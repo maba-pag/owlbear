@@ -187,6 +187,10 @@ class ProofCheckoutManager:
             manifest=manifest,
         )
 
+    def resolve_commit(self, commit: str) -> str | None:
+        """Resolve caller revision syntax to the canonical commit identity."""
+        return self._resolve_commit(commit)
+
     def validate(self, job_id: int, expected_commit: str) -> ProofCheckoutDiagnostic | None:
         """Require the existing checkout to remain at the expected clean revision."""
         checkout = self.existing(job_id)

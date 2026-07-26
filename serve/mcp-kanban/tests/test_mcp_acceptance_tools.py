@@ -971,6 +971,83 @@ async def test_public_accept_rejects_tracked_checkout_mutation(tmp_path: Path) -
     assert JobStore(board).read(int(start["job_id"])).job.attempt_id == start["attempt_id"]
     assert not (revision.source_dir / "receipts/accept-mutated.yaml").exists()
 
+    finding = Finding(
+        schema_version=1,
+        finding_id="finding-accept-tracked-mutation",
+        source_attempt_id=str(start["attempt_id"]),
+        source_job_id=int(start["job_id"]),
+        change_id=revision.change_id,
+        delivery_digest=revision.delivery_digest,
+        target_kind="packet",
+        target_id="DN-001-PK-001",
+        finding_class="implementation-defect",
+        detail=f"{result.diagnostic.lower_code}: tracked checkout state changed at {commit}",
+        created_at="2026-07-25T00:06:30Z",
+    )
+    route = plan_corrective_route(
+        CorrectiveRouteRequest(
+            finding_id=finding.finding_id,
+            finding_class=finding.finding_class,
+            target="packet-implementation",
+            target_node_ids=("DN-001",),
+        )
+    )
+    rejected = await server.reject_accept(
+        ctx,
+        **_identity(start),
+        rejected_at=finding.created_at,
+        detail=finding.detail,
+        evidence_ids=("accept-tracked-mutation",),
+        findings=(finding.model_dump(mode="json"),),
+        invalidation=InvalidationRequest(
+            invalidation_id="invalidation-accept-tracked-mutation",
+            supersession_receipt_id="supersession-accept-tracked-mutation",
+            invalidated_receipt_ids=("build-001",),
+            routes=(route,),
+            corrective_job_ids=(20,),
+            issued_at=finding.created_at,
+            code_revision=commit,
+            priority=9,
+        ).model_dump(mode="json"),
+    )
+    assert rejected.diagnostic is None
+    assert rejected.findings == (finding,)
+    assert rejected.invalidation is not None
+    assert tuple(item.job.kind for item in rejected.invalidation.corrective_jobs) == ("build",)
+    assert not checkout.root.exists()
+
+
+@pytest.mark.asyncio
+async def test_public_start_rejects_stale_checkout_at_different_revision(tmp_path: Path) -> None:
+    revision, board, ctx, runtime, checkout, start, commit = await _active_accept(tmp_path)
+    released = await server.release_job(
+        ctx,
+        **_identity(start),
+        released_at="2026-07-25T00:06:00Z",
+    )
+    assert released.diagnostic is None
+    manager = runtime._proof_checkouts  # noqa: SLF001 - arrange stale proof state at public dispatch boundary.
+    assert manager is not None
+    restored = manager.materialize(JobStore(board).read(int(start["job_id"])).job, commit)
+    assert restored.checkout is not None
+    other = _git_head()
+    result = await server.start_job(
+        ctx,
+        change_id=revision.change_id,
+        job_id=int(start["job_id"]),
+        attempt_id="attempt-stale-checkout",
+        claim_id="claim-stale-checkout",
+        actor_id=str(start["actor_id"]),
+        process_id=str(start["process_id"]),
+        claimed_at="2026-07-25T00:07:00Z",
+        candidate_revision=f"{other}^",
+    )
+    assert result.diagnostic is not None
+    assert result.diagnostic.code is StartJobDiagnosticCode.AUTHORITY_STALE
+    assert result.diagnostic.detail == "existing proof checkout differs from requested candidate revision"
+    assert checkout.root.exists()
+    assert JobStore(board).read(int(start["job_id"])).job.attempt_id is None
+
 
 @pytest.mark.asyncio
 async def test_public_accept_conflict_restores_exact_checkout_for_retry(

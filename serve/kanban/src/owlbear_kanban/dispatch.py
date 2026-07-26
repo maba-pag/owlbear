@@ -398,9 +398,28 @@ class DispatchRuntime:
         if stored.job.kind not in ("accept", "audit") or self._proof_checkouts is None:
             return self.start(request), None
         checkout = self._proof_checkouts.existing(request.job_id)
+        requested_commit = self._proof_checkouts.resolve_commit(request.candidate_revision)
+        if requested_commit is None:
+            return (
+                self._native._diagnostic(  # noqa: SLF001
+                    StartJobDiagnosticCode.AUTHORITY_STALE,
+                    "proof checkout candidate revision is unavailable",
+                    target=str(request.job_id),
+                ),
+                None,
+            )
+        if checkout is not None and checkout.commit != requested_commit:
+            return (
+                self._native._diagnostic(  # noqa: SLF001
+                    StartJobDiagnosticCode.AUTHORITY_STALE,
+                    "existing proof checkout differs from requested candidate revision",
+                    target=str(request.job_id),
+                ),
+                None,
+            )
         prepared = False
         if checkout is None:
-            result = self._proof_checkouts.materialize(stored.job, request.candidate_revision)
+            result = self._proof_checkouts.materialize(stored.job, requested_commit)
             if result.checkout is None:
                 return (
                     self._native._diagnostic(  # noqa: SLF001

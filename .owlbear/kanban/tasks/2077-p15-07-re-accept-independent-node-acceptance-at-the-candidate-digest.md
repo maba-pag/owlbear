@@ -4,7 +4,7 @@ title: 'P15-07: Re-accept independent node acceptance at the candidate digest'
 status: verify
 priority: high
 created: 2026-07-26T01:59:26.362933+02:00
-updated: 2026-07-26T07:08:33.350448+02:00
+updated: 2026-07-26T07:26:07.706507+02:00
 tags:
   - phase-15
   - candidate-reacceptance
@@ -70,3 +70,11 @@ Builder repair after verifier rejection of 398c352899e4b4423826b19a4949593cd4c94
 Canonical resolved checkout SHA is now persisted in immutable dispatch coordination and finish_accept rejects any request/manifest/HEAD substitution that differs from dispatched authority. Acceptance and audit publication now commit atomically before proof checkout cleanup; a cleanup failure returns a stable orphan diagnostic after publication, and exact replay retries cleanup without duplicating receipt/event/job publication. Receipt evidence now requires one ordered successful nonempty result per declared assembled command. Public audit fixtures were corrected to use fresh checkout-aware attempt identities rather than native-start bypasses.
 
 Focused validation with explicit existing .venv and system PATH: MCP acceptance/rejection 37 passed; dispatch acceptance/audit 8 passed; native acceptance + proof checkout 44 passed, 18 deselected; Ruff clean. Added manifest-tamper and post-publication cleanup-replay scenarios both pass. Independent lifecycle repair challenge: PASS, no mandatory defects. Owner-equivalent transient mutate/restore is outside the durable-state threat boundary; terminal guard, read-only modes, exact checkout SHA, immutable coordination authority, assembled evidence and final Git state remain enforced.
+
+[[2026-07-26T07:16:17+02:00]]
+Final committed review rejected d88c0f75ae5d1150f5a1715c21edadc5e8eddd46 on two mandatory gaps: start_with_checkout could reuse an orphaned checkout at SHA A when a new claim requested SHA B, silently replacing caller authority; and tracked-mutation detection stopped at ERR_PROOF_TRACKED_MUTATION without exercising the required typed reject_accept finding/minimum correction path. Return to build for scoped repair.
+
+[[2026-07-26T07:26:07+02:00]]
+Final builder repair closes the last two verifier findings. start_with_checkout now resolves the requested candidate and refuses an existing proof checkout whose canonical commit differs before any claim; it never substitutes stale orphan authority. The tracked-mutation public scenario now continues from ERR_PROOF_TRACKED_MUTATION into immutable implementation-defect finding, packet-implementation route, exactly one corrective build job, cleanup, and no accept receipt.
+
+Validation: both new regressions pass; full public acceptance/rejection file passed 37 before the two additions and focused additions pass; native acceptance/rejection 36 passed, 18 deselected; dispatch acceptance/audit 8 passed; Ruff clean. Final focused challenger: PASS, no mandatory defects.
