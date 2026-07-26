@@ -4,7 +4,7 @@ title: 'P15-13: Replace task Kanban with immutable-purpose Delivery jobs'
 status: verify
 priority: high
 created: 2026-07-26T02:00:14.063453+02:00
-updated: 2026-07-26T14:55:09.654807+02:00
+updated: 2026-07-26T15:06:41.152992+02:00
 tags:
   - phase-15
   - change:replace-delivery-pipeline
@@ -55,3 +55,9 @@ Proof guidance: component and browser tests may use grounded HTTP fixtures; asse
 
 [[2026-07-26T14:55:09+02:00]]
 Builder implementation at digest bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357 and base SHA 5c29404e169456e787d495663c0403ef2d766096. Delivery groups Plan/Build/Accept/Audit native jobs with complete identity/readiness/claim/request/block/digest/attempt/finding/receipt/status signals and no drag/generic edit/status/kind mutation. Intent controls prioritize/cancel/release/inspect/resolve request; actual retained job/request detail and linked action/decision resolver. Success refreshes; 409 retains intent/current authority and adopts safe tokens/digests; release non-owner requires Refresh authority. Backend release conflicts all include current job/token. Validation frontend1509/2skip, backend179, build, component12, Playwright3 desktop/mobile/conflict, Ruff, final challenger PASS.
+
+[[2026-07-26T15:04:22+02:00]]
+Verifier rejected 173633e823b71e7fe2bafb315ff58bfac8651ec5: after ERR_RELEASE_NON_OWNER the conflict panel correctly requires Refresh authority, but the primary Release claim button remains enabled and can repeat an unsafe mixed-identity request. Return to disable release until refresh.
+
+[[2026-07-26T15:06:41+02:00]]
+Final repair disables the primary Release claim action whenever ERR_RELEASE_NON_OWNER/current authority requires refresh, preventing mixed-identity retries; only Refresh authority remains. Exact second-click regression, build and9 board tests pass; final signoff PASS.

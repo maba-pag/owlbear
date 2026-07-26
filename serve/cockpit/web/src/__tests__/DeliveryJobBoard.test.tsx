@@ -277,6 +277,10 @@ describe('DeliveryJobBoard', () => {
     await screen.findByTestId('job-conflict-20')
 
     expect(screen.queryByText('Retry')).not.toBeInTheDocument()
+    const primaryRelease = screen.getByLabelText('Commands for job 20').querySelectorAll('p-button')[2]
+    expect(primaryRelease.disabled).toBe(true)
+    fireEvent.click(primaryRelease)
+    expect(api.release).toHaveBeenCalledTimes(1)
     fireEvent.click(screen.getByText('Refresh authority'))
     expect(refresh).toHaveBeenCalledOnce()
   })

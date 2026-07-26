@@ -183,7 +183,7 @@ function JobCard({ changeId, job, onRefresh }: { changeId: string; job: NativeJo
           type="button"
           compact
           variant="secondary"
-          disabled={!activeAttempt || isSubmitting}
+          disabled={!activeAttempt || isSubmitting || releaseAuthorityChanged}
           onClick={() => void submit({ kind: 'release', timestamp: new Date().toISOString() })}
         >Release claim</PButton>
         <PButton type="button" compact variant="secondary" onClick={inspect}>Inspect</PButton>
