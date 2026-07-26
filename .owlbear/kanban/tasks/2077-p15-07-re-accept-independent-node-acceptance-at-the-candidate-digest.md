@@ -1,10 +1,10 @@
 ---
 id: 2077
 title: 'P15-07: Re-accept independent node acceptance at the candidate digest'
-status: verify
+status: collect
 priority: high
 created: 2026-07-26T01:59:26.362933+02:00
-updated: 2026-07-26T07:26:07.706507+02:00
+updated: 2026-07-26T07:29:56.036729+02:00
 tags:
   - phase-15
   - candidate-reacceptance
@@ -78,3 +78,6 @@ Final committed review rejected d88c0f75ae5d1150f5a1715c21edadc5e8eddd46 on two 
 Final builder repair closes the last two verifier findings. start_with_checkout now resolves the requested candidate and refuses an existing proof checkout whose canonical commit differs before any claim; it never substitutes stale orphan authority. The tracked-mutation public scenario now continues from ERR_PROOF_TRACKED_MUTATION into immutable implementation-defect finding, packet-implementation route, exactly one corrective build job, cleanup, and no accept receipt.
 
 Validation: both new regressions pass; full public acceptance/rejection file passed 37 before the two additions and focused additions pass; native acceptance/rejection 36 passed, 18 deselected; dispatch acceptance/audit 8 passed; Ruff clean. Final focused challenger: PASS, no mandatory defects.
+
+[[2026-07-26T07:29:56+02:00]]
+Verifier acceptance at committed HEAD 2465c771c3a3460c5fe5062fdffdb28efe1cbd66. Exact final regressions: tracked checkout mutation -> typed finding/minimum build correction and stale checkout SHA mismatch -> typed stale authority, 2 passed in 8.43s. Final independent signoff PASS; aggregate Ruff and diff check clean.
