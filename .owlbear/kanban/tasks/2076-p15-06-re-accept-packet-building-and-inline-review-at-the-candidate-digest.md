@@ -1,10 +1,10 @@
 ---
 id: 2076
 title: 'P15-06: Re-accept packet building and inline review at the candidate digest'
-status: build
+status: verify
 priority: high
 created: 2026-07-26T01:59:18.946549+02:00
-updated: 2026-07-26T01:59:18.946549+02:00
+updated: 2026-07-26T03:46:05.661844+02:00
 tags:
   - phase-15
   - candidate-reacceptance
@@ -50,3 +50,7 @@ In: build-job selection, global writer lease, scoped commit, reviewer findings, 
 Out: node acceptance, frontend, cutover.
 
 Proof guidance: run the assembled builder/reviewer workflow over a contained fixture repository; mocks may replace the subagent runner but not writer policy, commit, review visibility, or receipt publication.
+
+[[2026-07-26T03:46:05+02:00]]
+## Builder Notes
+DONE: Re-accepted unchanged DN-007/PROOF-006 at candidate `bf5edd...`, tested SHA `78114a117ca9ac2434581b46db8bdb20ce2992a0`. Dedicated assembled builder interaction suite: 11 passed; challenger independently reran 11 and passed. Covers engine selection, one packet/global writer, scoped commit success/failure, mandatory warm read-only reviewer, defect repair/fresh review, write denial, receipt only after pass, failure release/no receipt, replay/dedupe. No product edit. Memories assessed.
