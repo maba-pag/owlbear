@@ -1,10 +1,10 @@
 ---
 id: 2079
 title: 'P15-09: Expose native job priority and cancellation through Cockpit'
-status: verify
+status: collect
 priority: high
 created: 2026-07-26T01:59:40.462624+02:00
-updated: 2026-07-26T10:37:43.592185+02:00
+updated: 2026-07-26T10:43:14.679625+02:00
 tags:
   - phase-15
   - corrective-projection
@@ -58,3 +58,6 @@ Proof guidance: exercise assembled FastAPI with the real native context/runtime 
 
 [[2026-07-26T10:37:43+02:00]]
 Builder implementation at admitted digest bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357 and base SHA 7aee72425add653f62f70ba81468db5ec7cad642. Added strict job_id/digest/OCC-token priority and cancel bodies; intent-specific FastAPI routes over DN-003; current-context digest precheck; refreshed token in detail/page; wrapped typed 409 current-authority envelope; priority/cancel SSE. PROOF-015 covers malformed, replay/conflicts, stale stored+request digest, active/terminal, OpenAPI, both SSE controls, transaction failure and retired-route absence. Validation: focused 19 passed; full Cockpit 177 passed; Ruff/diff clean; final challenger PASS.
+
+[[2026-07-26T10:43:14+02:00]]
+Verifier acceptance at committed HEAD 293974d7284c380a67926f136ff4023273f6c7fd. Focused public/assembled controls 19 passed; Ruff clean; full Cockpit backend 177 passed. Final review PASS: strict bodies, current digest, refreshed tokens, typed wrapped 409, priority/cancel SSE, transaction preservation, OpenAPI/runtime match and retired-route absence confirmed.
