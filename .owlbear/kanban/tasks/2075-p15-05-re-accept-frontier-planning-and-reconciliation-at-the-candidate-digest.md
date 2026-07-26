@@ -1,10 +1,10 @@
 ---
 id: 2075
 title: 'P15-05: Re-accept frontier planning and reconciliation at the candidate digest'
-status: verify
+status: collect
 priority: high
 created: 2026-07-26T01:59:09.251790+02:00
-updated: 2026-07-26T03:35:25.491925+02:00
+updated: 2026-07-26T03:41:48.202064+02:00
 tags:
   - phase-15
   - candidate-reacceptance
@@ -57,3 +57,7 @@ Proof guidance: exercise planner entry through real engine selection and node-sc
 DONE: Re-accepted unchanged DN-006/PROOF-005 at candidate digest `bf5edd...`, tested SHA `9be7018bbef8718a847b7df7c75d02ea275a0348`.
 
 Focused planner/native/dispatch proof: 12 passed. Builder challenger independently ran complete three-file boundary: 72 passed. Evidence covers candidate admission, stable topological frontier, atomic per-node plan/jobs and replay, invalid expansion zero-partial with prior-node preservation, acceptance-triggered reconciliation, old-build blocking, predecessor evidence, digest supersession, and precise invalidation preserving disjoint state. Product/proof clean; lint passed. No correction needed. Memories assessed.
+
+[[2026-07-26T03:41:48+02:00]]
+## Verify Notes
+PASS: DN-006 candidate re-acceptance is complete. Tested SHA `9be7018bbef8718a847b7df7c75d02ea275a0348` and builder `7c829c9bbb184e9db0033a4fb951c778d66f5542` are ancestors. Builder focused 12 and challenge 72 passed; verifier reran both assembled PROOF-005 scenarios (2 passed). Causal linkage covers topology, atomic publication, invalid expansion, predecessor acceptance, reconciliation job, old-build block, evidence consumption, digest supersession, and precise invalidation/disjoint preservation. Product/proof clean; lint and verifier challenge passed. Memories assessed.
