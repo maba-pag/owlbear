@@ -161,6 +161,7 @@ from owlbear_kanban.proof_checkout import (
     ProofCheckoutSnapshot,
 )
 from owlbear_kanban.receipt import (
+    WHOLE_CHANGE_AUDIT_COMMAND,
     AdmissionDiscovery,
     ChangeHealthFinding,
     ChangeHealthResult,
@@ -187,6 +188,7 @@ from owlbear_kanban.receipt import (
     parse_impact_closure,
     parse_receipt_mapping,
     parse_repository_path,
+    whole_change_audit_report,
 )
 from owlbear_kanban.runtime_query import (
     RuntimeHistoryEntry,
@@ -198,6 +200,7 @@ from owlbear_kanban.runtime_query import (
 from owlbear_kanban.storage_io import atomic_write
 
 __all__ = [
+    "WHOLE_CHANGE_AUDIT_COMMAND",
     "AdmissionAssessment",
     "AdmissionConflictError",
     "AdmissionDiscovery",
@@ -366,4 +369,5 @@ __all__ = [
     "read_job_generation",
     "serialize_attempt_event_mapping",
     "validate_and_admit",
+    "whole_change_audit_report",
 ]

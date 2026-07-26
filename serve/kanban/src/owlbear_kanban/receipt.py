@@ -18,7 +18,7 @@ from enum import StrEnum
 from io import StringIO
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import MappingProxyType
-from typing import Annotated, Literal, Never, Protocol
+from typing import TYPE_CHECKING, Annotated, Literal, Never, Protocol
 
 from pydantic import BaseModel, ConfigDict, StringConstraints, TypeAdapter, field_serializer, model_validator
 from pydantic import ValidationError as PydanticValidationError
@@ -37,6 +37,9 @@ from owlbear_kanban.change import (
 from owlbear_kanban.runtime_transaction import TransactionParticipant
 from owlbear_kanban.yaml_rt import make_yaml
 
+if TYPE_CHECKING:
+    from ruamel.yaml.main import YAML
+
 _RECEIPT_ID_PATTERN = r"^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
 _RECEIPT_ID_RE = re.compile(_RECEIPT_ID_PATTERN)
 _DIRECTORY_OPEN_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
@@ -44,6 +47,14 @@ _FILE_OPEN_FLAGS = os.O_RDONLY | os.O_NOFOLLOW
 _TEMP_OPEN_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
 _TEMP_CREATE_ATTEMPTS = 10
 _STABLE_ID_ADAPTER = TypeAdapter(StableId)
+WHOLE_CHANGE_AUDIT_COMMAND = "python -I -c <candidate whole-change audit report>"
+
+
+def _receipt_yaml() -> YAML:
+    yaml = make_yaml(explicit_start=True)
+    yaml.width = 10**9
+    return yaml
+
 
 ReceiptId = Annotated[str, StringConstraints(strict=True, pattern=_RECEIPT_ID_PATTERN)]
 ReceiptKind = Literal["admission", "plan", "build", "accept", "audit", "supersession"]
@@ -761,12 +772,13 @@ def _audit_evidence_complete(  # noqa: C901, PLR0911, PLR0912 - proof dimensions
         return False
     commands = assembled.get("commands")
     results = assembled.get("results")
+    accepted_mappings = tuple(stored.to_mapping() for stored in stored_receipts if stored is not None)
+    report = whole_change_audit_report(revision, accepted_mappings)
+    expected_output = json.dumps(report, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n"
     if (
         assembled.get("boundary") != proof.boundary
         or assembled.get("durable_outputs") != proof.durable_outputs
-        or not isinstance(commands, tuple)
-        or not commands
-        or not all(isinstance(command, str) and command for command in commands)
+        or commands != (WHOLE_CHANGE_AUDIT_COMMAND,)
         or not isinstance(results, tuple)
         or tuple(result.get("command") for result in results if isinstance(result, Mapping)) != commands
         or not all(
@@ -774,7 +786,7 @@ def _audit_evidence_complete(  # noqa: C901, PLR0911, PLR0912 - proof dimensions
             and isinstance(result.get("command"), str)
             and result.get("exit_code") == 0
             and isinstance(result.get("result"), str)
-            and bool(result.get("result"))
+            and result.get("result") == expected_output
             for result in results
         )
     ):
@@ -788,6 +800,39 @@ def _audit_evidence_complete(  # noqa: C901, PLR0911, PLR0912 - proof dimensions
         and state.get("diff") == ""
         for state in (before, after)
     )
+
+
+def whole_change_audit_report(
+    revision: ChangeRevision, accepted_receipt_mappings: tuple[Mapping[str, object], ...]
+) -> dict[str, object]:
+    """Derive canonical whole-change proof coverage from admitted authority and receipts."""
+    accepted = []
+    for mapping in accepted_receipt_mappings:
+        receipt = ReceiptRecord.from_mapping(mapping)
+        if receipt.kind != "accept":
+            msg = f"whole-change report receipt is not accepted-node evidence: {receipt.receipt_id}"
+            raise ValueError(msg)
+        accepted.append(
+            {
+                "receipt_id": receipt.receipt_id,
+                "target_node_id": receipt.payload.get("target_node_id"),
+                "code_revision": receipt.payload.get("code_revision"),
+                "impact_closure": receipt.impact_closure.model_dump(mode="json") if receipt.impact_closure else None,
+            }
+        )
+    proof = revision.resolve("PROOF-008")
+    assert isinstance(proof, Proof)
+    return {
+        "delivery_digest": revision.delivery_digest,
+        "product_promise": revision.intent,
+        "decisions": [item.model_dump(mode="json") for item in revision.decisions.decisions],
+        "workflows": [item.model_dump(mode="json") for item in revision.graph.workflows],
+        "migrations": [item.model_dump(mode="json") for item in revision.graph.migrations],
+        "nodes": [item.model_dump(mode="json") for item in revision.graph.nodes],
+        "audit_boundary": proof.boundary,
+        "audit_methods": list(proof.method),
+        "accepted_receipts": accepted,
+    }
 
 
 class ReceiptDiagnosticCode(StrEnum):
@@ -1117,7 +1162,7 @@ class ReceiptStore:
             filename, relative_path = _receipt_location(receipt_id)
             record = self._validate_record(receipt_id, value, path=relative_path)
             stream = StringIO()
-            make_yaml(explicit_start=True).dump(record.to_mapping(), stream)
+            _receipt_yaml().dump(record.to_mapping(), stream)
             with _receipts_directory(
                 self._revision.source_dir,
                 self._revision.source_identity,
@@ -1151,7 +1196,7 @@ class ReceiptStore:
         filename, relative_path = _receipt_location(receipt_id)
         record = self._validate_record(receipt_id, value, path=relative_path)
         stream = StringIO()
-        make_yaml(explicit_start=True).dump(record.to_mapping(), stream)
+        _receipt_yaml().dump(record.to_mapping(), stream)
         return record, TransactionParticipant(
             self._revision.source_dir,
             Path("receipts") / filename,

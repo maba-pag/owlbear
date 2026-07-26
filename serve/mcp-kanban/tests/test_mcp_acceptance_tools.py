@@ -36,6 +36,7 @@ from owlbear_kanban import (
     RejectAcceptDiagnosticCode,
     ReceiptStore,
     StartJobDiagnosticCode,
+    WHOLE_CHANGE_AUDIT_COMMAND,
     load_change,
     plan_corrective_route,
 )
@@ -377,15 +378,18 @@ async def _auditor_evidence(
     assert proof_id == "PROOF-008"
     assert requests == []
     assert tracked_state == {"head": checkout.commit, "status": "", "diff": ""}
+    accepted_mappings = tuple(receipt.to_mapping() for receipt in receipts)
     probe_script = (
-        "from pathlib import Path; "
-        "from owlbear_kanban import ReceiptStore, load_change; "
+        "import json,sys; from pathlib import Path; "
+        "sys.path.insert(0,str(Path('serve/kanban/src').resolve())); "
+        "from owlbear_kanban import load_change, whole_change_audit_report; "
         "result=load_change(Path('.owlbear/changes'), 'replace-delivery-pipeline'); "
         "assert result.revision is not None; "
-        "print(result.revision.delivery_digest, len(ReceiptStore(result.revision).list()))"
+        f"report=whole_change_audit_report(result.revision, {accepted_mappings!r}); "
+        "print(json.dumps(report,sort_keys=True,separators=(',',':'),ensure_ascii=False))"
     )
-    command_arguments = ("uv", "run", "python", "-c", probe_script)
-    command = " ".join(command_arguments[:3]) + " -c <whole-change audit probe>"
+    command_arguments = (sys.executable, "-I", "-c", probe_script)
+    command = WHOLE_CHANGE_AUDIT_COMMAND
     process = await asyncio.create_subprocess_exec(
         *command_arguments,
         cwd=checkout_root,
@@ -1463,11 +1467,12 @@ async def test_public_audit_success_closes_accepted_whole_change_and_replays(tmp
         "replacements",
         "boundary",
         "null-command",
+        "irrelevant-output",
         "tracked-state",
     ],
 )
 @pytest.mark.asyncio
-async def test_public_audit_rejects_incomplete_or_forged_evidence(  # noqa: C901 - each forged dimension is explicit.
+async def test_public_audit_rejects_incomplete_or_forged_evidence(  # noqa: C901, PLR0912 - forged dimensions explicit.
     tmp_path: Path, mutation: str
 ) -> None:
     revision, board, _native, ctx, checkouts, audit_job_id, _accept_request, commit = await _pending_public_audit(
@@ -1506,6 +1511,8 @@ async def test_public_audit_rejects_incomplete_or_forged_evidence(  # noqa: C901
     elif mutation == "null-command":
         evidence["assembled_proof"]["commands"] = [None]
         evidence["assembled_proof"]["results"] = [{"command": None, "exit_code": 0, "result": "forged success"}]
+    elif mutation == "irrelevant-output":
+        evidence["assembled_proof"]["results"][0]["result"] = "irrelevant success\n"
     else:
         evidence["after_tracked_state"]["status"] = " M README.md"
 
