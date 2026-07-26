@@ -295,6 +295,23 @@ def test_material_request_resolution_returns_design_reentry(control_harness: _Co
     assert JobStore(harness.work_root).read(2).job.pending_request_ids == ("request-001",)
 
 
+def test_stale_request_digest_returns_current_revision_without_mutation(control_harness: _ControlHarness) -> None:
+    harness = control_harness
+    before = _store_state(harness.work_root, harness.proof_root)
+
+    response = harness.client.post(
+        f"/api/changes/{_CHANGE_ID}/requests/request-001/resolve",
+        json=_resolution_body(harness) | {"delivery_digest": "a" * 64},
+    )
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["code"] == "ERR_CHANGE_REVISION_CONFLICT"
+    assert detail["current_delivery_digest"] == harness.context.revision.delivery_digest
+    assert detail["target"] == "request-001"
+    assert _store_state(harness.work_root, harness.proof_root) == before
+
+
 def test_release_replays_one_event_and_clears_coordination_and_checkout(
     control_harness: _ControlHarness,
 ) -> None:
@@ -314,6 +331,24 @@ def test_release_replays_one_event_and_clears_coordination_and_checkout(
     ]
     assert "readers: []" in (harness.work_root / "dispatch" / "coordination.yaml").read_text(encoding="utf-8")
     assert harness.checkouts.existing(1) is None
+
+
+def test_stale_release_digest_returns_current_job_authority(control_harness: _ControlHarness) -> None:
+    harness = control_harness
+    current = JobStore(harness.work_root).read(1)
+    before = _store_state(harness.work_root, harness.proof_root)
+
+    response = harness.client.post(
+        f"/api/changes/{_CHANGE_ID}/jobs/1/release",
+        json=_release_body(harness) | {"delivery_digest": "a" * 64},
+    )
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["code"] == "ERR_CHANGE_REVISION_CONFLICT"
+    assert detail["current"]["job"]["job_id"] == 1
+    assert detail["current"]["token"] == current.token
+    assert _store_state(harness.work_root, harness.proof_root) == before
 
 
 def test_priority_and_cancel_succeed_replay_and_refresh_job_tokens(control_harness: _ControlHarness) -> None:
@@ -461,6 +496,8 @@ def test_release_conflicts_preserve_complete_state(
     assert conflict["current_delivery_digest"] == harness.context.revision.delivery_digest
     if mode == "stale":
         assert conflict["holder_job_ids"] == [1]
+    assert conflict["current"]["job"]["job_id"] == 1
+    assert conflict["current"]["token"] == JobStore(harness.work_root).read(1).token
     assert _store_state(harness.work_root, harness.proof_root) == before
     assert harness.checkouts.existing(1) is not None
 
@@ -482,13 +519,16 @@ def test_release_transaction_conflict_preserves_all_participants(
     )
 
     assert response.status_code == 409
-    assert response.json()["detail"] == {
+    detail = response.json()["detail"]
+    assert {key: detail[key] for key in ("code", "detail", "current_delivery_digest", "lower_code", "target")} == {
         "code": "ERR_CONTROL_TRANSACTION_CONFLICT",
         "detail": "release transaction did not commit",
         "current_delivery_digest": harness.context.revision.delivery_digest,
         "lower_code": "ERR_TRANSACTION_CONFLICT",
         "target": "1",
     }
+    assert detail["current"]["job"]["job_id"] == 1
+    assert detail["current"]["token"] == JobStore(harness.work_root).read(1).token
     assert _store_state(harness.work_root, harness.proof_root) == before
     assert harness.checkouts.existing(1) is not None
 

@@ -6,6 +6,7 @@ import {
   getNativeGraph,
   getNativeInvalidation,
   getNativeJob,
+  getNativeRequest,
   getNativeWorkHealth,
   listNativeActivity,
   listNativeAttempts,
@@ -32,9 +33,9 @@ import {
 import { useNativeInvalidation } from './NativeInvalidationProvider'
 import { useNativePage, type UseNativePageResult } from './useNativePage'
 
-export function useNativeJobs(changeId: string): UseNativePageResult<NativeJobProjection> {
-  const load = useCallback((cursor?: string) => listNativeJobs(changeId, cursor), [changeId])
-  return useNativePage({ resource: 'jobs', load, identity: (item) => item.job_id })
+export function useNativeJobs(changeId: string | null): UseNativePageResult<NativeJobProjection> {
+  const load = useCallback((cursor?: string) => listNativeJobs(changeId ?? '', cursor), [changeId])
+  return useNativePage({ resource: 'jobs', load, identity: (item) => item.job_id, enabled: changeId !== null })
 }
 
 export function useNativeRequests(changeId: string): UseNativePageResult<NativeStoredRequest> {
@@ -183,8 +184,16 @@ export function useLegacyInventory(): ReturnType<typeof useNativeValue<LegacyInv
 
 export function useNativeJob(
   changeId: string,
-  jobId: number,
+  jobId: number | null,
 ): ReturnType<typeof useNativeValue<NativeJobDetail>> {
-  const load = useCallback(() => getNativeJob(changeId, jobId), [changeId, jobId])
-  return useNativeValue({ resources: ['jobs'], load })
+  const load = useCallback(() => getNativeJob(changeId, jobId ?? 0), [changeId, jobId])
+  return useNativeValue({ resources: ['jobs'], load, enabled: jobId !== null })
+}
+
+export function useNativeRequest(
+  changeId: string,
+  requestId: string | null,
+): ReturnType<typeof useNativeValue<NativeStoredRequest>> {
+  const load = useCallback(() => getNativeRequest(changeId, requestId ?? ''), [changeId, requestId])
+  return useNativeValue({ resources: ['requests'], load, enabled: requestId !== null })
 }

@@ -8,6 +8,7 @@ export interface UseNativePageOptions<T> {
   resource: NativeResource
   additionalResources?: NativeResource[]
   alwaysPoll?: boolean
+  enabled?: boolean
   load: (cursor?: string) => Promise<NativePage<T>>
   identity: (item: T) => string | number
   pollIntervalMs?: number
@@ -33,6 +34,7 @@ export function useNativePage<T>({
   resource,
   additionalResources = [],
   alwaysPoll = false,
+  enabled = true,
   load,
   identity,
   pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
@@ -114,30 +116,36 @@ export function useNativePage<T>({
     generationRef.current += 1
     pendingRefreshGenerationRef.current = null
     setNextCursor(null)
+    if (!enabled) {
+      setItems([])
+      setError(null)
+      setIsLoading(false)
+      return
+    }
     void refresh()
     return () => {
       mountedRef.current = false
     }
-  }, [load, refresh])
+  }, [enabled, load, refresh])
 
   useEffect(() => {
     const newestToken = [token, secondary.token, tertiary.token, quaternary.token]
       .filter((value): value is string => value !== null)
       .reduce((latest, value) => (BigInt(value) > BigInt(latest) ? value : latest), '0')
-    if (BigInt(newestToken) <= BigInt(lastTokenRef.current ?? '0')) {
+    if (!enabled || BigInt(newestToken) <= BigInt(lastTokenRef.current ?? '0')) {
       return
     }
     lastTokenRef.current = newestToken
     void refresh()
-  }, [quaternary.token, refresh, secondary.token, tertiary.token, token])
+  }, [enabled, quaternary.token, refresh, secondary.token, tertiary.token, token])
 
   useEffect(() => {
-    if (!alwaysPoll && status === 'open') {
+    if (!enabled || (!alwaysPoll && status === 'open')) {
       return
     }
     const interval = setInterval(() => void refresh(), pollIntervalMs)
     return () => clearInterval(interval)
-  }, [alwaysPoll, pollIntervalMs, refresh, status])
+  }, [alwaysPoll, enabled, pollIntervalMs, refresh, status])
 
   return {
     items,

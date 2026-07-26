@@ -102,6 +102,16 @@ export interface NativeRequestRecord {
   delivery_digest: string
   target_node_id: string | null
   job_ids: number[]
+  options?: Array<{
+    option_id: string
+    label: string
+    recommended: boolean
+    confidence: number
+    rationale: string
+    pros: string[]
+    cons: string[]
+    risks: string[]
+  }>
 }
 
 export interface NativeStoredRequest {
@@ -111,7 +121,10 @@ export interface NativeStoredRequest {
 
 export interface NativeAttempt {
   attempt_id: string
+  claim_id: string
   job_id: number
+  actor_id: string
+  process_id: string
   timestamp: string
   kind: string
   [key: string]: unknown
@@ -264,7 +277,9 @@ export class NativeApiError extends Error {
     this.serverMessage = payload.message
     this.currentDeliveryDigest = payload.current_delivery_digest
     this.target = payload.target
-    this.token = payload.token
+    this.token =
+      payload.token ??
+      (payload.current && typeof payload.current.token === 'string' ? payload.current.token : undefined)
     this.current = payload.current
     this.lowerCode = payload.lower_code
     this.validation = payload.validation ?? []
@@ -352,6 +367,9 @@ export const getNativeGraph = (changeId: string): Promise<NativeGraphDetail> =>
 export const listNativeRequests = (changeId: string, cursor?: string): Promise<NativePage<NativeStoredRequest>> =>
   nativeRequest(pageUrl(`/api/changes/${encodeURIComponent(changeId)}/requests`, cursor))
 
+export const getNativeRequest = (changeId: string, requestId: string): Promise<NativeStoredRequest> =>
+  nativeRequest(`/api/changes/${encodeURIComponent(changeId)}/requests/${encodeURIComponent(requestId)}`)
+
 export const listNativeAttempts = (changeId: string, cursor?: string): Promise<NativePage<NativeAttempt>> =>
   nativeRequest(pageUrl(`/api/changes/${encodeURIComponent(changeId)}/attempts`, cursor))
 
@@ -390,6 +408,26 @@ export interface CancelJobInput {
   cancelled_at: string
 }
 
+export interface ReleaseJobInput {
+  job_id: number
+  delivery_digest: string
+  attempt_id: string
+  claim_id: string
+  actor_id: string
+  process_id: string
+  released_at: string
+}
+
+export interface ResolveNativeRequestInput {
+  delivery_digest: string
+  disposition: 'local' | 'material'
+  resolved_at: string
+  resolved_by: string
+  selected_option_id?: string | null
+  response?: string | null
+  rationale: string
+}
+
 export function setNativeJobPriority(changeId: string, input: SetJobPriorityInput): Promise<{ job: StoredNativeJob }> {
   return nativeRequest(`/api/changes/${encodeURIComponent(changeId)}/jobs/${input.job_id}/priority`, {
     method: 'POST',
@@ -404,4 +442,28 @@ export function cancelNativeJob(changeId: string, input: CancelJobInput): Promis
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   })
+}
+
+export function releaseNativeJob(changeId: string, input: ReleaseJobInput): Promise<{ job: StoredNativeJob }> {
+  const { job_id: jobId, ...body } = input
+  return nativeRequest(`/api/changes/${encodeURIComponent(changeId)}/jobs/${jobId}/release`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+export function resolveNativeRequest(
+  changeId: string,
+  requestId: string,
+  input: ResolveNativeRequestInput,
+): Promise<Record<string, unknown>> {
+  return nativeRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/requests/${encodeURIComponent(requestId)}/resolve`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  )
 }

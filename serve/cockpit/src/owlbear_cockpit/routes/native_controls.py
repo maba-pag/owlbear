@@ -49,6 +49,12 @@ def _work_root(engine: KanbanEngine) -> Path:
     return Path(engine.kanban_dir)
 
 
+def _attach_current_job(error, engine: KanbanEngine, job_id: int) -> None:  # noqa: ANN001 - FastAPI HTTPException
+    current = _current_job(engine, job_id)
+    if current is not None:
+        error.detail["current"] = current.model_dump(mode="json")
+
+
 @router.post("/requests/{request_id}/resolve", response_model=ResolveRequestResult)
 def resolve_request(
     change_id: str,
@@ -102,7 +108,11 @@ def resolve_request(
         raise error from exc
 
 
-@router.post("/jobs/{job_id}/release", response_model=ReleaseJobResult)
+@router.post(
+    "/jobs/{job_id}/release",
+    response_model=ReleaseJobResult,
+    responses={409: {"model": JobAdminConflictEnvelope}},
+)
 def release_job(
     change_id: str,
     job_id: int,
@@ -119,6 +129,7 @@ def release_job(
             current_delivery_digest=context.revision.delivery_digest,
             target=str(job_id),
         )
+        _attach_current_job(error, engine, job_id)
         raise error
     request = ReleaseJobRequest(job_id=job_id, **body.model_dump(exclude={"delivery_digest"}))
     try:
@@ -131,6 +142,7 @@ def release_job(
             lower_code=exc.code,
             target=str(job_id),
         )
+        _attach_current_job(error, engine, job_id)
         raise error from exc
     except OSError as exc:
         error = conflict(
@@ -140,6 +152,7 @@ def release_job(
             lower_code="ERR_STORAGE_IO",
             target=str(job_id),
         )
+        _attach_current_job(error, engine, job_id)
         raise error from exc
     if isinstance(result, DispatchDiagnostic):
         error = conflict(
@@ -149,6 +162,7 @@ def release_job(
             diagnostic=result,
             target=str(job_id),
         )
+        _attach_current_job(error, engine, job_id)
         raise error
     if result.diagnostic is not None:
         error = conflict(
@@ -158,6 +172,7 @@ def release_job(
             diagnostic=result.diagnostic,
             target=str(job_id),
         )
+        _attach_current_job(error, engine, job_id)
         raise error
     return result
 
