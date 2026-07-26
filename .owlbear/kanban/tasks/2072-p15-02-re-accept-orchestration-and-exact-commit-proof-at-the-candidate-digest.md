@@ -1,10 +1,10 @@
 ---
 id: 2072
 title: 'P15-02: Re-accept orchestration and exact-commit proof at the candidate digest'
-status: verify
+status: collect
 priority: high
 created: 2026-07-26T01:58:44.920258+02:00
-updated: 2026-07-26T02:49:02.180344+02:00
+updated: 2026-07-26T02:52:03.572425+02:00
 tags:
   - phase-15
   - candidate-reacceptance
@@ -60,3 +60,16 @@ Evidence:
 - Product/proof paths remained clean; focused product lint passed.
 
 No product edit was required. Builder memories assessed.
+
+[[2026-07-26T02:52:03+02:00]]
+## Verify Notes
+PASS: Candidate-bound DN-004 re-acceptance is complete.
+
+Independent evidence at verifier HEAD `7e8762006d6d80602378cfe94f4cf00a8ebdc38d`:
+- Tested product SHA `86322a6ec48a1e690f2f003f08bd2e4550cd9fd3` and builder evidence are ancestors.
+- High-risk IF-015/DispatchRuntime/proof-checkout subset: 19 passed.
+- Full PROOF-014 and independent builder challenge: 69 + 69 passed.
+- Focused product lint passed and product/proof paths remained clean.
+- Verifier challenger: pass; no missing evidence or scope drift.
+
+AC-1 through AC-3 are tied to candidate digest, exact SHA, commands, and direct public-boundary results. Verifier memories assessed.
