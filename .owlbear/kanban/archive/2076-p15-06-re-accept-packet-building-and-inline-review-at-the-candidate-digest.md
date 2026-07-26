@@ -1,10 +1,10 @@
 ---
 id: 2076
 title: 'P15-06: Re-accept packet building and inline review at the candidate digest'
-status: collect
+status: archived
 priority: high
 created: 2026-07-26T01:59:18.946549+02:00
-updated: 2026-07-26T03:58:44.507356+02:00
+updated: 2026-07-26T03:59:33.937981+02:00
 tags:
   - phase-15
   - candidate-reacceptance
@@ -35,7 +35,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -58,3 +58,7 @@ DONE: Re-accepted unchanged DN-007/PROOF-006 at candidate `bf5edd...`, tested SH
 [[2026-07-26T03:58:44+02:00]]
 ## Verify Notes
 PASS: DN-007 candidate re-acceptance complete. Tested `78114a117ca9ac2434581b46db8bdb20ce2992a0`, builder `4c49deaf6eefcbb47a51a7bbb3b62b1797ed02ae` are ancestors. Builder/challenger full 11+11 and verifier high-risk 10 passed. Engine selection, writer/commit, warm read-only review, repair/rechallenge, write denial, receipt gate, failure release, and replay are direct. Product/proof clean; contract lint and verifier challenge passed. Memories assessed.
+
+[[2026-07-26T03:59:33+02:00]]
+## Collect Notes
+ARCHIVED: DN-007 candidate re-acceptance complete. Tested `78114a117ca9ac2434581b46db8bdb20ce2992a0`, builder `4c49deaf6eefcbb47a51a7bbb3b62b1797ed02ae`, verifier `f555050ce00feee3dc76b8107a1f949d9ab45f14` are ancestors. Full 11 + challenge 11 + high-risk 10 passed; both challengers passed; no product delta/open finding. Memories assessed.
