@@ -9,6 +9,7 @@ import { OPEN_TASK_DETAIL_EVENT, readOpenTaskDetailEvent } from './utils/openTas
 const ICONS = {
   specification: 'document',
   delivery: 'route',
+  requests: 'question',
   memory: 'brain',
   ideas: 'user-manual',
 } as const
@@ -52,14 +53,14 @@ export default function NativeShell() {
           </div>
           <ThemeToggle compact />
         </div>
-        <nav aria-label="Product phases" className="mx-auto grid w-full max-w-[1440px] grid-cols-4 gap-1 overflow-hidden px-static-xs sm:gap-static-xs sm:px-static-md md:px-static-xl">
+        <nav aria-label="Product phases" className="mx-auto grid w-full max-w-[1440px] grid-cols-5 gap-0.5 overflow-hidden px-0.5 sm:gap-static-xs sm:px-static-md md:px-static-xl">
           {navItems.map((route) => (
             <PLink
               key={route.path}
               href={`${route.path}${search}`}
               aria-current={route.active ? 'page' : undefined}
               className={[
-                'inline-flex min-h-11 min-w-0 items-center justify-center gap-static-xs border-b-2 px-1 py-static-xs text-xs font-semibold sm:px-static-sm sm:text-sm',
+                'inline-flex min-h-11 min-w-0 items-center justify-center gap-static-xs border-b-2 px-0.5 py-static-xs text-[0.7rem] font-semibold sm:px-static-sm sm:text-sm',
                 route.active ? 'border-primary text-primary' : 'border-transparent text-contrast-medium',
               ].join(' ')}
               onClick={(event) => {

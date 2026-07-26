@@ -1,104 +1,9 @@
-import { useState } from 'react'
-import { PButton, PHeading, PIcon, PTextarea } from '@porsche-design-system/components-react'
+import { PHeading, PIcon } from '@porsche-design-system/components-react'
 import { useSearchParams } from 'react-router'
 import { useNativeChangeSelection } from '../hooks/NativeChangeProvider'
 import { useNativeJob, useNativeJobs, useNativeRequest } from '../hooks/useNativeResources'
 import DeliveryJobBoard from '../components/DeliveryJobBoard'
-import { NativeApiError, resolveNativeRequest, type NativeStoredRequest } from '../api/native'
-
-type TextValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }
-
-function textValue(event: TextValueEvent): string {
-  const value = event.detail?.value ?? event.target?.value
-  return typeof value === 'string' ? value : ''
-}
-
-function LinkedRequestResolver({
-  changeId,
-  stored,
-  retryData,
-}: {
-  changeId: string
-  stored: NativeStoredRequest
-  retryData: () => void
-}) {
-  const request = stored.request
-  const [response, setResponse] = useState('')
-  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null)
-  const [resolutionDigest, setResolutionDigest] = useState(request.delivery_digest)
-  const [conflict, setConflict] = useState<NativeApiError | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-
-  const resolve = async () => {
-    setSubmitting(true)
-    setConflict(null)
-    try {
-      await resolveNativeRequest(changeId, request.request_id, {
-        delivery_digest: resolutionDigest,
-        disposition: 'local',
-        resolved_at: new Date().toISOString(),
-        resolved_by: 'cockpit-user',
-        selected_option_id: selectedOptionId,
-        response: response.trim() || null,
-        rationale: 'Resolved from Delivery.',
-      })
-      retryData()
-    } catch (caught) {
-      const nextConflict = caught instanceof NativeApiError
-        ? caught
-        : new NativeApiError(0, { code: 'ERR_NATIVE_REQUEST', detail: 'Resolution failed' })
-      setConflict(nextConflict)
-      if (nextConflict.currentDeliveryDigest) {
-        setResolutionDigest(nextConflict.currentDeliveryDigest)
-      }
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  if (stored.resolution) {
-    return <p className="mt-static-xs text-xs">Resolved</p>
-  }
-
-  return (
-    <div className="mt-static-md border-t border-contrast-low pt-static-md" data-testid="linked-request-resolver">
-      {request.kind === 'decision' ? (
-        <div className="flex flex-wrap gap-static-xs">
-          {(request.options ?? []).map((option) => (
-            <PButton
-              key={option.option_id}
-              type="button"
-              compact
-              variant={selectedOptionId === option.option_id ? 'primary' : 'secondary'}
-              onClick={() => setSelectedOptionId(option.option_id)}
-            >{option.label}</PButton>
-          ))}
-        </div>
-      ) : (
-        <PTextarea
-          name={`request-response-${request.request_id}`}
-          label="Response"
-          value={response}
-          onChange={(event) => setResponse(textValue(event as TextValueEvent))}
-        />
-      )}
-      <PButton
-        type="button"
-        className="mt-static-sm"
-        disabled={submitting || (request.kind === 'decision' ? selectedOptionId === null : response.trim() === '')}
-        onClick={() => void resolve()}
-      >Complete request</PButton>
-      {conflict ? (
-        <div className="mt-static-sm border-l-4 border-warning pl-static-sm text-xs" role="alert">
-          <strong>{conflict.code}</strong> {conflict.detail}
-          <p className="break-all">Current digest: {conflict.currentDeliveryDigest ?? 'unavailable'}</p>
-          <p>Submitted: {selectedOptionId ?? response}</p>
-          <PButton type="button" compact variant="secondary" onClick={() => void resolve()}>Retry resolution</PButton>
-        </div>
-      ) : null}
-    </div>
-  )
-}
+import NativeRequestResolver from '../components/NativeRequestResolver'
 
 export default function DeliveryPage() {
   const { selectedChangeId, selectedSummary } = useNativeChangeSelection()
@@ -155,10 +60,9 @@ export default function DeliveryPage() {
               <p className="mt-static-xs text-sm">{requestDetail.data.request.summary}</p>
               <p className="mt-static-xs whitespace-pre-wrap text-sm">{requestDetail.data.request.body}</p>
               <p className="mt-static-xs text-xs">{requestDetail.data.resolution ? 'Resolved' : 'Pending resolution'}</p>
-              <LinkedRequestResolver
-                changeId={requestDetail.data.request.change_id}
+              <NativeRequestResolver
                 stored={requestDetail.data}
-                retryData={() => {
+                onResolved={() => {
                   requestDetail.retry()
                   jobs.retry()
                 }}

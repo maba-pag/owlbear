@@ -3,6 +3,7 @@ import type { KanbanBoardProps } from './KanbanBoard'
 
 const SpecificationPage = lazy(() => import('./pages/SpecificationPage'))
 const DeliveryPage = lazy(() => import('./pages/DeliveryPage'))
+const RequestsPage = lazy(() => import('./pages/RequestsPage'))
 const IdeasPage = lazy(() => import('./pages/IdeasPage'))
 const MemoryTab = lazy(() => import('./pages/MemoryTab'))
 
@@ -31,6 +32,12 @@ export const routeConfig: RouteConfigEntry[] = [
     label: 'Delivery',
     icon: 'delivery',
     component: DeliveryPage,
+  },
+  {
+    path: '/requests',
+    label: 'Requests',
+    icon: 'requests',
+    component: RequestsPage,
   },
   {
     path: '/memories',

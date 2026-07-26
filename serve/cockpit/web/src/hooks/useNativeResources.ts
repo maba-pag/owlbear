@@ -38,9 +38,11 @@ export function useNativeJobs(changeId: string | null): UseNativePageResult<Nati
   return useNativePage({ resource: 'jobs', load, identity: (item) => item.job_id, enabled: changeId !== null })
 }
 
-export function useNativeRequests(changeId: string): UseNativePageResult<NativeStoredRequest> {
-  const load = useCallback((cursor?: string) => listNativeRequests(changeId, cursor), [changeId])
-  return useNativePage({ resource: 'requests', load, identity: (item) => item.request.request_id })
+export function useNativeRequests(changeId: string | null): UseNativePageResult<NativeStoredRequest> {
+  const load = useCallback((cursor?: string) => listNativeRequests(changeId ?? '', cursor), [changeId])
+  return useNativePage({
+    resource: 'requests', load, identity: (item) => item.request.request_id, enabled: changeId !== null,
+  })
 }
 
 export function useNativeAttempts(changeId: string): UseNativePageResult<NativeAttempt> {
@@ -195,5 +197,5 @@ export function useNativeRequest(
   requestId: string | null,
 ): ReturnType<typeof useNativeValue<NativeStoredRequest>> {
   const load = useCallback(() => getNativeRequest(changeId, requestId ?? ''), [changeId, requestId])
-  return useNativeValue({ resources: ['requests'], load, enabled: requestId !== null })
+  return useNativeValue({ resources: ['requests'], load, enabled: changeId !== '' && requestId !== null })
 }

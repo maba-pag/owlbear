@@ -4,7 +4,7 @@ title: 'P15-14: Build native change and job request resolution'
 status: build
 priority: high
 created: 2026-07-26T02:00:27.248344+02:00
-updated: 2026-07-26T02:00:27.248344+02:00
+updated: 2026-07-26T15:12:14.272099+02:00
 tags:
   - phase-15
   - change:replace-delivery-pipeline
@@ -33,7 +33,7 @@ ac:
 proof_bundle: critical+challenge
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-07-26T15:12:14.272099+02:00
 archival_reason:
 archival_refs: []
 ---

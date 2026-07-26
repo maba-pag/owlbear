@@ -11,6 +11,7 @@ vi.mock('../routes', () => ({
   routeConfig: [
     { path: '/', label: 'Specification', icon: 'specification', component: () => <div>Specification content</div> },
     { path: '/delivery', label: 'Delivery', icon: 'delivery', component: () => <div>Delivery content</div> },
+    { path: '/requests', label: 'Requests', icon: 'requests', component: () => <div>Requests content</div> },
     { path: '/memories', label: 'Memory', icon: 'memory', component: () => <div>Memory content</div> },
     { path: '/ideas', label: 'Ideas', icon: 'ideas', component: () => <div>Ideas content</div> },
   ],
@@ -24,7 +25,7 @@ function LocationProbe() {
 describe('NativeShell', () => {
   afterEach(() => vi.clearAllMocks())
 
-  it('presents Specification and Delivery as peer product phases', () => {
+  it('presents Specification, Delivery, and Requests as peer product phases', () => {
     render(
       <MemoryRouter initialEntries={['/?change=change-a']}>
         <NativeShell />
@@ -34,6 +35,7 @@ describe('NativeShell', () => {
     const nav = screen.getByRole('navigation', { name: 'Product phases' })
     expect(nav).toHaveTextContent('Specification')
     expect(nav).toHaveTextContent('Delivery')
+    expect(nav).toHaveTextContent('Requests')
     expect(screen.getByText('Specification content')).toBeInTheDocument()
   })
 

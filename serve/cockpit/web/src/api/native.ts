@@ -102,6 +102,8 @@ export interface NativeRequestRecord {
   delivery_digest: string
   target_node_id: string | null
   job_ids: number[]
+  evidence?: string[]
+  resume_condition?: string | null
   options?: Array<{
     option_id: string
     label: string
@@ -116,7 +118,15 @@ export interface NativeRequestRecord {
 
 export interface NativeStoredRequest {
   request: NativeRequestRecord
-  resolution: Record<string, unknown> | null
+  resolution: {
+    request_id: string
+    disposition: 'local' | 'material'
+    resolved_at: string
+    resolved_by: string
+    selected_option_id: string | null
+    response: string | null
+    rationale: string
+  } | null
 }
 
 export interface NativeAttempt {
@@ -428,6 +438,20 @@ export interface ResolveNativeRequestInput {
   rationale: string
 }
 
+export interface ResolveNativeRequestResult {
+  request: NativeStoredRequest
+  resumed_jobs: StoredNativeJob[]
+  resume: { disposition: 'resume-linked-jobs'; request_id: string; target_node_id: string | null; job_ids: number[] } | null
+  design_reentry: {
+    disposition: 'design-reentry'
+    request_id: string
+    change_id: string
+    delivery_digest: string
+    target_node_id: string | null
+    job_ids: number[]
+  } | null
+}
+
 export function setNativeJobPriority(changeId: string, input: SetJobPriorityInput): Promise<{ job: StoredNativeJob }> {
   return nativeRequest(`/api/changes/${encodeURIComponent(changeId)}/jobs/${input.job_id}/priority`, {
     method: 'POST',
@@ -457,7 +481,7 @@ export function resolveNativeRequest(
   changeId: string,
   requestId: string,
   input: ResolveNativeRequestInput,
-): Promise<Record<string, unknown>> {
+): Promise<ResolveNativeRequestResult> {
   return nativeRequest(
     `/api/changes/${encodeURIComponent(changeId)}/requests/${encodeURIComponent(requestId)}/resolve`,
     {
