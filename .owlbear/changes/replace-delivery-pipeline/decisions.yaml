@@ -1495,3 +1495,92 @@ decisions:
           - Adds a phase boundary without a separate authority or acceptance boundary
         risks:
           - Product navigation gains ceremony without clearer ownership
+
+  - id: DEC-034
+    title: Use intent-specific OCC controls for job priority and cancellation
+    status: accepted
+    decided_at: 2026-07-26
+    authority: user
+    selected: pending-unclaimed-occ-controls
+    rationale: >-
+      Cockpit's admitted Delivery board already promises prioritize and cancel actions. These actions
+      operate on pending unclaimed jobs through complete delivery-digest and OCC-token identity rather
+      than restoring generic task editing. Matching desired state replays the persisted outcome;
+      stale identity, an active claim, or an incompatible terminal disposition fails closed and
+      returns current job authority without partial mutation.
+    options:
+      - id: pending-unclaimed-occ-controls
+        label: Restrict priority and cancellation to pending unclaimed jobs with OCC identity
+        confidence: 0.94
+        recommended: true
+        pros:
+          - Preserves immutable job purpose and active-attempt ownership
+          - Gives Cockpit stable conflict recovery without generic mutation
+        cons:
+          - Claimed jobs must be released before priority or cancellation changes
+        risks:
+          - Callers that retain stale tokens receive conflicts and must refresh
+      - id: generic-job-edit
+        label: Restore a generic job mutation operation
+        confidence: 0.11
+        recommended: false
+        pros:
+          - Exposes one endpoint for future mutable fields
+        cons:
+          - Recreates arbitrary task mutation under a new record type
+        risks:
+          - Job purpose and authority fields become user-editable
+      - id: allow-claimed-administration
+        label: Permit priority and cancellation while a claim is active
+        confidence: 0.24
+        recommended: false
+        pros:
+          - Lets operators intervene without first releasing a claim
+        cons:
+          - Races active attempt ownership and finalization
+        risks:
+          - A running agent can publish evidence after its job is cancelled
+
+  - id: DEC-035
+    title: Preserve Cockpit Memory and Ideas through the shell rebuild
+    status: accepted
+    decided_at: 2026-07-26
+    authority: user
+    selected: preserve-both-utilities
+    rationale: >-
+      Memory and Ideas are useful shipped utilities unrelated to the delivery control-plane defect.
+      The Cockpit shell rebuild therefore retains their existing routes and core workflows unchanged,
+      proves that continuity at the assembled browser boundary, and does not make either utility
+      Specification, Delivery, or execution authority.
+    options:
+      - id: preserve-both-utilities
+        label: Preserve Memory and Ideas unchanged
+        confidence: 0.96
+        recommended: true
+        pros:
+          - Avoids unrelated product loss during the delivery redesign
+          - Keeps the new delivery surfaces focused on their admitted responsibilities
+        cons:
+          - The final navigation retains adjacent utilities outside the two product phases
+        risks:
+          - Route continuity can regress unless the rebuilt shell proves it explicitly
+      - id: remove-both-utilities
+        label: Remove Memory and Ideas
+        confidence: 0.18
+        recommended: false
+        pros:
+          - Produces fewer top-level destinations
+        cons:
+          - Deletes shipped utilities without a replacement
+        risks:
+          - Users lose institutional-memory and idea-capture workflows
+      - id: preserve-one-utility
+        label: Preserve only one utility
+        confidence: 0.31
+        recommended: false
+        pros:
+          - Retains one adjacent workflow with a smaller navigation set
+        cons:
+          - Introduces an unsupported asymmetry
+        risks:
+          - The removed utility disappears without product evidence

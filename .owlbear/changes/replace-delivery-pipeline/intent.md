@@ -31,7 +31,7 @@ OwlBear will provide one native, resumable path from rough idea to accepted chan
 5. The engine selects every purpose-specific `plan`, `build`, `accept`, or `audit` job. A thin orchestrator dispatches one fresh top-level agent invocation per job; builders implement one packet under the global writer lease and resolve mandatory read-only reviewer findings inside that job session.
 6. An independent acceptor proves each delivery node against its authoritative contract, all descendant receipts, and the exact committed revision. A final independent auditor proves the complete user workflow and issues the change receipt.
 7. Rejections create typed findings, corrective jobs, invalidated receipts, and superseding receipts. Completed attempts remain immutable history.
-8. Cockpit presents Specification and Delivery as peer product phases and exposes changes, delivery graphs, plans, jobs, decisions, evidence, invalidation, and acceptance without requiring users to reconstruct truth from Markdown task histories.
+8. Cockpit presents Specification and Delivery as peer product phases and exposes changes, delivery graphs, plans, jobs, decisions, evidence, invalidation, and acceptance without requiring users to reconstruct truth from Markdown task histories. Existing Memory and Ideas utilities remain available without becoming delivery authority.
 9. OpenSpec and the old task-authoritative `shape -> build -> verify -> collect` path are removed in the same atomic cutover. The old stores remain only as an immutable historical snapshot.
 
 ## Primary Workflows

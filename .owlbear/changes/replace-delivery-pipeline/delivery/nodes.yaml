@@ -12,15 +12,12 @@ authority:
 admission:
   state: admitted
   delivery_digest:
-    3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990
-  receipt: receipts/admission-3f6c65628991.yaml
+    bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+  receipt: receipts/admission-bf5edd67478d.yaml
   limits:
-    - Bootstrap projection dispatch remains disabled until complete digest-bound
-      projection audit.
-    - Admission certifies delivery completeness and feasibility, not
-      implementation correctness.
-    - The modular loader is active. MIG-004 remains open until the full delivery
-      graph completes cutover, DN-012 deletion, and DN-013 PROOF-013 absence evidence.
+    - Bootstrap correction and candidate-digest re-acceptance remain required for DN-003 through DN-014.
+    - Admission certifies delivery completeness and feasibility, not implementation correctness.
+    - Memory and Ideas continuity is preservation-only; DN-011 does not expand either utility.
 
 nodes:
   - id: DN-001
@@ -67,6 +64,7 @@ nodes:
       - REQ-015
       - REQ-016
       - REQ-023
+      - REQ-026
       - NEG-001
       - NEG-002
       - NEG-010
@@ -190,7 +188,7 @@ nodes:
       health, legacy, and SSE
       resources over the real engine with no arbitrary task transitions.
     owns: [REQ-021]
-    supports: [REQ-010, REQ-015, REQ-016, KEEP-006, KEEP-007]
+    supports: [REQ-010, REQ-015, REQ-016, REQ-026, KEEP-006, KEEP-007]
     modules: [MOD-004, MOD-008]
     produces: [IF-011]
     consumes: [IF-001, IF-002, IF-003, IF-007, IF-008, IF-009, IF-010, IF-014]
@@ -205,8 +203,8 @@ nodes:
       graph/list, plan, job, request, evidence, invalidation, exact-proof, and legacy
       inventory
       experiences across desktop and mobile.
-    owns: [REQ-010]
-    supports: [REQ-016, KEEP-006]
+    owns: [REQ-010, KEEP-010]
+    supports: [REQ-016, REQ-026, KEEP-006]
     modules: [MOD-005, MOD-008]
     produces: [IF-012]
     consumes: [IF-011]

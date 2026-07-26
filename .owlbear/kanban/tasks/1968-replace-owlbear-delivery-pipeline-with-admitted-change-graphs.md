@@ -4,14 +4,14 @@ title: Replace OwlBear delivery pipeline with admitted change graphs
 status: collect
 priority: high
 created: 2026-07-21T01:46:53.257501+02:00
-updated: 2026-07-25T02:48:10.051561+02:00
+updated: 2026-07-26T02:02:54.625430+02:00
 tags:
   - pipeline-redesign
   - architecture
   - scope:core
   - admitted-change
-  - digest:3f6c65628991
   - corrective-projection
+  - digest:bf5edd67478d
 parent:
 depends_on:
   - 1975
@@ -37,6 +37,21 @@ depends_on:
   - 2035
   - 2036
   - 2037
+  - 2071
+  - 2072
+  - 2073
+  - 2074
+  - 2075
+  - 2076
+  - 2077
+  - 2078
+  - 2079
+  - 2080
+  - 2081
+  - 2082
+  - 2083
+  - 2084
+  - 2085
 ac:
   - The bootstrap native change package records the approved intent, 
     architecture decisions, complete delivery-node graph, admission 
@@ -195,3 +210,24 @@ Route: `shape` for user-facing material design review, authority reconciliation,
 - C4 supplies engine-side REQ-025 reconciliation behavior; DN-006 still owns planner publication and full REQ-025 closure.
 - Bootstrap projection dispatch remains locked until the digest-bound corrective graph passes completion audit.
 - Direct Ruff on unchanged admission modules still reports five pre-existing findings; `yamllint` is unavailable.
+
+[[2026-07-26T02:01:40+02:00]]
+## Corrective Admission Projection
+- Change: `replace-delivery-pipeline`
+- Delivery digest: `bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357`
+- Admission receipt: `.owlbear/changes/replace-delivery-pipeline/receipts/admission-bf5edd67478d.yaml`
+- Authority: modular `delivery/obligations.yaml`, `delivery/contracts.yaml`, and `delivery/nodes.yaml`; historical `graph.yaml` references are superseded and must not drive work.
+- Deterministic evidence: independent authority/impact challenge pass; 37 canonical revision/admission tests passed; authority lint/diff passed; user approved the exact digest; production admission assessment returned zero findings; receipt plus jobs 1-14 published atomically.
+
+### Amendment
+DEC-034/REQ-026 assign already-designed intent-specific priority/cancel behavior through DN-003, IF-003, DN-010, IF-011, DN-011, and IF-012. DEC-035/KEEP-010 assign unchanged Memory/Ideas route continuity to DN-011/PROOF-012 without feature expansion.
+
+### Impact Closure
+DN-001/DN-002 authority remains unchanged. Candidate identity stales descendant receipts from DN-003 through DN-014. #2071 implements DN-003 controls; #2072-#2078 re-prove unchanged DN-004/DN-009/DN-005/DN-006/DN-007/DN-008/DN-014 boundaries in graph order; #2079 corrects DN-010 HTTP; #2080-#2085 deliver DN-011. #1989/#1990 are reprojected but remain in shape for DN-012/DN-013.
+
+### Projection Policy
+Only tasks carrying digest `bf5edd67478d` may dispatch for the corrective closure. Old aggregate/task notes remain historical evidence, not authority. #1968 archives only after #1988/#1989/#1990 and #2071-#2085 are archived completed with tested-revision evidence.
+
+[[2026-07-26T02:02:54+02:00]]
+## Shape Notes
+CORRECTIVE PROJECTION READY: Admitted digest `bf5edd...`, receipt/generation/jobs, repaired #1988/#1989/#1990 modular projections, corrective/re-acceptance chain #2071-#2079, and DN-011 leaves #2080-#2085 were audited. #1968 remains collect and blocked by these dependencies; no premature archive or DN-012/DN-013 shaping occurred.

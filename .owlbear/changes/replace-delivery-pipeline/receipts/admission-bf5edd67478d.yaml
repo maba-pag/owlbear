@@ -1,0 +1,473 @@
+---
+schema_version: 1
+kind: admission
+receipt_id: admission-bf5edd67478d
+change_id: replace-delivery-pipeline
+delivery_digest:
+  bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+issued_at: '2026-07-26T00:00:00Z'
+assessment:
+  schema_version: 1
+  revision_digest:
+    bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+  findings: []
+  limits:
+    - Bootstrap correction and candidate-digest re-acceptance remain required
+      for DN-003 through DN-014.
+    - Admission certifies delivery completeness and feasibility, not
+      implementation correctness.
+    - Memory and Ideas continuity is preservation-only; DN-011 does not expand
+      either utility.
+evidence:
+  digest: bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+  challenge:
+    REQ-001:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-002:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-003:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-004:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-005:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-006:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-007:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-008:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-009:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-010:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-011:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-012:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-013:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-014:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-015:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-016:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-017:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-018:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-019:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-020:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-021:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-022:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-023:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-024:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-025:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    REQ-026:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    WF-001:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    WF-002:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    WF-003:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    WF-004:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    WF-005:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    WF-006:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    WF-007:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    IF-001:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    IF-002:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    IF-003:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    IF-004:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    IF-005:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    IF-015:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    IF-006:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    IF-007:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    IF-008:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    IF-009:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    IF-010:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    IF-011:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    IF-012:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    IF-013:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    IF-014:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    MIG-001:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    MIG-002:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    MIG-003:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    MIG-004:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    RISK-001:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    RISK-002:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    RISK-003:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    RISK-004:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    RISK-005:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    RISK-006:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    RISK-007:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    RISK-008:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    RISK-009:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    RISK-010:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    RISK-011:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    RISK-012:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    RISK-013:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    PROOF-001:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    PROOF-002:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    PROOF-003:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    PROOF-004:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    PROOF-005:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    PROOF-006:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    PROOF-007:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    PROOF-008:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    PROOF-009:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    PROOF-011:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    PROOF-012:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    PROOF-013:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    PROOF-014:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    PROOF-015:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    DN-001:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    DN-002:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    DN-003:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    DN-004:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    DN-005:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    DN-006:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    DN-007:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    DN-008:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    DN-009:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    DN-010:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    DN-011:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    DN-012:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    DN-013:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+    DN-014:
+      disposition: pass
+      evidence: independent authority and impact challenge pass
+  baseline:
+    digest: bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+    clean_before: true
+    clean_after: true
+    commands:
+      - command: uv run pytest -q serve/kanban/tests/test_change_revision.py
+          serve/kanban/tests/test_admission_transaction.py
+        exit_code: 0
+        result: 37 passed
+      - command: authority lint and git diff --check
+        exit_code: 0
+        result: passed
+  approval:
+    approved: true
+    digest: bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+    authority: user
+    method: VS Code exact-digest approval
+  limits:
+    - Bootstrap correction and candidate-digest re-acceptance remain required
+      for DN-003 through DN-014.
+    - Admission certifies delivery completeness and feasibility, not
+      implementation correctness.
+    - Memory and Ideas continuity is preservation-only; DN-011 does not expand
+      either utility.
+generation:
+  schema_version: 1
+  change_id: replace-delivery-pipeline
+  delivery_digest:
+    bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+  receipt_id: admission-bf5edd67478d
+  jobs:
+    - job_id: 1
+      kind: plan
+      priority: 0
+      created_at: '2026-07-26T00:00:00Z'
+      updated_at: '2026-07-26T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+      target_node_id: DN-001
+      receipt_id: admission-bf5edd67478d
+    - job_id: 2
+      kind: plan
+      priority: 0
+      created_at: '2026-07-26T00:00:00Z'
+      updated_at: '2026-07-26T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+      target_node_id: DN-002
+      receipt_id: admission-bf5edd67478d
+    - job_id: 3
+      kind: plan
+      priority: 0
+      created_at: '2026-07-26T00:00:00Z'
+      updated_at: '2026-07-26T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+      target_node_id: DN-003
+      receipt_id: admission-bf5edd67478d
+    - job_id: 4
+      kind: plan
+      priority: 0
+      created_at: '2026-07-26T00:00:00Z'
+      updated_at: '2026-07-26T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+      target_node_id: DN-004
+      receipt_id: admission-bf5edd67478d
+    - job_id: 5
+      kind: plan
+      priority: 0
+      created_at: '2026-07-26T00:00:00Z'
+      updated_at: '2026-07-26T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+      target_node_id: DN-005
+      receipt_id: admission-bf5edd67478d
+    - job_id: 6
+      kind: plan
+      priority: 0
+      created_at: '2026-07-26T00:00:00Z'
+      updated_at: '2026-07-26T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+      target_node_id: DN-006
+      receipt_id: admission-bf5edd67478d
+    - job_id: 7
+      kind: plan
+      priority: 0
+      created_at: '2026-07-26T00:00:00Z'
+      updated_at: '2026-07-26T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+      target_node_id: DN-007
+      receipt_id: admission-bf5edd67478d
+    - job_id: 8
+      kind: plan
+      priority: 0
+      created_at: '2026-07-26T00:00:00Z'
+      updated_at: '2026-07-26T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+      target_node_id: DN-008
+      receipt_id: admission-bf5edd67478d
+    - job_id: 9
+      kind: plan
+      priority: 0
+      created_at: '2026-07-26T00:00:00Z'
+      updated_at: '2026-07-26T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+      target_node_id: DN-009
+      receipt_id: admission-bf5edd67478d
+    - job_id: 10
+      kind: plan
+      priority: 0
+      created_at: '2026-07-26T00:00:00Z'
+      updated_at: '2026-07-26T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+      target_node_id: DN-010
+      receipt_id: admission-bf5edd67478d
+    - job_id: 11
+      kind: plan
+      priority: 0
+      created_at: '2026-07-26T00:00:00Z'
+      updated_at: '2026-07-26T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+      target_node_id: DN-011
+      receipt_id: admission-bf5edd67478d
+    - job_id: 12
+      kind: plan
+      priority: 0
+      created_at: '2026-07-26T00:00:00Z'
+      updated_at: '2026-07-26T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+      target_node_id: DN-012
+      receipt_id: admission-bf5edd67478d
+    - job_id: 13
+      kind: plan
+      priority: 0
+      created_at: '2026-07-26T00:00:00Z'
+      updated_at: '2026-07-26T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+      target_node_id: DN-013
+      receipt_id: admission-bf5edd67478d
+    - job_id: 14
+      kind: plan
+      priority: 0
+      created_at: '2026-07-26T00:00:00Z'
+      updated_at: '2026-07-26T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
+      target_node_id: DN-014
+      receipt_id: admission-bf5edd67478d

@@ -213,6 +213,14 @@ requirements:
       superseding plans incorporate current implementation evidence; final audit remains
       read-only.
     workflows: [WF-002, WF-004, WF-005]
+  - id: REQ-026
+    title: Intent-specific job administration
+    statement: >-
+      Users reprioritize or cancel pending unclaimed Delivery jobs through strict delivery-digest
+      and OCC-token identity; matching desired state replays, while stale identity, active claims,
+      and incompatible terminal dispositions fail closed with current job authority and no partial
+      mutation.
+    workflows: [WF-002, WF-003, WF-004, WF-005]
 
 negative_requirements:
   - id: NEG-001
@@ -294,6 +302,10 @@ preserved_behaviors:
       Preserve adaptive architecture review that explains current ownership, proposed
       interfaces, tradeoffs,
       weaknesses, and completion at depth proportional to novelty and risk.
+  - id: KEEP-010
+    statement: >-
+      Preserve the existing Cockpit Memory and Ideas routes and core workflows through the shell
+      rebuild without expanding their behavior or making either utility delivery authority.
 
 workflows:
   - id: WF-001

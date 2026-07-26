@@ -176,7 +176,10 @@ interfaces:
       NativeRuntime receives positive
       claim-expiry policy and exposes a supplied-time, job-ID-ordered recovery sweep
       that turns strictly expired claims
-      into retryable jobs plus immutable crashed events.
+      into retryable jobs plus immutable crashed events. Intent-specific priority and cancellation
+      operations require matching delivery-digest and OCC-token identity on pending unclaimed jobs,
+      return refreshed job authority, replay matching desired state, and never expose generic job
+      editing.
     authority: MOD-001
     failure_semantics: >-
       Atomic transaction abort or recoverable manifest; no partial valid receipt.
@@ -352,7 +355,7 @@ interfaces:
     contract: >-
       Typed change, graph, job, request, attempt, finding, receipt, health, legacy
       inventory, and invalidation
-      resources with conflict tokens and SSE events.
+      resources with conflict tokens, intent-specific priority/cancellation controls, and SSE events.
     authority: MOD-004
     failure_semantics: Domain errors map to stable HTTP responses; stale
       conflicts return current authority identity.
@@ -364,7 +367,9 @@ interfaces:
     consumers: [DN-012, DN-013]
     contract: >-
       Accessible responsive peer Specification and Delivery views plus Requests, Activity,
-      Evidence, and Legacy views over native API contracts.
+      Evidence, and Legacy views over native API contracts, including intent-specific job priority
+      and cancellation actions without arbitrary status or kind mutation. Existing Memory and Ideas
+      routes retain their core workflows as unchanged peer utilities.
     authority: MOD-005
     failure_semantics: Fetch/conflict/error states preserve current data and
       expose actionable retry or resolution.
@@ -865,6 +870,7 @@ proofs:
         attempts/findings/receipts, and legacy inventory.
       - Resolve a decision, inspect stale/corrective chain, and verify
         keyboard/mobile behavior.
+      - Confirm Memory and Ideas routes still complete their existing core workflows after the shell rebuild.
       - Capture desktop/mobile screenshots and assert nonblank, nonoverlapping,
         bounded layout.
     allowed_replacements: [fixture change/job store; no mocked HTTP API]

@@ -753,6 +753,8 @@ A Changes view lists draft, admitted, executing, accepted, abandoned, and supers
 
 The existing request-resolution interaction is retained and expanded with pros, cons, risks, recommendation, and confidence. Activity/session views join jobs to graph targets. Legacy history is an immutable inventory, not an executable board.
 
+Memory and Ideas remain unchanged peer utilities through the shell and routing rebuild. DN-011 proves route and core-workflow continuity but does not expand either utility or make it Specification, Delivery, or execution authority.
+
 ### 15.4 Frontend constraints
 
 - Preserve PDS, current accessibility, keyboard, focus, SSE invalidation, filtering, conflict handling, and responsive shell behavior.
