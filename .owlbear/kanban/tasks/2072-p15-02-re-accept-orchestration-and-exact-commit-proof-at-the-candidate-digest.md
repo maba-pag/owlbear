@@ -1,10 +1,10 @@
 ---
 id: 2072
 title: 'P15-02: Re-accept orchestration and exact-commit proof at the candidate digest'
-status: build
+status: verify
 priority: high
 created: 2026-07-26T01:58:44.920258+02:00
-updated: 2026-07-26T01:58:44.920258+02:00
+updated: 2026-07-26T02:49:02.180344+02:00
 tags:
   - phase-15
   - candidate-reacceptance
@@ -48,3 +48,15 @@ In: DN-004 contract, IF-004/IF-005/IF-015, PROOF-014, candidate digest, current 
 Out: new orchestration behavior unless proof exposes a local defect; MCP, Cockpit, frontend, cutover.
 
 Proof guidance: run the existing public orchestration/writer/proof-checkout boundary at a recorded code SHA and inspect authority references; repair only a concrete DN-004 defect.
+
+[[2026-07-26T02:49:02+02:00]]
+## Builder Notes
+DONE: Re-accepted unchanged DN-004 against candidate digest `bf5edd...` at tested SHA `86322a6ec48a1e690f2f003f08bd2e4550cd9fd3`.
+
+Evidence:
+- `uv run pytest -q` over dispatch runtime, proof checkout, MCP surface/acceptance, planner interaction, and builder interaction: 69 passed.
+- Builder challenger independently reran the six files unsharded: 69 passed.
+- Exact PROOF-014 mapping covers the eight IF-015 tools, real DispatchRuntime waves for plan/build/accept/audit, writer/read-only compatibility, claim/finalize/recovery, checkout setup/rejection/finish/release/recovery cleanup, containment, exact commit, orphan health, and structured planner/builder interactions.
+- Product/proof paths remained clean; focused product lint passed.
+
+No product edit was required. Builder memories assessed.
