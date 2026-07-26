@@ -1,10 +1,10 @@
 ---
 id: 2075
 title: 'P15-05: Re-accept frontier planning and reconciliation at the candidate digest'
-status: collect
+status: archived
 priority: high
 created: 2026-07-26T01:59:09.251790+02:00
-updated: 2026-07-26T03:41:48.202064+02:00
+updated: 2026-07-26T03:42:34.317118+02:00
 tags:
   - phase-15
   - candidate-reacceptance
@@ -36,7 +36,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -61,3 +61,7 @@ Focused planner/native/dispatch proof: 12 passed. Builder challenger independent
 [[2026-07-26T03:41:48+02:00]]
 ## Verify Notes
 PASS: DN-006 candidate re-acceptance is complete. Tested SHA `9be7018bbef8718a847b7df7c75d02ea275a0348` and builder `7c829c9bbb184e9db0033a4fb951c778d66f5542` are ancestors. Builder focused 12 and challenge 72 passed; verifier reran both assembled PROOF-005 scenarios (2 passed). Causal linkage covers topology, atomic publication, invalid expansion, predecessor acceptance, reconciliation job, old-build block, evidence consumption, digest supersession, and precise invalidation/disjoint preservation. Product/proof clean; lint and verifier challenge passed. Memories assessed.
+
+[[2026-07-26T03:42:34+02:00]]
+## Collect Notes
+ARCHIVED: DN-006 candidate re-acceptance complete. Tested `9be7018bbef8718a847b7df7c75d02ea275a0348`, builder `7c829c9bbb184e9db0033a4fb951c778d66f5542`, verifier `bfba067f00fd3b073d6c4a0fae00a01e68d46030` are ancestors. Focused 12, challenge 72, assembled verifier 2 passed; both challengers passed; no product delta/open finding. Memories assessed.
