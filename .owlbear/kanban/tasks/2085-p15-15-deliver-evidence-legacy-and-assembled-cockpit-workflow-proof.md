@@ -1,10 +1,10 @@
 ---
 id: 2085
 title: 'P15-15: Deliver evidence, legacy, and assembled Cockpit workflow proof'
-status: verify
+status: collect
 priority: high
 created: 2026-07-26T02:00:36.235890+02:00
-updated: 2026-07-27T01:05:44.301473+02:00
+updated: 2026-07-27T01:12:40.844863+02:00
 tags:
   - phase-15
   - change:replace-delivery-pipeline
@@ -75,3 +75,19 @@ Evidence: desktop Playwright 1 passed in 52.0s; mobile Playwright 1 passed in 54
 Broad kanban xdist regression progressed beyond 88 percent after obsolete graph.yaml compatibility tests were removed but reported two failures whose tracebacks were lost to terminal transport. Historical evidence points to multiprocessing harness pressure rather than this packet, and no task-boundary production defect was evidenced; challenger classified this as non-blocking residual broad-suite risk.
 
 Adopted the complete interrupted-attempt diff within the shaped envelope, including current externally formatted runtime-query and proof-seeder contents.
+
+[[2026-07-27T01:12:40+02:00]]
+## Verify Notes
+PASS
+
+Verified builder commit `6e96b61d124d20b8c9d33e15c3d9369463bc9f8c` against AC-1 through AC-3 and admitted digest `bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357`.
+
+AC-1: the committed route contract exposes the eight admitted destinations and current production source contains no retired Kanban/Decisions/task-mutation owners; Memory and Ideas remain in the shell and in the assembled journey.
+
+AC-2: Activity, Evidence, and Legacy implement current/full history, receipt revisions and validity, supersession details, provenance, truncation, and read-only presentation. Maintained page/route tests and the full frontend suite cover these boundaries.
+
+AC-3: completed real-stack evidence on the semantically identical worktree passed desktop and mobile separately over built SPA plus real FastAPI, including persisted request resolution, route traversal, screenshots, keyboard/geometry/overflow checks, Memory/Ideas continuity, and 300-node virtualization. The builder commit's later hook delta was EOF normalization only.
+
+Evidence: frontend 264 passed; Cockpit backend 175 passed; focused Python 25 passed; build, Stylelint, HTMLHint, Ruff, and VS Code diagnostics clean; committed patch passes `git diff --check`. Verifier challenger decision: pass.
+
+Residual risk: the terminal transport prevented a fresh verifier Playwright exit report after starting real uvicorn and two tests, and two broad kanban xdist failures lacked preserved tracebacks. Neither produced a concrete defect in this packet; both are recorded rather than represented as fresh passing evidence.
