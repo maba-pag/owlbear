@@ -5,6 +5,7 @@ import Shell from './Shell'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { CockpitProvider } from './hooks/CockpitProvider'
 import * as EventSourceProviderModule from './hooks/EventSourceProvider'
+import { NativeInvalidationProvider } from './hooks/NativeInvalidationProvider'
 
 function PassthroughProvider({ children }: { children: ReactNode; url?: string }) {
   return <>{children}</>
@@ -18,11 +19,13 @@ const EventSourceProvider =
 function CockpitRuntime() {
   return (
     <EventSourceProvider url="/api/events">
-      <CockpitProvider>
-        <ErrorBoundary label="Cockpit">
-          <Shell />
-        </ErrorBoundary>
-      </CockpitProvider>
+      <NativeInvalidationProvider>
+        <CockpitProvider>
+          <ErrorBoundary label="Cockpit">
+            <Shell />
+          </ErrorBoundary>
+        </CockpitProvider>
+      </NativeInvalidationProvider>
     </EventSourceProvider>
   )
 }
