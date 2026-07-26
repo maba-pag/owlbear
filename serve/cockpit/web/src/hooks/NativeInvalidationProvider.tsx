@@ -13,7 +13,7 @@ export type NativeConnectionStatus = 'connecting' | 'open' | 'closed'
 
 interface NativeInvalidationContextValue {
   status: NativeConnectionStatus
-  tokens: Partial<Record<NativeResource, number>>
+  tokens: Partial<Record<NativeResource, string>>
 }
 
 interface NativeInvalidationProviderProps extends PropsWithChildren {
@@ -31,8 +31,8 @@ function isNativeChangedEvent(value: unknown): value is NativeChangedEvent {
   return (
     Array.isArray(record.resources) &&
     record.resources.every((item) => typeof item === 'string') &&
-    typeof record.token === 'number' &&
-    Number.isSafeInteger(record.token)
+    typeof record.token === 'string' &&
+    /^\d+$/.test(record.token)
   )
 }
 
@@ -42,7 +42,7 @@ export function NativeInvalidationProvider({
   reconnectMs = 30_000,
 }: NativeInvalidationProviderProps): ReactElement {
   const [status, setStatus] = useState<NativeConnectionStatus>('connecting')
-  const [tokens, setTokens] = useState<Partial<Record<NativeResource, number>>>({})
+  const [tokens, setTokens] = useState<Partial<Record<NativeResource, string>>>({})
   const sourceRef = useRef<EventSource | null>(null)
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -81,12 +81,16 @@ export function NativeInvalidationProvider({
             return
           }
           setTokens((previous) => {
-            if (payload.resources.every((resource) => payload.token <= (previous[resource] ?? 0))) {
+            if (
+              payload.resources.every(
+                (resource) => BigInt(payload.token) <= BigInt(previous[resource] ?? '0'),
+              )
+            ) {
               return previous
             }
             const next = { ...previous }
             for (const resource of payload.resources) {
-              if (payload.token > (next[resource] ?? 0)) {
+              if (BigInt(payload.token) > BigInt(next[resource] ?? '0')) {
                 next[resource] = payload.token
               }
             }
@@ -126,7 +130,7 @@ export function NativeInvalidationProvider({
 
 export function useNativeInvalidation(resource: NativeResource): {
   status: NativeConnectionStatus
-  token: number | null
+  token: string | null
 } {
   const context = useContext(NativeInvalidationContext)
   if (!context) {

@@ -125,7 +125,7 @@ async def events(request: Request, engine: _Engine) -> EventSourceResponse:
             token = _next_token(token)
             yield {
                 "event": "native-changed",
-                "data": json.dumps({"resources": resources, "token": token}),
+                "data": json.dumps({"resources": resources, "token": str(token)}),
             }
 
     return EventSourceResponse(_stream(), ping=1)

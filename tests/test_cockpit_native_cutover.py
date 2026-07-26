@@ -95,9 +95,9 @@ async def test_events_stream_one_native_event_per_batch_with_monotonic_tokens(
     assert response.status_code == 200
     assert lines == [
         "event: native-changed",
-        'data: {"resources": ["jobs", "receipts"], "token": 100}',
+        'data: {"resources": ["jobs", "receipts"], "token": "100"}',
         "event: native-changed",
-        'data: {"resources": ["requests"], "token": 101}',
+        'data: {"resources": ["requests"], "token": "101"}',
     ]
 
 

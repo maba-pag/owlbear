@@ -26,7 +26,7 @@ class MockEventSource {
     this.onopen?.()
   }
 
-  emit(resources: string[], token: number) {
+  emit(resources: string[], token: string) {
     this.listeners.get('native-changed')?.(
       { data: JSON.stringify({ resources, token }) } as MessageEvent<string>,
     )
@@ -62,11 +62,11 @@ describe('NativeInvalidationProvider', () => {
 
     act(() => {
       source.open()
-      source.emit(['jobs'], 10)
-      source.emit(['jobs'], 9)
+      source.emit(['jobs'], '1785057600602000000')
+      source.emit(['jobs'], '1785057600601999999')
     })
 
-    expect(hook.result.current.jobs).toEqual({ status: 'open', token: 10 })
+    expect(hook.result.current.jobs).toEqual({ status: 'open', token: '1785057600602000000' })
     expect(hook.result.current.requests.token).toBeNull()
   })
 

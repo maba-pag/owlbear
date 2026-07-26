@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeApiError, type NativePage } from '../api/native'
 import { useNativePage } from '../hooks/useNativePage'
 
-const invalidation = vi.hoisted(() => ({ status: 'open' as 'open' | 'closed', token: null as number | null }))
+const invalidation = vi.hoisted(() => ({ status: 'open' as 'open' | 'closed', token: null as string | null }))
 
 vi.mock('../hooks/NativeInvalidationProvider', () => ({
   useNativeInvalidation: vi.fn(() => invalidation),
@@ -103,7 +103,7 @@ describe('useNativePage', () => {
     const hook = renderHook(() => useRows(load))
     await waitFor(() => expect(load).toHaveBeenCalledTimes(1))
 
-    invalidation.token = 10
+    invalidation.token = '1785057600602000000'
     hook.rerender()
     await waitFor(() => expect(load).toHaveBeenCalledTimes(2))
     hook.rerender()
@@ -131,7 +131,7 @@ describe('useNativePage', () => {
     const hook = renderHook(() => useRows(load))
     await waitFor(() => expect(load).toHaveBeenCalledTimes(1))
 
-    invalidation.token = 10
+    invalidation.token = '1785057600602000000'
     hook.rerender()
     await act(async () => resolveInitial(page([{ id: 1, label: 'old' }], null)))
 
@@ -151,5 +151,34 @@ describe('useNativePage', () => {
 
     await waitFor(() => expect(loadB).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(hook.result.current.items).toEqual([{ id: 2, label: 'change-b' }]))
+  })
+
+  it('starts the replacement loader even when the previous owner never settles', async () => {
+    const loadA = vi.fn(() => new Promise<NativePage<Row>>(() => undefined))
+    const loadB = vi.fn().mockResolvedValue(page([{ id: 2, label: 'change-b' }], null))
+    const hook = renderHook(({ load }) => useRows(load), { initialProps: { load: loadA } })
+    await waitFor(() => expect(loadA).toHaveBeenCalledTimes(1))
+
+    hook.rerender({ load: loadB })
+
+    await waitFor(() => expect(loadB).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(hook.result.current.items).toEqual([{ id: 2, label: 'change-b' }]))
+  })
+
+  it('keeps the replacement owner loading when the stale request settles first', async () => {
+    let resolveA!: (value: NativePage<Row>) => void
+    let resolveB!: (value: NativePage<Row>) => void
+    const loadA = vi.fn(() => new Promise<NativePage<Row>>((resolve) => { resolveA = resolve }))
+    const loadB = vi.fn(() => new Promise<NativePage<Row>>((resolve) => { resolveB = resolve }))
+    const hook = renderHook(({ load }) => useRows(load), { initialProps: { load: loadA } })
+    await waitFor(() => expect(loadA).toHaveBeenCalledTimes(1))
+
+    hook.rerender({ load: loadB })
+    await waitFor(() => expect(loadB).toHaveBeenCalledTimes(1))
+    await act(async () => resolveA(page([{ id: 1, label: 'change-a' }], null)))
+
+    expect(hook.result.current.isLoading).toBe(true)
+    await act(async () => resolveB(page([{ id: 2, label: 'change-b' }], null)))
+    await waitFor(() => expect(hook.result.current.isLoading).toBe(false))
   })
 })

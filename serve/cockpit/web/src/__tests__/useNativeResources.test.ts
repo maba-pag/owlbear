@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeApiError } from '../api/native'
 import { useNativeChange } from '../hooks/useNativeResources'
 
-const invalidation = vi.hoisted(() => ({ status: 'open' as const, token: null as number | null }))
+const invalidation = vi.hoisted(() => ({ status: 'open' as const, token: null as string | null }))
 
 vi.mock('../hooks/NativeInvalidationProvider', () => ({
   useNativeInvalidation: vi.fn(() => invalidation),
@@ -46,7 +46,7 @@ describe('native retained value hooks', () => {
     const hook = renderHook(() => useNativeChange('change'))
     await waitFor(() => expect(hook.result.current.data).toMatchObject({ change_id: 'change' }))
 
-    invalidation.token = 10
+    invalidation.token = '1785057600602000000'
     hook.rerender()
     await waitFor(() => expect(hook.result.current.error).toBeInstanceOf(NativeApiError))
     expect(hook.result.current.data).toMatchObject({ change_id: 'change' })

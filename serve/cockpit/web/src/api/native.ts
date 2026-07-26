@@ -11,13 +11,13 @@ export type NativeResource =
 
 export interface NativeChangedEvent {
   resources: NativeResource[]
-  token: number
+  token: string
 }
 
 export interface NativeJob {
   schema_version: number
   job_id: number
-  kind: 'plan' | 'build' | 'accept' | 'audit'
+  kind: 'plan' | 'build' | 'accept' | 'audit' | 'supersession'
   priority: number
   created_at: string
   updated_at: string
@@ -100,7 +100,7 @@ export interface NativeRequestRecord {
   created_at: string
   change_id: string
   delivery_digest: string
-  target_node_id: string
+  target_node_id: string | null
   job_ids: number[]
 }
 

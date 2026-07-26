@@ -48,24 +48,24 @@ export function useNativePage<T>({
   const [error, setError] = useState<NativeApiError | Error | null>(null)
   const [retryFromStart, setRetryFromStart] = useState(false)
   const mountedRef = useRef(true)
-  const inFlightRef = useRef(false)
-  const pendingRefreshRef = useRef(false)
+  const inFlightGenerationRef = useRef<number | null>(null)
+  const pendingRefreshGenerationRef = useRef<number | null>(null)
   const generationRef = useRef(0)
   const loadRef = useRef(load)
   const identityRef = useRef(identity)
-  const lastTokenRef = useRef<number | null>(null)
+  const lastTokenRef = useRef<string | null>(null)
   loadRef.current = load
   identityRef.current = identity
 
   const refresh = useCallback(async (cursor?: string) => {
-    if (inFlightRef.current) {
+    const generation = generationRef.current
+    if (inFlightGenerationRef.current === generation) {
       if (!cursor) {
-        pendingRefreshRef.current = true
+        pendingRefreshGenerationRef.current = generation
       }
       return
     }
-    const generation = generationRef.current
-    inFlightRef.current = true
+    inFlightGenerationRef.current = generation
     if (cursor) {
       setIsLoadingMore(true)
     } else {
@@ -91,13 +91,15 @@ export function useNativePage<T>({
         setRetryFromStart(true)
       }
     } finally {
-      inFlightRef.current = false
-      if (mountedRef.current) {
+      if (inFlightGenerationRef.current === generation) {
+        inFlightGenerationRef.current = null
+      }
+      if (mountedRef.current && generation === generationRef.current) {
         setIsLoading(false)
         setIsLoadingMore(false)
       }
-      if (pendingRefreshRef.current && mountedRef.current) {
-        pendingRefreshRef.current = false
+      if (pendingRefreshGenerationRef.current === generation && mountedRef.current) {
+        pendingRefreshGenerationRef.current = null
         void refresh()
       }
     }
@@ -106,6 +108,7 @@ export function useNativePage<T>({
   useEffect(() => {
     mountedRef.current = true
     generationRef.current += 1
+    pendingRefreshGenerationRef.current = null
     setNextCursor(null)
     void refresh()
     return () => {
@@ -114,8 +117,10 @@ export function useNativePage<T>({
   }, [load, refresh])
 
   useEffect(() => {
-    const newestToken = Math.max(token ?? 0, secondary.token ?? 0, tertiary.token ?? 0, quaternary.token ?? 0)
-    if (newestToken <= (lastTokenRef.current ?? 0)) {
+    const newestToken = [token, secondary.token, tertiary.token, quaternary.token]
+      .filter((value): value is string => value !== null)
+      .reduce((latest, value) => (BigInt(value) > BigInt(latest) ? value : latest), '0')
+    if (BigInt(newestToken) <= BigInt(lastTokenRef.current ?? '0')) {
       return
     }
     lastTokenRef.current = newestToken
