@@ -1,10 +1,10 @@
 ---
 id: 2078
 title: 'P15-08: Re-accept independent whole-change audit at the candidate digest'
-status: verify
+status: collect
 priority: high
 created: 2026-07-26T01:59:33.060377+02:00
-updated: 2026-07-26T09:49:56.100134+02:00
+updated: 2026-07-26T10:12:23.139236+02:00
 tags:
   - phase-15
   - candidate-reacceptance
@@ -59,3 +59,6 @@ Verifier rejected 47a9c42a0a39d018aa762d6abc6ef99ce45b9f09: the audit command on
 
 [[2026-07-26T09:49:56+02:00]]
 Verifier repair replaces the weak digest/count probe with candidate-local whole_change_audit_report. The exact command identity is fixed; python -I imports serve/kanban/src from the proof checkout and loads checkout authority. Accepted receipts are explicit immutable inputs. Runtime independently derives and byte-compares canonical JSON covering full decisions, workflows, migrations, all nodes/proofs, PROOF-008 boundary/methods, and accepted receipt closure. Irrelevant command labels/output are rejected. No-wrap receipt YAML preserves exact replay. Bootstrap validation before commit: Ruff clean; report enumerates 14 nodes, 7 workflows, 4 migrations. Exact-checkout public proof will run immediately after commit.
+
+[[2026-07-26T10:12:23+02:00]]
+Verifier acceptance at committed HEAD 33b377a4bde697f249b6962e377ca81730706839. Ruff clean; full committed audit matrix 38 passed, 84 deselected. Candidate-local exact-checkout success/replay and irrelevant-output rejection 2 passed. Final command-provenance challenger PASS: fixed command identity, python -I candidate import, checkout authority, explicit receipts, independent canonical report, forged label/report/receipt attacks all rejected with no publication.
