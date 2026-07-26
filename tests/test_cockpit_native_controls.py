@@ -136,6 +136,9 @@ def control_harness(tmp_path: Path, project_root: Path) -> _ControlHarness:
     jobs = JobStore(work_root)
     _materialize(jobs, _job(revision, 1, "accept"))
     _materialize(jobs, _job(revision, 2, "build"))
+    _materialize(jobs, _job(revision, 3, "build"))
+    _materialize(jobs, _job(revision, 4, "build"))
+    _materialize(jobs, _job(revision, 5, "build"))
     NativeRequestRuntime(revision, work_root).create_request(_request(revision))
 
     proof_root = ops_root / "scratch" / "proof"
@@ -161,6 +164,16 @@ def control_harness(tmp_path: Path, project_root: Path) -> _ControlHarness:
     assert not isinstance(started, DispatchDiagnostic)
     assert started.diagnostic is None
     assert checkout is not None
+    active = StartJobRequest(
+        job_id=5,
+        attempt_id="attempt-005",
+        claim_id="claim-005",
+        actor_id="builder",
+        process_id="process-005",
+        claimed_at="2026-07-24T00:02:30Z",
+        candidate_revision=head,
+    )
+    assert runtime.start_job(active).diagnostic is None
 
     context = NativeChangeContext(revision=revision, runtime=runtime, dispatch=dispatch)
     engine = KanbanEngine(work_root)
@@ -213,6 +226,27 @@ def _store_state(*roots: Path) -> tuple[tuple[str, bytes], ...]:
             if path.is_file()
         )
     )
+
+
+def _priority_body(harness: _ControlHarness, job_id: int = 3) -> dict[str, object]:
+    stored = JobStore(harness.work_root).read(job_id)
+    return {
+        "job_id": job_id,
+        "delivery_digest": harness.context.revision.delivery_digest,
+        "expected_token": stored.token,
+        "priority": 9,
+        "updated_at": "2026-07-24T00:05:00Z",
+    }
+
+
+def _cancel_body(harness: _ControlHarness, job_id: int = 4) -> dict[str, object]:
+    stored = JobStore(harness.work_root).read(job_id)
+    return {
+        "job_id": job_id,
+        "delivery_digest": harness.context.revision.delivery_digest,
+        "expected_token": stored.token,
+        "cancelled_at": "2026-07-24T00:06:00Z",
+    }
 
 
 def test_request_resolution_replays_and_changed_identity_returns_current_authority(
@@ -274,9 +308,121 @@ def test_release_replays_one_event_and_clears_coordination_and_checkout(
     assert released.status_code == 200
     assert replayed.json() == released.json()
     assert released.json()["event"]["kind"] == "released"
-    assert [event.kind for event in AttemptStore(harness.work_root).list()] == ["started", "released"]
+    assert [event.kind for event in AttemptStore(harness.work_root).list() if event.job_id == 1] == [
+        "started",
+        "released",
+    ]
     assert "readers: []" in (harness.work_root / "dispatch" / "coordination.yaml").read_text(encoding="utf-8")
     assert harness.checkouts.existing(1) is None
+
+
+def test_priority_and_cancel_succeed_replay_and_refresh_job_tokens(control_harness: _ControlHarness) -> None:
+    harness = control_harness
+    priority_body = _priority_body(harness)
+    cancel_body = _cancel_body(harness)
+
+    priority = harness.client.post(f"/api/changes/{_CHANGE_ID}/jobs/3/priority", json=priority_body)
+    priority_replay = harness.client.post(f"/api/changes/{_CHANGE_ID}/jobs/3/priority", json=priority_body)
+    cancelled = harness.client.post(f"/api/changes/{_CHANGE_ID}/jobs/4/cancel", json=cancel_body)
+    cancel_replay = harness.client.post(f"/api/changes/{_CHANGE_ID}/jobs/4/cancel", json=cancel_body)
+    detail = harness.client.get(f"/api/changes/{_CHANGE_ID}/jobs/3")
+
+    assert priority.status_code == priority_replay.status_code == 200
+    assert priority.json() == priority_replay.json()
+    assert priority.json()["job"]["job"]["priority"] == 9
+    assert priority.json()["job"]["token"] != priority_body["expected_token"]
+    assert cancelled.status_code == cancel_replay.status_code == 200
+    assert cancelled.json() == cancel_replay.json()
+    assert cancelled.json()["job"]["job"]["disposition"] == "cancelled"
+    assert cancelled.json()["job"]["token"] != cancel_body["expected_token"]
+    assert detail.status_code == 200
+    assert detail.json()["token"] == priority.json()["job"]["token"]
+
+
+@pytest.mark.parametrize(
+    ("path_job_id", "body_mutation", "expected_code"),
+    [
+        (3, {"delivery_digest": "f" * 64}, "ERR_JOB_ADMIN_AUTHORITY_STALE"),
+        (3, {"expected_token": "stale-token"}, "ERR_JOB_ADMIN_OCC_STALE"),
+        (5, {"job_id": 5}, "ERR_JOB_ADMIN_ACTIVE_CLAIM"),
+        (3, {"job_id": 999}, "ERR_JOB_ID_CONFLICT"),
+    ],
+)
+def test_priority_conflicts_return_current_authority_without_mutation(
+    control_harness: _ControlHarness,
+    path_job_id: int,
+    body_mutation: dict[str, object],
+    expected_code: str,
+) -> None:
+    harness = control_harness
+    body = _priority_body(harness, path_job_id) | body_mutation
+    before = _store_state(harness.work_root, harness.proof_root)
+
+    response = harness.client.post(f"/api/changes/{_CHANGE_ID}/jobs/{path_job_id}/priority", json=body)
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["code"] == expected_code
+    assert detail["target"] == str(path_job_id)
+    assert detail["current_delivery_digest"] == harness.context.revision.delivery_digest
+    if expected_code.startswith("ERR_JOB_ADMIN"):
+        assert detail["current"]["job"]["job_id"] == path_job_id
+        assert detail["current"]["token"] == JobStore(harness.work_root).read(path_job_id).token
+    assert _store_state(harness.work_root, harness.proof_root) == before
+
+
+def test_cancel_terminal_and_strict_payload_fail_before_mutation(control_harness: _ControlHarness) -> None:
+    harness = control_harness
+    body = _cancel_body(harness)
+    first = harness.client.post(f"/api/changes/{_CHANGE_ID}/jobs/4/cancel", json=body)
+    assert first.status_code == 200
+    terminal_body = body | {
+        "expected_token": first.json()["job"]["token"],
+        "cancelled_at": "2026-07-24T00:07:00Z",
+    }
+    before = _store_state(harness.work_root, harness.proof_root)
+
+    terminal = harness.client.post(f"/api/changes/{_CHANGE_ID}/jobs/4/cancel", json=terminal_body)
+    malformed = harness.client.post(
+        f"/api/changes/{_CHANGE_ID}/jobs/3/priority",
+        json=_priority_body(harness) | {"status": "build"},
+    )
+
+    assert terminal.status_code == 409
+    assert terminal.json()["detail"]["code"] == "ERR_JOB_ADMIN_TERMINAL"
+    assert terminal.json()["detail"]["current"]["job"]["disposition"] == "cancelled"
+    assert malformed.status_code == 422
+    assert _store_state(harness.work_root, harness.proof_root) == before
+
+
+def test_priority_rejects_obsolete_request_and_stored_digest_against_current_context(
+    control_harness: _ControlHarness,
+) -> None:
+    harness = control_harness
+    jobs = JobStore(harness.work_root)
+    stored = jobs.read(3)
+    obsolete_digest = "a" * 64
+    obsolete = jobs.update(stored.job.model_copy(update={"delivery_digest": obsolete_digest}), stored.token)
+    before = _store_state(harness.work_root, harness.proof_root)
+
+    response = harness.client.post(
+        f"/api/changes/{_CHANGE_ID}/jobs/3/priority",
+        json={
+            "job_id": 3,
+            "delivery_digest": obsolete_digest,
+            "expected_token": obsolete.token,
+            "priority": 9,
+            "updated_at": "2026-07-24T00:08:00Z",
+        },
+    )
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["code"] == "ERR_JOB_ADMIN_AUTHORITY_STALE"
+    assert detail["current_delivery_digest"] == harness.context.revision.delivery_digest
+    assert detail["current"]["job"]["delivery_digest"] == obsolete_digest
+    assert detail["current"]["token"] == obsolete.token
+    assert _store_state(harness.work_root, harness.proof_root) == before
 
 
 @pytest.mark.parametrize(

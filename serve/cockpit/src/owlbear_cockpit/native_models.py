@@ -6,7 +6,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from owlbear_kanban import ChangeHealthFinding, ImpactClosure, JobRecord, ReceiptRecord
+from owlbear_kanban import ChangeHealthFinding, ImpactClosure, JobRecord, ReceiptRecord, StoredJob
 
 _DeliveryDigest = Annotated[str, StringConstraints(strict=True, pattern=r"^[0-9a-f]{64}$")]
 
@@ -19,6 +19,27 @@ class NativeDiagnosticResponse(BaseModel):
     code: str
     detail: str
     target: str | None = None
+
+
+class JobAdminConflictResponse(BaseModel):
+    """Expose one stable administrative conflict with current job authority."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    code: str
+    detail: str
+    current_delivery_digest: str
+    target: str
+    lower_code: str | None = None
+    current: StoredJob | None = None
+
+
+class JobAdminConflictEnvelope(BaseModel):
+    """Match FastAPI's HTTPException response wrapper."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    detail: JobAdminConflictResponse
 
 
 class ChangeListEntryResponse(BaseModel):
@@ -70,6 +91,7 @@ class JobDetailResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     job: JobRecord
+    token: str
     title: str
     outcome: str
     acceptance: tuple[str, ...]
@@ -137,15 +159,42 @@ class ReleaseJobBody(BaseModel):
     released_at: str = Field(min_length=1)
 
 
+class SetJobPriorityBody(BaseModel):
+    """Provide one strict OCC-guarded native priority update."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    job_id: int
+    delivery_digest: _DeliveryDigest
+    expected_token: str = Field(min_length=1)
+    priority: int
+    updated_at: str = Field(min_length=1)
+
+
+class CancelJobBody(BaseModel):
+    """Provide one strict OCC-guarded native job cancellation."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    job_id: int
+    delivery_digest: _DeliveryDigest
+    expected_token: str = Field(min_length=1)
+    cancelled_at: str = Field(min_length=1)
+
+
 __all__ = [
+    "CancelJobBody",
     "ChangeDetailResponse",
     "ChangeGraphResponse",
     "ChangeHealthPageResponse",
     "ChangeListEntryResponse",
     "ChangeListResponse",
     "InvalidationResponse",
+    "JobAdminConflictEnvelope",
+    "JobAdminConflictResponse",
     "JobDetailResponse",
     "NativeDiagnosticResponse",
     "ReleaseJobBody",
     "ResolveRequestBody",
+    "SetJobPriorityBody",
 ]

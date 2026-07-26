@@ -9,12 +9,27 @@ from fastapi import APIRouter, Depends
 
 from owlbear_cockpit.deps import NativeContextCache, get_engine, get_native_context_cache
 from owlbear_cockpit.native_http import conflict
-from owlbear_cockpit.native_models import (  # noqa: TC001 - FastAPI resolves route annotations
+from owlbear_cockpit.native_models import (
+    CancelJobBody,
+    JobAdminConflictEnvelope,
     ReleaseJobBody,
     ResolveRequestBody,
+    SetJobPriorityBody,
 )
 from owlbear_cockpit.routes.native_changes import get_native_context
-from owlbear_kanban import DispatchDiagnostic, KanbanEngine, ReleaseJobRequest, ReleaseJobResult
+from owlbear_kanban import (
+    CancelJobRequest,
+    CancelJobResult,
+    DispatchDiagnostic,
+    JobAdminDiagnostic,
+    JobAdminDiagnosticCode,
+    JobStore,
+    KanbanEngine,
+    ReleaseJobRequest,
+    ReleaseJobResult,
+    SetJobPriorityRequest,
+    SetJobPriorityResult,
+)
 from owlbear_kanban.runtime_requests import (
     NativeRequestRuntime,
     RequestConflictError,
@@ -144,6 +159,104 @@ def release_job(
             target=str(job_id),
         )
         raise error
+    return result
+
+
+def _admin_conflict(diagnostic: JobAdminDiagnostic, delivery_digest: str) -> None:
+    error = conflict(
+        code=diagnostic.code.value,
+        detail=diagnostic.detail,
+        current_delivery_digest=delivery_digest,
+        diagnostic=diagnostic,
+        lower_code=diagnostic.lower_code,
+        target=diagnostic.target,
+    )
+    raise error
+
+
+def _current_job(engine: KanbanEngine, job_id: int):  # noqa: ANN202 - inferred StoredJob | None
+    store = JobStore(_work_root(engine))
+    try:
+        return store.read(job_id)
+    except FileNotFoundError:
+        try:
+            return store.read(job_id, archived=True)
+        except FileNotFoundError:
+            return None
+
+
+def _require_current_digest(
+    body_digest: str,
+    current_digest: str,
+    engine: KanbanEngine,
+    job_id: int,
+) -> None:
+    if body_digest == current_digest:
+        return
+    diagnostic = JobAdminDiagnostic(
+        code=JobAdminDiagnosticCode.AUTHORITY_STALE,
+        detail="administrative request delivery digest is not current",
+        target=str(job_id),
+        current=_current_job(engine, job_id),
+    )
+    _admin_conflict(diagnostic, current_digest)
+
+
+def _require_job_identity(path_job_id: int, body_job_id: int, delivery_digest: str) -> None:
+    if path_job_id == body_job_id:
+        return
+    error = conflict(
+        code="ERR_JOB_ID_CONFLICT",
+        detail="job path and payload identities differ",
+        current_delivery_digest=delivery_digest,
+        target=str(path_job_id),
+    )
+    raise error
+
+
+@router.post(
+    "/jobs/{job_id}/priority",
+    response_model=SetJobPriorityResult,
+    responses={409: {"model": JobAdminConflictEnvelope}},
+)
+def set_job_priority(
+    change_id: str,
+    job_id: int,
+    body: SetJobPriorityBody,
+    engine: _Engine,
+    cache: _NativeCache,
+) -> SetJobPriorityResult:
+    """Update one pending unclaimed job through complete OCC identity."""
+    context = get_native_context(change_id, engine, cache)
+    _require_job_identity(job_id, body.job_id, context.revision.delivery_digest)
+    _require_current_digest(body.delivery_digest, context.revision.delivery_digest, engine, job_id)
+    request = SetJobPriorityRequest(change_id=change_id, **body.model_dump())
+    result = context.runtime.set_job_priority(request)
+    if result.diagnostic is not None:
+        _admin_conflict(result.diagnostic, context.revision.delivery_digest)
+    return result
+
+
+@router.post(
+    "/jobs/{job_id}/cancel",
+    response_model=CancelJobResult,
+    responses={409: {"model": JobAdminConflictEnvelope}},
+)
+def cancel_job(
+    change_id: str,
+    job_id: int,
+    body: CancelJobBody,
+    engine: _Engine,
+    cache: _NativeCache,
+) -> CancelJobResult:
+    """Cancel one pending unclaimed job through complete OCC identity."""
+    context = get_native_context(change_id, engine, cache)
+    _require_job_identity(job_id, body.job_id, context.revision.delivery_digest)
+    _require_current_digest(body.delivery_digest, context.revision.delivery_digest, engine, job_id)
+    request = CancelJobRequest(change_id=change_id, **body.model_dump())
+    result = context.runtime.cancel_job(request)
+    if result.diagnostic is not None:
+        _admin_conflict(result.diagnostic, context.revision.delivery_digest)
     return result
 
 

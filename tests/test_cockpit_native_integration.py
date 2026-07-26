@@ -37,6 +37,7 @@ from owlbear_kanban import (
     plan_corrective_route,
 )
 from owlbear_kanban.runtime_requests import NativeRequest, NativeRequestRuntime
+from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionConflictError
 
 from owlbear_cockpit.deps import get_engine, get_native_context_cache
 from owlbear_cockpit.main import app
@@ -221,6 +222,7 @@ def assembled_harness(tmp_path: Path, project_root: Path) -> Iterator[_Harness]:
         )
     )
     assert invalidation.outcome is not None
+    _materialize(jobs, _job(revision, 21, "build"))
     dispatch = DispatchRuntime(runtime, work_root, checkouts)
     start = StartJobRequest(
         job_id=2,
@@ -330,7 +332,18 @@ def test_assembled_native_resource_journey_is_bounded_strict_and_non_mutating(
     schema = app.openapi()
     assert _schema(schema["components"]["schemas"], "ResolveRequestBody")["additionalProperties"] is False
     assert _schema(schema["components"]["schemas"], "ReleaseJobBody")["additionalProperties"] is False
+    assert _schema(schema["components"]["schemas"], "SetJobPriorityBody")["additionalProperties"] is False
+    assert _schema(schema["components"]["schemas"], "CancelJobBody")["additionalProperties"] is False
     assert _schema(schema["components"]["schemas"], "LegacyInventoryResponse")["additionalProperties"] is False
+    assert f"/api/changes/{{change_id}}/jobs/{{job_id}}/priority" in schema["paths"]
+    assert f"/api/changes/{{change_id}}/jobs/{{job_id}}/cancel" in schema["paths"]
+    for operation in ("priority", "cancel"):
+        responses = schema["paths"][f"/api/changes/{{change_id}}/jobs/{{job_id}}/{operation}"]["post"]["responses"]
+        assert "409" in responses
+        assert "JobAdminConflictEnvelope" in json.dumps(responses["409"])
+    envelope = _schema(schema["components"]["schemas"], "JobAdminConflictEnvelope")
+    assert envelope["required"] == ["detail"]
+    assert "JobAdminConflictResponse" in json.dumps(envelope["properties"]["detail"])
     assert schema["paths"][f"/api/changes/{{change_id}}/jobs"]["get"]["parameters"][-1]["schema"]["maximum"] == 100
 
 
@@ -462,7 +475,28 @@ def _release_body(harness: _Harness) -> dict[str, object]:
     }
 
 
-def test_http_controls_emit_native_sse_and_preserve_replay_conflicts(
+def _priority_body(harness: _Harness) -> dict[str, object]:
+    stored = JobStore(harness.work_root).read(20)
+    return {
+        "job_id": 20,
+        "delivery_digest": harness.revision.delivery_digest,
+        "expected_token": stored.token,
+        "priority": 9,
+        "updated_at": "2026-07-24T00:06:30Z",
+    }
+
+
+def _cancel_body(harness: _Harness) -> dict[str, object]:
+    stored = JobStore(harness.work_root).read(21)
+    return {
+        "job_id": 21,
+        "delivery_digest": harness.revision.delivery_digest,
+        "expected_token": stored.token,
+        "cancelled_at": "2026-07-24T00:06:40Z",
+    }
+
+
+def test_http_controls_emit_native_sse_and_preserve_replay_conflicts(  # noqa: PLR0915 - assembled journey is linear.
     assembled_harness: _Harness,
 ) -> None:
     harness = assembled_harness
@@ -472,6 +506,8 @@ def test_http_controls_emit_native_sse_and_preserve_replay_conflicts(
         release_path = f"/api/changes/{_CHANGE_ID}/jobs/2/release"
         resolution_body = _resolution_body(harness)
         release_body = _release_body(harness)
+        priority_body = _priority_body(harness)
+        cancel_body = _cancel_body(harness)
 
         malformed_before = _state(harness.work_root, harness.change_dir)
         malformed = client.post(resolution_path, json=resolution_body | {"unexpected": True})
@@ -516,6 +552,51 @@ def test_http_controls_emit_native_sse_and_preserve_replay_conflicts(
         assert changed_release.json()["detail"]["code"] == "ERR_RELEASE_NON_OWNER"
         assert _state(harness.work_root, harness.change_dir) == release_before_conflict
 
+        prioritized, priority_event = _with_native_event(
+            base_url,
+            harness,
+            "jobs",
+            lambda: client.post(
+                f"/api/changes/{_CHANGE_ID}/jobs/20/priority",
+                json=priority_body,
+            ),
+        )
+        assert prioritized.status_code == 200
+        assert "jobs" in priority_event["resources"]
+        assert prioritized.json()["job"]["job"]["priority"] == 9
+        replayed_priority = client.post(
+            f"/api/changes/{_CHANGE_ID}/jobs/20/priority",
+            json=priority_body,
+        )
+        priority_before_conflict = _state(harness.work_root, harness.change_dir)
+        stale_priority = client.post(
+            f"/api/changes/{_CHANGE_ID}/jobs/20/priority",
+            json=priority_body | {"priority": 8, "updated_at": "2026-07-24T00:06:31Z"},
+        )
+        assert replayed_priority.json() == prioritized.json()
+        assert stale_priority.status_code == 409
+        assert stale_priority.json()["detail"]["code"] == "ERR_JOB_ADMIN_OCC_STALE"
+        assert stale_priority.json()["detail"]["current"]["token"] == prioritized.json()["job"]["token"]
+        assert _state(harness.work_root, harness.change_dir) == priority_before_conflict
+
+        cancelled, cancel_event = _with_native_event(
+            base_url,
+            harness,
+            "jobs",
+            lambda: client.post(
+                f"/api/changes/{_CHANGE_ID}/jobs/21/cancel",
+                json=cancel_body,
+            ),
+        )
+        assert cancelled.status_code == 200
+        assert "jobs" in cancel_event["resources"]
+        assert cancelled.json()["job"]["job"]["disposition"] == "cancelled"
+        replayed_cancel = client.post(
+            f"/api/changes/{_CHANGE_ID}/jobs/21/cancel",
+            json=cancel_body,
+        )
+        assert replayed_cancel.json() == cancelled.json()
+
         for path in (
             "/api/board",
             "/api/tasks",
@@ -525,3 +606,33 @@ def test_http_controls_emit_native_sse_and_preserve_replay_conflicts(
         ):
             assert client.get(path).status_code == 404
         assert client.post("/api/tasks/1/release", json={}).status_code == 404
+
+
+def test_priority_transaction_failure_returns_current_authority_without_partial_mutation(
+    assembled_harness: _Harness,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    harness = assembled_harness
+    app.dependency_overrides[get_engine] = lambda: harness.engine
+    before = _state(harness.work_root, harness.change_dir)
+
+    def fail_commit(_transaction: RuntimeTransaction, *, failure=None) -> None:  # noqa: ANN001, ARG001
+        raise TransactionConflictError
+
+    monkeypatch.setattr(RuntimeTransaction, "commit", fail_commit)
+    from fastapi.testclient import TestClient  # noqa: PLC0415
+
+    with TestClient(app) as client:
+        response = client.post(
+            f"/api/changes/{_CHANGE_ID}/jobs/20/priority",
+            json=_priority_body(harness),
+        )
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["code"] == "ERR_JOB_ADMIN_OCC_STALE"
+    assert detail["lower_code"] == "ERR_JOB_OCC_STALE"
+    current = JobStore(harness.work_root).read(20)
+    assert detail["current"]["job"]["priority"] == current.job.priority == 0
+    assert detail["current"]["token"] == current.token
+    assert _state(harness.work_root, harness.change_dir) == before

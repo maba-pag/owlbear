@@ -130,6 +130,7 @@ def show_job(change_id: str, job_id: int, engine: _Engine, cache: _NativeCache) 
     projection = project_job(stored.job, context.revision)
     return JobDetailResponse(
         job=stored.job,
+        token=stored.token,
         title=projection.title,
         outcome=projection.outcome,
         acceptance=projection.acceptance,
