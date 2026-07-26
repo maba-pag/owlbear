@@ -1,10 +1,10 @@
 ---
 id: 2085
 title: 'P15-15: Deliver evidence, legacy, and assembled Cockpit workflow proof'
-status: collect
+status: archived
 priority: high
 created: 2026-07-26T02:00:36.235890+02:00
-updated: 2026-07-27T01:12:40.844863+02:00
+updated: 2026-07-27T01:13:20.505752+02:00
 tags:
   - phase-15
   - change:replace-delivery-pipeline
@@ -42,7 +42,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -91,3 +91,13 @@ AC-3: completed real-stack evidence on the semantically identical worktree passe
 Evidence: frontend 264 passed; Cockpit backend 175 passed; focused Python 25 passed; build, Stylelint, HTMLHint, Ruff, and VS Code diagnostics clean; committed patch passes `git diff --check`. Verifier challenger decision: pass.
 
 Residual risk: the terminal transport prevented a fresh verifier Playwright exit report after starting real uvicorn and two tests, and two broad kanban xdist failures lacked preserved tracebacks. Neither produced a concrete defect in this packet; both are recorded rather than represented as fresh passing evidence.
+
+[[2026-07-27T01:13:20+02:00]]
+## Collect Notes
+ARCHIVED
+
+Collected DN-011 packet 6 at builder commit `6e96b61d124d20b8c9d33e15c3d9369463bc9f8c` with verifier evidence commit `82b6ce2ce04cb75217e2345d45e46c18d5d8b482`; both are ancestors of the collection snapshot.
+
+AC-1 through AC-3 are closed by the final eight-route shell and retirement diff, native immutable reader behavior, and PROOF-012's completed desktop/mobile real-FastAPI journeys with persisted request mutation, preserved Memory/Ideas, and 300-node bounded scale. Builder and verifier challengers both passed.
+
+The terminal transport limitation and unpreserved broad-kanban xdist failures remain recorded as residual non-blocking risk; they do not alter this packet's completed boundary evidence.
