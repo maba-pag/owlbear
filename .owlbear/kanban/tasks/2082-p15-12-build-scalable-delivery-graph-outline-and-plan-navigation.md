@@ -1,10 +1,10 @@
 ---
 id: 2082
 title: 'P15-12: Build scalable delivery graph outline and plan navigation'
-status: build
+status: verify
 priority: high
 created: 2026-07-26T02:00:06.968192+02:00
-updated: 2026-07-26T02:00:06.968192+02:00
+updated: 2026-07-26T13:43:36.614281+02:00
 tags:
   - phase-15
   - change:replace-delivery-pipeline
@@ -50,3 +50,6 @@ In: graph/list projection, node detail and plan panel, overlays/filters, virtual
 Out: job board, request resolution, evidence history, assembled backend proof.
 
 Proof guidance: use a proven virtualization library; use a proven graph library only if visualization ships. Component/browser proof uses schema-valid 14-node and 300-node fixtures.
+
+[[2026-07-26T13:43:36+02:00]]
+Builder implementation at digest bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357 and base SHA 491fa3183c495dc40153c413c2d6971cfeea6283. Added @tanstack/react-virtual outline, URL node deep links, requirement/interface/migration/proof filters, full node authority and packet plans, listbox Arrow navigation, retained graph Retry. One exact shared generator feeds canonical DeliveryGraph schema tests, 14/300 component fixtures and 300-node Playwright fixtures. Filtered-out selections rewrite URL; zero matches empty; DN-275 mounts <100 rows. Validation: schema/component10, Specification2, browser2 desktop/mobile, full frontend1498 pass/2skip, build, final challenger PASS.

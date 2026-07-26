@@ -22,6 +22,7 @@
   "dependencies": {
     "@porsche-design-system/components-js": "^4.5.0",
     "@porsche-design-system/components-react": "^4.5.0",
+    "@tanstack/react-virtual": "^3.14.8",
     "motion": "^12.40.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

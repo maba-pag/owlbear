@@ -1,5 +1,7 @@
 import { PButton, PHeading, PIcon, PSelect, PSelectOption, PTag } from '@porsche-design-system/components-react'
 import { useNativeChangeSelection } from '../hooks/NativeChangeProvider'
+import { useNativeGraph } from '../hooks/useNativeResources'
+import DeliveryGraphOutline from '../components/DeliveryGraphOutline'
 
 type SelectValueEvent = {
   target?: { value?: unknown }
@@ -38,6 +40,7 @@ export default function SpecificationPage() {
     retry,
   } = useNativeChangeSelection()
   const decisions = decisionsFrom(detail?.decisions)
+  const graphDetail = useNativeGraph(selectedSummary?.state === 'loaded' ? selectedSummary.change_id : null)
   const graph = record(detail?.graph)
   const authority = record(graph.authority)
   const admission = record(graph.admission)
@@ -156,6 +159,15 @@ export default function SpecificationPage() {
                 {decisions.length === 0 ? <p className="py-static-md text-sm text-contrast-medium">No accepted decisions.</p> : null}
               </div>
             </section>
+
+            {graphDetail.isLoading && graphDetail.data === null ? <p role="status">Loading delivery graph...</p> : null}
+            {graphDetail.error ? (
+              <div className="flex flex-wrap items-center gap-static-sm border-l-4 border-danger bg-surface p-static-md" role="alert">
+                <span className="min-w-0 flex-1">Delivery graph is unavailable. {graphDetail.error.message}</span>
+                <PButton type="button" variant="secondary" onClick={graphDetail.retry}>Retry graph</PButton>
+              </div>
+            ) : null}
+            {graphDetail.data?.change_id === detail.change_id ? <DeliveryGraphOutline detail={graphDetail.data} /> : null}
           </>
         ) : null}
       </div>

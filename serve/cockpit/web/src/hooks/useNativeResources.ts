@@ -154,9 +154,9 @@ export function useNativeChange(changeId: string | null): ReturnType<typeof useN
   return useNativeValue({ resources: ['changes'], load, enabled: changeId !== null })
 }
 
-export function useNativeGraph(changeId: string): ReturnType<typeof useNativeValue<NativeGraphDetail>> {
-  const load = useCallback(() => getNativeGraph(changeId), [changeId])
-  return useNativeValue({ resources: ['graphs'], load })
+export function useNativeGraph(changeId: string | null): ReturnType<typeof useNativeValue<NativeGraphDetail>> {
+  const load = useCallback(() => getNativeGraph(changeId ?? ''), [changeId])
+  return useNativeValue({ resources: ['graphs'], load, enabled: changeId !== null })
 }
 
 export function useNativeInvalidationDetail(

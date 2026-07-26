@@ -164,8 +164,59 @@ export interface NativeChangeDetail {
 export interface NativeGraphDetail {
   change_id: string
   delivery_digest: string
-  graph: Record<string, unknown>
-  plans: Record<string, Record<string, unknown>>
+  graph: {
+    schema_version: number
+    change_id: string
+    state: string
+    authority: { intent: string; design: string; decisions: string; research: string[] }
+    admission: Record<string, unknown> | null
+    requirements: Array<Record<string, unknown>>
+    negative_requirements: Array<Record<string, unknown>>
+    preserved_behaviors: Array<Record<string, unknown>>
+    workflows: Array<Record<string, unknown>>
+    modules: Array<Record<string, unknown>>
+    nodes: NativeDeliveryNode[]
+    interfaces: NativeInterfaceContract[]
+    migrations: NativeMigrationContract[]
+    risks: Array<Record<string, unknown>>
+    proofs: Array<Record<string, unknown>>
+    [key: string]: unknown
+  }
+  plans: Record<string, NativeNodePlan>
+}
+
+export interface NativeDeliveryNode {
+  id: string
+  title: string
+  outcome: string
+  owns: string[]
+  supports: string[]
+  modules: string[]
+  produces: string[]
+  consumes: string[]
+  dependencies: string[]
+  risks: string[]
+  proof: string
+}
+
+export interface NativeInterfaceContract {
+  id: string
+  migration: string | null
+  [key: string]: unknown
+}
+
+export interface NativeMigrationContract {
+  id: string
+  title: string
+  [key: string]: unknown
+}
+
+export interface NativeNodePlan {
+  packets: Array<{
+    id: string
+    dependencies: string[]
+    impact_closure: { paths: string[]; authority_targets: string[] }
+  }>
 }
 
 export interface NativeHealthPage<TFinding = Record<string, unknown>> {

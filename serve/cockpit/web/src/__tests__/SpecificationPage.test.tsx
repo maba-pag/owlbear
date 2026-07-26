@@ -46,9 +46,20 @@ vi.mock('../hooks/NativeChangeProvider', () => ({
   useNativeChangeSelection: vi.fn(() => selection),
 }))
 
+const graphState = vi.hoisted(() => ({
+  data: null,
+  error: null as Error | null,
+  isLoading: false,
+  retry: vi.fn(),
+}))
+vi.mock('../hooks/useNativeResources', () => ({
+  useNativeGraph: vi.fn(() => graphState),
+}))
+
 describe('SpecificationPage', () => {
   afterEach(() => {
     selection.error = null
+    graphState.error = null
     vi.clearAllMocks()
   })
 
@@ -95,5 +106,14 @@ describe('SpecificationPage', () => {
     expect(screen.getByText('Ship the native delivery system.')).toBeInTheDocument()
     fireEvent.click(screen.getByText('Retry'))
     expect(selection.retry).toHaveBeenCalledOnce()
+  })
+
+  it('retains specification authority while graph refresh fails', () => {
+    graphState.error = new Error('graph unavailable')
+    render(<SpecificationPage />)
+
+    expect(screen.getByText('Ship the native delivery system.')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Retry graph'))
+    expect(graphState.retry).toHaveBeenCalledOnce()
   })
 })
