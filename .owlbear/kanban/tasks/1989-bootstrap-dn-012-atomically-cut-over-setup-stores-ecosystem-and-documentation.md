@@ -4,7 +4,7 @@ title: 'Bootstrap DN-012: Atomically cut over setup, stores, ecosystem, and docu
 status: shape
 priority: high
 created: 2026-07-22T01:08:48.177677+02:00
-updated: 2026-07-26T02:02:42.957213+02:00
+updated: 2026-07-27T01:31:46.760010+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -12,8 +12,8 @@ tags:
   - scope:core
   - type:shape
   - rigor:thorough
-  - digest:bf5edd67478d
   - corrective-projection
+  - digest:8cd27726f86d
 parent: 1968
 depends_on:
   - 1988
@@ -25,7 +25,7 @@ depends_on:
   - 2078
   - 2079
 ac:
-  - 'AC-1: Shaper reads DN-012 from the modular authority trio at digest `bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357`
+  - 'AC-1: Shaper reads DN-012 from the modular authority trio at digest `8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1`
     and creates one outcome-cohesive packet DAG whose leaves reference the same change/digest/node;
     Kanban queries verify task fields and dependencies.'
   - 'AC-2: Shaper keeps leaves within DN-012 modules, interfaces, migrations, risks,
@@ -38,17 +38,17 @@ ac:
 proof_bundle: existing+challenge
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-07-27T01:14:41.165217+02:00
 archival_reason:
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
 - `change_id`: `replace-delivery-pipeline`
-- `delivery_digest`: `bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357`
+- `delivery_digest`: `8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1`
 - `delivery_node_id`: `DN-012`
 - `packet_id`: `aggregate`
-- `projection_key`: `replace-delivery-pipeline|bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357|DN-012|aggregate`
-- Admission receipt: `.owlbear/changes/replace-delivery-pipeline/receipts/admission-bf5edd67478d.yaml`
+- `projection_key`: `replace-delivery-pipeline|8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1|DN-012|aggregate`
+- Admission receipt: `.owlbear/changes/replace-delivery-pipeline/receipts/admission-8cd27726f86d.yaml`
 
 ## Authority Reference
 Resolve DN-012 from modular `delivery/nodes.yaml`; resolve REQ-011, REQ-012, REQ-017, NEG-004, NEG-007, KEEP-007 from `delivery/obligations.yaml`; resolve IF-013, MIG-001 through MIG-004, RISK-001/RISK-005, and PROOF-009 from `delivery/contracts.yaml`.
@@ -56,7 +56,7 @@ Resolve DN-012 from modular `delivery/nodes.yaml`; resolve REQ-011, REQ-012, REQ
 Outcome: A hash-verified legacy snapshot and active-item disposition inventory preserve history while setup, seed, hooks, docs, generated assets, agents, APIs, and stores switch entirely to the native control plane.
 
 ## Shaping Boundary
-The current shaper turns this aggregate into a bounded build-packet DAG only after candidate-digest predecessor corrections/re-acceptance and DN-011 completion. Any newly discovered product, interface, migration, security, destructive, or proof obligation returns to Specification and re-admission.
+The current shaper turns this aggregate into a bounded build-packet DAG after the completed candidate-digest predecessor corrections and DN-011 closure. Any newly discovered product, interface, migration, security, destructive, or proof obligation returns to Specification and re-admission.
 
 Proof guidance: exercise public setup and atomic cutover against populated-legacy and fresh-consumer fixtures, including no-overwrite, complete dispositions, hash equality, crash recovery, native-only launch, and old-surface absence under PROOF-009.
 
@@ -66,3 +66,7 @@ Reprojected from stale `9387...`/`graph.yaml` metadata to admitted modular diges
 [[2026-07-26T02:02:42+02:00]]
 ## Shape Notes
 PROJECTION REPAIRED: DN-012 now references admitted modular digest `bf5edd...`, current authority files, and candidate-bound predecessor tasks. It remains in `shape`; no packet DAG was created because DN-011 and re-acceptance dependencies are unresolved.
+
+[[2026-07-27]]
+## Shape Notes
+AUTHORITY CORRECTED: User approved adding MOD-001, MOD-002, and MOD-004 to DN-012 so its module grant matches its existing MIG-001 through MIG-004 deletion ownership and PROOF-009 absence boundary. Canonical validation passed with no findings, focused admission tests passed 37/37, and append-only receipt `admission-8cd27726f86d` admitted digest `8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1`. This aggregate is reprojected to the corrected authority before decomposition.

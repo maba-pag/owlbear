@@ -4,7 +4,7 @@ title: 'Bootstrap DN-013: Prove the complete native delivery system and cutover'
 status: shape
 priority: high
 created: 2026-07-22T01:09:02.449610+02:00
-updated: 2026-07-26T02:02:50.042115+02:00
+updated: 2026-07-27T01:31:54.929460+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -12,8 +12,8 @@ tags:
   - scope:core
   - type:shape
   - rigor:thorough
-  - digest:bf5edd67478d
   - corrective-projection
+  - digest:8cd27726f86d
 parent: 1968
 depends_on:
   - 1978
@@ -25,7 +25,7 @@ depends_on:
   - 2078
   - 2079
 ac:
-  - 'AC-1: Shaper reads DN-013 from the modular authority trio at digest `bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357`
+  - 'AC-1: Shaper reads DN-013 from the modular authority trio at digest `8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1`
     and creates one outcome-cohesive proof DAG whose leaves reference the same change/digest/node;
     Kanban queries verify task fields and dependencies.'
   - 'AC-2: Shaper keeps leaves within DN-013 consumed interfaces, risks, and PROOF-013;
@@ -44,11 +44,11 @@ archival_refs: []
 ---
 ## Bootstrap Projection Identity
 - `change_id`: `replace-delivery-pipeline`
-- `delivery_digest`: `bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357`
+- `delivery_digest`: `8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1`
 - `delivery_node_id`: `DN-013`
 - `packet_id`: `aggregate`
-- `projection_key`: `replace-delivery-pipeline|bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357|DN-013|aggregate`
-- Admission receipt: `.owlbear/changes/replace-delivery-pipeline/receipts/admission-bf5edd67478d.yaml`
+- `projection_key`: `replace-delivery-pipeline|8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1|DN-013|aggregate`
+- Admission receipt: `.owlbear/changes/replace-delivery-pipeline/receipts/admission-8cd27726f86d.yaml`
 
 ## Authority Reference
 Resolve DN-013 from modular `delivery/nodes.yaml`; resolve REQ-018, NEG-003, NEG-005, NEG-009, KEEP-005 from `delivery/obligations.yaml`; resolve consumed interfaces, RISK-003/RISK-005/RISK-006/RISK-009 through RISK-012, and PROOF-013 from `delivery/contracts.yaml`.
@@ -56,7 +56,7 @@ Resolve DN-013 from modular `delivery/nodes.yaml`; resolve REQ-018, NEG-003, NEG
 Outcome: Historical/generic fixtures and a fresh-consumer scenario prove admission, planning, build review, acceptance, correction, audit, Cockpit, setup, snapshot integrity, and absence of legacy execution.
 
 ## Shaping Boundary
-The current shaper turns this aggregate into a bounded complete-system proof DAG only after candidate-bound DN-012 closure. Any new product implementation discovered here routes to its owning node rather than being patched by final audit.
+The current shaper turns this aggregate into a bounded complete-system proof DAG only after corrected-authority DN-012 closure. Any new product implementation discovered here routes to its owning node rather than being patched by final audit.
 
 Proof guidance: exercise public native validation over incident/generic fixtures, then one fresh-consumer design-to-audit workflow through real MCP, engine, writer policy, proof checkout, Cockpit, setup, and legacy snapshot under PROOF-013.
 
@@ -66,3 +66,7 @@ Reprojected from stale `9387...`/`graph.yaml` metadata to admitted modular diges
 [[2026-07-26T02:02:50+02:00]]
 ## Shape Notes
 PROJECTION REPAIRED: DN-013 now references admitted modular digest `bf5edd...`, current authority files, and candidate-bound predecessor tasks. It remains in `shape`; no complete-system proof DAG was created because DN-011/DN-012 and re-acceptance dependencies are unresolved.
+
+[[2026-07-27]]
+## Shape Notes
+AUTHORITY REPROJECTED: DN-013 now follows append-only admission `admission-8cd27726f86d` at digest `8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1`. Product intent is unchanged; the correction grants DN-012 the modules required to perform its already-owned cutover before DN-013 complete-system proof.

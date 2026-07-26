@@ -12,8 +12,8 @@ authority:
 admission:
   state: admitted
   delivery_digest:
-    bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357
-  receipt: receipts/admission-bf5edd67478d.yaml
+    8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1
+  receipt: receipts/admission-8cd27726f86d.yaml
   limits:
     - Bootstrap correction and candidate-digest re-acceptance remain required for DN-003 through DN-014.
     - Admission certifies delivery completeness and feasibility, not implementation correctness.
@@ -220,7 +220,7 @@ nodes:
       native control plane.
     owns: [REQ-011, REQ-012, REQ-017, NEG-004]
     supports: [NEG-007, KEEP-007]
-    modules: [MOD-003, MOD-006, MOD-007, MOD-008, MOD-009]
+    modules: [MOD-001, MOD-002, MOD-003, MOD-004, MOD-006, MOD-007, MOD-008, MOD-009]
     produces: [IF-013]
     consumes:
       - IF-001

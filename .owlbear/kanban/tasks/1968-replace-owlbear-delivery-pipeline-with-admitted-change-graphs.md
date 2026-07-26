@@ -4,14 +4,14 @@ title: Replace OwlBear delivery pipeline with admitted change graphs
 status: collect
 priority: high
 created: 2026-07-21T01:46:53.257501+02:00
-updated: 2026-07-26T02:02:54.625430+02:00
+updated: 2026-07-27T01:32:01.079279+02:00
 tags:
   - pipeline-redesign
   - architecture
   - scope:core
   - admitted-change
   - corrective-projection
-  - digest:bf5edd67478d
+  - digest:8cd27726f86d
 parent:
 depends_on:
   - 1975
@@ -231,3 +231,9 @@ Only tasks carrying digest `bf5edd67478d` may dispatch for the corrective closur
 [[2026-07-26T02:02:54+02:00]]
 ## Shape Notes
 CORRECTIVE PROJECTION READY: Admitted digest `bf5edd...`, receipt/generation/jobs, repaired #1988/#1989/#1990 modular projections, corrective/re-acceptance chain #2071-#2079, and DN-011 leaves #2080-#2085 were audited. #1968 remains collect and blocked by these dependencies; no premature archive or DN-012/DN-013 shaping occurred.
+
+[[2026-07-27T01:32:01+02:00]]
+
+## Authority Correction — DN-012 Module Grant
+
+User approved the minimal authority repair adding `MOD-001`, `MOD-002`, and `MOD-004` to DN-012 so its module grant matches existing MIG-001 through MIG-004 deletion ownership and PROOF-009. Canonical validation produced no findings; `test_change_revision.py` plus `test_admission_transaction.py` passed 37/37. Append-only receipt `.owlbear/changes/replace-delivery-pipeline/receipts/admission-8cd27726f86d.yaml` admits digest `8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1` and supersedes `bf5edd...` for remaining DN-012/DN-013 work. Historical completed-task evidence remains bound to its tested digest and is not rewritten.

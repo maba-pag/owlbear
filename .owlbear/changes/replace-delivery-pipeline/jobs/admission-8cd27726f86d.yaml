@@ -1,0 +1,147 @@
+---
+schema_version: 1
+change_id: replace-delivery-pipeline
+delivery_digest:
+  8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1
+receipt_id: admission-8cd27726f86d
+jobs:
+  - job_id: 15
+    kind: plan
+    priority: 0
+    created_at: '2026-07-26T23:30:51.917888Z'
+    updated_at: '2026-07-26T23:30:51.917888Z'
+    change_id: replace-delivery-pipeline
+    delivery_digest:
+      8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1
+    target_node_id: DN-001
+    receipt_id: admission-8cd27726f86d
+  - job_id: 16
+    kind: plan
+    priority: 0
+    created_at: '2026-07-26T23:30:51.917888Z'
+    updated_at: '2026-07-26T23:30:51.917888Z'
+    change_id: replace-delivery-pipeline
+    delivery_digest:
+      8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1
+    target_node_id: DN-002
+    receipt_id: admission-8cd27726f86d
+  - job_id: 17
+    kind: plan
+    priority: 0
+    created_at: '2026-07-26T23:30:51.917888Z'
+    updated_at: '2026-07-26T23:30:51.917888Z'
+    change_id: replace-delivery-pipeline
+    delivery_digest:
+      8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1
+    target_node_id: DN-003
+    receipt_id: admission-8cd27726f86d
+  - job_id: 18
+    kind: plan
+    priority: 0
+    created_at: '2026-07-26T23:30:51.917888Z'
+    updated_at: '2026-07-26T23:30:51.917888Z'
+    change_id: replace-delivery-pipeline
+    delivery_digest:
+      8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1
+    target_node_id: DN-004
+    receipt_id: admission-8cd27726f86d
+  - job_id: 19
+    kind: plan
+    priority: 0
+    created_at: '2026-07-26T23:30:51.917888Z'
+    updated_at: '2026-07-26T23:30:51.917888Z'
+    change_id: replace-delivery-pipeline
+    delivery_digest:
+      8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1
+    target_node_id: DN-005
+    receipt_id: admission-8cd27726f86d
+  - job_id: 20
+    kind: plan
+    priority: 0
+    created_at: '2026-07-26T23:30:51.917888Z'
+    updated_at: '2026-07-26T23:30:51.917888Z'
+    change_id: replace-delivery-pipeline
+    delivery_digest:
+      8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1
+    target_node_id: DN-006
+    receipt_id: admission-8cd27726f86d
+  - job_id: 21
+    kind: plan
+    priority: 0
+    created_at: '2026-07-26T23:30:51.917888Z'
+    updated_at: '2026-07-26T23:30:51.917888Z'
+    change_id: replace-delivery-pipeline
+    delivery_digest:
+      8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1
+    target_node_id: DN-007
+    receipt_id: admission-8cd27726f86d
+  - job_id: 22
+    kind: plan
+    priority: 0
+    created_at: '2026-07-26T23:30:51.917888Z'
+    updated_at: '2026-07-26T23:30:51.917888Z'
+    change_id: replace-delivery-pipeline
+    delivery_digest:
+      8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1
+    target_node_id: DN-008
+    receipt_id: admission-8cd27726f86d
+  - job_id: 23
+    kind: plan
+    priority: 0
+    created_at: '2026-07-26T23:30:51.917888Z'
+    updated_at: '2026-07-26T23:30:51.917888Z'
+    change_id: replace-delivery-pipeline
+    delivery_digest:
+      8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1
+    target_node_id: DN-009
+    receipt_id: admission-8cd27726f86d
+  - job_id: 24
+    kind: plan
+    priority: 0
+    created_at: '2026-07-26T23:30:51.917888Z'
+    updated_at: '2026-07-26T23:30:51.917888Z'
+    change_id: replace-delivery-pipeline
+    delivery_digest:
+      8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1
+    target_node_id: DN-010
+    receipt_id: admission-8cd27726f86d
+  - job_id: 25
+    kind: plan
+    priority: 0
+    created_at: '2026-07-26T23:30:51.917888Z'
+    updated_at: '2026-07-26T23:30:51.917888Z'
+    change_id: replace-delivery-pipeline
+    delivery_digest:
+      8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1
+    target_node_id: DN-011
+    receipt_id: admission-8cd27726f86d
+  - job_id: 26
+    kind: plan
+    priority: 0
+    created_at: '2026-07-26T23:30:51.917888Z'
+    updated_at: '2026-07-26T23:30:51.917888Z'
+    change_id: replace-delivery-pipeline
+    delivery_digest:
+      8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1
+    target_node_id: DN-012
+    receipt_id: admission-8cd27726f86d
+  - job_id: 27
+    kind: plan
+    priority: 0
+    created_at: '2026-07-26T23:30:51.917888Z'
+    updated_at: '2026-07-26T23:30:51.917888Z'
+    change_id: replace-delivery-pipeline
+    delivery_digest:
+      8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1
+    target_node_id: DN-013
+    receipt_id: admission-8cd27726f86d
+  - job_id: 28
+    kind: plan
+    priority: 0
+    created_at: '2026-07-26T23:30:51.917888Z'
+    updated_at: '2026-07-26T23:30:51.917888Z'
+    change_id: replace-delivery-pipeline
+    delivery_digest:
+      8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1
+    target_node_id: DN-014
+    receipt_id: admission-8cd27726f86d
