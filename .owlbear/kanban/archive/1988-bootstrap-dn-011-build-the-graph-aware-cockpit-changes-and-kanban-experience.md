@@ -1,10 +1,10 @@
 ---
 id: 1988
 title: 'Bootstrap DN-011: Build the graph-aware Cockpit Changes and Kanban experience'
-status: collect
+status: archived
 priority: high
 created: 2026-07-22T01:08:34.349450+02:00
-updated: 2026-07-26T02:02:38.112445+02:00
+updated: 2026-07-27T01:14:20.211796+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -40,7 +40,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -94,3 +94,13 @@ Six DN-011 leaves: `#2080 -> #2081 -> {#2082,#2083} -> #2084 -> #2085`, where #2
 [[2026-07-26T02:02:38+02:00]]
 ## Shape Notes
 APPROVED GRAPH: Reconciled DN-011 to admitted digest `bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357` and created six build-ready leaves #2080-#2085. Corrective core/backend prerequisites #2071/#2079 plus graph-ordered candidate re-acceptance #2072-#2078 are separately parented to #1968. Concrete audit confirmed statuses, parents, digest tags, dependencies, proof bundles, and blocked ordering. Memory/Ideas continuity is preservation-only under DEC-035/KEEP-010/PROOF-012. Independent challenge passed after stale projection, obligation ownership, impact closure, and proof-boundary findings were resolved. User approved the exact digest; admission receipt and jobs were atomically published. Shaper memories were assessed before closure.
+
+[[2026-07-27T01:14:20+02:00]]
+## Collect Notes
+ARCHIVED
+
+Collected DN-011 against admitted digest `bf5edd67478d5304943e695bbb6d53186f2520773c0964f448b658613ee96357`. Prerequisite #2079 and leaves #2080 through #2085 are archived with `completed`; their recorded dependencies and ownership preserve the approved graph and keep DN-012 cutover plus DN-013 complete-system proof outside this aggregate.
+
+PROOF-012 is SHA-bound to builder commit `6e96b61d124d20b8c9d33e15c3d9369463bc9f8c`, verifier evidence commit `82b6ce2ce04cb75217e2345d45e46c18d5d8b482`, and packet archive commit `ddee0ca000b1af31e87453532cccf97f13e44ea3`; all are ancestors of the collection snapshot. The proof covers the peer Specification/Delivery experience, native requests and immutable history, final routes and legacy retirement, unchanged Memory/Ideas, desktop/mobile geometry and keyboard behavior, and the 300-node bounded scale case.
+
+DN-011 AC-1 through AC-3 are satisfied; aggregate archived completed.
