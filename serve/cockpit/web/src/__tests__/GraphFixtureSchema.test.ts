@@ -22,5 +22,19 @@ describe('shared graph scale fixture', () => {
     })
 
     expect(output.trim()).toBe(String(count))
+
+    const nodeIds = new Set(fixture.graph.nodes.map((node) => node.id))
+    const entityIds = new Set([
+      ...fixture.graph.nodes.map((node) => node.id),
+      ...fixture.graph.proofs.map((proof) => String(proof.id)),
+    ])
+    for (const [nodeId, plan] of Object.entries(fixture.plans)) {
+      expect(nodeIds.has(nodeId)).toBe(true)
+      const packetIds = new Set(plan.packets.map((packet) => packet.id))
+      for (const packet of plan.packets) {
+        expect(packet.dependencies.every((dependency) => packetIds.has(dependency))).toBe(true)
+        expect(packet.impact_closure.authority_targets.every((target) => entityIds.has(target))).toBe(true)
+      }
+    }
   })
 })

@@ -102,13 +102,13 @@ export function createDeliveryGraphFixture(count: number, changeId = 'fixture-ch
       nodes,
     },
     plans: Object.fromEntries(
-      nodes.map((item, index) => [
+      nodes.map((item) => [
         item.id,
         {
           packets: [
             {
               id: `${item.id}-PK-001`,
-              dependencies: index > 0 ? [`${nodes[index - 1].id}-PK-001`] : [],
+              dependencies: [],
               impact_closure: { paths: ['serve/'], authority_targets: [item.id, item.proof] },
             },
           ],
