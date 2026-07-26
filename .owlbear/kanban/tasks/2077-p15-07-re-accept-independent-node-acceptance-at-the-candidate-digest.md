@@ -4,7 +4,7 @@ title: 'P15-07: Re-accept independent node acceptance at the candidate digest'
 status: verify
 priority: high
 created: 2026-07-26T01:59:26.362933+02:00
-updated: 2026-07-26T06:18:11.626061+02:00
+updated: 2026-07-26T07:08:33.350448+02:00
 tags:
   - phase-15
   - candidate-reacceptance
@@ -60,3 +60,13 @@ Candidate authority: replace-delivery-pipeline at bf5edd67478d5304943e695bbb6d53
 The initial maintained PROOF-007 matrix passed 69 scenarios but independent challenge falsified it: finish_accept could bind a receipt to a different revision than its proof checkout, methods-only evidence passed, tracked edits were not engine-detected, cleanup preceded completion validation, and canonical rejection cases were synthetic. The correction now requires an existing clean exact-full-SHA checkout; engine-owned HEAD/tracked-state validation; transactional cleanup with exact snapshot restoration on diagnostics/OCC; successful replay after cleanup; complete node contract/modules/interfaces/interface-linked migrations/risks/proof/boundary/durable outputs/allowed replacements; exact node-plan packet IDs, predecessor receipts and impact closure; nonempty successful assembled command results; and unchanged before/after Git state. Public tests execute the assembled ChangeRevision + ReceiptStore boundary inside the disposable checkout. Local-defect, missing-harness, boundary-bypass, stale-receipt and tracked-mutation failures are observed before public typed rejection and minimum correction publication.
 
 Validation: uv run ruff check on the eight changed source/test files => All checks passed. uv run pytest -q -n0 -o session_timeout=600 serve/mcp-kanban/tests/test_mcp_acceptance_tools.py serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_proof_checkout.py -k 'accept or proof_checkout or reject' => 86 passed, 27 deselected in 234.87s. Final independent false-green probe => PASS, no mandatory defects. No stale candidate receipt was reused and unrelated dirty paths were untouched.
+
+[[2026-07-26T06:28:36+02:00]]
+Verifier rejected committed candidate 398c352899e4b4423826b19a4949593cd4c94e6f after independent review found two mandatory lifecycle defects: the canonical checkout SHA was not retained in durable dispatch authority, permitting coordinated manifest/HEAD tamper; and proof cleanup still ran before RuntimeTransaction publication, so non-OCC interruption could strand an active claim without checkout. Return to build for scoped repair and re-verification.
+
+[[2026-07-26T07:08:33+02:00]]
+Builder repair after verifier rejection of 398c352899e4b4423826b19a4949593cd4c94e6f.
+
+Canonical resolved checkout SHA is now persisted in immutable dispatch coordination and finish_accept rejects any request/manifest/HEAD substitution that differs from dispatched authority. Acceptance and audit publication now commit atomically before proof checkout cleanup; a cleanup failure returns a stable orphan diagnostic after publication, and exact replay retries cleanup without duplicating receipt/event/job publication. Receipt evidence now requires one ordered successful nonempty result per declared assembled command. Public audit fixtures were corrected to use fresh checkout-aware attempt identities rather than native-start bypasses.
+
+Focused validation with explicit existing .venv and system PATH: MCP acceptance/rejection 37 passed; dispatch acceptance/audit 8 passed; native acceptance + proof checkout 44 passed, 18 deselected; Ruff clean. Added manifest-tamper and post-publication cleanup-replay scenarios both pass. Independent lifecycle repair challenge: PASS, no mandatory defects. Owner-equivalent transient mutate/restore is outside the durable-state threat boundary; terminal guard, read-only modes, exact checkout SHA, immutable coordination authority, assembled evidence and final Git state remain enforced.

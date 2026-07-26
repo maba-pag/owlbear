@@ -676,6 +676,7 @@ def _acceptance_evidence_complete(  # noqa: C901, PLR0911 - proof dimensions fai
             and bool(result.get("result"))
             for result in results
         )
+        or tuple(result.get("command") for result in results) != commands
     ):
         return False
     if not isinstance(receipts, tuple) or not receipts or not all(isinstance(item, Mapping) for item in receipts):

@@ -409,6 +409,36 @@ async def _finish_terminal_accept(ctx, revision, accept_request) -> JobRecord:
     return accepted.created_jobs[0]
 
 
+async def _restart_terminal_accept(ctx, revision, native, accept_request, commit: str):
+    released = native.release_job(
+        ReleaseJobRequest(
+            job_id=accept_request.job_id,
+            attempt_id=accept_request.attempt_id,
+            claim_id=accept_request.claim_id,
+            actor_id=accept_request.actor_id,
+            process_id=accept_request.process_id,
+            released_at="2026-07-24T00:59:00Z",
+        )
+    )
+    assert released.diagnostic is None
+    restarted = accept_request.model_copy(
+        update={"attempt_id": "attempt-final-public", "claim_id": "claim-final-public"}
+    )
+    started = await server.start_job(
+        ctx,
+        change_id=revision.change_id,
+        job_id=restarted.job_id,
+        attempt_id=restarted.attempt_id,
+        claim_id=restarted.claim_id,
+        actor_id=restarted.actor_id,
+        process_id=restarted.process_id,
+        claimed_at="2026-07-24T00:59:30Z",
+        candidate_revision=commit,
+    )
+    assert started["start"].diagnostic is None
+    return restarted
+
+
 def _acceptance_failure_disposition(
     revision,
     checkout,
@@ -843,10 +873,76 @@ async def test_public_accept_rejects_symbolic_revision_authority(tmp_path: Path)
     )
 
     assert result.diagnostic is not None
-    assert result.diagnostic.lower_code == "ERR_PROOF_COMMIT_MISMATCH"
+    assert result.diagnostic.detail == "acceptance revision differs from dispatched checkout authority"
     assert checkout.root.exists()
     assert JobStore(board).read(int(start["job_id"])).job.attempt_id == start["attempt_id"]
     assert not (revision.source_dir / "receipts/accept-symbolic.yaml").exists()
+
+
+@pytest.mark.asyncio
+async def test_public_accept_rejects_manifest_revision_tamper(tmp_path: Path) -> None:
+    revision, board, ctx, _runtime, checkout, start, commit = await _active_accept(tmp_path)
+    evidence = await _acceptor_evidence(revision, ctx, checkout, start, commit)
+    manifest = yaml.safe_load(checkout.manifest.read_text(encoding="utf-8"))
+    forged_commit = "f" * 40
+    manifest["commit"] = forged_commit
+    checkout.manifest.write_text(yaml.safe_dump(manifest), encoding="utf-8")
+
+    result = await server.finish_accept(
+        ctx,
+        **_identity(start),
+        finished_at="2026-07-25T00:06:00Z",
+        receipt_id="accept-manifest-tamper",
+        code_revision=forged_commit,
+        evidence=evidence,
+        evidence_ids=("accept-manifest-tamper",),
+        impact_closure=evidence["changed_surfaces"],
+        reconciliation_plan_job_ids=(6, 7),
+    )
+
+    assert result.diagnostic is not None
+    assert result.diagnostic.detail == "acceptance revision differs from dispatched checkout authority"
+    assert JobStore(board).read(int(start["job_id"])).job.attempt_id == start["attempt_id"]
+    assert not (revision.source_dir / "receipts/accept-manifest-tamper.yaml").exists()
+
+
+@pytest.mark.asyncio
+async def test_public_accept_cleanup_failure_replays_cleanup_after_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    revision, board, ctx, runtime, checkout, start, commit = await _active_accept(tmp_path)
+    evidence = await _acceptor_evidence(revision, ctx, checkout, start, commit)
+    finish = {
+        "finished_at": "2026-07-25T00:06:00Z",
+        "receipt_id": "accept-cleanup-replay",
+        "code_revision": commit,
+        "evidence": evidence,
+        "evidence_ids": ("accept-cleanup-replay",),
+        "impact_closure": evidence["changed_surfaces"],
+        "reconciliation_plan_job_ids": (6, 7),
+    }
+    manager = runtime._proof_checkouts  # noqa: SLF001 - exercise cleanup recovery at the assembled runtime boundary.
+    assert manager is not None
+    cleanup = manager.cleanup
+
+    def fail_cleanup(_job_id: int) -> None:
+        raise OSError
+
+    monkeypatch.setattr(manager, "cleanup", fail_cleanup)
+    first = await server.finish_accept(ctx, **_identity(start), **finish)
+    assert isinstance(first, DispatchDiagnostic)
+    assert first.code is DispatchDiagnosticCode.LEASE_STALE
+    assert checkout.root.exists()
+    assert JobStore(board).read(int(start["job_id"]), archived=True).job.receipt_id == "accept-cleanup-replay"
+
+    monkeypatch.setattr(manager, "cleanup", cleanup)
+    replayed = await server.finish_accept(ctx, **_identity(start), **finish)
+    assert replayed.diagnostic is None
+    assert replayed.receipt is not None
+    assert replayed.receipt.receipt_id == "accept-cleanup-replay"
+    assert not checkout.root.exists()
+    assert len([event for event in AttemptStore(board).list() if event.attempt_id == start["attempt_id"]]) == 2
 
 
 @pytest.mark.asyncio
@@ -1178,13 +1274,12 @@ async def test_public_audit_success_closes_accepted_whole_change_and_replays(tmp
         history=GitRepositoryHistory(repository),
     )
     checkouts = ProofCheckoutManager(repository, tmp_path / "proof-mcp")
-    prepared = checkouts.materialize(JobStore(board).read(accept_request.job_id).job, commit)
-    assert prepared.checkout is not None
     runtime = DispatchRuntime(native, board, checkouts)
     app_ctx = AppContext(engine=server.KanbanEngine(board), kanban_dir=board)
     app_ctx.dispatch_runtimes[revision.change_id] = runtime
     ctx = MagicMock()
     ctx.request_context.lifespan_context = app_ctx
+    accept_request = await _restart_terminal_accept(ctx, revision, native, accept_request, commit)
     audit_job_id = (await _finish_terminal_accept(ctx, revision, accept_request)).job_id
     picked = await server.pick_jobs(
         ctx,
@@ -1262,13 +1357,12 @@ async def _pending_public_audit(tmp_path: Path, proof_dir: str):
         history=GitRepositoryHistory(repository),
     )
     checkouts = ProofCheckoutManager(repository, tmp_path / proof_dir)
-    prepared = checkouts.materialize(JobStore(board).read(accept_request.job_id).job, commit)
-    assert prepared.checkout is not None
     runtime = DispatchRuntime(native, board, checkouts)
     app_ctx = AppContext(engine=server.KanbanEngine(board), kanban_dir=board)
     app_ctx.dispatch_runtimes[revision.change_id] = runtime
     ctx = MagicMock()
     ctx.request_context.lifespan_context = app_ctx
+    accept_request = await _restart_terminal_accept(ctx, revision, native, accept_request, commit)
     audit_job_id = (await _finish_terminal_accept(ctx, revision, accept_request)).job_id
     return revision, board, native, ctx, checkouts, audit_job_id, accept_request, commit
 
