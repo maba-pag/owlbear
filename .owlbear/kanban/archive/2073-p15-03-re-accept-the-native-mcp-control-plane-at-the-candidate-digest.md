@@ -1,10 +1,10 @@
 ---
 id: 2073
 title: 'P15-03: Re-accept the native MCP control plane at the candidate digest'
-status: collect
+status: archived
 priority: high
 created: 2026-07-26T01:58:52.402176+02:00
-updated: 2026-07-26T03:13:47.452299+02:00
+updated: 2026-07-26T03:14:33.986485+02:00
 tags:
   - phase-15
   - candidate-reacceptance
@@ -32,7 +32,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -74,3 +74,7 @@ Evidence:
 - Verifier challenger: pass; AC-1 through AC-3 and unchanged IF-010 scope are closed.
 
 Verifier memories assessed.
+
+[[2026-07-26T03:14:33+02:00]]
+## Collect Notes
+ARCHIVED: DN-009 candidate re-acceptance is complete. Tested SHA `2a804df1ce9b291c5919c9356883f958bba1c362`, builder commit `80111bd91007a8c32d1721a4ca9be74eb0ad51c9`, and verifier commit `8747c9ea40d6d2713633bdbd0bcb9c22d079741b` are ancestors. Complete 102-test package and focused 39/36/7/7 evidence passed; both challengers passed; no product delta or open finding. Collector memories assessed.
