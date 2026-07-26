@@ -1790,7 +1790,7 @@ def test_job_administration_conflicts_preserve_complete_state(revision, tmp_path
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
-    for job_id in range(1, 5):
+    for job_id in range(1, 6):
         _materialize(store, _record(revision, job_id=job_id))
     runtime = _runtime(revision, work_root)
     initial = store.read(1)
@@ -1809,6 +1809,12 @@ def test_job_administration_conflicts_preserve_complete_state(revision, tmp_path
     assert runtime.start_job(active_request).diagnostic is None
     terminal = store.read(3)
     store.update(terminal.job.model_copy(update={"disposition": JobDisposition.SUPERSEDED}), terminal.token)
+    archived = store.read(5)
+    archived = store.update(
+        archived.job.model_copy(update={"disposition": JobDisposition.SUPERSEDED}),
+        archived.token,
+    )
+    store.archive(5, archived.token)
     before = _snapshot(work_root)
 
     stale = runtime.set_job_priority(priority_request.model_copy(update={"priority": 9}))
@@ -1839,6 +1845,15 @@ def test_job_administration_conflicts_preserve_complete_state(revision, tmp_path
             cancelled_at="2026-07-24T00:03:00Z",
         )
     )
+    archived_result = runtime.cancel_job(
+        CancelJobRequest(
+            job_id=5,
+            change_id=revision.change_id,
+            delivery_digest=revision.delivery_digest,
+            expected_token=archived.token,
+            cancelled_at="2026-07-24T00:03:00Z",
+        )
+    )
 
     assert stale.diagnostic is not None
     assert stale.diagnostic.code is JobAdminDiagnosticCode.OCC_STALE
@@ -1849,6 +1864,9 @@ def test_job_administration_conflicts_preserve_complete_state(revision, tmp_path
     assert active.diagnostic.code is JobAdminDiagnosticCode.ACTIVE_CLAIM
     assert terminal_result.diagnostic is not None
     assert terminal_result.diagnostic.code is JobAdminDiagnosticCode.TERMINAL
+    assert archived_result.diagnostic is not None
+    assert archived_result.diagnostic.code is JobAdminDiagnosticCode.TERMINAL
+    assert archived_result.diagnostic.current == archived
     assert _snapshot(work_root) == before
 
 

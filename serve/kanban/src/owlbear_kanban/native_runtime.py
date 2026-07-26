@@ -755,11 +755,14 @@ class NativeRuntime:
         try:
             current = self._jobs.read(request.job_id)
         except FileNotFoundError:
-            return JobAdminDiagnostic(
-                code=JobAdminDiagnosticCode.NOT_FOUND,
-                detail="job does not exist in the active store",
-                target=str(request.job_id),
-            )
+            try:
+                current = self._jobs.read(request.job_id, archived=True)
+            except FileNotFoundError:
+                return JobAdminDiagnostic(
+                    code=JobAdminDiagnosticCode.NOT_FOUND,
+                    detail="job does not exist in active or archived storage",
+                    target=str(request.job_id),
+                )
         job = current.job
         if job.change_id != request.change_id or job.delivery_digest != request.delivery_digest:
             return self._admin_diagnostic(

@@ -1,10 +1,10 @@
 ---
 id: 2071
 title: 'P15-01: Add OCC-safe native job priority and cancellation controls'
-status: verify
+status: collect
 priority: high
 created: 2026-07-26T01:58:18.179812+02:00
-updated: 2026-07-26T02:29:12.632898+02:00
+updated: 2026-07-26T02:36:26.485348+02:00
 tags:
   - phase-15
   - corrective-projection
@@ -73,3 +73,16 @@ Evidence:
 - Builder challenger: pass; independently reran 3 focused, 58 runtime/query, 20 native Cockpit, and lint checks.
 
 Builder memories assessed before closure.
+
+[[2026-07-26T02:36:26+02:00]]
+## Verify Notes
+PASS: Builder SHA `5162328111077a38aa9977523435ba656f2f79df` plus local archived-terminal repair satisfies DEC-034/REQ-026/IF-003.
+
+Independent evidence:
+- Focused success/replay/conflict/process-race/recovery matrix: 3 passed.
+- Complete native runtime/query after repair: 58 passed.
+- Verifier challenger initially found archived superseded jobs returned NOT_FOUND; repair adds archived lookup and proves exact TERMINAL current authority with complete-state preservation.
+- Rechallenge: pass.
+- Full Kanban package had 1035 passing with only eight unrelated stale legacy graph fixtures; Cockpit consumers 169 passed; lint-all passed.
+
+AC judgment: refreshed token and replay are stable; stale/digest/active/active-terminal/archived-terminal diagnostics contain current authority; process race has one winner; interrupted publication recovers and replays. Verifier memories assessed before closure.
