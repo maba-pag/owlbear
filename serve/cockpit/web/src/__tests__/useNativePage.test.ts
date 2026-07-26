@@ -122,6 +122,15 @@ describe('useNativePage', () => {
     expect(load).toHaveBeenCalledTimes(1)
   })
 
+  it('does not duplicate the initial page request when a provider token predates mount', async () => {
+    invalidation.token = '1785057600602000000'
+    const load = vi.fn<(cursor?: string) => Promise<NativePage<Row>>>().mockResolvedValue(page([], null))
+
+    renderHook(() => useRows(load))
+
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(1))
+  })
+
   it('queues an SSE refresh that arrives while the initial request is in flight', async () => {
     let resolveInitial!: (value: NativePage<Row>) => void
     const load = vi

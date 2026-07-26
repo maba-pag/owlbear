@@ -54,4 +54,19 @@ describe('native retained value hooks', () => {
     act(() => hook.result.current.retry())
     await waitFor(() => expect(hook.result.current.data).toMatchObject({ change_id: 'recovered' }))
   })
+
+  it('does not duplicate the initial request when a provider token predates mount', async () => {
+    invalidation.token = '1785057600602000000'
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ change_id: 'change' }),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+
+    const hook = renderHook(() => useNativeChange('change'))
+
+    await waitFor(() => expect(hook.result.current.data).toMatchObject({ change_id: 'change' }))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(hook.result.current.isLoading).toBe(false)
+  })
 })

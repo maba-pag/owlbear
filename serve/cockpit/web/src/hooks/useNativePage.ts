@@ -53,7 +53,11 @@ export function useNativePage<T>({
   const generationRef = useRef(0)
   const loadRef = useRef(load)
   const identityRef = useRef(identity)
-  const lastTokenRef = useRef<string | null>(null)
+  const lastTokenRef = useRef<string>(
+    [token, secondary.token, tertiary.token, quaternary.token]
+      .filter((value): value is string => value !== null)
+      .reduce((latest, value) => (BigInt(value) > BigInt(latest) ? value : latest), '0'),
+  )
   loadRef.current = load
   identityRef.current = identity
 

@@ -4,7 +4,7 @@ title: 'P15-10: Build the typed native Cockpit data boundary'
 status: verify
 priority: high
 created: 2026-07-26T01:59:53.046397+02:00
-updated: 2026-07-26T11:41:37.379175+02:00
+updated: 2026-07-26T12:03:46.203661+02:00
 tags:
   - phase-15
   - change:replace-delivery-pipeline
@@ -58,3 +58,9 @@ Verifier rejected 7e12ff32e869248528c78542eac75dd89dde8f25: server nanosecond to
 
 [[2026-07-26T11:41:37+02:00]]
 Builder repair after verifier rejection of 7e12ff32: corrected flat job/nested request/detail shapes and route-specific endpoints; preserved nested current.token, message/detail and 422 entries; queued in-flight invalidations; generation-guarded ownership/data/error/loading with permanently pending and adverse completion order proofs; mounted provider; mapped only real SSE resources with activity polling; changed native SSE token protocol to exact decimal strings and BigInt monotonic comparison; aligned supersession and nullable request targets. Validation: backend 177, frontend 1635 pass/2 skip, production build; final build + 23 focused tests; final challenger PASS.
+
+[[2026-07-26T12:03:40+02:00]]
+Verifier found preexisting provider tokens could duplicate initial page/value requests; returned for token-baseline repair.
+
+[[2026-07-26T12:03:46+02:00]]
+Final repair baselines preexisting native tokens in both paged and retained-value hooks, preventing duplicate mount refreshes and retained-payload loss. Exact regressions cover page/value late mount, pending owner replacement, stale completion loading state, exact decimal tokens and backend union alignment. Validation: production build; 25 focused tests; prior full frontend 1635/backend177; final mandatory-AC signoff PASS.

@@ -86,6 +86,8 @@ function useNativeValue<T>({ resources, load, pollIntervalMs = 10_000 }: NativeV
   const [error, setError] = useState<Error | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const generationRef = useRef(0)
+  const primaryTokenRef = useRef(primary.token)
+  const secondaryTokenRef = useRef(secondary.token)
   const loadRef = useRef(load)
   loadRef.current = load
 
@@ -115,7 +117,12 @@ function useNativeValue<T>({ resources, load, pollIntervalMs = 10_000 }: NativeV
   }, [load, refresh])
 
   useEffect(() => {
-    if (primary.token !== null || secondary.token !== null) {
+    const changed =
+      (primary.token !== null && primary.token !== primaryTokenRef.current) ||
+      (secondary.token !== null && secondary.token !== secondaryTokenRef.current)
+    primaryTokenRef.current = primary.token
+    secondaryTokenRef.current = secondary.token
+    if (changed) {
       void refresh()
     }
   }, [primary.token, refresh, secondary.token])
