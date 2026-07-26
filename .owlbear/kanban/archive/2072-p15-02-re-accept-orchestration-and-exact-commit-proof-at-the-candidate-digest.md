@@ -1,10 +1,10 @@
 ---
 id: 2072
 title: 'P15-02: Re-accept orchestration and exact-commit proof at the candidate digest'
-status: collect
+status: archived
 priority: high
 created: 2026-07-26T01:58:44.920258+02:00
-updated: 2026-07-26T02:52:03.572425+02:00
+updated: 2026-07-26T02:52:56.318498+02:00
 tags:
   - phase-15
   - candidate-reacceptance
@@ -33,7 +33,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Projection
@@ -73,3 +73,7 @@ Independent evidence at verifier HEAD `7e8762006d6d80602378cfe94f4cf00a8ebdc38d`
 - Verifier challenger: pass; no missing evidence or scope drift.
 
 AC-1 through AC-3 are tied to candidate digest, exact SHA, commands, and direct public-boundary results. Verifier memories assessed.
+
+[[2026-07-26T02:52:56+02:00]]
+## Collect Notes
+ARCHIVED: DN-004 candidate re-acceptance is complete. Tested product SHA `86322a6ec48a1e690f2f003f08bd2e4550cd9fd3`, builder evidence `7e8762006d6d80602378cfe94f4cf00a8ebdc38d`, and verifier evidence `50ba1a8287d7eda097f9d8f434df453a4bb21ad7` are ancestors. Full 69-test PROOF-014, independent 69-test challenge, and verifier 19-test high-risk proof passed; no product delta or unresolved finding. Collector memories assessed.
