@@ -1,10 +1,10 @@
 ---
 id: 2087
 title: 'P16-01: Implement immutable legacy inventory and snapshot'
-status: verify
+status: build
 priority: high
 created: 2026-07-27T08:39:20.202385+02:00
-updated: 2026-07-27T08:55:13.125725+02:00
+updated: 2026-07-27T08:56:57.567066+02:00
 tags:
   - phase-16
   - scope:core
@@ -71,3 +71,17 @@ DONE
 
 ### Memory Assessment
 Assessed each of 10 recalled entries. The retry-safe replay lesson directly improved AC-3 evidence; public adapter and active-workspace guidance were applied; remaining entries were not relevant.
+
+[[2026-07-27T08:56:57+02:00]]
+## Verify Notes
+REJECT
+
+Independent focused verification passed 7/7 with Ruff and editor diagnostics clean, but verifier-challenger returned `fail` on two unproven AC-2 safety boundaries.
+
+### Required Follow-up
+| # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
+|---|---|---|---|---|---|
+| 1 | AC-2/destination-ancestor | builder | Reject symlinks in any existing destination ancestor before creating missing parents; prove publication cannot escape the requested path. | `serve/kanban/src/owlbear_kanban/snapshot.py`, focused test | Challenger found `_validate_roots` checks only the immediate parent before `mkdir(parents=True)`/`resolve()` follows ancestors. |
+| 2 | AC-2/source-publication-race | builder | Close the source-stability window at publication and prove mutation after the current check cannot produce a completed snapshot. | `serve/kanban/src/owlbear_kanban/snapshot.py`, focused test | Challenger found `before-publication` hook runs after the final source check. |
+
+Builder commit reviewed: `0e6efe6e7a9b27840ab704787f929f8090b9f77d`. Recalled memories assessed; artifact-to-scope and replay-proof guidance materially informed rejection.
