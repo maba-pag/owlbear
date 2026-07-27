@@ -1,10 +1,10 @@
 ---
 id: 2096
 title: 'P17-03: Prove receipt, invalidation, and recovery properties'
-status: build
+status: verify
 priority: high
 created: 2026-07-27T19:45:12.555886+02:00
-updated: 2026-07-27T20:55:29.450628+02:00
+updated: 2026-07-27T21:37:54.773876+02:00
 tags:
   - phase-17
   - scope:test
@@ -85,3 +85,15 @@ Local task repair of builder follow-up key `AC-2/finding-class-route-contract`; 
 - Original history freezing and superseding-chain release remain part of the public rejection proof.
 - Shaper challenger: `pass`; it confirmed canonical literals, orthogonal class/target semantics, test-only scope, and closure-map causality.
 - Board audit before release: task remains child of #1990, has no dependencies, retains `existing+challenge`, and routes to `build`.
+
+[[2026-07-27T21:37:54+02:00]]
+## Builder Notes
+
+DONE. Added generic durable proof over the maintained public runtime and transaction boundaries; production source is unchanged.
+
+- AC-1: `test_start_job_accepts_only_current_unsuperseded_receipt_history_without_mutation` covers current, stale node-plan digest, superseded, intersecting-descendant, and proven-nonintersecting-descendant histories through `NativeRuntime.start_job`; rejected histories return stable lower diagnostics and preserve work bytes.
+- AC-2 and `AC-2/finding-class-route-contract`: `test_reject_accept_routes_class_and_target_orthogonally_without_rewriting_history` proves `implementation-defect` plus `packet-implementation` creates one build repair and `planning-omission` plus `packet-dependency` creates one node-plan revision with `through_plan_correction=False`. Replay is idempotent and original attempt, receipt, and finding history remains immutable. Maintained reconciliation proof confirms only a successful replacement chain releases the new build; an invalidated chain remains blocked without mutation. No `packet-boundary-defect` class was added.
+- AC-3: `test_recovery_converges_graph_job_receipt_activity_and_invalidation_participants` covers interruption before publication, after participant replacement, before cleanup, and during replay across graph, job move, receipt, activity, and invalidation participants; repeated recovery converges to one complete state without active/archive split and preserves prior history.
+- Changed files: `serve/kanban/tests/test_native_runtime.py`; `serve/kanban/tests/test_runtime_transaction.py`.
+- Focused proof: 11 passed. Successful-chain gate: 1 passed. Kanban package: 376 passed with 4 existing Python fork deprecation warnings. Focused `uv run lint` passed; VS Code diagnostics clean.
+- Builder challenger: pass. All 20 recalled memories assessed.

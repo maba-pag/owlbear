@@ -252,7 +252,13 @@ def _active_accept_scenario(tmp_path: Path):  # noqa: PLR0915 - assembles the pu
     return revision, work_root, runtime, start
 
 
-def _reject_request(revision, start: StartJobRequest) -> RejectAcceptRequest:
+def _reject_request(
+    revision,
+    start: StartJobRequest,
+    *,
+    finding_class: str = "implementation-defect",
+    corrective_target: str = "packet-implementation",
+) -> RejectAcceptRequest:
     finding = Finding(
         schema_version=1,
         finding_id="finding-accept-001",
@@ -262,7 +268,7 @@ def _reject_request(revision, start: StartJobRequest) -> RejectAcceptRequest:
         delivery_digest=revision.delivery_digest,
         target_kind="packet",
         target_id="DN-001-PK-001",
-        finding_class="implementation-defect",
+        finding_class=finding_class,
         detail="packet proof does not satisfy admitted behavior",
         created_at="2026-07-24T00:05:00Z",
     )
@@ -270,7 +276,7 @@ def _reject_request(revision, start: StartJobRequest) -> RejectAcceptRequest:
         CorrectiveRouteRequest(
             finding_id=finding.finding_id,
             finding_class=finding.finding_class,
-            target="packet-implementation",
+            target=corrective_target,
             target_node_ids=("DN-001",),
         )
     )
@@ -776,6 +782,52 @@ def test_reject_accept_atomically_publishes_minimum_correction_and_replays(tmp_p
     assert AttemptStore(work_root).read(start.attempt_id, 2).event == rejected.event
     assert changed.diagnostic is not None
     assert changed.diagnostic.code is RejectAcceptDiagnosticCode.IDENTITY_CONFLICT
+
+
+@pytest.mark.parametrize(
+    ("finding_class", "corrective_target", "expected_route", "expected_kind"),
+    [
+        ("implementation-defect", "packet-implementation", "build-repair", "build"),
+        ("planning-omission", "packet-dependency", "node-plan-revision", "plan"),
+    ],
+)
+def test_reject_accept_routes_class_and_target_orthogonally_without_rewriting_history(
+    tmp_path: Path,
+    finding_class: str,
+    corrective_target: str,
+    expected_route: str,
+    expected_kind: str,
+) -> None:
+    revision, work_root, runtime, start = _active_accept_scenario(tmp_path)
+    request = _reject_request(
+        revision,
+        start,
+        finding_class=finding_class,
+        corrective_target=corrective_target,
+    )
+    original_attempt = AttemptStore(work_root).read(start.attempt_id, 1).event
+    original_receipts = {path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")}
+
+    rejected = runtime.reject_accept(request)
+    replayed = runtime.reject_accept(request)
+
+    assert rejected.diagnostic is None
+    assert replayed == rejected
+    assert rejected.findings[0].finding_class == finding_class
+    assert request.invalidation.routes[0].finding_class == finding_class
+    assert request.invalidation.routes[0].route == expected_route
+    assert tuple(job.through_plan_correction for job in request.invalidation.routes[0].jobs) == (False,)
+    assert rejected.invalidation is not None
+    assert tuple((item.job.job_id, item.job.kind) for item in rejected.invalidation.corrective_jobs) == (
+        (20, expected_kind),
+    )
+    assert AttemptStore(work_root).read(start.attempt_id, 1).event == original_attempt
+    assert tuple(item.finding for item in FindingStore(work_root).list()) == rejected.findings
+    assert original_receipts == {
+        path.name: path.read_bytes()
+        for path in (revision.source_dir / "receipts").glob("*.yaml")
+        if path.name != request.invalidation.supersession_receipt_id + ".yaml"
+    }
 
 
 @pytest.mark.parametrize(
@@ -1636,6 +1688,90 @@ def test_reconciliation_finish_releases_new_build_and_invalidation_closure(tmp_p
     assert non_current.diagnostic is not None
     assert non_current.diagnostic.code is StartJobDiagnosticCode.PREDECESSOR_INVALID
     assert _snapshot(work_root) == non_current_before
+
+
+@pytest.mark.parametrize(
+    ("history_case", "expected_lower_code"),
+    [
+        ("current", None),
+        ("stale-digest", "ERR_RECEIPT_NODE_PLAN_DIGEST_STALE"),
+        ("superseded", "ERR_RECEIPT_SUPERSEDED"),
+        ("intersecting-descendant", "ERR_RECEIPT_CODE_PATH_STALE"),
+        ("proven-nonintersecting-descendant", None),
+    ],
+)
+def test_start_job_accepts_only_current_unsuperseded_receipt_history_without_mutation(
+    tmp_path: Path,
+    history_case: str,
+    expected_lower_code: str | None,
+) -> None:
+    revision = _copied_revision(tmp_path, clean_receipts=True)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    jobs = JobStore(work_root)
+    receipts = ReceiptStore(revision)
+    RuntimeTransaction(
+        work_root,
+        "generated-node-plan",
+        (NodePlanStore(revision).prepare(revision.graph.nodes[0].id, _plan_request(revision).node_plan),),
+    ).commit()
+    predecessor = _record(revision, job_id=1, receipt_id="predecessor-001")
+    _materialize(jobs, predecessor)
+    jobs.archive(1, jobs.read(1).token)
+    _materialize(jobs, _record(revision, job_id=2, predecessor_job_ids=(1,)))
+    receipt = {
+        "schema_version": 1,
+        "kind": "build",
+        "receipt_id": "predecessor-001",
+        "change_id": revision.change_id,
+        "delivery_digest": revision.delivery_digest,
+        "issued_at": "2026-07-24T00:00:00Z",
+        "impact_closure": {
+            "paths": ["serve/kanban/"],
+            "authority_targets": [revision.graph.nodes[0].id, revision.graph.nodes[0].proof],
+        },
+        "target_node_id": revision.graph.nodes[0].id,
+        "node_plan_digest": compute_node_plan_digest(revision, revision.graph.nodes[0].id),
+        "predecessor_receipt_ids": [],
+        "evidence": {"methods": list(revision.resolve(revision.graph.nodes[0].proof).method)},
+        "code_revision": "a" * 40,
+    }
+    assert receipts.create("predecessor-001", receipt).receipt is not None
+    if history_case == "stale-digest":
+        receipt_path = revision.source_dir / "receipts/predecessor-001.yaml"
+        receipt_path.write_text(
+            receipt_path.read_text(encoding="utf-8").replace(receipt["node_plan_digest"], "f" * 64),
+            encoding="utf-8",
+        )
+    elif history_case == "superseded":
+        supersession = {
+            **receipt,
+            "kind": "supersession",
+            "receipt_id": "supersession-001",
+            "invalidated_receipt_ids": ["predecessor-001"],
+            "finding_ids": ["finding-001"],
+            "superseded_job_ids": [1],
+            "corrective_job_ids": [],
+        }
+        assert receipts.create("supersession-001", supersession).receipt is not None
+    history = _History()
+    if history_case == "intersecting-descendant":
+        history.changed_paths = b"M\0serve/kanban/src/owlbear_kanban/native_runtime.py\0"
+    before = _snapshot(work_root)
+    request = _request().model_copy(
+        update={"job_id": 2, "attempt_id": "attempt-002", "claim_id": "claim-002", "candidate_revision": "b" * 40}
+    )
+
+    result = _runtime(revision, work_root, history=history).start_job(request)
+
+    if expected_lower_code is None:
+        assert result.diagnostic is None
+        assert result.job is not None
+    else:
+        assert result.diagnostic is not None
+        assert result.diagnostic.code is StartJobDiagnosticCode.PREDECESSOR_INVALID
+        assert result.diagnostic.lower_code == expected_lower_code
+        assert _snapshot(work_root) == before
 
 
 def test_start_job_stores_claim_and_started_event_then_replays(revision, tmp_path) -> None:

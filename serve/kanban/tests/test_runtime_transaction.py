@@ -272,6 +272,83 @@ def test_recovery_completes_lifecycle_job_and_activity_participants(tmp_path: Pa
     assert not list((change_root / ".runtime-transactions").glob("*.yaml"))
 
 
+@pytest.mark.parametrize(
+    "interruption",
+    ["before-publication", "after-first-publication", "before-manifest-cleanup", "during-replay"],
+)
+def test_recovery_converges_graph_job_receipt_activity_and_invalidation_participants(
+    tmp_path: Path,
+    interruption: str,
+) -> None:
+    change_root = tmp_path / "change"
+    work_root = tmp_path / "work"
+    active_job = work_root / "jobs/1.yaml"
+    archived_job = work_root / "archive/1.yaml"
+    prior_receipt = change_root / "receipts/prior.yaml"
+    prior_activity = work_root / "activity/prior.jsonl"
+    active_job.parent.mkdir(parents=True)
+    prior_receipt.parent.mkdir(parents=True)
+    prior_activity.parent.mkdir(parents=True)
+    active_job.write_bytes(b"active-job")
+    prior_receipt.write_bytes(b"prior-receipt")
+    prior_activity.write_bytes(b"prior-activity\n")
+    transaction = RuntimeTransaction(
+        change_root,
+        "complete-publication",
+        (
+            MoveTransactionParticipant(
+                work_root,
+                Path("jobs/1.yaml"),
+                Path("archive/1.yaml"),
+                b"active-job",
+                b"archived-job",
+            ),
+            TransactionParticipant(change_root, Path("delivery/graph.yaml"), b"graph"),
+            TransactionParticipant(change_root, Path("receipts/current.yaml"), b"receipt"),
+            TransactionParticipant(work_root, Path("activity/current.jsonl"), b"activity\n"),
+            TransactionParticipant(work_root, Path("invalidations/current.yaml"), b"invalidation"),
+        ),
+    )
+
+    def interrupt(stage: str) -> None:
+        if stage == interruption:
+            message = "interrupted"
+            raise RuntimeError(message)
+
+    if interruption == "during-replay":
+        with pytest.raises(RuntimeError, match="interrupted"):
+            transaction.commit(
+                failure=lambda stage: (
+                    (_ for _ in ()).throw(RuntimeError("interrupted")) if stage == "before-publication" else None
+                )
+            )
+        with pytest.raises(RuntimeError, match="interrupted"):
+            transaction.commit(
+                failure=lambda stage: (
+                    (_ for _ in ()).throw(RuntimeError("interrupted")) if stage == "after-first-publication" else None
+                )
+            )
+    else:
+        with pytest.raises(RuntimeError, match="interrupted"):
+            transaction.commit(failure=interrupt)
+
+    assert active_job.exists() is not archived_job.exists()
+
+    roots = (change_root, work_root)
+    RuntimeTransaction.recover_all(change_root, roots=roots)
+    RuntimeTransaction.recover_all(change_root, roots=roots)
+
+    assert not active_job.exists()
+    assert archived_job.read_bytes() == b"archived-job"
+    assert (change_root / "delivery/graph.yaml").read_bytes() == b"graph"
+    assert (change_root / "receipts/current.yaml").read_bytes() == b"receipt"
+    assert (work_root / "activity/current.jsonl").read_bytes() == b"activity\n"
+    assert (work_root / "invalidations/current.yaml").read_bytes() == b"invalidation"
+    assert prior_receipt.read_bytes() == b"prior-receipt"
+    assert prior_activity.read_bytes() == b"prior-activity\n"
+    assert not list((change_root / ".runtime-transactions").glob("*.yaml"))
+
+
 def test_transaction_rejects_conflicts_and_escaped_destinations_without_mutation(tmp_path: Path) -> None:
     root = tmp_path / "work"
     destination = root / "jobs/plan.yaml"
