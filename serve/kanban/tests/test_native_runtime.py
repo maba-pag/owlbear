@@ -788,6 +788,8 @@ def test_reject_accept_atomically_publishes_minimum_correction_and_replays(tmp_p
     ("finding_class", "corrective_target", "expected_route", "expected_kind"),
     [
         ("implementation-defect", "packet-implementation", "build-repair", "build"),
+        ("planning-omission", "packet-implementation", "build-repair", "build"),
+        ("implementation-defect", "packet-dependency", "node-plan-revision", "plan"),
         ("planning-omission", "packet-dependency", "node-plan-revision", "plan"),
     ],
 )
@@ -1759,7 +1761,12 @@ def test_start_job_accepts_only_current_unsuperseded_receipt_history_without_mut
         history.changed_paths = b"M\0serve/kanban/src/owlbear_kanban/native_runtime.py\0"
     before = _snapshot(work_root)
     request = _request().model_copy(
-        update={"job_id": 2, "attempt_id": "attempt-002", "claim_id": "claim-002", "candidate_revision": "b" * 40}
+        update={
+            "job_id": 2,
+            "attempt_id": "attempt-002",
+            "claim_id": "claim-002",
+            "candidate_revision": ("a" if history_case == "current" else "b") * 40,
+        }
     )
 
     result = _runtime(revision, work_root, history=history).start_job(request)

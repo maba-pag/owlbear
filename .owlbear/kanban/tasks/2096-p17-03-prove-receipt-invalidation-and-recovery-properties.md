@@ -1,10 +1,10 @@
 ---
 id: 2096
 title: 'P17-03: Prove receipt, invalidation, and recovery properties'
-status: verify
+status: collect
 priority: high
 created: 2026-07-27T19:45:12.555886+02:00
-updated: 2026-07-27T21:37:54.773876+02:00
+updated: 2026-07-27T21:47:25.681274+02:00
 tags:
   - phase-17
   - scope:test
@@ -97,3 +97,16 @@ DONE. Added generic durable proof over the maintained public runtime and transac
 - Changed files: `serve/kanban/tests/test_native_runtime.py`; `serve/kanban/tests/test_runtime_transaction.py`.
 - Focused proof: 11 passed. Successful-chain gate: 1 passed. Kanban package: 376 passed with 4 existing Python fork deprecation warnings. Focused `uv run lint` passed; VS Code diagnostics clean.
 - Builder challenger: pass. All 20 recalled memories assessed.
+
+[[2026-07-27T21:47:25+02:00]]
+## Verify Notes
+
+PASS. Independently reviewed builder SHA `a019085f601d2248dd34605d3284ead6c6d584e1`, current source, and the exact two-test diff. Production source is unchanged.
+
+- AC-1: `NativeRuntime.start_job` delegates predecessor checks to persisted `ReceiptStore.evaluate_currentness`. The five-case matrix proves exact current, stale node-plan digest, explicit supersession, intersecting descendant, and proven nonintersecting descendant behavior with exact lower diagnostics and complete work-root snapshot equality on every rejection. Verifier repaired the `current` row to use the receipt SHA so it no longer duplicated the nonintersecting-descendant setup.
+- AC-2 and `AC-2/finding-class-route-contract`: public `reject_accept` now proves both required routes plus both cross-pairs, so finding class and corrective target vary independently. Every row proves replay equality, one exact corrective job, `through_plan_correction=False`, frozen original attempt/finding/receipt history, and preserved finding class. Maintained reconciliation coverage proves stale/invalidated chains remain blocked without mutation while the successful replacement chain starts and releases. `packet-boundary-defect` is absent.
+- AC-3: real `RuntimeTransaction` participants cover job move, graph, receipt, activity, and invalidation publication across before-publication, after-first-publication, before-cleanup, and interrupted replay. Active/archive XOR, repeated `recover_all`, complete final participants, immutable prior bytes, and manifest cleanup prove convergence.
+- Verifier patch: `serve/kanban/tests/test_native_runtime.py` only; two tiny test-discrimination repairs, no production changes.
+- Proof: corrected AC-1 matrix 5 passed; corrected AC-2 public matrix 4 passed; consolidated AC selection 14 passed; full `serve/kanban/tests` 378 passed with four existing Python 3.14 fork deprecation warnings. Scoped `uv run lint` passed, `git diff --check` passed, and VS Code diagnostics report no errors in either builder-changed test.
+- Verifier challenger: `pass`; tests exercise public/runtime persistence boundaries rather than independently scripting expected outputs.
+- Memory: all 20 recalled entries assessed; one pending verifier-scoped orthogonality-test lesson saved.
