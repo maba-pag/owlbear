@@ -67,10 +67,7 @@ _AGENTS_DIR = Path(__file__).resolve().parents[2] / "share" / "agents"
 ND3_AGENTS: frozenset[str] = frozenset(
     {
         "build-reviewer",
-        "shaper-challenger",
-        "builder-challenger",
         "planner-challenger",
-        "verifier-challenger",
     }
 )
 

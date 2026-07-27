@@ -106,6 +106,6 @@ Return a compact evidence package:
 - Durable artifact: {.owlbear/research/{slug}.md, or none}
 ```
 
-Do not create or edit Kanban tasks, invoke `shaper-challenger`, request approval, or advance the board.
+Do not edit native authority, invoke admission challenge, request approval, or create Delivery work.
 The selected shaping workflow incorporates the evidence, resolves material decisions, challenges the
 complete graph when applicable, and owns all task history and routing.

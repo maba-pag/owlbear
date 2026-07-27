@@ -88,7 +88,7 @@ Honor explicit project or CI thresholds, but never manufacture low-value asserti
 - Task-scoped executable scaffolding is exceptional, not the default proof for every change. After
   archive, the test-curator removes it or mines only assertions that pass Durable Test Admission.
 - Durable test names describe behavior or risk, not task IDs or acceptance-criteria numbering.
-- Builder/verifier run focused proof commands proportional to the task risk. There is no mandatory GREEN phase or coverage target.
+- Builder and independent proof roles run commands proportional to packet and change risk. There is no mandatory GREEN phase or coverage target.
 
 ## Known Gotchas
 

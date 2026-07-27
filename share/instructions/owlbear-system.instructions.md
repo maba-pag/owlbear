@@ -18,9 +18,9 @@ applyTo: "**"
   satisfies the request. Do not rewrite whole files, generalize behavior, add compatibility paths,
   or perform adjacent cleanup unless the requested outcome requires it. Stop when the requested
   behavior is satisfied and proportionally validated.
-- **Goal-driven.** Implementation and pipeline mutation trace to a kanban task. If you can't name it,
-  check the board before changing code or task state. Audits, research, ideation, and exploration may
-  remain taskless until they produce approved implementation work.
+- **Goal-driven.** Delivery implementation traces to an engine-selected native job and admitted
+  packet. Audits, research, ideation, and exploration may remain jobless until they produce admitted
+  Delivery work.
 
 ## 2. System Awareness
 
@@ -28,15 +28,16 @@ applyTo: "**"
   and a Kanban execution board.
 - **Distribution and safety.** Clone = install; `setup/init.py` wires workspace configuration. Git
   history and audit logs provide review and recovery.
-- **Pipeline.** `shape → build → verify → collect → archived`. Use `r-pipeline-protocol` for lifecycle,
-  priority, and tags; use `r-workspace-governance` for commits and OwlBear-managed artifact placement.
+- **Delivery.** `design → plan → build → accept → audit`. The engine owns graph readiness, claims,
+  receipts, and correction routing; use `r-workspace-governance` for packet commits and OwlBear-managed
+  artifact placement.
 
 ## 3. Memory Governance
 
 | Store | What goes here |
 |-------|----------------|
 | mcp-memory `ob-memory` | Agent institutional knowledge: durable, scoped lessons for future agents |
-| Task body / `.owlbear/kanban/decisions/` | Task-specific context, blockers, decisions, and action requests |
+| Native changes, jobs, and requests | Change-specific context, blockers, decisions, and actions |
 | `.owlbear/research/` | Research findings and source-grounded analysis |
 | Project knowledge MCP | Domain knowledge and external-source knowledge |
 
@@ -62,7 +63,7 @@ Before completing material work, decide whether you learned a specific, non-obvi
   result as unreliable. Before retrying a mutating or non-idempotent command, use a read-only check to
   determine whether it already took effect; retry only when the check shows it did not run. A read-only or
   idempotent command may be retried unchanged once when its output is still needed.
-- **Loop detection.** Tier 1: same approach twice — change approach. Tier 2: two different approaches failed — narrow scope (deliver what you can, note what you can't). Tier 3: 3+ attempts — stop and report what failed. When working a claimed pipeline task, load `r-pipeline-protocol` and classify the next task state under `Interruptions And Requests` before mutating it.
+- **Loop detection.** Tier 1: same approach twice — change approach. Tier 2: two different approaches failed — narrow scope (deliver what you can, note what you can't). Tier 3: 3+ attempts — stop and report what failed. For an engine-started job, return the owning workflow's fail-closed structured disposition without inventing lifecycle mutation.
 - **Terminal.** `uv run` for all Python tools.
 - **Scratch files.** Terminal output, temp/debug files, and one-off scripts go to `.owlbear/scratch/`, never the project root.
 - **Commits.** Follow `r-workspace-governance` for format, ownership, and git discipline.

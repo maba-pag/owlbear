@@ -14,10 +14,9 @@ Dispatch fresh engine plans until no work remains.
 - `cycle_count` starts at 1 and increments after each cycle.
 - Keep no board state between plans.
 
-## Native Bootstrap Contract
+## Native Dispatch Contract
 
-`pick_tasks` is the default procedure below. IF-015 permits an explicit, non-default native procedure
-for an admitted `change_id`: call `pick_jobs` for the current candidate revision, call `start_job` for
+For an admitted `change_id`, call `pick_jobs` for the current candidate revision, call `start_job` for
 one returned entry, dispatch only its assigned profile, and pattern-match its structured disposition.
 The profile-specific success object selects the matching `finish_plan`, `finish_build`,
 `finish_accept`, or `finish_audit`;
@@ -99,23 +98,11 @@ never executes audit proof, classifies findings, assembles evidence, plans corre
 replacements, or supplements a disposition. It preserves the returned fields verbatim.
 
 Before `start_job`, resolve the selected profile against the installed subagent allowlist. If it is unavailable,
-report the profile and halt native mode without claiming, running, releasing, or mutating legacy task state.
-The native `planner` profile is valid only in this explicit mode; routine `pick_tasks` shape work remains
-user-facing through `/shape`. Role bodies remain in their owning agent and workflow files.
+report the profile and halt without claiming or running the job. Role bodies remain in their owning
+agent and workflow files.
 
 For `accept` and `audit`, `start_job` returns the engine-owned exact-commit checkout context. The orchestrator
 does not materialize or clean it independently; finish, release, and recovery own checkout cleanup.
-
-## Signal Contracts
-
-`pick_tasks(wave_size=None, max_waves=3)` returns ordered waves of `(task, agent)` entries. Empty
-waves end the session.
-
-**Pipeline subagent output:** Use the Channel A vocabulary defined by `r-pipeline-protocol`. Channel A
-reports lifecycle completion; it never authorizes orchestration to route the task. Re-plan from the
-board after each wave.
-
-`shape` work stays user-facing through `/shape`.
 
 ## Step 1 — Housekeeping
 
@@ -129,40 +116,26 @@ Curator failure does not stop dispatch.
 
 ## Step 2 — Plan
 
-Call:
+Call `pick_jobs` for the admitted change and candidate revision, using `wave_size=1` after a rate limit.
 
-```
-pick_tasks(wave_size=1 if rate_limited else None, max_waves=3)
-```
-
-If `waves=[]`, report completion and stop.
+If no entries are returned, report completion and stop.
 
 ## Step 3 — Dispatch
 
-Dispatch waves in returned order without re-bucketing. Dispatch each returned `(task_id, agent)` pair
-once. A lifecycle result never authorizes the task's next agent; only a fresh plan does. Same-plan
-redispatch is limited to the recovery cases below.
+Dispatch waves in returned order without re-bucketing. Start and dispatch each returned job once. A
+structured result never authorizes the next job; only a fresh `pick_jobs` plan does.
 
 ### Dispatch Mechanics
 
-For each returned pair, use the `agent` capability's
-`runSubagent(agentName=agent, prompt=str(task_id), description=description)` operation. The prompt
-contains only the task ID; the description is display-only. The subagent claims and reads its task.
+Use `runSubagent(agentName=profile, prompt=serialized_start_result, description=description)`. The
+prompt contains only the complete successful `start_job` result; the description is display-only.
 
 **Error handling:** Classify agent returns top-to-bottom. First match wins.
 
-1. **Return starts with `TOOL_UNAVAILABLE`:** retry the same pair once. A second occurrence halts
-   orchestration. Do not release or block; the agent already recorded failure.
-2. **Return starts with `DONE | PASS | ARCHIVED | REJECT | RESHAPE | BLOCK | COMMIT_FAILED`:**
-   consume the pair. The agent owns task state; make no task mutation.
-3. **Unstructured return contains `rate-limited | rate_limited | rate limits`:** set
+1. **Unstructured return contains `rate-limited | rate_limited | rate limits`:** set
    `rate_limited=True`, retry the same pair once, and keep later plans sequential.
-4. **Crash or unstructured return:** call
-   `end_work(id={task_id}, outcome="release", note="{agent} crashed once: {reason}")`, then retry
-   once. Continue when release returns `ERR_NOT_CLAIMED`. After a second crash, call
-   `end_work(id={task_id}, outcome="block", block_reason="{agent} crashed twice: {reason}",
-   note="{agent} crashed twice: {reason}")`. If that returns `ERR_NOT_CLAIMED`, call
-   `edit_task(id={task_id}, block_reason="{agent} crashed twice before claiming: {reason}")`.
+2. **Crash or unstructured return:** call `release_job` with the unchanged active identity and an
+   orchestrator-owned timestamp, then retry once from a fresh plan. A second crash halts orchestration.
 
 ## Step 4 — Loop
 
@@ -174,9 +147,9 @@ intervention or a halting error above may stop earlier.
 During execution:
 
 ```
-Cycle 1 (Plan): Running pick_tasks(wave_size=None, max_waves=3)...
-Cycle 1 (Wave 1/3): #103 (builder), #105 (verifier)
-Cycle 1 (Done): 3/4 succeeded, 1 crashed (#112)
+Cycle 1 (Plan): Running pick_jobs(change_id=replace-cache)...
+Cycle 1 (Wave 1/2): job 103 (builder)
+Cycle 1 (Done): 3/4 succeeded, 1 crashed (job 112)
 ```
 
 At end of session:

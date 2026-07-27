@@ -10,14 +10,13 @@ user-invocable: false
 
 The `ob-memory` MCP server exposes memory operations over stdio. The FastMCP app name is `owlbear-memory`; VS Code registers it in `.vscode/mcp.json` as `ob-memory`.
 
-For pipeline integration (pre-flight, reflection), see `r-pipeline-protocol`.
 For curation workflow, see `w-mem-curation`.
 
 ## Agent Access Matrix
 
 | Role | Agents | Available Tools |
 |------|--------|----------------|
-| Task-owning pipeline agents | shaper (task-repair mode), builder, verifier, collector | `assess_memories`, `save_memory`, `recall_memory` |
+| Native implementation role | builder | `assess_memories`, `save_memory`, `recall_memory` |
 | Candidate producer | test-curator | `save_memory` |
 | Memory curator | memory-curator | `list_memories`, `read_memory`, `curate_memory`, `delete_memory` |
 
@@ -264,7 +263,7 @@ save_memory(
 ```text
 list_memories(states=["pending"], categories=["tool-usage"])
 read_memory(entry_id="...")
-curate_memory(entry_id="...", scope_agents=["builder", "verifier"])
+curate_memory(entry_id="...", scope_agents=["builder", "acceptor"])
 ```
 
 ```text

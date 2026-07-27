@@ -6,8 +6,9 @@ user-invocable: false
 
 # Decision And Action Requests
 
-Use this handbook after `r-pipeline-protocol` classifies an interruption as a request. A request is
-a resumable task dependency, not a general error report.
+Use this handbook when a native workflow identifies one user-owned choice or action that blocks an
+admitted change or engine-selected job. A request is a durable graph dependency, not a general error
+report.
 
 ## Choose The Request Kind
 
@@ -16,10 +17,10 @@ a resumable task dependency, not a general error report.
 | Decision Request (DR) | The user must choose among materially different valid paths | One listed option or a free-text decision |
 | Action Request (AR) | The user or an explicitly invoked authorized workflow must perform an operation | A free-text outcome with the requested evidence |
 
-Do not create a request for a transient tool failure, an ordinary implementation defect, or a task
-contract that no safe action can satisfy. Follow the interruption matrix in `r-pipeline-protocol`.
-When the user-facing shaper can resolve a question live before task dispatch, use `askQuestions`
-instead of creating a blocked task and request.
+Do not create a request for a transient tool failure, an ordinary implementation defect, broad
+design discussion, or authority that no safe response can satisfy. The designer resolves material
+Specification choices before admission; the planner may create one request only for a bounded
+choice inside the admitted target.
 
 ## Create A Request
 
@@ -27,19 +28,23 @@ Call:
 
 ```text
 create_request(
-  task_id,
+   request_id,
+   created_at,
+   change_id,
+   delivery_digest,
   kind="decision" | "action",
   title,
   summary,
   agent,
+   target_node_id=None,
+   job_ids=None,
   options=None,
   body="...",
 )
 ```
 
-`create_request` atomically writes `decisions/pending/{request_id}.md` and blocks the task with
-`block_reason="DR pending"`. It returns the structured request, including `request_id`. It does not
-return a block reason.
+`create_request` validates the admitted revision, writes one immutable pending request, and gates
+referenced native work through the engine. Reusing an identity with different content fails.
 
 For a DR, provide 2–10 options. Each option has `option_id`, `label`, `confidence`, `recommended`,
 and `rationale`; at most one is recommended. For an AR, omit options.
@@ -53,38 +58,33 @@ The body must make the request executable:
 - condition that makes the task ready to resume;
 - destructive effects and cleanup, when applicable.
 
-Do not hand-write files under `.owlbear/kanban/decisions/`.
+Do not hand-write native request records.
 
-## Close The Active Work Session
+## Close The Active Job Attempt
 
 After successful request creation:
 
-1. If the task is claimed, append the current agent's Channel B note and release the claim with
-   `end_work(outcome="release", note=...)`.
-2. Do not call `end_work(outcome="block")`; the request already blocked the task.
-3. Commit the task record and `decisions/pending/{request_id}.md`, plus any other task-owned changes,
-   through the scoped commit procedure in `r-workspace-governance`.
-4. A dispatched task agent returns `BLOCK #{task_id} | {request title; request_id; resume condition}`.
-   Shaper reports the same state in its user-facing summary.
+1. Return the workflow's exact request-created disposition with the persisted request identity and
+   resume condition.
+2. Do not finish the job or write request files directly.
+3. The orchestrator releases the unchanged active job identity and obtains a fresh engine plan.
 
-If `create_request` fails validation, correct the payload and retry. If the assigned Kanban request
-tool is unexpectedly unreachable, use the tool-outage route from `r-pipeline-protocol`; never create
-a substitute request file.
+If `create_request` fails validation, correct only a malformed payload. Digest, reference, or
+authority contradictions are blocking findings; never create a substitute request file.
 
 ## Resolution And Resume
 
-Resolution is user/Cockpit controlled. There is no agent-callable resolve tool. Resolution moves the
-record to `decisions/resolved/`, appends a human-readable `## DR:` or `## AR:` summary to the task,
-and unblocks the task when no sibling request remains pending.
+Resolution is user/Cockpit controlled. There is no agent-callable resolve tool. Resolution creates
+durable resolved state and lets the engine recompute graph readiness.
 
 On the resumed task:
 
-1. Call `list_requests(status="resolved", task_id=...)`.
+1. Call `list_requests(change_id=..., delivery_digest=..., status="resolved")`.
 2. Call `show_request(request_id=...)` for each relevant request.
 3. Verify `resolution.resolved_at` and consume `selected_option_id` or `free_text` as structured
    authority. Do not parse the task-body summary as the decision source.
-4. Confirm the response satisfies the request's resume condition. If it does not, create a new
-   focused request or reject an invalid task contract according to `r-pipeline-protocol`.
+4. Confirm the response satisfies the request's resume condition and current revision. If it does
+   not, return the workflow's blocked or Specification re-entry disposition.
 
-Resolved decisions constrain subsequent work. AR outcomes are evidence, not automatic proof that
-the task AC is satisfied; builder and verifier still judge the returned evidence at their boundary.
+Resolved decisions constrain subsequent work. Action outcomes are evidence, not automatic proof
+that a node or change satisfies its acceptance boundary.

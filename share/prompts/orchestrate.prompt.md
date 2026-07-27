@@ -1,9 +1,7 @@
 ---
-description: "Start the orchestrator to read the kanban board, plan execution waves, and dispatch subagents"
+description: "Start native graph-aware orchestration for an admitted change"
 agent: orchestrator
 ---
 
-Orchestrate all eligible work.
-
-Use the non-default IF-015 native contract from `w-orchestration` only for an explicitly requested
-admitted change and candidate revision; otherwise use its `pick_tasks` procedure.
+Ask for the admitted `change_id` when it is not supplied, then follow `w-orchestration` to dispatch
+engine-selected native jobs until no eligible work remains or the user intervenes.

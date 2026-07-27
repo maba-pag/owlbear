@@ -10,7 +10,7 @@ user-invocable: false
 
 Structural standards for project memory entries in MCP (`ob-memory`) storage. Covers entry shape, tier selection, deduplication, and quality enforcement.
 
-For tool syntax, see `h-mcp-memory`. For curation workflow, see `w-mem-curation`. For pipeline integration (pre-flight, reflection), see `r-pipeline-protocol`.
+For tool syntax, see `h-mcp-memory`. For curation workflow, see `w-mem-curation`.
 
 ## Entry Shape
 
@@ -45,8 +45,8 @@ Per `owlbear-system.instructions.md` § Memory Governance (single source of trut
 | Content type | Tier | Store |
 |-------------|------|-------|
 | Agent institutional knowledge (queryable) | MCP canonical | `ob-memory` |
-| Task-specific context and working state | Task artifacts | Task body, `.owlbear/scratch/`, or kanban DR/AR files |
-| Architecture decisions | Not memory | `.owlbear/kanban/decisions/` |
+| Job-specific context and working state | Native artifacts | Change/job records or `.owlbear/scratch/` |
+| Architecture decisions | Not memory | Native change decisions and requests |
 | Research findings | Not memory | `.owlbear/research/` |
 | Code snippets, task-specific context | Not memory | Do not record |
 
@@ -64,7 +64,7 @@ MCP memory is canonical.
 | Pre-flight knowledge load | MCP only (`recall_memory(agent="{agent_name}")`) |
 
 The always-loaded `owlbear-system.instructions.md` Memory Governance section triggers post-work
-reflection. Pipeline recall and assessment are defined separately in `r-pipeline-protocol`.
+reflection.
 
 See `share/diagrams/memory-layers.excalidraw` for a visual overview of the tier and state model.
 

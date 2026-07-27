@@ -1,4 +1,4 @@
-"""PostToolUse lint and non-blocking minimum-change feedback for pipeline agents.
+"""PostToolUse lint and non-blocking minimum-change feedback for implementation agents.
 
 Reads VS Code hook JSON, runs Ruff on edited Python files, and warns about unusually broad edits.
 """

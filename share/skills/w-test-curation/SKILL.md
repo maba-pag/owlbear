@@ -1,27 +1,27 @@
 ---
 name: w-test-curation
-description: "Workflow: Test suite curation — remove low-value task-tests, mine useful assertions into durable tests"
+description: "Workflow: Remove low-value transient proof tests and preserve durable regressions"
 user-invocable: false
 ---
 
 # Test Curation
 
-Remove task-scoped tests that no longer provide project value. Mine useful assertions into durable tests before deleting. The goal is not to reduce test count — it is to stop spending compute on tests whose only purpose was proving a task's AC were met.
+Remove transient proof tests that no longer provide project value. Mine useful assertions into durable tests before deleting. The goal is not to reduce test count — it is to stop spending compute on tests whose only purpose was proving one completed change.
 
-**Non-blocking:** Runs on demand via prompt. Never gates task dispatch. Coverage may help locate
+**Non-blocking:** Runs on demand via prompt. Never gates Delivery. Coverage may help locate
 unexamined code, but it never justifies keeping or adding a test.
 
 ## Goal
 
-A task-scoped test has **no ongoing value** when:
+A transient proof test has **no ongoing value** when:
 
-- The task is archived and the test only proved AC were met (typical TDD RED-phase artifact)
+- Its immutable legacy provenance is complete and the test only proved one change's acceptance
 - The test verifies something was *removed* — once removed, the test is tautological
 - The test verifies a configuration was *added* — and the configuration is now exercised by product tests
 - The test exercises code paths already covered by durable module or integration tests
 - The test is a proof-of-concept, benchmark, or visual snapshot tied to a completed investigation
 
-A task-scoped test **still has value** when:
+A transient proof test **still has value** when:
 
 - It exercises a code path no other test covers (regression guard)
 - It documents an edge case or boundary condition that is hard to re-derive
@@ -29,9 +29,9 @@ A task-scoped test **still has value** when:
 
 ## Discovery
 
-Scan **all** directories listed in `testpaths` (from `pyproject.toml` or equivalent config) plus any package-local test directories (`serve/*/tests/`, `packages/*/tests/`, etc.). Task-scoped tests follow the pattern `*_{task_id}*` where task_id is a numeric identifier.
+Scan **all** directories listed in `testpaths` (from `pyproject.toml` or equivalent config) plus any package-local test directories (`serve/*/tests/`, `packages/*/tests/`, etc.). Legacy transient tests may use a numeric work identifier in the filename or module header.
 
-### Finding task-scoped tests
+### Finding transient tests
 
 1. **Python:** Find files matching `test_*_[0-9]*.py` recursively in all test directories. New transient suites must use `test_{behavior}_{task_id}.py`; durable suites use behavior names without task IDs.
 2. **Vitest/Jest:** Find files matching `*[._-][0-9][0-9][0-9]*.test.{ts,tsx}` in the frontend test directories.
@@ -44,17 +44,17 @@ describe durable behavioral coverage and must never make a file a curation candi
 
 ### Filtering
 
-1. Extract task IDs from filenames or explicit legacy module-header ownership markers, recording which signal identified each candidate.
-2. Check each task via `show_task`. Keep only files whose task is **archived**.
-3. **Protect** files for tasks in any active state (`shape`, `build`, `verify`, `collect`).
-4. **Protect** files that active-task tests import or reference.
+1. Extract legacy work IDs from filenames or explicit module-header ownership markers, recording which signal identified each candidate.
+2. Read only the hash-verified immutable legacy snapshot under `.owlbear/legacy/`; require the manifest and preserved record to identify the work as archived or completed.
+3. Protect candidates with missing, unverifiable, or nonterminal provenance.
+4. Protect files imported or referenced by another maintained test.
 5. Treat discovery as a triage input, never a deletion decision; inspect candidate assertions under the Rent Test before mining or deletion.
 
-If no archived task-tests exist across any suite, report "nothing to curate" and stop.
+If no immutable legacy-proof candidates exist across any suite, report "nothing to curate" and stop.
 
 ## Triage
 
-For each archived task-test, answer one question: **does this test provide ongoing project value?**
+For each candidate, answer one question: **does this test provide ongoing project value?**
 
 ### Zero-value patterns (delete without mining)
 
@@ -111,7 +111,7 @@ After mining (or for zero-value tests, directly):
 
 1. **Run affected tests** to confirm nothing breaks. Run the relevant command directly (pytest for Python, vitest/jest for frontend, playwright for E2E).
 
-2. **Delete** the task-test files:
+2. **Delete** the transient test files:
 
 ```shell
 git rm {task_test_paths}
@@ -134,14 +134,14 @@ git add -A && git commit -m "test: curate {N} task-tests — {D} deleted, {M} mi
 ```
 ## Test Curation
 ### Summary
-- Task-tests found: {total} (Python: {py}, Frontend: {fe}, E2E: {e2e})
+- Transient tests found: {total} (Python: {py}, Frontend: {fe}, E2E: {e2e})
 - Deleted (zero-value): {D}
 - Mined then deleted: {M}
 - Skipped (protected/uncertain): {S}
 
 ### Decisions
-| File | Task | Verdict | Protected behavior / reason |
-|------|------|---------|-----------------------------|
+| File | Legacy provenance | Verdict | Protected behavior / reason |
+|------|-------------------|---------|-----------------------------|
 | test_core_removal_1234.py | #1234 (archived) | delete | removal proof; no ongoing behavior |
 | test_engine_edge_1200.py | #1200 (archived) | mine → engine tests | malformed input remains atomic |
 | Shell.tab-routing_1639.test.tsx | #1639 (archived) | delete | already protected by Shell.test.tsx |
@@ -151,7 +151,7 @@ git add -A && git commit -m "test: curate {N} task-tests — {D} deleted, {M} mi
 
 - **Package-local tests.** Task-tests in package test directories mine into the same directory's durable files, not into a different location.
 - **Shared fixtures.** Task-tests may use fixtures from their local `conftest.py` or setup file. Verify fixture availability in the durable target.
-- **Active task dependencies.** Some active-task tests import or reference archived-task test files. Protect those until the active task completes.
+- **Maintained dependencies.** Protect any candidate imported or referenced by another maintained test.
 - **Coverage ≠ value.** A module at 95% coverage may still benefit from a mined edge-case test. Read the assertions before deleting.
 
 ## Companion Skills

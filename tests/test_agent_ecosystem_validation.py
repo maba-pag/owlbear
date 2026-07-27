@@ -11,8 +11,52 @@ import yaml
 
 _REPO_ROOT = Path(__file__).parent.parent
 _AGENTS_ROOT = _REPO_ROOT / "share/agents"
+_PROMPTS_ROOT = _REPO_ROOT / "share/prompts"
+_SKILLS_ROOT = _REPO_ROOT / "share/skills"
+_INSTRUCTIONS_ROOT = _REPO_ROOT / "share/instructions"
 _AGENT_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_agents.py"
 _SKILL_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_skills.py"
+
+_EXPECTED_AGENTS = {
+    "acceptor",
+    "auditor",
+    "build-reviewer",
+    "builder",
+    "designer",
+    "designer-challenger",
+    "knowledge-enricher",
+    "knowledge-ingestor",
+    "memory-curator",
+    "orchestrator",
+    "planner",
+    "planner-challenger",
+    "test-curator",
+}
+_RETIRED_AGENTS = {
+    "builder-challenger",
+    "collector",
+    "shaper",
+    "shaper-challenger",
+    "verifier",
+    "verifier-challenger",
+}
+_RETIRED_SKILLS = {
+    "h-mcp-kanban",
+    "r-pipeline-protocol",
+    "w-spec-shaping",
+    "w-task-decomposition",
+    "w-task-repair",
+}
+_GENERIC_TASK_TOOLS = {
+    "ob-kanban/create_task",
+    "ob-kanban/edit_task",
+    "ob-kanban/end_work",
+    "ob-kanban/list_tasks",
+    "ob-kanban/move_task",
+    "ob-kanban/pick_tasks",
+    "ob-kanban/show_task",
+    "ob-kanban/start_work",
+}
 
 
 def _load_module(path: Path, name: str) -> types.ModuleType:
@@ -122,11 +166,11 @@ def test_agent_validator_rejects_unresolved_or_misaligned_delegates(tmp_path: Pa
 
 
 def test_agent_validator_enforces_filename_and_nd3_invocation(tmp_path: Path) -> None:
-    path = _write_agent(tmp_path, "builder-challenger", _agent_text("wrong-name"))
+    path = _write_agent(tmp_path, "planner-challenger", _agent_text("wrong-name"))
 
     errors = _AGENT_VALIDATOR.validate_agent(path)
 
-    assert any("must match filename 'builder-challenger'" in error for error in errors)
+    assert any("must match filename 'planner-challenger'" in error for error in errors)
     assert any("ND3 agent must have disable-model-invocation: false" in error for error in errors)
 
 
@@ -191,3 +235,82 @@ def test_declared_owlbear_mcp_tools_exist_in_live_registries() -> None:
             }
             missing = declared - registered
             assert not missing, f"{agent_path.name} has unavailable {server} tools: {sorted(missing)}"
+
+
+def test_installed_delivery_ecosystem_is_native_only() -> None:
+    agents = {path.stem.removesuffix(".agent") for path in _AGENTS_ROOT.glob("*.agent.md")}
+    assert agents == _EXPECTED_AGENTS
+    assert agents.isdisjoint(_RETIRED_AGENTS)
+
+    metadata = {path.stem.removesuffix(".agent"): _frontmatter(path) for path in _AGENTS_ROOT.glob("*.agent.md")}
+    orchestrator = metadata["orchestrator"]
+    assert orchestrator["agents"] == ["planner", "builder", "acceptor", "auditor", "memory-curator", "Explore"]
+    assert {
+        "ob-kanban/pick_jobs",
+        "ob-kanban/start_job",
+        "ob-kanban/finish_plan",
+        "ob-kanban/finish_build",
+        "ob-kanban/finish_accept",
+        "ob-kanban/finish_audit",
+    } <= set(orchestrator["tools"])
+    assert metadata["builder"]["agents"] == ["build-reviewer"]
+
+    declared_tools = {tool for agent in metadata.values() for tool in agent.get("tools", []) if isinstance(tool, str)}
+    assert declared_tools.isdisjoint(_GENERIC_TASK_TOOLS)
+
+    prompts = {path.stem.removesuffix(".prompt"): _frontmatter(path) for path in _PROMPTS_ROOT.glob("*.prompt.md")}
+    assert "shape" not in prompts
+    assert prompts["ideate"]["agent"] == "designer"
+    assert prompts["design"]["agent"] == "designer"
+    assert prompts["orchestrate"]["agent"] == "orchestrator"
+    assert {prompt.get("agent") for prompt in prompts.values()}.isdisjoint(_RETIRED_AGENTS)
+
+    skills = {path.parent.name for path in _SKILLS_ROOT.glob("*/SKILL.md")}
+    assert _RETIRED_SKILLS.isdisjoint(skills)
+    assert {
+        "w-design-session",
+        "w-frontier-planning",
+        "w-packet-building",
+        "w-node-acceptance",
+        "w-whole-change-audit",
+        "w-orchestration",
+    } <= skills
+
+    instructions = {path.stem.removesuffix(".instructions") for path in _INSTRUCTIONS_ROOT.glob("*.instructions.md")}
+    assert instructions == {
+        "agent-ecosystem",
+        "doc-standards",
+        "frontend",
+        "owlbear-system",
+        "python",
+        "research-docs",
+    }
+
+
+def test_native_role_write_and_lifecycle_guards_are_preserved() -> None:
+    metadata = {path.stem.removesuffix(".agent"): _frontmatter(path) for path in _AGENTS_ROOT.glob("*.agent.md")}
+
+    builder = metadata["builder"]
+    assert builder["hooks"] == {
+        "SessionStart": [{"type": "command", "command": "uv run python .owlbear/hooks/session-context.py"}],
+        "PostToolUse": [{"type": "command", "command": "uv run python .owlbear/hooks/lint-changed.py"}],
+    }
+    assert not any(tool.startswith("ob-kanban/finish_") for tool in builder["tools"])
+
+    for role in ("acceptor", "auditor"):
+        assert metadata[role]["hooks"] == {
+            "PreToolUse": [
+                {
+                    "type": "command",
+                    "command": "uv run python .owlbear/hooks/deny-writes.py --terminal-read-only",
+                }
+            ]
+        }
+        assert not any(tool.startswith("edit/") for tool in metadata[role]["tools"])
+
+    orchestrator_tools = set(metadata["orchestrator"]["tools"])
+    assert not any(tool.startswith("edit/") for tool in orchestrator_tools)
+    assert not any(tool.startswith("execute/") for tool in orchestrator_tools)
+    assert metadata["build-reviewer"]["hooks"] == {
+        "PreToolUse": [{"type": "command", "command": "uv run python .owlbear/hooks/deny-writes.py"}]
+    }

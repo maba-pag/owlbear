@@ -1,4 +1,4 @@
-"""session-context.py — SessionStart hook for pipeline agents.
+"""session-context.py — SessionStart hook for implementation agents.
 
 Reads stdin JSON, runs git branch/log, outputs SessionStart additionalContext.
 Returns {} on any failure (non-blocking, fail-open).
