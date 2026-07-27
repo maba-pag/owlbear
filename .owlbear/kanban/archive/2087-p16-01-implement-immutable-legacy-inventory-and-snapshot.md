@@ -1,10 +1,10 @@
 ---
 id: 2087
 title: 'P16-01: Implement immutable legacy inventory and snapshot'
-status: collect
+status: archived
 priority: high
 created: 2026-07-27T08:39:20.202385+02:00
-updated: 2026-07-27T09:26:33.641220+02:00
+updated: 2026-07-27T09:27:33.060987+02:00
 tags:
   - phase-16
   - scope:core
@@ -34,7 +34,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -129,3 +129,14 @@ PASS
 - All 10 recalled verifier memories assessed; mutation-path, handled-abort, replay, and artifact-to-scope guidance materially informed the final proof.
 
 Verifier-owned patch is limited to `serve/kanban/src/owlbear_kanban/snapshot.py` and `serve/kanban/tests/test_snapshot.py`.
+
+[[2026-07-27T09:27:33+02:00]]
+## Collect Notes
+ARCHIVED
+
+- Aggregate outcome is complete at verifier commit `813d031c193ff5231b99249a9a7384e2fdd4fe83`: reusable immutable inventory/snapshot contracts, exact active-item dispositions, contained no-overwrite publication, verified hashes/counts, and deterministic rollback/replay are all delivered under MOD-001.
+- AC-1 closure: committed focused success proof validates manifest counts, hashes, bytes, disposition, copied data, and retained source.
+- AC-2 closure: committed tests cover missing disposition, existing destination, source symlink, initial ancestor symlink, ancestor swaps before and after provisional publication, and source mutation before and after provisional publication; every unsafe path leaves no completed snapshot.
+- AC-3 closure: corruption and interruption scenarios expose no completed snapshot and replay successfully.
+- Collector reran `uv run pytest serve/kanban/tests/test_snapshot.py -q --tb=short`: 11 passed on the committed verifier state. Package proof recorded by verifier: 1047 passed with four existing fork warnings; Ruff and diagnostics clean.
+- No unresolved requests, out-of-scope live-board mutation, or uncommitted source/test deliverables. Collector memories assessed.
