@@ -13,4 +13,5 @@ choices.
 Use public `list_changes` and `show_change` for selection and inspection. Investigate repository facts
 with read-only evidence and ask exactly one material product or architecture question at a time.
 Keep incomplete revisions draft. Invoke `validate_change` and `admit_change` only in the ordering and
-conditions defined by `w-design-session`; never hand off to OpenSpec or create Delivery work manually.
+conditions defined by `w-design-session`; never hand off to a retired specification workflow or
+create Delivery work manually.

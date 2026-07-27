@@ -153,7 +153,9 @@ Only load deeper context when one of these is true:
 
 When deeper context is needed, load only the minimum necessary:
 
-1. Recover source task context from `.owlbear/kanban/tasks/` or `.owlbear/kanban/archive/`.
+1. Recover native source context from the referenced job, receipt, or activity record. For entries
+   created before native cutover, inspect the immutable legacy inventory rather than an active task
+   store.
 2. Read likely overlapping memories before calling something duplicate or conflicting.
 3. Read `share/agents/{source_agent}.agent.md` when the source role matters.
 4. Read scoped agent definitions only when scope is part of the decision.

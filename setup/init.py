@@ -48,7 +48,6 @@ _DICT_MERGE_KEYS = _LOCATION_KEYS | frozenset(
 )
 
 _SKIP_NAMES = frozenset({"scratch-pad.txt"})
-_SKIP_REL_PREFIXES = ("openspec/",)
 _SKIP_IF_EXISTS_REL = frozenset(
     {
         ".github/copilot-instructions.md",
@@ -340,8 +339,6 @@ def init(  # noqa: C901
         rel_posix = rel.as_posix()
 
         if src.name in _SKIP_NAMES:
-            continue
-        if rel_posix.startswith(_SKIP_REL_PREFIXES):
             continue
 
         dest = target_dir / rel

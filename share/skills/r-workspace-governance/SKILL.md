@@ -63,7 +63,7 @@ reverting them.
 | Approved external repository clones | `.owlbear/scratch/research/{repo-name}/` | Inspect only; delete before task closure. |
 | Durable research findings | `.owlbear/research/{slug}.md` | Tracked; include the task reference. |
 | External source attribution | `.owlbear/sources/overview.md` | Tracked; use the Attribution schema below. |
-| Decision and action requests | `.owlbear/kanban/decisions/` | Create through Kanban tools; do not hand-author alternate locations. |
+| Decision and action requests | `.owlbear/kanban/requests/` | Create through native Kanban tools; do not hand-author alternate locations. |
 | Generated navigation indexes | `.owlbear/doc-index.md`, `.owlbear/py-index.md`, `.owlbear/ts-index.md` | Regenerate with `uv run --project {owlbear-root} indexes {project-root}`. |
 
 Project-owned source, test, documentation, and benchmark locations come from the local project map,

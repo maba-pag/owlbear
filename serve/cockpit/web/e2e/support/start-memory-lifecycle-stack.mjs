@@ -59,7 +59,13 @@ if (mcpProbeExit !== 0) {
 
 const server = spawn('uv', ['run', '--project', root, '--package', 'owlbear-cockpit', 'cockpit'], {
   cwd: root,
-  env: { ...process.env, KANBAN_DIR: kanbanDir, MEMORY_DIR: memoryDir, COCKPIT_PORT: '8422', COCKPIT_NO_OPEN: '1' },
+  env: {
+    ...process.env,
+    OWLBEAR_WORK_ROOT: kanbanDir,
+    MEMORY_DIR: memoryDir,
+    COCKPIT_PORT: '8422',
+    COCKPIT_NO_OPEN: '1',
+  },
   stdio: 'inherit',
 })
 const cleanup = async () => {

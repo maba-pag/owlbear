@@ -20,7 +20,7 @@ const server = spawn('uv', ['run', '--project', root, '--package', 'owlbear-cock
   cwd: workspace,
   env: {
     ...process.env,
-    KANBAN_DIR: join(workspace, '.owlbear', 'kanban'),
+    OWLBEAR_WORK_ROOT: join(workspace, '.owlbear', 'kanban'),
     MEMORY_DIR: join(workspace, '.owlbear', 'memory'),
     COCKPIT_PORT: '8423',
     COCKPIT_NO_OPEN: '1',

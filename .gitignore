@@ -115,12 +115,5 @@ store/audit/
 .owlbear/memory/*.db
 
 # Lock files (transient runtime artifacts)
-.owlbear/kanban/.activity.lock
-.owlbear/kanban/.next_id.lock
-.owlbear/kanban/tasks/.*.lock
-.owlbear/kanban/archive/.*.lock
+.owlbear/kanban/.storage.lock
 .owlbear/kanban/activity.jsonl
-
-# --- OwlBear OpenSpec generated commands ---
-.github/skills/openspec-*/
-.github/prompts/opsx-*.prompt.md

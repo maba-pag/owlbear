@@ -1,10 +1,10 @@
 ---
 id: 2092
 title: 'P16-06: Align native distribution, generated assets, and documentation'
-status: build
+status: verify
 priority: medium
 created: 2026-07-27T08:40:04.276149+02:00
-updated: 2026-07-27T08:40:04.276149+02:00
+updated: 2026-07-27T12:02:38.988783+02:00
 tags:
   - phase-16
   - scope:distribution
@@ -54,3 +54,15 @@ Out of scope: implementing snapshot/finalizer/setup behavior, deleting runtime o
 DN-012 at delivery digest `6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9`; REQ-011, REQ-017, IF-013/IF-016 public surfaces, MIG-001 through MIG-004 consumer inventories, RISK-005, and outputs from #2088 through #2091.
 
 Proof guidance: build and install the consumer artifact in a temporary workspace, inspect the resulting artifact/config inventory, and run maintained documentation/config validators; do not add source-string absence tests.
+
+[[2026-07-27T12:02:38+02:00]]
+## Builder Notes
+
+DONE. Adopted the complete uncommitted #2092 change envelope from the interrupted builder attempt after inspecting and validating it; unrelated Memory, task-control, and MCP configuration state remains excluded.
+
+- AC-1: removed active `openspec/`, installer/seed compatibility, generated `opsx-*` prompts and skills, retired diagrams, and stale generated/runtime references. `tests/test_native_distribution.py` proves the exact retired-path and shipped native inventories; setup and Cockpit launch regressions pass. The earlier packet proof also passed 264 Cockpit tests and the production Vite build.
+- AC-2: aligned maintained setup, consumer, sharing, package, ecosystem, and security-adjacent documentation/configuration with native design and delivery. Published the former OpenSpec tree through `create_legacy_snapshot` at `.owlbear/legacy/openspec-final`; `verify_legacy_snapshot` proves 22 files and four explicit `completed-history` dispositions while active paths remain absent.
+- AC-3: exact distribution proof covers sync ownership, prebuilt Cockpit output, retained diagram inventory, MCP inventory, and relative documentation links. The doc-index owner no longer excludes retired command trees.
+- Corrected MCP Memory review attribution to `memory-reviewer`; `tests/test_memory_git.py` exercises public `commit_batch` behavior in a real temporary Git repository.
+- Focused evidence: 73 unique Python regressions passed across native distribution/setup/launch, customization contracts, Memory review, and doc indexing; Markdownlint passed 39 files; yamllint passed all files; agent and skill validators passed; focused Ruff and format checks passed; diagnostics and both staged/unstaged diff checks are clean. Three pre-existing asyncio deprecation warnings remain.
+- Independent builder challenger decision: pass; both prior findings are resolved and no blocking defect remains.

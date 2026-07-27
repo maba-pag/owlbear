@@ -37,9 +37,9 @@ The request tools create and inspect structured decision or action requests for 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `KANBAN_TOOLS_EXCLUDE` | _(none)_ | Comma-separated native tool names to remove from the live registry at startup. |
-| `KANBAN_DIR` | `.owlbear/kanban` | Optional board directory override. Relative values resolve from process working directory, then normalize to absolute paths. |
+| `OWLBEAR_WORK_ROOT` | `.owlbear/kanban` | Optional native work-root override. Relative values resolve from process working directory, then normalize to absolute paths. |
 
-If `KANBAN_DIR` is unset or empty, the server uses `.owlbear/kanban` relative to the current working directory.
+If `OWLBEAR_WORK_ROOT` is unset or empty, the server uses `.owlbear/kanban` relative to the current working directory.
 
 ## Dependencies
 

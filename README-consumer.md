@@ -9,10 +9,10 @@ and MCP servers that work together out of the box. Clone once, run one setup com
 every project on your machine gains access to a consistent set of AI-powered development
 tools without any per-project configuration overhead.
 
-Agents handle structured tasks (research, architecture, testing, implementation, review),
-skills carry domain knowledge that loads automatically by relevance, and MCP servers give
-every agent live access to your project's kanban board, knowledge base, and persistent
-memory — all scoped to your project directory and shared through the filesystem.
+Native agents design and admit durable changes, then plan, build, accept, and audit engine-selected
+delivery jobs. Skills carry domain knowledge that loads automatically by relevance, and MCP servers
+give agents access to native changes and work, the knowledge base, persistent Memory, and browser
+automation, all scoped to your project directory and shared through the filesystem.
 
 ## Prerequisites
 
@@ -40,17 +40,14 @@ cd C:\Dev\my-project
 # 3. Bootstrap the OwlBear workspace
 python ..\owlbear\setup\init.py
 
-# Optional: set a project name and type
-python ..\owlbear\setup\init.py --name my-project --type webapp
-
 # 4. Open the project in VS Code
 code .
 ```
 
 Setup creates merged VS Code settings/MCP config plus copied runtime files such as
-`.owlbear/hooks/` and `.owlbear/kanban/` in your project directory. Agents, skills, instructions, and prompts still load live from the owlbear
-clone via relative paths, so the same owlbear repo can be shared across multiple
-projects on your machine.
+`.owlbear/hooks/`, `.owlbear/changes/`, and the native `.owlbear/kanban/` work store in your project
+directory. Agents, skills, instructions, and prompts still load live from the owlbear clone via
+relative paths, so the same owlbear repo can be shared across multiple projects on your machine.
 
 For more detail on what each file does and how to customise see
 [setup/setup-guide.md](setup/setup-guide.md).
@@ -62,7 +59,7 @@ For more detail on what each file does and how to customise see
 | `share/agents/` | Agent definitions (`.agent.md`) — loaded into VS Code automatically |
 | `share/skills/` | Agent skills (`SKILL.md`) — domain knowledge loaded by relevance |
 | `share/instructions/` | Shared instruction files (`*.instructions.md`) |
-| `serve/mcp-kanban/` | MCP server for kanban board operations |
+| `serve/mcp-kanban/` | MCP server for native change admission and delivery jobs |
 | `serve/mcp-memory/` | MCP server for persistent agent memory (markdown-file backed) |
 | `serve/mcp-knowledge/` | MCP server exposing the knowledge base |
 | `serve/cockpit/` | Cockpit backend package and prebuilt frontend bundle (`dist/`) used by consumers |
@@ -99,14 +96,24 @@ bundled `dist/` directory in the owlbear clone.
 `uv run cockpit` without `--project` is only for running from inside the owlbear
 repository itself. If you launch Cockpit from outside the consumer project directory,
 use `uv run --project ../owlbear --directory /path/to/project cockpit` or set
-`KANBAN_DIR` and `MEMORY_DIR` explicitly.
+`OWLBEAR_WORK_ROOT` and `MEMORY_DIR` explicitly.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `COCKPIT_PORT` | `8420` | Override listen port (1-65535) |
 | `COCKPIT_NO_OPEN` | unset | Set to `1` to suppress browser auto-open |
-| `KANBAN_DIR` | `$PWD/.owlbear/kanban/` | Override kanban directory path |
+| `OWLBEAR_WORK_ROOT` | `$PWD/.owlbear/kanban/` | Override the native delivery work root |
 | `MEMORY_DIR` | `$PWD/.owlbear/memory/` | Override memory directory path |
+
+## Native Workflow
+
+Use `/ideate` to refine a rough idea, then `/design` to create or resume one durable change under
+`.owlbear/changes/`. The designer validates the exact revision and asks for explicit approval before
+admission. Run `/orchestrate <change-id>` only after admission; the engine then selects native
+`plan`, `build`, `accept`, and `audit` jobs.
+
+Cockpit exposes the same changes, jobs, requests, receipts, findings, and activity. Any migrated
+records under `.owlbear/legacy/` are immutable history for inspection, never executable work.
 
 If Cockpit fails because `dist/` assets are missing, refresh from the latest `main`
 branch release artifacts (the sync-to-main workflow builds and stages `serve/cockpit/dist/`).

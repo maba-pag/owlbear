@@ -52,7 +52,7 @@ All other `serve/` packages are Python — use `uv run` for those.
 |-----------|-------|
 | Stack | FastAPI + Pydantic v2 |
 | Endpoints | REST API under `/api/` — see `owlbear_cockpit/routes/` for current routes |
-| Launch | `uv run cockpit` — starts uvicorn on `127.0.0.1:8420` (default) and auto-opens browser; `COCKPIT_PORT` overrides port; `COCKPIT_NO_OPEN=1` suppresses browser; `KANBAN_DIR` overrides `.owlbear/kanban/`; requires built `dist/` |
+| Launch | `uv run cockpit` — starts uvicorn on `127.0.0.1:8420` (default) and auto-opens browser; `COCKPIT_PORT` overrides port; `COCKPIT_NO_OPEN=1` suppresses browser; `OWLBEAR_WORK_ROOT` overrides `.owlbear/kanban/`; requires built `dist/` |
 | Package manager | `uv` (standard for all `serve/` Python packages) |
 
 ## 5. Test Domain Mapping

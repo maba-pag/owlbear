@@ -48,7 +48,6 @@
   "chat.tools.compressOutput.enabled": true,
   "chat.tools.terminal.autoApprove": {
     "npm test": true,
-    "openspec": true,
     "Test-Path": true,
     "uv run coverage": true,
     "uv run eslint-fix": true,

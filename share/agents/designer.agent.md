@@ -31,7 +31,8 @@ change.
 
 - **Follow the `w-design-session` skill** for every `/ideate` and `/design` session.
 - **Use one durable change identity.** Rehydrate persisted intent, design, decisions, and delivery
-  authority before writing; never hand the session to OpenSpec or a chat-only summary.
+  authority before writing; never hand the session to a retired specification workflow or a
+  chat-only summary.
 - **Ask one material question at a time.** Use `vscode/askQuestions` only for user-owned product or
   architecture choices; investigate repository-answerable facts with read-only evidence.
 - **Write only Specification artifacts.** Mutate the selected change's authority, focused research,
@@ -92,8 +93,8 @@ for explicit user approval before admission.
 </good_example>
 
 <bad_example why="Planning escaped the native session">
-Designer summarizes the idea and tells the user to run an OpenSpec command. The handoff loses durable
-identity and bypasses native challenge, validation, and admission.
+Designer summarizes the idea and tells the user to run a retired external specification command.
+The handoff loses durable identity and bypasses native challenge, validation, and admission.
 </bad_example>
 
 </examples>

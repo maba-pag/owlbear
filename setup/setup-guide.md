@@ -56,11 +56,12 @@ Running `init.py` writes the following files into your project directory:
 |------------------|---------|-------------|
 | `.vscode/settings.json` | Points VS Code at owlbear agents, skills, and instructions; enables `mermaid-chat.enabled` for Mermaid diagram rendering in chat | Merged (owlbear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 5 MCP servers (4 owlbear stdio, including browser access, + markitdown) | Merged (owlbear servers as defaults; your existing servers are preserved) |
-| `.owlbear/kanban/tasks/.gitkeep` | Ensures tasks directory exists in version control | Always written |
-| `.owlbear/kanban/decisions/pending/` | Ensures decisions inbox directory exists | Always created (`mkdir`, `exist_ok=True`) |
-| `.owlbear/kanban/decisions/resolved/` | Ensures decisions resolved directory exists | Always created (`mkdir`, `exist_ok=True`) |
+| `.owlbear/changes/` | Native product intent, design, decisions, delivery graph, plans, and receipts | Created if missing; existing change records are preserved |
+| `.owlbear/kanban/jobs/` and `archive/` | Active and completed native delivery jobs | Created if missing; existing jobs are preserved |
+| `.owlbear/kanban/requests/{pending,resolved}/` | Native Decision and Action Requests | Created if missing; existing requests are preserved |
+| `.owlbear/kanban/attempts/` and `findings/` | Immutable attempt events and corrective findings | Created if missing; existing evidence is preserved |
+| `.owlbear/kanban/activity.jsonl` | Native delivery activity stream | Created if missing; never truncated on rerun |
 | `.owlbear/hooks/allow-stances-only.py` | Restricts ideation agents to approved stance outputs | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
-| `.owlbear/hooks/deny-non-doc-writes.py` | Constrains bounded-output non-code roles to doc-adjacent files (`.md`, `.excalidraw`) and scratch | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-src-writes.py` | Constrains test-only roles to `tests/`, `__tests__/`, and scratch surfaces | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-writes.py` | Constrains read-only roles to scratch workspace writes only | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/lint-changed.py` | Builder lint feedback hook — runs `uv run ruff check` on edited `.py` files; silently no-ops if `ruff` is not in your project's deps | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
@@ -77,7 +78,8 @@ Running `init.py` writes the following files into your project directory:
 | `.markdownlintignore` | Markdown lint exclusion patterns | Skipped if file already exists |
 | `.yamllint.yml` | YAML linting configuration | Always written |
 
-`init.py` creates the kanban board directory structure (`tasks/`, `archive/`, `decisions/pending/`, `decisions/resolved/`) but does not seed or overwrite `.owlbear/kanban/config.yml`.
+`init.py` creates only native authority and work stores. It does not create the retired
+`tasks/`, `decisions/`, or board configuration paths, and reruns do not overwrite native records.
 
 ## Shared vs Copied
 
@@ -95,45 +97,28 @@ entry, so setup does not seed a separate memory store.
 
 ---
 
-## Optional Specification Workflow
+## Native Delivery Workflow
 
-OwlBear can install pinned OpenSpec commands for changes that benefit from durable
-product intent, requirements, architecture, and delivery planning. This requires Node.js with `npx`.
-From the consumer project root, run:
+Use `/ideate` when the starting idea needs a one-question-at-a-time refinement interview. Use
+`/design` to create or resume the durable native change under `.owlbear/changes/<change-id>/`.
+The designer keeps product intent, decisions, technical design, delivery obligations, and proof
+boundaries together, then validates and admits the exact approved revision.
 
-```shell
-uv run --project ../owlbear python ../owlbear/setup/openspec.py .
-```
-
-The installer initializes OpenSpec's stock `spec-driven` workflow for GitHub Copilot and
-adds OwlBear context and per-artifact rules in `openspec/config.yaml`. OwlBear provides
-`/ideate` through its shared prompt set. The installer ignores only generated OpenSpec
-command copies; change artifacts under `openspec/changes/` remain version-controlled and
-continue to follow OpenSpec's community-maintained artifact graph.
-
-Use `/ideate` before `/opsx:propose` when the starting idea is still rough. The first command uses a
-one-question interview to produce a confirmed Refined Idea Summary; the second maps it into durable
-native artifacts. The resulting flow is deliberately memorable and sequential:
+After admission, invoke `/orchestrate <change-id>`. The orchestrator asks the engine for eligible
+native jobs and delegates each started job to its purpose-specific planner, builder, acceptor, or
+auditor. Jobs reference authoritative change targets; they do not copy specifications into task
+files.
 
 ```text
-/ideate -> /opsx:propose
-proposal.md -> specs/**/*.md + design.md -> tasks.md
+/ideate -> /design -> explicit admission -> /orchestrate
+Specification: design and validate
+Delivery: plan -> build -> accept -> audit
 ```
 
-OwlBear rules add material decision provenance, scope boundaries, evidence authorities,
-and normal-path proof guidance without replacing the stock templates. Do not rely on chat
-context after Proposal creation: load-bearing decisions belong in Proposal, Specs, or Design.
-
-After reviewing the package, pass the change to OwlBear shaper:
-
-```text
-/shape openspec/changes/<change>/
-```
-
-The shaper reads Proposal, Specs, Design, and Tasks together. Proposal and Specs constrain
-the intended outcome; grounded Design decisions constrain the technical plan; Tasks are
-advisory decomposition. The shaper writes the final Kanban task graph, acceptance criteria,
-dependencies, priorities, tags, and proof guidance.
+Successful work creates immutable receipts in the native change. Attempts, requests, findings, and
+activity remain inspectable in the work store. Historical records from the retired workflow, when
+present, live under `.owlbear/legacy/` as hash-verified read-only inventory and are never execution
+authority.
 
 ---
 
@@ -159,7 +144,8 @@ this shows chronological tool calls, LLM requests, and prompt discovery events.
 
 ## Launch Cockpit
 
-Cockpit is the browser UI for the project kanban board. Launch it from the project root
+Cockpit is the browser UI for native changes, delivery jobs, requests, evidence, Memory, Ideas, and
+immutable legacy inventory. Launch it from the project root
 so it reads this project's `.owlbear/kanban/` and `.owlbear/memory/` directories.
 
 1. Open a terminal in the project directory.
@@ -181,7 +167,7 @@ so it reads this project's `.owlbear/kanban/` and `.owlbear/memory/` directories
    ```
 
    Expected outcome: Cockpit opens `http://127.0.0.1:8420` and shows this project's
-   board. Use `COCKPIT_NO_OPEN=1` to suppress browser auto-open.
+  native workspace. Use `COCKPIT_NO_OPEN=1` to suppress browser auto-open.
 
 3. If your owlbear clone is not a sibling directory, replace `../owlbear` with the path
    to the clone.
@@ -281,7 +267,7 @@ Set these in `.vscode/mcp.json` under the server's `env` key:
 | Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
 | `uv run cockpit` says the command is missing | Command was run from the consumer project without `--project` | Use `uv run --project ../owlbear cockpit` from the project root |
-| Cockpit shows the wrong board or cannot find `.owlbear/kanban` | Cockpit was launched from the wrong working directory | Run from the project root, add `--directory /path/to/project`, or set `KANBAN_DIR` explicitly |
+| Cockpit shows the wrong workspace or cannot find `.owlbear/kanban` | Cockpit was launched from the wrong working directory | Run from the project root, add `--directory /path/to/project`, or set `OWLBEAR_WORK_ROOT` explicitly |
 | `ValueError` on setup | Cross-drive path resolution | Place owlbear and your project on the same Windows drive |
 | Hook file not refreshed on rerun | Existing local `.owlbear/hooks/` file differs from seed | Re-run `init.py --replace-hooks` to overwrite, or choose `replace` when prompted interactively |
 | Agent name conflict | Same-name agent in both owlbear and project locations | Give project agents unique names (see Customization section above) |

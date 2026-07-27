@@ -13,5 +13,6 @@ authority before writing when the session already exists.
 Investigate repository facts with read-only evidence. Ask exactly one material product or
 architecture question at a time, preserve the full Product Promise, and keep unresolved revisions
 draft. Continue through design, challenge, baseline, validation, and explicit admission in the same
-session when the user chooses to do so. Never hand off to OpenSpec, a PRD, or a parallel
+session when the user chooses to do so. Never hand off to a retired specification workflow, a PRD,
+or a parallel
 specification document, and never edit product code or create Delivery work manually.
