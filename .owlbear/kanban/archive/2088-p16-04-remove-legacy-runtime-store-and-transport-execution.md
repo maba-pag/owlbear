@@ -1,10 +1,10 @@
 ---
 id: 2088
 title: 'P16-04: Remove legacy runtime, store, and transport execution'
-status: collect
+status: archived
 priority: high
 created: 2026-07-27T08:39:27.780712+02:00
-updated: 2026-07-27T10:27:44.229395+02:00
+updated: 2026-07-27T10:28:24.013491+02:00
 tags:
   - phase-16
   - scope:core
@@ -35,7 +35,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -76,3 +76,8 @@ PASS against committed builder artifact `ac1913815efce4ed72c5da6ba0ffabae3e03515
 - Intentional retained boundaries remain correct: snapshot manifest inventory, Ideas, Memory, native SSE, and `storage_io` for Ideas/native transactions.
 
 No compatibility shim or executable legacy task/OpenSpec path remains.
+
+[[2026-07-27T10:28:24+02:00]]
+## Collect Notes
+
+ARCHIVED. Builder commit `ac1913815efce4ed72c5da6ba0ffabae3e035159` and verifier commit `f0e6ae2778f521cf1a790d8031deb94c92909215` are reachable from `dev`; the committed source/test slice has no outstanding changes. Direct evidence covers every AC: retained native Python/MCP/FastAPI and immutable inventory boundaries, explicit absence of retired task/OpenSpec tools and routes, and clean package health/import/collection checks. Builder and verifier challengers both approved with no follow-up. No unresolved request or dependency remains.
