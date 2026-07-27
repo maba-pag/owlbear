@@ -1,10 +1,10 @@
 ---
 id: 2095
 title: 'P17-02: Prove generated graph admission properties'
-status: verify
+status: collect
 priority: high
 created: 2026-07-27T19:45:12.509746+02:00
-updated: 2026-07-27T21:12:30.594371+02:00
+updated: 2026-07-27T21:24:42.102584+02:00
 tags:
   - phase-17
   - scope:test
@@ -126,3 +126,19 @@ INTERRUPTED
 - The verifier subagent returned no response after claiming this task. Effect checks found no verifier commit and no status change.
 - A recovery verifier could not adopt the live claim (`ERR_ALREADY_CLAIMED`), so the orchestrator released the interrupted claim through the public lifecycle operation before clean redispatch.
 - No product or test mutation is attributed to the interrupted verifier.
+
+[[2026-07-27T21:24:42+02:00]]
+## Verify Notes
+
+PASS
+
+- Verified builder commit `a0ee4be65140b9454665dc4d6f5e288e99cfec2e`; current HEAD is its descendant and had no later committed `serve/kanban` drift. The builder diff was limited to the task record and `serve/kanban/tests/test_generated_graph_admission.py`.
+- Closed `AC-1/topology-order`: source review confirmed `plan_jobs` persists authored node order while real `DispatchRuntime.pick_waves` independently derives dependency-ready order from the loaded graph and persisted `JobStore`. Challenger found the repaired fixture's ascending topology could still false-green lexical sorting, so verifier locally strengthened it to a non-lexical dependency chain distinct from reverse-authored YAML and added an explicit dependency-before-dependent assertion. Publication order, real runtime topology, replay tuple, stored `JobRecord` identities, and singleton receipt/generation artifacts are asserted.
+- Closed `AC-2/dangling-loader-boundary`: dangling YAML crosses canonical `load_change`, returns no revision with exact `ERR_CHANGE_REFERENCE_MISSING`, and creates no authority publication. The seven other YAML mutations reload canonically and now assert exact singleton tuples `DV-008`, `DV-003`, `DV-003`, `DV-004`, `DV-005`, `DV-006`, and `DV-007`; public admission returns no receipt/generation and creates no authority or work publication. No `model_copy` bypass remains.
+- AC-3 passes: repeated canonical loads after recursive key reversal, explicit document wrapping, and narrow line wrapping preserve digest, exact sorted findings, and semantic identity.
+- Final focused proof: `uv run pytest serve/kanban/tests/test_generated_graph_admission.py -q` with short tracebacks and xdist disabled passed 14 tests in 5.06 seconds.
+- Proportional package proof after verifier repair: `uv run pytest serve/kanban/tests -q` with short tracebacks passed 365 tests in 79.31 seconds; four existing Python multiprocessing fork deprecation warnings only.
+- Repository lint passed all applicable hooks for the test file; VS Code diagnostics were clean; scoped diff check passed.
+- Verifier challenger initially failed the lexical-topology and set-cardinality assertions. After the local repair and rerun, the required challenger decision was `pass`, explicitly closing both defects and supporting AC-1 through AC-3.
+- All 20 recalled verifier memories were assessed successfully. No new non-obvious reusable institutional lesson was identified.
+- Verifier-owned changed file: `serve/kanban/tests/test_generated_graph_admission.py`; final task record is included in the scoped closure commit.

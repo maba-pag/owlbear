@@ -29,6 +29,7 @@ _YAML_FILES = (
     "delivery/contracts.yaml",
     "delivery/nodes.yaml",
 )
+_SCRAMBLED_TOPOLOGY = ("DN-001", "DN-003", "DN-002", "DN-005", "DN-004", "DN-007", "DN-006")
 
 
 def _node_id(index: int) -> str:
@@ -36,13 +37,16 @@ def _node_id(index: int) -> str:
 
 
 def _dependencies(family: str, index: int) -> list[str]:
+    if family == "scrambled":
+        topology_index = _SCRAMBLED_TOPOLOGY.index(_node_id(index))
+        return [] if topology_index == 0 else [_SCRAMBLED_TOPOLOGY[topology_index - 1]]
     if index == 1:
         return []
     if family == "branching":
         return [_node_id((index - 2) // 2 + 1)]
-    if family in {"joining", "scrambled"} and index == 4:
+    if family == "joining" and index == 4:
         return [_node_id(2), _node_id(3)]
-    if family in {"joining", "scrambled"} and index in {2, 3}:
+    if family == "joining" and index in {2, 3}:
         return [_node_id(1)]
     return [_node_id(index - 1)]
 
@@ -258,7 +262,9 @@ def test_generated_graph_families_publish_authored_order_dispatch_topology_and_r
     replayed = validate_and_admit(revision, evidence, work_root, timestamp=_TIMESTAMP)
 
     authored_targets = tuple(node.id for node in revision.graph.nodes)
-    topology_targets = tuple(_node_id(index) for index in range(1, count + 1))
+    topology_targets = (
+        _SCRAMBLED_TOPOLOGY if family == "scrambled" else tuple(_node_id(index) for index in range(1, count + 1))
+    )
     assert assessment.findings == ()
     assert receipt is not None
     assert generation is not None
@@ -272,8 +278,15 @@ def test_generated_graph_families_publish_authored_order_dispatch_topology_and_r
         JobStore(work_root).read(entry.job_id).job.target_node_id for wave in plan.waves for entry in wave
     )
     assert dispatched_targets == topology_targets
+    dispatched_positions = {target: index for index, target in enumerate(dispatched_targets)}
+    assert all(
+        dispatched_positions[dependency] < dispatched_positions[node.id]
+        for node in revision.graph.nodes
+        for dependency in node.dependencies
+    )
     if family == "scrambled":
-        assert authored_targets == tuple(reversed(topology_targets))
+        assert authored_targets == tuple(sorted(topology_targets, reverse=True))
+        assert topology_targets != tuple(sorted(topology_targets))
     assert replayed == (receipt, generation, assessment)
     assert tuple(stored.job for stored in JobStore(work_root).list()) == tuple(
         JobRecord(schema_version=1, **job.model_dump()) for job in generation.jobs
@@ -358,7 +371,7 @@ def test_generated_yaml_mutations_return_exact_admission_code_before_publication
 
     receipt, generation, assessment = validate_and_admit(revision, _evidence(revision), work_root)
 
-    assert {finding.code for finding in assessment.errors} == {expected_code}
+    assert tuple(finding.code for finding in assessment.errors) == (expected_code,)
     assert receipt is None
     assert generation is None
     assert not (revision.source_dir / "receipts").exists()
