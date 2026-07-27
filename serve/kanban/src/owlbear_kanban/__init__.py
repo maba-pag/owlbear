@@ -55,6 +55,20 @@ from owlbear_kanban.dispatch import (
     DispatchWaveEntry,
     WriterCoordination,
 )
+from owlbear_kanban.finalization import (
+    BootstrapFinalizationAbsenceError,
+    BootstrapFinalizationCurrentnessError,
+    BootstrapFinalizationError,
+    BootstrapFinalizationPathError,
+    BootstrapFinalizationPreconditionError,
+    BootstrapFinalizationPublicationError,
+    BootstrapFinalizationReadiness,
+    BootstrapFinalizationReceipt,
+    BootstrapFinalizationReceiptError,
+    BootstrapFinalizationRequest,
+    BootstrapFinalizationResult,
+    finalize_bootstrap_carrier,
+)
 from owlbear_kanban.finding import (
     Finding,
     FindingConflictError,
@@ -199,6 +213,8 @@ from owlbear_kanban.snapshot import (
     LegacySnapshotSourceChangedError,
     LegacySnapshotVerificationError,
     create_legacy_snapshot,
+    inventory_legacy_source,
+    verify_legacy_snapshot,
 )
 from owlbear_kanban.workspace import NativeWorkspace, parse_claim_expiry
 
@@ -223,6 +239,17 @@ __all__ = [
     "AttemptEventParseResult",
     "AttemptResult",
     "AttemptStore",
+    "BootstrapFinalizationAbsenceError",
+    "BootstrapFinalizationCurrentnessError",
+    "BootstrapFinalizationError",
+    "BootstrapFinalizationPathError",
+    "BootstrapFinalizationPreconditionError",
+    "BootstrapFinalizationPublicationError",
+    "BootstrapFinalizationReadiness",
+    "BootstrapFinalizationReceipt",
+    "BootstrapFinalizationReceiptError",
+    "BootstrapFinalizationRequest",
+    "BootstrapFinalizationResult",
     "CancelJobRequest",
     "CancelJobResult",
     "ChangeDiagnostic",
@@ -362,6 +389,8 @@ __all__ = [
     "evaluate_admission",
     "evaluate_code_revision_currency",
     "evaluate_receipt_currentness",
+    "finalize_bootstrap_carrier",
+    "inventory_legacy_source",
     "load_change",
     "load_modular_change",
     "parse_attempt_event_mapping",
@@ -377,5 +406,6 @@ __all__ = [
     "read_job_generation",
     "serialize_attempt_event_mapping",
     "validate_and_admit",
+    "verify_legacy_snapshot",
     "whole_change_audit_report",
 ]

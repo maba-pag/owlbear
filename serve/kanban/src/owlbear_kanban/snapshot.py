@@ -183,6 +183,58 @@ type SnapshotFailureHook = Callable[[str, Path], None]
 type _Inventory = tuple[tuple[str, ...], tuple[LegacySnapshotFile, ...]]
 
 
+def inventory_legacy_source(
+    source: Path,
+    active_items: tuple[LegacyActiveItem, ...],
+    dispositions: Mapping[str, LegacyDisposition],
+) -> LegacySnapshotManifest:
+    """Build the verified manifest identity for a legacy source without publishing it."""
+    if source.is_symlink() or not source.is_dir():
+        raise LegacySnapshotPathError(source)
+    inventory = _inventory(source.resolve())
+    return _build_manifest(inventory, _resolve_dispositions(active_items, dispositions, inventory))
+
+
+def verify_legacy_snapshot(destination: Path) -> LegacySnapshotResult:
+    """Recompute a published snapshot's manifest and every content hash."""
+    if destination.is_symlink() or not destination.is_dir():
+        raise LegacySnapshotPathError(destination)
+    destination = destination.resolve()
+    try:
+        root_fd = os.open(destination, _DIRECTORY_FLAGS)
+    except OSError as exc:
+        raise LegacySnapshotPathError(destination) from exc
+    try:
+        metadata = os.stat("manifest.json", dir_fd=root_fd, follow_symlinks=False)
+        manifest_bytes = _read_open_file(root_fd, "manifest.json", PurePosixPath("manifest.json"), metadata)
+        try:
+            manifest = LegacySnapshotManifest.model_validate_json(manifest_bytes)
+        except ValueError as exc:
+            message = "manifest is invalid"
+            raise LegacySnapshotVerificationError(message) from exc
+        content_fd = os.open("content", _DIRECTORY_FLAGS, dir_fd=root_fd)
+        try:
+            inventory = _inventory_descriptor(content_fd)
+        finally:
+            os.close(content_fd)
+        if _build_manifest(inventory, manifest.active_items) != manifest:
+            message = "published inventory differs from manifest"
+            raise LegacySnapshotVerificationError(message)
+    except LegacySnapshotError:
+        raise
+    except OSError as exc:
+        message = "published snapshot is incomplete"
+        raise LegacySnapshotVerificationError(message) from exc
+    finally:
+        os.close(root_fd)
+    return LegacySnapshotResult(
+        destination=destination,
+        manifest_path=destination / "manifest.json",
+        manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
+        manifest=manifest,
+    )
+
+
 def create_legacy_snapshot(
     source: Path,
     destination: Path,
@@ -197,8 +249,7 @@ def create_legacy_snapshot(
         with _locked_destination_parent(parent_fd):
             _ensure_destination_available(parent_fd, destination.name, destination)
             inventory = _inventory(source)
-            resolved_dispositions = _resolve_dispositions(active_items, dispositions, inventory)
-            manifest = _build_manifest(inventory, resolved_dispositions)
+            manifest = _build_manifest(inventory, _resolve_dispositions(active_items, dispositions, inventory))
             manifest_bytes = _manifest_bytes(manifest)
             staging = _staging_path(destination, manifest.source_digest)
             _remove_staging(parent_fd, staging.name, staging)

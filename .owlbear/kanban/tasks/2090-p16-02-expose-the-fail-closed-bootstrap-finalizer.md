@@ -1,10 +1,10 @@
 ---
 id: 2090
 title: 'P16-02: Expose the fail-closed bootstrap finalizer'
-status: build
+status: verify
 priority: high
 created: 2026-07-27T08:39:49.070496+02:00
-updated: 2026-07-27T08:39:49.070496+02:00
+updated: 2026-07-27T10:48:55.849815+02:00
 tags:
   - phase-16
   - scope:core
@@ -53,3 +53,23 @@ Out of scope: invoking the command against the live self-hosting board, native j
 DN-012 at delivery digest `6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9`; IF-016, MIG-005's consumed handoff contract, DEC-036, RISK-001, KEEP-007, MOD-001 internal ownership, and MOD-006 public interface ownership.
 
 Proof guidance: invoke the public command against temporary populated repositories and exercise the finite approval/currentness/readiness/path/publication/absence matrix; never point it at the live board.
+
+[[2026-07-27T10:48:55+02:00]]
+## Builder Notes
+
+Implemented IF-016 as a fixture-proved fail-closed bootstrap finalizer without invoking the live carrier.
+
+- Added typed readiness/request/error/receipt/result contracts and a replayable core transaction in `serve/kanban`.
+- Added public source-inventory and published-snapshot verification helpers that recompute every content hash.
+- Added `setup/finalize.py`, a thin JSON command returning machine-readable success or typed failure.
+- Finalization validates proof/terminal declarations, zero claims/writers/requests/unclassified records, authority/code/source currentness, explicit approval, and workspace-relative non-overlapping paths before mutation. It publishes a verified snapshot, removes source and sibling carrier, verifies absence, publishes an exclusive deterministic receipt, and returns the exact four commit paths.
+- A deterministic pending fingerprint supports same-request replay after interruption. Receipt-link interruption rolls back the visible receipt; corruption rolls back the snapshot while the source remains; completed replay verifies and returns identical artifact identities.
+
+Proof:
+- Complete `serve/kanban` suite plus command contract: 338 passed, with 4 existing Python multiprocessing fork deprecation warnings.
+- Setup/export regressions: 18 passed.
+- Root test collection succeeds.
+- Ruff check and format pass across all affected package/setup/test paths; direct command help and package imports succeed; editor diagnostics and scoped `git diff --check` are clean.
+- Builder challenger APPROVE with no follow-up; independent finalizer/snapshot/command run: 34 passed.
+
+All destructive tests used temporary workspaces. The live `.owlbear/kanban` carrier was not supplied to the finalizer.

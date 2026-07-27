@@ -16,6 +16,8 @@ from owlbear_kanban import (
     LegacySnapshotSourceChangedError,
     LegacySnapshotVerificationError,
     create_legacy_snapshot,
+    inventory_legacy_source,
+    verify_legacy_snapshot,
 )
 
 
@@ -39,9 +41,13 @@ def _dispositions() -> dict[str, LegacyDisposition]:
 def test_snapshot_publishes_verified_copy_and_manifest(tmp_path: Path) -> None:
     source = _legacy_root(tmp_path)
     destination = tmp_path / "snapshots" / "legacy-v1"
+    expected = inventory_legacy_source(source, _active_items(), _dispositions())
 
     result = create_legacy_snapshot(source, destination, _active_items(), _dispositions())
+    verified = verify_legacy_snapshot(destination)
 
+    assert result.manifest == expected
+    assert verified == result
     assert result.destination == destination
     assert result.manifest.file_count == 2
     assert result.manifest.directory_count == 2
