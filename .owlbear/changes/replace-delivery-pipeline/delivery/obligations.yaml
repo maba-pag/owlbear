@@ -221,6 +221,14 @@ requirements:
       and incompatible terminal dispositions fail closed with current job authority and no partial
       mutation.
     workflows: [WF-002, WF-003, WF-004, WF-005]
+  - id: REQ-027
+    title: Terminal self-hosting carrier retirement
+    statement: >-
+      After native complete-system proof and release of every legacy projection, an engine-selected
+      build job atomically snapshots and removes the real bootstrap board and sibling carrier under
+      the writer lease and commits the manifest and finalization receipt; a distinct read-only accept
+      job verifies that exact commit without any subsequent legacy lifecycle mutation.
+    workflows: [WF-008]
 
 negative_requirements:
   - id: NEG-001
@@ -369,3 +377,12 @@ workflows:
       cycles preserve exact receipt
       history.
     proof: PROOF-013
+  - id: WF-008
+    title: Finalize the self-hosting bootstrap carrier
+    entry: >-
+      DN-012 and DN-013 proof are current, every legacy projection including the root is released and
+      ready for terminal disposition, no legacy claim or writer is active, and finalization inputs are complete.
+    result: >-
+      The build receipt identifies the committed immutable snapshot, finalization receipt, and carrier
+      retirement; independent exact-commit acceptance proves no legacy dispatch or mutation remains possible.
+    proof: PROOF-016

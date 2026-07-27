@@ -2,7 +2,7 @@
 
 > **Change ID:** `replace-delivery-pipeline`
 > **Owning intake:** #1968
-> **State:** Draft, pending challenge and approval
+> **Authority state:** Canonical state and admission receipt are declared in `delivery/nodes.yaml`.
 > **Authority:** This file owns technical realization. Product intent belongs in `intent.md`; material choices belong in `decisions.yaml`; stable identities and delivery ownership belong in `delivery/`.
 
 ## 1. Design Goals
@@ -564,10 +564,19 @@ bootstrap uses the current pipeline as a disposable execution carrier under thes
   they do not become native receipts and cannot certify the replacement's final Product Promise.
   The native historical replay, full workflow, independent node acceptance, and whole-change audit
   in DN-013 and DN-014 must re-prove the assembled system at an exact commit before cutover.
-6. DN-012 removes the old pipeline from the product revision and consumer distribution. The external
-  stable sibling carrier remains available only to dispatch and record DN-013's post-cutover native
-  proof and bootstrap closure, then is retired from this change. No bootstrap loader, legacy receipt
-  adapter, command alias, or compatibility mode enters the native runtime.
+6. DN-012 removes the old pipeline from the product revision and consumer distribution and proves the
+  public cutover command against populated and fresh temporary repositories. The current workspace's
+  legacy board remains external bootstrap-carrier state only long enough to dispatch and record
+  DN-013's native proof and leave every legacy projection, including the root, released and ready for
+  terminal disposition. DN-015 is not projected into the board it destroys. The native engine selects
+  its `build` job, and the orchestrator invokes one builder under the global writer lease and explicit
+  finalization approval. That builder runs the finalizer, verifies the immutable manifest and hashes,
+  writes the finalization receipt, removes active board and carrier state, and commits those tracked
+  changes. Native build finalization records the commit without touching a legacy task. A distinct
+  `accept` job then verifies the exact commit in a disposable read-only checkout before issuing the
+  DN-015 accept receipt. No later legacy lifecycle mutation occurs. No bootstrap loader, legacy
+  receipt adapter, command alias, or compatibility mode enters the native runtime or consumer
+  distribution.
 
 The admission receipt limit states that bootstrap task mutation is not atomic with receipt creation.
 Task creation is idempotent by `(change_id, delivery_digest, delivery_node_id, packet_id)` and dispatch
@@ -766,6 +775,17 @@ Memory and Ideas remain unchanged peer utilities through the shell and routing r
 ## 16. Atomic Cutover
 
 The replacement is developed behind the current repository but is not shipped in mixed mode.
+
+For the self-hosting replacement, DN-012 completes and fixture-proves the product and distribution
+cutover below without mutating the board that still carries DN-013. DN-013 then proves the complete
+native workflow. Once every legacy projection is released and ready for terminal disposition,
+DN-015's engine-selected build job runs the fixture-proven command against that board under the writer
+lease, verifies the immutable manifest and content hashes, writes the finalization receipt, removes
+active board and carrier state, and commits the evidence. DN-015 is not projected into the board it
+destroys. Native build finalization binds that commit to the job; a separate read-only accept job
+verifies the exact commit in a disposable checkout and issues the node receipt. The operation is final
+and cannot dispatch or record more legacy work. Future consumer cutovers execute the sequence directly
+without this one-time carrier exception.
 
 At cutover:
 

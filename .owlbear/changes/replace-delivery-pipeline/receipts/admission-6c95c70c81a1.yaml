@@ -1,0 +1,603 @@
+---
+schema_version: 1
+kind: admission
+receipt_id: admission-6c95c70c81a1
+change_id: replace-delivery-pipeline
+delivery_digest:
+  6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+issued_at: '2026-07-27T01:58:50.487593Z'
+assessment:
+  schema_version: 1
+  revision_digest:
+    6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+  findings: []
+  limits:
+    - Admission certifies delivery completeness and feasibility, not
+      implementation correctness.
+    - Memory and Ideas continuity is preservation-only; DN-011 does not expand
+      either utility.
+    - DN-015 is not projected into the legacy board it destroys; its native
+      build/accept receipts and final commit are authoritative.
+evidence:
+  digest: 6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+  challenge:
+    REQ-001:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-001
+    REQ-002:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-002
+    REQ-003:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-003
+    REQ-004:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-004
+    REQ-005:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-005
+    REQ-006:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-006
+    REQ-007:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-007
+    REQ-008:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-008
+    REQ-009:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-009
+    REQ-010:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-010
+    REQ-011:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-011
+    REQ-012:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-012
+    REQ-013:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-013
+    REQ-014:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-014
+    REQ-015:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-015
+    REQ-016:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-016
+    REQ-017:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-017
+    REQ-018:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-018
+    REQ-019:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-019
+    REQ-020:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-020
+    REQ-021:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-021
+    REQ-022:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-022
+    REQ-023:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-023
+    REQ-024:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-024
+    REQ-025:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-025
+    REQ-026:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-026
+    REQ-027:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for REQ-027
+    WF-001:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for WF-001
+    WF-002:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for WF-002
+    WF-003:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for WF-003
+    WF-004:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for WF-004
+    WF-005:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for WF-005
+    WF-006:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for WF-006
+    WF-007:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for WF-007
+    WF-008:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for WF-008
+    IF-001:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for IF-001
+    IF-002:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for IF-002
+    IF-003:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for IF-003
+    IF-004:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for IF-004
+    IF-005:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for IF-005
+    IF-015:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for IF-015
+    IF-006:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for IF-006
+    IF-007:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for IF-007
+    IF-008:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for IF-008
+    IF-009:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for IF-009
+    IF-010:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for IF-010
+    IF-011:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for IF-011
+    IF-012:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for IF-012
+    IF-013:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for IF-013
+    IF-016:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for IF-016
+    IF-014:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for IF-014
+    MIG-001:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for MIG-001
+    MIG-002:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for MIG-002
+    MIG-003:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for MIG-003
+    MIG-004:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for MIG-004
+    MIG-005:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for MIG-005
+    RISK-001:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for RISK-001
+    RISK-002:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for RISK-002
+    RISK-003:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for RISK-003
+    RISK-004:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for RISK-004
+    RISK-005:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for RISK-005
+    RISK-006:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for RISK-006
+    RISK-007:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for RISK-007
+    RISK-008:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for RISK-008
+    RISK-009:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for RISK-009
+    RISK-010:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for RISK-010
+    RISK-011:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for RISK-011
+    RISK-012:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for RISK-012
+    RISK-013:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for RISK-013
+    RISK-014:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for RISK-014
+    PROOF-001:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for PROOF-001
+    PROOF-002:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for PROOF-002
+    PROOF-003:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for PROOF-003
+    PROOF-004:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for PROOF-004
+    PROOF-005:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for PROOF-005
+    PROOF-006:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for PROOF-006
+    PROOF-007:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for PROOF-007
+    PROOF-008:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for PROOF-008
+    PROOF-009:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for PROOF-009
+    PROOF-011:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for PROOF-011
+    PROOF-012:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for PROOF-012
+    PROOF-013:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for PROOF-013
+    PROOF-014:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for PROOF-014
+    PROOF-015:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for PROOF-015
+    PROOF-016:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for PROOF-016
+    DN-001:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for DN-001
+    DN-002:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for DN-002
+    DN-003:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for DN-003
+    DN-004:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for DN-004
+    DN-005:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for DN-005
+    DN-006:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for DN-006
+    DN-007:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for DN-007
+    DN-008:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for DN-008
+    DN-009:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for DN-009
+    DN-010:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for DN-010
+    DN-011:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for DN-011
+    DN-012:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for DN-012
+    DN-013:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for DN-013
+    DN-014:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for DN-014
+    DN-015:
+      disposition: pass
+      evidence: Independent authority challenge passed complete ownership,
+        dependency, scenario, and proof closure for DN-015
+  baseline:
+    digest: 6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+    commands:
+      - command: canonical modular change loader
+        exit_code: 0
+        result: no diagnostics; digest
+          6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+      - command: uv run pytest -q serve/kanban/tests/test_change_revision.py
+          serve/kanban/tests/test_admission_transaction.py
+        exit_code: 0
+        result: 37 passed
+  approval:
+    approved: true
+    digest: 6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+    authority: user
+    method: VS Code exact-digest approval
+  limits:
+    - Admission certifies delivery completeness and feasibility, not
+      implementation correctness.
+    - Memory and Ideas continuity is preservation-only; DN-011 does not expand
+      either utility.
+    - DN-015 is not projected into the legacy board it destroys; its native
+      build/accept receipts and final commit are authoritative.
+generation:
+  schema_version: 1
+  change_id: replace-delivery-pipeline
+  delivery_digest:
+    6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+  receipt_id: admission-6c95c70c81a1
+  jobs:
+    - job_id: 29
+      kind: plan
+      priority: 0
+      created_at: '2026-07-27T01:58:50.487593Z'
+      updated_at: '2026-07-27T01:58:50.487593Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+      target_node_id: DN-001
+      receipt_id: admission-6c95c70c81a1
+    - job_id: 30
+      kind: plan
+      priority: 0
+      created_at: '2026-07-27T01:58:50.487593Z'
+      updated_at: '2026-07-27T01:58:50.487593Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+      target_node_id: DN-002
+      receipt_id: admission-6c95c70c81a1
+    - job_id: 31
+      kind: plan
+      priority: 0
+      created_at: '2026-07-27T01:58:50.487593Z'
+      updated_at: '2026-07-27T01:58:50.487593Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+      target_node_id: DN-003
+      receipt_id: admission-6c95c70c81a1
+    - job_id: 32
+      kind: plan
+      priority: 0
+      created_at: '2026-07-27T01:58:50.487593Z'
+      updated_at: '2026-07-27T01:58:50.487593Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+      target_node_id: DN-004
+      receipt_id: admission-6c95c70c81a1
+    - job_id: 33
+      kind: plan
+      priority: 0
+      created_at: '2026-07-27T01:58:50.487593Z'
+      updated_at: '2026-07-27T01:58:50.487593Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+      target_node_id: DN-005
+      receipt_id: admission-6c95c70c81a1
+    - job_id: 34
+      kind: plan
+      priority: 0
+      created_at: '2026-07-27T01:58:50.487593Z'
+      updated_at: '2026-07-27T01:58:50.487593Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+      target_node_id: DN-006
+      receipt_id: admission-6c95c70c81a1
+    - job_id: 35
+      kind: plan
+      priority: 0
+      created_at: '2026-07-27T01:58:50.487593Z'
+      updated_at: '2026-07-27T01:58:50.487593Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+      target_node_id: DN-007
+      receipt_id: admission-6c95c70c81a1
+    - job_id: 36
+      kind: plan
+      priority: 0
+      created_at: '2026-07-27T01:58:50.487593Z'
+      updated_at: '2026-07-27T01:58:50.487593Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+      target_node_id: DN-008
+      receipt_id: admission-6c95c70c81a1
+    - job_id: 37
+      kind: plan
+      priority: 0
+      created_at: '2026-07-27T01:58:50.487593Z'
+      updated_at: '2026-07-27T01:58:50.487593Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+      target_node_id: DN-009
+      receipt_id: admission-6c95c70c81a1
+    - job_id: 38
+      kind: plan
+      priority: 0
+      created_at: '2026-07-27T01:58:50.487593Z'
+      updated_at: '2026-07-27T01:58:50.487593Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+      target_node_id: DN-010
+      receipt_id: admission-6c95c70c81a1
+    - job_id: 39
+      kind: plan
+      priority: 0
+      created_at: '2026-07-27T01:58:50.487593Z'
+      updated_at: '2026-07-27T01:58:50.487593Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+      target_node_id: DN-011
+      receipt_id: admission-6c95c70c81a1
+    - job_id: 40
+      kind: plan
+      priority: 0
+      created_at: '2026-07-27T01:58:50.487593Z'
+      updated_at: '2026-07-27T01:58:50.487593Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+      target_node_id: DN-012
+      receipt_id: admission-6c95c70c81a1
+    - job_id: 41
+      kind: plan
+      priority: 0
+      created_at: '2026-07-27T01:58:50.487593Z'
+      updated_at: '2026-07-27T01:58:50.487593Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+      target_node_id: DN-013
+      receipt_id: admission-6c95c70c81a1
+    - job_id: 42
+      kind: plan
+      priority: 0
+      created_at: '2026-07-27T01:58:50.487593Z'
+      updated_at: '2026-07-27T01:58:50.487593Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+      target_node_id: DN-014
+      receipt_id: admission-6c95c70c81a1
+    - job_id: 43
+      kind: plan
+      priority: 0
+      created_at: '2026-07-27T01:58:50.487593Z'
+      updated_at: '2026-07-27T01:58:50.487593Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+      target_node_id: DN-015
+      receipt_id: admission-6c95c70c81a1

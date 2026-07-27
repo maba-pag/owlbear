@@ -1584,3 +1584,56 @@ decisions:
           - Introduces an unsupported asymmetry
         risks:
           - The removed utility disappears without product evidence
+
+  - id: DEC-036
+    title: Retire the self-hosting board after native proof and bootstrap archival
+    status: accepted
+    decided_at: 2026-07-27
+    authority: user
+    selected: two-stage-bootstrap-finalization
+    rationale: >-
+      DN-012 must remove the legacy pipeline from shipped source and consumer distribution, but the
+      current workspace board is also the external carrier required to dispatch and record DN-013.
+      DN-012 therefore builds and fixture-proves the exact destructive cutover while leaving that one
+      board outside the shipped product boundary. DN-015 is the accountable terminal node and is not
+      projected into the board it destroys. After DN-013 proof and after every legacy projection,
+      including the root, is released and ready for terminal disposition, the named bootstrap
+      native engine selects a DN-015 build job and the orchestrator invokes its builder under the
+      global writer lease and explicit finalization approval. The builder runs the same command,
+      verifies the immutable manifest and hashes, writes a finalization receipt, retires the sibling
+      carrier, and commits the evidence. A distinct read-only accept job verifies that exact commit
+      before issuing the DN-015 receipt, with no later legacy dispatch or task mutation.
+    options:
+      - id: two-stage-bootstrap-finalization
+        label: Cut shipped product in DN-012 and retire the bootstrap board in terminal DN-015
+        confidence: 0.96
+        recommended: true
+        pros:
+          - Preserves the carrier required to complete independent native proof
+          - Uses the same fixture-proven command for the final destructive operation
+          - Leaves no compatibility path in the shipped or native runtime
+          - Preserves builder mutation authority and independent read-only acceptance
+        cons:
+          - DN-015 completion is recorded by its final receipt and commit rather than a legacy task archive
+        risks:
+          - Finalization evidence must be inspected outside the retired board
+      - id: relocate-bootstrap-carrier
+        label: Move the live carrier state outside the product workspace during DN-012
+        confidence: 0.52
+        recommended: false
+        pros:
+          - Lets the product workspace remove its old board before DN-013
+        cons:
+          - Adds a second board location and relocation transaction
+        risks:
+          - Carrier configuration or evidence can diverge across workspaces
+      - id: redesign-bootstrap-order
+        label: Stop implementation and redesign the cutover dependency order
+        confidence: 0.35
+        recommended: false
+        pros:
+          - Could eliminate the one-time exception
+        cons:
+          - Reopens accepted bootstrap architecture after the native substrate is built
+        risks:
+          - Delays cutover and introduces new authority churn

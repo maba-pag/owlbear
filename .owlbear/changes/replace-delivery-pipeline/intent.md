@@ -2,7 +2,7 @@
 
 > **Change ID:** `replace-delivery-pipeline`
 > **Owning intake:** #1968
-> **State:** Draft, pending challenge and approval
+> **Authority state:** Canonical state and admission receipt are declared in `delivery/nodes.yaml`.
 > **Authority:** This file owns product intent. Technical realization belongs in `design.md`; delivery ownership belongs in `delivery/`; material choices belong in `decisions.yaml`.
 
 ## Problem
@@ -89,6 +89,16 @@ After every delivery node has a valid acceptance receipt, an independent `audit`
 - Historical snapshot and active-work disposition inventory
 - Four incident replays plus generic validator and end-to-end tests
 - Atomic removal of OpenSpec and the old pipeline
+
+The self-hosting replacement has one bootstrap-only ordering exception. DN-012 removes the old
+pipeline from shipped source and consumer distribution and fixture-proves the destructive cutover.
+The current workspace's legacy board remains external carrier state only until DN-013 proof is
+complete and every legacy projection, including the root, is released and ready for terminal
+disposition. An engine-selected DN-015 build job then runs the same cutover against that board under
+the global writer lease, records the immutable manifest and finalization receipt, and commits the
+retirement. A distinct read-only DN-015 accept job verifies that exact commit in a disposable proof
+checkout. Neither step performs any later legacy dispatch or mutation. This exception is not
+installed, shipped, or readable by the native runtime.
 
 ### Out of Scope
 

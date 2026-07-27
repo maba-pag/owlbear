@@ -4,14 +4,14 @@ title: Replace OwlBear delivery pipeline with admitted change graphs
 status: collect
 priority: high
 created: 2026-07-21T01:46:53.257501+02:00
-updated: 2026-07-27T01:32:01.079279+02:00
+updated: 2026-07-27T03:59:58.559254+02:00
 tags:
   - pipeline-redesign
   - architecture
   - scope:core
   - admitted-change
   - corrective-projection
-  - digest:8cd27726f86d
+  - digest:6c95c70c81a1
 parent:
 depends_on:
   - 1975
@@ -237,3 +237,9 @@ CORRECTIVE PROJECTION READY: Admitted digest `bf5edd...`, receipt/generation/job
 ## Authority Correction — DN-012 Module Grant
 
 User approved the minimal authority repair adding `MOD-001`, `MOD-002`, and `MOD-004` to DN-012 so its module grant matches existing MIG-001 through MIG-004 deletion ownership and PROOF-009. Canonical validation produced no findings; `test_change_revision.py` plus `test_admission_transaction.py` passed 37/37. Append-only receipt `.owlbear/changes/replace-delivery-pipeline/receipts/admission-8cd27726f86d.yaml` admits digest `8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1` and supersedes `bf5edd...` for remaining DN-012/DN-013 work. Historical completed-task evidence remains bound to its tested digest and is not rewritten.
+
+[[2026-07-27T03:59:58+02:00]]
+
+## Final Bootstrap Authority
+
+User approved exact digest `6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9` after independent challenge. It includes DEC-036 and terminal non-projected DN-015, which resolves the self-hosting cutover order without shipped compatibility: DN-012 builds and fixture-proves IF-016; DN-013 proves the complete native workflow; DN-015's engine-selected builder retires the real board/carrier under the writer lease and commits the immutable manifest/finalization receipt; an independent read-only accept job verifies that exact commit under PROOF-016. Receipt: `.owlbear/changes/replace-delivery-pipeline/receipts/admission-6c95c70c81a1.yaml`; replacement native jobs: 29-43. Completed historical packets retain their tested digests. Remaining legacy projections #1989/#1990 are re-bound to `6c95c70...`; DN-015 is intentionally absent from the legacy board it destroys.

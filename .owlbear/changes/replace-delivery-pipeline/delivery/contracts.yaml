@@ -382,11 +382,31 @@ interfaces:
     contract: >-
       Hash-verified immutable legacy manifest, explicit active-item dispositions,
       empty native stores, no active
-      old runtime, and reproducible consumer setup.
+      old runtime in shipped source or consumer distribution, and reproducible consumer setup.
+      For this self-hosting change only, DEC-036 defers mutation of the external bootstrap-carrier
+      board to DN-015; the final manifest, receipt, and commit close that exception.
     authority: MOD-006
     failure_semantics: Any missing disposition/hash or remaining active legacy
       reference blocks cutover.
     migration: MIG-001
+    proof: PROOF-009
+  - id: IF-016
+    name: Public bootstrap carrier finalizer
+    producer: DN-012
+    consumers: [DN-015]
+    contract: >-
+      A fixture-proved fail-closed command accepts the real bootstrap board, complete dispositions,
+      expected authority and code revisions, and an explicit finalization approval; it verifies
+      terminal readiness and zero claims, writes an immutable snapshot and finalization receipt,
+      removes active board and sibling-carrier state, verifies absence, and returns the exact paths
+      that the DN-015 builder must commit before native build finalization, without performing any
+      later legacy board mutation.
+    authority: MOD-006
+    failure_semantics: >-
+      Missing or stale proof, nonterminal projection, active claim, source change, existing destination,
+      hash mismatch, unsafe path, publication failure, or absence failure leaves no completed
+      finalization and preserves a recoverable source.
+    migration: MIG-005
     proof: PROOF-009
   - id: IF-014
     name: Whole-change audit and closure
@@ -421,6 +441,9 @@ migrations:
       - Copy or move legacy stores into the versioned snapshot and record
         content hashes.
       - Verify snapshot counts and hashes before deleting active readers.
+      - >-
+        For this self-hosting change only, fixture-prove these steps in DN-012, then execute them
+        against the external bootstrap-carrier board in DN-015 under DEC-036.
     consumer_inventory:
       - owlbear-kanban legacy task and request readers
       - mcp-kanban generic task tools
@@ -521,6 +544,33 @@ migrations:
       alias remains.
     deletion_owner: DN-012
     absence_proof: PROOF-013
+  - id: MIG-005
+    title: Retire the self-hosting bootstrap carrier
+    owner: DN-015
+    from: >-
+      The real owlbear-dev legacy board and separately clean sibling runtime retained only to carry
+      this replacement through DN-013 proof.
+    to: >-
+      A versioned immutable snapshot, explicit terminal dispositions, finalization receipt, and final
+      Git commit with no active legacy board, sibling carrier, or post-finalization mutation path.
+    ordered_steps:
+      - Verify DN-012 and DN-013 proof identities and the expected authority and code revisions.
+      - Require every legacy projection including the root to be released and ready for terminal disposition.
+      - Require zero active claims, writers, pending requests, or unclassified active records.
+      - Dispatch DN-015's native build job under the global writer lease without projecting it into the legacy board.
+      - Run IF-016 against the real board with explicit finalization approval.
+      - Verify every manifest hash, finalization receipt field, removed active path, and retained native path.
+      - Commit the snapshot, receipt, source removals, and carrier retirement before native build finalization.
+      - Run DN-015 acceptance read-only in a disposable checkout of that exact commit.
+      - Forbid every subsequent legacy dispatch, task mutation, or compatibility read.
+    consumer_inventory:
+      - root bootstrap task and all descendant legacy projections
+      - external sibling MCP carrier configuration and process
+      - final operator invocation and scoped Git commit
+      - native source, consumer distribution, and immutable legacy inventory
+    compatibility: One terminal self-hosting operation only; no shipped or runtime compatibility.
+    deletion_owner: DN-015
+    absence_proof: PROOF-016
 
 risks:
   - id: RISK-001
@@ -714,6 +764,25 @@ risks:
       registrations after IF-010 completes the control plane.
     owner: DN-004
     proof: PROOF-014
+  - id: RISK-014
+    class: destructive
+    title: Bootstrap carrier retires early or without durable closure evidence
+    scenarios:
+      - A legacy projection or request is not terminal-ready.
+      - A claim, writer, or sibling carrier process remains active.
+      - Snapshot or receipt publication succeeds only partially.
+      - Active board removal occurs before hash or absence verification.
+      - The build commit fails after filesystem finalization.
+      - Acceptance observes a different revision or mutates tracked state.
+      - A caller attempts legacy dispatch or mutation after finalization.
+    disposition: >-
+      Make DN-015 a non-projected terminal node, require exact revisions and explicit finalization
+      approval, execute mutation only in its engine-selected build under the writer lease, fail closed
+      on nonterminal or active state, retain recoverable uncommitted evidence until the scoped build
+      commit succeeds, and verify absence plus no-later-mutation independently in a read-only exact-commit
+      accept job under PROOF-016.
+    owner: DN-015
+    proof: PROOF-016
 
 proofs:
   - id: PROOF-001
@@ -846,6 +915,9 @@ proofs:
       - Verify no overwrite, complete inventory/dispositions, hash equality,
         crash recovery, clean native stores, no OpenSpec dependency or old
         references, and successful consumer launch.
+      - >-
+        Record the exact command, manifest, hash, and commit evidence required for DEC-036's final
+        post-archive bootstrap-board operation; PROOF-009 itself remains fixture-bounded.
     allowed_replacements:
       - temporary repositories
       - package installation command recorder
@@ -946,3 +1018,23 @@ proofs:
       - Assert arbitrary task mutation and old lifecycle routes are absent.
     allowed_replacements: [temporary engine store]
     durable_outputs: [FastAPI integration tests]
+  - id: PROOF-016
+    title: Real bootstrap carrier finalization proof
+    boundary: >-
+      Read-only DN-015 accept job in an engine-created disposable checkout of the exact build commit
+      that applied public IF-016 to the real self-hosting workspace and sibling carrier.
+    owner: DN-015
+    method:
+      - Verify the build receipt binds the expected authority, source revision, finalization approval,
+        complete terminal dispositions, zero-claim preflight evidence, and exact committed revision.
+      - Recompute all snapshot counts and hashes and verify finalization receipt identity, active-board
+        and sibling-carrier absence, retained native source/distribution, and no compatibility reader.
+      - Prove the checkout remains unmodified and legacy dispatch or mutation cannot be invoked from
+        the committed product or distribution.
+    allowed_replacements:
+      - none; real workspace and exact build commit required
+    durable_outputs:
+      - immutable real-workspace legacy snapshot and manifest
+      - bootstrap finalization receipt
+      - terminal build receipt and scoped Git commit
+      - exact-commit DN-015 accept receipt

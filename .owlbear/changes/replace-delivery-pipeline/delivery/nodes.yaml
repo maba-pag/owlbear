@@ -12,13 +12,12 @@ authority:
 admission:
   state: admitted
   delivery_digest:
-    8cd27726f86df8428ab3dc586d2be3af4678accaca1706dece98c7357bb2b3e1
-  receipt: receipts/admission-8cd27726f86d.yaml
+    6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
+  receipt: receipts/admission-6c95c70c81a1.yaml
   limits:
-    - Bootstrap correction and candidate-digest re-acceptance remain required for DN-003 through DN-014.
     - Admission certifies delivery completeness and feasibility, not implementation correctness.
     - Memory and Ideas continuity is preservation-only; DN-011 does not expand either utility.
-
+    - DN-015 is not projected into the legacy board it destroys; its native build/accept receipts and final commit are authoritative.
 nodes:
   - id: DN-001
     title: Establish native change authority and semantic identity
@@ -217,11 +216,12 @@ nodes:
       A hash-verified legacy snapshot and active-item disposition inventory preserve
       history while setup, seed,
       hooks, docs, generated assets, agents, APIs, and stores switch entirely to the
-      native control plane.
+      native control plane in shipped source and consumer distribution; the public cutover is
+      fixture-proved for DEC-036's final bootstrap-board operation.
     owns: [REQ-011, REQ-012, REQ-017, NEG-004]
     supports: [NEG-007, KEEP-007]
     modules: [MOD-001, MOD-002, MOD-003, MOD-004, MOD-006, MOD-007, MOD-008, MOD-009]
-    produces: [IF-013]
+    produces: [IF-013, IF-016]
     consumes:
       - IF-001
       - IF-002
@@ -253,7 +253,7 @@ nodes:
       prove admission, frontier planning,
       build review, acceptance, correction, audit, Cockpit, setup, snapshot integrity,
       and absence of legacy
-      execution.
+      execution in the shipped product before DN-015 retires the external bootstrap carrier.
     owns: [REQ-018]
     supports: [NEG-010, KEEP-004, KEEP-005, KEEP-006, KEEP-007]
     modules: [MOD-008]
@@ -303,3 +303,17 @@ nodes:
     dependencies: [DN-004, DN-008, DN-009]
     risks: [RISK-008, RISK-009]
     proof: PROOF-008
+  - id: DN-015
+    title: Finalize the self-hosting bootstrap carrier
+    outcome: >-
+      An engine-selected build retires the real legacy board and sibling carrier exactly once after
+      native complete-system proof, and independent exact-commit acceptance verifies the immutable
+      snapshot, finalization receipt, build commit, and absence of any later legacy mutation path.
+    owns: [REQ-027]
+    supports: [REQ-011, REQ-012, NEG-004, KEEP-007]
+    modules: [MOD-006, MOD-008, MOD-009]
+    produces: []
+    consumes: [IF-004, IF-005, IF-016]
+    dependencies: [DN-012, DN-013, DN-014]
+    risks: [RISK-014]
+    proof: PROOF-016
