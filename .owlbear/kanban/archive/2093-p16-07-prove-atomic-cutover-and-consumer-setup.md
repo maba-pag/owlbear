@@ -1,10 +1,10 @@
 ---
 id: 2093
 title: 'P16-07: Prove atomic cutover and consumer setup'
-status: collect
+status: archived
 priority: high
 created: 2026-07-27T08:40:26.563879+02:00
-updated: 2026-07-27T12:34:55.571724+02:00
+updated: 2026-07-27T12:35:23.829338+02:00
 tags:
   - phase-16
   - scope:test
@@ -41,7 +41,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -99,3 +99,14 @@ PASS. Independently verified builder commit `7c6ac26def71ba737d9c4db0b03232ec6e5
 - Commit audit: exactly six declared code/proof files plus the #2093 task record; diff integrity clean.
 - Verifier challenger: pass with no unresolved finding.
 - All 20 recalled verifier memories assessed.
+
+[[2026-07-27T12:35:23+02:00]]
+## Collect Notes
+
+ARCHIVED. #2093 closes PROOF-009 for DN-012 at builder commit `7c6ac26def71ba737d9c4db0b03232ec6e583224` and verifier commit `1df8885a59f59239477073c0bcc18236fb26dfd6`.
+
+- All three ACs have direct public-boundary evidence.
+- Builder and verifier challengers pass after the explicit AC-3 evidence repair.
+- The fixture preserves the DEC-036 boundary: it never reads or mutates the live carrier and leaves actual self-hosting finalization to DN-015.
+- The DN-015 handoff includes exact revisions, hashes, receipt, and returned commit paths.
+- Six recalled collector memories assessed; no unresolved request, follow-up, or aggregate defect remains.
