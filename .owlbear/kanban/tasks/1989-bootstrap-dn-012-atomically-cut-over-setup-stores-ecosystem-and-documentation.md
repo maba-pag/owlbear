@@ -1,10 +1,10 @@
 ---
 id: 1989
 title: 'Bootstrap DN-012: Atomically cut over setup, stores, ecosystem, and documentation'
-status: shape
+status: collect
 priority: high
 created: 2026-07-22T01:08:48.177677+02:00
-updated: 2026-07-27T03:59:33.017891+02:00
+updated: 2026-07-27T08:40:56.861004+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -24,6 +24,13 @@ depends_on:
   - 2077
   - 2078
   - 2079
+  - 2087
+  - 2088
+  - 2089
+  - 2090
+  - 2091
+  - 2092
+  - 2093
 ac:
   - 'AC-1: Shaper reads DN-012 from the modular authority trio at digest `6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9`
     and creates one outcome-cohesive packet DAG whose leaves reference the same change/digest/node;
@@ -39,7 +46,7 @@ ac:
 proof_bundle: existing+challenge
 blocked: false
 block_reason:
-claimed_at: 2026-07-27T01:14:41.165217+02:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -67,3 +74,39 @@ Historical projection repairs to `bf5edd...` and `8cd277...` remain evidence of 
 [[2026-07-27]]
 ## Shape Notes
 FINAL AUTHORITY REPROJECTED: User approved DEC-036 and terminal DN-015 after independent challenge resolved bootstrap ordering, ownership, and builder/acceptor separation. Canonical loading passed with no diagnostics; focused loader/admission tests passed 37/37; append-only receipt `admission-6c95c70c81a1` admits digest `6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9`. DN-015 is intentionally not projected into the legacy board it destroys. This DN-012 aggregate remains in `shape` pending approval of its seven-leaf packet DAG.
+
+[[2026-07-27T08:40:56+02:00]]
+## Shape Notes
+### Approval And Authority
+- User approved the challenged seven-leaf DN-012 graph on 2026-07-27.
+- Authority: modular change `replace-delivery-pipeline` at admitted digest `6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9`, receipt `admission-6c95c70c81a1`.
+- Product boundary: fixture-prove IF-013/IF-016 and remove legacy behavior from shipped source/distribution. DEC-036 reserves real-board and sibling-carrier retirement for non-projected DN-015/PROOF-016.
+
+### Challenger Closure
+- First retry returned `reconsider`: distinguish MOD-001 reusable snapshot/finalization logic from MOD-006 public setup/cutover adapter and justify seven leaves.
+- Rebuilt map resolves that authority split from `delivery/contracts.yaml` module paths and design section 13. Fragmentation is required by distinct hash-integrity, finalizer-state, installer, runtime-removal, agent-authority, distribution, and assembled-proof failure domains.
+- Second retry returned `fail`: T6 omitted T2 although it validates the finalizer adapter and inventory documentation.
+- Corrected T6 dependencies to T2/T3/T4/T5; final shaper-challenger decision: `pass`.
+
+### Coverage Maps
+| Product promise | Owner | Proof |
+|---|---|---|
+| Immutable inventory and dispositions | #2087, #2090 | Native snapshot and public finalizer fixtures |
+| Native-only consumer setup | #2091, #2092 | Public setup plus installed distribution |
+| No shipped legacy runtime or ecosystem | #2088, #2089, #2092 | Public inventories, health, hooks, artifact scan |
+| Atomic fixture cutover and DN-015 handoff | #2093 | PROOF-009 assembled commands |
+| Real bootstrap-carrier retirement | DN-015 exclusion under DEC-036 | PROOF-016 |
+
+| Module responsibility | Owner |
+|---|---|
+| MOD-001 snapshot/finalization core | #2087, #2090 |
+| MOD-001/002/004/007 runtime and transport removal | #2088 |
+| MOD-003/009 agent and hook retirement | #2089 |
+| MOD-006 setup and public finalizer adapter | #2090, #2091 |
+| MOD-006/007/009 distribution and docs | #2092 |
+| MOD-008 assembled proof | #2093 |
+
+Dependency closure: #2087, #2088, and #2089 are foundations; #2090 depends on #2087; #2091 depends on #2088/#2089; #2092 depends on #2090/#2091/#2088/#2089; #2093 explicitly depends on #2087 through #2092. Scenario closure enumerates disposition, destination, path, source-change, hash/count, crash, approval/currentness, terminal/claim/writer/request, installer rerun, residual-runtime, residual-agent, distribution, and assembled recovery classes.
+
+### Board Audit
+Created build leaves #2087 through #2093 under #1989. Full `show_task` audit confirmed titles, bodies, AC, priorities, tags, parent links, dependency fields, proof bundles, build statuses, and unclaimed state. This aggregate now moves to `collect` and remains dependency-blocked until the seven leaves complete.
