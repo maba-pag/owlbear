@@ -1,10 +1,10 @@
 ---
 id: 2090
 title: 'P16-02: Expose the fail-closed bootstrap finalizer'
-status: verify
+status: collect
 priority: high
 created: 2026-07-27T08:39:49.070496+02:00
-updated: 2026-07-27T10:48:55.849815+02:00
+updated: 2026-07-27T10:51:30.682428+02:00
 tags:
   - phase-16
   - scope:core
@@ -73,3 +73,13 @@ Proof:
 - Builder challenger APPROVE with no follow-up; independent finalizer/snapshot/command run: 34 passed.
 
 All destructive tests used temporary workspaces. The live `.owlbear/kanban` carrier was not supplied to the finalizer.
+
+[[2026-07-27T10:51:30+02:00]]
+## Verifier Notes
+
+PASS against builder commit `f8c6d6cbbac2007f6ca25a7f5ef52610e3cda070`.
+
+- `git show --check` passed; the committed finalizer/snapshot/public-command matrix passed 34 tests.
+- A first challenger incorrectly classified Python 3.14 PEP 758 syntax (`except A, B:`) as invalid. This was disproved under the repository contract: Python 3.14.6 imported the module, `py_compile` passed, Ruff 0.16 reported the file already formatted, and all committed tests executed successfully. No compatibility edit was made.
+- The fresh verifier challenger returned PASS with no findings. AC-1 is covered by fixture finalization, content-hash verification, both-carrier absence, deterministic receipt validation, exact tracked paths, exports, and CLI output. AC-2 covers readiness, stale identities, source mutation, unsafe/overlapping/symlink paths, existing destination, verification/publication/receipt failure, and recovery state. AC-3 covers interruption after snapshot/source removal, absence verification, before/after receipt publication, correction/replay, and stable receipt/manifest identities.
+- No proof invoked the live `.owlbear/kanban` carrier.
