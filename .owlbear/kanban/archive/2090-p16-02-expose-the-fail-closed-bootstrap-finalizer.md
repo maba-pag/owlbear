@@ -1,10 +1,10 @@
 ---
 id: 2090
 title: 'P16-02: Expose the fail-closed bootstrap finalizer'
-status: collect
+status: archived
 priority: high
 created: 2026-07-27T08:39:49.070496+02:00
-updated: 2026-07-27T10:51:30.682428+02:00
+updated: 2026-07-27T10:51:57.213251+02:00
 tags:
   - phase-16
   - scope:core
@@ -38,7 +38,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -83,3 +83,8 @@ PASS against builder commit `f8c6d6cbbac2007f6ca25a7f5ef52610e3cda070`.
 - A first challenger incorrectly classified Python 3.14 PEP 758 syntax (`except A, B:`) as invalid. This was disproved under the repository contract: Python 3.14.6 imported the module, `py_compile` passed, Ruff 0.16 reported the file already formatted, and all committed tests executed successfully. No compatibility edit was made.
 - The fresh verifier challenger returned PASS with no findings. AC-1 is covered by fixture finalization, content-hash verification, both-carrier absence, deterministic receipt validation, exact tracked paths, exports, and CLI output. AC-2 covers readiness, stale identities, source mutation, unsafe/overlapping/symlink paths, existing destination, verification/publication/receipt failure, and recovery state. AC-3 covers interruption after snapshot/source removal, absence verification, before/after receipt publication, correction/replay, and stable receipt/manifest identities.
 - No proof invoked the live `.owlbear/kanban` carrier.
+
+[[2026-07-27T10:51:57+02:00]]
+## Collect Notes
+
+ARCHIVED. Builder commit `f8c6d6cbbac2007f6ca25a7f5ef52610e3cda070` and verifier commit `efedb36094fdb2b370131d8e0643edbfd24207e6` are reachable from `dev`; no task-owned implementation/test path is uncommitted. Direct evidence closes AC-1 through AC-3, both challengers' final decisions approve/pass with no follow-up, and the one initial syntax objection was conclusively disproved against the pinned Python 3.14.6/Ruff contract. The live external carrier remains untouched for DN-015.
