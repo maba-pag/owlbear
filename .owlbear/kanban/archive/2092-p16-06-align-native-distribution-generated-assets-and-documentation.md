@@ -1,10 +1,10 @@
 ---
 id: 2092
 title: 'P16-06: Align native distribution, generated assets, and documentation'
-status: collect
+status: archived
 priority: medium
 created: 2026-07-27T08:40:04.276149+02:00
-updated: 2026-07-27T12:09:00.087263+02:00
+updated: 2026-07-27T12:10:43.857908+02:00
 tags:
   - phase-16
   - scope:distribution
@@ -39,7 +39,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -80,3 +80,15 @@ PASS. Independently verified builder commit `336b613048e79a1f5e21a7d6a3a1c8fff83
 - Focused verifier run: 11 tests passed across native distribution, setup, Cockpit launch, and Memory actor behavior. Builder's broader lint, customization, Cockpit, Vite, and 73-test evidence remains applicable.
 - Verifier challenger decision: pass; the four-file repair is exact, local, and satisfies the manifest without adding generalized behavior or violating the broad source-string-test prohibition.
 - Recalled verifier memory was assessed in one complete batch; artifact-to-scope and non-code-consumer checks directly exposed and bounded the omission.
+
+[[2026-07-27T12:10:43+02:00]]
+## Collect Notes
+
+ARCHIVED. #2092 satisfies AC-1 through AC-3 with builder and verifier challenges passed and no unresolved follow-up.
+
+- Builder commit: `336b613048e79a1f5e21a7d6a3a1c8fff83ff673`.
+- Verifier repair commit: `8e1703e4fb57a51871d32bcf53f7dcabbfbd4093`.
+- Archive-readiness proof extracted committed `HEAD` with `git archive`, verified `.owlbear/legacy/openspec-final` byte-for-byte with manifest SHA-256 `fdbd000ef1616dd2bd50f3a3f070a24aa4c94098666be710357099059ce64a4c`, confirmed 22 historical files and only `completed-history` dispositions, and confirmed active `openspec/` and `setup/openspec.py` are absent.
+- Native distribution, generated ownership, maintained documentation/configuration, setup/launch behavior, customization validation, Cockpit unit/build proof, and Memory review attribution all have durable evidence in prior stage notes.
+- Immutable OpenSpec history remains readable and non-authoritative; live Kanban finalization remains reserved for DN-015.
+- Recalled collector memory was assessed in one complete batch. Unrelated dirty Memory and control-plane state remains untouched.
