@@ -1,10 +1,10 @@
 ---
 id: 2088
 title: 'P16-04: Remove legacy runtime, store, and transport execution'
-status: verify
+status: collect
 priority: high
 created: 2026-07-27T08:39:27.780712+02:00
-updated: 2026-07-27T10:25:36.927409+02:00
+updated: 2026-07-27T10:27:44.229395+02:00
 tags:
   - phase-16
   - scope:core
@@ -64,3 +64,15 @@ Proof:
 - Final cutover slice after formatting: 33 passed; builder challenger independently ran 36 tests, APPROVE, no follow-up.
 - Ruff production checks passed; editor diagnostics reported no errors.
 - Production absence scans found no retired engine/view/model/module imports, legacy task/OpenSpec callables, migration entry point, or task/decision registrations. Retained `storage_io` imports serve Ideas and native transaction locking.
+
+[[2026-07-27T10:27:44+02:00]]
+## Verifier Notes
+
+PASS against committed builder artifact `ac1913815efce4ed72c5da6ba0ffabae3e035159`.
+
+- `git show --check` passed.
+- Commit-based focused proof passed: 35 tests covering native workspace/bootstrap, immutable snapshot inventory, exact MCP public registry and legacy absence, Cockpit native/retained routes, and retired task/decision 404 behavior.
+- Verifier challenger returned PASS with no findings or follow-up. It mapped AC-1 to native exports, exact MCP inventory, and Cockpit route contracts; AC-2 to MCP absence plus OpenAPI/404 assertions; AC-3 to package health, import/collection, Ruff, diagnostics, and production absence evidence.
+- Intentional retained boundaries remain correct: snapshot manifest inventory, Ideas, Memory, native SSE, and `storage_io` for Ideas/native transactions.
+
+No compatibility shim or executable legacy task/OpenSpec path remains.
