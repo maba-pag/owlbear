@@ -9,6 +9,7 @@ import re
 import shutil
 import stat
 from collections.abc import Callable, Mapping
+from contextlib import suppress
 from enum import StrEnum
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Literal
@@ -205,8 +206,8 @@ def create_legacy_snapshot(
             _materialize(source, staging, inventory, manifest_bytes)
             _invoke_failure(failure, "after-staging", staging)
             _verify_staging(staging, inventory, manifest_bytes)
-            _ensure_source_stable(source, inventory)
             _invoke_failure(failure, "before-publication", staging)
+            _ensure_source_stable(source, inventory)
             _ensure_destination_available(destination)
             staging.rename(destination)
             _fsync_directory(destination.parent)
@@ -239,14 +240,38 @@ def _validate_roots(source: Path, destination: Path) -> tuple[Path, Path]:
     if source.is_symlink() or not source.is_dir():
         raise LegacySnapshotPathError(source)
     source = source.resolve()
-    destination_parent = destination.parent
-    if destination_parent.is_symlink():
-        raise LegacySnapshotPathError(destination_parent)
-    destination_parent.mkdir(parents=True, exist_ok=True)
-    destination = destination_parent.resolve() / destination.name
+    destination_parent = _prepare_destination_parent(destination.parent)
+    destination = destination_parent / destination.name
     if not destination.name or source == destination or source in destination.parents or destination in source.parents:
         raise LegacySnapshotPathError(destination)
     return source, destination
+
+
+def _prepare_destination_parent(path: Path) -> Path:
+    absolute = path if path.is_absolute() else Path.cwd() / path
+    if ".." in absolute.parts:
+        raise LegacySnapshotPathError(path)
+    current_fd: int | None = None
+    candidate = Path(absolute.anchor)
+    try:
+        current_fd = os.open(absolute.anchor, _DIRECTORY_FLAGS)
+        for name in absolute.parts[1:]:
+            candidate /= name
+            try:
+                child_fd = os.open(name, _DIRECTORY_FLAGS, dir_fd=current_fd)
+            except FileNotFoundError:
+                with suppress(FileExistsError):
+                    os.mkdir(name, mode=0o755, dir_fd=current_fd)
+                child_fd = os.open(name, _DIRECTORY_FLAGS, dir_fd=current_fd)
+            os.close(current_fd)
+            current_fd = child_fd
+    except OSError as exc:
+        raise LegacySnapshotPathError(candidate) from exc
+    else:
+        return absolute
+    finally:
+        if current_fd is not None:
+            os.close(current_fd)
 
 
 def _inventory(source: Path) -> _Inventory:

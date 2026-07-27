@@ -89,12 +89,25 @@ def test_snapshot_rejects_symlinked_source_entry(tmp_path: Path) -> None:
     assert not (tmp_path / "snapshot").exists()
 
 
+def test_snapshot_rejects_symlinked_destination_ancestor(tmp_path: Path) -> None:
+    source = _legacy_root(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    linked = tmp_path / "linked"
+    linked.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(LegacySnapshotPathError):
+        create_legacy_snapshot(source, linked / "nested/snapshot", _active_items(), _dispositions())
+
+    assert not (outside / "nested").exists()
+
+
 def test_snapshot_rejects_source_change_before_publication(tmp_path: Path) -> None:
     source = _legacy_root(tmp_path)
     destination = tmp_path / "snapshot"
 
     def mutate_source(stage: str, _staging: Path) -> None:
-        if stage == "after-staging":
+        if stage == "before-publication":
             (source / "tasks" / "1-active.md").write_text("changed\n", encoding="utf-8")
 
     with pytest.raises(LegacySnapshotSourceChangedError):

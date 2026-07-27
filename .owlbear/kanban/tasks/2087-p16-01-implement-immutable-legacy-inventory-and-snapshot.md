@@ -1,10 +1,10 @@
 ---
 id: 2087
 title: 'P16-01: Implement immutable legacy inventory and snapshot'
-status: build
+status: verify
 priority: high
 created: 2026-07-27T08:39:20.202385+02:00
-updated: 2026-07-27T08:56:57.567066+02:00
+updated: 2026-07-27T09:14:56.903087+02:00
 tags:
   - phase-16
   - scope:core
@@ -85,3 +85,24 @@ Independent focused verification passed 7/7 with Ruff and editor diagnostics cle
 | 2 | AC-2/source-publication-race | builder | Close the source-stability window at publication and prove mutation after the current check cannot produce a completed snapshot. | `serve/kanban/src/owlbear_kanban/snapshot.py`, focused test | Challenger found `before-publication` hook runs after the final source check. |
 
 Builder commit reviewed: `0e6efe6e7a9b27840ab704787f929f8090b9f77d`. Recalled memories assessed; artifact-to-scope and replay-proof guidance materially informed rejection.
+
+[[2026-07-27T09:14:56+02:00]]
+## Builder Notes
+DONE
+
+### Repair Envelope
+- Closed `AC-2/destination-ancestor` in `serve/kanban/src/owlbear_kanban/snapshot.py`: destination parents are now traversed and created descriptor-relative with `O_DIRECTORY | O_NOFOLLOW`; lexical `..` is rejected.
+- Closed `AC-2/source-publication-race`: source stability is checked after the `before-publication` hook and immediately before destination availability and atomic rename.
+- Extended `serve/kanban/tests/test_snapshot.py` with a non-immediate symlinked-ancestor regression and moved source mutation to the exact pre-publication window.
+
+### Follow-up Resolution Evidence
+- `AC-2/destination-ancestor`: symlinked ancestor raises `LegacySnapshotPathError`; no directory is created through the link. Descriptor-relative traversal removes the check-then-mkdir redirection window.
+- `AC-2/source-publication-race`: mutation from `before-publication` raises `LegacySnapshotSourceChangedError` and leaves no completed destination.
+
+### Validation
+- `uv run pytest serve/kanban/tests/test_snapshot.py -q --tb=short`: 8 passed on the final implementation.
+- `uv run pytest serve/kanban/tests/ -q --tb=short`: 1044 passed, four existing multiprocessing fork warnings, on the final implementation.
+- Ruff check and format-check: clean. Editor diagnostics: none.
+- Builder challenger: `pass`; both exact follow-up keys closed, including path-creation TOCTOU and FD handling.
+
+No files outside the existing snapshot owner and durable focused test changed in this retry.
