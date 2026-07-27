@@ -1,10 +1,10 @@
 ---
 id: 2096
 title: 'P17-03: Prove receipt, invalidation, and recovery properties'
-status: collect
+status: archived
 priority: high
 created: 2026-07-27T19:45:12.555886+02:00
-updated: 2026-07-27T21:47:25.681274+02:00
+updated: 2026-07-27T21:50:59.715968+02:00
 tags:
   - phase-17
   - scope:test
@@ -38,7 +38,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -110,3 +110,15 @@ PASS. Independently reviewed builder SHA `a019085f601d2248dd34605d3284ead6c6d584
 - Proof: corrected AC-1 matrix 5 passed; corrected AC-2 public matrix 4 passed; consolidated AC selection 14 passed; full `serve/kanban/tests` 378 passed with four existing Python 3.14 fork deprecation warnings. Scoped `uv run lint` passed, `git diff --check` passed, and VS Code diagnostics report no errors in either builder-changed test.
 - Verifier challenger: `pass`; tests exercise public/runtime persistence boundaries rather than independently scripting expected outputs.
 - Memory: all 20 recalled entries assessed; one pending verifier-scoped orthogonality-test lesson saved.
+
+[[2026-07-27T21:50:59+02:00]]
+## Collect Notes
+ARCHIVED. Closure audit accepted builder SHA `a019085f601d2248dd34605d3284ead6c6d584e1` and descendant verifier SHA `d1431e4f7c7b873b40b9e213fd4c31d882d9c307`.
+
+- AC-1: fresh public-runtime receipt-history matrix proved current-chain acceptance plus stable stale-digest, superseded, intersecting-descendant, and proven-nonintersecting diagnostics without rejected-work mutation.
+- AC-2 and repaired failure key `AC-2/finding-class-route-contract`: fresh public rejection matrix proved finding class and corrective target vary independently, produce the required exact jobs, preserve immutable history, and retain `through_plan_correction=False`; accepted verifier evidence ties successful superseding-chain release and stale/invalidated-chain blocking to maintained reconciliation coverage.
+- AC-3: fresh real-transaction matrix proved graph, job, receipt, activity, and invalidation recovery converges across publication/replacement/replay interruptions without partial receipt publication or active/archive job splits, while preserving prior history.
+- Focused closure proof at verifier HEAD: 13 passed. Commit ancestry check passed; verifier SHA descends from builder SHA.
+- Scope audit: supplied commits changed only this task record and `serve/kanban/tests/test_native_runtime.py` plus `serve/kanban/tests/test_runtime_transaction.py`; no product behavior or live carrier mutation entered scope.
+- Parent #1990 remains the unclaimed `collect` aggregate owner and continues to depend on #2096 for DN-013/PROOF-013 closure.
+- No resolved requests remain. All six recalled memories were assessed.
