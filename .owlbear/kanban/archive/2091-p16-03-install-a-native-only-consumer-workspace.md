@@ -1,10 +1,10 @@
 ---
 id: 2091
 title: 'P16-03: Install a native-only consumer workspace'
-status: verify
+status: archived
 priority: high
 created: 2026-07-27T08:39:56.044193+02:00
-updated: 2026-07-27T11:24:04.478968+02:00
+updated: 2026-07-27T11:25:30.013799+02:00
 tags:
   - phase-16
   - scope:setup
@@ -34,8 +34,8 @@ ac:
 proof_bundle: existing+challenge
 blocked: false
 block_reason:
-claimed_at: 2026-07-27T11:24:04.478968+02:00
-archival_reason:
+claimed_at:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -53,3 +53,9 @@ Proof guidance: exercise public setup against fresh and populated temporary cons
 
 [[2026-07-27T11:24:01+02:00]]
 Builder completed native-only consumer setup at commit 56e5d3261. Public init creates native authority/work stores, skips OpenSpec installation/output, removes legacy task seed topology, preserves user settings and native records across reruns, and starts Cockpit against the generated NativeWorkspace. Focused proof: 29 setup/import/launch tests passed; Ruff, pre-commit hooks, diagnostics, and independent builder challenge passed.
+
+[[2026-07-27T11:25:20+02:00]]
+Verifier accepted exact builder commit 56e5d3261. All packet paths were drift-free, the 29-test setup/import/launch proof passed after commit, commit ancestry was valid, and verifier-challenger returned PASS with no defect in AC coverage, topology, rerun preservation, or scope.
+
+[[2026-07-27T11:25:30+02:00]]
+Collected #2091 with builder commit 56e5d3261 and verifier commit 9ac427674. Durable setup regressions cover fresh native installation, package-install absence, exact installed ecosystem inventory, populated rerun preservation, native import inventory, and setup-generated Cockpit launch.
