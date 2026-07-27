@@ -1,10 +1,10 @@
 ---
 id: 2093
 title: 'P16-07: Prove atomic cutover and consumer setup'
-status: build
+status: verify
 priority: high
 created: 2026-07-27T08:40:26.563879+02:00
-updated: 2026-07-27T08:40:26.563879+02:00
+updated: 2026-07-27T12:32:20.588977+02:00
 tags:
   - phase-16
   - scope:test
@@ -56,3 +56,29 @@ Out of scope: historical/generic complete-system proof owned by DN-013, real sel
 DN-012 at delivery digest `6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9`; PROOF-009, IF-013, IF-016, REQ-011/REQ-012/REQ-017, MIG-001 through MIG-004, RISK-001/RISK-005, DEC-036, and outputs from #2087 through #2092.
 
 Proof guidance: invoke public setup and cutover commands without replacing those boundaries; temporary repositories and the package-install recorder are permitted below them. Record command, revisions, manifests, hashes, receipt, and returned commit-path evidence; never target the live board.
+
+[[2026-07-27T12:32:20+02:00]]
+## Builder Notes
+
+DONE. Adopted and completed the interrupted #2093 change envelope without touching the live self-hosting carrier or unrelated dirty state.
+
+### Changed Files
+- `serve/cockpit/web/e2e/support/seed-native-proof-stack.py`
+- `serve/cockpit/web/e2e/native-proof-assembled.spec.ts`
+- `tests/test_bootstrap_finalizer_command.py`
+- `tests/test_native_cutover.py`
+- `serve/kanban/src/owlbear_kanban/workspace.py`
+- `serve/kanban/tests/test_workspace.py`
+
+### AC Evidence
+- AC-1: The assembled fixture invokes public `setup/finalize.py` and `setup/init.py`, verifies the immutable `kanban-final` manifest/counts/hashes, checks clean native stores and explicit old-surface absence, launches the real Cockpit process, and completes serial desktop/mobile journeys. The 65-test focused regression and two Playwright journeys passed.
+- AC-2: Public-command tests cover existing destination, missing disposition, corrected source mutation replay, and induced publication interruption replay. They prove no completed receipt/overwrite on failure, recoverable source, and success after correction.
+- AC-3: `.owlbear/proof-009.json` records both commands, expected delivery/code revisions, source and manifest hashes, finalization receipt, returned commit paths, fixture/live source identities, and an explicit DN-015 handoff. A fail-closed guard and assertions prove the temporary fixture carrier is not the live `.owlbear/kanban` input.
+
+### Validation
+- Focused Python regression: 65 passed; four pre-existing Starlette deprecation warnings.
+- Dedicated assembled Playwright project: 2 passed serially across desktop and mobile.
+- Cockpit CSS/HTML lint, TypeScript build, and Vite production build passed.
+- Ruff check/format, VS Code diagnostics, and Git diff integrity checks passed.
+- Builder challenger initially failed the implicit AC-3 evidence; explicit handoff/live-input/absent-surface evidence was added, focused and full checks reran, and the required challenger retry passed. Challenger independently reran 14 finalizer/cutover/workspace tests successfully.
+- All 20 recalled builder memories were assessed for task #2093.

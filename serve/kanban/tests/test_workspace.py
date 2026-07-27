@@ -20,7 +20,7 @@ def test_native_workspace_resolves_native_roots_without_legacy_board_files(tmp_p
     assert workspace.changes_dir == tmp_path / ".owlbear" / "changes"
     assert workspace.workspace_root == tmp_path
     assert workspace.proof_root == tmp_path / ".owlbear" / "scratch" / "proof"
-    assert workspace.legacy_snapshot_root == tmp_path / ".owlbear" / "legacy"
+    assert workspace.legacy_snapshot_root == tmp_path / ".owlbear" / "legacy" / "kanban-final"
     assert not (work_root / "tasks").exists()
     assert not (work_root / "config.yml").exists()
 

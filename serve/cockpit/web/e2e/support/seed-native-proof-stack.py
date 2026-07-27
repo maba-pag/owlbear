@@ -4,12 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import shutil
 import subprocess
 from datetime import timedelta
 from pathlib import Path
 
 from owlbear_kanban import (
+    BootstrapFinalizationReadiness,
+    BootstrapFinalizationRequest,
     CorrectiveRouteRequest,
     FindingStore,
     GitRepositoryHistory,
@@ -17,12 +21,15 @@ from owlbear_kanban import (
     JobGeneration,
     JobRecord,
     JobStore,
-    KanbanEngine,
+    LegacyActiveItem,
+    LegacyDisposition,
     NativeRuntime,
     PlanJob,
     ReceiptStore,
+    inventory_legacy_source,
     load_change,
     plan_corrective_route,
+    verify_legacy_snapshot,
 )
 from owlbear_kanban.change import (
     AuthorityMetadata,
@@ -283,6 +290,120 @@ Memory continuity over the native Cockpit shell.
     (memory_dir / "11111111-1111-4111-8111-111111111111.md").write_text(content, encoding="utf-8")
 
 
+def _run_public_command(command: list[str], *, cwd: Path) -> dict[str, object]:
+    completed = subprocess.run(  # noqa: S603 - arguments are controlled by this fixture.
+        command,
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(completed.stdout)
+
+
+def _finalize_legacy_carrier(project_root: Path, workspace: Path, revision: ChangeRevision, head: str) -> None:
+    source = workspace / ".owlbear/kanban"
+    live_self_hosting_board = project_root / ".owlbear/kanban"
+    if source == live_self_hosting_board or source.is_relative_to(live_self_hosting_board):
+        message = "PROOF-009 must finalize only its temporary fixture carrier"
+        raise RuntimeError(message)
+    legacy_files = {
+        "tasks/1-legacy-proof.md": "---\nid: 1\ntitle: Legacy proof task\nstatus: build\n---\n",
+        "decisions/pending/DR-001.md": "---\nid: DR-001\ntask_id: 1\nstatus: pending\n---\n",
+        "activity.jsonl": '{"task_id":1,"action":"created"}\n',
+    }
+    for relative_path, content in legacy_files.items():
+        path = source / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    sibling_carrier = workspace / ".vscode/mcp.json"
+    sibling_carrier.parent.mkdir(parents=True)
+    sibling_carrier.write_text('{"servers":{"ob-kanban":{"command":"legacy"}}}\n', encoding="utf-8")
+
+    active_items = (
+        LegacyActiveItem(item_id="task:1", relative_path="tasks/1-legacy-proof.md"),
+        LegacyActiveItem(item_id="request:DR-001", relative_path="decisions/pending/DR-001.md"),
+    )
+    dispositions = {item.item_id: LegacyDisposition.COMPLETED_HISTORY for item in active_items}
+    source_digest = inventory_legacy_source(source, active_items, dispositions).source_digest
+    code_revision = hashlib.sha256(head.encode()).hexdigest()
+    request = BootstrapFinalizationRequest(
+        source_path=".owlbear/kanban",
+        sibling_carrier_path=".vscode/mcp.json",
+        snapshot_path=".owlbear/legacy/kanban-final",
+        receipt_path=".owlbear/legacy/bootstrap-finalization.json",
+        active_items=active_items,
+        dispositions=dispositions,
+        expected_source_digest=source_digest,
+        expected_delivery_digest=revision.delivery_digest,
+        actual_delivery_digest=revision.delivery_digest,
+        expected_code_revision=code_revision,
+        actual_code_revision=code_revision,
+        approval="FINALIZE_BOOTSTRAP_CARRIER",
+        readiness=BootstrapFinalizationReadiness(terminal=True),
+    )
+    request_path = workspace / "finalization-request.json"
+    request_path.write_text(request.model_dump_json(indent=2), encoding="utf-8")
+    finalize_command = [
+        "uv",
+        "run",
+        "--project",
+        str(project_root),
+        "python",
+        str(project_root / "setup/finalize.py"),
+        "--workspace",
+        str(workspace),
+        "--request",
+        str(request_path),
+    ]
+    result = _run_public_command(finalize_command, cwd=workspace)
+    setup_command = [
+        "uv",
+        "run",
+        "--project",
+        str(project_root),
+        "python",
+        str(project_root / "setup/init.py"),
+    ]
+    setup = subprocess.run(  # noqa: S603 - arguments are controlled by this fixture.
+        setup_command,
+        cwd=workspace,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    request_path.unlink()
+
+    snapshot = verify_legacy_snapshot(workspace / ".owlbear/legacy/kanban-final")
+    returned_commit_paths = result["result"]["tracked_paths"]
+    absent_legacy_runtime_surfaces = [".owlbear/kanban/tasks", ".owlbear/kanban/decisions", "openspec"]
+    proof = {
+        "finalize_command": finalize_command,
+        "setup_command": setup_command,
+        "setup_output": setup.stdout.strip(),
+        "expected_delivery_digest": revision.delivery_digest,
+        "expected_code_revision": code_revision,
+        "source_digest": source_digest,
+        "snapshot_manifest_sha256": result["result"]["snapshot_manifest_sha256"],
+        "snapshot_file_count": snapshot.manifest.file_count,
+        "finalization_receipt": result["result"]["receipt"],
+        "tracked_paths": returned_commit_paths,
+        "fixture_legacy_source": str(source),
+        "live_self_hosting_board": str(live_self_hosting_board),
+        "live_self_hosting_board_input": False,
+        "absent_legacy_runtime_surfaces": absent_legacy_runtime_surfaces,
+        "dn_015_handoff": {
+            "expected_delivery_digest": revision.delivery_digest,
+            "expected_code_revision": code_revision,
+            "source_digest": source_digest,
+            "snapshot_manifest_sha256": result["result"]["snapshot_manifest_sha256"],
+            "finalization_receipt": result["result"]["receipt"],
+            "returned_commit_paths": returned_commit_paths,
+        },
+    }
+    (workspace / ".owlbear/proof-009.json").write_text(json.dumps(proof, indent=2), encoding="utf-8")
+
+
 def _load_proof_revision(changes_dir: Path) -> ChangeRevision:
     loaded = load_change(changes_dir, CHANGE_ID)
     scale = load_change(changes_dir, SCALE_CHANGE_ID)
@@ -377,12 +498,6 @@ def main() -> None:
     shutil.rmtree(changes_dir / CHANGE_ID / "receipts", ignore_errors=True)
     shutil.rmtree(changes_dir / CHANGE_ID / "jobs", ignore_errors=True)
     _seed_scale_change(changes_dir)
-    (work_root / "tasks").mkdir(parents=True)
-    (work_root / "archive").mkdir()
-    _seed_memory(workspace / ".owlbear" / "memory")
-    (workspace / ".owlbear" / "ideas.md").write_text(
-        "# Native proof ideas\n\n- [ ] Preserve Ideas continuity\n", encoding="utf-8"
-    )
 
     _git(workspace, "init", "-q")
     _git(workspace, "add", ".")
@@ -402,10 +517,12 @@ def main() -> None:
     head = _git(workspace, "rev-parse", "HEAD")
 
     revision = _load_proof_revision(changes_dir)
+    _finalize_legacy_carrier(project_root, workspace, revision, head)
+    _seed_memory(workspace / ".owlbear" / "memory")
+    (workspace / ".owlbear" / "ideas.md").write_text(
+        "# Native proof ideas\n\n- [ ] Preserve Ideas continuity\n", encoding="utf-8"
+    )
     _seed_native_work(revision, work_root, workspace, head)
-    engine = KanbanEngine(work_root)
-    legacy_task = engine.create_task("Legacy proof task", status="build", priority="high")
-    engine.create_request(legacy_task.id, "action", "Legacy proof request", "Historical only.", "builder")
 
 
 if __name__ == "__main__":

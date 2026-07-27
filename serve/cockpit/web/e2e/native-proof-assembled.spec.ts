@@ -56,6 +56,8 @@ for (const viewport of VIEWPORTS) {
     test.setTimeout(ASSEMBLED_TIMEOUT_MS)
     await page.setViewportSize(viewport)
     const apiFailures: string[] = []
+    const pageErrors: string[] = []
+    page.on('pageerror', (error) => pageErrors.push(error.message))
     page.on('response', (response) => {
       if (response.url().includes('/api/') && response.status() >= 400) {
         apiFailures.push(`${response.status()} ${response.url()}`)
@@ -65,7 +67,7 @@ for (const viewport of VIEWPORTS) {
     await page.goto(`/?change=${PRIMARY_CHANGE}&node=DN-011`)
     await expectAssembledPage(page, 'specification-page', viewport)
     await expect(page.getByRole('heading', { name: 'Authority metadata' })).toBeVisible()
-    await expect(page.getByText('admission-bf5edd67478d')).toBeVisible()
+    await expect(page.getByText('admission-6c95c70c81a1')).toBeVisible()
     const graph = page.getByTestId('delivery-graph-outline')
     await expect(graph).toBeVisible()
     await expect(graph.getByTestId('node-detail')).toContainText('DN-011')
@@ -109,6 +111,7 @@ for (const viewport of VIEWPORTS) {
     await selectActionResponse(page, requestId)
     await screenshot(page, testInfo, `PROOF-012-${viewport.name}-request-resolved`)
     await page.reload()
+    expect(pageErrors).toEqual([])
     await expectAssembledPage(page, 'requests-page', viewport)
     await page.getByRole('button', { name: 'Resolved' }).click()
     await expect(page.locator(`[data-request-id="${requestId}"]`)).toBeVisible()

@@ -67,4 +67,4 @@ class NativeWorkspace:
     @property
     def legacy_snapshot_root(self) -> Path:
         """Return the immutable legacy-inventory root."""
-        return self.ops_root / "legacy"
+        return self.ops_root / "legacy" / "kanban-final"
