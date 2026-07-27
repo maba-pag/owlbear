@@ -1,10 +1,10 @@
 ---
 id: 2092
 title: 'P16-06: Align native distribution, generated assets, and documentation'
-status: verify
+status: collect
 priority: medium
 created: 2026-07-27T08:40:04.276149+02:00
-updated: 2026-07-27T12:02:38.988783+02:00
+updated: 2026-07-27T12:09:00.087263+02:00
 tags:
   - phase-16
   - scope:distribution
@@ -66,3 +66,17 @@ DONE. Adopted the complete uncommitted #2092 change envelope from the interrupte
 - Corrected MCP Memory review attribution to `memory-reviewer`; `tests/test_memory_git.py` exercises public `commit_batch` behavior in a real temporary Git repository.
 - Focused evidence: 73 unique Python regressions passed across native distribution/setup/launch, customization contracts, Memory review, and doc indexing; Markdownlint passed 39 files; yamllint passed all files; agent and skill validators passed; focused Ruff and format checks passed; diagnostics and both staged/unstaged diff checks are clean. Three pre-existing asyncio deprecation warnings remain.
 - Independent builder challenger decision: pass; both prior findings are resolved and no blocking defect remains.
+
+[[2026-07-27T12:09:00+02:00]]
+## Verify Notes
+
+PASS. Independently verified builder commit `336b613048e79a1f5e21a7d6a3a1c8fff83ff673` against AC-1 through AC-3 and repaired one local committed-artifact omission.
+
+- Found that the builder commit's scoped shell glob omitted four hidden `.openspec.yaml` files from `.owlbear/legacy/openspec-final`, leaving the committed 22-file manifest unverifiable even though worktree tests passed.
+- Added exactly those four manifest-required historical records. A temporary copied Git index plus `git write-tree`, `git archive`, and extraction proved the prospective committed tree with `verify_legacy_snapshot`: 22 files, source digest `f1d9b64df37d27ce22fc3ddd62dcd6d61b5ea89fdf10965e27393010305013c4`, and no active `openspec/` tree. Scratch artifacts were removed.
+- AC-1: exact native distribution/setup/launch tests pass and active retired paths remain absent; immutable history is readable but not executable authority.
+- AC-2: maintained docs/configuration and completed-history dispositions describe native delivery and bounded legacy evidence.
+- AC-3: shipped owners, generated output, retained diagram/MCP inventory, and relative documentation links are exact and current.
+- Focused verifier run: 11 tests passed across native distribution, setup, Cockpit launch, and Memory actor behavior. Builder's broader lint, customization, Cockpit, Vite, and 73-test evidence remains applicable.
+- Verifier challenger decision: pass; the four-file repair is exact, local, and satisfies the manifest without adding generalized behavior or violating the broad source-string-test prohibition.
+- Recalled verifier memory was assessed in one complete batch; artifact-to-scope and non-code-consumer checks directly exposed and bounded the omission.

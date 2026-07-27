@@ -84,6 +84,7 @@ ACTION_ACTIONLINT_FILTER_REGEX_INCLUDE: '^(\.github/workflows/.*\.ya?ml)$'
 
 # YAML — strict mode
 YAML_YAMLLINT_ARGUMENTS: "--strict"
+YAML_YAMLLINT_FILTER_REGEX_EXCLUDE: '(\.owlbear/legacy/)'
 
 # JSON — quiet output; exclude JSONC files (VS Code settings use comments)
 JSON_JSONLINT_ARGUMENTS: "--quiet"
