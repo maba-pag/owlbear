@@ -1,10 +1,10 @@
 ---
 id: 2095
 title: 'P17-02: Prove generated graph admission properties'
-status: shape
+status: build
 priority: high
 created: 2026-07-27T19:45:12.509746+02:00
-updated: 2026-07-27T20:41:05.562446+02:00
+updated: 2026-07-27T20:55:29.363135+02:00
 tags:
   - phase-17
   - scope:test
@@ -20,14 +20,17 @@ parent: 1990
 depends_on: []
 ac:
   - 'AC-1: Given deterministic generated acyclic graph families spanning single-node,
-    branching, joining, and hundreds-of-node topologies, public admission succeeds,
-    creates plan jobs in stable delivery-topology order, and replay preserves digest,
-    finding, and job identities.'
-  - 'AC-2: Given one generated mutation in each class `dangling reference`, `dependency
+    branching, joining, and hundreds-of-node topologies whose delivery nodes are serialized
+    in dependency-first and scrambled authored orders, public admission succeeds,
+    creates one plan job per delivery node in authored YAML order, `DispatchRuntime.pick_waves`
+    returns eligible plan jobs in stable dependency-topology order, and replay preserves
+    digest, finding, and job identities.'
+  - 'AC-2: Given YAML-backed generated mutations, the canonical loader rejects `dangling
+    reference` with `ERR_CHANGE_REFERENCE_MISSING`; public validation rejects `dependency
     cycle`, `disconnected obligation`, `duplicate owner`, `interface omission`, `migration
-    gap`, `risk disposition`, and `proof authorization`, public validation returns
-    respectively `DV-002`, `DV-008`, `DV-003`, `DV-003`, `DV-004`, `DV-005`, `DV-006`,
-    and `DV-007` before a receipt or job exists.'
+    gap`, `risk disposition`, and `proof authorization` with `DV-008`, `DV-003`, `DV-003`,
+    `DV-004`, `DV-005`, `DV-006`, and `DV-007`, respectively, before a receipt or
+    job exists.'
   - 'AC-3: Given the same seed and generated authority, repeated loading and validation
     produce the same canonical delivery digest and sorted findings; YAML key order
     and document wrapping do not change semantic identity.'
@@ -83,3 +86,19 @@ RESHAPE
 |---|-------------|--------------|-----------------|---------|----------|
 | 1 | AC-1/topology-order | shaper via `/shape` | Define stable delivery-topology ordering independently of authored YAML order and require a scrambled-order generated family; include builder-owned planner correction if authored order is not the contract. | `serve/kanban/src/owlbear_kanban/jobs.py`; `serve/kanban/tests/test_generated_graph_admission.py` | Reversed loaded graph published dependents before dependencies. |
 | 2 | AC-2/dangling-loader-boundary | shaper via `/shape` | Reconcile exact `DV-002` admission expectation with canonical loader rejection, explicitly choosing the owning boundary and valid generated input path. | `serve/kanban/src/owlbear_kanban/change.py`; `serve/kanban/src/owlbear_kanban/admission.py`; `serve/kanban/tests/test_generated_graph_admission.py` | Loader returns `ERR_CHANGE_REFERENCE_MISSING` before admission; current test bypasses loader invariants. |
+
+[[2026-07-27T20:55:29+02:00]]
+## Shape Notes
+
+Local task repair of verifier follow-up keys `AC-1/topology-order` and `AC-2/dangling-loader-boundary`; approved intent, parent, dependencies, scope, authority, proof bundle, and AC-3 are unchanged.
+
+### Repair Closure Map
+| Failure Key | Claimed Production Boundary | Current-Source Artifacts | Cheapest Disconfirming Check | Causal Proof Or Negative Control | Executor Availability |
+|---|---|---|---|---|---|
+| AC-1/topology-order | Canonical admission publishes authored-order plan jobs; `DispatchRuntime.pick_waves` consumes eligible jobs in stable dependency-topology order. | `change.py`, `admission.py`, `jobs.py::plan_jobs`, `dispatch.py::pick_waves/_delivery_topology_key`, generated admission proof. | Serialize a joining graph in scrambled order; compare persisted targets with authored order and flattened picked waves with dependency order. | Scrambling must alter publication order without altering dispatch topology; dependency-first-only fixtures cannot prove the distinction. | Installed pytest through `uv`. |
+| AC-2/dangling-loader-boundary | Modular load owns undeclared-reference rejection; admission owns the seven semantic mutation findings that can reach a loaded revision. | `change.py` identity validation, `admission.py` DV findings, generated admission proof. | Write `DN-999` into YAML and require `ERR_CHANGE_REFERENCE_MISSING` with no revision; require each other YAML-backed mutation to load and return its declared DV code with no publication. | Post-load `model_copy` is excluded because it bypasses the canonical loader invariant. | Installed pytest through `uv`. |
+
+- AC-1 now distinguishes authored publication order from dependency-topology dispatch order and requires a scrambled-order family.
+- AC-2 now assigns dangling references to the canonical loader and the seven reachable semantic classes to public admission, with canonical diagnostics.
+- Shaper challenger: `pass`; it confirmed live owners, literal authority, test-only scope, and closure-map causality.
+- Board audit before release: task remains child of #1990, has no dependencies, retains `existing+challenge`, and routes to `build`.
