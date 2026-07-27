@@ -1,10 +1,10 @@
 ---
 id: 2089
 title: 'P16-05: Remove retired delivery agents and workflow surfaces'
-status: verify
+status: collect
 priority: high
 created: 2026-07-27T08:39:38.469917+02:00
-updated: 2026-07-27T11:09:27.703595+02:00
+updated: 2026-07-27T11:11:57.939914+02:00
 tags:
   - phase-16
   - scope:agent
@@ -66,3 +66,21 @@ Proof:
 - builder-challenger independent review -> pass; it reran validators and 55 focused tests
 
 A broader optional run exposed one pre-existing obsolete assertion in `tests/test_deny_code_writes.py` that expects storage tests removed by #2088. It is unrelated to #2089 and is left for the later test-cleanup packet.
+
+[[2026-07-27T11:11:57+02:00]]
+## Verify Notes
+
+PASS at exact builder commit `269b6bf9d94e34e8f18e1b9bee018ada168ca9ac`.
+
+- AC-1: committed artifact inventory is exactly 13 native/neutral agents with native design, plan, build, accept, audit, and orchestration roles; prompt routes and purpose-specific job tools are parsed and asserted by the regression suite.
+- AC-2: committed inventories contain no retired agent, `/shape` prompt, generic task authority skill, or generic task tool grant. Native delegation is orchestrator -> planner/builder/acceptor/auditor and builder -> build-reviewer; neutral Memory/Knowledge/Test roles remain.
+- AC-3: builder session/lint hooks and packet commit governance remain; acceptor/auditor retain `deny-writes.py --terminal-read-only`; build-reviewer remains hard read-only; orchestrator has no edit/terminal grants and only purpose-specific lifecycle tools.
+
+Exact-commit evidence:
+- complete path set matches #2089 scope
+- no post-commit drift on owned implementation paths
+- agent and skill validators pass
+- focused artifact/live-registry/write-guard/lint-hook proof: 55 passed, 3 existing deprecation warnings
+- verifier-challenger: pass; confirmed historical briefs/research/archive references are non-dispatchable and optional obsolete storage-test failure is outside this task
+
+No verifier patch was needed.
