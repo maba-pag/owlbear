@@ -1,10 +1,10 @@
 ---
 id: 2096
 title: 'P17-03: Prove receipt, invalidation, and recovery properties'
-status: shape
+status: build
 priority: high
 created: 2026-07-27T19:45:12.555886+02:00
-updated: 2026-07-27T20:37:02.649218+02:00
+updated: 2026-07-27T20:55:29.450628+02:00
 tags:
   - phase-17
   - scope:test
@@ -23,9 +23,11 @@ ac:
     and proven-nonintersecting-descendant receipts, runtime dependency checks accept
     only the current unsuperseded chain and return the declared stable diagnostic
     for each rejected class without mutating jobs or receipts.'
-  - 'AC-2: Given an acceptance finding classified as `implementation-defect` or `packet-boundary-defect`,
-    public rejection creates respectively the minimum corrective build job or through-plan
-    corrective route, freezes original attempt/receipt/finding history, and only the
+  - 'AC-2: Given an acceptance finding classified as `implementation-defect` and targeted
+    at `packet-implementation`, public rejection creates one `build-repair` job; given
+    an acceptance finding classified as `planning-omission` and targeted at `packet-dependency`,
+    public rejection creates one `node-plan-revision` job with `through_plan_correction=False`;
+    both routes freeze original attempt, receipt, and finding history, and only a
     successful superseding chain releases dependencies.'
   - 'AC-3: Given interruption before transaction publication, after participant replacement,
     or during replay for graph, job, receipt, activity, and invalidation participants,
@@ -67,3 +69,19 @@ REJECT: AC-2 cannot be instantiated through the accepted public contract, so no 
 | # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|--------------|-----------------|---------|----------|
 | 1 | AC-2/finding-class-route-contract | shaper via `/shape` | Rewrite AC-2 to use an admitted `FindingClass` separately from the corrective target/route, and state whether packet boundary proof expects `packet-dependency` with `through_plan_correction=False` or an integration target with `through_plan_correction=True`. Do not add `packet-boundary-defect` as a public class unless the accepted design and interface are intentionally changed. | `serve/kanban/src/owlbear_kanban/finding.py`; `serve/kanban/src/owlbear_kanban/invalidation.py`; `serve/kanban/tests/test_invalidation.py`; `.owlbear/changes/replace-delivery-pipeline/design.md` | Public validator rejects the AC literal; builder challenger returned `reconsider`. |
+
+[[2026-07-27T20:55:29+02:00]]
+## Shape Notes
+
+Local task repair of builder follow-up key `AC-2/finding-class-route-contract`; approved intent, parent, dependencies, scope, authority, proof bundle, AC-1, and AC-3 are unchanged.
+
+### Repair Closure Map
+| Failure Key | Claimed Production Boundary | Current-Source Artifacts | Cheapest Disconfirming Check | Causal Proof Or Negative Control | Executor Availability |
+|---|---|---|---|---|---|
+| AC-2/finding-class-route-contract | Public finding validation is separate from corrective-target routing and rejection publication. | `finding.py`, `invalidation.py::plan_corrective_route`, invalidation runtime, maintained invalidation proof. | Validate canonical class literals and invoke rejection for `packet-implementation` and `packet-dependency`. | Returned target route must select the job kind and correction flag; unsupported `packet-boundary-defect` remains rejected. | Installed pytest through `uv`. |
+
+- AC-2 replaces the invented `packet-boundary-defect` class with admitted classes and explicit targets.
+- `implementation-defect` plus `packet-implementation` requires one `build-repair`; `planning-omission` plus `packet-dependency` requires one `node-plan-revision` with `through_plan_correction=False`.
+- Original history freezing and superseding-chain release remain part of the public rejection proof.
+- Shaper challenger: `pass`; it confirmed canonical literals, orthogonal class/target semantics, test-only scope, and closure-map causality.
+- Board audit before release: task remains child of #1990, has no dependencies, retains `existing+challenge`, and routes to `build`.
