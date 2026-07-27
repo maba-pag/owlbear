@@ -2,24 +2,24 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
 import re
 import shutil
 import stat
-from collections.abc import Callable, Mapping
-from contextlib import suppress
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager, suppress
 from enum import StrEnum
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from owlbear_kanban.storage_io import locked_roots
-
 _DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 _FILE_FLAGS = os.O_RDONLY | os.O_NOFOLLOW
+_LOCK_FLAGS = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW
 _DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -192,31 +192,41 @@ def create_legacy_snapshot(
     failure: SnapshotFailureHook | None = None,
 ) -> LegacySnapshotResult:
     """Publish a verified immutable copy of one caller-described legacy root."""
-    source, destination = _validate_roots(source, destination)
-    with locked_roots((destination.parent,)):
-        if destination.exists() or destination.is_symlink():
-            raise LegacySnapshotDestinationError(destination)
-        inventory = _inventory(source)
-        resolved_dispositions = _resolve_dispositions(active_items, dispositions, inventory)
-        manifest = _build_manifest(inventory, resolved_dispositions)
-        manifest_bytes = _manifest_bytes(manifest)
-        staging = _staging_path(destination, manifest.source_digest)
-        _remove_staging(staging)
-        try:
-            _materialize(source, staging, inventory, manifest_bytes)
-            _invoke_failure(failure, "after-staging", staging)
-            _verify_staging(staging, inventory, manifest_bytes)
-            _invoke_failure(failure, "before-publication", staging)
-            _ensure_source_stable(source, inventory)
-            _ensure_destination_available(destination)
-            staging.rename(destination)
-            _fsync_directory(destination.parent)
-        except LegacySnapshotError:
-            _remove_staging(staging)
-            raise
-        except Exception as exc:
-            _remove_staging(staging)
-            raise LegacySnapshotPublicationError(str(exc)) from exc
+    source, destination, parent_fd = _validate_roots(source, destination)
+    try:
+        with _locked_destination_parent(parent_fd):
+            _ensure_destination_available(parent_fd, destination.name, destination)
+            inventory = _inventory(source)
+            resolved_dispositions = _resolve_dispositions(active_items, dispositions, inventory)
+            manifest = _build_manifest(inventory, resolved_dispositions)
+            manifest_bytes = _manifest_bytes(manifest)
+            staging = _staging_path(destination, manifest.source_digest)
+            _remove_staging(parent_fd, staging.name, staging)
+            try:
+                _materialize(source, parent_fd, staging.name, inventory, manifest_bytes)
+                _invoke_failure(failure, "after-staging", staging)
+                _verify_staging(parent_fd, staging.name, inventory, manifest_bytes)
+                _invoke_failure(failure, "before-publication", staging)
+                _ensure_source_stable(source, inventory)
+                _ensure_destination_parent_stable(destination.parent, parent_fd)
+                _ensure_destination_available(parent_fd, destination.name, destination)
+                os.rename(staging.name, destination.name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+                try:
+                    _invoke_failure(failure, "after-publication", destination)
+                    _ensure_source_stable(source, inventory)
+                    _ensure_destination_parent_stable(destination.parent, parent_fd)
+                    os.fsync(parent_fd)
+                except Exception:
+                    _remove_published_snapshot(parent_fd, destination.name, destination)
+                    raise
+            except LegacySnapshotError:
+                _remove_staging(parent_fd, staging.name, staging)
+                raise
+            except Exception as exc:
+                _remove_staging(parent_fd, staging.name, staging)
+                raise LegacySnapshotPublicationError(str(exc)) from exc
+    finally:
+        os.close(parent_fd)
     manifest_path = destination / "manifest.json"
     return LegacySnapshotResult(
         destination=destination,
@@ -231,23 +241,29 @@ def _ensure_source_stable(source: Path, expected: _Inventory) -> None:
         raise LegacySnapshotSourceChangedError(source)
 
 
-def _ensure_destination_available(destination: Path) -> None:
-    if destination.exists() or destination.is_symlink():
-        raise LegacySnapshotDestinationError(destination)
+def _ensure_destination_available(parent_fd: int, name: str, destination: Path) -> None:
+    try:
+        os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise LegacySnapshotPathError(destination) from exc
+    raise LegacySnapshotDestinationError(destination)
 
 
-def _validate_roots(source: Path, destination: Path) -> tuple[Path, Path]:
+def _validate_roots(source: Path, destination: Path) -> tuple[Path, Path, int]:
     if source.is_symlink() or not source.is_dir():
         raise LegacySnapshotPathError(source)
     source = source.resolve()
-    destination_parent = _prepare_destination_parent(destination.parent)
+    destination_parent, parent_fd = _prepare_destination_parent(destination.parent)
     destination = destination_parent / destination.name
     if not destination.name or source == destination or source in destination.parents or destination in source.parents:
+        os.close(parent_fd)
         raise LegacySnapshotPathError(destination)
-    return source, destination
+    return source, destination, parent_fd
 
 
-def _prepare_destination_parent(path: Path) -> Path:
+def _prepare_destination_parent(path: Path, *, create: bool = True) -> tuple[Path, int]:
     absolute = path if path.is_absolute() else Path.cwd() / path
     if ".." in absolute.parts:
         raise LegacySnapshotPathError(path)
@@ -260,31 +276,66 @@ def _prepare_destination_parent(path: Path) -> Path:
             try:
                 child_fd = os.open(name, _DIRECTORY_FLAGS, dir_fd=current_fd)
             except FileNotFoundError:
+                if not create:
+                    raise
                 with suppress(FileExistsError):
                     os.mkdir(name, mode=0o755, dir_fd=current_fd)
                 child_fd = os.open(name, _DIRECTORY_FLAGS, dir_fd=current_fd)
             os.close(current_fd)
             current_fd = child_fd
     except OSError as exc:
-        raise LegacySnapshotPathError(candidate) from exc
-    else:
-        return absolute
-    finally:
         if current_fd is not None:
             os.close(current_fd)
+        raise LegacySnapshotPathError(candidate) from exc
+    if current_fd is None:
+        raise LegacySnapshotPathError(path)
+    return absolute, current_fd
+
+
+def _ensure_destination_parent_stable(path: Path, expected_fd: int) -> None:
+    candidate_fd: int | None = None
+    try:
+        _, candidate_fd = _prepare_destination_parent(path, create=False)
+        expected = os.fstat(expected_fd)
+        candidate = os.fstat(candidate_fd)
+        if (expected.st_dev, expected.st_ino) != (candidate.st_dev, candidate.st_ino):
+            raise LegacySnapshotPathError(path)
+    finally:
+        if candidate_fd is not None:
+            os.close(candidate_fd)
+
+
+@contextmanager
+def _locked_destination_parent(parent_fd: int) -> Iterator[None]:
+    lock_name = ".storage.lock"
+    try:
+        lock_fd = os.open(lock_name, _LOCK_FLAGS, 0o600, dir_fd=parent_fd)
+    except OSError as exc:
+        raise LegacySnapshotPathError(lock_name) from exc
+    try:
+        if not stat.S_ISREG(os.fstat(lock_fd).st_mode):
+            raise LegacySnapshotPathError(lock_name)
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(lock_fd)
 
 
 def _inventory(source: Path) -> _Inventory:
-    directories: list[str] = []
-    files: list[LegacySnapshotFile] = []
     try:
         root_fd = os.open(source, _DIRECTORY_FLAGS)
     except OSError as exc:
         raise LegacySnapshotPathError(source) from exc
     try:
-        _walk_directory(root_fd, PurePosixPath(), directories, files)
+        return _inventory_descriptor(root_fd)
     finally:
         os.close(root_fd)
+
+
+def _inventory_descriptor(root_fd: int) -> _Inventory:
+    directories: list[str] = []
+    files: list[LegacySnapshotFile] = []
+    _walk_directory(root_fd, PurePosixPath(), directories, files)
     return tuple(directories), tuple(files)
 
 
@@ -427,30 +478,80 @@ def _staging_path(destination: Path, source_digest: str) -> Path:
     return destination.with_name(f".tmp-snapshot-{destination.name}-{source_digest[:16]}")
 
 
-def _remove_staging(path: Path) -> None:
-    if path.is_symlink():
+def _remove_staging(parent_fd: int, name: str, path: Path) -> None:
+    try:
+        metadata = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise LegacySnapshotPathError(path) from exc
+    if not stat.S_ISDIR(metadata.st_mode):
         raise LegacySnapshotPathError(path)
-    if path.exists():
-        if not path.is_dir():
-            raise LegacySnapshotPathError(path)
-        shutil.rmtree(path)
-        _fsync_directory(path.parent)
+    shutil.rmtree(name, dir_fd=parent_fd)
+    os.fsync(parent_fd)
 
 
-def _materialize(source: Path, staging: Path, inventory: _Inventory, manifest_bytes: bytes) -> None:
-    content_root = staging / "content"
-    content_root.mkdir(parents=True)
-    for relative in inventory[0]:
-        (content_root / relative).mkdir(parents=True, exist_ok=True)
-    for item in inventory[1]:
-        target = content_root / item.relative_path
-        target.parent.mkdir(parents=True, exist_ok=True)
-        content = _read_relative_file(source, PurePosixPath(item.relative_path))
-        if hashlib.sha256(content).hexdigest() != item.sha256 or len(content) != item.size:
-            raise LegacySnapshotSourceChangedError(item.relative_path)
-        _write_bytes(target, content)
-    _write_bytes(staging / "manifest.json", manifest_bytes)
-    _fsync_directory(staging)
+def _remove_published_snapshot(parent_fd: int, name: str, path: Path) -> None:
+    try:
+        _remove_staging(parent_fd, name, path)
+    except LegacySnapshotError as exc:
+        message = f"failed to roll back unverified publication: {exc}"
+        raise LegacySnapshotPublicationError(message) from exc
+
+
+def _materialize(
+    source: Path,
+    parent_fd: int,
+    staging_name: str,
+    inventory: _Inventory,
+    manifest_bytes: bytes,
+) -> None:
+    os.mkdir(staging_name, mode=0o755, dir_fd=parent_fd)
+    staging_fd = os.open(staging_name, _DIRECTORY_FLAGS, dir_fd=parent_fd)
+    try:
+        os.mkdir("content", mode=0o755, dir_fd=staging_fd)
+        content_fd = os.open("content", _DIRECTORY_FLAGS, dir_fd=staging_fd)
+        try:
+            for relative in inventory[0]:
+                directory_fd = _open_relative_directory(content_fd, PurePosixPath(relative), create=True)
+                os.fsync(directory_fd)
+                os.close(directory_fd)
+            for item in inventory[1]:
+                relative = PurePosixPath(item.relative_path)
+                directory_fd = _open_relative_directory(content_fd, relative.parent, create=True)
+                try:
+                    content = _read_relative_file(source, relative)
+                    if hashlib.sha256(content).hexdigest() != item.sha256 or len(content) != item.size:
+                        raise LegacySnapshotSourceChangedError(item.relative_path)
+                    _write_descriptor_file(directory_fd, relative.name, content)
+                finally:
+                    os.close(directory_fd)
+            os.fsync(content_fd)
+        finally:
+            os.close(content_fd)
+        _write_descriptor_file(staging_fd, "manifest.json", manifest_bytes)
+        os.fsync(staging_fd)
+    finally:
+        os.close(staging_fd)
+    os.fsync(parent_fd)
+
+
+def _open_relative_directory(root_fd: int, relative: PurePosixPath, *, create: bool) -> int:
+    current_fd = os.dup(root_fd)
+    try:
+        for part in relative.parts:
+            if part in {"", "."}:
+                continue
+            if create:
+                with suppress(FileExistsError):
+                    os.mkdir(part, mode=0o755, dir_fd=current_fd)
+            child_fd = os.open(part, _DIRECTORY_FLAGS, dir_fd=current_fd)
+            os.close(current_fd)
+            current_fd = child_fd
+    except Exception:
+        os.close(current_fd)
+        raise
+    return current_fd
 
 
 def _read_relative_file(source: Path, relative: PurePosixPath) -> bytes:
@@ -472,31 +573,36 @@ def _read_relative_file(source: Path, relative: PurePosixPath) -> bytes:
             os.close(descriptor)
 
 
-def _write_bytes(path: Path, content: bytes) -> None:
-    with path.open("xb") as handle:
-        handle.write(content)
-        handle.flush()
-        os.fsync(handle.fileno())
-    _fsync_directory(path.parent)
+def _write_descriptor_file(directory_fd: int, name: str, content: bytes) -> None:
+    file_fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644, dir_fd=directory_fd)
+    try:
+        with os.fdopen(file_fd, "wb", closefd=False) as handle:
+            handle.write(content)
+            handle.flush()
+        os.fsync(file_fd)
+    finally:
+        os.close(file_fd)
+    os.fsync(directory_fd)
 
 
-def _verify_staging(staging: Path, inventory: _Inventory, manifest_bytes: bytes) -> None:
-    if (staging / "manifest.json").read_bytes() != manifest_bytes:
-        message = "manifest bytes differ"
-        raise LegacySnapshotVerificationError(message)
-    if _inventory(staging / "content") != inventory:
-        message = "staged inventory differs"
-        raise LegacySnapshotVerificationError(message)
+def _verify_staging(parent_fd: int, staging_name: str, inventory: _Inventory, manifest_bytes: bytes) -> None:
+    staging_fd = os.open(staging_name, _DIRECTORY_FLAGS, dir_fd=parent_fd)
+    try:
+        metadata = os.stat("manifest.json", dir_fd=staging_fd, follow_symlinks=False)
+        if _read_open_file(staging_fd, "manifest.json", PurePosixPath("manifest.json"), metadata) != manifest_bytes:
+            message = "manifest bytes differ"
+            raise LegacySnapshotVerificationError(message)
+        content_fd = os.open("content", _DIRECTORY_FLAGS, dir_fd=staging_fd)
+        try:
+            if _inventory_descriptor(content_fd) != inventory:
+                message = "staged inventory differs"
+                raise LegacySnapshotVerificationError(message)
+        finally:
+            os.close(content_fd)
+    finally:
+        os.close(staging_fd)
 
 
 def _invoke_failure(failure: SnapshotFailureHook | None, stage: str, staging: Path) -> None:
     if failure is not None:
         failure(stage, staging)
-
-
-def _fsync_directory(directory: Path) -> None:
-    descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
-    try:
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)

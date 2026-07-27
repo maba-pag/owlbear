@@ -102,12 +102,69 @@ def test_snapshot_rejects_symlinked_destination_ancestor(tmp_path: Path) -> None
     assert not (outside / "nested").exists()
 
 
+def test_snapshot_rejects_destination_ancestor_swap_before_publication(tmp_path: Path) -> None:
+    source = _legacy_root(tmp_path)
+    parent = tmp_path / "snapshots"
+    parent.mkdir()
+    moved_parent = tmp_path / "moved-snapshots"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    destination = parent / "snapshot"
+
+    def swap_parent(stage: str, _staging: Path) -> None:
+        if stage == "before-publication":
+            parent.rename(moved_parent)
+            parent.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(LegacySnapshotPathError):
+        create_legacy_snapshot(source, destination, _active_items(), _dispositions(), failure=swap_parent)
+
+    assert not (outside / "snapshot").exists()
+    assert not (moved_parent / "snapshot").exists()
+    assert not list(moved_parent.glob(".tmp-snapshot-*"))
+
+
+def test_snapshot_rolls_back_destination_ancestor_swap_after_publication(tmp_path: Path) -> None:
+    source = _legacy_root(tmp_path)
+    parent = tmp_path / "snapshots"
+    parent.mkdir()
+    moved_parent = tmp_path / "moved-snapshots"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    destination = parent / "snapshot"
+
+    def swap_parent(stage: str, _published: Path) -> None:
+        if stage == "after-publication":
+            parent.rename(moved_parent)
+            parent.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(LegacySnapshotPathError):
+        create_legacy_snapshot(source, destination, _active_items(), _dispositions(), failure=swap_parent)
+
+    assert not (outside / "snapshot").exists()
+    assert not (moved_parent / "snapshot").exists()
+
+
 def test_snapshot_rejects_source_change_before_publication(tmp_path: Path) -> None:
     source = _legacy_root(tmp_path)
     destination = tmp_path / "snapshot"
 
     def mutate_source(stage: str, _staging: Path) -> None:
         if stage == "before-publication":
+            (source / "tasks" / "1-active.md").write_text("changed\n", encoding="utf-8")
+
+    with pytest.raises(LegacySnapshotSourceChangedError):
+        create_legacy_snapshot(source, destination, _active_items(), _dispositions(), failure=mutate_source)
+
+    assert not destination.exists()
+
+
+def test_snapshot_rolls_back_source_change_after_publication(tmp_path: Path) -> None:
+    source = _legacy_root(tmp_path)
+    destination = tmp_path / "snapshot"
+
+    def mutate_source(stage: str, _published: Path) -> None:
+        if stage == "after-publication":
             (source / "tasks" / "1-active.md").write_text("changed\n", encoding="utf-8")
 
     with pytest.raises(LegacySnapshotSourceChangedError):

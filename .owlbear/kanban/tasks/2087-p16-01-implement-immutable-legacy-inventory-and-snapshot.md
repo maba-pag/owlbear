@@ -1,10 +1,10 @@
 ---
 id: 2087
 title: 'P16-01: Implement immutable legacy inventory and snapshot'
-status: verify
+status: collect
 priority: high
 created: 2026-07-27T08:39:20.202385+02:00
-updated: 2026-07-27T09:14:56.903087+02:00
+updated: 2026-07-27T09:26:33.641220+02:00
 tags:
   - phase-16
   - scope:core
@@ -106,3 +106,26 @@ DONE
 - Builder challenger: `pass`; both exact follow-up keys closed, including path-creation TOCTOU and FD handling.
 
 No files outside the existing snapshot owner and durable focused test changed in this retry.
+
+[[2026-07-27T09:26:33+02:00]]
+## Verify Notes
+PASS
+
+### Independent Verification
+- Reviewed builder commit `6bb1c922aade7730ba7599e8fe2f552f592638d9`; ownership was exactly the #2087 record, snapshot owner, and focused durable test.
+- Initial focused suite and Ruff passed, but verifier challenge found that path-based final rename could follow an ancestor swapped after validation.
+- Applied the allowed local verifier patch: retained the validated parent descriptor through lock, staging creation, writes, verification, cleanup, rename, rollback, and fsync; added requested-parent identity checks.
+- A second challenge found source and parent mutation windows after pre-rename checks. Final patch makes rename provisional, repeats source and requested-parent checks after publication, and descriptor-relatively rolls back on failure before success linearizes.
+
+### Historical Follow-up Closure
+- `AC-2/destination-ancestor`: componentwise `O_NOFOLLOW` traversal plus retained parent FD prevents redirected writes; pre-publication swap fails closed, and post-publication swap rolls back from the retained directory. Focused tests prove no snapshot outside or in the moved parent and no stale staging.
+- `AC-2/source-publication-race`: source is checked before provisional publication and again afterward; focused mutations at both hooks produce typed failure and no completed destination.
+
+### Evidence
+- `uv run pytest serve/kanban/tests/test_snapshot.py -q --tb=short`: 11 passed.
+- `uv run pytest serve/kanban/tests/ -q --tb=short`: 1047 passed, four existing multiprocessing fork warnings.
+- Ruff check and format-check: clean. Editor diagnostics: none.
+- Final verifier challenger: `pass`; publication boundary is defensible and both historical keys are closed.
+- All 10 recalled verifier memories assessed; mutation-path, handled-abort, replay, and artifact-to-scope guidance materially informed the final proof.
+
+Verifier-owned patch is limited to `serve/kanban/src/owlbear_kanban/snapshot.py` and `serve/kanban/tests/test_snapshot.py`.
