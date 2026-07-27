@@ -1,10 +1,10 @@
 ---
 id: 2094
 title: 'P17-01: Migrate and replay historical admission incidents'
-status: collect
+status: archived
 priority: high
 created: 2026-07-27T19:45:12.424338+02:00
-updated: 2026-07-27T20:16:09.130976+02:00
+updated: 2026-07-27T20:20:10.549539+02:00
 tags:
   - phase-17
   - scope:test
@@ -33,7 +33,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -98,3 +98,21 @@ None.
 - Assertion-based migration proof: semantic preservation `8/8`, modular layout `8/8`, rebound digests exactly R1 browser defective and R2 workspace defective.
 - Verifier-challenger: `pass`; evidence directly covers all ACs and remains within minimum scope.
 - Assessed all 20 recalled verifier memories. No verifier patch or unresolved follow-up.
+
+[[2026-07-27T20:20:10+02:00]]
+## Collect Notes
+
+**Verdict:** ARCHIVED
+
+### Closure Evidence
+- Builder commit `ff220a3a9ce76226f71596584d6e342da65274fa` migrated all eight historical incident pairs to modular delivery authority and added the public-boundary fixture matrix; verifier commit `821ac18fa45d807666eb1f4835e52959fa2dcb40` is its current-HEAD descendant and independently confirmed the change.
+- **AC-1:** Exact defective finding sets and absence of receipt, generation, work root, and jobs are covered by the public validation/admission matrix.
+- **AC-2:** Corrected fixtures produce zero findings, one digest-bound receipt and initial jobs, while same-identity replay preserves stored identities and counts.
+- **AC-3:** All eight packages load joined modular authority, omit `graph.yaml`, and preserve only the named semantic pair deltas.
+- Fresh collector check: focused historical admission matrix passed 16 tests.
+- Builder challenger: `pass`. Verifier challenger: `pass`.
+- Leaf has no dependencies or requests. Parent `#1990` remains in `collect` with other active descendants; archiving this leaf satisfies its `#2094` dependency only.
+- Assessed all six recalled collector memories.
+
+### Unresolved Follow-up
+None.
