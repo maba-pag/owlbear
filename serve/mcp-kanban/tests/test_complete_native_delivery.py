@@ -1,0 +1,107 @@
+"""Assembled PROOF-013 fresh-consumer native delivery workflow."""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+from owlbear_kanban import JobStore
+from owlbear_mcp_kanban import server
+
+from .test_mcp_acceptance_tools import _active_accept, _identity, _rejection_payload, _start
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_LIVE_CARRIER = _REPO_ROOT / ".owlbear" / "kanban"
+
+
+def _run(repository: Path, *command: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603
+        command,
+        cwd=repository,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+
+
+def _git(repository: Path, *arguments: str) -> str:
+    executable = shutil.which("git")
+    assert executable is not None
+    return _run(repository, executable, *arguments).stdout.strip()
+
+
+@pytest.mark.asyncio
+async def test_fresh_consumer_completes_native_delivery_and_audit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    consumer = tmp_path / "consumer"
+    consumer.mkdir()
+    _git(consumer, "init", "--initial-branch=main")
+    _git(consumer, "config", "user.name", "PROOF-013")
+    _git(consumer, "config", "user.email", "proof-013@example.invalid")
+
+    setup = _run(consumer, sys.executable, str(_REPO_ROOT / "setup" / "init.py"))
+
+    work_root = consumer / ".owlbear" / "kanban"
+    change_root = consumer / ".owlbear" / "changes"
+    assert "OwlBear workspace initialised" in setup.stdout
+    assert work_root.is_dir()
+    assert change_root.is_dir()
+    assert consumer.is_relative_to(tmp_path)
+    assert not work_root.is_relative_to(_LIVE_CARRIER)
+    assert not change_root.is_relative_to(_REPO_ROOT / ".owlbear" / "changes")
+    assert not (consumer / ".owlbear" / "legacy").exists()
+
+    shutil.copytree(
+        _REPO_ROOT / ".owlbear" / "changes" / "replace-delivery-pipeline",
+        change_root / "replace-delivery-pipeline",
+    )
+    _git(consumer, "add", ".")
+    _git(consumer, "commit", "-m", "fixture: initialize disposable consumer")
+    monkeypatch.chdir(consumer)
+
+    runtime_root = tmp_path / "runtime"
+    revision, board, context, _runtime, checkout, accept_start, base_commit = await _active_accept(runtime_root)
+    rejected = await server.reject_accept(
+        context,
+        **_rejection_payload(revision, accept_start, base_commit),
+    )
+    assert rejected.diagnostic is None
+    assert not checkout.root.exists()
+    assert rejected.invalidation is not None
+    assert tuple(job.job.kind for job in rejected.invalidation.corrective_jobs) == ("build",)
+
+    (consumer / "README.md").write_text("# Corrected disposable consumer\n", encoding="utf-8")
+    _git(consumer, "add", "README.md")
+    _git(consumer, "commit", "-m", "fix: correct disposable implementation")
+    corrected_commit = _git(consumer, "rev-parse", "HEAD")
+    corrective_job = rejected.invalidation.corrective_jobs[0].job
+    corrective_start = _start(corrective_job.job_id, 5, corrected_commit)
+    started = await server.start_job(context, **corrective_start)
+    assert started.diagnostic is None
+    target = revision.resolve(corrective_job.target_node_id)
+    proof = revision.resolve(target.proof)
+    closure = {"paths": ["serve/kanban/"], "authority_targets": [target.id, target.proof]}
+    corrected = await server.finish_build(
+        context,
+        **_identity(corrective_start),
+        finished_at="2026-07-25T00:08:00Z",
+        receipt_id="build-corrected",
+        code_revision=corrected_commit,
+        evidence={"methods": list(proof.method)},
+        evidence_ids=("proof-corrected",),
+        impact_closure=closure,
+    )
+
+    assert corrected.receipt is None
+    assert not (revision.source_dir / "receipts" / "build-corrected.yaml").exists()
+    still_active = JobStore(board).read(corrective_job.job_id).job
+    assert still_active.attempt_id == corrective_start["attempt_id"]
+    assert still_active.claim_id == corrective_start["claim_id"]
+    assert corrected.diagnostic is None
+    assert JobStore(board).read(corrective_job.job_id, archived=True).job.receipt_id == "build-corrected"

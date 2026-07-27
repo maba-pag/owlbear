@@ -1,10 +1,10 @@
 ---
 id: 2097
 title: 'P17-04: Execute the fresh-consumer native delivery workflow'
-status: build
+status: shape
 priority: high
 created: 2026-07-27T19:45:12.576115+02:00
-updated: 2026-07-27T19:45:12.576115+02:00
+updated: 2026-07-27T22:10:18.633998+02:00
 tags:
   - phase-17
   - scope:test
@@ -53,3 +53,22 @@ DN-013, REQ-018, WF-007, PROOF-013, IF-002/003/005/009/010/013/014, RISK-003/RIS
 Complexity waiver: PROOF-013 requires one assembled design-to-audit boundary; splitting lifecycle phases would bypass it. A two-node fixture keeps the matrix bounded.
 
 Proof guidance: reuse the current assembled MCP harness over a temporary Git consumer; replace only repository location, never public setup, MCP, engine, writer, or checkout boundaries.
+
+[[2026-07-27T22:10:18+02:00]]
+## Builder Notes
+REJECT: the assembled public corrective cycle exposes a production runtime defect, and the task contract explicitly forbids patching production here.
+
+- Added `serve/mcp-kanban/tests/test_complete_native_delivery.py`, a task-scoped PROOF-013 red proof. Public `setup/init.py` initializes a Git consumer under pytest `tmp_path`; all setup, change, runtime, writer, Git, and proof-checkout roots are disposable.
+- Safety binding: the proof asserts its work root is not under `/Users/markus/Projects/owlbear-dev/.owlbear/kanban`, its change root is not under the live change source, and no legacy root exists. It never invokes DN-015 or `setup/finalize.py`, and never passes the live carrier or active legacy carrier to setup, finalization, runtime, or checkout mutation.
+- Causal flow: public `reject_accept` independently rejects the defective checkout and publishes exactly one corrective `build` job; a corrected disposable Git commit is created; public `start_job` accepts that corrective job at the corrected SHA; public `finish_build` then returns `ERR_FINISH_AUTHORITY_STALE` with lower code `ERR_RECEIPT_NODE_PLAN_DIGEST_STALE`.
+- Root cause: `serve/kanban/src/owlbear_kanban/invalidation.py::_corrective_jobs` creates corrective build jobs without `node_plan_digest`, while `serve/kanban/src/owlbear_kanban/native_runtime.py::_finish` requires every non-plan job digest to equal current node-plan authority. The red proof confirms no corrected receipt is published and the owning active claim remains for diagnosis/retry.
+- Exact proof: `uv run pytest serve/mcp-kanban/tests/test_complete_native_delivery.py -q --tb=short -n 0` reaches the expected final success assertion and fails only with the stale node-plan diagnostic after all negative controls pass.
+- Regression: `uv run pytest serve/kanban/tests -q --tb=short -n 0` passed 378 tests. `uv run pytest serve/mcp-kanban/tests -q --tb=short -n 0` reproduced this red proof; it also had seven unrelated dirty-worktree contract failures in builder/designer agent prompt assertions and reached the configured 300-second session timeout (52 passed before timeout).
+- Quality: `uv run lint serve/mcp-kanban/tests/test_complete_native_delivery.py` passed; VS Code diagnostics and `git diff --check` are clean.
+- Builder-challenger: pass. It reproduced the causal failure, confirmed the disposable/live-carrier exclusion and fail-closed no-publication controls, and approved reject-to-shape rather than a production patch.
+- Memory: all recalled entries were assessed; the returned pairwise-precedence entry ID was not found by the memory service and is recorded as an entry-level assessment failure.
+
+### Required Follow-up
+| # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|--------------|-----------------|---------|----------|
+| 1 | AC-2/corrective-build-node-plan-digest | shaper via `/shape` | Assign the owning production node a fix so engine-created corrective build jobs carry current node-plan authority and can complete through public `finish_build`; retain this assembled red proof for closure. | `serve/kanban/src/owlbear_kanban/invalidation.py`, `serve/kanban/src/owlbear_kanban/native_runtime.py`, `serve/mcp-kanban/tests/test_complete_native_delivery.py` | Exact serial test returns `ERR_FINISH_AUTHORITY_STALE` / `ERR_RECEIPT_NODE_PLAN_DIGEST_STALE`; challenger decision `pass`. |
