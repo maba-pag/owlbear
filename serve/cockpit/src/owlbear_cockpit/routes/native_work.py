@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from owlbear_cockpit.deps import NativeChangeContext, NativeContextCache, get_engine, get_native_context_cache
+from owlbear_cockpit.deps import NativeChangeContext, NativeContextCache, get_native_context_cache, get_workspace
 from owlbear_cockpit.native_models import ChangeHealthPageResponse, InvalidationResponse, JobDetailResponse
 from owlbear_cockpit.routes.native_changes import get_native_context
 from owlbear_kanban import (
@@ -16,7 +15,7 @@ from owlbear_kanban import (
     Finding,
     FindingStore,
     JobStore,
-    KanbanEngine,
+    NativeWorkspace,
     ReceiptRecord,
     ReceiptStore,
     RuntimeHistoryEntry,
@@ -32,18 +31,14 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 router = APIRouter(prefix="/changes/{change_id}", tags=["native-work"])
-_Engine = Annotated[KanbanEngine, Depends(get_engine)]
+_Workspace = Annotated[NativeWorkspace, Depends(get_workspace)]
 _NativeCache = Annotated[NativeContextCache, Depends(get_native_context_cache)]
 _Cursor = Annotated[str | None, Query()]
 _Limit = Annotated[int, Query(ge=1, le=100)]
 
 
-def _context(change_id: str, engine: KanbanEngine, cache: NativeContextCache) -> NativeChangeContext:
-    return get_native_context(change_id, engine, cache)
-
-
-def _work_root(engine: KanbanEngine) -> Path:
-    return Path(engine.kanban_dir)
+def _context(change_id: str, workspace: NativeWorkspace, cache: NativeContextCache) -> NativeChangeContext:
+    return get_native_context(change_id, workspace, cache)
 
 
 def _page[PageT](call: Callable[[], PageT]) -> PageT:
@@ -103,22 +98,22 @@ def _integers(value: object) -> tuple[int, ...]:
 @router.get("/jobs", response_model=RuntimePage[RuntimeJobProjection])
 def list_jobs(  # noqa: PLR0913, PLR0917 - FastAPI exposes each query and dependency explicitly.
     change_id: str,
-    engine: _Engine,
+    workspace: _Workspace,
     cache: _NativeCache,
     candidate_revision: str,
     cursor: _Cursor = None,
     limit: _Limit = 100,
 ) -> RuntimePage[RuntimeJobProjection]:
     """Return one bounded page of authority-composed native jobs."""
-    runtime = _context(change_id, engine, cache).runtime
+    runtime = _context(change_id, workspace, cache).runtime
     return _page(lambda: runtime.list_jobs(candidate_revision=candidate_revision, cursor=cursor, limit=limit))
 
 
 @router.get("/jobs/{job_id}", response_model=JobDetailResponse)
-def show_job(change_id: str, job_id: int, engine: _Engine, cache: _NativeCache) -> JobDetailResponse:
+def show_job(change_id: str, job_id: int, workspace: _Workspace, cache: _NativeCache) -> JobDetailResponse:
     """Return one immutable job composed with current authority."""
-    context = _context(change_id, engine, cache)
-    store = JobStore(_work_root(engine))
+    context = _context(change_id, workspace, cache)
+    store = JobStore(workspace.work_root)
     try:
         stored = store.read(job_id)
     except FileNotFoundError:
@@ -143,34 +138,34 @@ def show_job(change_id: str, job_id: int, engine: _Engine, cache: _NativeCache) 
 @router.get("/attempts", response_model=RuntimePage[AttemptEvent])
 def list_attempts(
     change_id: str,
-    engine: _Engine,
+    workspace: _Workspace,
     cache: _NativeCache,
     cursor: _Cursor = None,
     limit: _Limit = 100,
 ) -> RuntimePage[AttemptEvent]:
     """Return one bounded page of immutable attempt events."""
-    runtime = _context(change_id, engine, cache).runtime
+    runtime = _context(change_id, workspace, cache).runtime
     return _page(lambda: runtime.list_attempts(cursor=cursor, limit=limit))
 
 
 @router.get("/findings", response_model=RuntimePage[Finding])
 def list_findings(
     change_id: str,
-    engine: _Engine,
+    workspace: _Workspace,
     cache: _NativeCache,
     cursor: _Cursor = None,
     limit: _Limit = 100,
 ) -> RuntimePage[Finding]:
     """Return one bounded page of corrective findings."""
-    runtime = _context(change_id, engine, cache).runtime
+    runtime = _context(change_id, workspace, cache).runtime
     return _page(lambda: runtime.list_findings(cursor=cursor, limit=limit))
 
 
 @router.get("/findings/{finding_id}", response_model=Finding)
-def show_finding(change_id: str, finding_id: str, engine: _Engine, cache: _NativeCache) -> Finding:
+def show_finding(change_id: str, finding_id: str, workspace: _Workspace, cache: _NativeCache) -> Finding:
     """Return one immutable corrective finding."""
-    _context(change_id, engine, cache)
-    result = FindingStore(_work_root(engine)).read(finding_id)
+    _context(change_id, workspace, cache)
+    result = FindingStore(workspace.work_root).read(finding_id)
     if result.finding is not None:
         return result.finding
     diagnostic = result.diagnostics[0]
@@ -183,20 +178,20 @@ def show_finding(change_id: str, finding_id: str, engine: _Engine, cache: _Nativ
 @router.get("/receipts", response_model=RuntimePage[ReceiptRecord])
 def list_receipts(
     change_id: str,
-    engine: _Engine,
+    workspace: _Workspace,
     cache: _NativeCache,
     cursor: _Cursor = None,
     limit: _Limit = 100,
 ) -> RuntimePage[ReceiptRecord]:
     """Return one bounded page of immutable receipts."""
-    runtime = _context(change_id, engine, cache).runtime
+    runtime = _context(change_id, workspace, cache).runtime
     return _page(lambda: runtime.list_receipts(cursor=cursor, limit=limit))
 
 
 @router.get("/receipts/{receipt_id}", response_model=ReceiptRecord)
-def show_receipt(change_id: str, receipt_id: str, engine: _Engine, cache: _NativeCache) -> ReceiptRecord:
+def show_receipt(change_id: str, receipt_id: str, workspace: _Workspace, cache: _NativeCache) -> ReceiptRecord:
     """Return one immutable native receipt."""
-    context = _context(change_id, engine, cache)
+    context = _context(change_id, workspace, cache)
     result = ReceiptStore(context.revision).read(receipt_id)
     if result.receipt is not None:
         return result.receipt
@@ -210,22 +205,22 @@ def show_receipt(change_id: str, receipt_id: str, engine: _Engine, cache: _Nativ
 @router.get("/requests", response_model=RuntimePage[StoredRequest])
 def list_requests(
     change_id: str,
-    engine: _Engine,
+    workspace: _Workspace,
     cache: _NativeCache,
     cursor: _Cursor = None,
     limit: _Limit = 100,
 ) -> RuntimePage[StoredRequest]:
     """Return one bounded page of native requests."""
-    runtime = _context(change_id, engine, cache).runtime
+    runtime = _context(change_id, workspace, cache).runtime
     return _page(lambda: runtime.list_requests(cursor=cursor, limit=limit))
 
 
 @router.get("/requests/{request_id}", response_model=StoredRequest)
-def show_request(change_id: str, request_id: str, engine: _Engine, cache: _NativeCache) -> StoredRequest:
+def show_request(change_id: str, request_id: str, workspace: _Workspace, cache: _NativeCache) -> StoredRequest:
     """Return one native request with its optional resolution."""
-    context = _context(change_id, engine, cache)
+    context = _context(change_id, workspace, cache)
     try:
-        return NativeRequestRuntime(context.revision, _work_root(engine)).show_request(request_id)
+        return NativeRequestRuntime(context.revision, workspace.work_root).show_request(request_id)
     except RequestNotFoundError as exc:
         error = _not_found("ERR_NATIVE_REQUEST_NOT_FOUND", "request not found")
         raise error from exc
@@ -234,13 +229,13 @@ def show_request(change_id: str, request_id: str, engine: _Engine, cache: _Nativ
 @router.get("/activity", response_model=RuntimePage[RuntimeHistoryEntry])
 def list_activity(
     change_id: str,
-    engine: _Engine,
+    workspace: _Workspace,
     cache: _NativeCache,
     cursor: _Cursor = None,
     limit: _Limit = 100,
 ) -> RuntimePage[RuntimeHistoryEntry]:
     """Return one bounded chronological native history page."""
-    runtime = _context(change_id, engine, cache).runtime
+    runtime = _context(change_id, workspace, cache).runtime
     return _page(lambda: runtime.list_history(cursor=cursor, limit=limit))
 
 
@@ -248,11 +243,11 @@ def list_activity(
 def show_invalidation(
     change_id: str,
     receipt_id: str,
-    engine: _Engine,
+    workspace: _Workspace,
     cache: _NativeCache,
 ) -> InvalidationResponse:
     """Return one persisted supersession and its job closure."""
-    context = _context(change_id, engine, cache)
+    context = _context(change_id, workspace, cache)
     result = ReceiptStore(context.revision).read(receipt_id)
     receipt = result.receipt
     if receipt is None or receipt.kind != "supersession" or receipt.impact_closure is None:
@@ -273,27 +268,27 @@ def show_invalidation(
 @router.get("/health/work", response_model=WorkHealthResult)
 def work_health(
     change_id: str,
-    engine: _Engine,
+    workspace: _Workspace,
     cache: _NativeCache,
     cursor: _Cursor = None,
     limit: _Limit = 100,
 ) -> WorkHealthResult:
     """Return one bounded non-mutating native work health page."""
-    runtime = _context(change_id, engine, cache).runtime
+    runtime = _context(change_id, workspace, cache).runtime
     return _page(lambda: runtime.work_health(cursor=cursor, limit=limit))
 
 
 @router.get("/health/change", response_model=ChangeHealthPageResponse)
 def show_change_health(
     change_id: str,
-    engine: _Engine,
+    workspace: _Workspace,
     cache: _NativeCache,
     cursor: _Cursor = None,
     limit: _Limit = 100,
 ) -> ChangeHealthPageResponse:
     """Return canonical authority and receipt currentness health."""
-    _context(change_id, engine, cache)
-    result = change_health(_work_root(engine).parent / "changes", change_id)
+    _context(change_id, workspace, cache)
+    result = change_health(workspace.changes_dir, change_id)
     return _change_health_page(result, cursor, limit)
 
 

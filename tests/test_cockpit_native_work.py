@@ -20,7 +20,7 @@ from owlbear_kanban import (
     JobGeneration,
     JobRecord,
     JobStore,
-    KanbanEngine,
+    NativeWorkspace,
     NativeRuntime,
     PlanJob,
     ProofCheckoutManager,
@@ -33,8 +33,8 @@ from owlbear_kanban.runtime_requests import NativeRequest, NativeRequestRuntime
 from owlbear_cockpit.deps import (
     NativeChangeContext,
     NativeContextCache,
-    get_engine,
     get_native_context_cache,
+    get_workspace,
 )
 from owlbear_cockpit.main import app
 
@@ -220,9 +220,9 @@ def work_client(
         runtime=runtime,
         dispatch=DispatchRuntime(runtime, work_root, proof_checkouts),
     )
-    engine = KanbanEngine(work_root)
+    workspace = NativeWorkspace(work_root, timedelta(hours=1))
     cache = _SeededCache(context)
-    app.dependency_overrides[get_engine] = lambda: engine
+    app.dependency_overrides[get_workspace] = lambda: workspace
     app.dependency_overrides[get_native_context_cache] = lambda: cache
     try:
         yield TestClient(app), head, work_root, change_dir

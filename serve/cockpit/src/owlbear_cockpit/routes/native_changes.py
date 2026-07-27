@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from owlbear_cockpit.deps import NativeChangeContext, NativeContextCache, get_engine, get_native_context_cache
+from owlbear_cockpit.deps import NativeChangeContext, NativeContextCache, get_native_context_cache, get_workspace
 from owlbear_cockpit.native_models import (
     ChangeDetailResponse,
     ChangeGraphResponse,
@@ -15,17 +14,14 @@ from owlbear_cockpit.native_models import (
     ChangeListResponse,
     NativeDiagnosticResponse,
 )
-from owlbear_kanban import ChangeDiagnostic, ChangeDiagnosticCode, ChangeRevision, KanbanEngine
-from owlbear_kanban._duration import _parse_duration
+from owlbear_kanban import ChangeDiagnostic, ChangeDiagnosticCode, ChangeRevision, NativeWorkspace
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 router = APIRouter(prefix="/changes", tags=["native-changes"])
-_Engine = Annotated[KanbanEngine, Depends(get_engine)]
+_Workspace = Annotated[NativeWorkspace, Depends(get_workspace)]
 _NativeCache = Annotated[NativeContextCache, Depends(get_native_context_cache)]
-
-
-def _roots(engine: KanbanEngine) -> tuple[Path, Path, Path]:
-    work_root = Path(engine.kanban_dir)
-    return work_root.parent / "changes", work_root, work_root.parent.parent
 
 
 def _diagnostics(items: tuple[ChangeDiagnostic, ...]) -> tuple[NativeDiagnosticResponse, ...]:
@@ -53,17 +49,14 @@ def _load_revision(cache: NativeContextCache, changes_dir: Path, change_id: str)
     )
 
 
-def get_native_context(change_id: str, engine: KanbanEngine, cache: NativeContextCache) -> NativeChangeContext:
+def get_native_context(change_id: str, workspace: NativeWorkspace, cache: NativeContextCache) -> NativeChangeContext:
     """Load and assemble one native context or raise its stable HTTP error."""
-    changes_dir, work_root, workspace_root = _roots(engine)
+    changes_dir = workspace.changes_dir
     revision = _load_revision(cache, changes_dir, change_id)
     try:
         return cache.get(
-            changes_dir=changes_dir,
-            work_root=work_root,
-            workspace_root=workspace_root,
+            workspace=workspace,
             revision=revision,
-            claim_expiry=_parse_duration(engine.board_config().pipeline.claim_timeout),
         )
     except (OSError, RuntimeError, ValueError) as exc:
         raise HTTPException(
@@ -73,9 +66,9 @@ def get_native_context(change_id: str, engine: KanbanEngine, cache: NativeContex
 
 
 @router.get("", response_model=ChangeListResponse)
-def list_changes(engine: _Engine, cache: _NativeCache) -> ChangeListResponse:
+def list_changes(workspace: _Workspace, cache: _NativeCache) -> ChangeListResponse:
     """List loaded and malformed sibling native changes in identity order."""
-    changes_dir, _, _ = _roots(engine)
+    changes_dir = workspace.changes_dir
     if not changes_dir.is_dir():
         return ChangeListResponse(changes=())
     entries: list[ChangeListEntryResponse] = []
@@ -105,11 +98,11 @@ def list_changes(engine: _Engine, cache: _NativeCache) -> ChangeListResponse:
 @router.get("/{change_id}", response_model=ChangeDetailResponse)
 def show_change(
     change_id: str,
-    engine: _Engine,
+    workspace: _Workspace,
     cache: _NativeCache,
 ) -> ChangeDetailResponse:
     """Return joined authority for one native change revision."""
-    revision = get_native_context(change_id, engine, cache).revision
+    revision = get_native_context(change_id, workspace, cache).revision
     return ChangeDetailResponse(
         change_id=revision.change_id,
         delivery_digest=revision.delivery_digest,
@@ -123,11 +116,11 @@ def show_change(
 @router.get("/{change_id}/graph", response_model=ChangeGraphResponse)
 def show_change_graph(
     change_id: str,
-    engine: _Engine,
+    workspace: _Workspace,
     cache: _NativeCache,
 ) -> ChangeGraphResponse:
     """Return delivery graph authority and current isolated node plans."""
-    revision = get_native_context(change_id, engine, cache).revision
+    revision = get_native_context(change_id, workspace, cache).revision
     plans = {node.id: plan for node in revision.graph.nodes if (plan := revision.read_node_plan(node.id)) is not None}
     return ChangeGraphResponse(
         change_id=revision.change_id,

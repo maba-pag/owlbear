@@ -33,13 +33,6 @@ from owlbear_cockpit.routes.memory import router as memory_router
 from owlbear_cockpit.routes.native_changes import router as native_changes_router
 from owlbear_cockpit.routes.native_controls import router as native_controls_router
 from owlbear_cockpit.routes.native_work import router as native_work_router
-from owlbear_kanban.errors import (
-    ConcurrencyError,
-    ConfigError,
-    KanbanError,
-    NotFoundError,
-    ValidationError,
-)
 
 _DEFAULT_PORT = 8420
 _MAX_PORT = 65535
@@ -77,27 +70,6 @@ _HealthIdeasPath = Annotated[Path, Depends(_get_health_ideas_path)]
 
 def _error_envelope(code: str, message: str) -> dict[str, str]:
     return {"code": code, "message": message}
-
-
-def _kanban_status(exc: KanbanError) -> int:
-    if isinstance(exc, NotFoundError):
-        return 404
-    if isinstance(exc, ConcurrencyError):
-        return 409
-    if isinstance(exc, ValidationError):
-        return 422
-    if isinstance(exc, ConfigError):
-        return 500
-    return 500
-
-
-@app.exception_handler(KanbanError)
-def handle_kanban_error(_request: Request, exc: KanbanError) -> JSONResponse:
-    """Return stable cockpit error envelope for domain errors."""
-    return JSONResponse(
-        status_code=_kanban_status(exc),
-        content=_error_envelope(exc.code, exc.user_message),
-    )
 
 
 @app.exception_handler(MemoryNotFoundError)
@@ -206,7 +178,7 @@ def run() -> None:
     """Start the Cockpit server — entry point for `uv run cockpit`."""
     from owlbear_memory.engine import MemoryEngine  # noqa: PLC0415
 
-    from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+    from owlbear_kanban import NativeWorkspace  # noqa: PLC0415
 
     # --- port resolution and validation ---
     port_str = os.environ.get("COCKPIT_PORT", str(_DEFAULT_PORT))
@@ -219,11 +191,11 @@ def run() -> None:
         sys.stderr.write(f"Error: COCKPIT_PORT={port} is out of range (1-{_MAX_PORT}).\n")
         sys.exit(1)
 
-    # --- kanban directory ---
-    kanban_dir_str = os.environ.get("KANBAN_DIR")
-    kanban_dir = Path(kanban_dir_str) if kanban_dir_str else Path.cwd() / ".owlbear" / "kanban"
-    if not kanban_dir.is_dir():
-        sys.stderr.write(f"Error: kanban directory not found: {kanban_dir}\n")
+    # --- native work root ---
+    work_root_str = os.environ.get("OWLBEAR_WORK_ROOT")
+    work_root = Path(work_root_str) if work_root_str else Path.cwd() / ".owlbear" / "kanban"
+    if not work_root.is_dir():
+        sys.stderr.write(f"Error: native work root not found: {work_root}\n")
         sys.exit(1)
 
     # --- dist/ directory ---
@@ -232,12 +204,12 @@ def run() -> None:
         sys.stderr.write(f"Error: dist/ directory not found at {dist_dir}. Run `npm run build` first.\n")
         sys.exit(1)
 
-    # --- engine init (before uvicorn starts) ---
-    engine = KanbanEngine(kanban_dir)
+    # --- runtime init (before uvicorn starts) ---
+    workspace = NativeWorkspace(work_root)
     memory_dir_str = os.environ.get("MEMORY_DIR")
     memory_dir = Path(memory_dir_str) if memory_dir_str else Path.cwd() / ".owlbear" / "memory"
     memory_engine = MemoryEngine(memory_dir)
-    app.state.engine = engine
+    app.state.workspace = workspace
     app.state.memory_engine = memory_engine
 
     # --- static file mount and SPA catch-all (inside run() for test isolation) ---

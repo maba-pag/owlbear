@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import shutil
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 from ruamel.yaml import YAML
 
-from owlbear_kanban import load_change
+from owlbear_kanban import NativeWorkspace, load_change
 from owlbear_mcp_kanban import server
 from owlbear_mcp_kanban.server import AppContext
 
@@ -83,7 +84,7 @@ def _context(tmp_path: Path) -> MagicMock:
     (board / "tasks").mkdir()
     (board / "archive").mkdir()
     context = MagicMock()
-    context.request_context.lifespan_context = AppContext(engine=server.KanbanEngine(board), kanban_dir=board)
+    context.request_context.lifespan_context = AppContext(workspace=NativeWorkspace(board, timedelta(hours=1)))
     return context
 
 
@@ -196,7 +197,7 @@ async def test_unresolved_decision_validates_as_draft_without_approval_or_admiss
     change_dir, revision = _copy_change(tmp_path, pending_decision=True)
     context = _context(tmp_path)
     _prompt, agent, workflow = _shipped_contracts()
-    before = _publication_snapshot(change_dir, context.request_context.lifespan_context.kanban_dir)
+    before = _publication_snapshot(change_dir, context.request_context.lifespan_context.workspace.work_root)
 
     shown = await server.show_change(context, change_id=_CHANGE_ID)
     assessment = await server.validate_change(
@@ -215,7 +216,7 @@ async def test_unresolved_decision_validates_as_draft_without_approval_or_admiss
         in _normalized(workflow)
     )
     assert "Do not invoke `admit_change`" in _normalized(workflow)
-    assert _publication_snapshot(change_dir, context.request_context.lifespan_context.kanban_dir) == before
+    assert _publication_snapshot(change_dir, context.request_context.lifespan_context.workspace.work_root) == before
 
 
 @pytest.mark.asyncio
@@ -225,7 +226,7 @@ async def test_failed_challenge_keeps_resolved_revision_unpublished(tmp_path: Pa
     _prompt, _agent, workflow = _shipped_contracts()
     failing_target = revision.graph.requirements[0].id
     evidence = _evidence(revision, approval=True, failing_target=failing_target)
-    board = context.request_context.lifespan_context.kanban_dir
+    board = context.request_context.lifespan_context.workspace.work_root
     before = _publication_snapshot(change_dir, board)
 
     shown = await server.show_change(context, change_id=_CHANGE_ID)
@@ -247,7 +248,7 @@ async def test_complete_native_design_admits_once_and_replays_exactly(tmp_path: 
     design_prompt, agent, workflow = _shipped_contracts()
     ideate_prompt = (_REPO_ROOT / "share" / "prompts" / "ideate.prompt.md").read_text(encoding="utf-8")
     evidence = _evidence(revision, approval=True)
-    board = context.request_context.lifespan_context.kanban_dir
+    board = context.request_context.lifespan_context.workspace.work_root
 
     changes = await server.list_changes(context)
     shown = await server.show_change(context, change_id=_CHANGE_ID)

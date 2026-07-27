@@ -265,15 +265,14 @@ class TestIdeasPathDep:
         assert callable(get_ideas_path)
 
     def test_get_ideas_path_returns_path_instance(self, tmp_path: Path) -> None:
-        """AC3: default get_ideas_path implementation returns a Path when called with an engine."""
-        from unittest.mock import MagicMock  # noqa: PLC0415
-
+        """AC3: default get_ideas_path implementation returns a Path for a native workspace."""
         from owlbear_cockpit.deps import get_ideas_path  # noqa: PLC0415
+        from owlbear_kanban import NativeWorkspace  # noqa: PLC0415
 
-        mock_engine = MagicMock()
-        mock_engine.kanban_dir = str(tmp_path / "kanban")
+        work_root = tmp_path / "kanban"
+        work_root.mkdir()
 
-        result = get_ideas_path(engine=mock_engine)
+        result = get_ideas_path(workspace=NativeWorkspace(work_root))
         assert isinstance(result, Path)
 
     def test_dependency_overridable_for_test_isolation(self, tmp_path: Path) -> None:

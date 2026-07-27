@@ -27,19 +27,20 @@ from owlbear_kanban import (
     JobGeneration,
     JobRecord,
     JobStore,
-    KanbanEngine,
     NativeRuntime,
+    NativeWorkspace,
     PlanJob,
     ProofCheckoutManager,
     ReceiptStore,
     StartJobRequest,
+    create_legacy_snapshot,
     load_change,
     plan_corrective_route,
 )
 from owlbear_kanban.runtime_requests import NativeRequest, NativeRequestRuntime
 from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionConflictError
 
-from owlbear_cockpit.deps import get_engine, get_native_context_cache
+from owlbear_cockpit.deps import get_native_context_cache, get_workspace
 from owlbear_cockpit.main import app
 
 if TYPE_CHECKING:
@@ -53,7 +54,7 @@ class _Harness:
     repository: Path
     work_root: Path
     change_dir: Path
-    engine: KanbanEngine
+    workspace: NativeWorkspace
     revision: object
     head: str
     checkouts: ProofCheckoutManager
@@ -238,16 +239,12 @@ def assembled_harness(tmp_path: Path, project_root: Path) -> Iterator[_Harness]:
     assert started.diagnostic is None
     assert checkout is not None
 
-    engine = KanbanEngine(work_root)
-    legacy_task = engine.create_task("Legacy integration task", status="build", priority="high")
-    engine.create_request(
-        legacy_task.id,
-        "action",
-        "Legacy evidence",
-        "Return one legacy value.",
-        "builder",
-    )
-    harness = _Harness(repository, work_root, change_dir, engine, revision, head, checkouts)
+    workspace = NativeWorkspace(work_root, timedelta(minutes=5))
+    legacy_source = repository / "legacy-source"
+    (legacy_source / "tasks").mkdir(parents=True)
+    (legacy_source / "tasks" / "1.md").write_text("opaque legacy task\n", encoding="utf-8")
+    create_legacy_snapshot(legacy_source, workspace.legacy_snapshot_root, (), {})
+    harness = _Harness(repository, work_root, change_dir, workspace, revision, head, checkouts)
     try:
         yield harness
     finally:
@@ -276,7 +273,7 @@ def test_assembled_native_resource_journey_is_bounded_strict_and_non_mutating(
     assembled_harness: _Harness,
 ) -> None:
     harness = assembled_harness
-    app.dependency_overrides[get_engine] = lambda: harness.engine
+    app.dependency_overrides[get_workspace] = lambda: harness.workspace
     assert get_native_context_cache not in app.dependency_overrides
     before = _state(harness.work_root, harness.change_dir)
     from fastapi.testclient import TestClient  # noqa: PLC0415
@@ -358,7 +355,7 @@ def test_core_context_failure_has_stable_envelope_without_partial_mutation(
         encoding="utf-8",
     )
     before = _state(harness.work_root, harness.change_dir)
-    app.dependency_overrides[get_engine] = lambda: harness.engine
+    app.dependency_overrides[get_workspace] = lambda: harness.workspace
     assert get_native_context_cache not in app.dependency_overrides
     from fastapi.testclient import TestClient  # noqa: PLC0415
 
@@ -374,8 +371,8 @@ def test_core_context_failure_has_stable_envelope_without_partial_mutation(
 
 
 @contextmanager
-def _live_server(engine: KanbanEngine) -> Iterator[str]:
-    app.dependency_overrides[get_engine] = lambda: engine
+def _live_server(workspace: NativeWorkspace) -> Iterator[str]:
+    app.dependency_overrides[get_workspace] = lambda: workspace
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     sock.listen()
@@ -500,7 +497,7 @@ def test_http_controls_emit_native_sse_and_preserve_replay_conflicts(  # noqa: P
     assembled_harness: _Harness,
 ) -> None:
     harness = assembled_harness
-    with _live_server(harness.engine) as base_url, httpx.Client(base_url=base_url, timeout=10) as client:
+    with _live_server(harness.workspace) as base_url, httpx.Client(base_url=base_url, timeout=10) as client:
         assert get_native_context_cache not in app.dependency_overrides
         resolution_path = f"/api/changes/{_CHANGE_ID}/requests/request-integration/resolve"
         release_path = f"/api/changes/{_CHANGE_ID}/jobs/2/release"
@@ -613,7 +610,7 @@ def test_priority_transaction_failure_returns_current_authority_without_partial_
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     harness = assembled_harness
-    app.dependency_overrides[get_engine] = lambda: harness.engine
+    app.dependency_overrides[get_workspace] = lambda: harness.workspace
     before = _state(harness.work_root, harness.change_dir)
 
     def fail_commit(_transaction: RuntimeTransaction, *, failure=None) -> None:  # noqa: ANN001, ARG001

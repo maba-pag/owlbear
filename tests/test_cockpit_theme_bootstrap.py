@@ -37,7 +37,7 @@ def _reset_app_after_run() -> object:
     yield
     _m.app.routes[:] = saved_routes
     with contextlib.suppress(AttributeError, KeyError):
-        del _m.app.state.engine
+        del _m.app.state.workspace
 
 
 class TestThemeBootstrapServing:

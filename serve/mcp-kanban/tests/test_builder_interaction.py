@@ -22,6 +22,7 @@ from owlbear_kanban import (
     DispatchRuntime,
     JobStore,
     NativeRuntime,
+    NativeWorkspace,
     ReceiptDiagnosticCode,
     ReceiptStore,
     StartJobDiagnosticCode,
@@ -165,7 +166,7 @@ def scenario(tmp_path: Path) -> _Scenario:
     (board / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
     (board / "tasks").mkdir()
     (board / "archive").mkdir()
-    app_context = AppContext(engine=server.KanbanEngine(board), kanban_dir=board)
+    app_context = AppContext(workspace=NativeWorkspace(board, timedelta(hours=1)))
     native = NativeRuntime(revision, board, _History(), timedelta(minutes=5))
     app_context.dispatch_runtimes[revision.change_id] = DispatchRuntime(native, board)
     context = MagicMock()

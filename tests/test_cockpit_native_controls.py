@@ -19,7 +19,7 @@ from owlbear_kanban import (
     JobGeneration,
     JobRecord,
     JobStore,
-    KanbanEngine,
+    NativeWorkspace,
     NativeRuntime,
     PlanJob,
     ProofCheckoutManager,
@@ -32,8 +32,8 @@ from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionCo
 from owlbear_cockpit.deps import (
     NativeChangeContext,
     NativeContextCache,
-    get_engine,
     get_native_context_cache,
+    get_workspace,
 )
 from owlbear_cockpit.main import app
 
@@ -176,9 +176,9 @@ def control_harness(tmp_path: Path, project_root: Path) -> _ControlHarness:
     assert runtime.start_job(active).diagnostic is None
 
     context = NativeChangeContext(revision=revision, runtime=runtime, dispatch=dispatch)
-    engine = KanbanEngine(work_root)
+    workspace = NativeWorkspace(work_root, timedelta(hours=1))
     cache = _SeededCache(context)
-    app.dependency_overrides[get_engine] = lambda: engine
+    app.dependency_overrides[get_workspace] = lambda: workspace
     app.dependency_overrides[get_native_context_cache] = lambda: cache
     harness = _ControlHarness(
         client=TestClient(app),

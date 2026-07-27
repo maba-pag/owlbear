@@ -30,6 +30,7 @@ from owlbear_kanban import (
     JobRecord,
     JobStore,
     NativeRuntime,
+    NativeWorkspace,
     PlanJob,
     ProofCheckoutManager,
     ReleaseJobRequest,
@@ -50,7 +51,7 @@ from serve.kanban.tests.test_native_runtime import (
     _terminal_accept_scenario,
 )
 
-from .test_mcp_surface_contract import _make_board
+from .test_mcp_surface_contract import _make_work_root
 
 
 def _git_head() -> str:
@@ -238,7 +239,7 @@ async def _active_accept(tmp_path: Path):  # noqa: PLR0915 - public lifecycle as
     loaded = load_change(changes_dir, "replace-delivery-pipeline")
     assert loaded.revision is not None
     revision = loaded.revision
-    board = _make_board(tmp_path)
+    board = _make_work_root(tmp_path)
     _materialize_plan(revision, board)
     repository = Path.cwd()
     commit = _git_head()
@@ -254,7 +255,7 @@ async def _active_accept(tmp_path: Path):  # noqa: PLR0915 - public lifecycle as
         board,
         checkouts,
     )
-    app_ctx = AppContext(engine=server.KanbanEngine(board), kanban_dir=board)
+    app_ctx = AppContext(workspace=NativeWorkspace(board, timedelta(hours=1)))
     app_ctx.dispatch_runtimes[revision.change_id] = runtime
     ctx = MagicMock()
     ctx.request_context.lifespan_context = app_ctx
@@ -1205,7 +1206,7 @@ async def test_public_audit_rejection_forwards_and_exposes_persisted_correction_
     )
     assert released.diagnostic is None
     runtime = DispatchRuntime(native, board)
-    app_ctx = AppContext(engine=server.KanbanEngine(board), kanban_dir=board)
+    app_ctx = AppContext(workspace=NativeWorkspace(board, timedelta(hours=1)))
     app_ctx.dispatch_runtimes[revision.change_id] = runtime
     ctx = MagicMock()
     ctx.request_context.lifespan_context = app_ctx
@@ -1380,7 +1381,7 @@ async def test_public_audit_success_closes_accepted_whole_change_and_replays(tmp
     )
     checkouts = ProofCheckoutManager(repository, tmp_path / "proof-mcp")
     runtime = DispatchRuntime(native, board, checkouts)
-    app_ctx = AppContext(engine=server.KanbanEngine(board), kanban_dir=board)
+    app_ctx = AppContext(workspace=NativeWorkspace(board, timedelta(hours=1)))
     app_ctx.dispatch_runtimes[revision.change_id] = runtime
     ctx = MagicMock()
     ctx.request_context.lifespan_context = app_ctx
@@ -1603,7 +1604,7 @@ async def _pending_public_audit(tmp_path: Path, proof_dir: str):
     )
     checkouts = ProofCheckoutManager(repository, tmp_path / proof_dir)
     runtime = DispatchRuntime(native, board, checkouts)
-    app_ctx = AppContext(engine=server.KanbanEngine(board), kanban_dir=board)
+    app_ctx = AppContext(workspace=NativeWorkspace(board, timedelta(hours=1)))
     app_ctx.dispatch_runtimes[revision.change_id] = runtime
     ctx = MagicMock()
     ctx.request_context.lifespan_context = app_ctx

@@ -27,17 +27,11 @@ class _History:
 def _native_ctx(tmp_path: Path) -> object:
     """Build a minimal AppContext for native tool tests."""
     from owlbear_mcp_kanban.server import AppContext
-    from owlbear_kanban import KanbanEngine
+    from owlbear_kanban import NativeWorkspace
 
     kanban_dir = tmp_path / "kanban"
     kanban_dir.mkdir(exist_ok=True)
-    tasks_dir = kanban_dir / "tasks"
-    tasks_dir.mkdir(exist_ok=True)
-    config_yaml = kanban_dir / "config.yaml"
-    if not config_yaml.exists():
-        config_yaml.write_text("version: 10\nboard:\n  name: TestBoard\ntasks_dir: tasks\n")
-    engine = KanbanEngine(kanban_dir)
-    app_ctx = AppContext(engine=engine, kanban_dir=kanban_dir)
+    app_ctx = AppContext(workspace=NativeWorkspace(kanban_dir, timedelta(hours=1)))
 
     class _Ctx:
         class _RequestContext:

@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from owlbear_cockpit.deps import NativeContextCache, get_engine, get_native_context_cache
+from owlbear_cockpit.deps import NativeContextCache, get_native_context_cache, get_workspace
 from owlbear_cockpit.native_http import conflict
 from owlbear_cockpit.native_models import (
     CancelJobBody,
@@ -24,7 +23,7 @@ from owlbear_kanban import (
     JobAdminDiagnostic,
     JobAdminDiagnosticCode,
     JobStore,
-    KanbanEngine,
+    NativeWorkspace,
     ReleaseJobRequest,
     ReleaseJobResult,
     SetJobPriorityRequest,
@@ -40,16 +39,12 @@ from owlbear_kanban.runtime_requests import (
 from owlbear_kanban.runtime_transaction import TransactionConflictError
 
 router = APIRouter(prefix="/changes/{change_id}", tags=["native-controls"])
-_Engine = Annotated[KanbanEngine, Depends(get_engine)]
+_Workspace = Annotated[NativeWorkspace, Depends(get_workspace)]
 _NativeCache = Annotated[NativeContextCache, Depends(get_native_context_cache)]
 
 
-def _work_root(engine: KanbanEngine) -> Path:
-    return Path(engine.kanban_dir)
-
-
-def _attach_current_job(error, engine: KanbanEngine, job_id: int) -> None:  # noqa: ANN001 - FastAPI HTTPException
-    current = _current_job(engine, job_id)
+def _attach_current_job(error, workspace: NativeWorkspace, job_id: int) -> None:  # noqa: ANN001 - FastAPI HTTPException
+    current = _current_job(workspace, job_id)
     if current is not None:
         error.detail["current"] = current.model_dump(mode="json")
 
@@ -59,11 +54,11 @@ def resolve_request(
     change_id: str,
     request_id: str,
     body: ResolveRequestBody,
-    engine: _Engine,
+    workspace: _Workspace,
     cache: _NativeCache,
 ) -> ResolveRequestResult:
     """Resolve one pending native request through its immutable identity."""
-    context = get_native_context(change_id, engine, cache)
+    context = get_native_context(change_id, workspace, cache)
     if body.delivery_digest != context.revision.delivery_digest:
         error = conflict(
             code="ERR_CHANGE_REVISION_CONFLICT",
@@ -116,11 +111,11 @@ def release_job(
     change_id: str,
     job_id: int,
     body: ReleaseJobBody,
-    engine: _Engine,
+    workspace: _Workspace,
     cache: _NativeCache,
 ) -> ReleaseJobResult:
     """Release one claim only when its complete immutable identity matches."""
-    context = get_native_context(change_id, engine, cache)
+    context = get_native_context(change_id, workspace, cache)
     if body.delivery_digest != context.revision.delivery_digest:
         error = conflict(
             code="ERR_CHANGE_REVISION_CONFLICT",
@@ -128,7 +123,7 @@ def release_job(
             current_delivery_digest=context.revision.delivery_digest,
             target=str(job_id),
         )
-        _attach_current_job(error, engine, job_id)
+        _attach_current_job(error, workspace, job_id)
         raise error
     request = ReleaseJobRequest(job_id=job_id, **body.model_dump(exclude={"delivery_digest"}))
     try:
@@ -141,7 +136,7 @@ def release_job(
             lower_code=exc.code,
             target=str(job_id),
         )
-        _attach_current_job(error, engine, job_id)
+        _attach_current_job(error, workspace, job_id)
         raise error from exc
     except OSError as exc:
         error = conflict(
@@ -151,7 +146,7 @@ def release_job(
             lower_code="ERR_STORAGE_IO",
             target=str(job_id),
         )
-        _attach_current_job(error, engine, job_id)
+        _attach_current_job(error, workspace, job_id)
         raise error from exc
     if isinstance(result, DispatchDiagnostic):
         error = conflict(
@@ -161,7 +156,7 @@ def release_job(
             diagnostic=result,
             target=str(job_id),
         )
-        _attach_current_job(error, engine, job_id)
+        _attach_current_job(error, workspace, job_id)
         raise error
     if result.diagnostic is not None:
         error = conflict(
@@ -171,7 +166,7 @@ def release_job(
             diagnostic=result.diagnostic,
             target=str(job_id),
         )
-        _attach_current_job(error, engine, job_id)
+        _attach_current_job(error, workspace, job_id)
         raise error
     return result
 
@@ -188,8 +183,8 @@ def _admin_conflict(diagnostic: JobAdminDiagnostic, delivery_digest: str) -> Non
     raise error
 
 
-def _current_job(engine: KanbanEngine, job_id: int):  # noqa: ANN202 - inferred StoredJob | None
-    store = JobStore(_work_root(engine))
+def _current_job(workspace: NativeWorkspace, job_id: int):  # noqa: ANN202 - inferred StoredJob | None
+    store = JobStore(workspace.work_root)
     try:
         return store.read(job_id)
     except FileNotFoundError:
@@ -202,7 +197,7 @@ def _current_job(engine: KanbanEngine, job_id: int):  # noqa: ANN202 - inferred 
 def _require_current_digest(
     body_digest: str,
     current_digest: str,
-    engine: KanbanEngine,
+    workspace: NativeWorkspace,
     job_id: int,
 ) -> None:
     if body_digest == current_digest:
@@ -211,7 +206,7 @@ def _require_current_digest(
         code=JobAdminDiagnosticCode.AUTHORITY_STALE,
         detail="administrative request delivery digest is not current",
         target=str(job_id),
-        current=_current_job(engine, job_id),
+        current=_current_job(workspace, job_id),
     )
     _admin_conflict(diagnostic, current_digest)
 
@@ -237,13 +232,13 @@ def set_job_priority(
     change_id: str,
     job_id: int,
     body: SetJobPriorityBody,
-    engine: _Engine,
+    workspace: _Workspace,
     cache: _NativeCache,
 ) -> SetJobPriorityResult:
     """Update one pending unclaimed job through complete OCC identity."""
-    context = get_native_context(change_id, engine, cache)
+    context = get_native_context(change_id, workspace, cache)
     _require_job_identity(job_id, body.job_id, context.revision.delivery_digest)
-    _require_current_digest(body.delivery_digest, context.revision.delivery_digest, engine, job_id)
+    _require_current_digest(body.delivery_digest, context.revision.delivery_digest, workspace, job_id)
     request = SetJobPriorityRequest(change_id=change_id, **body.model_dump())
     result = context.runtime.set_job_priority(request)
     if result.diagnostic is not None:
@@ -260,13 +255,13 @@ def cancel_job(
     change_id: str,
     job_id: int,
     body: CancelJobBody,
-    engine: _Engine,
+    workspace: _Workspace,
     cache: _NativeCache,
 ) -> CancelJobResult:
     """Cancel one pending unclaimed job through complete OCC identity."""
-    context = get_native_context(change_id, engine, cache)
+    context = get_native_context(change_id, workspace, cache)
     _require_job_identity(job_id, body.job_id, context.revision.delivery_digest)
-    _require_current_digest(body.delivery_digest, context.revision.delivery_digest, engine, job_id)
+    _require_current_digest(body.delivery_digest, context.revision.delivery_digest, workspace, job_id)
     request = CancelJobRequest(change_id=change_id, **body.model_dump())
     result = context.runtime.cancel_job(request)
     if result.diagnostic is not None:

@@ -2,27 +2,24 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import patch
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from owlbear_kanban import KanbanEngine
+from owlbear_kanban import NativeWorkspace, create_legacy_snapshot
 
-from owlbear_cockpit.deps import get_engine
+from owlbear_cockpit.deps import get_workspace
 from owlbear_cockpit.main import app
 from owlbear_cockpit.routes.events import _batch_resources, _build_watch_filter
 
 
 @pytest.fixture
-def legacy_engine(tmp_path: Path) -> KanbanEngine:
+def workspace(tmp_path: Path) -> NativeWorkspace:
     work_root = tmp_path / ".owlbear" / "kanban"
     work_root.mkdir(parents=True)
-    (work_root / "tasks").mkdir()
-    (work_root / "archive").mkdir()
-    return KanbanEngine(work_root)
+    return NativeWorkspace(work_root)
 
 
 def _store_state(root: Path) -> tuple[tuple[str, bytes], ...]:
@@ -57,9 +54,9 @@ def test_native_batch_classification_is_sorted_and_suppresses_legacy_noise(tmp_p
 
 @pytest.mark.asyncio
 async def test_events_stream_one_native_event_per_batch_with_monotonic_tokens(
-    legacy_engine: KanbanEngine,
+    workspace: NativeWorkspace,
 ) -> None:
-    work_root = Path(legacy_engine.kanban_dir)
+    work_root = workspace.work_root
     changes_root = work_root.parent / "changes"
     changes_root.mkdir()
     batches = (
@@ -77,7 +74,7 @@ async def test_events_stream_one_native_event_per_batch_with_monotonic_tokens(
         for batch in batches:
             yield batch
 
-    app.dependency_overrides[get_engine] = lambda: legacy_engine
+    app.dependency_overrides[get_workspace] = lambda: workspace
     try:
         with (
             patch("owlbear_cockpit.routes.events.awatch", _batches),
@@ -102,8 +99,8 @@ async def test_events_stream_one_native_event_per_batch_with_monotonic_tokens(
 
 
 @pytest.mark.asyncio
-async def test_events_missing_native_root_terminates_without_watcher(legacy_engine: KanbanEngine) -> None:
-    app.dependency_overrides[get_engine] = lambda: legacy_engine
+async def test_events_missing_native_root_terminates_without_watcher(workspace: NativeWorkspace) -> None:
+    app.dependency_overrides[get_workspace] = lambda: workspace
     called = False
 
     async def _unexpected(*_args: object, **_kwargs: object):
@@ -127,18 +124,17 @@ async def test_events_missing_native_root_terminates_without_watcher(legacy_engi
     assert called is False
 
 
-def test_legacy_inventory_is_bounded_read_only_and_preserves_provenance(legacy_engine: KanbanEngine) -> None:
-    task = legacy_engine.create_task("Legacy task", status="build", priority="high")
-    request = legacy_engine.create_request(
-        task.id,
-        "action",
-        "Supply legacy evidence",
-        "Return one signed value.",
-        "builder",
-    )
-    root = Path(legacy_engine.kanban_dir)
-    before = _store_state(root)
-    app.dependency_overrides[get_engine] = lambda: legacy_engine
+def test_legacy_inventory_is_bounded_read_only_and_preserves_provenance(
+    workspace: NativeWorkspace, tmp_path: Path
+) -> None:
+    source = tmp_path / "legacy-source"
+    for relative in ("tasks/1.md", "decisions/pending/request-1.yaml", "activity.jsonl"):
+        path = source / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"opaque legacy bytes for {relative}\n", encoding="utf-8")
+    create_legacy_snapshot(source, workspace.legacy_snapshot_root, (), {})
+    before = _store_state(source)
+    app.dependency_overrides[get_workspace] = lambda: workspace
     try:
         with TestClient(app) as client:
             response = client.get("/api/legacy", params={"limit": 1})
@@ -150,20 +146,20 @@ def test_legacy_inventory_is_bounded_read_only_and_preserves_provenance(legacy_e
     payload = response.json()
     assert len(payload["tasks"]) == 1
     assert payload["tasks"][0]["provenance"] == "tasks"
-    assert payload["tasks"][0]["task"]["id"] == task.id
+    assert payload["tasks"][0]["task"]["relative_path"] == "tasks/1.md"
     assert len(payload["requests"]) == 1
     assert payload["requests"][0]["provenance"] == "decisions/pending"
-    assert payload["requests"][0]["request"]["request_id"] == request.request_id
+    assert payload["requests"][0]["request"]["relative_path"] == "decisions/pending/request-1.yaml"
     assert len(payload["activity"]) == 1
     assert payload["activity"][0]["provenance"] == "activity.jsonl"
     assert set(payload) == {"tasks", "requests", "activity", "truncated"}
-    assert all("url" not in json.dumps(entry).lower() for key in ("tasks", "requests") for entry in payload[key])
+    assert payload["activity"][0]["event"]["relative_path"] == "activity.jsonl"
     assert write.status_code == 405
-    assert _store_state(root) == before
+    assert _store_state(source) == before
 
 
-def test_empty_legacy_inventory_and_limit_validation(legacy_engine: KanbanEngine) -> None:
-    app.dependency_overrides[get_engine] = lambda: legacy_engine
+def test_empty_legacy_inventory_and_limit_validation(workspace: NativeWorkspace) -> None:
+    app.dependency_overrides[get_workspace] = lambda: workspace
     try:
         with TestClient(app) as client:
             response = client.get("/api/legacy")
@@ -182,7 +178,7 @@ def test_empty_legacy_inventory_and_limit_validation(legacy_engine: KanbanEngine
 
 
 def test_assembled_app_removes_generic_surface_and_keeps_native_peer_services(
-    legacy_engine: KanbanEngine,
+    workspace: NativeWorkspace,
 ) -> None:
     schema = app.openapi()
     paths = schema["paths"]
@@ -215,7 +211,7 @@ def test_assembled_app_removes_generic_surface_and_keeps_native_peer_services(
     assert required <= paths.keys()
     assert set(paths["/api/legacy"]) == {"get"}
 
-    app.dependency_overrides[get_engine] = lambda: legacy_engine
+    app.dependency_overrides[get_workspace] = lambda: workspace
     try:
         with TestClient(app) as client:
             assert client.get("/api/tasks").status_code == 404

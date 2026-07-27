@@ -8,9 +8,9 @@ from unittest import mock
 
 import pytest
 from fastapi.testclient import TestClient
-from owlbear_kanban import KanbanEngine
+from owlbear_kanban import NativeWorkspace
 
-from owlbear_cockpit.deps import NativeContextCache, get_engine, get_native_context_cache
+from owlbear_cockpit.deps import NativeContextCache, get_native_context_cache, get_workspace
 from owlbear_cockpit.main import app
 
 _CHANGE_ID = "replace-delivery-pipeline"
@@ -21,9 +21,6 @@ def native_client(tmp_path: Path, project_root: Path) -> tuple[TestClient, Path,
     ops_root = tmp_path / ".owlbear"
     work_root = ops_root / "kanban"
     work_root.mkdir(parents=True)
-    (work_root / "config.yml").write_text("next_id: 1\n", encoding="utf-8")
-    (work_root / "tasks").mkdir()
-    (work_root / "archive").mkdir()
     source = project_root / ".owlbear" / "changes" / _CHANGE_ID
     change_dir = ops_root / "changes" / _CHANGE_ID
     shutil.copytree(source, change_dir)
@@ -31,9 +28,9 @@ def native_client(tmp_path: Path, project_root: Path) -> tuple[TestClient, Path,
     malformed.mkdir()
     (malformed / "intent.md").write_text("broken\n", encoding="utf-8")
 
-    engine = KanbanEngine(work_root)
+    workspace = NativeWorkspace(work_root)
     cache = NativeContextCache()
-    app.dependency_overrides[get_engine] = lambda: engine
+    app.dependency_overrides[get_workspace] = lambda: workspace
     app.dependency_overrides[get_native_context_cache] = lambda: cache
     try:
         yield TestClient(app), change_dir, cache

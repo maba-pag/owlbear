@@ -11,12 +11,12 @@ from fastapi import APIRouter, Depends, Request
 from sse_starlette import EventSourceResponse
 from watchfiles import awatch
 
-from owlbear_cockpit.deps import get_engine
-from owlbear_kanban import KanbanEngine
+from owlbear_cockpit.deps import get_workspace
+from owlbear_kanban import NativeWorkspace
 
 router = APIRouter()
 
-_Engine = Annotated[KanbanEngine, Depends(get_engine)]
+_Workspace = Annotated[NativeWorkspace, Depends(get_workspace)]
 _AUTHORITY_RESOURCES = {
     "delivery": "changes",
     "plans": "graphs",
@@ -97,13 +97,13 @@ def _next_token(previous: int) -> int:
 
 
 @router.get("/events")
-async def events(request: Request, engine: _Engine) -> EventSourceResponse:
+async def events(request: Request, workspace: _Workspace) -> EventSourceResponse:
     """Stream one native invalidation event for each canonical watch batch."""
 
     async def _stream() -> object:
-        work_root = _resolve(engine.kanban_dir)
-        ops_root = work_root.parent
-        changes_root = _resolve(ops_root / "changes")
+        work_root = workspace.work_root
+        ops_root = workspace.ops_root
+        changes_root = workspace.changes_dir
         if not ops_root.is_dir() or not work_root.is_dir() or not changes_root.is_dir():
             return
 

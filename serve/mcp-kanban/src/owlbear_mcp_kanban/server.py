@@ -1,4 +1,4 @@
-"""OwlBear MCP kanban server — exposes KanbanEngine operations as MCP tools."""
+"""OwlBear MCP server for the native delivery control plane."""
 
 from __future__ import annotations
 
@@ -29,8 +29,8 @@ from owlbear_kanban import (
     FinishPlanRequest,
     GitRepositoryHistory,
     InvalidationRequest,
-    KanbanEngine,
     NativeRuntime,
+    NativeWorkspace,
     ProofCheckoutManager,
     RecoverExpiredClaimsRequest,
     RejectAcceptRequest,
@@ -39,13 +39,13 @@ from owlbear_kanban import (
     StartJobRequest,
     evaluate_admission,
     load_change,
+    parse_claim_expiry,
     parse_impact_closure,
     project_job,
 )
 from owlbear_kanban import (
     change_health as get_change_health,
 )
-from owlbear_kanban._duration import _parse_duration
 from owlbear_kanban.admission_transaction import (
     AdmissionConflictError,
     AdmissionPublicationError,
@@ -84,8 +84,6 @@ from owlbear_mcp_kanban.models import (
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from owlbear_kanban.errors import KanbanError
-
 
 def _coerce_to_str(v: str | int) -> str:
     """Accept int values for str parameters (Pydantic v2 refuses int→str).
@@ -103,7 +101,6 @@ __all__ = [
     "AppContext",
     "StrId",
     "_apply_tool_exclusions",
-    "_map_kanban_error",
     "admit_change",
     "app_lifespan",
     "change_health",
@@ -134,7 +131,8 @@ __all__ = [
     "work_health",
 ]
 
-_DEFAULT_KANBAN_DIR = Path(".owlbear/kanban")
+_DEFAULT_WORK_ROOT = Path(".owlbear/kanban")
+_DEFAULT_CLAIM_EXPIRY = "1h"
 _UUID4_VERSION = 4
 _NORM_GUIDANCE = (
     "Literal \\n sequences were normalized to actual newlines. "
@@ -142,10 +140,10 @@ _NORM_GUIDANCE = (
 )
 
 
-def _resolve_kanban_dir() -> Path:
-    """Resolve KANBAN_DIR from the environment, defaulting to cwd/.owlbear/kanban."""
-    raw_value = os.environ.get("KANBAN_DIR", "").strip()
-    selected = Path(raw_value) if raw_value else _DEFAULT_KANBAN_DIR
+def _resolve_work_root() -> Path:
+    """Resolve the native work root from process configuration."""
+    raw_value = os.environ.get("OWLBEAR_WORK_ROOT", "").strip()
+    selected = Path(raw_value) if raw_value else _DEFAULT_WORK_ROOT
     return selected.resolve()
 
 
@@ -178,34 +176,9 @@ def _append_norm_guidance(guidance: list[str] | None, *, changed: bool) -> list[
     return merged
 
 
-def _startup_error(kanban_dir: Path, detail: str) -> RuntimeError:
-    """Build a startup error with board path and KANBAN_DIR remediation guidance."""
-    return RuntimeError(f"{detail}: {kanban_dir}. Set KANBAN_DIR to a valid kanban board directory.")
-
-
-def parse_task_id(value: str | int, *, field: str = "task_id") -> int:
-    """Parse MCP task identifiers as positive base-10 integers."""
-    msg = f"{field} must be a positive integer"
-    payload = json.dumps({"code": "ERR_INVALID_ID", "message": msg})
-    if isinstance(value, bool):
-        raise ToolError(payload)
-    if isinstance(value, int):
-        parsed = value
-    elif isinstance(value, str):
-        if not value or value != value.strip() or not value.isdecimal():
-            raise ToolError(payload)
-        parsed = int(value)
-    else:
-        raise ToolError(payload)
-    if parsed <= 0:
-        raise ToolError(payload)
-    return parsed
-
-
-def _map_kanban_error(exc: KanbanError) -> None:
-    """Raise MCP ToolError with machine-readable code and human-readable message."""
-    payload = json.dumps({"code": exc.code, "message": exc.user_message})
-    raise ToolError(payload) from exc
+def _startup_error(work_root: Path, detail: str) -> RuntimeError:
+    """Build a startup error with native work-root remediation guidance."""
+    return RuntimeError(f"{detail}: {work_root}. Set OWLBEAR_WORK_ROOT to a valid native work directory.")
 
 
 def _raise_tool_error(code: str, message: str) -> None:
@@ -230,51 +203,11 @@ def _require_uuid4(value: str, *, field: str) -> str:
     return value
 
 
-def _raise_not_found(message: str = "Task not found") -> None:
-    """Raise not-found errors without leaking filesystem paths."""
-    _raise_tool_error("ERR_NOT_FOUND", message)
-
-
-def _safe_not_found_message(raw_message: str, fallback: str) -> str:
-    """Preserve user-facing not-found text while hiding path-like internals."""
-    text = raw_message.strip()
-    if not text:
-        return fallback
-    if "/" in text or "\\" in text:
-        return fallback
-    return text
-
-
-def _validate_archival_constraints(
-    app_ctx: AppContext,
-    *,
-    task_id: int,
-    current_status: str | None,
-    target_status: str | None,
-    archival: tuple[str | None, list[int] | None],
-) -> None:
-    """Validate archival constraints in one shared adapter-level path."""
-    archival_reason, archival_refs = archival
-    if target_status == "archived":
-        config = app_ctx.engine.board_config()
-        app_ctx.engine.validate_archival(
-            task_id=task_id,
-            can_mark_completed=(current_status == config.pipeline.terminal_status),
-            config=config,
-            archival_reason=archival_reason,
-            archival_refs=list(archival_refs or []),
-        )
-    elif archival_reason is not None or archival_refs is not None:
-        # Non-archived cases are validated by AgentView to preserve existing behavior.
-        return
-
-
 @dataclass
 class AppContext:
     """Runtime context passed through MCP lifespan to all tools."""
 
-    engine: KanbanEngine
-    kanban_dir: Path
+    workspace: NativeWorkspace
     dispatch_runtimes: dict[str, DispatchRuntime] = field(default_factory=dict)
 
     def __contains__(self, item: object) -> bool:
@@ -305,23 +238,16 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
 
 @asynccontextmanager
 async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext]:
-    """Instantiate KanbanEngine and yield AppContext for the MCP session."""
-    kanban_dir = _resolve_kanban_dir()
+    """Instantiate the native workspace and yield the MCP session context."""
+    work_root = _resolve_work_root()
     _apply_tool_exclusions(_server)
 
-    if not kanban_dir.is_dir():
-        raise _startup_error(kanban_dir, "Kanban directory does not exist")
-
     try:
-        engine = KanbanEngine(kanban_dir)
+        claim_expiry = parse_claim_expiry(os.environ.get("OWLBEAR_CLAIM_EXPIRY", _DEFAULT_CLAIM_EXPIRY))
+        workspace = NativeWorkspace(work_root, claim_expiry)
     except Exception as exc:
-        raise _startup_error(kanban_dir, "Failed to initialize kanban board") from exc
-
-    if not engine.tasks_dir.is_dir():
-        raise _startup_error(kanban_dir, "Kanban tasks directory does not exist")
-
-    engine.sweep()
-    yield AppContext(engine=engine, kanban_dir=kanban_dir)
+        raise _startup_error(work_root, "Failed to initialize native workspace") from exc
+    yield AppContext(workspace=workspace)
 
 
 def _dispatch_runtime(app_ctx: AppContext, change_id: str) -> DispatchRuntime:
@@ -329,22 +255,21 @@ def _dispatch_runtime(app_ctx: AppContext, change_id: str) -> DispatchRuntime:
     cached = app_ctx.dispatch_runtimes.get(change_id)
     if cached is not None:
         return cached
-    workspace_root = app_ctx.kanban_dir.parent.parent
-    changes_dir = app_ctx.kanban_dir.parent / "changes"
+    workspace = app_ctx.workspace
+    changes_dir = workspace.changes_dir
     loaded = load_change(changes_dir, change_id)
     if loaded.revision is None:
         _raise_tool_error("ERR_CHANGE_NOT_ADMITTED", "change is not admitted")
-    claim_expiry = _parse_duration(app_ctx.engine.board_config().claim_timeout)
-    proof_checkouts = ProofCheckoutManager(workspace_root, app_ctx.kanban_dir.parent / "scratch" / "proof")
+    proof_checkouts = ProofCheckoutManager(workspace.workspace_root, workspace.proof_root)
     runtime = DispatchRuntime(
         NativeRuntime(
             loaded.revision,
-            app_ctx.kanban_dir,
-            GitRepositoryHistory(workspace_root),
-            claim_expiry,
+            workspace.work_root,
+            GitRepositoryHistory(workspace.workspace_root),
+            workspace.claim_expiry,
             proof_checkouts,
         ),
-        app_ctx.kanban_dir,
+        workspace.work_root,
         proof_checkouts,
     )
     app_ctx.dispatch_runtimes[change_id] = runtime
@@ -353,7 +278,7 @@ def _dispatch_runtime(app_ctx: AppContext, change_id: str) -> DispatchRuntime:
 
 def _load_request_revision(app_ctx: AppContext, change_id: str, delivery_digest: str) -> ChangeRevision:
     """Load and validate the admitted revision named by a request tool call."""
-    changes_dir = app_ctx.kanban_dir.parent / "changes"
+    changes_dir = app_ctx.workspace.changes_dir
     try:
         loaded = load_change(changes_dir, change_id)
     except FileNotFoundError:
@@ -431,7 +356,7 @@ async def create_request(  # noqa: PLR0913, PLR0917
 
     # Create via native runtime
     try:
-        runtime = NativeRequestRuntime(revision, app_ctx.kanban_dir)
+        runtime = NativeRequestRuntime(revision, app_ctx.workspace.work_root)
         stored = await asyncio.to_thread(runtime.create_request, request)
     except RequestConflictError:
         _raise_tool_error("ERR_NATIVE_REQUEST_CONFLICT", "request identity already names different immutable content")
@@ -466,7 +391,7 @@ async def list_requests(
 
     # List via native runtime
     try:
-        runtime = NativeRequestRuntime(revision, app_ctx.kanban_dir)
+        runtime = NativeRequestRuntime(revision, app_ctx.workspace.work_root)
         if status == "all":
             records = await asyncio.to_thread(runtime.list_requests, None)
         else:
@@ -490,7 +415,7 @@ async def show_request(
 
     # Show via native runtime
     try:
-        runtime = NativeRequestRuntime(revision, app_ctx.kanban_dir)
+        runtime = NativeRequestRuntime(revision, app_ctx.workspace.work_root)
         record = await asyncio.to_thread(runtime.show_request, request_id)  # type: ignore[arg-type]
     except RequestNotFoundError:
         _raise_tool_error("ERR_NATIVE_REQUEST_NOT_FOUND", f"request '{request_id}' not found")
@@ -1027,7 +952,7 @@ async def work_health(
 async def list_changes(ctx: Context) -> list[dict[str, object]]:
     """List all change packages with load state and identity-ordered summaries."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    changes_dir = app_ctx.kanban_dir.parent / "changes"
+    changes_dir = app_ctx.workspace.changes_dir
 
     if not changes_dir.is_dir():
         return []
@@ -1080,7 +1005,7 @@ async def show_change(ctx: Context, *, change_id: str) -> dict[str, object]:
         _raise_param_validation("change_id must be non-empty")
 
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    changes_dir = app_ctx.kanban_dir.parent / "changes"
+    changes_dir = app_ctx.workspace.changes_dir
 
     load_result = load_change(changes_dir, change_id)
 
@@ -1114,7 +1039,7 @@ async def validate_change(ctx: Context, *, change_id: str, evidence: dict[str, o
         _raise_param_validation("change_id must be non-empty")
 
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    changes_dir = app_ctx.kanban_dir.parent / "changes"
+    changes_dir = app_ctx.workspace.changes_dir
 
     load_result = load_change(changes_dir, change_id)
 
@@ -1137,7 +1062,7 @@ async def change_health(ctx: Context, *, change_id: str) -> dict[str, object]:
         _raise_param_validation("change_id must be non-empty")
 
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    changes_dir = app_ctx.kanban_dir.parent / "changes"
+    changes_dir = app_ctx.workspace.changes_dir
 
     result = get_change_health(changes_dir, change_id)
     return result.model_dump(mode="python")
@@ -1155,7 +1080,7 @@ async def admit_change(
         _raise_param_validation("change_id must be non-empty")
 
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    changes_dir = app_ctx.kanban_dir.parent / "changes"
+    changes_dir = app_ctx.workspace.changes_dir
 
     load_result = load_change(changes_dir, change_id)
 
@@ -1168,7 +1093,7 @@ async def admit_change(
         _raise_param_validation(f"invalid evidence: {exc}")
 
     try:
-        transaction = AdmissionTransaction(load_result.revision, app_ctx.kanban_dir)
+        transaction = AdmissionTransaction(load_result.revision, app_ctx.workspace.work_root)
         receipt, generation, assessment = transaction.validate_and_admit(admission_evidence)
     except AdmissionConflictError:
         _raise_tool_error("ERR_ADMISSION_CONFLICT", "admission conflict: incompatible identity already exists")

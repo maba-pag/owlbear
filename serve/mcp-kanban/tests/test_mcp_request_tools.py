@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import inspect
 import shutil
+from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 from unittest.mock import MagicMock
 
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
-from owlbear_kanban import JobGeneration, JobStore, KanbanEngine, PlanJob, load_change
+from owlbear_kanban import JobGeneration, JobStore, NativeWorkspace, PlanJob, load_change
 from owlbear_kanban.change import ChangeRevision
 from owlbear_kanban.runtime_requests import NativeRequestRuntime, RequestResolution
 from owlbear_mcp_kanban.server import AppContext, create_request, list_requests, mcp, show_request
@@ -45,31 +46,7 @@ def app_ctx(work_root: Path) -> AppContext:
     """Provide the board root used by the MCP request runtime."""
     kanban_dir = work_root / "board"
     kanban_dir.mkdir()
-    (kanban_dir / "tasks").mkdir()
-    (kanban_dir / "archive").mkdir()
-    (kanban_dir / "config.yml").write_text(
-        """\
-version: 10
-board:
-  name: TestBoard
-tasks_dir: tasks
-statuses: [{name: build}]
-priorities: [medium]
-defaults: {status: build, priority: medium}
-claim_timeout: 1h
-next_id: 1
-archive_dir: archive
-activity_log: false
-agent_map: {build: builder}
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: []
-archival_reasons: [completed]
-status_predicates: {}
-""",
-        encoding="utf-8",
-    )
-    return AppContext(engine=KanbanEngine(kanban_dir), kanban_dir=kanban_dir)
+    return AppContext(workspace=NativeWorkspace(kanban_dir, timedelta(hours=1)))
 
 
 @pytest.fixture
@@ -193,7 +170,7 @@ async def test_create_request_replays_exact_native_identity_without_mutation(
     revision: ChangeRevision,
 ) -> None:
     """Persist one linked request and replay the same immutable payload exactly."""
-    stored_job = _materialize_job(app_ctx.kanban_dir, revision)
+    stored_job = _materialize_job(app_ctx.workspace.work_root, revision)
     target_node_id = revision.graph.nodes[0].id
 
     created = await _create_action(
@@ -203,7 +180,7 @@ async def test_create_request_replays_exact_native_identity_without_mutation(
         target_node_id=target_node_id,
         job_ids=[stored_job.job.job_id],
     )
-    snapshot = _storage_snapshot(app_ctx.kanban_dir)
+    snapshot = _storage_snapshot(app_ctx.workspace.work_root)
     replayed = await _create_action(
         mcp_ctx,
         revision,
@@ -213,9 +190,9 @@ async def test_create_request_replays_exact_native_identity_without_mutation(
     )
 
     assert replayed == created
-    assert _storage_snapshot(app_ctx.kanban_dir) == snapshot
+    assert _storage_snapshot(app_ctx.workspace.work_root) == snapshot
     assert set(snapshot) == {"jobs/1.yaml", "requests/pending/request-replay.yaml"}
-    assert JobStore(app_ctx.kanban_dir).read(1).job.pending_request_ids == ("request-replay",)
+    assert JobStore(app_ctx.workspace.work_root).read(1).job.pending_request_ids == ("request-replay",)
 
 
 @pytest.mark.asyncio
@@ -284,10 +261,10 @@ async def test_create_request_reference_errors_leave_storage_unchanged(
     )
 
     for arguments, error_code in cases:
-        before = _storage_snapshot(app_ctx.kanban_dir)
+        before = _storage_snapshot(app_ctx.workspace.work_root)
         with pytest.raises(ToolError, match=error_code):
             await _create_action(mcp_ctx, revision, **arguments)  # type: ignore[arg-type]
-        assert _storage_snapshot(app_ctx.kanban_dir) == before
+        assert _storage_snapshot(app_ctx.workspace.work_root) == before
 
 
 @pytest.mark.asyncio
@@ -299,11 +276,11 @@ async def test_create_request_rejects_jobs_outside_revision_or_target(
     """Reject revision- and target-mismatched jobs without changing storage."""
     first_node = revision.graph.nodes[0].id
     second_node = revision.graph.nodes[1].id
-    _materialize_job(app_ctx.kanban_dir, revision, job_id=2, change_id="other-change")
-    _materialize_job(app_ctx.kanban_dir, revision, job_id=3, target_node_id=second_node)
+    _materialize_job(app_ctx.workspace.work_root, revision, job_id=2, change_id="other-change")
+    _materialize_job(app_ctx.workspace.work_root, revision, job_id=3, target_node_id=second_node)
 
     for request_id, job_id in (("request-revision-job", 2), ("request-target-job", 3)):
-        before = _storage_snapshot(app_ctx.kanban_dir)
+        before = _storage_snapshot(app_ctx.workspace.work_root)
         with pytest.raises(ToolError, match="ERR_NATIVE_REQUEST_REFERENCE"):
             await _create_action(
                 mcp_ctx,
@@ -312,7 +289,7 @@ async def test_create_request_rejects_jobs_outside_revision_or_target(
                 target_node_id=first_node,
                 job_ids=[job_id],
             )
-        assert _storage_snapshot(app_ctx.kanban_dir) == before
+        assert _storage_snapshot(app_ctx.workspace.work_root) == before
 
 
 @pytest.mark.asyncio
@@ -323,7 +300,7 @@ async def test_create_request_changed_replay_conflicts_without_mutation(
 ) -> None:
     """Treat changed immutable content under one request identity as a conflict."""
     await _create_action(mcp_ctx, revision, request_id="request-conflict")
-    before = _storage_snapshot(app_ctx.kanban_dir)
+    before = _storage_snapshot(app_ctx.workspace.work_root)
 
     with pytest.raises(ToolError, match="ERR_NATIVE_REQUEST_CONFLICT"):
         await _create_action(
@@ -333,7 +310,7 @@ async def test_create_request_changed_replay_conflicts_without_mutation(
             summary="Changed immutable summary.",
         )
 
-    assert _storage_snapshot(app_ctx.kanban_dir) == before
+    assert _storage_snapshot(app_ctx.workspace.work_root) == before
 
 
 @pytest.mark.asyncio
@@ -345,7 +322,7 @@ async def test_list_requests_filters_status_in_request_identity_order(
     """Filter pending and resolved summaries in ascending request identity order."""
     for request_id in ("request-zulu", "request-alpha", "request-mike"):
         await _create_action(mcp_ctx, revision, request_id=request_id)
-    NativeRequestRuntime(revision, app_ctx.kanban_dir).resolve_request(
+    NativeRequestRuntime(revision, app_ctx.workspace.work_root).resolve_request(
         RequestResolution(
             request_id="request-alpha",
             disposition="local",
@@ -407,7 +384,7 @@ async def test_show_request_returns_full_record_and_missing_is_read_only(
     assert shown["request"]["body"] == "release-id=42"
     assert shown["resolution"] is None
 
-    before = _storage_snapshot(app_ctx.kanban_dir)
+    before = _storage_snapshot(app_ctx.workspace.work_root)
     with pytest.raises(ToolError, match="ERR_NATIVE_REQUEST_NOT_FOUND"):
         await show_request(
             mcp_ctx,
@@ -415,4 +392,4 @@ async def test_show_request_returns_full_record_and_missing_is_read_only(
             delivery_digest=revision.delivery_digest,
             request_id="request-missing",
         )
-    assert _storage_snapshot(app_ctx.kanban_dir) == before
+    assert _storage_snapshot(app_ctx.workspace.work_root) == before

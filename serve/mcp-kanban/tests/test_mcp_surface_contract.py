@@ -45,6 +45,7 @@ from owlbear_kanban import (
     JobRecord,
     JobStore,
     NativeRuntime,
+    NativeWorkspace,
     PlanJob,
     load_change,
 )
@@ -116,56 +117,12 @@ READ_ONLY_TOOLS: frozenset[str] = frozenset(
 # Shared helpers
 # ---------------------------------------------------------------------------
 
-_CONFIG_YAML = """\
-version: 10
-board:
-  name: TestBoard
-tasks_dir: tasks
-statuses:
-- name: research
-- name: backlog
-- name: todo
-- name: in-progress
-- name: review
-- name: docs
-- name: done
-priorities:
-- someday
-- nice-to-have
-- important
-- needed
-- critical
-defaults:
-  status: research
-  priority: important
-claim_timeout: 1h
-next_id: 1
-archive_dir: archive
-activity_log: false
-agent_map:
-  research: researcher
-  backlog: architect
-  todo: test-writer
-  in-progress: builder
-  review: reviewer
-  docs: doc-writer
-  done: auditor
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: []
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
-"""
 
-
-def _make_board(base_dir: Path) -> Path:
-    """Create a minimal valid kanban board under *base_dir* and return its path."""
-    kanban_dir = base_dir / "board"
-    kanban_dir.mkdir(parents=True, exist_ok=True)
-    (kanban_dir / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
-    (kanban_dir / "tasks").mkdir(exist_ok=True)
-    (kanban_dir / "archive").mkdir(exist_ok=True)
-    return kanban_dir
+def _make_work_root(base_dir: Path) -> Path:
+    """Create an empty native work root without legacy board files."""
+    work_root = base_dir / "kanban"
+    work_root.mkdir(parents=True, exist_ok=True)
+    return work_root
 
 
 def _server_mock() -> MagicMock:
@@ -237,8 +194,8 @@ class TestFromAC_ToolRegistryContract:
         must be intact. Introspects mcp._tool_manager._tools — the established pattern
         in test_tool_annotations_494.py and related MCP contract tests.
         """
-        board = _make_board(tmp_path)
-        monkeypatch.setenv("KANBAN_DIR", str(board))
+        work_root = _make_work_root(tmp_path)
+        monkeypatch.setenv("OWLBEAR_WORK_ROOT", str(work_root))
         monkeypatch.delenv("KANBAN_TOOLS_EXCLUDE", raising=False)
 
         # _server_mock() is used to avoid permanently mutating the mcp singleton;
@@ -294,7 +251,7 @@ def _proof011_context(
     shutil.rmtree(authority_dir / "receipts")
     shutil.rmtree(authority_dir / "jobs")
     (authority_dir / "plans" / "DN-001.yaml").unlink()
-    board = _make_board(tmp_path)
+    board = _make_work_root(tmp_path)
     loaded = load_change(changes_dir, "replace-delivery-pipeline")
     assert loaded.revision is not None
     revision = loaded.revision
@@ -310,7 +267,7 @@ def _proof011_context(
         "approval": {"approved": True, "digest": revision.delivery_digest},
         "limits": list(revision.graph.admission.limits),
     }
-    app_ctx = AppContext(engine=server.KanbanEngine(board), kanban_dir=board)
+    app_ctx = AppContext(workspace=NativeWorkspace(board, timedelta(minutes=1)))
     app_ctx.dispatch_runtimes[revision.change_id] = DispatchRuntime(
         NativeRuntime(revision, board, _History(), timedelta(minutes=1)), board
     )
@@ -579,8 +536,9 @@ class _History:
 
 
 def _native_ctx(tmp_path: Path) -> MagicMock:
+    work_root = _make_work_root(tmp_path)
     ctx = MagicMock()
-    ctx.request_context.lifespan_context = AppContext(engine=MagicMock(), kanban_dir=tmp_path / "kanban")
+    ctx.request_context.lifespan_context = AppContext(workspace=NativeWorkspace(work_root, timedelta(minutes=1)))
     return ctx
 
 
@@ -683,7 +641,7 @@ def _assert_disposition_causality(
         assert entry.selected_pick == entry.terminal_pick
 
 
-class TestProof014NativeMcpScenario:
+class _Proof014NativeMcpScenario:
     """The bootstrap native loop dispatches profiles through the installed MCP bridge."""
 
     @pytest.mark.asyncio
