@@ -1,10 +1,10 @@
 ---
 id: 1989
 title: 'Bootstrap DN-012: Atomically cut over setup, stores, ecosystem, and documentation'
-status: collect
+status: archived
 priority: high
 created: 2026-07-22T01:08:48.177677+02:00
-updated: 2026-07-27T08:40:56.861004+02:00
+updated: 2026-07-27T12:37:07.872867+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -47,7 +47,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -110,3 +110,15 @@ Dependency closure: #2087, #2088, and #2089 are foundations; #2090 depends on #2
 
 ### Board Audit
 Created build leaves #2087 through #2093 under #1989. Full `show_task` audit confirmed titles, bodies, AC, priorities, tags, parent links, dependency fields, proof bundles, build statuses, and unclaimed state. This aggregate now moves to `collect` and remains dependency-blocked until the seven leaves complete.
+
+[[2026-07-27T12:37:07+02:00]]
+## Collect Notes
+
+ARCHIVED. DN-012 is complete at admitted digest `6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9`.
+
+- AC-1: Board audit confirms exactly seven outcome-cohesive leaves #2087 through #2093, all tagged to the same change/digest/node with the challenged dependency DAG and completed archival.
+- AC-2: Descendant scopes remain within the shaped MOD-001/002/003/004/006/007/008/009, IF-013/IF-016, migration, distribution, and PROOF-009 boundaries. No material authority expansion occurred.
+- AC-3: All seven descendants are archived `completed` with independent verifier evidence and successful challenge/collection. Historical leaves #2088/#2090 use `Verifier Notes` and #2091 uses a timestamped verifier paragraph; full authoritative bodies contain their exact-SHA PASS evidence. PROOF-009 is bound to builder commit `7c6ac26def71ba737d9c4db0b03232ec6e583224`, proven ancestral to collector HEAD `cec51a24818a6299ed58510aa177a6e4afa27761`, and supplies the DN-015 handoff.
+- Canonical change read-back returned the exact admitted digest with no diagnostics.
+- DEC-036 remains intact: real self-hosting board and sibling-carrier retirement are excluded here and owned only by non-projected DN-015/PROOF-016.
+- Six recalled collector memories assessed; no unresolved request, follow-up, or dependency remains.
