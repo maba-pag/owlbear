@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Callable
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -9,14 +10,16 @@ import yaml
 
 from owlbear_kanban import (
     AdmissionEvidence,
+    ChangeDiagnosticCode,
+    DispatchRuntime,
     JobRecord,
     JobStore,
-    compute_delivery_digest,
+    NativeRuntime,
     evaluate_admission,
     load_change,
     validate_and_admit,
 )
-from owlbear_kanban.change import AdmissionMetadata, ChangeRevision, DeliveryGraph
+from owlbear_kanban.change import ChangeRevision
 
 _SEED = 2095
 _TIMESTAMP = "2026-07-27T12:00:00Z"
@@ -37,9 +40,9 @@ def _dependencies(family: str, index: int) -> list[str]:
         return []
     if family == "branching":
         return [_node_id((index - 2) // 2 + 1)]
-    if family == "joining" and index == 4:
+    if family in {"joining", "scrambled"} and index == 4:
         return [_node_id(2), _node_id(3)]
-    if family == "joining" and index in {2, 3}:
+    if family in {"joining", "scrambled"} and index in {2, 3}:
         return [_node_id(1)]
     return [_node_id(index - 1)]
 
@@ -83,6 +86,8 @@ def _authority(change_id: str, family: str, count: int, seed: int) -> dict[str, 
         }
         for index in range(1, count + 1)
     ]
+    if family == "scrambled":
+        nodes.reverse()
     common = {"schema_version": 1, "change_id": change_id}
     return {
         "decisions.yaml": {**common, "decisions": []},
@@ -219,11 +224,22 @@ def _evidence(revision: ChangeRevision) -> AdmissionEvidence:
     )
 
 
+class _History:
+    def revisions_exist(self, _tested_revision: str, _candidate_revision: str) -> bool:
+        return True
+
+    def is_descendant(self, _tested_revision: str, _candidate_revision: str) -> bool:
+        return True
+
+    def name_status(self, _tested_revision: str, _candidate_revision: str) -> bytes:
+        return b""
+
+
 @pytest.mark.parametrize(
     ("family", "count"),
-    [("single", 1), ("branching", 15), ("joining", 7), ("hundreds", 240)],
+    [("single", 1), ("branching", 15), ("joining", 7), ("scrambled", 7), ("hundreds", 240)],
 )
-def test_generated_graph_families_publish_in_stable_topology_order_and_replay(
+def test_generated_graph_families_publish_authored_order_dispatch_topology_and_replay(
     tmp_path: Path,
     family: str,
     count: int,
@@ -241,16 +257,23 @@ def test_generated_graph_families_publish_in_stable_topology_order_and_replay(
     )
     replayed = validate_and_admit(revision, evidence, work_root, timestamp=_TIMESTAMP)
 
-    expected_targets = tuple(_node_id(index) for index in range(1, count + 1))
+    authored_targets = tuple(node.id for node in revision.graph.nodes)
+    topology_targets = tuple(_node_id(index) for index in range(1, count + 1))
     assert assessment.findings == ()
     assert receipt is not None
     assert generation is not None
-    assert tuple(job.target_node_id for job in generation.jobs) == expected_targets
-    assert all(
-        dependency in expected_targets[:index]
-        for index, node in enumerate(revision.graph.nodes)
-        for dependency in node.dependencies
+    assert tuple(job.target_node_id for job in generation.jobs) == authored_targets
+    runtime = DispatchRuntime(
+        NativeRuntime(revision, work_root, _History(), timedelta(minutes=5)),
+        work_root,
     )
+    plan = runtime.pick_waves(revision.delivery_digest, size=count)
+    dispatched_targets = tuple(
+        JobStore(work_root).read(entry.job_id).job.target_node_id for wave in plan.waves for entry in wave
+    )
+    assert dispatched_targets == topology_targets
+    if family == "scrambled":
+        assert authored_targets == tuple(reversed(topology_targets))
     assert replayed == (receipt, generation, assessment)
     assert tuple(stored.job for stored in JobStore(work_root).list()) == tuple(
         JobRecord(schema_version=1, **job.model_dump()) for job in generation.jobs
@@ -259,84 +282,78 @@ def test_generated_graph_families_publish_in_stable_topology_order_and_replay(
     assert len(tuple((revision.source_dir / "jobs").glob("*.yaml"))) == 1
 
 
-def _rebind(revision: ChangeRevision, graph: DeliveryGraph) -> ChangeRevision:
-    digest = compute_delivery_digest(revision.intent, revision.design, revision.decisions, graph)
-    admitted = graph.model_copy(
-        update={
-            "admission": AdmissionMetadata(
-                state="admitted",
-                delivery_digest=digest,
-                receipt=f"receipts/admission-{digest[:12]}.yaml",
-                limits=("Generated authority is test-only.",),
-            )
-        }
+def _mutate_document(revision: ChangeRevision, relative_path: str, mutation: Callable[[dict], None]) -> None:
+    path = revision.source_dir / relative_path
+    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    mutation(document)
+    path.write_text(yaml.safe_dump(document, sort_keys=False, width=120), encoding="utf-8")
+
+
+def _dependency_cycle(document: dict) -> None:
+    document["nodes"][0]["dependencies"] = [document["nodes"][-1]["id"]]
+
+
+def _disconnected_obligation(document: dict) -> None:
+    document["nodes"][1]["owns"] = []
+
+
+def _duplicate_owner(document: dict) -> None:
+    document["nodes"][1]["owns"].append("REQ-001")
+
+
+def _interface_omission(document: dict) -> None:
+    document["nodes"][-1]["consumes"] = []
+
+
+def _migration_gap(document: dict) -> None:
+    document["migrations"][0]["ordered_steps"] = []
+
+
+def _risk_disposition(document: dict) -> None:
+    document["risks"][0]["disposition"] = ""
+
+
+def _proof_authorization(document: dict) -> None:
+    document["proofs"][0]["allowed_replacements"] = []
+
+
+def test_generated_dangling_reference_is_rejected_by_canonical_loader(tmp_path: Path) -> None:
+    revision = _generated_revision(tmp_path, "dangling", 5)
+    _mutate_document(
+        revision,
+        "delivery/nodes.yaml",
+        lambda document: document["nodes"][0].update(dependencies=["DN-999"]),
     )
-    return revision.model_copy(update={"graph": admitted, "delivery_digest": digest})
 
+    result = load_change(revision.source_dir.parent, revision.change_id)
 
-def _replace_node(revision: ChangeRevision, node_index: int, **updates: object) -> ChangeRevision:
-    nodes = tuple(
-        node.model_copy(update=updates) if index == node_index else node
-        for index, node in enumerate(revision.graph.nodes)
-    )
-    return _rebind(revision, revision.graph.model_copy(update={"nodes": nodes}))
-
-
-def _dangling_reference(revision: ChangeRevision) -> ChangeRevision:
-    return _replace_node(revision, 0, dependencies=("DN-999",))
-
-
-def _dependency_cycle(revision: ChangeRevision) -> ChangeRevision:
-    return _replace_node(revision, 0, dependencies=(revision.graph.nodes[-1].id,))
-
-
-def _disconnected_obligation(revision: ChangeRevision) -> ChangeRevision:
-    return _replace_node(revision, 1, owns=())
-
-
-def _duplicate_owner(revision: ChangeRevision) -> ChangeRevision:
-    return _replace_node(revision, 1, owns=(*revision.graph.nodes[1].owns, "REQ-001"))
-
-
-def _interface_omission(revision: ChangeRevision) -> ChangeRevision:
-    return _replace_node(revision, len(revision.graph.nodes) - 1, consumes=())
-
-
-def _migration_gap(revision: ChangeRevision) -> ChangeRevision:
-    migration = revision.graph.migrations[0].model_copy(update={"ordered_steps": ()})
-    return _rebind(revision, revision.graph.model_copy(update={"migrations": (migration,)}))
-
-
-def _risk_disposition(revision: ChangeRevision) -> ChangeRevision:
-    risk = revision.graph.risks[0].model_copy(update={"disposition": ""})
-    return _rebind(revision, revision.graph.model_copy(update={"risks": (risk,)}))
-
-
-def _proof_authorization(revision: ChangeRevision) -> ChangeRevision:
-    proof = revision.graph.proofs[0].model_copy(update={"allowed_replacements": ()})
-    proofs = (proof, *revision.graph.proofs[1:])
-    return _rebind(revision, revision.graph.model_copy(update={"proofs": proofs}))
+    assert result.revision is None
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [ChangeDiagnosticCode.REFERENCE_MISSING]
+    assert not (revision.source_dir / "receipts").exists()
+    assert not (revision.source_dir / "jobs").exists()
 
 
 @pytest.mark.parametrize(
-    ("mutation", "expected_code"),
+    ("relative_path", "mutation", "expected_code"),
     [
-        (_dangling_reference, "DV-002"),
-        (_dependency_cycle, "DV-008"),
-        (_disconnected_obligation, "DV-003"),
-        (_duplicate_owner, "DV-003"),
-        (_interface_omission, "DV-004"),
-        (_migration_gap, "DV-005"),
-        (_risk_disposition, "DV-006"),
-        (_proof_authorization, "DV-007"),
+        ("delivery/nodes.yaml", _dependency_cycle, "DV-008"),
+        ("delivery/nodes.yaml", _disconnected_obligation, "DV-003"),
+        ("delivery/nodes.yaml", _duplicate_owner, "DV-003"),
+        ("delivery/nodes.yaml", _interface_omission, "DV-004"),
+        ("delivery/contracts.yaml", _migration_gap, "DV-005"),
+        ("delivery/contracts.yaml", _risk_disposition, "DV-006"),
+        ("delivery/contracts.yaml", _proof_authorization, "DV-007"),
     ],
 )
-def test_generated_invalid_classes_return_exact_code_before_publication(
+def test_generated_yaml_mutations_return_exact_admission_code_before_publication(
     tmp_path: Path,
-    mutation: Callable[[ChangeRevision], ChangeRevision],
+    relative_path: str,
+    mutation: Callable[[dict], None],
     expected_code: str,
 ) -> None:
-    revision = mutation(_generated_revision(tmp_path, "invalid", 5))
+    revision = _generated_revision(tmp_path, "invalid", 5)
+    _mutate_document(revision, relative_path, mutation)
+    revision = _bind_admission(revision.source_dir.parent, revision.change_id)
     work_root = tmp_path / "work"
 
     receipt, generation, assessment = validate_and_admit(revision, _evidence(revision), work_root)

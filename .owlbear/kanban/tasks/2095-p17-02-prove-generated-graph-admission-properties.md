@@ -1,10 +1,10 @@
 ---
 id: 2095
 title: 'P17-02: Prove generated graph admission properties'
-status: build
+status: verify
 priority: high
 created: 2026-07-27T19:45:12.509746+02:00
-updated: 2026-07-27T20:55:29.363135+02:00
+updated: 2026-07-27T21:05:06.711634+02:00
 tags:
   - phase-17
   - scope:test
@@ -102,3 +102,18 @@ Local task repair of verifier follow-up keys `AC-1/topology-order` and `AC-2/dan
 - AC-2 now assigns dangling references to the canonical loader and the seven reachable semantic classes to public admission, with canonical diagnostics.
 - Shaper challenger: `pass`; it confirmed live owners, literal authority, test-only scope, and closure-map causality.
 - Board audit before release: task remains child of #1990, has no dependencies, retains `existing+challenge`, and routes to `build`.
+
+[[2026-07-27T21:05:06+02:00]]
+## Builder Notes
+
+DONE
+
+- Changed files: `serve/kanban/tests/test_generated_graph_admission.py` only; no production behavior or dependencies changed.
+- Resolved `AC-1/topology-order`: added a valid seven-node joining family serialized in reverse authored order. The proof crosses canonical `load_change` and public `validate_and_admit`, asserts one persisted plan job per node in authored YAML order, then uses real `NativeRuntime` and `DispatchRuntime.pick_waves` to assert stable dependency-topology order. Exact admission replay and stored `JobRecord` identities remain stable. Existing single-node, branching, joining, and 240-node families remain covered.
+- Resolved `AC-2/dangling-loader-boundary`: removed the dangling-reference `model_copy` bypass. A YAML-backed `DN-999` dependency now reaches canonical `load_change` and asserts no revision plus exact singleton `ERR_CHANGE_REFERENCE_MISSING`, with no receipt or job publication. The other seven mutations are YAML-backed, reload through canonical loading, and public admission returns exact singleton `DV-008`, `DV-003`, `DV-003`, `DV-004`, `DV-005`, `DV-006`, and `DV-007`, each with no receipt, generation, authority job artifact, or work job.
+- AC-3 remains substantive and unchanged: repeated canonical loading after recursive YAML key reversal, explicit document wrapping, and narrow line wrapping preserves digest and sorted findings.
+- Focused proof: `uv run pytest serve/kanban/tests/test_generated_graph_admission.py -q` with short tracebacks and xdist disabled passed 14 tests in 5.03 seconds. Builder challenger independently reran it and passed 14 tests in 4.58 seconds.
+- Proportional package proof: `uv run pytest serve/kanban/tests -q` with short tracebacks passed 365 tests in 79.48 seconds; four existing Python multiprocessing fork deprecation warnings only.
+- Lint and diagnostics: `uv run lint serve/kanban/tests/test_generated_graph_admission.py` passed all applicable hooks; VS Code diagnostics reported no errors; scoped `git diff --check` was clean.
+- Builder challenger decision: `pass`; it confirmed the one-file test-only diff and independently reran focused test and lint.
+- Memory assessment: all 20 recalled builder memories were assessed successfully. Four informed artifact-to-repaired-scope review, active-workspace selection, replay proof, or separation of replay identity from mutation eligibility; 16 were not applicable. No new non-obvious reusable institutional lesson was identified.
