@@ -1,10 +1,10 @@
 ---
 id: 2089
 title: 'P16-05: Remove retired delivery agents and workflow surfaces'
-status: collect
+status: archived
 priority: high
 created: 2026-07-27T08:39:38.469917+02:00
-updated: 2026-07-27T11:11:57.939914+02:00
+updated: 2026-07-27T11:12:29.261175+02:00
 tags:
   - phase-16
   - scope:agent
@@ -32,7 +32,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -84,3 +84,16 @@ Exact-commit evidence:
 - verifier-challenger: pass; confirmed historical briefs/research/archive references are non-dispatchable and optional obsolete storage-test failure is outside this task
 
 No verifier patch was needed.
+
+[[2026-07-27T11:12:29+02:00]]
+## Collect Notes
+
+Archived after confirming exact-commit PASS, no unresolved follow-up or request state, and linear commit ancestry.
+
+- Builder: `269b6bf9d94e34e8f18e1b9bee018ada168ca9ac`
+- Verifier: `f54257094a5711c5ad53b8e25edebaa851cd055c`
+- Focused proof: 55 passed; structural validators and Ruff clean
+- Builder and verifier challengers: pass
+- Parent reference: #1989
+
+The one optional obsolete storage-test assertion is unrelated to this packet and does not affect native ecosystem closure.
