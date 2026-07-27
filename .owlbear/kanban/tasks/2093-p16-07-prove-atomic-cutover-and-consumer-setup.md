@@ -1,10 +1,10 @@
 ---
 id: 2093
 title: 'P16-07: Prove atomic cutover and consumer setup'
-status: verify
+status: collect
 priority: high
 created: 2026-07-27T08:40:26.563879+02:00
-updated: 2026-07-27T12:32:20.588977+02:00
+updated: 2026-07-27T12:34:55.571724+02:00
 tags:
   - phase-16
   - scope:test
@@ -82,3 +82,20 @@ DONE. Adopted and completed the interrupted #2093 change envelope without touchi
 - Ruff check/format, VS Code diagnostics, and Git diff integrity checks passed.
 - Builder challenger initially failed the implicit AC-3 evidence; explicit handoff/live-input/absent-surface evidence was added, focused and full checks reran, and the required challenger retry passed. Challenger independently reran 14 finalizer/cutover/workspace tests successfully.
 - All 20 recalled builder memories were assessed for task #2093.
+
+[[2026-07-27T12:34:55+02:00]]
+## Verify Notes
+
+PASS. Independently verified builder commit `7c6ac26def71ba737d9c4db0b03232ec6e583224` against all three ACs and the DEC-036 temporary-carrier boundary.
+
+### Independent Evidence
+- AC-1: Public finalizer/setup, native distribution/launch, workspace, and Cockpit integration suite passed; the dedicated real Cockpit desktop/mobile Playwright project passed both journeys serially. Assertions cover matching manifest count/hashes/receipt, clean native stores, and explicit absence of old executable surfaces.
+- AC-2: Public-command scenarios prove missing disposition, existing destination, source mutation, and induced publication interruption fail closed without a completed receipt or overwrite, then replay successfully after correction.
+- AC-3: The generated proof records exact commands, authority/code revisions, source/manifest hashes, finalization receipt, returned paths, and DN-015 handoff. Source confinement and explicit guard/assertions prove the live self-hosting board was not input.
+
+### Checks
+- Focused Python verification: 65 passed; four pre-existing Starlette deprecation warnings.
+- Real assembled browser verification: 2 passed across desktop and mobile.
+- Commit audit: exactly six declared code/proof files plus the #2093 task record; diff integrity clean.
+- Verifier challenger: pass with no unresolved finding.
+- All 20 recalled verifier memories assessed.
