@@ -4,7 +4,7 @@ title: 'P17-02: Prove generated graph admission properties'
 status: verify
 priority: high
 created: 2026-07-27T19:45:12.509746+02:00
-updated: 2026-07-27T21:05:06.711634+02:00
+updated: 2026-07-27T21:12:30.594371+02:00
 tags:
   - phase-17
   - scope:test
@@ -117,3 +117,12 @@ DONE
 - Lint and diagnostics: `uv run lint serve/kanban/tests/test_generated_graph_admission.py` passed all applicable hooks; VS Code diagnostics reported no errors; scoped `git diff --check` was clean.
 - Builder challenger decision: `pass`; it confirmed the one-file test-only diff and independently reran focused test and lint.
 - Memory assessment: all 20 recalled builder memories were assessed successfully. Four informed artifact-to-repaired-scope review, active-workspace selection, replay proof, or separation of replay identity from mutation eligibility; 16 were not applicable. No new non-obvious reusable institutional lesson was identified.
+
+[[2026-07-27T21:12:30+02:00]]
+## Verify Notes
+
+INTERRUPTED
+
+- The verifier subagent returned no response after claiming this task. Effect checks found no verifier commit and no status change.
+- A recovery verifier could not adopt the live claim (`ERR_ALREADY_CLAIMED`), so the orchestrator released the interrupted claim through the public lifecycle operation before clean redispatch.
+- No product or test mutation is attributed to the interrupted verifier.
