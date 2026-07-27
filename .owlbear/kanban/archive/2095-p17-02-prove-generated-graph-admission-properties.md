@@ -1,10 +1,10 @@
 ---
 id: 2095
 title: 'P17-02: Prove generated graph admission properties'
-status: collect
+status: archived
 priority: high
 created: 2026-07-27T19:45:12.509746+02:00
-updated: 2026-07-27T21:24:42.102584+02:00
+updated: 2026-07-27T21:30:01.081125+02:00
 tags:
   - phase-17
   - scope:test
@@ -38,7 +38,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -142,3 +142,22 @@ PASS
 - Verifier challenger initially failed the lexical-topology and set-cardinality assertions. After the local repair and rerun, the required challenger decision was `pass`, explicitly closing both defects and supporting AC-1 through AC-3.
 - All 20 recalled verifier memories were assessed successfully. No new non-obvious reusable institutional lesson was identified.
 - Verifier-owned changed file: `serve/kanban/tests/test_generated_graph_admission.py`; final task record is included in the scoped closure commit.
+
+[[2026-07-27T21:30:01+02:00]]
+## Collect Notes
+
+**Verdict:** ARCHIVED
+
+### Closure Evidence
+- Builder commit `a0ee4be65140b9454665dc4d6f5e288e99cfec2e` repaired the generated graph admission proof; verifier commit `95b198bf0e25052bce8ff6747de43ccf4bd7047d` is its current-HEAD descendant and independently accepted the repair.
+- **AC-1:** Deterministic single, branching, joining, scrambled, and 240-node families cross canonical loading and public admission. Authored plan-job order, real `DispatchRuntime.pick_waves` dependency order, replay values, stored job identities, and singleton receipt/generation artifacts are asserted. The repaired scrambled chain is non-lexical and distinct from reverse-authored YAML.
+- **AC-2:** YAML-backed dangling-reference loading returns exact singleton `ERR_CHANGE_REFERENCE_MISSING`; seven canonical YAML mutations return exact singleton `DV-008`, `DV-003`, `DV-003`, `DV-004`, `DV-005`, `DV-006`, and `DV-007`, with no receipt, generation, authority job artifact, or work publication.
+- **AC-3:** Repeated canonical loads after recursive key reversal, explicit document wrapping, and line wrapping preserve digest and exact sorted findings.
+- Repaired failure keys `AC-1/topology-order` and `AC-2/dangling-loader-boundary` are explicitly closed by the latest builder and verifier notes. Builder challenger: `pass`. Verifier challenger after local repair: `pass`. No collector challenger is defined for this role, so the collector ran direct closure proof.
+- Fresh collector check at verifier commit: generated graph admission suite passed 14 tests. VS Code diagnostics are clean and the supplied commit range passes diff checking.
+- Scope audit: both supplied commits touch only this task record and `serve/kanban/tests/test_generated_graph_admission.py`; no production, dependency, receipt-lifecycle, browser, or other product scope leaked.
+- Parent `#1990` remains the unclaimed `collect` aggregate owner with other active descendants; archiving this leaf satisfies only its `#2095` dependency.
+- No resolved requests exist. All six recalled collector memories were assessed successfully.
+
+### Unresolved Follow-up
+None.
