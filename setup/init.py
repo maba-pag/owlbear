@@ -10,7 +10,6 @@ the location of this script.
 from __future__ import annotations
 
 import difflib
-import importlib.util
 import json
 import os
 import re
@@ -49,6 +48,7 @@ _DICT_MERGE_KEYS = _LOCATION_KEYS | frozenset(
 )
 
 _SKIP_NAMES = frozenset({"scratch-pad.txt"})
+_SKIP_REL_PREFIXES = ("openspec/",)
 _SKIP_IF_EXISTS_REL = frozenset(
     {
         ".github/copilot-instructions.md",
@@ -62,22 +62,20 @@ _SKIP_IF_EXISTS_REL = frozenset(
 
 _OWLBEAR_GITIGNORE_MARKER = "# --- OwlBear managed paths ---"
 _HOOKS_REL_PREFIX = ".owlbear/hooks/"
+_NATIVE_STORE_DIRS = (
+    Path("changes"),
+    Path("kanban/jobs"),
+    Path("kanban/archive"),
+    Path("kanban/requests/pending"),
+    Path("kanban/requests/resolved"),
+    Path("kanban/attempts"),
+    Path("kanban/findings"),
+)
 
 # Regex: match // line-comments outside of strings.  Handles the common JSONC
 # patterns VS Code uses (trailing comments like `true, // old value`).  Does
 # NOT attempt to handle every edge case — just enough for settings.json files.
 _JSONC_LINE_COMMENT_RE = re.compile(r"(?<!:)//.*$", re.MULTILINE)
-
-
-def _install_openspec(target_dir: Path) -> None:
-    setup_path = Path(__file__).with_name("openspec.py")
-    spec = importlib.util.spec_from_file_location("owlbear_openspec_setup", setup_path)
-    if spec is None or spec.loader is None:
-        msg = f"Unable to load OpenSpec setup from {setup_path}"
-        raise RuntimeError(msg)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    module.install(target_dir)
 
 
 def _strip_jsonc_comments(text: str) -> str:
@@ -322,8 +320,7 @@ def init(  # noqa: C901
     Walks the seed/ tree inside *owlbear_dir*, copies static files, and
     replaces ``{{placeholder}}`` tokens in ``.json`` / ``.yml`` templates.
     ``settings.json`` and ``mcp.json`` are deep-merged with existing files.
-    Also creates the four kanban board directories under ``.owlbear/kanban/``
-    (``tasks``, ``archive``, ``decisions/pending``, ``decisions/resolved``).
+    Also creates empty native authority and work-plane stores under ``.owlbear/``.
 
     Args:
         target_dir: Destination project directory.
@@ -343,6 +340,8 @@ def init(  # noqa: C901
         rel_posix = rel.as_posix()
 
         if src.name in _SKIP_NAMES:
+            continue
+        if rel_posix.startswith(_SKIP_REL_PREFIXES):
             continue
 
         dest = target_dir / rel
@@ -378,16 +377,10 @@ def init(  # noqa: C901
 
         _write_seed_file(src, dest, replacements)
 
-    board_root = target_dir / ".owlbear" / "kanban"
-    for rel_dir in (
-        Path("tasks"),
-        Path("archive"),
-        Path("decisions") / "pending",
-        Path("decisions") / "resolved",
-    ):
-        (board_root / rel_dir).mkdir(parents=True, exist_ok=True)
-
-    _install_openspec(target_dir)
+    ops_root = target_dir / ".owlbear"
+    for rel_dir in _NATIVE_STORE_DIRS:
+        (ops_root / rel_dir).mkdir(parents=True, exist_ok=True)
+    (ops_root / "kanban/activity.jsonl").touch(exist_ok=True)
 
 
 # ---------------------------------------------------------------------------

@@ -3,11 +3,27 @@
 from __future__ import annotations
 
 import contextlib
+import importlib.util
 from pathlib import Path
+import sys
+import types
 from unittest.mock import patch
 
 import pytest
 from owlbear_kanban import NativeWorkspace
+
+_REPO_ROOT = Path(__file__).parent.parent
+
+
+def _init_consumer(target: Path) -> None:
+    setup_path = _REPO_ROOT / "setup/init.py"
+    spec = importlib.util.spec_from_file_location("owlbear_setup_init_launch", setup_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    assert isinstance(module, types.ModuleType)
+    spec.loader.exec_module(module)
+    module.init(target, _REPO_ROOT, interactive=False)
 
 
 @pytest.fixture(autouse=True)
@@ -53,3 +69,33 @@ def test_run_rejects_missing_native_work_root(tmp_path: Path, monkeypatch: pytes
 
     with pytest.raises(SystemExit):
         run()
+
+
+def test_setup_workspace_starts_native_cockpit_without_retired_runtime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from owlbear_cockpit.main import app, run
+
+    _init_consumer(tmp_path)
+    root = tmp_path / ".owlbear/kanban"
+    monkeypatch.setenv("OWLBEAR_WORK_ROOT", str(root))
+    monkeypatch.setenv("MEMORY_DIR", str(tmp_path / ".owlbear/memory"))
+    monkeypatch.setenv("COCKPIT_NO_OPEN", "1")
+    started: list[bool] = []
+
+    with patch("uvicorn.run", side_effect=lambda *_args, **_kwargs: started.append(True)):
+        run()
+
+    assert started == [True]
+    assert isinstance(app.state.workspace, NativeWorkspace)
+    assert app.state.workspace.work_root == root.resolve()
+    forbidden_modules = {
+        "openspec",
+        "owlbear_kanban.decisions",
+        "owlbear_kanban.engine",
+        "owlbear_kanban.migrate",
+        "owlbear_kanban.models",
+        "owlbear_kanban.storage",
+    }
+    assert forbidden_modules.isdisjoint(sys.modules)
