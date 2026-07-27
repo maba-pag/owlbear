@@ -1,0 +1,210 @@
+---
+schema_version: 1
+change_id: r2-workspace-defective
+state: admitted
+authority:
+  intent: intent.md
+  design: design.md
+  decisions: decisions.yaml
+  research:
+    - ../../research/planning-workflow-root-cause-and-redesign.md
+admission:
+  state: admitted
+  delivery_digest: c5234a38be2a875c4b9266196508bafc92f08996bea970cd7f5f51b0eacbed46
+  receipt: receipts/admission-9387dea789fb.yaml
+  limits:
+    - Implementation packet boundaries remain intentionally unshaped until delivery-node shape jobs run.
+    - Admission certifies delivery completeness and feasibility, not implementation correctness.
+    - >-
+      This bootstrap change uses the current pipeline from a recorded stable sibling checkout as a one-time
+      execution carrier; its projected tasks are non-authoritative and no compatibility path survives cutover.
+    - >-
+      Bootstrap task creation is not atomic with admission receipt creation, so dispatch remains disabled until the
+      complete digest-bound projection passes an idempotency and dependency audit.
+
+nodes:
+  - id: DN-001
+    title: Establish native change authority and semantic identity
+    outcome: >-
+      Strict four-file ChangeRevision loading, stable IDs/digests, immutable receipt storage, path safety, and
+      health diagnostics replace OpenSpec artifact resolution.
+    owns: [REQ-019, NEG-007]
+    supports: [REQ-001, REQ-016, NEG-004, KEEP-003, KEEP-007]
+    modules: [MOD-001]
+    produces: [IF-001]
+    consumes: []
+    dependencies: []
+    risks: [RISK-004]
+    proof: PROOF-001
+  - id: DN-002
+    title: Admit complete delivery revisions
+    outcome: >-
+      Layered deterministic admission validates complete delivery obligations, runs baseline/challenge inputs,
+      emits stable diagnostics, and atomically creates an admission receipt plus node shape jobs.
+    owns: [REQ-002, REQ-003]
+    supports: [REQ-018, NEG-010, KEEP-003, KEEP-004, KEEP-005]
+    modules: [MOD-001, MOD-008]
+    produces: [IF-002]
+    consumes: [IF-001]
+    dependencies: [DN-001]
+    risks: [RISK-003, RISK-007]
+    proof: PROOF-002
+  - id: DN-003
+    title: Replace task runtime with graph-linked jobs and receipts
+    outcome: >-
+      Purpose-specific job, attempt, finding, receipt, request, supersession, invalidation, transaction, recovery,
+      and health models provide one graph-aware runtime with no copied specification truth.
+    owns: [REQ-008, REQ-009, REQ-015, REQ-016, REQ-023, NEG-001, NEG-002, NEG-010, KEEP-006, KEEP-007]
+    supports: []
+    modules: [MOD-001, MOD-009]
+    produces: [IF-003]
+    consumes: [IF-001, IF-002]
+    dependencies: [DN-001, DN-002]
+    risks: [RISK-002, RISK-003, RISK-006]
+    proof: PROOF-003
+  - id: DN-004
+    title: Dispatch graph work and isolate exact-commit proof
+    outcome: >-
+      Graph-aware dispatch and orchestrator contracts release only engine-selected shape/build/accept/audit jobs,
+      serialize shared-worktree writers, recover attempts, replan from current state, and provide crash-safe
+      disposable proof checkouts.
+    owns: [REQ-013, REQ-014, REQ-022, NEG-006]
+    supports: [KEEP-006, KEEP-007]
+    modules: [MOD-001, MOD-003, MOD-009]
+    produces: [IF-004, IF-005]
+    consumes: [IF-003]
+    dependencies: [DN-003]
+    risks: [RISK-002, RISK-004]
+    proof: PROOF-014
+  - id: DN-005
+    title: Deliver the resumable native design and admission experience
+    outcome: >-
+      /ideate and /design operate one durable user-facing session that preserves intent/decisions, delegates
+      evidence and challenge, presents the complete graph, and admits only approved revisions.
+    owns: [REQ-001, KEEP-001, KEEP-002, KEEP-003, KEEP-008, KEEP-009]
+    supports: [REQ-002, REQ-015, KEEP-005]
+    modules: [MOD-003]
+    produces: [IF-006]
+    consumes: [IF-001, IF-002, IF-010]
+    dependencies: [DN-002, DN-009]
+    risks: [RISK-007]
+    proof: PROOF-004
+  - id: DN-006
+    title: Shape delivery nodes into bounded packet DAGs
+    outcome: >-
+      One shaper job per admitted node creates a complete outcome-cohesive packet plan and build/accept jobs while
+      mechanically rejecting global delivery expansion.
+    owns: [REQ-004, REQ-024, NEG-005, NEG-008, KEEP-004]
+    supports: [KEEP-003, KEEP-005]
+    modules: [MOD-001, MOD-003]
+    produces: [IF-007]
+    consumes: [IF-001, IF-002, IF-003, IF-004, IF-006, IF-010]
+    dependencies: [DN-003, DN-004, DN-005, DN-009]
+    risks: [RISK-007, RISK-011]
+    proof: PROOF-005
+  - id: DN-007
+    title: Build outcome-cohesive packets with inline adversarial review
+    outcome: >-
+      The builder consumes exact packet authority, implements all required outputs under one writer lease, commits
+      scoped work, resolves mandatory read-only review, and emits a valid build receipt.
+    owns: [REQ-005]
+    supports: [REQ-013, NEG-005, NEG-006, NEG-009, KEEP-004, KEEP-005, KEEP-007, KEEP-008]
+    modules: [MOD-003, MOD-009]
+    produces: [IF-008]
+    consumes: [IF-003, IF-004, IF-007, IF-010]
+    dependencies: [DN-004, DN-006, DN-009]
+    risks: [RISK-002, RISK-008, RISK-011]
+    proof: PROOF-006
+  - id: DN-008
+    title: Independently accept delivery nodes
+    outcome: >-
+      A read-only acceptor uses exact-commit proof checkouts, evaluates each delivery node against its contract and
+      descendant receipts, and routes typed findings into minimum corrective work without self-patching.
+    owns: [REQ-006, NEG-003, NEG-009, KEEP-005]
+    supports: [REQ-008, REQ-014, KEEP-004, KEEP-007, KEEP-008]
+    modules: [MOD-001, MOD-003, MOD-009]
+    produces: [IF-009]
+    consumes: [IF-001, IF-003, IF-004, IF-005, IF-007, IF-008, IF-010]
+    dependencies: [DN-004, DN-006, DN-007, DN-009]
+    risks: [RISK-008, RISK-009]
+    proof: PROOF-007
+  - id: DN-009
+    title: Expose the native control plane through MCP
+    outcome: >-
+      Strict MCP tools expose change admission, graph reads, job dispatch/completion, requests, evidence, and health
+      while generic task mutation and old lifecycle tools disappear.
+    owns: [REQ-020]
+    supports: [REQ-009, REQ-015, REQ-016, REQ-017, NEG-001, KEEP-006, KEEP-007]
+    modules: [MOD-002, MOD-008]
+    produces: [IF-010]
+    consumes: [IF-001, IF-002, IF-003, IF-004]
+    dependencies: [DN-004]
+    risks: [RISK-005]
+    proof: PROOF-011
+  - id: DN-010
+    title: Provide graph-aware Cockpit backend contracts and events
+    outcome: >-
+      FastAPI exposes typed change, graph, job, request, attempt, finding, receipt, health, legacy, and SSE
+      resources over the real engine with no arbitrary task transitions.
+    owns: [REQ-021]
+    supports: [REQ-010, REQ-015, REQ-016, KEEP-006, KEEP-007]
+    modules: [MOD-004, MOD-008]
+    produces: [IF-011]
+    consumes: [IF-001, IF-002, IF-003, IF-007, IF-008, IF-009, IF-010, IF-014]
+    dependencies: [DN-003, DN-004, DN-008, DN-014]
+    risks: [RISK-005]
+    proof: PROOF-015
+  - id: DN-011
+    title: Build the graph-aware Cockpit Changes and Kanban experience
+    outcome: >-
+      Cockpit keeps Kanban central and adds accessible scalable change, graph/list, request, evidence, invalidation,
+      exact-proof, and legacy inventory experiences across desktop and mobile.
+    owns: [REQ-010]
+    supports: [REQ-016, KEEP-006]
+    modules: [MOD-005, MOD-008]
+    produces: [IF-012]
+    consumes: [IF-011]
+    dependencies: [DN-010]
+    risks: [RISK-010, RISK-012]
+    proof: PROOF-012
+  - id: DN-012
+    title: Atomically cut over setup, stores, ecosystem, and documentation
+    outcome: >-
+      A hash-verified legacy snapshot and active-item disposition inventory preserve history while setup, seed,
+      hooks, docs, generated assets, agents, APIs, and stores switch entirely to the native control plane.
+    owns: [REQ-011, REQ-012, REQ-017, NEG-004]
+    supports: [NEG-007, KEEP-007]
+    modules: [MOD-003, MOD-006, MOD-007, MOD-008, MOD-009]
+    produces: [IF-013]
+    consumes: [IF-001, IF-002, IF-003, IF-004, IF-006, IF-007, IF-008, IF-009, IF-010, IF-011, IF-012, IF-014]
+    dependencies: [DN-005, DN-006, DN-007, DN-008, DN-009, DN-010, DN-011, DN-014]
+    risks: [RISK-001, RISK-005]
+    proof: PROOF-009
+  - id: DN-013
+    title: Prove the complete native delivery system and cutover
+    outcome: >-
+      Durable historical/generic fixtures and a fresh-consumer end-to-end scenario prove admission, node shaping,
+      build review, acceptance, correction, audit, Cockpit, setup, snapshot integrity, and absence of legacy
+      execution.
+    owns: [REQ-018]
+    supports: [NEG-010, KEEP-004, KEEP-005, KEEP-006, KEEP-007]
+    modules: [MOD-008]
+    produces: []
+    consumes: [IF-002, IF-003, IF-005, IF-009, IF-010, IF-011, IF-012, IF-013, IF-014]
+    dependencies: [DN-002, DN-003, DN-008, DN-009, DN-010, DN-011, DN-012, DN-014]
+    risks: [RISK-003, RISK-005, RISK-006, RISK-009, RISK-010, RISK-011, RISK-012]
+    proof: PROOF-013
+  - id: DN-014
+    title: Independently audit and close complete changes
+    outcome: >-
+      A distinct read-only auditor uses an exact-commit proof checkout to evaluate all accepted nodes, Product
+      Promise, decisions, migrations, normal workflows, and receipt validity before final closure or typed
+      corrective work.
+    owns: [REQ-007]
+    supports: [REQ-008, REQ-014, NEG-003, NEG-009, KEEP-004, KEEP-005, KEEP-007, KEEP-008]
+    modules: [MOD-001, MOD-003, MOD-009]
+    produces: [IF-014]
+    consumes: [IF-001, IF-003, IF-004, IF-005, IF-009, IF-010]
+    dependencies: [DN-004, DN-008, DN-009]
+    risks: [RISK-008, RISK-009]
+    proof: PROOF-008
