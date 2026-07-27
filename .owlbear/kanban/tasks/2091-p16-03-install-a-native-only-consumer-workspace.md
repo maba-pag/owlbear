@@ -1,10 +1,10 @@
 ---
 id: 2091
 title: 'P16-03: Install a native-only consumer workspace'
-status: build
+status: verify
 priority: high
 created: 2026-07-27T08:39:56.044193+02:00
-updated: 2026-07-27T08:39:56.044193+02:00
+updated: 2026-07-27T11:24:04.478968+02:00
 tags:
   - phase-16
   - scope:setup
@@ -34,7 +34,7 @@ ac:
 proof_bundle: existing+challenge
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-07-27T11:24:04.478968+02:00
 archival_reason:
 archival_refs: []
 ---
@@ -50,3 +50,6 @@ Out of scope: reusable snapshot/finalizer logic, Python/API legacy deletion owne
 DN-012 at delivery digest `6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9`; REQ-017, IF-013 installation half, MIG-003, RISK-005, KEEP-007, MOD-006, plus final native inventories from #2088 and #2089.
 
 Proof guidance: exercise public setup against fresh and populated temporary consumer workspaces with the package-install recorder, then run the maintained native import/launch smoke; preserve user-owned files and settings.
+
+[[2026-07-27T11:24:01+02:00]]
+Builder completed native-only consumer setup at commit 56e5d3261. Public init creates native authority/work stores, skips OpenSpec installation/output, removes legacy task seed topology, preserves user settings and native records across reruns, and starts Cockpit against the generated NativeWorkspace. Focused proof: 29 setup/import/launch tests passed; Ruff, pre-commit hooks, diagnostics, and independent builder challenge passed.
