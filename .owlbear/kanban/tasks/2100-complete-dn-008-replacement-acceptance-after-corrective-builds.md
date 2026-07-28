@@ -4,7 +4,7 @@ title: Complete DN-008 replacement acceptance after corrective builds
 status: build
 priority: high
 created: 2026-07-28T05:20:51.823233+02:00
-updated: 2026-07-28T05:20:51.823233+02:00
+updated: 2026-07-28T05:29:59.760088+02:00
 tags:
   - phase-17
   - scope:core
@@ -81,3 +81,6 @@ Complexity waiver: route classification, replacement identity, transaction atomi
 
 ## Proof Guidance
 Use public MCP `reject_accept`, `pick_jobs`, `start_job`, and purpose-specific finish boundaries over a temporary workspace. Prove replacement existence through persisted `JobStore` and readiness through public dispatch. Do not complete #2097's final audit here and never pass the live carrier, live change root, or finalizer input.
+
+[[2026-07-28T05:29:59+02:00]]
+Interrupted builder recovery: coding subagent returned prematurely without tests, challenger, lifecycle note, or commit and incorrectly reported pytest unavailable. Effect check found one bounded candidate diff in `native_runtime.py`, MCP models/server, plus claim metadata. Existing reject-accept tests pass 16/16, but source review found contract gaps: reject-audit parameter leakage, missing required replacement identity for all-build closures, malformed mixed/cross-node closure acceptance when ID absent, archived collision omission, and an incorrect completion receipt on the pending replacement. Claim released so the candidate can be adopted and repaired in a clean build attempt.
