@@ -98,14 +98,35 @@ orchestrator supplies it unchanged to the selected lifecycle operation.
 
 Use only when the exact commit satisfies the complete node contract and tracked state is unchanged:
 
-Return canonical receipt evidence, not a prose or shorthand proof summary. `evidence` contains the
-admitted `methods`; complete `authority` fields for delivery digest, target contract, proof, modules,
-interfaces, migrations, and risks; `plan.node_plan_digest` and ordered `plan.packet_ids`; complete
-`assembled_proof` boundary, durable outputs, commands, and successful results; `checkout.candidate_sha`;
-empty-string `status` and `diff` values in both tracked states; `packet_receipts`; `replacements`; and
-`changed_surfaces` equal to `impact_closure`. For verification-only plans, additionally require
-`plan.receipt_id` equal to the current plan receipt, `plan.packet_ids: []`, and
-`packet_receipts: []`. Never encode clean state as the word `clean`.
+Return canonical receipt evidence, not a prose or shorthand proof summary. Preserve exact values and
+field names from current authority; never paraphrase, expand an ID into a record, truncate a record,
+or append context to an authority string.
+
+| Evidence field | Exact value |
+|---|---|
+| `methods` | complete ordered `proof.method` |
+| `authority.delivery_digest` | current delivery digest |
+| `authority.target_node_id` | target node ID |
+| `authority.proof` | proof ID string, not the proof record |
+| `authority.node_contract` | complete target `DeliveryNode` model, under this exact key |
+| `authority.modules` | ordered target module ID list, not module records |
+| `authority.interfaces` | sorted produced and consumed interface ID list, not interface records |
+| `authority.migrations` | sorted migration ID list derived from interfaces and owned migrations |
+| `authority.risks` | ordered target risk ID list, not risk records |
+| `plan.node_plan_digest` | selected job's exact node-plan digest |
+| `plan.packet_ids` | ordered packet ID list; empty for verification-only |
+| `assembled_proof.boundary` | exact unmodified `proof.boundary` |
+| `assembled_proof.durable_outputs` | complete ordered `proof.durable_outputs` |
+| each assembled result | `command`, integer `exit_code: 0`, and non-empty string `result` |
+| `checkout.candidate_sha` | exact supplied candidate SHA |
+| tracked `before` and `after` | candidate `head` plus empty-string `status` and `diff` |
+| `packet_receipts` | ordered complete packet receipt identities; empty for verification-only |
+| `replacements` | complete replacement list, limited to `proof.allowed_replacements` |
+| `changed_surfaces` | exactly the returned `impact_closure` |
+
+For verification-only plans, additionally require `plan.receipt_id` equal to the current plan
+receipt, `plan.packet_ids: []`, and `packet_receipts: []`. Never encode clean state as the word
+`clean`.
 
 ```yaml
 kind: AcceptorSuccess

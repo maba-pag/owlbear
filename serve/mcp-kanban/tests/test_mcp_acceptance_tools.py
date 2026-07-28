@@ -112,6 +112,10 @@ def test_acceptor_requires_every_direct_dependent_reconciliation_identity() -> N
     assert "Return canonical receipt evidence, not a prose or shorthand proof summary" in workflow
     assert "`plan.receipt_id` equal to the current plan receipt" in workflow
     assert "Never encode clean state as the word `clean`" in workflow
+    assert "`authority.node_contract` | complete target `DeliveryNode` model, under this exact key" in workflow
+    assert "`authority.modules` | ordered target module ID list, not module records" in workflow
+    assert "`assembled_proof.boundary` | exact unmodified `proof.boundary`" in workflow
+    assert "integer `exit_code: 0`" in workflow
     assert "per affected dependent node" not in workflow
 
 
