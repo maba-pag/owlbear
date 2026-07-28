@@ -1,10 +1,10 @@
 ---
 id: 2097
 title: 'P17-04: Execute the fresh-consumer native delivery workflow'
-status: shape
+status: build
 priority: high
 created: 2026-07-27T19:45:12.576115+02:00
-updated: 2026-07-28T06:16:00.395793+02:00
+updated: 2026-07-28T06:21:19.238510+02:00
 tags:
   - phase-17
   - scope:test
@@ -22,10 +22,10 @@ depends_on:
   - 2100
 ac:
   - 'AC-1: Given a temporary consumer initialized by public setup and a representative
-    admitted two-node/two-module change, installed design contracts plus public MCP
-    `show_change`, `validate_change`, and `admit_change` publish digest-bound frontier
-    plan jobs while a plan outside admitted authority fails without a plan receipt
-    or packet job.'
+    admitted fixture with two delivery-work nodes/two modules plus mandatory DN-014
+    audit authority, installed design contracts plus public MCP `show_change`, `validate_change`,
+    and `admit_change` publish digest-bound frontier plan jobs while a plan outside
+    admitted authority fails without a plan receipt or packet job.'
   - 'AC-2: Given engine-selected jobs, public MCP pick, start, and purpose-specific
     finish operations run plan and reviewed build work under shared writer coordination;
     a read-only proof checkout rejects one implementation defect, publishes the minimum
@@ -52,9 +52,9 @@ In scope: MOD-008 assembled Python proof using public setup and real MCP, engine
 ## Authority
 DN-013, REQ-018, WF-007, PROOF-013, IF-002/003/005/009/010/013/014, RISK-003/RISK-005/RISK-009 at admitted digest `6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9`.
 
-Complexity waiver: PROOF-013 requires one assembled design-to-audit boundary; splitting lifecycle phases would bypass it. A two-node fixture keeps the matrix bounded.
+Complexity waiver: PROOF-013 requires one assembled design-to-audit boundary; splitting lifecycle phases would bypass it. A bounded fixture contains two delivery-work nodes/two modules plus the mandatory DN-014 audit-authority node.
 
-Proof guidance: reuse the current assembled MCP harness over a temporary Git consumer; replace only repository location, never public setup, MCP, engine, writer, or checkout boundaries.
+Proof guidance: reuse the current assembled MCP harness over a temporary Git consumer and generate the reduced admitted fixture through structured change authority; replace only repository location and fixture authority, never public setup, MCP, engine, writer, Git, or checkout boundaries.
 
 [[2026-07-27T22:10:18+02:00]]
 ## Builder Notes
@@ -135,3 +135,15 @@ Smallest faithful fixture: two delivery-work nodes/two modules plus the mandator
 | Failure Key | Claimed Production Boundary | Current-Source Artifacts | Cheapest Disconfirming Check | Causal Proof Or Negative Control | Executor Availability |
 |---|---|---|---|---|---|
 | `PROOF-013/literal-two-node-audit-impossible` | One disposable public setup-to-audit workflow | `native_runtime.py::{_prepare_terminal_audit,_terminal_audit_authority,_terminal_accept_jobs}`, `receipt.py` audit validation, `test_complete_native_delivery.py` | Load a reduced graph without DN-014: terminal acceptance creates no audit; include DN-014 and current accepts for all fixture nodes: audit is eligible | Public returned jobs must select every plan/build/accept/audit action; missing work-node accept or DN-014 authority prevents audit, detecting bypass | Public MCP tools, real Git/checkouts, structured change loader, and temporary consumer are available; a three-node fixture needs no production change. |
+
+[[2026-07-28T06:17:00+02:00]]
+## Shape Notes
+Local proof-contract repair for `PROOF-013/literal-two-node-audit-impossible`.
+
+- AC-1 and the operative fixture guidance now require three graph nodes: two delivery-work nodes representing exactly two modules, plus mandatory DN-014 audit authority. DN-014 is the third graph node, not a third represented delivery module.
+- Outcome, assembled public lifecycle, AC-2/AC-3, production behavior, dependencies, and all live-carrier/DN-015/finalization safety exclusions are unchanged.
+- The builder must generate this reduced fixture through structured change authority and select every plan/build/accept/audit action from public returned jobs. Missing DN-014 or any node's current accept remains the fail-closed negative control.
+- Shaper-challenger: `pass`. It independently confirmed terminal authority and all-node accept requirements, found existing arbitrary-node structured fixture precedent in `serve/kanban/tests/test_generated_graph_admission.py`, and classified this as a complete non-material fixture-sizing correction requiring no production change.
+
+[[2026-07-28T06:21:19+02:00]]
+Proof-contract repair complete and challenged: AC-1, complexity waiver, and proof guidance now require two delivery-work nodes/two modules plus the mandatory DN-014 audit-authority node. AC-2/AC-3, Outcome, dependencies, public assembled lifecycle, and safety exclusions are unchanged. Shaper-challenger passed; task returns to build.
