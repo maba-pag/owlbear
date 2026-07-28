@@ -4,7 +4,7 @@ title: 'Bootstrap DN-013: Prove the complete native delivery system and cutover'
 status: collect
 priority: high
 created: 2026-07-22T01:09:02.449610+02:00
-updated: 2026-07-27T19:46:10.914156+02:00
+updated: 2026-07-28T02:35:36.081596+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -29,6 +29,7 @@ depends_on:
   - 2096
   - 2097
   - 2098
+  - 2099
 ac:
   - 'AC-1: Shaper reads DN-013 from the modular authority trio at digest `6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9`
     and creates one outcome-cohesive proof DAG whose leaves reference the same change/digest/node;
@@ -124,3 +125,13 @@ REQ-018 incident, generic graph, generic runtime, complete native workflow, and 
 
 ### Board Audit
 Kanban queries confirmed #2094-#2098 titles, bodies, ACs, priorities, tags, parent links, proof bundles, build statuses, and unclaimed state. #2098 depends only on #2097; #1990 includes all five dependencies and is intentionally blocked in `collect` until they complete. All 18 recalled shaper memories were assessed.
+
+[[2026-07-28T02:35:36+02:00]]
+## Shape Notes
+
+Material graph repair approved after #2097 routed a real DN-008 product defect instead of patching it inside PROOF-013.
+
+- Added #2099 as a direct aggregate dependency so DN-013 cannot collect until corrective build authority is fixed and independently archived.
+- Existing DN-013 intent, AC, five proof leaves, and collected parent status remain unchanged.
+- #2099 is owned by root #1968 and DN-008 lineage #1985; #2097 retains assembled workflow proof ownership.
+- Final shaper-challenger: `pass`; user approved the graph.
