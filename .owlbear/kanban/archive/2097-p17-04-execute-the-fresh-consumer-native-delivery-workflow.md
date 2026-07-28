@@ -1,10 +1,10 @@
 ---
 id: 2097
 title: 'P17-04: Execute the fresh-consumer native delivery workflow'
-status: collect
+status: archived
 priority: high
 created: 2026-07-27T19:45:12.576115+02:00
-updated: 2026-07-28T11:34:06.829257+02:00
+updated: 2026-07-28T11:35:01.360857+02:00
 tags:
   - phase-17
   - scope:test
@@ -40,7 +40,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -177,3 +177,14 @@ PASS: independently verified the committed PROOF-013 assembled workflow and patc
 - Verifier-challenger initially failed because the returned final audit receipt was not explicitly bound to its requested identity. Added `finished.receipt.receipt_id == "audit-proof-013"`, reran the full direct bundle and lint, and obtained final challenger `pass`.
 - The earlier broad 300-second timeout after 46 passes is non-material for this test-only change because the focused assembled/owner bundle directly covers the changed boundary; builder-challenger also independently reported a broader 57-test slice passed.
 - The repaired three-graph-node/two-module fixture faithfully closes `PROOF-013/literal-two-node-audit-impossible` with no production or live-carrier mutation.
+
+[[2026-07-28T11:35:01+02:00]]
+## Collector Notes
+ARCHIVED: PROOF-013 fresh-consumer native delivery workflow is complete.
+
+- Builder commit `45ee5478052e403b038d787da899362760287413` implements the structured three-node/two-module public setup-to-audit proof.
+- Verifier commit `b8042a816295e71bb814d5d80292b039c2af3300` binds the exact final audit receipt identity after independent verification.
+- Final direct evidence: assembled workflow plus admission, replacement gating, acceptance, audit, and health owner cases all pass; focused lint and diagnostics are clean.
+- Builder-challenger and verifier-challenger final decisions are `pass`.
+- Dependencies #2099 and #2100 are archived completed; all historical failure keys are closed; no live carrier, DN-015, finalization, legacy, or production mutation occurred.
+- Downstream #2098 is the remaining DN-013 leaf and becomes dispatchable when this archive move commits.
