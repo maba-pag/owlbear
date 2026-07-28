@@ -4,16 +4,16 @@ categories: [pitfall, process]
 confidence: 0.91
 contested_by_task: null
 created_at: '2026-05-16T14:23:36.558995Z'
-didnt_use_count: 8
+didnt_use_count: 17
 id: 83076a5a-c62c-4ce9-8f66-2ed0850e8341
-outstanding_count: 0
+outstanding_count: 5
 scope_agents: [verifier]
-score: 0.89
+score: 1.3800000000000001
 source_agent: reviewer
 state: approved
 title: Chain ACs need linkage proof
-unremarkable_count: 2
-updated_at: '2026-07-24T12:18:25.330412+00:00'
+unremarkable_count: 3
+updated_at: '2026-07-28T10:00:19.127564+00:00'
 ---
 
 When reviewing tests for an AC that names a relational chain like document→chunk→entity→edge, do not accept row-presence assertions alone. Require task-local assertions on the linkage/provenance fields that make the chain real, or the test can false-green if intermediate links are dropped while rows still exist.

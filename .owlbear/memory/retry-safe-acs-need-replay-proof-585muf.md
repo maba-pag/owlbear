@@ -4,16 +4,16 @@ categories: [pitfall, process]
 confidence: 0.92
 contested_by_task: null
 created_at: '2026-05-25T19:08:31.830100Z'
-didnt_use_count: 42
+didnt_use_count: 87
 id: a52159ee-d5e0-4a47-9bf4-c4583ff964c1
-outstanding_count: 11
+outstanding_count: 49
 scope_agents: [verifier, builder]
-score: 1.94
+score: 5.61
 source_agent: reviewer
 state: approved
 title: Retry-safe ACs need replay proof
-unremarkable_count: 8
-updated_at: '2026-07-24T18:41:57.023918+00:00'
+unremarkable_count: 21
+updated_at: '2026-07-28T10:00:18.896748+00:00'
 ---
 
 When an AC says state is consistent for retry after an external write failure, do not accept tests that stop at the first exception plus surviving DB rows. Require a replay of the same request and proof that the external state is repaired, or the suite can false-green unrecoverable partial failures.
