@@ -1,10 +1,10 @@
 ---
 id: 2099
 title: Complete DN-008 corrective build authority
-status: build
+status: shape
 priority: high
 created: 2026-07-28T02:34:32.523427+02:00
-updated: 2026-07-28T02:34:32.523427+02:00
+updated: 2026-07-28T02:53:16.471069+02:00
 tags:
   - phase-17
   - scope:core
@@ -75,3 +75,20 @@ DN-008, REQ-006/REQ-008/REQ-014, IF-009, PROOF-007, RISK-008/RISK-009 at admitte
 | Atomic invalidation | replay; identity conflict; interrupted publication | AC-3 |
 
 Proof guidance: begin from the #2097 red public workflow and the normal `_prepare_plan` digest precedent. Make the minimum change in `_corrective_jobs`; preserve the finish-time stale gate and public literals. The first focused check must include the red proof or an equally public causal slice.
+
+[[2026-07-28T02:53:16+02:00]]
+## Builder Notes
+REJECT: the scoped corrective digest defect is fixed, but the accepted one-owner premise is insufficient for AC-2 in current source.
+
+- Changed `serve/kanban/src/owlbear_kanban/invalidation.py`: corrective `build` jobs now receive canonical `compute_node_plan_digest`; corrective `plan` jobs remain `None` until plan completion. No stale gate changed.
+- Changed `serve/kanban/tests/test_invalidation.py`: durable assertions protect the observed build omission and the plan non-binding branch. Existing replay, conflict, interruption, and immutable-history proof remains green.
+- Immediate public proof: `uv run pytest serve/mcp-kanban/tests/test_complete_native_delivery.py::test_fresh_consumer_completes_native_delivery_and_audit -q` now passes public `reject_accept` and `start_job`, proving the stale-digest construction defect is repaired, but `finish_build` returns `ERR_FINISH_AUTHORITY_STALE`, detail `build job does not correspond to a packet`, lower code `None`, and no receipt.
+- Current-source cause: `NativeRuntime._finish_closure` maps ordinary build jobs to packet closures by sorted same-node/same-digest sibling job IDs. A corrective build shares the canonical digest with its archived original, so the one packet closure cannot index the corrective job. The persisted `finding_id` identifies a canonical packet finding, but current finish logic does not use it.
+- Proof: focused invalidation `37 passed`; full Kanban `379 passed` with four multiprocessing deprecation warnings; MCP acceptance subset `45 passed` before its configured 300-second session timeout and no failures; Ruff check and format check clean; editor diagnostics clean; `git diff --check` clean.
+- Builder-challenger: `reconsider`. It confirmed AC-2 remains false through the named public boundary and expanding into the read-only `native_runtime.py` owner would exceed the accepted minimum-change map.
+- Memory: all 20 recalled entries assessed successfully. No new memory candidate: the remaining defect is task-specific architecture evidence that belongs in this task.
+
+### Required Follow-up
+| # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
+|---|-------------|--------------|-----------------|---------|----------|
+| 1 | AC-2/corrective-packet-authority | shaper | Expand the accepted production map to define how a corrective build's existing `finding_id` binds it to the canonical packet closure at finish time, while retaining digest stale/tamper failure and no-receipt behavior; then require the public current and stale causal matrix. | `serve/kanban/src/owlbear_kanban/native_runtime.py`, focused Kanban/MCP tests | Public proof reaches corrected `start_job` then fails `finish_build` with `build job does not correspond to a packet`; builder-challenger `reconsider`. |

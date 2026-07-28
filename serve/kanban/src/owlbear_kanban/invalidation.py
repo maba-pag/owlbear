@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 
 from owlbear_kanban.finding import Finding, FindingClass, FindingId, FindingStore
 from owlbear_kanban.jobs import JobDisposition, JobRecord, JobStore, StoredJob
-from owlbear_kanban.receipt import ReceiptRecord, ReceiptStore
+from owlbear_kanban.receipt import ReceiptRecord, ReceiptStore, compute_node_plan_digest
 from owlbear_kanban.runtime_transaction import (
     ReplacementTransactionParticipant,
     RuntimeTransaction,
@@ -430,6 +430,9 @@ class InvalidationRuntime:
                 change_id=self._revision.change_id,
                 delivery_digest=self._revision.delivery_digest,
                 target_node_id=plan.target_node_id,
+                node_plan_digest=(
+                    compute_node_plan_digest(self._revision, plan.target_node_id) if plan.kind == "build" else None
+                ),
                 finding_id=finding_id,
                 receipt_id=request.supersession_receipt_id,
             )

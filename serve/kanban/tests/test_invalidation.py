@@ -17,6 +17,7 @@ from owlbear_kanban import (
     JobStore,
     ReceiptStore,
     PlanJob,
+    compute_node_plan_digest,
     load_change,
     plan_corrective_route,
 )
@@ -222,6 +223,9 @@ def test_invalidation_applies_minimum_closure_and_replays_without_rewriting_hist
     assert tuple(item.job.job_id for item in applied.outcome.superseded_jobs) == (3,)
     assert applied.outcome.superseded_jobs[0].job.disposition is JobDisposition.SUPERSEDED
     assert tuple(item.job.job_id for item in applied.outcome.corrective_jobs) == (20,)
+    assert applied.outcome.corrective_jobs[0].job.node_plan_digest == compute_node_plan_digest(
+        revision, applied.outcome.corrective_jobs[0].job.target_node_id
+    )
     assert JobStore(work_root).read(4).job.disposition is JobDisposition.PENDING
     assert (work_root / "jobs/5.yaml").read_bytes() == terminal_before
     assert conflict.diagnostic is not None
@@ -232,6 +236,24 @@ def test_invalidation_applies_minimum_closure_and_replays_without_rewriting_hist
         for path in (revision.source_dir / "receipts").glob("*.yaml")
         if path.name != "supersession-001.yaml"
     }
+
+
+def test_invalidation_leaves_corrective_plan_without_node_plan_digest(tmp_path: Path) -> None:
+    revision, work_root, request = _scenario(tmp_path)
+    route = plan_corrective_route(
+        CorrectiveRouteRequest(
+            finding_id="finding-001",
+            finding_class="implementation-defect",
+            target="packet-plan",
+            target_node_ids=(revision.graph.nodes[0].id,),
+        )
+    )
+
+    result = InvalidationRuntime(revision, work_root).apply(request.model_copy(update={"routes": (route,)}))
+
+    assert result.outcome is not None
+    assert result.outcome.corrective_jobs[0].job.kind == "plan"
+    assert result.outcome.corrective_jobs[0].job.node_plan_digest is None
 
 
 @pytest.mark.parametrize("stage", ["before-publication", "after-first-publication", "before-manifest-cleanup"])
