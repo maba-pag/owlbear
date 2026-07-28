@@ -655,9 +655,11 @@ class DispatchRuntime:
             return stale
         holder = self._find_holder(coordination, request.job_id)
         participants: tuple[ReplacementTransactionParticipant, ...] = ()
+        predecessor_revision = request.code_revision
         if holder is not None and self._matches(holder, request):
             replacement = self._without_holder(coordination, holder)
             participants = (self._coordination.replacement_participant(replacement, token),)
+            predecessor_revision = holder.candidate_revision
         return self._native._finish(  # noqa: SLF001
             request,
             kind,
@@ -665,6 +667,7 @@ class DispatchRuntime:
                 *participants,
                 *(participant_factory(stored, finish_request) if participant_factory is not None else ()),
             ),
+            predecessor_revision=predecessor_revision,
         )
 
     def _stale_diagnostic(self, coordination: WriterCoordination) -> DispatchDiagnostic | None:

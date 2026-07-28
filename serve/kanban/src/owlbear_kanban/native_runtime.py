@@ -1708,6 +1708,8 @@ class NativeRuntime:
             ]
             | None
         ) = None,
+        *,
+        predecessor_revision: str | None = None,
     ) -> FinishJobResult:
         RuntimeTransaction.recover_all(
             self._work_root,
@@ -1745,7 +1747,7 @@ class NativeRuntime:
                 "audit job has unresolved requests",
                 target=job.pending_request_ids[0],
             )
-        predecessors = self._finish_predecessors(job, request.code_revision)
+        predecessors = self._finish_predecessors(job, predecessor_revision or request.code_revision)
         if isinstance(predecessors, FinishJobResult):
             return predecessors
 

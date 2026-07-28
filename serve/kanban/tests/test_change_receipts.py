@@ -386,6 +386,7 @@ def test_receipt_store_evaluates_complete_currentness_without_mutation(tmp_path:
     class CurrentHistory:
         def __init__(self) -> None:
             self.name_status_calls = 0
+            self.changed_paths: dict[str, bytes] = {}
 
         def revisions_exist(self, _tested: str, _candidate: str) -> bool:
             return True
@@ -393,9 +394,9 @@ def test_receipt_store_evaluates_complete_currentness_without_mutation(tmp_path:
         def is_descendant(self, _tested: str, _candidate: str) -> bool:
             return True
 
-        def name_status(self, _tested: str, _candidate: str) -> bytes:
+        def name_status(self, tested: str, _candidate: str) -> bytes:
             self.name_status_calls += 1
-            return b""
+            return self.changed_paths.get(tested, b"")
 
     def complete_receipt(receipt_id: str, predecessors: list[str]) -> dict[str, object]:
         value = _current_receipt(revision)
@@ -416,8 +417,18 @@ def test_receipt_store_evaluates_complete_currentness_without_mutation(tmp_path:
         "cycle-a-001": complete_receipt("cycle-a-001", ["cycle-b-001"]),
         "cycle-b-001": complete_receipt("cycle-b-001", ["cycle-a-001"]),
         "superseded-001": complete_receipt("superseded-001", []),
+        "covered-stale-001": complete_receipt("covered-stale-001", []),
+        "covered-current-001": complete_receipt("covered-current-001", ["covered-stale-001"]),
+        "uncovered-stale-001": complete_receipt("uncovered-stale-001", []),
+        "uncovered-invalid-001": complete_receipt("uncovered-invalid-001", ["uncovered-stale-001"]),
     }
     records["stale-001"]["evidence"] = {"methods": []}
+    records["covered-stale-001"]["code_revision"] = "e" * 40
+    records["uncovered-stale-001"]["code_revision"] = "f" * 40
+    records["uncovered-stale-001"]["impact_closure"] = {
+        "paths": ["docs/"],
+        "authority_targets": ["REQ-001"],
+    }
     for receipt_id, value in records.items():
         assert store.create(receipt_id, value).receipt is not None
     supersession = _receipt(revision, "supersession-001", "supersession")
@@ -425,6 +436,10 @@ def test_receipt_store_evaluates_complete_currentness_without_mutation(tmp_path:
     assert store.create("supersession-001", supersession).receipt is not None
     before = {path: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")}
     history = CurrentHistory()
+    history.changed_paths = {
+        "e" * 40: b"M\0src/app.py\0",
+        "f" * 40: b"M\0docs/readme.md\0",
+    }
 
     current = store.evaluate_currentness("current-001", history, "d" * 40)
     repeated = store.evaluate_currentness("current-001", history, "d" * 40)
@@ -432,6 +447,8 @@ def test_receipt_store_evaluates_complete_currentness_without_mutation(tmp_path:
     invalid = store.evaluate_currentness("invalid-001", history, "d" * 40)
     cycle = store.evaluate_currentness("cycle-a-001", history, "d" * 40)
     superseded = store.evaluate_currentness("superseded-001", history, "d" * 40)
+    covered = store.evaluate_currentness("covered-current-001", history, "d" * 40)
+    uncovered = store.evaluate_currentness("uncovered-invalid-001", history, "d" * 40)
 
     assert current.code is ReceiptValidityCode.CURRENT
     assert repeated == current
@@ -440,6 +457,11 @@ def test_receipt_store_evaluates_complete_currentness_without_mutation(tmp_path:
     assert (invalid.code, invalid.target) == (ReceiptValidityCode.PREDECESSOR_INVALID, "stale-001")
     assert (cycle.code, cycle.target) == (ReceiptValidityCode.PREDECESSOR_CYCLE, "cycle-a-001")
     assert (superseded.code, superseded.target) == (ReceiptValidityCode.SUPERSEDED, "superseded-001")
+    assert covered.code is ReceiptValidityCode.CURRENT
+    assert (uncovered.code, uncovered.target) == (
+        ReceiptValidityCode.PREDECESSOR_INVALID,
+        "uncovered-stale-001",
+    )
     assert {path: path.read_bytes() for path in before} == before
 
 

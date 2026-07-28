@@ -420,6 +420,19 @@ def _intersecting_selector(path: str, selectors: tuple[str, ...]) -> str | None:
     return None
 
 
+def _impact_closure_covers(successor: ImpactClosure, predecessor: ImpactClosure) -> bool:
+    if not set(predecessor.authority_targets) <= set(successor.authority_targets):
+        return False
+    return all(
+        any(
+            successor_selector in ("/", predecessor_selector)
+            or (successor_selector.endswith("/") and predecessor_selector.startswith(successor_selector))
+            for successor_selector in successor.paths
+        )
+        for predecessor_selector in predecessor.paths
+    )
+
+
 class ReceiptParseDiagnostic(_ReceiptModel):
     """Describe one stable root-receipt parsing failure."""
 
@@ -1377,12 +1390,13 @@ class _CompleteCurrentnessEvaluator:
         self._superseded = superseded
         self._history = history
         self._candidate_revision = candidate_revision
-        self._memo: dict[str, ReceiptValidity] = {}
+        self._memo: dict[tuple[str, bool], ReceiptValidity] = {}
         self._active: set[str] = set()
 
-    def evaluate(self, receipt_id: str) -> ReceiptValidity:
-        if receipt_id in self._memo:
-            return self._memo[receipt_id]
+    def evaluate(self, receipt_id: str, *, evaluate_code: bool = True) -> ReceiptValidity:
+        key = (receipt_id, evaluate_code)
+        if key in self._memo:
+            return self._memo[key]
         if receipt_id in self._active:
             return ReceiptValidity(
                 code=ReceiptValidityCode.PREDECESSOR_CYCLE,
@@ -1395,7 +1409,7 @@ class _CompleteCurrentnessEvaluator:
                 detail="a supersession receipt explicitly invalidates this receipt",
                 target=receipt_id,
             )
-            self._memo[receipt_id] = result
+            self._memo[key] = result
             return result
         receipt = self._records.get(receipt_id)
         if receipt is None:
@@ -1406,18 +1420,21 @@ class _CompleteCurrentnessEvaluator:
             )
         self._active.add(receipt_id)
         try:
-            result = self._evaluate_record(receipt)
+            result = self._evaluate_record(receipt, evaluate_code=evaluate_code)
         finally:
             self._active.remove(receipt_id)
-        self._memo[receipt_id] = result
+        self._memo[key] = result
         return result
 
-    def _evaluate_record(self, receipt: ReceiptRecord) -> ReceiptValidity:
+    def _evaluate_record(self, receipt: ReceiptRecord, *, evaluate_code: bool) -> ReceiptValidity:
         local = evaluate_receipt_currentness(self._revision, receipt)
         if not local.current:
             return local
-        code = self._evaluate_code_revision(receipt)
-        return self._evaluate_predecessors(receipt) if code.current else code
+        if evaluate_code:
+            code = self._evaluate_code_revision(receipt)
+            if not code.current:
+                return code
+        return self._evaluate_predecessors(receipt)
 
     def _evaluate_code_revision(self, receipt: ReceiptRecord) -> ReceiptValidity:
         tested_revision = receipt.payload.get("code_revision")
@@ -1443,7 +1460,14 @@ class _CompleteCurrentnessEvaluator:
                 target=receipt.receipt_id,
             )
         for predecessor_id in predecessors:
-            predecessor = self.evaluate(predecessor_id)
+            predecessor_record = self._records.get(predecessor_id)
+            predecessor_is_covered = (
+                predecessor_record is not None
+                and receipt.impact_closure is not None
+                and predecessor_record.impact_closure is not None
+                and _impact_closure_covers(receipt.impact_closure, predecessor_record.impact_closure)
+            )
+            predecessor = self.evaluate(predecessor_id, evaluate_code=not predecessor_is_covered)
             if not predecessor.current:
                 code = predecessor.code
                 if code not in {

@@ -26,6 +26,7 @@ from owlbear_kanban import (
     RejectAcceptDiagnosticCode,
     ReleaseJobRequest,
     PlanJob,
+    ReceiptValidityCode,
     StartJobRequest,
     compute_node_plan_digest,
     load_change,
@@ -174,6 +175,7 @@ def _plan_request(revision) -> FinishPlanRequest:
             "evidence": {"methods": list(proof.method)},
             "evidence_ids": ("plan-proof-001",),
             "node_plan": {
+                "mode": "build",
                 "packets": [
                     {"id": f"{target.id}-PK-001", "dependencies": [], "impact_closure": closure},
                     {
@@ -181,7 +183,7 @@ def _plan_request(revision) -> FinishPlanRequest:
                         "dependencies": [f"{target.id}-PK-001"],
                         "impact_closure": closure,
                     },
-                ]
+                ],
             },
             "build_job_ids": (2, 3),
             "accept_job_id": 4,
@@ -499,7 +501,8 @@ def test_finish_plan_build_and_audit_publish_with_coordination_release(revision,
         store,
         _record(revision, 1).model_copy(update={"kind": "plan", "packet_id": None, "receipt_id": "bootstrap-001"}),
     )
-    native = NativeRuntime(revision, work_root, _History(), timedelta(minutes=5))
+    history = _History()
+    native = NativeRuntime(revision, work_root, history, timedelta(minutes=5))
     runtime = DispatchRuntime(native, work_root)
     plan_request = _plan_request(revision)
 
@@ -518,16 +521,23 @@ def test_finish_plan_build_and_audit_publish_with_coordination_release(revision,
         process_id="process-001",
         finished_at="2026-07-24T00:03:00Z",
         receipt_id="build-001",
-        code_revision="a" * 40,
+        code_revision="b" * 40,
         evidence=plan_request.evidence,
         evidence_ids=("build-proof-001",),
         impact_closure=parse_impact_closure(plan_request.node_plan["packets"][0]["impact_closure"]),
     )
     assert not isinstance(runtime.start(_request(2)), DispatchDiagnostic)
+    history.changed_paths = b"M\0serve/kanban/src/owlbear_kanban/native_runtime.py\0"
     build = runtime.finish_build(build_request)
     assert build.diagnostic is None
     assert build.receipt is not None
     assert build.event is not None
+    validity = ReceiptStore(native._revision).evaluate_currentness(  # noqa: SLF001
+        build.receipt.receipt_id,
+        history,
+        build_request.code_revision,
+    )
+    assert validity.code is ReceiptValidityCode.CURRENT
     assert "writer:\nreaders: []" in (work_root / "dispatch" / "coordination.yaml").read_text(encoding="utf-8")
 
     current_revision = native._revision  # noqa: SLF001 - plan completion replaces the active authority revision.
