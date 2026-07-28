@@ -197,15 +197,21 @@ class StartJobResult(BaseModel):
 
     job: StoredJob | None = None
     event: AttemptEvent | None = None
+    candidate_revision: str | None = None
     diagnostic: StartJobDiagnostic | None = None
 
     @model_validator(mode="after")
     def _require_one_outcome(self) -> StartJobResult:
-        if self.diagnostic is None and self.job is not None and self.event is not None:
+        if (
+            self.diagnostic is None
+            and self.job is not None
+            and self.event is not None
+            and self.candidate_revision is not None
+        ):
             return self
-        if self.diagnostic is not None and self.job is None and self.event is None:
+        if self.diagnostic is not None and self.job is None and self.event is None and self.candidate_revision is None:
             return self
-        msg = "start result must contain a job/event pair or one diagnostic"
+        msg = "start result must contain a job/event/revision tuple or one diagnostic"
         raise ValueError(msg)
 
 
@@ -2512,7 +2518,7 @@ class NativeRuntime:
                 StartJobDiagnosticCode.IDENTITY_CONFLICT,
                 "active claim identity differs from the request",
             )
-        return StartJobResult(job=stored, event=existing)
+        return StartJobResult(job=stored, event=existing, candidate_revision=request.candidate_revision)
 
     def _commit_start(
         self,
@@ -2547,7 +2553,11 @@ class NativeRuntime:
                 *participants,
             ),
         ).commit()
-        return StartJobResult(job=self._jobs.read(request.job_id), event=event)
+        return StartJobResult(
+            job=self._jobs.read(request.job_id),
+            event=event,
+            candidate_revision=request.candidate_revision,
+        )
 
     def _finalize(  # noqa: PLR0911, PLR0913
         self,

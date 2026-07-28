@@ -438,7 +438,7 @@ async def pick_jobs(
     candidate_revision: str,
     wave_size: int,
 ) -> object:
-    """Plan eligible native jobs for one admitted change revision."""
+    """Plan eligible native jobs against one exact candidate Git revision."""
     try:
         params = PickJobsParams.model_validate(
             {
@@ -469,7 +469,7 @@ async def start_job(  # noqa: PLR0913
     claimed_at: str,
     candidate_revision: str,
 ) -> object:
-    """Claim one native job through the dispatch runtime."""
+    """Claim one native job against an exact candidate Git revision."""
     try:
         params = StartJobParams.model_validate(
             {

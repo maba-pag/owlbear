@@ -116,7 +116,10 @@ Curator failure does not stop dispatch.
 
 ## Step 2 — Plan
 
-Call `pick_jobs` for the admitted change and candidate revision, using `wave_size=1` after a rate limit.
+Before each `pick_jobs`, dispatch read-only `Explore` to return the exact `git rev-parse HEAD` SHA for
+the shared worktree. Use that SHA unchanged as `candidate_revision` for `pick_jobs` and the selected
+`start_job`; a delivery digest or admission receipt digest is not a code revision. Use `wave_size=1`
+after a rate limit.
 
 If no entries are returned, report completion and stop.
 
@@ -126,6 +129,13 @@ Dispatch waves in returned order without re-bucketing. Start and dispatch each r
 structured result never authorizes the next job; only a fresh `pick_jobs` plan does.
 
 ### Dispatch Mechanics
+
+Before each `start_job`, generate fresh revision-local `attempt_id` and `claim_id` values, set
+`actor_id` to `orchestrator`, set `process_id` to the selected profile, and set `claimed_at` to an
+orchestrator-owned RFC 3339 UTC timestamp. Preserve that complete identity tuple unchanged in every
+finish, reject, or release call for the attempt; never recover or invent replacement values from job
+projection fields. Require the successful start result to contain the same `candidate_revision` before
+dispatching it.
 
 Use `runSubagent(agentName=profile, prompt=serialized_start_result, description=description)`. The
 prompt contains only the complete successful `start_job` result; the description is display-only.

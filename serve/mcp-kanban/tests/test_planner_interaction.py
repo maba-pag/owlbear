@@ -177,8 +177,13 @@ def _dispatch_shipped_planner(revision, started, *, receipt_id: str, next_job_id
     assert "Return exactly one of these objects to the orchestrator" in workflow
     assert 'runSubagent(agentName="planner")' in orchestration
     assert "Do not inspect, complete, or reconstruct `node_plan`" in orchestration
+    assert "exact `git rev-parse HEAD` SHA" in orchestration
+    assert "a delivery digest or admission receipt digest is not a code revision" in orchestration
+    assert "generate fresh revision-local `attempt_id` and `claim_id` values" in orchestration
+    assert "Preserve that complete identity tuple unchanged" in orchestration
 
     assert started.diagnostic is None
+    assert started.candidate_revision == _CODE_REVISION
     assert started.job is not None
     target = revision.resolve(started.job.job.target_node_id)
     proof = revision.resolve(target.proof)
