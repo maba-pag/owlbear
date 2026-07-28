@@ -12,7 +12,7 @@ The replacement must make these properties true by construction:
 1. One durable change revision owns product intent, decisions, architecture, delivery obligations, interface edges, migration, risk, and proof.
 2. Admission ends Specification and certifies layered delivery completeness for one exact revision before Delivery work exists.
 3. Specification and Delivery are peer product phases backed by one transactional control-plane core.
-4. The admitted graph is complete at delivery-node level; bounded frontier planning adds implementation packets without changing admitted obligations.
+4. The admitted graph is complete at delivery-node level; bounded frontier planning either adds implementation packets or, for a proven exact-candidate re-admission case, publishes a verification-only plan without changing admitted obligations.
 5. Every visible Delivery column names an agent transformation: `plan`, `build`, `accept`, or `audit`.
 6. Builders retain warm context while a mandatory read-only reviewer challenges their packet.
 7. Node acceptance and final change audit are independent, read-only over tracked files, exact-revision gates.
@@ -102,14 +102,22 @@ The loader joins these files into one canonical logical `DeliveryGraph`; physica
 
 Each `<node-id>.yaml` contains one post-admission packet DAG. A planner may write only the target node's plan file through the per-node transaction. Any change to `delivery/`, `intent.md`, `design.md`, or accepted decisions requires Specification re-entry and re-admission.
 
+A node plan has one discriminated mode. `build` contains one or more packets. `verification-only`
+contains zero packets and the exact candidate revision, re-admission generation identity, source
+inspection, required-output inventory, admitted-proof readiness, clean tracked-scope result, and
+node-level impact closure that establish the eligibility contract in §6.4. Empty packets without
+that complete mode-specific evidence are invalid.
+
 ### 3.6 Receipts
 
 Receipts are immutable YAML records with a versioned discriminated schema. Core receipt kinds are:
 
 - `admission`: certifies one delivery digest and records deterministic diagnostics, semantic challenge, baseline commands, user approval, and limits;
-- `plan`: certifies one node plan digest and the complete packet DAG for a delivery node;
+- `plan`: certifies one node plan digest and either the complete packet DAG or the complete
+  verification-only eligibility record for a delivery node;
 - `build`: certifies one packet contract, commit, changed paths, proof, inline-review result, and predecessors;
-- `accept`: certifies one delivery node against its node plan, build receipts, proof boundary, and tested code revision;
+- `accept`: certifies one delivery node against its node plan, required build receipts when packets
+  exist, proof boundary, and tested code revision;
 - `audit`: certifies the complete change against all delivery nodes, workflows, accepted decisions, and tested code revision;
 - `supersession`: invalidates named receipts and identifies corrective findings/jobs.
 
@@ -185,10 +193,11 @@ Each non-admission receipt freezes one typed `impact_closure` at issuance. The c
 The reserved selector `/` denotes the complete repository tree. Other selectors reject a leading slash, `.`, `..`,
 empty segments, backslashes, NUL, and repository escape. A tree selector matches the named tree and its descendants;
 a file selector matches only that path. Plan and build receipts copy the closure from their canonical packet
-contract. An accept receipt uses the canonical union of its node-plan packet closures. An audit receipt uses `/` plus
-the active change-authority targets. Receipt issuance fails when the required closure is missing, malformed, or
-cannot be derived without ambiguity. Changed paths and receipt diffs are evidence, not authority for widening or
-narrowing the frozen closure.
+contract. An accept receipt uses the canonical union of its node-plan packet closures in `build` mode and the
+explicit node-level verification closure in `verification-only` mode. An audit receipt uses `/` plus the active
+change-authority targets. Receipt issuance fails when the required closure is missing, malformed, empty, or cannot
+be derived without ambiguity. Changed paths and receipt diffs are evidence, not authority for widening or narrowing
+the frozen closure.
 
 #### 4.3.2 Code-revision currency
 
@@ -255,7 +264,8 @@ remain dispatch gates.
 
 One resumable planner may process several engine-selected plan-ready jobs in a warm session, but
 each job independently validates, challenges, and atomically writes only its node plan before
-creating build jobs plus one dependency-gated `accept` job. A plan job receives:
+creating either one build job per packet plus one dependency-gated `accept` job, or no build jobs
+plus one `accept` job for an eligible verification-only plan. A plan job receives:
 
 - the complete current `ChangeRevision`;
 - its target delivery node;
@@ -314,6 +324,44 @@ Each packet records:
 
 The planner must validate and canonicalize each packet impact closure before publishing its node plan. Packet
 dependencies do not imply path ownership: a packet names the paths and authority targets its own proof consumes.
+
+### 6.4 Verification-only re-admission contract
+
+Verification-only planning is a narrow re-admission and self-hosting projection-refresh path, not a
+second implementation mechanism. It is eligible only when all of the following are proven for the
+plan job's exact candidate revision and current delivery digest:
+
+1. The job belongs to the current re-admission generation or its acceptance-triggered reconciliation;
+  an initial implementation plan for unimplemented work is ineligible.
+2. Source-grounded inspection maps every node-owned obligation, module/interface effect, migration,
+  required output, and durable proof mechanism to tracked state already present at that candidate.
+3. The inspected tracked scope is clean at the candidate, requires no implementation, test,
+  documentation, generated-artifact, migration, or proof-infrastructure delta, and has one explicit
+  non-empty impact closure. Unknown, untracked, generated-but-missing, or ambiguous state is a delta.
+4. The admitted proof can execute at the candidate without an acceptor creating tracked setup,
+  harnesses, fixtures, clients, wiring, or other durable outputs.
+5. The independent plan reviewer confirms the evidence and the absence of hidden delivery expansion.
+  Existing bootstrap or legacy records may corroborate inspection but cannot satisfy any native
+  receipt, proof, currentness, or predecessor requirement.
+
+The published plan records `mode: verification-only`, `packets: []`, the exact candidate revision,
+generation identity, evidence above, and its node-level impact closure. `finish_plan` fails closed on
+any missing or mismatched field, creates no build jobs, creates exactly one accept job, and issues a
+normal plan receipt. The accept job has no build-job predecessors, but it remains gated by the plan
+receipt and predecessor-node acceptance rules. Its independent read-only acceptor executes the full
+admitted node proof in a disposable checkout of that exact candidate and issues the new-digest accept
+receipt only on success.
+
+Any needed tracked change, missing output, unavailable durable proof mechanism, candidate mismatch,
+uncertain scope, failed plan review, or failed acceptance routes to normal packet planning and build
+ownership. Verification-only planning never converts historical records into native receipts, never
+authorizes acceptor edits, and never weakens proof commands, boundary, outputs, reconciliation, or
+receipt currentness. `finish_accept` performs the same dependent-plan reconciliation and invalidation
+transitions for either plan mode.
+
+DN-015 remains a mandatory build-plus-accept terminal node. Its required board retirement,
+snapshot/finalization outputs, and commit do not exist until its engine-selected builder executes
+IF-016, so it cannot satisfy verification-only eligibility.
 
 ## 7. Kanban Job Model
 
@@ -450,6 +498,10 @@ engine marks dependent plans reconciliation-required and blocks their builds unt
 publishes superseding plans against accepted implementation evidence. One material choice creates a
 Decision Request; broader design discussion re-enters Specification.
 
+For a re-admission projection refresh, the planner may instead publish the verification-only form in
+§6.4. It owns source inspection and eligibility evidence, but it does not certify implementation;
+the fresh acceptor remains the only owner of the new-digest node verdict.
+
 ### 8.3 Builder
 
 One fresh top-level builder invocation processes exactly one `build` job in the shared worktree.
@@ -467,7 +519,11 @@ The reviewer cannot edit files, choose product direction, or ask for generic ext
 
 ### 8.4 Acceptor
 
-The acceptor processes one `accept` job after all required build receipts are valid. It is independent and cannot edit tracked files. The engine materializes the target commit in a disposable proof checkout. The acceptor may inspect code, execute commands, start services, create temporary scratch stores/fixtures, and capture logs/screenshots. It verifies:
+The acceptor processes one `accept` job after all required build receipts are valid, or after an
+eligible verification-only plan has established that no build receipts are required. It is independent
+and cannot edit tracked files. The engine materializes the target commit in a disposable proof checkout.
+The acceptor may inspect code, execute commands, start services, create temporary scratch stores/fixtures,
+and capture logs/screenshots. It verifies:
 
 - every delivery obligation and interface edge owned by the node;
 - packet coverage and actual changed surfaces;
@@ -577,6 +633,24 @@ bootstrap uses the current pipeline as a disposable execution carrier under thes
   DN-015 accept receipt. No later legacy lifecycle mutation occurs. No bootstrap loader, legacy
   receipt adapter, command alias, or compatibility mode enters the native runtime or consumer
   distribution.
+7. Before any re-admission that depends on verification-only plans, the current carrier implements
+    the minimum missing native capability under DN-003: discriminated plan validation, zero-build job
+    publication with one accept job, non-empty node-level closure/currentness, exact-candidate accept
+    evidence, replay/transaction behavior, and focused runtime tests. DN-004/IF-015 then proves the
+    unchanged `finish_plan` operation transports an empty `build_job_ids` tuple without a new tool or
+    lifecycle alias. These carrier records are supporting implementation evidence only. Re-admission
+    at the resulting candidate creates the new native plan and accept receipts; no carrier record is
+    imported or promoted.
+
+  The planning omission that triggered this re-entry was observed at candidate
+  `2578367095d004b2ebcb00bca890560dc24c34ba`: DN-001's packet-owned implementation and tests were
+  present, its 27 public loader tests passed, and builder job 59 returned
+  `SpecificationReentry/planning-omission` because no scoped tracked delta or commit existed to build.
+  That source inspection identified DN-003/IF-003 and PROOF-003 as the minimum bootstrap owner;
+  DN-004/IF-015 and PROOF-014 own only proof that the unchanged MCP operation transports and coordinates
+  the result. Candidate `be82c31005d41ccd888af8a1d90b33a817b51d0c` now implements the missing carrier
+  capability and focused runtime proof. These carrier results are supporting implementation evidence,
+  not native receipts or final certification.
 
 The admission receipt limit states that bootstrap task mutation is not atomic with receipt creation.
 Task creation is idempotent by `(change_id, delivery_digest, delivery_node_id, packet_id)` and dispatch
@@ -817,6 +891,8 @@ The new engine contains no reader or migration path for old execution records. T
 - request resolution and invalidation;
 - atomic multi-file transactions, locks, crash recovery, and path containment;
 - graph-aware dispatch and writer compatibility;
+- fail-closed verification-only eligibility, zero-build plan publication, exact-candidate acceptance,
+  reconciliation, replay, and transaction behavior;
 - supersession and corrective-job minimality;
 - snapshot manifest and disposition completeness;
 - MCP and Cockpit response contracts.
@@ -852,6 +928,8 @@ Use table-driven and property-based cases for dangling IDs, cycles, disconnected
 | Agent/session cost explodes | One resumable frontier planner with atomic per-node outputs; outcome-cohesive packets; inline packet review; no artifact-specific statuses |
 | Shared worktree contaminates proof | Single writer for implementation, disposable exact-SHA proof checkouts for accept/audit, scoped commits, stale-boundary detection |
 | Receipt/job files drift from graph | Jobs carry references/digests only; engine projects contracts and health-scans every reference |
+| Verification-only planning becomes a shortcut around missing work | Restrict it to exact-candidate re-admission generations; require complete source/output/proof inspection, independent plan review, a non-empty node closure, and full fresh acceptance; any uncertainty or delta requires build packets |
+| Bootstrap records are mistaken for native certification | Permit them only as corroborating inspection evidence; require new-digest native plan and accept receipts created by the current engine |
 | Corrective jobs create board noise | Immutable history with latest-valid-chain default and grouped finding-set corrections |
 | Bootstrap MCP bridge becomes a duplicate control plane | Keep its tool list closed to native job pick/start/finish/release/recovery, prove exact schemas and error mapping in DN-004, and require DN-009/cutover absence proof for any residual bridge-only surface |
 | Deterministic validation creates false confidence | Admission receipt states limits; independent source-grounded challenge and executable baselines remain mandatory |

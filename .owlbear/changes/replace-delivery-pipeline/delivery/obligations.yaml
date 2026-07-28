@@ -31,9 +31,8 @@ requirements:
     statement: >-
       One resumable planner processes the plan-ready node frontier while each purpose-specific
       plan job independently validates, reviews, publishes, digests, and receipts
-      one
-      complete
-      outcome-cohesive packet DAG without unadmitted delivery expansion.
+      either one complete outcome-cohesive packet DAG or one fail-closed exact-candidate
+      verification-only re-admission plan without unadmitted delivery expansion.
     workflows: [WF-002]
   - id: REQ-005
     title: Outcome-cohesive implementation with warm review
@@ -47,7 +46,7 @@ requirements:
     statement: >-
       A tracked-file-read-only acceptor proves each node against its authoritative
       contract,
-      descendant receipts, assembled boundary, and exact code commit in a disposable
+      required descendant receipts, assembled boundary, and exact code commit in a disposable
       checkout.
     workflows: [WF-004]
   - id: REQ-007
@@ -259,13 +258,14 @@ negative_requirements:
     statement: >-
       A plan job must not add a delivery outcome, interface, migration, risk, or
       proof boundary outside its admitted
-      node.
+      node, or use verification-only mode when any tracked implementation, output, test, migration,
+      or proof-infrastructure delta is required or uncertain.
   - id: NEG-009
     statement: A reviewer, acceptor, or auditor must not approve tracked changes
       it authored.
   - id: NEG-010
-    statement: A stale or superseded receipt must not satisfy any job, node, or
-      change dependency.
+    statement: A stale, superseded, bootstrap, or legacy record must not satisfy any native job,
+      node, or change dependency.
 
 preserved_behaviors:
   - id: KEEP-001
@@ -330,11 +330,10 @@ workflows:
       from the
       current admitted graph frontier in stable topological order.
     result: >-
-      Every completed node independently has one valid plan receipt, one complete
-      packet
-      DAG,
-      build jobs, and a dependency-gated accept job; no failed node exposes a partial
-      plan.
+      Every completed node independently has one valid plan receipt and a dependency-gated accept
+      job; normal plans have one complete packet DAG and build jobs, while eligible exact-candidate
+      verification-only plans have zero packets and zero build jobs. No failed node exposes a
+      partial plan.
     proof: PROOF-005
   - id: WF-003
     title: Build and review an implementation packet
@@ -345,8 +344,9 @@ workflows:
     proof: PROOF-006
   - id: WF-004
     title: Accept or reject a delivery node
-    entry: All required packet receipts for a node are valid and no writer is
-      active.
+    entry: >-
+      All required packet receipts for a node are valid, or its current verification-only plan
+      requires none, and no writer is active.
     result: >-
       The exact commit has either a valid accept receipt that makes dependent plans
       reconciliation-required and blocks their builds until superseding plans exist,

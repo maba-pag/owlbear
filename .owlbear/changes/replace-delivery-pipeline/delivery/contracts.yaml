@@ -176,7 +176,11 @@ interfaces:
       into retryable jobs plus immutable crashed events. Intent-specific priority and cancellation
       operations require matching delivery-digest and OCC-token identity on pending unclaimed jobs,
       return refreshed job authority, replay matching desired state, and never expose generic job
-      editing.
+      editing. Node plans are discriminated as build or verification-only. Build mode requires at
+      least one packet and one build job per packet. Verification-only mode requires complete
+      exact-candidate re-admission evidence and a non-empty node-level impact closure, permits zero
+      packets and zero build jobs, and creates exactly one accept job whose predecessor set retains
+      normal plan and predecessor-node gates.
     authority: MOD-001
     failure_semantics: >-
       Atomic transaction abort or recoverable manifest; no partial valid receipt.
@@ -194,13 +198,15 @@ interfaces:
       rejects non-positive policy, leaves claims active through the exact expiry boundary,
       isolates identity and
       transaction-conflict diagnostics per job, and replays exact persisted crash
-      outcomes without duplication.
+      outcomes without duplication. Empty packets outside a complete eligible verification-only
+      record, mismatched candidate/generation evidence, an empty closure, or any build-job cardinality
+      mismatch rejects the whole plan transaction without a plan, receipt, job, or attempt outcome.
     migration: MIG-004
     proof: PROOF-003
   - id: IF-004
     name: Dispatch and writer coordination
     producer: DN-004
-    consumers: [DN-006, DN-007, DN-008, DN-009, DN-012, DN-014]
+    consumers: [DN-006, DN-007, DN-008, DN-009, DN-012, DN-014, DN-015]
     contract: >-
       Dependency-aware waves, one global tracked-file writer, no accept/audit overlap,
       expiring
@@ -215,7 +221,9 @@ interfaces:
       marks each
       dependent plan reconciliation-required, creates or releases its plan job, and
       keeps dependent
-      builds blocked until a superseding plan receipt is current.
+      builds blocked until a superseding plan receipt is current. A verification-only accept job has
+      no build-job predecessors but remains gated by its current plan receipt, exact candidate, and
+      predecessor-node acceptance requirements.
     runtime_producer: owlbear_kanban.dispatch
     runtime_consumers:
       - orchestrator
@@ -231,7 +239,7 @@ interfaces:
   - id: IF-005
     name: Disposable exact-commit proof checkout
     producer: DN-004
-    consumers: [DN-008, DN-013, DN-014]
+    consumers: [DN-008, DN-013, DN-014, DN-015]
     contract: >-
       Contained read-only checkout under .owlbear/scratch/proof for one commit with
       normal toolchain and crash-safe
@@ -254,7 +262,8 @@ interfaces:
       start_job composes IF-005 setup before claim creation and returns contained
       checkout context; purpose-specific
       finish, release, and recovery perform idempotent cleanup without adding another
-      tool.
+      tool. The existing finish_plan schema transports an empty build_job_ids tuple for an eligible
+      verification-only plan; no additional operation, alias, or lifecycle state is introduced.
     runtime_producer: owlbear_mcp_kanban
     runtime_consumers: [orchestrator]
     authority: MOD-002
@@ -286,10 +295,10 @@ interfaces:
     contract: >-
       A resumable planner consumes engine-selected plan-ready jobs, but each completion
       publishes
-      one isolated node plan, node-plan digest, complete packet DAG, plan receipt,
-      build
-      jobs, and
-      accept job inside admitted node bounds. An initial plan receipt records admitted
+      one isolated node plan, node-plan digest, and plan receipt inside admitted node bounds. Normal
+      mode publishes a complete packet DAG, one build job per packet, and one accept job.
+      Verification-only mode publishes zero packets, zero build jobs, complete exact-candidate
+      eligibility evidence, and one accept job. An initial plan receipt records admitted
       predecessor
       contracts; an acceptance-triggered reconciliation publishes a superseding plan
       receipt based
@@ -298,7 +307,8 @@ interfaces:
     failure_semantics: >-
       Illegal delivery expansion routes to Specification re-entry; one material choice
       creates a
-      Decision Request; no partial plan or packet jobs persist for the failing node,
+      Decision Request; needed or uncertain implementation/output/proof work forces normal build
+      packets; no partial plan or packet jobs persist for the failing node,
       and prior
       completed node plans remain valid.
     migration: MIG-004
@@ -327,7 +337,10 @@ interfaces:
       receipt,
       marks dependent plans reconciliation-required, and blocks dependent builds until
       superseding
-      plans incorporate accepted implementation evidence.
+      plans incorporate accepted implementation evidence. For verification-only plans, acceptance
+      requires no build receipts but must execute the unchanged full node proof at the plan's exact
+      candidate and issue a new-digest native accept receipt; bootstrap records are supporting
+      evidence only.
     authority: MOD-003
     failure_semantics: Failure creates typed findings and corrective jobs;
       reviewer never patches tracked files.
@@ -534,6 +547,10 @@ migrations:
         test, and Cockpit vocabulary with plan.
       - Re-prove DN-003 runtime and DN-004 dispatch/IF-015 contracts before
         DN-009 consumes the corrected API.
+      - >-
+        Before re-admission projection refresh, add and prove DN-003's discriminated
+        verification-only plan mode, zero-build publication, node-level closure, and exact-candidate
+        acceptance path through the unchanged IF-015 finish_plan operation.
       - Remove graph.yaml plan mutation, finish_shape, shape discriminators, and
         every dual registration.
     consumer_inventory:
@@ -612,12 +629,14 @@ risks:
       - Node plan changes after build.
       - Code changes after acceptance.
       - Superseded receipt remains referenced.
+      - A verification-only plan names a different candidate or incomplete impact closure.
     disposition: >-
       Canonical digests, frozen typed impact closures, conservative repository-history
       classification, explicit
       supersession references, dependency-closure invalidation, and transition predicates
       that require current
-      receipts.
+      receipts. Verification-only plans bind their candidate, generation, inspection evidence, and
+      non-empty node-level closure into the node-plan digest and resulting receipts.
     owner: DN-003
     proof: PROOF-003
   - id: RISK-004
@@ -668,10 +687,12 @@ risks:
       - New interface is described as an implementation detail.
       - Missing integration work becomes a local packet.
       - Proof boundary changes without re-admission.
+      - Unimplemented, uncertain, or missing-output work is labeled verification-only.
     disposition: >-
       Namespace-limited graph transaction, reference subset validation, independent
-      plan review, typed
-      material-discovery finding, and global re-admission.
+      plan review, complete source/output/proof eligibility evidence for verification-only mode,
+      typed material-discovery finding, and global re-admission. Any ambiguity or delta requires
+      normal build packets.
     owner: DN-006
     proof: PROOF-005
   - id: RISK-008
@@ -695,10 +716,12 @@ risks:
       - Injected completed workflow replaces application assembly.
       - Scratch fixture invents an ungrounded contract.
       - Mock replaces the endpoint, command, or UI under test.
+      - Bootstrap execution records replace fresh exact-candidate acceptance.
     disposition: >-
       Proof contracts name assembled boundary and allowed lower replacements; receipts
       enumerate setup/replacements;
-      accept/audit reject boundary substitution.
+      accept/audit reject boundary substitution, and native receipt issuance ignores legacy records
+      as dependency or certification authority.
     owner: DN-008
     supporting_nodes: [DN-014]
     proof: PROOF-007
@@ -824,6 +847,13 @@ proofs:
         predecessor-cycle, and explicit-supersession receipt classes.
       - Assert no partial valid receipt or dangling job after injected write
         failures.
+      - >-
+        Accept an eligible exact-candidate verification-only plan with zero packets and zero build
+        jobs, one accept job, and a non-empty node-level closure; reject missing mode evidence,
+        candidate/generation mismatch, empty closure, hidden delta, and zero packets in build mode.
+      - >-
+        Prove exact replay, transaction rollback, receipt currentness, and dependent reconciliation
+        are identical across build and verification-only plan modes.
     allowed_replacements:
       - clock
       - process identity
@@ -864,6 +894,14 @@ proofs:
         superseding plan receipts are current.
       - Invalidate a predecessor accept receipt and prove dependent reconciled
         plan/build closure becomes stale.
+      - >-
+        Publish a source-grounded verification-only re-admission plan only when every node output and
+        durable proof mechanism exists at the exact candidate with no tracked delta; assert zero
+        build jobs, one accept job, and independent reviewer evidence.
+      - >-
+        Force normal packets for missing code, tests, documentation, generated output, migration,
+        harness, fixture, client, wiring, ambiguous scope, or unavailable proof infrastructure, and
+        reject bootstrap records as native receipt evidence.
     allowed_replacements: [repository search results below the planner]
     durable_outputs: [planner scenario and transaction tests]
   - id: PROOF-006
@@ -891,6 +929,10 @@ proofs:
       - Reject local defect, missing harness, boundary bypass, stale receipt,
         and tracked acceptor edit.
       - Assert corrective jobs and cleanup are exact and minimal.
+      - >-
+        Pass an eligible verification-only node with zero build receipts only after executing its
+        full admitted proof at the exact candidate; reject candidate mismatch, missing outputs,
+        boundary weakening, legacy-record substitution, and any tracked acceptor edit.
     allowed_replacements:
       - dependencies explicitly below each fixture proof boundary
     durable_outputs: [acceptance and proof-checkout tests]
@@ -1005,6 +1047,10 @@ proofs:
         paths.
       - Assert every structured attempt is finalized once and replanning reads
         current graph/job state.
+      - >-
+        Prove IF-015 finish_plan accepts an empty build_job_ids tuple only for the DN-003-validated
+        verification-only plan form, creates one accept job, and adds no tool, alias, or lifecycle
+        semantic.
     allowed_replacements: [clock, subagent runner, temporary repository]
     durable_outputs:
       - bootstrap MCP contract

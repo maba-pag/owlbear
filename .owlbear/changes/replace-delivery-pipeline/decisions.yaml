@@ -1637,3 +1637,55 @@ decisions:
           - Reopens accepted bootstrap architecture after the native substrate is built
         risks:
           - Delays cutover and introduces new authority churn
+
+  - id: DEC-037
+    title: Permit verification-only plans for source-proven re-admission nodes
+    status: accepted
+    decided_at: 2026-07-28
+    authority: user
+    selected: exact-candidate-verification-only
+    rationale: >-
+      Re-admission of the self-hosting replacement creates fresh plan jobs even when a delivery
+      node's admitted implementation, tests, outputs, and proof infrastructure already exist at the
+      exact candidate revision. Requiring a builder to manufacture a no-op diff cannot produce valid
+      build evidence and confuses implementation with certification. A discriminated
+      verification-only node plan may therefore contain zero packets only after fail-closed
+      source/output/proof inspection and independent plan review. It creates one fresh read-only
+      accept job whose exact-candidate proof issues the new-digest native receipt. Any delta,
+      ambiguity, missing durable output, or unavailable proof mechanism requires normal build
+      packets; bootstrap records remain supporting evidence only.
+    options:
+      - id: exact-candidate-verification-only
+        label: Allow zero build packets only for source-proven exact-candidate re-admission nodes
+        confidence: 0.96
+        recommended: true
+        pros:
+          - Avoids fabricated no-op commits while preserving fresh native certification
+          - Keeps implementation ownership with builders and verdict ownership with acceptors
+          - Preserves reconciliation, exact-revision proof, and receipt currentness
+        cons:
+          - Adds a discriminated node-plan mode and stricter evidence validation
+          - Requires a small bootstrap runtime change before re-admission can use the mode
+        risks:
+          - Weak eligibility evidence could turn the mode into an implementation shortcut
+      - id: require-no-op-build
+        label: Require at least one build packet and commit for every re-admitted node
+        confidence: 0.12
+        recommended: false
+        pros:
+          - Preserves one uniform packet cardinality rule
+        cons:
+          - Cannot produce a scoped implementation diff when the admitted output already exists
+          - Encourages meaningless churn solely to satisfy lifecycle shape
+        risks:
+          - Fabricated commits and tests are mistaken for delivery evidence
+      - id: import-bootstrap-receipts
+        label: Convert existing bootstrap records into native build or accept receipts
+        confidence: 0.04
+        recommended: false
+        pros:
+          - Avoids rerunning node proof
+        cons:
+          - Bypasses the native exact-digest and exact-candidate evidence boundary
+        risks:
+          - Legacy records silently certify contracts they never executed

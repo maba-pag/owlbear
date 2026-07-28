@@ -1,7 +1,9 @@
 ---
 schema_version: 1
 change_id: replace-delivery-pipeline
-state: admitted
+# candidate_delivery_digest: 3212969f2164f0d71ae60c30405eb941b8a87b99d225a57db96062143dd4de7c
+# candidate_admission_receipt: pending challenge, baselines, validation, and user approval
+state: draft
 authority:
   intent: intent.md
   design: design.md
@@ -9,15 +11,7 @@ authority:
   research:
     - ../../research/planning-workflow-root-cause-and-redesign.md
     - ../../research/delivery-operating-model-reframe.md
-admission:
-  state: admitted
-  delivery_digest:
-    784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
-  receipt: receipts/admission-784c7b96d745.yaml
-  limits:
-    - Admission certifies delivery completeness and feasibility, not implementation correctness.
-    - Memory and Ideas continuity is preservation-only; DN-011 does not expand either utility.
-    - DN-015 is not projected into the legacy board it destroys; its native build/accept receipts and final commit are authoritative.
+admission: null
 nodes:
   - id: DN-001
     title: Establish native change authority and semantic identity
@@ -55,8 +49,8 @@ nodes:
       Purpose-specific job, attempt, finding, receipt, request, supersession, invalidation,
       transaction, recovery,
       and health models provide one graph-aware runtime with plan-only lifecycle vocabulary
-      and no
-      copied specification truth.
+      and no copied specification truth, including fail-closed discriminated build and
+      exact-candidate verification-only plan transactions.
     owns:
       - REQ-008
       - REQ-009
@@ -113,8 +107,8 @@ nodes:
       One resumable planner processes engine-selected plan-ready nodes while each
       node
       independently
-      publishes a complete outcome-cohesive packet plan and build/accept jobs, mechanically
-      rejects
+      publishes either a complete outcome-cohesive packet plan with build/accept jobs or an eligible
+      exact-candidate verification-only plan with one accept job, mechanically rejects
       global delivery expansion, and publishes superseding dependent plans after predecessor
       acceptance
       before dependent builds proceed.
@@ -153,7 +147,8 @@ nodes:
     outcome: >-
       A read-only acceptor uses exact-commit proof checkouts, evaluates each delivery
       node against its contract and
-      descendant receipts, and routes typed findings into minimum corrective work
+      required descendant receipts, including zero build receipts only for an eligible
+      verification-only plan, and routes typed findings into minimum corrective work
       without self-patching.
     owns: [REQ-006, NEG-003, NEG-009, KEEP-005]
     supports: [REQ-008, REQ-014, KEEP-004, KEEP-007, KEEP-008]

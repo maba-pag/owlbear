@@ -27,7 +27,7 @@ OwlBear will provide one native, resumable path from rough idea to accepted chan
 1. A user collaborates with one `/design` session that persists intent, decisions, evidence, architecture, interfaces, migration, risk, proof, and a complete delivery graph as understanding develops.
 2. The user is asked one material decision at a time with explicit options, pros, cons, risks, recommendation, and confidence. Repository-answerable facts are researched rather than delegated to the user.
 3. Specification ends when admission certifies one semantic revision containing complete delivery nodes, contracts, risks, dependencies, and proof ownership.
-4. Delivery begins with a resumable frontier planner that publishes one independently validated, reviewed, digested, and receipted packet plan per plan-ready node without changing admitted obligations.
+4. Delivery begins with a resumable frontier planner that publishes one independently validated, reviewed, digested, and receipted node plan without changing admitted obligations. A re-admission node whose implementation and proof infrastructure are source-proven complete at the exact candidate may use a verification-only plan with zero build packets; every uncertain, missing, or changed output requires normal build packets.
 5. The engine selects every purpose-specific `plan`, `build`, `accept`, or `audit` job. A thin orchestrator dispatches one fresh top-level agent invocation per job; builders implement one packet under the global writer lease and resolve mandatory read-only reviewer findings inside that job session.
 6. An independent acceptor proves each delivery node against its authoritative contract, all descendant receipts, and the exact committed revision. A final independent auditor proves the complete user workflow and issues the change receipt.
 7. Rejections create typed findings, corrective jobs, invalidated receipts, and superseding receipts. Completed attempts remain immutable history.
@@ -45,7 +45,11 @@ The user invokes `/ideate` or `/design`. OwlBear creates or resumes a native cha
 Admission creates initially plan-ready `plan` jobs for admitted delivery nodes because their
 predecessor contracts are already authoritative. One resumable planner processes them in stable
 delivery-graph order while context is warm, but validates, reviews, publishes, digests, and receipts
-each node independently. A predecessor's acceptance makes each dependent plan
+each node independently. A normal plan publishes its complete packet DAG and build jobs. A
+verification-only re-admission plan publishes zero build packets only after exact-candidate source,
+output, clean-scope, proof-readiness, and independent-review evidence passes fail closed; it still
+creates one independent accept job and cannot use legacy records as native receipts. A predecessor's
+acceptance makes each dependent plan
 reconciliation-required and blocks that dependent's build until the reconciled plan is current. The
 planner may refine implementation work within admitted authority; one material choice becomes a
 Decision Request, and any broader product or architecture change re-enters interactive Specification
@@ -57,7 +61,7 @@ The engine selects at most one tracked-file writer at a time. The orchestrator i
 
 ### WF-4: Node acceptance and corrective work
 
-When all required packet receipts exist, an independent `accept` job executes the admitted node proof at an exact clean commit. The acceptor may create ephemeral diagnostic setup but cannot edit tracked files. Success releases dependent planning reconciliation. Failure emits structured findings and minimum corrective `plan` or `build` jobs; prior attempts remain visible and invalid receipts cannot satisfy dependencies.
+When all required packet receipts exist, or an eligible verification-only plan proves that no packet receipts are required, an independent `accept` job executes the full admitted node proof at the exact candidate commit. The acceptor may create ephemeral diagnostic setup but cannot edit tracked files. Success releases dependent planning reconciliation. Failure emits structured findings and minimum corrective `plan` or `build` jobs; prior attempts remain visible and invalid or legacy receipts cannot satisfy dependencies.
 
 ### WF-5: Whole-change audit and closure
 
@@ -67,6 +71,7 @@ After every delivery node has a valid acceptance receipt, an independent `audit`
 
 - Each active product promise, negative requirement, preserved behavior, design obligation, changed interface, migration/removal step, material risk, and normal workflow has an admitted owner and executable proof path.
 - Delivery jobs contain operational state and references; they do not become a competing specification authority.
+- Verification-only plans are restricted to source-proven exact-candidate re-admission work, create no build receipts, and still require fresh independent node acceptance; any required code, output, or proof-infrastructure change creates build work.
 - Every job kind names an agent transformation: `plan`, `build`, `accept`, or `audit`. Dependency blocking, readiness, claims, staleness, cancellation, and failed attempts are properties or dispositions.
 - No tracked-file writer overlaps another writer. Acceptance and audit operate on clean committed revisions.
 - The four historical defective plans are rejected before implementation; corrected equivalents are admitted and can complete through the new board.
@@ -121,6 +126,7 @@ The cutover must retain: one-question product clarification; Product Promise and
 - Builders still receive copied task prose that can drift from the admitted graph.
 - Packet checks pass, but no build-owned mechanism exercises the assembled delivery node or whole user workflow.
 - The acceptor or auditor writes missing harnesses or product code and then approves its own work.
+- A planner labels unimplemented or uncertain work verification-only, treats a clean diff as proof of completeness, or promotes bootstrap records into native receipts.
 - A design revision occurs after admission, but old jobs or receipts can still close the change.
 - Every code, test, documentation, and migration file becomes a separate job, multiplying agent starts and deferring integration.
 - The old pipeline remains available as a quick lane or compatibility mode and becomes the path of least resistance.
