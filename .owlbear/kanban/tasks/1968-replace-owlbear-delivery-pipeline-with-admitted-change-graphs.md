@@ -4,7 +4,7 @@ title: Replace OwlBear delivery pipeline with admitted change graphs
 status: collect
 priority: high
 created: 2026-07-21T01:46:53.257501+02:00
-updated: 2026-07-28T05:22:07.041758+02:00
+updated: 2026-07-28T12:28:57.042791+02:00
 tags:
   - pipeline-redesign
   - architecture
@@ -271,3 +271,10 @@ Material late DN-008 repair approved for failure key `DN-013/resumed-dispatch-no
 
 [[2026-07-28T05:22:07+02:00]]
 Connected graph mutation complete: user-approved, challenger-passed late DN-008 repair #2100 is now a direct root dependency. Board audit confirms #2100 build-ready under #1968 with archived lineage #1985/#2099; DN-013 remains blocked transitively. Claim released without status change.
+
+[[2026-07-28T12:28:57+02:00]]
+## Collect Notes
+
+CORRECTION: root archive is not yet authorized. Commit `761a30c0547bcbf579118b173e154e3b84f36c57` archived this aggregate using legacy dependency completion and PROOF-013 evidence while explicitly recording that DN-015/finalizer/live-carrier execution was absent. Commit `c526a23e7` reverted that premature archive and restored this task to `collect`.
+
+DEC-036, DN-015, MIG-005, IF-016, and PROOF-016 require an engine-selected native build, committed real carrier finalization, and distinct read-only exact-commit DN-015 acceptance before root closure. Current native job 43 remains a pending `plan` job with no claim or receipt. Do not archive #1968 until the exact-commit DN-015 accept receipt and immutable finalization manifest/receipt exist and are verified. Legacy dependency `dep_status=ok` is necessary but not sufficient.
