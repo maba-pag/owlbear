@@ -2251,6 +2251,28 @@ def test_job_administration_conflicts_preserve_complete_state(revision, tmp_path
     assert _snapshot(work_root) == before
 
 
+def test_stale_plan_job_does_not_block_current_build(tmp_path) -> None:
+    revision = _copied_revision(tmp_path, clean_receipts=True)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision, kind="plan", receipt_id="bootstrap-001"))
+    runtime = _runtime(revision, work_root)
+
+    assert runtime.start_job(_request()).diagnostic is None
+    assert runtime.finish_plan(_plan_request(revision)).diagnostic is None
+    _materialize(
+        store,
+        _record(revision, job_id=99, kind="plan", receipt_id="stale-plan").model_copy(
+            update={"delivery_digest": "b" * 64}
+        ),
+    )
+
+    build_start = _request().model_copy(update={"job_id": 2, "attempt_id": "attempt-002", "claim_id": "claim-002"})
+
+    assert runtime.start_job(build_start).diagnostic is None
+
+
 def test_job_priority_process_race_has_one_winner_and_interrupted_publication_recovers(revision, tmp_path) -> None:
     work_root = tmp_path / "work"
     work_root.mkdir()

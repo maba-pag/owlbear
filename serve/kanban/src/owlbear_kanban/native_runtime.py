@@ -2181,7 +2181,13 @@ class NativeRuntime:
 
     def _reconciliation_predecessors(self, node_id: str, code_revision: str) -> StartJobResult | None:
         active_plan = next(
-            (item.job for item in self._jobs.list() if item.job.kind == "plan" and item.job.target_node_id == node_id),
+            (
+                item.job
+                for item in self._jobs.list()
+                if item.job.kind == "plan"
+                and item.job.target_node_id == node_id
+                and item.job.delivery_digest == self._revision.delivery_digest
+            ),
             None,
         )
         if active_plan is not None:
