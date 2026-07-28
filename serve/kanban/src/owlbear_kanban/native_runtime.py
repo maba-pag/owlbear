@@ -1925,7 +1925,9 @@ class NativeRuntime:
                 item.job
                 for dependent in dependents
                 for item in self._jobs.list()
-                if item.job.kind == "plan" and item.job.target_node_id == dependent.id
+                if item.job.kind == "plan"
+                and item.job.target_node_id == dependent.id
+                and item.job.delivery_digest == self._revision.delivery_digest
             )
             shape_identity_matches = (
                 tuple(job.job_id for job in reconciliation_jobs) == request.reconciliation_plan_job_ids
@@ -2024,7 +2026,9 @@ class NativeRuntime:
             active = tuple(
                 item
                 for item in self._jobs.list()
-                if item.job.kind == "plan" and item.job.target_node_id == dependent.id
+                if item.job.kind == "plan"
+                and item.job.target_node_id == dependent.id
+                and item.job.delivery_digest == self._revision.delivery_digest
             )
             if len(active) > 1:
                 msg = "dependent has multiple active plan jobs"

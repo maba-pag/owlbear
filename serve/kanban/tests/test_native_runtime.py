@@ -1436,6 +1436,18 @@ def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> No
         evidence_ids=("accept-proof-001",),
         reconciliation_plan_job_ids=(6, 7),
     )
+    for job_id, target_node_id in ((8, "DN-002"), (9, "DN-003")):
+        _materialize(
+            store,
+            _record(
+                runtime._revision,  # noqa: SLF001 - stale retained generation exercises digest filtering.
+                job_id=job_id,
+                kind="plan",
+                target_node_id=target_node_id,
+                delivery_digest="b" * 64,
+                receipt_id="admission-stale",
+            ),
+        )
     accept = runtime.finish_accept(accept_request)
     assert accept.diagnostic is None
     assert accept.created_jobs == ()
@@ -1446,7 +1458,7 @@ def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> No
     assert tuple(
         (item.job.job_id, item.job.target_node_id, item.job.predecessor_job_ids)
         for item in store.list()
-        if item.job.kind == "plan"
+        if item.job.kind == "plan" and item.job.delivery_digest == runtime._revision.delivery_digest  # noqa: SLF001
     ) == ((6, "DN-002", (4,)), (7, "DN-003", (4,)))
     assert runtime.finish_accept(accept_request).receipt == accept.receipt
     changed_reconciliation_replay = runtime.finish_accept(
