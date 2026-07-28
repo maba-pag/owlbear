@@ -1,10 +1,10 @@
 ---
 id: 2097
 title: 'P17-04: Execute the fresh-consumer native delivery workflow'
-status: shape
+status: build
 priority: high
 created: 2026-07-27T19:45:12.576115+02:00
-updated: 2026-07-28T05:22:07.065509+02:00
+updated: 2026-07-28T06:11:51.211506+02:00
 tags:
   - phase-17
   - scope:test
@@ -100,3 +100,14 @@ Connected repair update after #2099 closure and resumed PROOF-013 diagnosis.
 
 [[2026-07-28T05:22:07+02:00]]
 Connected graph mutation complete: earlier node-plan-digest failure is closed by archived #2099; resumed-dispatch failure is assigned to build-ready #2100 with complete Repair Closure Map. #2097 stays in shape and blocked on #2100, preserving its ACs and disposable full-workflow proof boundary. Claim released.
+
+[[2026-07-28T06:11:51+02:00]]
+## Shape Notes
+Mechanical reroute after completion of the approved repair graph; no AC, scope, authority, dependency, or proof-guidance change.
+
+- Failure key `AC-2/corrective-build-node-plan-digest` remains closed by archived completed #2099; public corrective build completion is now proven with packet and current node-plan authority.
+- Failure key `DN-013/resumed-dispatch-no-accept-job` is closed by archived completed #2100 at builder commit `4438f6e4ec9e2d5076e64eb35e4e2f27aa0d9f05`; public one/two-build proofs show replacement acceptance omitted through partial correction and selected/started after the full current receipt closure.
+- The actual proof artifact `serve/mcp-kanban/tests/test_complete_native_delivery.py` now resumes replacement acceptance instead of preserving the stale empty-dispatch xfail. It remains disposable and retains the live-carrier, live change root, DN-015, and `setup/finalize.py` exclusions.
+- The previously approved Repair Closure Map and shaper-challenger pass in #2100 establish the production owner, causal public check, negative controls, and executor availability. #2100's archived completion satisfies the prior explicit route: #2097 returns to build and completes its unchanged full correction-to-audit AC boundary.
+
+Board audit: #2097 `dep_status=ok`; #2099 and #2100 are archived completed; downstream #2098 remains blocked on #2097. All 18 recalled shaper memories were assessed.
