@@ -165,6 +165,10 @@ Before returning success:
    dependency references, and acyclicity.
 2. Confirm each impact path is canonical and each authority target is in the target node's admitted
    node, obligations, modules, interfaces, risks, proof, or predecessor contracts.
+   Migration effects must still be inspected and recorded in source or required-output evidence,
+   but do not put a migration ID anywhere in the node plan unless that ID is itself in this selected
+   node's allowed authority set. A migration attached to a consumed or produced interface does not
+   become node-owned authority.
 3. Confirm every target obligation and acceptance outcome has one packet owner and one
    boundary-valid proof path.
 4. For build mode, confirm the packet set is outcome-cohesive, sized for focused builder contexts,

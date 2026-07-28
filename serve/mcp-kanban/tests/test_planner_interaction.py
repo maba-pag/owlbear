@@ -198,6 +198,8 @@ def _dispatch_shipped_planner(revision, started, *, receipt_id: str, next_job_id
     )
     assert "Call a fresh read-only plan reviewer" in workflow
     assert "Return exactly one of these objects to the orchestrator" in workflow
+    assert "do not put a migration ID anywhere in the node plan" in workflow
+    assert "does not\n   become node-owned authority" in workflow
     assert 'runSubagent(agentName="planner")' in orchestration
     assert "execute/runInTerminal" in orchestrator["tools"]
     assert "OwlBear Kanban native job pick_jobs start_job finish_plan" in orchestration
