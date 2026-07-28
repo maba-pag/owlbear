@@ -517,7 +517,7 @@ async def _setup_scenario(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     assert loaded.diagnostics == ()
     assert loaded.revision is not None
     revision = loaded.revision
-    checkouts = ProofCheckoutManager(consumer, tmp_path / "proof")
+    checkouts = ProofCheckoutManager(consumer, tmp_path / "proof", change_root)
     app_context = AppContext(workspace=NativeWorkspace(work_root, timedelta(hours=1)))
     app_context.dispatch_runtimes[revision.change_id] = DispatchRuntime(
         NativeRuntime(

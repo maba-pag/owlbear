@@ -15,15 +15,16 @@ Treat the serialized successful `start_job` result as immutable execution author
 
 1. The result contains an active `accept` job and started event with no diagnostic. Its change, job,
    attempt, claim, actor, process, candidate revision, and delivery digest identities agree.
-2. The result contains the engine-created proof checkout. Its root and commit identify the candidate
-   revision; never substitute the shared worktree or create another checkout.
+2. The result contains the engine-created proof checkout and read-only authority sidecar. Its root,
+   commit, and authority digest identify the candidate source and lifecycle snapshot; never
+   substitute the shared worktree, live authority tree, or another checkout.
 3. `show_change(change_id)` matches the selected delivery digest. Resolve only the target node's
    admitted outcome, obligations, interfaces, risks, acceptance contract, and proof.
 4. `show_job(change_id, job_id)` matches the supplied target, active claim, current plan identity,
    packet set, and exact candidate revision.
-5. The current `plans/<target-node-id>.yaml` matches the selected node-plan digest and complete packet
-   DAG. `show_receipt` confirms every required packet receipt is current, successful, descended from
-   the plan, and tied to the exact candidate revision.
+5. The authority sidecar's current `plans/<target-node-id>.yaml` matches the selected node-plan digest
+   and complete packet DAG. Its receipt records and `show_receipt` confirm every required packet
+   receipt is current, successful, descended from the plan, and tied to the exact candidate revision.
 6. The admitted proof boundary, methods, allowed lower replacements, and durable evidence outputs are
    complete enough to execute without creating tracked harness or changing authority.
 
@@ -36,6 +37,7 @@ release, or finish work.
 Before running proof, record:
 
 - the exact checkout root and candidate SHA;
+- the authority sidecar root and digest;
 - the admitted node outcome and acceptance contract;
 - the current plan and packet receipt identities;
 - each proof command or observation and its expected boundary;

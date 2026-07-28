@@ -260,7 +260,7 @@ def _dispatch_runtime(app_ctx: AppContext, change_id: str) -> DispatchRuntime:
     loaded = load_change(changes_dir, change_id)
     if loaded.revision is None:
         _raise_tool_error("ERR_CHANGE_NOT_ADMITTED", "change is not admitted")
-    proof_checkouts = ProofCheckoutManager(workspace.workspace_root, workspace.proof_root)
+    proof_checkouts = ProofCheckoutManager(workspace.workspace_root, workspace.proof_root, workspace.changes_dir)
     runtime = DispatchRuntime(
         NativeRuntime(
             loaded.revision,

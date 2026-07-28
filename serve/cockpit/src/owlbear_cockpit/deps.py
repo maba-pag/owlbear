@@ -61,7 +61,11 @@ class NativeContextCache:
             ):
                 return cached
 
-            proof_checkouts = ProofCheckoutManager(workspace.workspace_root, workspace.proof_root)
+            proof_checkouts = ProofCheckoutManager(
+                workspace.workspace_root,
+                workspace.proof_root,
+                workspace.changes_dir,
+            )
             runtime = NativeRuntime(
                 revision,
                 workspace.work_root,

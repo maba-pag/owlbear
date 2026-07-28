@@ -324,7 +324,7 @@ def test_reject_accept_transaction_conflict_restores_cleaned_checkout(
     )
     assert released.diagnostic is None
     repository, commit = _repository(tmp_path)
-    checkouts = ProofCheckoutManager(repository, tmp_path / "proof")
+    checkouts = ProofCheckoutManager(repository, tmp_path / "proof", revision.source_dir.parent)
     runtime = DispatchRuntime(native, work_root, checkouts)
     start = first_start.model_copy(update={"attempt_id": "attempt-014", "claim_id": "claim-014"})
     started = runtime.start(start)

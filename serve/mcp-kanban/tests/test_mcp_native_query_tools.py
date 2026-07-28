@@ -856,7 +856,7 @@ class TestNativeQueryTools:
         orphan_dir.mkdir(mode=0o700)
 
         # Create proof checkout manager and runtime with it
-        proof_checkouts = ProofCheckoutManager(Path.cwd(), proof_root)
+        proof_checkouts = ProofCheckoutManager(Path.cwd(), proof_root, changes_dir)
         runtime = DispatchRuntime(
             NativeRuntime(revision, work_root, _History(), timedelta(minutes=1), proof_checkouts=proof_checkouts),
             work_root,

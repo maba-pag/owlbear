@@ -243,7 +243,7 @@ async def _active_accept(tmp_path: Path):  # noqa: PLR0915 - public lifecycle as
     _materialize_plan(revision, board)
     repository = Path.cwd()
     commit = _git_head()
-    checkouts = ProofCheckoutManager(repository, tmp_path / "proof")
+    checkouts = ProofCheckoutManager(repository, tmp_path / "proof", changes_dir)
     runtime = DispatchRuntime(
         NativeRuntime(
             revision,
@@ -1486,7 +1486,7 @@ async def test_public_audit_success_closes_accepted_whole_change_and_replays(tmp
         code_revision=commit,
         history=GitRepositoryHistory(repository),
     )
-    checkouts = ProofCheckoutManager(repository, tmp_path / "proof-mcp")
+    checkouts = ProofCheckoutManager(repository, tmp_path / "proof-mcp", revision.source_dir.parent)
     runtime = DispatchRuntime(native, board, checkouts)
     app_ctx = AppContext(workspace=NativeWorkspace(board, timedelta(hours=1)))
     app_ctx.dispatch_runtimes[revision.change_id] = runtime
@@ -1709,7 +1709,7 @@ async def _pending_public_audit(tmp_path: Path, proof_dir: str):
         code_revision=commit,
         history=GitRepositoryHistory(repository),
     )
-    checkouts = ProofCheckoutManager(repository, tmp_path / proof_dir)
+    checkouts = ProofCheckoutManager(repository, tmp_path / proof_dir, revision.source_dir.parent)
     runtime = DispatchRuntime(native, board, checkouts)
     app_ctx = AppContext(workspace=NativeWorkspace(board, timedelta(hours=1)))
     app_ctx.dispatch_runtimes[revision.change_id] = runtime

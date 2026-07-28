@@ -31,6 +31,9 @@ def _repository(tmp_path: Path) -> tuple[Path, str]:
     tracked.write_text("proof\n", encoding="utf-8")
     _git(repository, "add", "tracked.txt")
     _git(repository, "commit", "-m", "proof")
+    authority = repository / ".owlbear/changes/proof-change"
+    authority.mkdir(parents=True)
+    (authority / "plan.yaml").write_text("mode: verification-only\n", encoding="utf-8")
     return repository, _git(repository, "rev-parse", "HEAD")
 
 
@@ -64,7 +67,11 @@ def test_materialize_uses_exact_commit_read_only_checkout_and_manifest(tmp_path:
     checkout = result.checkout
     assert checkout.root == tmp_path / "scratch" / "proof" / "27"
     assert _git(checkout.checkout, "rev-parse", "HEAD") == commit
+    assert (checkout.authority / "plan.yaml").read_text(encoding="utf-8") == "mode: verification-only\n"
+    assert len(checkout.authority_digest) == 64
     assert "job_id: 27" in checkout.manifest.read_text(encoding="utf-8")
+    assert "authority_digest:" in checkout.manifest.read_text(encoding="utf-8")
+    assert checkout.authority_digest in checkout.manifest.read_text(encoding="utf-8").replace("\n", "")
     assert "TOOLCHAIN: uv" in checkout.manifest.read_text(encoding="utf-8")
     assert "temporary repository" in checkout.manifest.read_text(encoding="utf-8")
     with pytest.raises(PermissionError):
@@ -110,6 +117,21 @@ def test_validate_rejects_revision_mismatch_and_tracked_mutation(tmp_path: Path)
     assert mismatch.code is ProofCheckoutDiagnosticCode.COMMIT_MISMATCH
 
 
+def test_validate_rejects_authority_sidecar_mutation(tmp_path: Path) -> None:
+    repository, commit = _repository(tmp_path)
+    manager = ProofCheckoutManager(repository, tmp_path / "scratch" / "proof")
+    result = manager.materialize(_job(), commit)
+    assert result.checkout is not None
+
+    plan = result.checkout.authority / "plan.yaml"
+    plan.chmod(stat.S_IMODE(plan.stat().st_mode) | stat.S_IWUSR)
+    plan.write_text("mode: build\n", encoding="utf-8")
+
+    mutation = manager.validate(27, commit)
+    assert mutation is not None
+    assert mutation.code is ProofCheckoutDiagnosticCode.AUTHORITY_MUTATION
+
+
 @pytest.mark.parametrize(
     ("job", "commit", "proof_root", "expected"),
     [
@@ -149,6 +171,22 @@ def test_materialize_rejects_symlinked_or_unusable_proof_root(tmp_path: Path) ->
     failed = ProofCheckoutManager(repository, unusable).materialize(_job(), commit)
     assert failed.diagnostic is not None
     assert failed.diagnostic.code is ProofCheckoutDiagnosticCode.SETUP_FAILED
+
+
+def test_materialize_preserves_existing_same_job_root(tmp_path: Path) -> None:
+    repository, commit = _repository(tmp_path)
+    proof_root = tmp_path / "scratch" / "proof"
+    existing = proof_root / "27"
+    existing.mkdir(parents=True)
+    marker = existing / "concurrent-owner"
+    marker.write_text("active\n", encoding="utf-8")
+
+    result = ProofCheckoutManager(repository, proof_root).materialize(_job(), commit)
+
+    assert result.checkout is None
+    assert result.diagnostic is not None
+    assert result.diagnostic.code is ProofCheckoutDiagnosticCode.SETUP_FAILED
+    assert marker.read_text(encoding="utf-8") == "active\n"
 
 
 def test_cleanup_is_idempotent_and_health_reports_leftover_checkout(tmp_path: Path) -> None:
@@ -196,3 +234,18 @@ def test_snapshot_restores_exact_checkout_manifest_after_cleanup(tmp_path: Path)
     assert current is not None
     assert current.commit == commit
     assert current.manifest.read_bytes() == manifest_before
+
+
+def test_snapshot_restore_rejects_changed_live_authority(tmp_path: Path) -> None:
+    repository, commit = _repository(tmp_path)
+    manager = ProofCheckoutManager(repository, tmp_path / "scratch" / "proof")
+    job = _job()
+    created = manager.materialize(job, commit)
+    assert created.checkout is not None
+    snapshot = manager.snapshot(job.job_id)
+    assert snapshot is not None
+    manager.cleanup(job.job_id)
+    (repository / ".owlbear/changes/proof-change/plan.yaml").write_text("mode: build\n", encoding="utf-8")
+
+    assert not manager.restore(job, snapshot)
+    assert manager.existing(job.job_id) is None
