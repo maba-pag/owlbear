@@ -182,8 +182,11 @@ def _dispatch_shipped_planner(revision, started, *, receipt_id: str, next_job_id
     assert "ob-kanban/finish_plan" not in planner["tools"]
     assert reviewer["tools"] == ["vscode/toolSearch", "read/problems", "read/readFile", "read/viewImage", "search"]
     assert reviewer["hooks"]["PreToolUse"][0]["command"].endswith("deny-writes.py")
+    reviewer_contract = reviewer_path.read_text(encoding="utf-8")
+    assert "Cross-check source coverage and the" in reviewer_contract
+    assert "never merely\n  because this role has no terminal tool" in reviewer_contract
     assert all(
-        key in reviewer_path.read_text(encoding="utf-8")
+        key in reviewer_contract
         for key in (
             "plan_completeness",
             "admitted_references",

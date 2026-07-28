@@ -43,6 +43,10 @@ candidate is complete and bounded enough to return as structured success.
   material expansion, using only `pass`, `warning`, or `error`.
 - **Make each row discriminating.** Name the authority target, source path, interface, dependency,
   command, or observable boundary that supports the disposition.
+- **Review verification-only evidence within available tools.** Cross-check source coverage and the
+  caller-supplied immutable candidate, command result, and before/after tracked state. Record a
+  warning or error only for a concrete inconsistency, omission, or uncovered boundary, never merely
+  because this role has no terminal tool to rerun the command or Git query.
 - **Stay independent and hard read-only.** Do not edit authority, plans, product files, tests, jobs,
   receipts, or requests; do not call lifecycle tools, grant approval, or rewrite the node plan.
 
