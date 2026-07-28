@@ -4,7 +4,7 @@ title: Complete DN-008 corrective build authority
 status: verify
 priority: high
 created: 2026-07-28T02:34:32.523427+02:00
-updated: 2026-07-28T04:28:01.697296+02:00
+updated: 2026-07-28T04:46:59.795201+02:00
 tags:
   - phase-17
   - scope:core
@@ -131,3 +131,6 @@ DONE: explicit packet authority closes `AC-2/corrective-packet-authority`; prior
 - Quality: scoped lint/format/skill validation passed; editor diagnostics and `git diff --check` clean. Full MCP trio earlier reached `56 passed` with no failures before its configured timeout.
 - Builder-challenger: `pass` after confirming the #2097 xfail occurs only beyond successful corrective finish and the change remains within packet-authority scope with no live-carrier paths.
 - Memory: all 20 recalled entries assessed successfully; no new reusable candidate because the remaining DN-013 observation is task-specific and recorded in #2097 proof.
+
+[[2026-07-28T04:46:59+02:00]]
+Verifier interruption recovery: the prior verifier invocation ended on a network timeout before producing a verdict, commit, request, or implementation/test patch. Effect check found HEAD still at builder commit `5c7da2f27`, no pending request, and only claim metadata on #2099. Claim released so verification can restart cleanly against the exact builder commit.
