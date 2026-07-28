@@ -70,6 +70,7 @@ def _job(revision, job_id: int, kind: str) -> JobRecord:  # noqa: ANN001
         change_id=revision.change_id,
         delivery_digest=revision.delivery_digest,
         target_node_id=revision.graph.nodes[0].id,
+        packet_id=f"{revision.graph.nodes[0].id}-PK-001" if kind == "build" else None,
     )
 
 

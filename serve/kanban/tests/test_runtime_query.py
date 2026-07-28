@@ -43,6 +43,8 @@ def _revision(tmp_path: Path):
 
 
 def _job(revision, job_id: int, **changes: object) -> JobRecord:
+    target_node_id = str(changes.get("target_node_id", revision.graph.nodes[0].id))
+    kind = str(changes.get("kind", "build"))
     return JobRecord.model_validate(
         {
             "schema_version": 1,
@@ -53,7 +55,8 @@ def _job(revision, job_id: int, **changes: object) -> JobRecord:
             "updated_at": "2026-07-24T00:00:00Z",
             "change_id": revision.change_id,
             "delivery_digest": revision.delivery_digest,
-            "target_node_id": revision.graph.nodes[0].id,
+            "target_node_id": target_node_id,
+            "packet_id": f"{target_node_id}-PK-001" if kind == "build" else None,
             **changes,
         }
     )
@@ -137,6 +140,7 @@ def test_public_invalidation_refreshes_only_returned_index_closure(tmp_path: Pat
             finding_class="implementation-defect",
             target="packet-implementation",
             target_node_ids=(revision.graph.nodes[0].id,),
+            packet_id=f"{revision.graph.nodes[0].id}-PK-001",
         )
     )
     request = InvalidationRequest(

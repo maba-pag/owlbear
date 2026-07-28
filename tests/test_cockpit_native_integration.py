@@ -65,6 +65,7 @@ def _git(repository: Path, *args: str) -> str:
 
 
 def _job(revision, job_id: int, kind: str, **changes: object) -> JobRecord:  # noqa: ANN001
+    target_node_id = str(changes.get("target_node_id", revision.graph.nodes[0].id))
     return JobRecord.model_validate(
         {
             "schema_version": 1,
@@ -75,7 +76,8 @@ def _job(revision, job_id: int, kind: str, **changes: object) -> JobRecord:  # n
             "updated_at": "2026-07-24T00:00:00Z",
             "change_id": revision.change_id,
             "delivery_digest": revision.delivery_digest,
-            "target_node_id": revision.graph.nodes[0].id,
+            "target_node_id": target_node_id,
+            "packet_id": f"{target_node_id}-PK-001" if kind == "build" else None,
             **changes,
         }
     )
@@ -201,6 +203,7 @@ def assembled_harness(tmp_path: Path, project_root: Path) -> Iterator[_Harness]:
             finding_class="implementation-defect",
             target="packet-implementation",
             target_node_ids=(revision.graph.nodes[0].id,),
+            packet_id=f"{revision.graph.nodes[0].id}-PK-001",
         )
     )
     checkouts = ProofCheckoutManager(repository, repository / ".owlbear" / "scratch" / "proof")

@@ -46,6 +46,7 @@ def _job(kind: str = "accept", job_id: int = 27) -> JobRecord:
             "change_id": "proof-change",
             "delivery_digest": "a" * 64,
             "target_node_id": "DN-004",
+            "packet_id": "DN-004-PK-001" if kind == "build" else None,
         }
     )
 

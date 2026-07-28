@@ -534,6 +534,7 @@ def _acceptance_failure_disposition(
             finding_class=finding.finding_class,
             target=route_target,
             target_node_ids=("DN-001",),
+            packet_id=target_id if route_target in {"packet-implementation", "packet-local-proof"} else None,
         )
     )
     return finding, route, (f"evidence-{str(name).replace(' ', '-')}",)
@@ -686,6 +687,7 @@ def _rejection_payload(revision, start: dict[str, object], commit: str) -> dict[
             finding_class=finding.finding_class,
             target="packet-implementation",
             target_node_ids=("DN-001",),
+            packet_id=finding.target_id,
         )
     )
     invalidation = InvalidationRequest(
@@ -1019,6 +1021,7 @@ async def test_public_accept_rejects_tracked_checkout_mutation(tmp_path: Path) -
             finding_class=finding.finding_class,
             target="packet-implementation",
             target_node_ids=("DN-001",),
+            packet_id=finding.target_id,
         )
     )
     rejected = await server.reject_accept(
@@ -1721,6 +1724,12 @@ def _audit_rejection_payload(
             finding_class=finding.finding_class,
             target=emitted_route_target,
             target_node_ids=route_node_ids,
+            packet_id=(
+                finding.target_id
+                if emitted_route_target in {"packet-implementation", "packet-local-proof"}
+                and finding.target_kind == "packet"
+                else None
+            ),
         )
     )
     invalidation = InvalidationRequest(

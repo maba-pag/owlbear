@@ -63,6 +63,7 @@ def test_corrective_route_matrix_preserves_late_work_class(  # noqa: PLR0913
                 "finding_class": finding_class,
                 "target": target,
                 "target_node_ids": node_ids,
+                "packet_id": "DN-003-PK-001" if target in {"packet-implementation", "packet-local-proof"} else None,
             }
         )
     )
@@ -96,6 +97,7 @@ def _receipt(revision, receipt_id: str, predecessors: tuple[str, ...]) -> dict[s
         "impact_closure": {"paths": ["serve/kanban/"], "authority_targets": [node.id, node.proof]},
         "target_node_id": node.id,
         "node_plan_digest": "b" * 64,
+        "packet_id": f"{node.id}-PK-001",
         "predecessor_receipt_ids": list(predecessors),
         "evidence": {"commands": ["focused proof"]},
         "code_revision": "a" * 40,
@@ -148,6 +150,7 @@ def _scenario(tmp_path: Path):
         "delivery_digest": revision.delivery_digest,
         "target_node_id": node.id,
         "node_plan_digest": "b" * 64,
+        "packet_id": f"{node.id}-PK-001",
     }
     jobs = JobStore(work_root)
     _materialize(jobs, JobRecord.model_validate({**base, "job_id": 1, "receipt_id": "build-root"}), archived=True)
@@ -181,6 +184,7 @@ def _scenario(tmp_path: Path):
             finding_class="implementation-defect",
             target="packet-implementation",
             target_node_ids=(node.id,),
+            packet_id=f"{node.id}-PK-001",
         )
     )
     request = InvalidationRequest(
@@ -226,6 +230,7 @@ def test_invalidation_applies_minimum_closure_and_replays_without_rewriting_hist
     assert applied.outcome.corrective_jobs[0].job.node_plan_digest == compute_node_plan_digest(
         revision, applied.outcome.corrective_jobs[0].job.target_node_id
     )
+    assert applied.outcome.corrective_jobs[0].job.packet_id == request.routes[0].packet_id
     assert JobStore(work_root).read(4).job.disposition is JobDisposition.PENDING
     assert (work_root / "jobs/5.yaml").read_bytes() == terminal_before
     assert conflict.diagnostic is not None
@@ -254,6 +259,7 @@ def test_invalidation_leaves_corrective_plan_without_node_plan_digest(tmp_path: 
     assert result.outcome is not None
     assert result.outcome.corrective_jobs[0].job.kind == "plan"
     assert result.outcome.corrective_jobs[0].job.node_plan_digest is None
+    assert result.outcome.corrective_jobs[0].job.packet_id is None
 
 
 @pytest.mark.parametrize("stage", ["before-publication", "after-first-publication", "before-manifest-cleanup"])

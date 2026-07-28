@@ -87,6 +87,8 @@ def revision():
 
 
 def _record(revision, **changes: object) -> JobRecord:
+    target_node_id = str(changes.get("target_node_id", revision.graph.nodes[0].id))
+    kind = str(changes.get("kind", "build"))
     return JobRecord.model_validate(
         {
             "schema_version": 1,
@@ -97,7 +99,8 @@ def _record(revision, **changes: object) -> JobRecord:
             "updated_at": "2026-07-24T00:00:00Z",
             "change_id": revision.change_id,
             "delivery_digest": revision.delivery_digest,
-            "target_node_id": revision.graph.nodes[0].id,
+            "target_node_id": target_node_id,
+            "packet_id": f"{target_node_id}-PK-001" if kind == "build" else None,
             **changes,
         }
     )
@@ -278,6 +281,7 @@ def _reject_request(
             finding_class=finding.finding_class,
             target=corrective_target,
             target_node_ids=("DN-001",),
+            packet_id="DN-001-PK-001" if corrective_target in {"packet-implementation", "packet-local-proof"} else None,
         )
     )
     return RejectAcceptRequest(
@@ -839,6 +843,8 @@ def test_reject_accept_routes_class_and_target_orthogonally_without_rewriting_hi
         ("stale-finding-authority", RejectAcceptDiagnosticCode.FINDING_INVALID),
         ("missing-receipt", RejectAcceptDiagnosticCode.INVALIDATION_INVALID),
         ("route-mismatch", RejectAcceptDiagnosticCode.INVALIDATION_INVALID),
+        ("unknown-route-packet", RejectAcceptDiagnosticCode.INVALIDATION_INVALID),
+        ("mismatched-admitted-route-packet", RejectAcceptDiagnosticCode.INVALIDATION_INVALID),
         ("non-owner", RejectAcceptDiagnosticCode.NON_OWNER),
         ("missing-job", RejectAcceptDiagnosticCode.AUTHORITY_STALE),
     ],
@@ -866,6 +872,18 @@ def test_reject_accept_invalid_identity_publishes_nothing(
         )
     elif case == "route-mismatch":
         route = request.invalidation.routes[0].model_copy(update={"finding_class": "planning-omission"})
+        request = request.model_copy(
+            update={"invalidation": request.invalidation.model_copy(update={"routes": (route,)})}
+        )
+    elif case in {"unknown-route-packet", "mismatched-admitted-route-packet"}:
+        packet_id = "DN-001-PK-999" if case == "unknown-route-packet" else "DN-001-PK-002"
+        original_route = request.invalidation.routes[0]
+        route = original_route.model_copy(
+            update={
+                "packet_id": packet_id,
+                "jobs": tuple(job.model_copy(update={"packet_id": packet_id}) for job in original_route.jobs),
+            }
+        )
         request = request.model_copy(
             update={"invalidation": request.invalidation.model_copy(update={"routes": (route,)})}
         )
@@ -945,6 +963,11 @@ def test_finish_plan_publishes_one_complete_outcome_and_replays(revision, tmp_pa
         revision.graph.nodes[0].id,
     )
     assert tuple(job.kind for job in result.created_jobs) == ("build", "build", "accept")
+    assert tuple(job.packet_id for job in result.created_jobs) == (
+        "DN-001-PK-001",
+        "DN-001-PK-002",
+        None,
+    )
     assert JobStore(work_root).read(1, archived=True).job.receipt_id == request.receipt_id
     assert tuple(item.job.kind for item in JobStore(work_root).list()) == ("build", "build", "accept")
     assert tuple(event.kind for event in AttemptStore(work_root).list()) == ("started", "succeeded")
@@ -1022,6 +1045,49 @@ def test_finish_plan_transaction_failure_publishes_nothing(tmp_path, monkeypatch
     assert store.list(archived=True) == ()
     assert AttemptStore(work_root).read("attempt-001", 2).event is None
     assert not (revision.source_dir / "receipts/plan-001.yaml").exists()
+
+
+def test_finish_build_rejects_different_admitted_packet_closure_without_publication(tmp_path) -> None:
+    revision = _copied_revision(tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision, kind="plan", receipt_id="bootstrap-001"))
+    runtime = _runtime(revision, work_root)
+    assert runtime.start_job(_request()).diagnostic is None
+    plan = _plan_request(revision)
+    packets = list(plan.node_plan["packets"])
+    packets[1] = packets[1] | {
+        "impact_closure": {
+            "paths": ["serve/tools/"],
+            "authority_targets": packets[1]["impact_closure"]["authority_targets"],
+        }
+    }
+    plan = plan.model_copy(update={"node_plan": plan.node_plan | {"packets": packets}})
+    assert runtime.finish_plan(plan).diagnostic is None
+    start = _request().model_copy(update={"job_id": 2, "attempt_id": "attempt-002", "claim_id": "claim-002"})
+    assert runtime.start_job(start).diagnostic is None
+
+    result = runtime.finish_build(
+        FinishJobRequest(
+            job_id=2,
+            attempt_id=start.attempt_id,
+            claim_id=start.claim_id,
+            actor_id=start.actor_id,
+            process_id=start.process_id,
+            finished_at="2026-07-24T00:03:00Z",
+            receipt_id="build-wrong-packet",
+            code_revision="a" * 40,
+            evidence=plan.evidence,
+            impact_closure=parse_impact_closure(packets[1]["impact_closure"]),
+        )
+    )
+
+    assert result.diagnostic is not None
+    assert result.diagnostic.code is FinishJobDiagnosticCode.EVIDENCE_INVALID
+    assert not (runtime._revision.source_dir / "receipts/build-wrong-packet.yaml").exists()  # noqa: SLF001
+    assert store.read(2).job.attempt_id == start.attempt_id
+    assert AttemptStore(work_root).read(start.attempt_id, 2).event is None
 
 
 def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> None:  # noqa: PLR0915
@@ -1654,6 +1720,7 @@ def test_reconciliation_finish_releases_new_build_and_invalidation_closure(tmp_p
             finding_class="implementation-defect",
             target="packet-implementation",
             target_node_ids=("DN-001",),
+            packet_id="DN-001-PK-001",
         )
     )
     request = InvalidationRequest(

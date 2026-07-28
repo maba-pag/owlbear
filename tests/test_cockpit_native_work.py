@@ -51,6 +51,7 @@ class _SeededCache(NativeContextCache):
 
 
 def _job(revision, job_id: int, **changes: object) -> JobRecord:  # noqa: ANN001
+    target_node_id = str(changes.get("target_node_id", revision.graph.nodes[0].id))
     return JobRecord.model_validate(
         {
             "schema_version": 1,
@@ -61,7 +62,8 @@ def _job(revision, job_id: int, **changes: object) -> JobRecord:  # noqa: ANN001
             "updated_at": "2026-07-24T00:00:00Z",
             "change_id": revision.change_id,
             "delivery_digest": revision.delivery_digest,
-            "target_node_id": revision.graph.nodes[0].id,
+            "target_node_id": target_node_id,
+            "packet_id": f"{target_node_id}-PK-001",
             **changes,
         }
     )
@@ -192,6 +194,7 @@ def work_client(
             finding_class="implementation-defect",
             target="packet-implementation",
             target_node_ids=(revision.graph.nodes[0].id,),
+            packet_id=f"{revision.graph.nodes[0].id}-PK-001",
         )
     )
     proof_checkouts = ProofCheckoutManager(project_root, ops_root / "scratch" / "proof")

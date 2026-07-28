@@ -2116,6 +2116,7 @@ class NativeRuntime:
                 delivery_digest=job.delivery_digest,
                 target_node_id=job.target_node_id,
                 node_plan_digest=digest,
+                packet_id=packet_id,
                 predecessor_job_ids=(job.job_id, *(by_packet[item] for item in dependencies[packet_id])),
             )
             for packet_id, job_id in zip(packet_ids, request.build_job_ids, strict=True)
@@ -2263,18 +2264,11 @@ class NativeRuntime:
         validated = self._validate_node_plan(job.target_node_id, node_plan)
         if isinstance(validated, FinishJobResult):
             return validated
-        _packet_ids, _dependencies, closures = validated
+        packet_ids, _dependencies, closures = validated
         if job.kind == "build":
-            sibling_ids = sorted(
-                stored.job.job_id
-                for stored in (*self._jobs.list(), *self._jobs.list(archived=True))
-                if stored.job.kind == "build"
-                and stored.job.target_node_id == job.target_node_id
-                and stored.job.node_plan_digest == job.node_plan_digest
-            )
             try:
-                expected = closures[sibling_ids.index(job.job_id)]
-            except ValueError, IndexError:
+                expected = dict(zip(packet_ids, closures, strict=True))[job.packet_id]
+            except KeyError:
                 return self._finish_diagnostic(
                     FinishJobDiagnosticCode.AUTHORITY_STALE,
                     "build job does not correspond to a packet",

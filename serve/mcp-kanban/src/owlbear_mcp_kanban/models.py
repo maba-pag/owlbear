@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from owlbear_kanban import Finding
 
@@ -72,7 +72,18 @@ class CorrectiveJobParams(MCPParamsBase):
 
     kind: Literal["plan", "build"]
     target_node_id: str = Field(min_length=1)
+    packet_id: str | None = Field(default=None, pattern=r"^DN-[0-9]{3}-PK-[0-9]{3}$")
     through_plan_correction: bool = False
+
+    @model_validator(mode="after")
+    def _validate_packet_authority(self) -> CorrectiveJobParams:
+        if self.kind == "build" and self.packet_id is None:
+            message = "corrective build plans require packet identity"
+            raise ValueError(message)
+        if self.kind == "plan" and self.packet_id is not None:
+            message = "corrective plan jobs forbid packet identity"
+            raise ValueError(message)
+        return self
 
 
 class CorrectiveRouteParams(MCPParamsBase):
@@ -92,8 +103,23 @@ class CorrectiveRouteParams(MCPParamsBase):
         "node-integration-repair",
         "affected-node-correction",
     ]
+    packet_id: str | None = Field(default=None, pattern=r"^DN-[0-9]{3}-PK-[0-9]{3}$")
     design_reentry: bool = False
     jobs: tuple[CorrectiveJobParams, ...] = ()
+
+    @model_validator(mode="after")
+    def _validate_packet_authority(self) -> CorrectiveRouteParams:
+        build_packet_ids = tuple(job.packet_id for job in self.jobs if job.kind == "build")
+        if self.route == "build-repair" and self.packet_id is None:
+            message = "build repair routes require packet identity"
+            raise ValueError(message)
+        if build_packet_ids and any(item != self.packet_id for item in build_packet_ids):
+            message = "corrective route packet identity must match its build plans"
+            raise ValueError(message)
+        if self.route != "build-repair" and self.packet_id is not None:
+            message = "corrective routes without build plans forbid packet identity"
+            raise ValueError(message)
+        return self
 
 
 class InvalidationParams(MCPParamsBase):

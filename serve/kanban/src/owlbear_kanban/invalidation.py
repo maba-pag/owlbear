@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from owlbear_kanban.finding import Finding, FindingClass, FindingId, FindingStore
-from owlbear_kanban.jobs import JobDisposition, JobRecord, JobStore, StoredJob
+from owlbear_kanban.jobs import JobDisposition, JobRecord, JobStore, PacketId, StoredJob
 from owlbear_kanban.receipt import ReceiptRecord, ReceiptStore, compute_node_plan_digest
 from owlbear_kanban.runtime_transaction import (
     ReplacementTransactionParticipant,
@@ -62,6 +62,7 @@ class CorrectiveRouteRequest(_InvalidationModel):
     finding_class: FindingClass
     target: FindingTarget
     target_node_ids: tuple[str, ...] = Field(min_length=1)
+    packet_id: PacketId | None = None
 
     @model_validator(mode="after")
     def _require_one_local_target(self) -> CorrectiveRouteRequest:
@@ -71,6 +72,16 @@ class CorrectiveRouteRequest(_InvalidationModel):
         if len(set(self.target_node_ids)) != len(self.target_node_ids):
             msg = "corrective target nodes must be unique"
             raise ValueError(msg)
+        packet_target = self.target in {"packet-implementation", "packet-local-proof"}
+        if packet_target and self.packet_id is None:
+            msg = "packet build repair requires packet identity"
+            raise ValueError(msg)
+        if not packet_target and self.packet_id is not None:
+            msg = "non-build corrective targets forbid packet identity"
+            raise ValueError(msg)
+        if self.packet_id is not None and not self.packet_id.startswith(f"{self.target_node_ids[0]}-PK-"):
+            msg = "corrective packet identity must belong to its target node"
+            raise ValueError(msg)
         return self
 
 
@@ -79,7 +90,21 @@ class CorrectiveJobPlan(_InvalidationModel):
 
     kind: CorrectiveJobKind
     target_node_id: str
+    packet_id: PacketId | None = None
     through_plan_correction: bool = False
+
+    @model_validator(mode="after")
+    def _validate_packet_authority(self) -> CorrectiveJobPlan:
+        if self.kind == "build" and self.packet_id is None:
+            msg = "corrective build plans require packet identity"
+            raise ValueError(msg)
+        if self.kind == "plan" and self.packet_id is not None:
+            msg = "corrective plan jobs forbid packet identity"
+            raise ValueError(msg)
+        if self.packet_id is not None and not self.packet_id.startswith(f"{self.target_node_id}-PK-"):
+            msg = "corrective build packet identity must belong to its target node"
+            raise ValueError(msg)
+        return self
 
 
 class CorrectiveRoute(_InvalidationModel):
@@ -88,8 +113,23 @@ class CorrectiveRoute(_InvalidationModel):
     finding_id: FindingId
     finding_class: FindingClass
     route: CorrectiveRouteKind
+    packet_id: PacketId | None = None
     design_reentry: bool = False
     jobs: tuple[CorrectiveJobPlan, ...] = ()
+
+    @model_validator(mode="after")
+    def _validate_packet_authority(self) -> CorrectiveRoute:
+        build_packet_ids = tuple(job.packet_id for job in self.jobs if job.kind == "build")
+        if self.route == "build-repair" and self.packet_id is None:
+            msg = "build repair routes require packet identity"
+            raise ValueError(msg)
+        if build_packet_ids and any(item != self.packet_id for item in build_packet_ids):
+            msg = "corrective route packet identity must match its build plans"
+            raise ValueError(msg)
+        if self.route != "build-repair" and self.packet_id is not None:
+            msg = "corrective routes without build plans forbid packet identity"
+            raise ValueError(msg)
+        return self
 
 
 class InvalidationRequest(_InvalidationModel):
@@ -184,7 +224,8 @@ def plan_corrective_route(request: CorrectiveRouteRequest) -> CorrectiveRoute:
         return CorrectiveRoute(
             **common,
             route="build-repair",
-            jobs=(CorrectiveJobPlan(kind="build", target_node_id=node_id),),
+            packet_id=request.packet_id,
+            jobs=(CorrectiveJobPlan(kind="build", target_node_id=node_id, packet_id=request.packet_id),),
         )
     if request.target in {"packet-plan", "packet-dependency", "packet-proof-plan"}:
         return CorrectiveRoute(
@@ -361,7 +402,20 @@ class InvalidationRuntime:
         receipts: Mapping[str, ReceiptRecord],
         request: InvalidationRequest,
     ) -> None:
-        if finding.target_kind == "packet":
+        if route.packet_id is not None:
+            target_nodes = {job.target_node_id for job in route.jobs}
+            packet_ids = {
+                packet.get("id")
+                for node_id in target_nodes
+                for packet in (self._revision.read_node_plan(node_id) or {}).get("packets", ())
+                if isinstance(packet, Mapping)
+            }
+            valid = (
+                finding.target_kind == "packet"
+                and route.packet_id == finding.target_id
+                and route.packet_id in packet_ids
+            )
+        elif finding.target_kind == "packet":
             target_nodes = {job.target_node_id for job in route.jobs}
             packet_ids = {
                 packet.get("id")
@@ -433,6 +487,7 @@ class InvalidationRuntime:
                 node_plan_digest=(
                     compute_node_plan_digest(self._revision, plan.target_node_id) if plan.kind == "build" else None
                 ),
+                packet_id=plan.packet_id,
                 finding_id=finding_id,
                 receipt_id=request.supersession_receipt_id,
             )

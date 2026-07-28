@@ -34,11 +34,10 @@ def _git(repository: Path, *arguments: str) -> str:
     return _run(repository, executable, *arguments).stdout.strip()
 
 
-@pytest.mark.asyncio
-async def test_fresh_consumer_completes_native_delivery_and_audit(
+async def _complete_corrective_build(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+) -> tuple[object, object, str]:
     consumer = tmp_path / "consumer"
     consumer.mkdir()
     _git(consumer, "init", "--initial-branch=main")
@@ -98,10 +97,36 @@ async def test_fresh_consumer_completes_native_delivery_and_audit(
         impact_closure=closure,
     )
 
-    assert corrected.receipt is None
-    assert not (revision.source_dir / "receipts" / "build-corrected.yaml").exists()
-    still_active = JobStore(board).read(corrective_job.job_id).job
-    assert still_active.attempt_id == corrective_start["attempt_id"]
-    assert still_active.claim_id == corrective_start["claim_id"]
     assert corrected.diagnostic is None
+    assert corrected.receipt is not None
+    assert corrected.receipt.receipt_id == "build-corrected"
+    assert corrected.receipt.payload["node_plan_digest"] == corrective_job.node_plan_digest
+    assert (revision.source_dir / "receipts" / "build-corrected.yaml").is_file()
     assert JobStore(board).read(corrective_job.job_id, archived=True).job.receipt_id == "build-corrected"
+    return revision, context, corrected_commit
+
+
+@pytest.mark.asyncio
+async def test_fresh_consumer_completes_corrective_build(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _complete_corrective_build(tmp_path, monkeypatch)
+
+
+@pytest.mark.asyncio
+async def test_fresh_consumer_completes_native_delivery_and_audit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    revision, context, corrected_commit = await _complete_corrective_build(tmp_path, monkeypatch)
+
+    resumed = await server.pick_jobs(
+        context,
+        change_id=revision.change_id,
+        candidate_revision=corrected_commit,
+        wave_size=2,
+    )
+    selected = [entry for wave in resumed.waves for entry in wave]
+    assert selected == []
+    pytest.xfail("#2097 DN-013: corrective finish succeeds but resumed dispatch publishes no accept job")

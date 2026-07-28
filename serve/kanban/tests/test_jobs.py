@@ -63,6 +63,7 @@ def _job_mapping(revision, kind: str, *, target_node_id: str | None = None) -> d
         "delivery_digest": revision.delivery_digest,
         "target_node_id": target_node_id or revision.graph.nodes[0].id,
         "node_plan_digest": "a" * 64,
+        "packet_id": f"{target_node_id or revision.graph.nodes[0].id}-PK-001" if kind == "build" else None,
         "predecessor_job_ids": [2],
         "claim_id": "claim-001",
         "block_id": "block-001",
@@ -155,6 +156,25 @@ def test_public_job_parser_returns_stable_diagnostics(revision, field: str, valu
 
     assert result.job is None
     assert [diagnostic.code for diagnostic in result.diagnostics] == [expected]
+
+
+@pytest.mark.parametrize(
+    ("kind", "packet_id"),
+    [
+        ("build", None),
+        ("plan", "DN-001-PK-001"),
+        ("accept", "DN-001-PK-001"),
+        ("audit", "DN-001-PK-001"),
+    ],
+)
+def test_public_job_parser_enforces_build_only_packet_authority(revision, kind: str, packet_id: str | None) -> None:
+    value = _job_mapping(revision, kind)
+    value["packet_id"] = packet_id
+
+    result = parse_job_mapping(value)
+
+    assert result.job is None
+    assert [diagnostic.code for diagnostic in result.diagnostics] == [JobDiagnosticCode.SCHEMA_INVALID]
 
 
 def test_project_job_derives_normative_context_without_serializing_it(revision) -> None:

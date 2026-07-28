@@ -71,6 +71,7 @@ class PlanJob(BaseModel):
 
 JobKind = Literal["plan", "build", "accept", "audit", "supersession"]
 DeliveryNodeId = Annotated[str, StringConstraints(strict=True, pattern=r"^DN-[0-9]{3}$")]
+PacketId = Annotated[str, StringConstraints(strict=True, pattern=r"^DN-[0-9]{3}-PK-[0-9]{3}$")]
 
 
 class JobDisposition(StrEnum):
@@ -96,6 +97,7 @@ class JobRecord(BaseModel):
     delivery_digest: Digest
     target_node_id: DeliveryNodeId
     node_plan_digest: Digest | None = None
+    packet_id: PacketId | None = None
     predecessor_job_ids: tuple[int, ...] = ()
     claim_id: str | None = None
     block_id: str | None = None
@@ -111,6 +113,19 @@ class JobRecord(BaseModel):
     @classmethod
     def _parse_disposition(cls, value: object) -> object:
         return JobDisposition(value) if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def _validate_packet_authority(self) -> JobRecord:
+        if self.kind == "build" and self.packet_id is None:
+            msg = "build jobs require packet identity"
+            raise ValueError(msg)
+        if self.kind != "build" and self.packet_id is not None:
+            msg = "non-build jobs forbid packet identity"
+            raise ValueError(msg)
+        if self.packet_id is not None and not self.packet_id.startswith(f"{self.target_node_id}-PK-"):
+            msg = "build packet identity must belong to its target node"
+            raise ValueError(msg)
+        return self
 
 
 class StoredJob(BaseModel):

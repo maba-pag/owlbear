@@ -103,11 +103,12 @@ def _record(revision, job_id: int) -> JobRecord:
         change_id=revision.change_id,
         delivery_digest=revision.delivery_digest,
         target_node_id=revision.graph.nodes[0].id,
+        packet_id=f"{revision.graph.nodes[0].id}-PK-001",
     )
 
 
 def _reader_record(revision, job_id: int, kind: str) -> JobRecord:
-    return _record(revision, job_id).model_copy(update={"kind": kind})
+    return _record(revision, job_id).model_copy(update={"kind": kind, "packet_id": None})
 
 
 def _materialize(store: JobStore, record: JobRecord) -> None:
@@ -494,7 +495,10 @@ def test_finish_plan_build_and_audit_publish_with_coordination_release(revision,
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
-    _materialize(store, _record(revision, 1).model_copy(update={"kind": "plan", "receipt_id": "bootstrap-001"}))
+    _materialize(
+        store,
+        _record(revision, 1).model_copy(update={"kind": "plan", "packet_id": None, "receipt_id": "bootstrap-001"}),
+    )
     native = NativeRuntime(revision, work_root, _History(), timedelta(minutes=5))
     runtime = DispatchRuntime(native, work_root)
     plan_request = _plan_request(revision)
@@ -567,7 +571,10 @@ def test_finish_diagnostics_and_coordination_occ_conflicts_publish_nothing(revis
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
-    _materialize(store, _record(revision, 1).model_copy(update={"kind": "plan", "receipt_id": "bootstrap-001"}))
+    _materialize(
+        store,
+        _record(revision, 1).model_copy(update={"kind": "plan", "packet_id": None, "receipt_id": "bootstrap-001"}),
+    )
     runtime = DispatchRuntime(NativeRuntime(revision, work_root, _History(), timedelta(minutes=5)), work_root)
     request = _plan_request(revision)
     coordination_path = work_root / "dispatch" / "coordination.yaml"
@@ -632,7 +639,7 @@ def test_pick_waves_orders_plan_frontier_by_delivery_topology(revision, tmp_path
         _materialize(
             store,
             _record(revision, job_id).model_copy(
-                update={"kind": "plan", "target_node_id": node_id, "receipt_id": "bootstrap-001"}
+                update={"kind": "plan", "target_node_id": node_id, "packet_id": None, "receipt_id": "bootstrap-001"}
             ),
         )
     runtime = DispatchRuntime(NativeRuntime(revision, work_root, _History(), timedelta(minutes=5)), work_root)

@@ -93,6 +93,7 @@ def _materialize(store: JobStore, record: JobRecord) -> None:
 
 
 def _job(revision: ChangeRevision, job_id: int, kind: str, **changes: object) -> JobRecord:
+    target_node_id = str(changes.get("target_node_id", "DN-011"))
     return JobRecord.model_validate(
         {
             "schema_version": 1,
@@ -103,7 +104,8 @@ def _job(revision: ChangeRevision, job_id: int, kind: str, **changes: object) ->
             "updated_at": "2026-07-26T10:00:00Z",
             "change_id": revision.change_id,
             "delivery_digest": revision.delivery_digest,
-            "target_node_id": "DN-011",
+            "target_node_id": target_node_id,
+            "packet_id": f"{target_node_id}-PK-001" if kind == "build" else None,
             **changes,
         }
     )
@@ -464,6 +466,7 @@ def _seed_native_work(revision: ChangeRevision, work_root: Path, workspace: Path
             finding_class="implementation-defect",
             target="packet-implementation",
             target_node_ids=("DN-001",),
+            packet_id="DN-001-PK-001",
         )
     )
     runtime = NativeRuntime(revision, work_root, GitRepositoryHistory(workspace), timedelta(minutes=5))

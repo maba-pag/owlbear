@@ -69,6 +69,10 @@ Use the admitted corrective route rules to return one matching invalidation with
 identity and the minimum corrective jobs. The acceptor classifies observed evidence; the orchestrator
 must not classify findings or assemble evidence.
 
+For packet implementation and packet-local proof routes, set `CorrectiveRouteRequest.packet_id` to the
+finding's exact packet target ID. Do not infer a sibling packet from job order or substitute another
+admitted packet. Other corrective route targets must omit `packet_id`.
+
 Use this canonical PROOF-007 routing matrix. The route target is input to `plan_corrective_route`; it
 does not replace the finding's admitted target kind and identity.
 

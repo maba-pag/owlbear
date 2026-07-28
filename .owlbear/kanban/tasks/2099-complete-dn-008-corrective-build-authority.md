@@ -1,10 +1,10 @@
 ---
 id: 2099
 title: Complete DN-008 corrective build authority
-status: build
+status: verify
 priority: high
 created: 2026-07-28T02:34:32.523427+02:00
-updated: 2026-07-28T03:34:46.987028+02:00
+updated: 2026-07-28T04:28:01.697296+02:00
 tags:
   - phase-17
   - scope:core
@@ -117,3 +117,17 @@ Material architecture repair for failure key `AC-2/corrective-packet-authority`;
 - Final shaper-challenger decision: `pass` after adding the finding-to-route equality gate and mismatched-but-admitted packet negative control.
 - User decision: approved the recommended explicit packet identity architecture.
 - Route: return #2099 to `build`; #2097 and #1990 remain gated until independent archive closure.
+
+[[2026-07-28T04:28:01+02:00]]
+## Builder Notes
+DONE: explicit packet authority closes `AC-2/corrective-packet-authority`; prior same-task digest work at `73b11b7c6b863dd36bbe8a26e53ccae912384097` is adopted.
+
+- AC-1: `JobRecord` now requires canonical target-bound `packet_id` for `build` and forbids it otherwise. Normal plan publication binds each build job to its corresponding packet; corrective route, plan, and job schemas carry exact packet identity. Current MCP, Cockpit, proof-seed, fixture, parser, and acceptance-guidance consumers were migrated with no compatibility or backfill path.
+- AC-2: invalidation authenticates a build route before transaction participants against immutable `Finding.target_kind=packet`, exact `target_id` equality, and current target node plan membership. Unknown and mismatched admitted packet controls return `ERR_REJECT_ACCEPT_INVALIDATION_INVALID` without publication. Finish maps canonical closures by persisted packet ID only; sibling-position inference was removed, and a sibling packet closure returns `ERR_FINISH_EVIDENCE_INVALID` without a receipt.
+- AC-3: existing replay, identity-conflict, and interruption behavior remains intact; corrective jobs preserve packet ID and canonical node-plan digest. Prior digest stale gates and focused evidence were retained without a separate digest matrix.
+- Changed production/guidance: `serve/kanban/src/owlbear_kanban/{jobs,invalidation,native_runtime}.py`, `serve/mcp-kanban/src/owlbear_mcp_kanban/models.py`, `share/skills/w-node-acceptance/SKILL.md`; changed direct consumers/proof in focused Kanban/MCP/Cockpit tests and `serve/cockpit/web/e2e/support/seed-native-proof-stack.py`.
+- Public causal proof: `test_fresh_consumer_completes_corrective_build` passes through public setup, `reject_accept`, `start_job`, and `finish_build`, including receipt/digest/archive assertions. The continuing #2097 proof then records the later DN-013 empty resumed-dispatch defect as xfail only after corrective finish (`1 passed, 1 xfailed`); it does not mutate the live carrier or live change root.
+- Proof: complete Kanban serial `386 passed`; reliable serial MCP `22 passed`; challenger combined regression `196 passed, 1 xfailed`, no failures before configured 300-second timeout; affected root/Cockpit/native-cutover `26 passed`; focused route/security `41 passed`; packet negative/positive/replay `11 passed`; parser/MCP schema guards `5 passed`; final MCP smoke `2 passed`.
+- Quality: scoped lint/format/skill validation passed; editor diagnostics and `git diff --check` clean. Full MCP trio earlier reached `56 passed` with no failures before its configured timeout.
+- Builder-challenger: `pass` after confirming the #2097 xfail occurs only beyond successful corrective finish and the change remains within packet-authority scope with no live-carrier paths.
+- Memory: all 20 recalled entries assessed successfully; no new reusable candidate because the remaining DN-013 observation is task-specific and recorded in #2097 proof.

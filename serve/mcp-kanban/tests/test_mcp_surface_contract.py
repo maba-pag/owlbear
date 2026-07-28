@@ -471,6 +471,8 @@ class TestFinishAcceptSchema:
         assert properties["findings"]["items"]["$ref"].endswith("Finding")
         assert properties["invalidation"]["$ref"].endswith("InvalidationParams")
         assert tool.parameters["$defs"]["InvalidationParams"]["additionalProperties"] is False
+        assert "packet_id" in tool.parameters["$defs"]["CorrectiveRouteParams"]["properties"]
+        assert "packet_id" in tool.parameters["$defs"]["CorrectiveJobParams"]["properties"]
 
     def test_reject_audit_exposes_strict_nested_corrective_schema(self) -> None:
         """The audit rejection schema exposes full identities and corrective structures."""
