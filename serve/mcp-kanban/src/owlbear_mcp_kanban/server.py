@@ -14,7 +14,7 @@ from uuid import UUID
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
-from pydantic import BeforeValidator
+from pydantic import BeforeValidator, Field
 from pydantic import ValidationError as PydanticValidationError
 
 from owlbear_kanban import (
@@ -618,14 +618,16 @@ async def reject_accept(  # noqa: PLR0913
     evidence_ids: tuple[str, ...],
     findings: tuple[Finding, ...],
     invalidation: InvalidationParams,
+    replacement_accept_job_id: Annotated[int, Field(gt=0)] | None = None,
 ) -> object:
     """Reject an accept job and publish its minimum corrective work."""
     try:
         params = RejectAcceptParams.model_validate(_tool_params(locals()))
         app_ctx: AppContext = ctx.request_context.lifespan_context
+        payload = params.model_dump(exclude={"change_id", "findings", "invalidation"})
         return _dispatch_runtime(app_ctx, params.change_id).reject_accept(
             RejectAcceptRequest(
-                **params.model_dump(exclude={"change_id", "findings", "invalidation"}),
+                **payload,
                 findings=params.findings,
                 invalidation=InvalidationRequest(**params.invalidation.model_dump()),
             )

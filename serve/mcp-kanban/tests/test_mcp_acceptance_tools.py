@@ -707,6 +707,7 @@ def _rejection_payload(revision, start: dict[str, object], commit: str) -> dict[
         "evidence_ids": ("accept-proof-001",),
         "findings": (finding.model_dump(mode="json"),),
         "invalidation": invalidation.model_dump(mode="json"),
+        "replacement_accept_job_id": 21,
     }
 
 
@@ -736,6 +737,8 @@ async def test_shipped_acceptor_routes_canonical_minimum_correction(tmp_path: Pa
         "findings": (finding.model_dump(mode="json"),),
         "invalidation": invalidation.model_dump(mode="json"),
     }
+    if route.jobs and all(job.kind == "build" for job in route.jobs):
+        payload["replacement_accept_job_id"] = corrective_job_ids[-1] + 1
     rejected = await server.reject_accept(ctx, **payload)
     replayed = await server.reject_accept(ctx, **payload)
 
@@ -755,6 +758,105 @@ async def test_shipped_acceptor_routes_canonical_minimum_correction(tmp_path: Pa
     assert FindingStore(board).read(finding.finding_id).finding == finding
     assert not checkout.root.exists()
     assert "readers: []" in (board / "dispatch/coordination.yaml").read_text(encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_replacement_accept_waits_for_every_corrective_build(tmp_path: Path) -> None:
+    revision, board, ctx, _runtime, checkout, start, commit = await _active_accept(tmp_path)
+    routes = []
+    findings = []
+    for index, packet_id in enumerate(("DN-001-PK-001", "DN-001-PK-002"), start=1):
+        finding = Finding(
+            schema_version=1,
+            finding_id=f"finding-accept-{index:03}",
+            source_attempt_id=str(start["attempt_id"]),
+            source_job_id=int(start["job_id"]),
+            change_id=revision.change_id,
+            delivery_digest=revision.delivery_digest,
+            target_kind="packet",
+            target_id=packet_id,
+            finding_class="implementation-defect",
+            detail=f"{packet_id} requires corrective implementation",
+            created_at="2026-07-25T00:06:00Z",
+        )
+        findings.append(finding)
+        routes.append(
+            plan_corrective_route(
+                CorrectiveRouteRequest(
+                    finding_id=finding.finding_id,
+                    finding_class=finding.finding_class,
+                    target="packet-implementation",
+                    target_node_ids=("DN-001",),
+                    packet_id=packet_id,
+                )
+            )
+        )
+    rejected = await server.reject_accept(
+        ctx,
+        **_identity(start),
+        rejected_at="2026-07-25T00:06:00Z",
+        detail="acceptance found two implementation defects",
+        evidence_ids=("accept-proof-001",),
+        findings=tuple(finding.model_dump(mode="json") for finding in findings),
+        invalidation=InvalidationRequest(
+            invalidation_id="invalidation-accept-001",
+            supersession_receipt_id="supersession-accept-001",
+            invalidated_receipt_ids=("build-001", "build-002"),
+            routes=tuple(routes),
+            corrective_job_ids=(20, 21),
+            issued_at="2026-07-25T00:06:00Z",
+            code_revision=commit,
+            priority=9,
+        ).model_dump(mode="json"),
+        replacement_accept_job_id=22,
+    )
+
+    assert rejected.diagnostic is None
+    assert rejected.replacement_accept is not None
+    replacement = rejected.replacement_accept.job
+    assert replacement.predecessor_job_ids == (20, 21)
+    assert replacement.node_plan_digest == JobStore(board).read(20).job.node_plan_digest
+    assert replacement.receipt_id is None
+    assert not checkout.root.exists()
+
+    proof = revision.resolve(revision.resolve("DN-001").proof)
+    plan = revision.read_node_plan("DN-001")
+    for offset, corrective_job_id in enumerate((20, 21), start=7):
+        picked = await server.pick_jobs(
+            ctx,
+            change_id=revision.change_id,
+            candidate_revision=commit,
+            wave_size=3,
+        )
+        selected_ids = {entry.job_id for wave in picked.waves for entry in wave}
+        assert 22 not in selected_ids
+        corrective_start = _start(corrective_job_id, offset, commit)
+        assert (await server.start_job(ctx, **corrective_start)).diagnostic is None
+        packet_id = JobStore(board).read(corrective_job_id).job.packet_id
+        packet = next(item for item in plan["packets"] if item["id"] == packet_id)
+        finished = await server.finish_build(
+            ctx,
+            **_identity(corrective_start),
+            finished_at=f"2026-07-25T00:{offset + 2:02}:00Z",
+            receipt_id=f"build-corrected-{offset}",
+            code_revision=commit,
+            evidence={"methods": list(proof.method)},
+            impact_closure=packet["impact_closure"],
+        )
+        assert finished.diagnostic is None
+
+    resumed = await server.pick_jobs(
+        ctx,
+        change_id=revision.change_id,
+        candidate_revision=commit,
+        wave_size=3,
+    )
+    selected = [entry for wave in resumed.waves for entry in wave]
+    assert [(entry.job_id, entry.agent_profile) for entry in selected] == [(22, "acceptor")]
+    replacement_start = _start(22, 9, commit)
+    started = await server.start_job(ctx, **replacement_start)
+    assert isinstance(started, dict)
+    assert started["start"].diagnostic is None
 
 
 @pytest.mark.asyncio
@@ -1041,6 +1143,7 @@ async def test_public_accept_rejects_tracked_checkout_mutation(tmp_path: Path) -
             code_revision=commit,
             priority=9,
         ).model_dump(mode="json"),
+        replacement_accept_job_id=21,
     )
     assert rejected.diagnostic is None
     assert rejected.findings == (finding,)

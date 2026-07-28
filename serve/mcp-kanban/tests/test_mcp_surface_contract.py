@@ -468,6 +468,7 @@ class TestFinishAcceptSchema:
             "invalidation",
         }
         properties = tool.parameters["properties"]
+        assert properties["replacement_accept_job_id"]["anyOf"][0]["exclusiveMinimum"] == 0
         assert properties["findings"]["items"]["$ref"].endswith("Finding")
         assert properties["invalidation"]["$ref"].endswith("InvalidationParams")
         assert tool.parameters["$defs"]["InvalidationParams"]["additionalProperties"] is False
@@ -495,6 +496,7 @@ class TestFinishAcceptSchema:
             "invalidation",
         }
         properties = tool.parameters["properties"]
+        assert "replacement_accept_job_id" not in properties
         assert properties["findings"]["items"]["$ref"].endswith("Finding")
         assert properties["invalidation"]["$ref"].endswith("InvalidationParams")
         assert tool.parameters["$defs"]["InvalidationParams"]["additionalProperties"] is False

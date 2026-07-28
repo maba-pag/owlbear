@@ -74,6 +74,8 @@ async def _complete_corrective_build(
     assert not checkout.root.exists()
     assert rejected.invalidation is not None
     assert tuple(job.job.kind for job in rejected.invalidation.corrective_jobs) == ("build",)
+    assert rejected.replacement_accept is not None
+    assert rejected.replacement_accept.job.predecessor_job_ids == (20,)
 
     (consumer / "README.md").write_text("# Corrected disposable consumer\n", encoding="utf-8")
     _git(consumer, "add", "README.md")
@@ -115,7 +117,7 @@ async def test_fresh_consumer_completes_corrective_build(
 
 
 @pytest.mark.asyncio
-async def test_fresh_consumer_completes_native_delivery_and_audit(
+async def test_fresh_consumer_resumes_replacement_acceptance(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -128,5 +130,10 @@ async def test_fresh_consumer_completes_native_delivery_and_audit(
         wave_size=2,
     )
     selected = [entry for wave in resumed.waves for entry in wave]
-    assert selected == []
-    pytest.xfail("#2097 DN-013: corrective finish succeeds but resumed dispatch publishes no accept job")
+    assert [(entry.job_id, entry.agent_profile, entry.predecessor_job_ids) for entry in selected] == [
+        (21, "acceptor", (20,))
+    ]
+    replacement_start = _start(21, 6, corrected_commit)
+    started = await server.start_job(context, **replacement_start)
+    assert started["start"].diagnostic is None
+    assert started["checkout"].commit == corrected_commit

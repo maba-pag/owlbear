@@ -284,6 +284,7 @@ def _reject_request(
             packet_id="DN-001-PK-001" if corrective_target in {"packet-implementation", "packet-local-proof"} else None,
         )
     )
+    replacement_accept_job_id = 21 if route.jobs and all(job.kind == "build" for job in route.jobs) else None
     return RejectAcceptRequest(
         job_id=start.job_id,
         attempt_id=start.attempt_id,
@@ -304,6 +305,7 @@ def _reject_request(
             code_revision="a" * 40,
             priority=9,
         ),
+        replacement_accept_job_id=replacement_accept_job_id,
     )
 
 
@@ -770,6 +772,7 @@ def test_reject_accept_atomically_publishes_minimum_correction_and_replays(tmp_p
     rejected = runtime.reject_accept(request)
     replayed = runtime.reject_accept(request)
     changed = runtime.reject_accept(request.model_copy(update={"detail": "changed rejection"}))
+    changed_replacement = runtime.reject_accept(request.model_copy(update={"replacement_accept_job_id": 22}))
 
     assert rejected.diagnostic is None
     assert replayed == rejected
@@ -782,10 +785,17 @@ def test_reject_accept_atomically_publishes_minimum_correction_and_replays(tmp_p
     assert rejected.invalidation is not None
     assert rejected.invalidation.affected_receipt_ids == ("build-001", "build-002")
     assert tuple(item.job.job_id for item in rejected.invalidation.corrective_jobs) == (20,)
+    assert rejected.replacement_accept is not None
+    assert rejected.replacement_accept.job == JobStore(work_root).read(21).job
+    assert rejected.replacement_accept.job.kind == "accept"
+    assert rejected.replacement_accept.job.predecessor_job_ids == (20,)
+    assert rejected.replacement_accept.job.receipt_id is None
     assert FindingStore(work_root).read("finding-accept-001").finding == request.findings[0]
     assert AttemptStore(work_root).read(start.attempt_id, 2).event == rejected.event
     assert changed.diagnostic is not None
     assert changed.diagnostic.code is RejectAcceptDiagnosticCode.IDENTITY_CONFLICT
+    assert changed_replacement.diagnostic is not None
+    assert changed_replacement.diagnostic.code is RejectAcceptDiagnosticCode.IDENTITY_CONFLICT
 
 
 @pytest.mark.parametrize(
@@ -891,6 +901,72 @@ def test_reject_accept_invalid_identity_publishes_nothing(
         request = request.model_copy(update={"claim_id": "claim-other"})
     else:
         request = request.model_copy(update={"job_id": 999})
+    work_before = _snapshot(work_root)
+    receipt_before = {path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")}
+
+    rejected = runtime.reject_accept(request)
+
+    assert rejected.diagnostic is not None
+    assert rejected.diagnostic.code is expected_code
+    assert _snapshot(work_root) == work_before
+    assert receipt_before == {
+        path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")
+    }
+
+
+def _invalid_replacement_request(revision, work_root: Path, start: StartJobRequest, case: str) -> RejectAcceptRequest:
+    request = _reject_request(revision, start)
+    if case == "missing":
+        return request.model_copy(update={"replacement_accept_job_id": None})
+    if case in {"active-collision", "archived-collision"}:
+        collision = _record(revision, job_id=21, packet_id="DN-001-PK-002")
+        _materialize(JobStore(work_root), collision)
+        if case == "archived-collision":
+            stored_collision = JobStore(work_root).read(21)
+            JobStore(work_root).archive(21, stored_collision.token)
+        return request
+    if case == "unexpected-plan":
+        return _reject_request(revision, start, corrective_target="packet-dependency").model_copy(
+            update={"replacement_accept_job_id": 21}
+        )
+    plan_request = _reject_request(revision, start, corrective_target="packet-dependency")
+    route = request.invalidation.routes[0] if case == "mixed" else plan_request.invalidation.routes[0]
+    additional = route.jobs[0].model_copy(
+        update=(
+            {"kind": "plan", "packet_id": None, "through_plan_correction": True}
+            if case == "mixed"
+            else {"target_node_id": "DN-002"}
+        )
+    )
+    updated_route = route.model_copy(update={"jobs": (*route.jobs, additional)})
+    return (request if case == "mixed" else plan_request).model_copy(
+        update={
+            "invalidation": (request if case == "mixed" else plan_request).invalidation.model_copy(
+                update={"routes": (updated_route,), "corrective_job_ids": (20, 22)}
+            ),
+            "replacement_accept_job_id": None,
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("case", "expected_code"),
+    [
+        ("missing", RejectAcceptDiagnosticCode.INVALIDATION_INVALID),
+        ("active-collision", RejectAcceptDiagnosticCode.IDENTITY_CONFLICT),
+        ("archived-collision", RejectAcceptDiagnosticCode.IDENTITY_CONFLICT),
+        ("unexpected-plan", RejectAcceptDiagnosticCode.INVALIDATION_INVALID),
+        ("mixed", RejectAcceptDiagnosticCode.INVALIDATION_INVALID),
+        ("cross-node", RejectAcceptDiagnosticCode.INVALIDATION_INVALID),
+    ],
+)
+def test_reject_accept_invalid_replacement_publishes_nothing(
+    tmp_path: Path,
+    case: str,
+    expected_code: RejectAcceptDiagnosticCode,
+) -> None:
+    revision, work_root, runtime, start = _active_accept_scenario(tmp_path)
+    request = _invalid_replacement_request(revision, work_root, start, case)
     work_before = _snapshot(work_root)
     receipt_before = {path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")}
 

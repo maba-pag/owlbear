@@ -135,8 +135,8 @@ class InvalidationParams(MCPParamsBase):
     priority: int = 0
 
 
-class RejectAcceptParams(MCPParamsBase):
-    """Validate accept rejection and corrective publication inputs."""
+class _RejectParams(MCPParamsBase):
+    """Validate shared rejection and corrective publication inputs."""
 
     change_id: str = Field(min_length=1)
     job_id: int = Field(gt=0)
@@ -151,7 +151,13 @@ class RejectAcceptParams(MCPParamsBase):
     invalidation: InvalidationParams
 
 
-class RejectAuditParams(RejectAcceptParams):
+class RejectAcceptParams(_RejectParams):
+    """Validate accept rejection and replacement identity inputs."""
+
+    replacement_accept_job_id: int | None = Field(default=None, gt=0)
+
+
+class RejectAuditParams(_RejectParams):
     """Validate audit rejection and corrective publication inputs."""
 
 

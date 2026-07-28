@@ -1,10 +1,10 @@
 ---
 id: 2100
 title: Complete DN-008 replacement acceptance after corrective builds
-status: build
+status: verify
 priority: high
 created: 2026-07-28T05:20:51.823233+02:00
-updated: 2026-07-28T05:29:59.760088+02:00
+updated: 2026-07-28T06:04:50.807563+02:00
 tags:
   - phase-17
   - scope:core
@@ -84,3 +84,23 @@ Use public MCP `reject_accept`, `pick_jobs`, `start_job`, and purpose-specific f
 
 [[2026-07-28T05:29:59+02:00]]
 Interrupted builder recovery: coding subagent returned prematurely without tests, challenger, lifecycle note, or commit and incorrectly reported pytest unavailable. Effect check found one bounded candidate diff in `native_runtime.py`, MCP models/server, plus claim metadata. Existing reject-accept tests pass 16/16, but source review found contract gaps: reject-audit parameter leakage, missing required replacement identity for all-build closures, malformed mixed/cross-node closure acceptance when ID absent, archived collision omission, and an incorrect completion receipt on the pending replacement. Claim released so the candidate can be adopted and repaired in a clean build attempt.
+
+[[2026-07-28T06:04:50+02:00]]
+## Builder Notes
+Adopted and repaired the interrupted same-task candidate within the shaped seven-file module map.
+
+Implemented accept-only `replacement_accept_job_id` validation and MCP exposure, with strict reject-audit isolation. Native rejection now classifies prepared corrective closure independently of ID presence: same-node all-build requires a positive unused replacement identity; same-node plan-only or zero-job design re-entry forbids one; mixed and cross-node closures fail closed. The replacement is a current-digest pending accept with exact corrective predecessors, no packet or receipt, and is published in the same transaction as findings, supersession, corrective jobs, failed event, and original-job supersession. Typed result, query refresh, and exact replay expose and validate the replacement; active/archive collisions and changed IDs return identity conflict.
+
+Durable proof covers one and two corrective builds, zero/partial/full readiness through public `pick_jobs`, start at the corrected commit in a disposable consumer, replay, missing/nonpositive/unexpected IDs, active/archive collisions, plan/design controls, mixed/cross-node closure rejection, and transaction interruption with byte-for-byte no mutation.
+
+Evidence:
+- Focused replacement/public lifecycle bundle: 36 passed, 62 deselected.
+- Full Kanban package: 392 passed; four existing Python fork deprecation warnings.
+- Builder challenger: pass; independent 33 focused tests and Ruff clean.
+- Ruff check, Ruff format check, git diff check, and VS Code diagnostics: clean.
+- MCP API/lifecycle suite excluding interaction modules returned exit 0. Full interaction modules remain independently incompatible with unrelated dirty `share/agents/builder.agent.md` and `share/prompts/ideate.prompt.md` exact-text expectations; no #2100-owned path touches those assets.
+
+### AC Evidence
+- AC-1 and AC-4: `test_replacement_accept_waits_for_every_corrective_build` plus `test_complete_native_delivery.py` prove persisted predecessor-gated continuation, zero/partial omission, sole full-closure eligibility, and start at corrected commit through public MCP tools.
+- AC-2: native invalid-replacement matrix and MCP schema tests prove plan/design no eager accept, mixed/cross-node fail closed, positive parameter validation, accept-only schema, and active/archive collision handling before mutation.
+- AC-3: exact replay returns the same typed replacement; changed identity conflicts; injected transaction failures preserve complete pre-rejection snapshots.

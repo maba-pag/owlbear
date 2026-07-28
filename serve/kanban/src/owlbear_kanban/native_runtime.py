@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from owlbear_kanban.attempts import AttemptEvent, AttemptStore
 from owlbear_kanban.change import DeliveryNode, load_change
@@ -404,8 +404,8 @@ class RejectAcceptDiagnosticCode(StrEnum):
     ABORTED = "ERR_REJECT_ACCEPT_ABORTED"
 
 
-class RejectAcceptRequest(BaseModel):
-    """Provide one owned accept rejection and its minimum corrective identity."""
+class _BaseRejectRequest(BaseModel):
+    """Shared base for reject requests (no accept-replacement identity)."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
@@ -421,7 +421,7 @@ class RejectAcceptRequest(BaseModel):
     invalidation: InvalidationRequest
 
     @model_validator(mode="after")
-    def _validate_corrective_identity(self) -> RejectAcceptRequest:
+    def _validate_corrective_identity(self) -> _BaseRejectRequest:
         finding_ids = tuple(finding.finding_id for finding in self.findings)
         route_ids = tuple(route.finding_id for route in self.invalidation.routes)
         if not finding_ids or len(set(finding_ids)) != len(finding_ids):
@@ -434,6 +434,12 @@ class RejectAcceptRequest(BaseModel):
             msg = "accept rejection and invalidation timestamps must match"
             raise ValueError(msg)
         return self
+
+
+class RejectAcceptRequest(_BaseRejectRequest):
+    """Provide one owned accept rejection and its minimum corrective identity."""
+
+    replacement_accept_job_id: int | None = Field(default=None, gt=0)
 
 
 class RejectAcceptDiagnostic(BaseModel):
@@ -456,12 +462,19 @@ class RejectAcceptResult(BaseModel):
     event: AttemptEvent | None = None
     findings: tuple[Finding, ...] = ()
     invalidation: InvalidationOutcome | None = None
+    replacement_accept: StoredJob | None = None
     diagnostic: RejectAcceptDiagnostic | None = None
 
     @model_validator(mode="after")
     def _require_one_outcome(self) -> RejectAcceptResult:
         complete = self.job is not None and self.event is not None and self.findings and self.invalidation is not None
-        empty = self.job is None and self.event is None and not self.findings and self.invalidation is None
+        empty = (
+            self.job is None
+            and self.event is None
+            and not self.findings
+            and self.invalidation is None
+            and self.replacement_accept is None
+        )
         if (self.diagnostic is None and complete) or (self.diagnostic is not None and empty):
             return self
         msg = "accept rejection result needs one complete outcome or diagnostic"
@@ -482,7 +495,7 @@ class RejectAuditDiagnosticCode(StrEnum):
     ABORTED = "ERR_REJECT_AUDIT_ABORTED"
 
 
-class RejectAuditRequest(RejectAcceptRequest):
+class RejectAuditRequest(_BaseRejectRequest):
     """Provide one owned audit rejection and its minimum corrective identity."""
 
 
@@ -525,6 +538,8 @@ class _PreparedAcceptRejection:
     findings: tuple[Finding, ...]
     finding_participants: tuple[TransactionParticipant, ...]
     invalidation: PreparedInvalidation
+    replacement_participant: TransactionParticipant | None = None
+    replacement_accept: JobRecord | None = None
 
 
 class RecoveryDiagnosticCode(StrEnum):
@@ -1010,13 +1025,92 @@ class NativeRuntime:
                 f"invalidation closure does not supersede the active {expected_kind} job",
                 target=str(request.job_id),
             )
+        replacement = (
+            self._prepare_replacement_accept(request, stored.job, prepared)
+            if expected_kind == "accept"
+            else (None, None)
+        )
+        if isinstance(replacement, RejectAcceptResult):
+            return replacement
+        replacement_accept, replacement_participant = replacement
         return _PreparedAcceptRejection(
             stored=stored,
             event=self._rejection_event(stored.job, request),
             findings=finding_values,
             finding_participants=finding_participants,
             invalidation=prepared,
+            replacement_participant=replacement_participant,
+            replacement_accept=replacement_accept,
         )
+
+    def _prepare_replacement_accept(
+        self,
+        request: RejectAcceptRequest,
+        rejected: JobRecord,
+        prepared: PreparedInvalidation,
+    ) -> tuple[JobRecord | None, TransactionParticipant | None] | RejectAcceptResult:
+        corrective = prepared.corrective_jobs
+        replacement_id = getattr(request, "replacement_accept_job_id", None)
+        try:
+            replacement_required = self._replacement_required(corrective, rejected.target_node_id)
+        except ValueError as exc:
+            return self._reject_diagnostic(
+                RejectAcceptDiagnosticCode.INVALIDATION_INVALID,
+                str(exc),
+                target=str(request.job_id),
+            )
+        if not replacement_required:
+            if replacement_id is None:
+                return None, None
+            return self._reject_diagnostic(
+                RejectAcceptDiagnosticCode.INVALIDATION_INVALID,
+                "replacement accept identity is forbidden without an all-build correction",
+                target=str(replacement_id),
+            )
+        if replacement_id is None:
+            return self._reject_diagnostic(
+                RejectAcceptDiagnosticCode.INVALIDATION_INVALID,
+                "all-build correction requires replacement accept identity",
+                target=str(request.job_id),
+            )
+        try:
+            self._read_job(replacement_id)
+        except FileNotFoundError:
+            replacement_accept = JobRecord(
+                schema_version=1,
+                job_id=replacement_id,
+                kind="accept",
+                priority=rejected.priority,
+                created_at=request.rejected_at,
+                updated_at=request.rejected_at,
+                change_id=rejected.change_id,
+                delivery_digest=rejected.delivery_digest,
+                target_node_id=rejected.target_node_id,
+                node_plan_digest=compute_node_plan_digest(self._revision, rejected.target_node_id),
+                predecessor_job_ids=tuple(job.job_id for job in corrective),
+            )
+            return replacement_accept, self._jobs.create_participant(replacement_accept)
+        return self._reject_diagnostic(
+            RejectAcceptDiagnosticCode.IDENTITY_CONFLICT,
+            "replacement accept job identity collides with existing job",
+            target=str(replacement_id),
+        )
+
+    @staticmethod
+    def _replacement_required(corrective: tuple[JobRecord, ...], rejected_target: str) -> bool:
+        if not corrective:
+            return False
+        kinds = {job.kind for job in corrective}
+        targets = {job.target_node_id for job in corrective}
+        if targets != {rejected_target}:
+            msg = "accept corrective closure must target only the rejected node"
+            raise ValueError(msg)
+        if kinds == {"plan"}:
+            return False
+        if kinds == {"build"}:
+            return True
+        msg = "accept corrective closure must not mix plan and build jobs"
+        raise ValueError(msg)
 
     def _reject_accept_job(self, request: RejectAcceptRequest, expected_kind: str) -> StoredJob | RejectAcceptResult:
         try:
@@ -1091,15 +1185,18 @@ class NativeRuntime:
         failure: Callable[[str], None] | None,
         expected_kind: str,
     ) -> RejectAcceptResult | None:
+        participant_tuple = (
+            *prepared.finding_participants,
+            *prepared.invalidation.participants,
+            self._attempts.create_participant(prepared.event),
+            *participants,
+        )
+        if prepared.replacement_participant is not None:
+            participant_tuple = (*participant_tuple, prepared.replacement_participant)
         transaction = RuntimeTransaction(
             self._work_root,
             f"reject-{prepared.event.attempt_id}",
-            (
-                *prepared.finding_participants,
-                *prepared.invalidation.participants,
-                self._attempts.create_participant(prepared.event),
-                *participants,
-            ),
+            participant_tuple,
         )
         try:
             transaction.commit(failure=failure)
@@ -1132,6 +1229,7 @@ class NativeRuntime:
             (
                 *invalidation.outcome.affected_job_ids,
                 *(item.job.job_id for item in invalidation.outcome.corrective_jobs),
+                *((prepared.replacement_accept.job_id,) if prepared.replacement_accept is not None else ()),
             ),
         )
         return RejectAcceptResult(
@@ -1139,6 +1237,9 @@ class NativeRuntime:
             event=prepared.event,
             findings=prepared.findings,
             invalidation=invalidation.outcome,
+            replacement_accept=(
+                self._jobs.read(prepared.replacement_accept.job_id) if prepared.replacement_accept is not None else None
+            ),
         )
 
     @staticmethod
@@ -1220,12 +1321,65 @@ class NativeRuntime:
             )
         assert isinstance(invalidation, InvalidationResult)
         assert invalidation.outcome is not None
+        replacement = self._replayed_replacement(request, expected_kind, stored, invalidation.outcome)
+        if isinstance(replacement, RejectAcceptResult):
+            return replacement
         return RejectAcceptResult(
             job=stored,
             event=event,
             findings=request.findings,
             invalidation=invalidation.outcome,
+            replacement_accept=replacement,
         )
+
+    def _replayed_replacement(
+        self,
+        request: RejectAcceptRequest,
+        expected_kind: str,
+        stored: StoredJob,
+        invalidation: InvalidationOutcome,
+    ) -> StoredJob | RejectAcceptResult | None:
+        replacement_id = getattr(request, "replacement_accept_job_id", None)
+        try:
+            replacement_required = self._replacement_required(
+                tuple(item.job for item in invalidation.corrective_jobs),
+                stored.job.target_node_id,
+            )
+        except ValueError:
+            return self._reject_diagnostic(
+                RejectAcceptDiagnosticCode.IDENTITY_CONFLICT,
+                f"rejected {expected_kind} corrective closure is invalid",
+                target=str(request.job_id),
+            )
+        if replacement_required != (replacement_id is not None):
+            return self._reject_diagnostic(
+                RejectAcceptDiagnosticCode.IDENTITY_CONFLICT,
+                f"rejected {expected_kind} replacement identity differs from the request",
+                target=str(request.job_id),
+            )
+        replacement = None
+        if replacement_id is not None:
+            try:
+                replacement = self._jobs.read(replacement_id)
+            except FileNotFoundError:
+                return self._reject_diagnostic(
+                    RejectAcceptDiagnosticCode.IDENTITY_CONFLICT,
+                    "replacement accept job identity is incomplete",
+                    target=str(replacement_id),
+                )
+            if (
+                replacement.job.kind != "accept"
+                or replacement.job.target_node_id != stored.job.target_node_id
+                or replacement.job.node_plan_digest
+                != compute_node_plan_digest(self._revision, stored.job.target_node_id)
+                or replacement.job.predecessor_job_ids != request.invalidation.corrective_job_ids
+            ):
+                return self._reject_diagnostic(
+                    RejectAcceptDiagnosticCode.IDENTITY_CONFLICT,
+                    "replacement accept job identity differs from the request",
+                    target=str(replacement_id),
+                )
+        return replacement
 
     @staticmethod
     def _audit_rejection_result(result: RejectAcceptResult) -> RejectAuditResult:
