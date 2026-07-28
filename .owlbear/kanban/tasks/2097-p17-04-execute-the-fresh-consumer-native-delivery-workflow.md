@@ -4,7 +4,7 @@ title: 'P17-04: Execute the fresh-consumer native delivery workflow'
 status: shape
 priority: high
 created: 2026-07-27T19:45:12.576115+02:00
-updated: 2026-07-27T22:10:18.633998+02:00
+updated: 2026-07-28T02:35:36.092373+02:00
 tags:
   - phase-17
   - scope:test
@@ -17,7 +17,8 @@ tags:
   - module:MOD-008
   - proof:PROOF-013
 parent: 1990
-depends_on: []
+depends_on:
+  - 2099
 ac:
   - 'AC-1: Given a temporary consumer initialized by public setup and a representative
     admitted two-node/two-module change, installed design contracts plus public MCP
@@ -72,3 +73,13 @@ REJECT: the assembled public corrective cycle exposes a production runtime defec
 | # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
 |---|-------------|--------------|-----------------|---------|----------|
 | 1 | AC-2/corrective-build-node-plan-digest | shaper via `/shape` | Assign the owning production node a fix so engine-created corrective build jobs carry current node-plan authority and can complete through public `finish_build`; retain this assembled red proof for closure. | `serve/kanban/src/owlbear_kanban/invalidation.py`, `serve/kanban/src/owlbear_kanban/native_runtime.py`, `serve/mcp-kanban/tests/test_complete_native_delivery.py` | Exact serial test returns `ERR_FINISH_AUTHORITY_STALE` / `ERR_RECEIPT_NODE_PLAN_DIGEST_STALE`; challenger decision `pass`. |
+
+[[2026-07-28T02:35:36+02:00]]
+## Shape Notes
+
+Material graph repair for failure key `AC-2/corrective-build-node-plan-digest` was challenged and user-approved.
+
+- The production fix is assigned to new owning task #2099 under root #1968 with archived DN-008 #1985 as lineage; this task now depends on #2099.
+- The committed red assembled proof remains the causal closure check and continues to exclude the live carrier, live change root, DN-015, and `setup/finalize.py`.
+- No AC, scope, authority, or proof guidance changed. This task stays in `shape` while #2099 is active; after #2099 archives, a local repair may record closure of this failure key and route #2097 back to `build`.
+- Final shaper-challenger: `pass`; user approved the graph.
