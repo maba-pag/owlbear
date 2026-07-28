@@ -1,10 +1,10 @@
 ---
 id: 2099
 title: Complete DN-008 corrective build authority
-status: collect
+status: archived
 priority: high
 created: 2026-07-28T02:34:32.523427+02:00
-updated: 2026-07-28T04:54:40.694217+02:00
+updated: 2026-07-28T04:55:20.297875+02:00
 tags:
   - phase-17
   - scope:core
@@ -37,7 +37,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -146,3 +146,12 @@ PASS against builder commit `5c7da2f27`; prior network-timeout attempt was effec
 - Ruff check/format passed on changed Python source and direct tests; editor diagnostics clean; builder patch and current drift checks clean. No verifier implementation patch was required.
 - Verifier-challenger decision: `pass`; it confirmed all ACs have direct causal evidence and the later #2097 xfail does not mask #2099.
 - All 20 recalled verifier memories were assessed successfully.
+
+[[2026-07-28T04:55:20+02:00]]
+## Collector Notes
+ARCHIVED: DN-008 corrective packet authority is complete.
+
+- Builder commit `5c7da2f27` and verifier commit `0b0c8e1ce` are reachable from current `dev`; timeout recovery is durably recorded at `f6704ff9`.
+- AC-1 through AC-3 have matching builder and verifier evidence, including public correction completion, authenticated packet routing, sibling-closure rejection, replay, identity conflict, and interruption/no-partial-publication proof.
+- Verifier-challenger passed; no pending request or unresolved follow-up remains. The later resumed-dispatch xfail belongs to #2097 and begins only after #2099's corrective finish succeeds.
+- Six recalled collector memories were assessed successfully.
