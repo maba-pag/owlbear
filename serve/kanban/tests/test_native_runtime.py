@@ -37,6 +37,7 @@ from owlbear_kanban import (
     RejectAcceptDiagnosticCode,
     RejectAcceptRequest,
     ReceiptStore,
+    ReceiptValidityCode,
     ReleaseJobDiagnosticCode,
     ReleaseJobRequest,
     SetJobPriorityRequest,
@@ -362,6 +363,8 @@ def _accept_evidence(
     )
     packets = revision.read_node_plan(target_node_id)["packets"]
     closures = tuple(parse_impact_closure(packet["impact_closure"]) for packet in packets)
+    if not closures:
+        closures = (parse_impact_closure(revision.read_node_plan(target_node_id)["impact_closure"]),)
     state = {"head": code_revision, "status": "", "diff": ""}
     command = "maintained assembled acceptance boundary"
     return {
@@ -1138,6 +1141,33 @@ def test_finish_plan_publishes_verification_only_accept_and_replays(tmp_path, mo
     assert store.read(1, archived=True).job.receipt_id == request.receipt_id
     assert replay.receipt == result.receipt
     assert replay.created_jobs == ()
+
+    evidence = _accept_evidence(runtime._revision, "DN-001", packet_receipt_ids=())  # noqa: SLF001
+    evidence["plan"]["receipt_id"] = request.receipt_id
+    accepted = runtime._receipts.create(  # noqa: SLF001 - exercise local receipt currentness after publication.
+        "accept-verification-001",
+        {
+            "schema_version": 1,
+            "kind": "accept",
+            "receipt_id": "accept-verification-001",
+            "change_id": runtime._revision.change_id,  # noqa: SLF001
+            "delivery_digest": runtime._revision.delivery_digest,  # noqa: SLF001
+            "issued_at": "2026-07-24T00:05:00Z",
+            "target_node_id": "DN-001",
+            "node_plan_digest": compute_node_plan_digest(runtime._revision, "DN-001"),  # noqa: SLF001
+            "predecessor_receipt_ids": [request.receipt_id],
+            "evidence": evidence,
+            "code_revision": "a" * 40,
+            "impact_closure": request.node_plan["impact_closure"],
+        },
+    )
+    assert accepted.receipt is not None
+    assert (
+        runtime._receipts.evaluate_currentness(  # noqa: SLF001
+            accepted.receipt.receipt_id, _History(), "a" * 40
+        ).code
+        is ReceiptValidityCode.CURRENT
+    )
 
     before = _snapshot(work_root)
     stale = runtime.start_job(

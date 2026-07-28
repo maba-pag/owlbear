@@ -606,7 +606,7 @@ def _evaluate_target_receipt(  # noqa: PLR0911 - each receipt proof kind fails c
     return ReceiptValidity(code=ReceiptValidityCode.CURRENT, detail="receipt is locally current", target=target)
 
 
-def _acceptance_evidence_complete(  # noqa: C901, PLR0911 - proof dimensions fail closed independently.
+def _acceptance_evidence_complete(  # noqa: PLR0911 - proof dimensions fail closed independently.
     revision: ChangeRevision,
     receipt: ReceiptRecord,
     evidence: object,
@@ -668,11 +668,14 @@ def _acceptance_evidence_complete(  # noqa: C901, PLR0911 - proof dimensions fai
     ):
         return False
     node_plan = revision.read_node_plan(target) if isinstance(target, str) else None
-    packets = node_plan.get("packets") if isinstance(node_plan, Mapping) else None
-    if not isinstance(packets, list | tuple) or not packets:
-        return False
-    packet_ids = tuple(packet.get("id") for packet in packets if isinstance(packet, Mapping))
-    if len(packet_ids) != len(packets) or plan.get("packet_ids") != packet_ids:
+    predecessor_receipt_ids = receipt.payload.get("predecessor_receipt_ids")
+    if not _acceptance_packet_evidence_complete(
+        node_plan,
+        plan,
+        receipts,
+        predecessor_receipt_ids,
+        code_revision,
+    ):
         return False
     commands = assembled.get("commands")
     results = assembled.get("results")
@@ -696,17 +699,6 @@ def _acceptance_evidence_complete(  # noqa: C901, PLR0911 - proof dimensions fai
         or tuple(result.get("command") for result in results) != commands
     ):
         return False
-    if not isinstance(receipts, tuple) or not receipts or not all(isinstance(item, Mapping) for item in receipts):
-        return False
-    receipt_ids = tuple(item.get("receipt_id") for item in receipts)
-    predecessor_receipt_ids = receipt.payload.get("predecessor_receipt_ids")
-    if (
-        not all(
-            isinstance(item.get("receipt_id"), str) and item.get("code_revision") == code_revision for item in receipts
-        )
-        or receipt_ids != predecessor_receipt_ids
-    ):
-        return False
     if (
         not isinstance(replacements, tuple)
         or not set(replacements) <= set(proof.allowed_replacements)
@@ -727,6 +719,39 @@ def _acceptance_evidence_complete(  # noqa: C901, PLR0911 - proof dimensions fai
         and state.get("status") == ""
         and state.get("diff") == ""
         for state in (before, after)
+    )
+
+
+def _acceptance_packet_evidence_complete(  # noqa: PLR0911 - packet modes fail closed independently.
+    node_plan: object,
+    plan: Mapping[str, object],
+    receipts: object,
+    predecessor_receipt_ids: object,
+    code_revision: object,
+) -> bool:
+    if not isinstance(node_plan, Mapping):
+        return False
+    packets = node_plan.get("packets")
+    mode = node_plan.get("mode")
+    if not isinstance(packets, list | tuple) or mode not in {"build", "verification-only"}:
+        return False
+    if (mode == "build" and not packets) or (mode == "verification-only" and packets):
+        return False
+    packet_ids = tuple(packet.get("id") for packet in packets if isinstance(packet, Mapping))
+    if len(packet_ids) != len(packets) or plan.get("packet_ids") != packet_ids:
+        return False
+    if not isinstance(receipts, tuple) or not all(isinstance(item, Mapping) for item in receipts):
+        return False
+    if mode == "verification-only":
+        plan_receipt_id = plan.get("receipt_id")
+        return not receipts and isinstance(plan_receipt_id, str) and predecessor_receipt_ids == (plan_receipt_id,)
+    receipt_ids = tuple(item.get("receipt_id") for item in receipts)
+    return (
+        bool(receipts)
+        and all(
+            isinstance(item.get("receipt_id"), str) and item.get("code_revision") == code_revision for item in receipts
+        )
+        and receipt_ids == predecessor_receipt_ids
     )
 
 

@@ -109,6 +109,9 @@ def test_acceptor_requires_every_direct_dependent_reconciliation_identity() -> N
     assert "every delivery node whose `dependencies` contains the accepted target" in workflow
     assert "sole current-digest, pending, unclaimed plan job ID" in workflow
     assert "Do not omit a direct dependent based on impact" in workflow
+    assert "Return canonical receipt evidence, not a prose or shorthand proof summary" in workflow
+    assert "`plan.receipt_id` equal to the current plan receipt" in workflow
+    assert "Never encode clean state as the word `clean`" in workflow
     assert "per affected dependent node" not in workflow
 
 
