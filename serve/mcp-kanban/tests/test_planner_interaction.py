@@ -109,7 +109,21 @@ def _copy_change(tmp_path: Path):
 
     loaded = load_change(changes_dir, _CHANGE_ID)
     assert loaded.revision is not None
-    return change_dir, loaded.revision
+    digest = loaded.revision.delivery_digest
+    authority["state"] = "admitted"
+    authority["admission"] = {
+        "state": "admitted",
+        "delivery_digest": digest,
+        "receipt": f"receipts/admission-{digest[:12]}.yaml",
+        "limits": ["The interaction proof uses synthetic repository history."],
+    }
+    yaml_writer = YAML()
+    yaml_writer.indent(mapping=2, sequence=4, offset=2)
+    with (change_dir / "delivery" / "nodes.yaml").open("w", encoding="utf-8") as stream:
+        yaml_writer.dump(authority, stream)
+    admitted = load_change(changes_dir, _CHANGE_ID)
+    assert admitted.revision is not None
+    return change_dir, admitted.revision
 
 
 def _context(tmp_path: Path, revision) -> tuple[Path, MagicMock, NativeRuntime]:
@@ -137,7 +151,11 @@ def _evidence(revision) -> dict[str, object]:
         "challenge": challenge,
         "baseline": {"commands": [{"command": "pytest", "exit_code": 0}], "digest": revision.delivery_digest},
         "approval": {"approved": True, "digest": revision.delivery_digest},
-        "limits": list(revision.graph.admission.limits),
+        "limits": (
+            list(revision.graph.admission.limits)
+            if revision.graph.admission is not None
+            else ["The interaction proof uses synthetic repository history."]
+        ),
     }
 
 
@@ -167,7 +185,7 @@ def _dispatch_shipped_planner(revision, started, *, receipt_id: str, next_job_id
     assert all(
         key in reviewer_path.read_text(encoding="utf-8")
         for key in (
-            "packet_completeness",
+            "plan_completeness",
             "admitted_references",
             "impact_closures",
             "dependency_order",
@@ -202,7 +220,7 @@ def _dispatch_shipped_planner(revision, started, *, receipt_id: str, next_job_id
     review = {
         key: {"disposition": "pass", "evidence": f"shipped reviewer contract checked {key}"}
         for key in (
-            "packet_completeness",
+            "plan_completeness",
             "admitted_references",
             "impact_closures",
             "dependency_order",
@@ -217,6 +235,7 @@ def _dispatch_shipped_planner(revision, started, *, receipt_id: str, next_job_id
         "evidence_ids": (f"{receipt_id}-review",),
         "impact_closure": closure,
         "node_plan": {
+            "mode": "build",
             "packets": [
                 {
                     "id": packet_id,
@@ -234,7 +253,7 @@ def _dispatch_shipped_planner(revision, started, *, receipt_id: str, next_job_id
                     "profile": {"agent": "builder", "risk_ids": list(target.risks)},
                     "context_budget": {"paths": paths, "interfaces": [*target.produces, *target.consumes]},
                 }
-            ]
+            ],
         },
         "build_job_ids": (next_job_id,),
         "accept_job_id": next_job_id + 1,

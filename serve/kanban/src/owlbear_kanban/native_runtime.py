@@ -1665,6 +1665,18 @@ class NativeRuntime:
                     lower_code=validity.code.value,
                     target=validity.target or predecessor.receipt_id,
                 )
+        if stored.job.kind == "accept":
+            node_plan = self._revision.read_node_plan(stored.job.target_node_id)
+            if (
+                isinstance(node_plan, Mapping)
+                and node_plan.get("mode") == "verification-only"
+                and node_plan.get("candidate_revision") != request.candidate_revision
+            ):
+                return self._diagnostic(
+                    StartJobDiagnosticCode.AUTHORITY_STALE,
+                    "verification-only plan candidate differs from dispatch candidate",
+                    target=stored.job.target_node_id,
+                )
         return None
 
     def _read_job(self, job_id: int) -> StoredJob:
@@ -1877,7 +1889,7 @@ class NativeRuntime:
         if isinstance(request, FinishPlanRequest):
             validated = self._validate_node_plan(stored.job.target_node_id, request.node_plan)
             prepared_closure = (
-                validated if isinstance(validated, FinishJobResult) else self._union_closures(validated[2])
+                validated if isinstance(validated, FinishJobResult) else self._union_closures(validated[3])
             )
         else:
             prepared_closure = self._finish_closure(stored.job, request)
@@ -1889,13 +1901,16 @@ class NativeRuntime:
         shape_identity_matches = True
         if isinstance(request, FinishPlanRequest):
             node_plan = self._revision.read_node_plan(stored.job.target_node_id)
+            accept_predecessors = (
+                (stored.job.job_id,) if request.node_plan.get("mode") == "verification-only" else request.build_job_ids
+            )
             generated_jobs = tuple(
                 item.job
                 for item in (*self._jobs.list(), *self._jobs.list(archived=True))
                 if item.job.target_node_id == stored.job.target_node_id
                 and item.job.node_plan_digest == receipt_payload.get("node_plan_digest")
                 and (item.job.kind != "build" or stored.job.job_id in item.job.predecessor_job_ids)
-                and (item.job.kind != "accept" or item.job.predecessor_job_ids == request.build_job_ids)
+                and (item.job.kind != "accept" or item.job.predecessor_job_ids == accept_predecessors)
             )
             build_job_ids = tuple(item.job_id for item in generated_jobs if item.kind == "build")
             accept_job_ids = tuple(item.job_id for item in generated_jobs if item.kind == "accept")
@@ -2239,7 +2254,23 @@ class NativeRuntime:
         plan = self._validate_node_plan(job.target_node_id, request.node_plan)
         if isinstance(plan, FinishJobResult):
             return plan
-        packet_ids, dependencies, closures = plan
+        mode, packet_ids, dependencies, closures = plan
+        if mode == "verification-only":
+            expected_generation = {
+                "job_id": job.job_id,
+                "receipt_id": job.receipt_id,
+                "predecessor_job_ids": list(job.predecessor_job_ids),
+            }
+            if (
+                not self._verification_generation_is_eligible(job)
+                or request.node_plan.get("candidate_revision") != request.code_revision
+                or request.node_plan.get("generation") != expected_generation
+            ):
+                return self._finish_diagnostic(
+                    FinishJobDiagnosticCode.NODE_PLAN_INVALID,
+                    "verification-only candidate or re-admission generation is ineligible",
+                    target=job.target_node_id,
+                )
         if (
             len(request.build_job_ids) != len(packet_ids)
             or tuple(sorted(request.build_job_ids)) != request.build_job_ids
@@ -2298,19 +2329,47 @@ class NativeRuntime:
             delivery_digest=job.delivery_digest,
             target_node_id=job.target_node_id,
             node_plan_digest=digest,
-            predecessor_job_ids=request.build_job_ids,
+            predecessor_job_ids=(job.job_id,) if mode == "verification-only" else request.build_job_ids,
         )
         closure = self._union_closures(closures)
         return self._revision, plan_participant, (*build_jobs, accept_job), closure
 
+    def _verification_generation_is_eligible(self, job: JobRecord) -> bool:
+        if job.predecessor_job_ids:
+            try:
+                predecessors = tuple(self._read_job(job_id).job for job_id in job.predecessor_job_ids)
+            except FileNotFoundError:
+                return False
+            return all(
+                predecessor.kind == "accept"
+                and predecessor.delivery_digest == self._revision.delivery_digest
+                and predecessor.receipt_id is not None
+                for predecessor in predecessors
+            )
+        if job.receipt_id is None:
+            return False
+        admission = self._receipts.read(job.receipt_id).receipt
+        if admission is None or admission.kind != "admission":
+            return False
+        return any(
+            item.job.kind == "plan"
+            and item.job.change_id == job.change_id
+            and item.job.delivery_digest != job.delivery_digest
+            and item.job.receipt_id is not None
+            for item in (*self._jobs.list(), *self._jobs.list(archived=True))
+        )
+
     def _validate_node_plan(  # noqa: C901, PLR0911
         self, target: str, node_plan: Mapping[str, object]
-    ) -> tuple[tuple[str, ...], dict[str, tuple[str, ...]], tuple[ImpactClosure, ...]] | FinishJobResult:
+    ) -> tuple[str, tuple[str, ...], dict[str, tuple[str, ...]], tuple[ImpactClosure, ...]] | FinishJobResult:
+        mode = node_plan.get("mode")
         packets = node_plan.get("packets")
-        if not isinstance(packets, list | tuple) or not packets:
+        if mode == "verification-only":
+            return self._validate_verification_only_plan(target, node_plan, packets)
+        if mode != "build" or not isinstance(packets, list | tuple) or not packets:
             return self._finish_diagnostic(
                 FinishJobDiagnosticCode.NODE_PLAN_INVALID,
-                "node plan must contain packets",
+                "build node plan must contain packets",
                 target=target,
             )
         allowed_targets = self._allowed_packet_targets(target)
@@ -2378,7 +2437,83 @@ class NativeRuntime:
 
         if not all(visit(packet_id) for packet_id in packet_ids):
             return self._finish_diagnostic(FinishJobDiagnosticCode.NODE_PLAN_INVALID, "packet graph is cyclic")
-        return tuple(packet_ids), dependencies, tuple(closures)
+        return mode, tuple(packet_ids), dependencies, tuple(closures)
+
+    def _validate_verification_only_plan(
+        self,
+        target: str,
+        node_plan: Mapping[str, object],
+        packets: object,
+    ) -> tuple[str, tuple[str, ...], dict[str, tuple[str, ...]], tuple[ImpactClosure, ...]] | FinishJobResult:
+        if target == "DN-015":
+            return self._finish_diagnostic(
+                FinishJobDiagnosticCode.NODE_PLAN_INVALID,
+                "DN-015 requires build packets",
+                target=target,
+            )
+        generation = node_plan.get("generation")
+        source_inspection = node_plan.get("source_inspection")
+        required_outputs = node_plan.get("required_outputs")
+        proof_readiness = node_plan.get("proof_readiness")
+        tracked_scope = node_plan.get("tracked_scope")
+        review = node_plan.get("review")
+        candidate_revision = node_plan.get("candidate_revision")
+        valid = (
+            isinstance(packets, list | tuple)
+            and not packets
+            and isinstance(candidate_revision, str)
+            and bool(re.fullmatch(r"[0-9a-f]{40}", candidate_revision))
+            and isinstance(generation, Mapping)
+            and set(generation) == {"job_id", "receipt_id", "predecessor_job_ids"}
+            and isinstance(source_inspection, Mapping)
+            and source_inspection.get("disposition") == "pass"
+            and isinstance(source_inspection.get("evidence"), str)
+            and bool(source_inspection["evidence"].strip())
+            and isinstance(required_outputs, list | tuple)
+            and bool(required_outputs)
+            and all(isinstance(item, str) and item.strip() for item in required_outputs)
+            and isinstance(proof_readiness, Mapping)
+            and proof_readiness.get("disposition") == "pass"
+            and isinstance(proof_readiness.get("evidence"), str)
+            and bool(proof_readiness["evidence"].strip())
+            and isinstance(proof_readiness.get("commands"), list | tuple)
+            and bool(proof_readiness["commands"])
+            and all(isinstance(item, str) and item.strip() for item in proof_readiness["commands"])
+            and isinstance(tracked_scope, Mapping)
+            and tracked_scope.get("clean") is True
+            and isinstance(tracked_scope.get("evidence"), str)
+            and bool(tracked_scope["evidence"].strip())
+            and isinstance(review, Mapping)
+            and review.get("disposition") == "pass"
+            and isinstance(review.get("evidence"), str)
+            and bool(review["evidence"].strip())
+        )
+        if not valid:
+            return self._finish_diagnostic(
+                FinishJobDiagnosticCode.NODE_PLAN_INVALID,
+                "verification-only plan evidence is incomplete",
+                target=target,
+            )
+        allowed_targets = self._allowed_packet_targets(target)
+        escaped_reference = self._escaped_plan_reference(node_plan, allowed_targets)
+        if escaped_reference is not None:
+            return self._finish_diagnostic(
+                FinishJobDiagnosticCode.NODE_PLAN_INVALID,
+                "node plan references authority outside its delivery node",
+                target=escaped_reference,
+            )
+        try:
+            closure = parse_impact_closure(
+                node_plan.get("impact_closure"),
+                declared_authority_targets=allowed_targets,
+            )
+        except ValueError as exc:
+            return self._finish_diagnostic(
+                FinishJobDiagnosticCode.NODE_PLAN_INVALID,
+                str(exc),
+                target=target,
+            )
+        return "verification-only", (), {}, (closure,)
 
     def _allowed_packet_targets(self, target: str) -> set[str]:
         node = self._revision.resolve(target)
@@ -2430,7 +2565,7 @@ class NativeRuntime:
         validated = self._validate_node_plan(job.target_node_id, node_plan)
         if isinstance(validated, FinishJobResult):
             return validated
-        packet_ids, _dependencies, closures = validated
+        _mode, packet_ids, _dependencies, closures = validated
         if job.kind == "build":
             try:
                 expected = dict(zip(packet_ids, closures, strict=True))[job.packet_id]

@@ -273,6 +273,7 @@ async def _active_accept(tmp_path: Path):  # noqa: PLR0915 - public lifecycle as
         code_revision=commit,
         evidence={"methods": list(proof.method)},
         node_plan={
+            "mode": "build",
             "packets": [
                 {"id": f"{target.id}-PK-001", "dependencies": [], "impact_closure": closure},
                 {
@@ -280,7 +281,7 @@ async def _active_accept(tmp_path: Path):  # noqa: PLR0915 - public lifecycle as
                     "dependencies": [f"{target.id}-PK-001"],
                     "impact_closure": closure,
                 },
-            ]
+            ],
         },
         build_job_ids=(2, 3),
         accept_job_id=4,

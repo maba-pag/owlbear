@@ -5,6 +5,7 @@ from collections import Counter
 from datetime import timedelta
 from multiprocessing import get_context
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -184,6 +185,7 @@ def _plan_request(revision, *, target_node_id: str = "DN-001", **changes: object
             "evidence": {"methods": list(proof.method)},
             "evidence_ids": ("plan-review-001",),
             "node_plan": {
+                "mode": "build",
                 "packets": [
                     {"id": f"{target.id}-PK-001", "dependencies": [], "impact_closure": closure},
                     {
@@ -191,12 +193,40 @@ def _plan_request(revision, *, target_node_id: str = "DN-001", **changes: object
                         "dependencies": [f"{target.id}-PK-001"],
                         "impact_closure": closure,
                     },
-                ]
+                ],
             },
             "build_job_ids": (2, 3),
             "accept_job_id": 4,
             **changes,
         }
+    )
+
+
+def _verification_plan_request(revision, *, target_node_id: str = "DN-001", **changes: object) -> FinishPlanRequest:
+    target = revision.resolve(target_node_id)
+    closure = {"paths": ["serve/kanban/"], "authority_targets": [target.id, target.proof]}
+    return _plan_request(
+        revision,
+        target_node_id=target_node_id,
+        node_plan={
+            "mode": "verification-only",
+            "packets": [],
+            "candidate_revision": "a" * 40,
+            "generation": {"job_id": 1, "receipt_id": "bootstrap-001", "predecessor_job_ids": []},
+            "source_inspection": {"disposition": "pass", "evidence": "Tracked implementation is present."},
+            "required_outputs": ["native implementation", "durable proof tests"],
+            "proof_readiness": {
+                "disposition": "pass",
+                "evidence": "The admitted proof runs without tracked setup.",
+                "commands": ["uv run pytest serve/kanban/tests/test_change_revision.py -q"],
+            },
+            "tracked_scope": {"clean": True, "evidence": "Candidate scope has no tracked diff."},
+            "review": {"disposition": "pass", "evidence": "Independent review found no hidden delta."},
+            "impact_closure": closure,
+        },
+        build_job_ids=(),
+        accept_job_id=2,
+        **changes,
     )
 
 
@@ -388,6 +418,7 @@ def _terminal_accept_scenario(
     job_ids = {node.id: index for index, node in enumerate(revision.graph.nodes, start=1)}
     for node in revision.graph.nodes:
         plan = {
+            "mode": "build",
             "packets": [
                 {
                     "id": f"{node.id}-PK-001",
@@ -397,7 +428,7 @@ def _terminal_accept_scenario(
                         "authority_targets": [node.id, node.proof],
                     },
                 }
-            ]
+            ],
         }
         RuntimeTransaction(
             work_root,
@@ -1061,6 +1092,182 @@ def test_finish_plan_publishes_one_complete_outcome_and_replays(revision, tmp_pa
     assert changed_attempt_replay.diagnostic is not None
     assert changed_attempt_replay.diagnostic.code is FinishJobDiagnosticCode.IDENTITY_CONFLICT
     assert tuple(event.kind for event in AttemptStore(work_root).list()) == ("started", "succeeded")
+
+
+def test_finish_plan_publishes_verification_only_accept_and_replays(tmp_path, monkeypatch) -> None:
+    revision = _copied_revision(tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(
+        store,
+        _record(
+            revision,
+            job_id=99,
+            kind="plan",
+            delivery_digest="b" * 64,
+            receipt_id="admission-prior",
+        ),
+    )
+    prior = store.read(99)
+    store.archive(99, prior.token)
+    _materialize(store, _record(revision, kind="plan", receipt_id="bootstrap-001"))
+    runtime = _runtime(revision, work_root)
+    read_receipt = runtime._receipts.read  # noqa: SLF001 - isolate admission-generation eligibility.
+    monkeypatch.setattr(
+        runtime._receipts,  # noqa: SLF001 - isolate admission-generation eligibility.
+        "read",
+        lambda receipt_id: (
+            SimpleNamespace(receipt=SimpleNamespace(kind="admission"))
+            if receipt_id == "bootstrap-001"
+            else read_receipt(receipt_id)
+        ),
+    )
+    assert runtime.start_job(_request()).diagnostic is None
+    request = _verification_plan_request(revision)
+
+    result = runtime.finish_plan(request)
+    replay = runtime.finish_plan(request)
+
+    assert result.diagnostic is None
+    assert result.receipt is not None
+    assert result.receipt.impact_closure == parse_impact_closure(request.node_plan["impact_closure"])
+    assert tuple(job.kind for job in result.created_jobs) == ("accept",)
+    assert result.created_jobs[0].predecessor_job_ids == (1,)
+    assert tuple((item.job.job_id, item.job.kind) for item in store.list()) == ((2, "accept"),)
+    assert store.read(1, archived=True).job.receipt_id == request.receipt_id
+    assert replay.receipt == result.receipt
+    assert replay.created_jobs == ()
+
+    before = _snapshot(work_root)
+    stale = runtime.start_job(
+        _request().model_copy(
+            update={
+                "job_id": 2,
+                "attempt_id": "attempt-002",
+                "claim_id": "claim-002",
+                "candidate_revision": "b" * 40,
+            }
+        )
+    )
+
+    assert stale.diagnostic is not None
+    assert stale.diagnostic.code is StartJobDiagnosticCode.AUTHORITY_STALE
+    assert _snapshot(work_root) == before
+    current = runtime.start_job(
+        _request().model_copy(update={"job_id": 2, "attempt_id": "attempt-002", "claim_id": "claim-002"})
+    )
+    assert current.diagnostic is None
+
+
+def test_finish_plan_rejects_verification_only_for_first_admission_generation(tmp_path) -> None:
+    revision = _copied_revision(tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision, kind="plan", receipt_id="bootstrap-001"))
+    runtime = _runtime(revision, work_root)
+    assert runtime.start_job(_request()).diagnostic is None
+    before = _snapshot(work_root)
+
+    result = runtime.finish_plan(_verification_plan_request(revision))
+
+    assert result.diagnostic is not None
+    assert result.diagnostic.code is FinishJobDiagnosticCode.NODE_PLAN_INVALID
+    assert _snapshot(work_root) == before
+    assert not (revision.source_dir / "plans/DN-001.yaml").exists()
+
+
+def test_verification_only_generation_accepts_reconciliation_plan(revision, tmp_path) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(
+        store,
+        _record(revision, job_id=1, kind="accept", receipt_id="accept-001"),
+    )
+    _materialize(
+        store,
+        _record(
+            revision,
+            job_id=2,
+            kind="plan",
+            packet_id=None,
+            predecessor_job_ids=(1,),
+            receipt_id=None,
+        ),
+    )
+    runtime = _runtime(revision, work_root)
+
+    assert runtime._verification_generation_is_eligible(store.read(2).job)  # noqa: SLF001
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "missing-mode",
+        "missing-evidence",
+        "candidate-mismatch",
+        "generation-mismatch",
+        "empty-closure",
+        "dirty-scope",
+        "empty-build",
+    ],
+)
+def test_finish_plan_rejects_invalid_verification_only_without_publication(tmp_path, case) -> None:
+    revision = _copied_revision(tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision, kind="plan", receipt_id="bootstrap-001"))
+    runtime = _runtime(revision, work_root)
+    assert runtime.start_job(_request()).diagnostic is None
+    request = _verification_plan_request(revision)
+    node_plan = dict(request.node_plan)
+    if case == "missing-mode":
+        node_plan.pop("mode")
+    elif case == "missing-evidence":
+        node_plan.pop("source_inspection")
+    elif case == "candidate-mismatch":
+        node_plan["candidate_revision"] = "b" * 40
+    elif case == "generation-mismatch":
+        node_plan["generation"] = dict(node_plan["generation"]) | {"job_id": 99}
+    elif case == "empty-closure":
+        node_plan["impact_closure"] = {"paths": [], "authority_targets": []}
+    elif case == "dirty-scope":
+        node_plan["tracked_scope"] = {"clean": False, "evidence": "Tracked delta exists."}
+    else:
+        node_plan = {"mode": "build", "packets": []}
+    request = request.model_copy(update={"node_plan": node_plan})
+    before = _snapshot(work_root)
+
+    result = runtime.finish_plan(request)
+
+    assert result.diagnostic is not None
+    assert result.diagnostic.code is FinishJobDiagnosticCode.NODE_PLAN_INVALID
+    assert _snapshot(work_root) == before
+    assert not (revision.source_dir / "plans/DN-001.yaml").exists()
+
+
+def test_finish_plan_rejects_verification_only_for_mandatory_build_node(tmp_path) -> None:
+    revision = _copied_revision(tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(
+        store,
+        _record(revision, kind="plan", target_node_id="DN-015", receipt_id="bootstrap-001"),
+    )
+    runtime = _runtime(revision, work_root)
+    assert runtime.start_job(_request().model_copy(update={"candidate_revision": "a" * 40})).diagnostic is None
+    before = _snapshot(work_root)
+
+    result = runtime.finish_plan(_verification_plan_request(revision, target_node_id="DN-015"))
+
+    assert result.diagnostic is not None
+    assert result.diagnostic.code is FinishJobDiagnosticCode.NODE_PLAN_INVALID
+    assert _snapshot(work_root) == before
+    assert not (revision.source_dir / "plans/DN-015.yaml").exists()
 
 
 @pytest.mark.parametrize(

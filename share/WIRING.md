@@ -122,7 +122,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | planner | orchestrator | Engine-selected native plan jobs cannot be refined or completed |
 | acceptor | orchestrator | Engine-selected native accept jobs cannot produce independent success, rejection, or blocked dispositions |
 | auditor | orchestrator | Engine-selected native audit jobs cannot produce independent success, rejection, or blocked dispositions |
-| planner-challenger | planner | A packet DAG cannot satisfy the independent plan review gate |
+| planner-challenger | planner | A node plan cannot satisfy the independent plan review gate |
 | builder | orchestrator | Engine-selected native build jobs cannot be completed |
 | build-reviewer | builder | A native packet commit cannot satisfy mandatory independent inline review |
 | memory-curator | orchestrator | Periodic memory housekeeping is skipped |

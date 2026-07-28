@@ -351,6 +351,7 @@ class TestProof011NativeControlPlane:
             code_revision="a" * 40,
             evidence={"methods": list(proof.method)},
             node_plan={
+                "mode": "build",
                 "packets": [
                     {"id": f"{target.id}-PK-001", "dependencies": [], "impact_closure": closure},
                     {
@@ -358,7 +359,7 @@ class TestProof011NativeControlPlane:
                         "dependencies": [f"{target.id}-PK-001"],
                         "impact_closure": closure,
                     },
-                ]
+                ],
             },
             build_job_ids=(next_job_id, next_job_id + 1),
             accept_job_id=next_job_id + 2,
@@ -753,6 +754,7 @@ class _Proof014NativeMcpScenario:
                         code_revision="a" * 40,
                         evidence={"methods": list(proof.method)},
                         node_plan={
+                            "mode": "build",
                             "packets": [
                                 {"id": f"{target.id}-PK-001", "dependencies": [], "impact_closure": closure},
                                 {
@@ -760,7 +762,7 @@ class _Proof014NativeMcpScenario:
                                     "dependencies": [f"{target.id}-PK-001"],
                                     "impact_closure": closure,
                                 },
-                            ]
+                            ],
                         },
                         build_job_ids=(2, 3),
                         accept_job_id=4,

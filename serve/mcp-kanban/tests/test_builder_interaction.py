@@ -247,6 +247,7 @@ async def _publish_target_plan(scenario: _Scenario) -> tuple[int, int]:
         evidence_ids=("plan-proof-006-review",),
         impact_closure=closure,
         node_plan={
+            "mode": "build",
             "packets": [
                 {
                     "id": f"{target.id}-PK-001",
@@ -264,7 +265,7 @@ async def _publish_target_plan(scenario: _Scenario) -> tuple[int, int]:
                     "profile": {"agent": "builder", "risk_ids": list(target.risks)},
                     "context_budget": {"paths": ["sample/module.py"], "interfaces": list(target.produces)},
                 }
-            ]
+            ],
         },
         build_job_ids=(next_job_id,),
         accept_job_id=next_job_id + 1,

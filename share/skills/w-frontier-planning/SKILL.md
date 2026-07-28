@@ -1,15 +1,15 @@
 ---
 name: w-frontier-planning
-description: "Workflow: Plan engine-selected delivery nodes into reviewed atomic packet DAGs"
+description: "Workflow: Plan engine-selected delivery nodes into reviewed build or verification-only plans"
 user-invocable: false
 ---
 
 # Frontier Planning
 
 Process engine-selected initial and reconciliation `plan` jobs in one resumable planner session.
-Each job independently refines one admitted delivery node into an outcome-cohesive packet DAG. The
-engine remains the authority for selection, claims, validation, publication, receipts, and
-downstream jobs.
+Each job independently refines one admitted delivery node into an outcome-cohesive build packet DAG
+or a source-proven verification-only re-admission record. The engine remains the authority for
+selection, claims, validation, publication, receipts, and downstream jobs.
 
 This workflow owns planning below admitted delivery authority. It cannot edit intent, design,
 decisions, obligations, contracts, nodes, jobs, receipts, or another node's plan.
@@ -106,11 +106,33 @@ If one material choice inside the admitted boundary remains after repository res
 `h-decision-requests`, create one Decision Request tied to the selected job, and return
 `RequestCreated`. Broader design discussion returns `SpecificationReentry` instead.
 
-## Step 4 - Draft One Complete Packet DAG
+## Step 4 - Select And Draft One Plan Mode
 
-Load `h-module-design` and prefer a small number of deep outcome-cohesive packets. Do not create
-artifact-specific code, test, documentation, migration, research, or proof jobs. Each packet must
-record:
+Use `mode: verification-only` only for a current exact-candidate re-admission generation or its
+acceptance-triggered reconciliation. It is ineligible for initial unimplemented work and always
+ineligible for DN-015. Before selecting it, inspect tracked source and durable proof deeply enough
+to establish all of these facts:
+
+1. Every node-owned obligation, module and interface effect, migration, required output, and durable
+   proof mechanism maps to tracked state already present at the supplied candidate revision.
+2. The complete inspected scope is clean and needs no implementation, test, documentation,
+   generated artifact, migration, fixture, harness, client, wiring, or proof-infrastructure delta.
+   Unknown, untracked, generated-but-missing, or ambiguous state is a delta.
+3. The admitted proof can execute at that candidate without the acceptor creating tracked setup or
+   another durable output.
+4. One explicit non-empty canonical node impact closure covers the paths and admitted authority
+   consumed by that inspection and proof.
+
+Record `mode`, `packets: []`, the exact candidate revision, the selected plan job's receipt and
+predecessor generation identity, source-inspection evidence, a non-empty required-output inventory,
+proof-readiness commands and evidence, the clean tracked-scope result, the node impact closure, and
+the independent review evidence. Bootstrap or legacy records may corroborate inspection but cannot
+satisfy native receipt, currentness, predecessor, proof, or review requirements. Any uncertainty or
+delta selects normal build planning; authority expansion still returns `SpecificationReentry`.
+
+For normal implementation work, use `mode: build`. Load `h-module-design` and prefer a small number
+of deep outcome-cohesive packets. Do not create artifact-specific code, test, documentation,
+migration, research, or proof jobs. Each packet must record:
 
 | Field | Required content |
 |-------|------------------|
@@ -131,23 +153,28 @@ Packet dependencies must remain acyclic and inside the target plan. A dependency
 path ownership; each packet declares the impact closure its own acceptance proof consumes.
 
 Use bounded `list_jobs` results while the selected plan job holds the global writer lease to choose
-unused positive downstream job IDs. Return one sorted `build_job_ids` entry per authored packet and
-one distinct `accept_job_id`. Do not infer readiness or reserve work by writing job files.
+unused positive downstream job IDs. For build mode, return one sorted `build_job_ids` entry per
+authored packet. For verification-only mode, return `build_job_ids: []`. Return one distinct
+`accept_job_id` in either mode. Do not infer readiness or reserve work by writing job files.
 
 ## Step 5 - Validate And Review
 
 Before returning success:
 
-1. Check packet IDs, dependency references, and acyclicity.
+1. Confirm exactly one explicit mode and all mode-specific fields; for build mode, check packet IDs,
+   dependency references, and acyclicity.
 2. Confirm each impact path is canonical and each authority target is in the target node's admitted
    node, obligations, modules, interfaces, risks, proof, or predecessor contracts.
 3. Confirm every target obligation and acceptance outcome has one packet owner and one
    boundary-valid proof path.
-4. Confirm the packet set is outcome-cohesive, sized for focused builder contexts, and contains no
-   artifact-specific status work.
+4. For build mode, confirm the packet set is outcome-cohesive, sized for focused builder contexts,
+   and contains no artifact-specific status work. For verification-only mode, confirm exact
+   candidate and generation identity, complete source/output/proof inspection, clean tracked scope,
+   no hidden delta, and a non-empty node closure.
 5. Call a fresh read-only plan reviewer. Require source-grounded disposition and evidence for
-   packet completeness, admitted references, impact closures, dependency order, proof boundary,
-   and material expansion.
+   plan completeness, admitted references, impact closures, dependency order, proof boundary, and
+   material expansion. A verification-only review must inspect the claimed tracked state and proof,
+   not merely review the supplied prose.
 
 Malformed or non-pass review evidence returns `PlanBlocked`. A review finding that exposes one
 material choice returns `RequestCreated` only after creating its Decision Request. A finding that
@@ -169,8 +196,8 @@ code_revision: <tested candidate Git revision>
 evidence: <review and proof evidence accepted by finish_plan>
 evidence_ids: [<durable evidence identities>]
 impact_closure: <union of packet proof impact closures>
-node_plan: <complete reviewed packet DAG>
-build_job_ids: [<one unused ID per packet>]
+node_plan: <complete reviewed build or verification-only plan>
+build_job_ids: [<one unused ID per build packet; empty for verification-only>]
 accept_job_id: <one distinct unused ID>
 ```
 

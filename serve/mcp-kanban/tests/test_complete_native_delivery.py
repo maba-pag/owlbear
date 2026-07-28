@@ -254,6 +254,7 @@ async def _assert_out_of_authority_plan_refused(
         code_revision=scenario.commit,
         evidence={"methods": list(proof.method)},
         node_plan={
+            "mode": "build",
             "packets": [
                 {
                     "id": f"{target.id}-PK-INVALID",
@@ -263,7 +264,7 @@ async def _assert_out_of_authority_plan_refused(
                         "authority_targets": [target.id, target.proof, escaped_target],
                     },
                 }
-            ]
+            ],
         },
         build_job_ids=(build_job_id,),
         accept_job_id=accept_job_id,
@@ -422,7 +423,7 @@ async def _finish_plan(scenario: _Scenario, attempt: int):
         receipt_id=f"plan-{target.id.lower()}",
         code_revision=scenario.commit,
         evidence=evidence,
-        node_plan={"packets": [packet]},
+        node_plan={"mode": "build", "packets": [packet]},
         build_job_ids=(build_job_id,),
         accept_job_id=accept_job_id,
     )
