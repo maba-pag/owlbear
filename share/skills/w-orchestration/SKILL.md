@@ -116,10 +116,14 @@ Curator failure does not stop dispatch.
 
 ## Step 2 — Plan
 
-Before each `pick_jobs`, dispatch read-only `Explore` to return the exact `git rev-parse HEAD` SHA for
-the shared worktree. Use that SHA unchanged as `candidate_revision` for `pick_jobs` and the selected
-`start_job`; a delivery digest or admission receipt digest is not a code revision. Use `wave_size=1`
-after a rate limit.
+If the native lifecycle tools are deferred, call `tool_search` once with
+`OwlBear Kanban native job pick_jobs start_job finish_plan finish_build finish_accept finish_audit
+release_job recovery` before continuing.
+
+Before each `pick_jobs`, run `git rev-parse HEAD` in the shared worktree and use that SHA unchanged as
+`candidate_revision` for `pick_jobs` and the selected `start_job`. A delivery digest or admission receipt
+digest is not a code revision. Do not use the terminal for any other orchestration action. Use
+`wave_size=1` after a rate limit.
 
 If no entries are returned, report completion and stop.
 

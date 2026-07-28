@@ -5,7 +5,7 @@ argument-hint: "Orchestrate native work for {change_id}"
 user-invocable: true
 disable-model-invocation: true
 model: GPT-5.6 Terra (copilot)
-tools: [vscode/toolSearch, read/readFile, agent, ob-kanban/pick_jobs, ob-kanban/start_job, ob-kanban/finish_plan, ob-kanban/finish_build, ob-kanban/finish_accept, ob-kanban/reject_accept, ob-kanban/finish_audit, ob-kanban/reject_audit, ob-kanban/release_job, ob-kanban/recover_expired_claims]
+tools: [vscode/toolSearch, execute/runInTerminal, read/readFile, agent, ob-kanban/pick_jobs, ob-kanban/start_job, ob-kanban/finish_plan, ob-kanban/finish_build, ob-kanban/finish_accept, ob-kanban/reject_accept, ob-kanban/finish_audit, ob-kanban/reject_audit, ob-kanban/release_job, ob-kanban/recover_expired_claims]
 agents:
   - planner
   - builder

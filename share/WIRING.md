@@ -47,7 +47,7 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | designer-challenger | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
 | planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | None; no lifecycle or tracked-write tools |
 | planner-challenger | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
-| orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, acceptor, auditor, memory-curator, Explore | Native pick/start, purpose-specific finish/reject, release, and recovery tools only |
+| orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, acceptor, auditor, memory-curator, Explore | Native lifecycle tools plus terminal access limited by workflow to exact-HEAD lookup |
 | builder | GPT-5.6 Terra | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | `SessionStart`: repository context; `PostToolUse`: lint changed files |
 | build-reviewer | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | `PreToolUse`: deny writes except scratch |
 | acceptor | GPT-5.6 Terra | `w-node-acceptance` | None | `PreToolUse`: deny writes except scratch and terminal mutation; exact-HEAD/tracked-state checks |

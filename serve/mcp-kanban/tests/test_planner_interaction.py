@@ -153,8 +153,10 @@ def _dispatch_shipped_planner(revision, started, *, receipt_id: str, next_job_id
     reviewer_path = _REPO_ROOT / "share" / "agents" / "planner-challenger.agent.md"
     workflow_path = _REPO_ROOT / "share" / "skills" / "w-frontier-planning" / "SKILL.md"
     orchestration_path = _REPO_ROOT / "share" / "skills" / "w-orchestration" / "SKILL.md"
+    orchestrator_path = _REPO_ROOT / "share" / "agents" / "orchestrator.agent.md"
     planner = _frontmatter(planner_path)
     reviewer = _frontmatter(reviewer_path)
+    orchestrator = _frontmatter(orchestrator_path)
     workflow = workflow_path.read_text(encoding="utf-8")
     orchestration = orchestration_path.read_text(encoding="utf-8")
 
@@ -176,9 +178,13 @@ def _dispatch_shipped_planner(revision, started, *, receipt_id: str, next_job_id
     assert "Call a fresh read-only plan reviewer" in workflow
     assert "Return exactly one of these objects to the orchestrator" in workflow
     assert 'runSubagent(agentName="planner")' in orchestration
+    assert "execute/runInTerminal" in orchestrator["tools"]
+    assert "OwlBear Kanban native job pick_jobs start_job finish_plan" in orchestration
     assert "Do not inspect, complete, or reconstruct `node_plan`" in orchestration
-    assert "exact `git rev-parse HEAD` SHA" in orchestration
-    assert "a delivery digest or admission receipt digest is not a code revision" in orchestration
+    assert "run `git rev-parse HEAD` in the shared worktree" in orchestration
+    assert "Do not use the terminal for any other orchestration action" in orchestration
+    normalized_orchestration = " ".join(orchestration.lower().split())
+    assert "delivery digest or admission receipt digest is not a code revision" in normalized_orchestration
     assert "generate fresh revision-local `attempt_id` and `claim_id` values" in orchestration
     assert "Preserve that complete identity tuple unchanged" in orchestration
 

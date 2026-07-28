@@ -53,7 +53,7 @@ Before completing material work, decide whether you learned a specific, non-obvi
 
   | MCP server | `tools:` prefix | Runtime tool ID | `tool_search` query |
   |---|---|---|---|
-  | OwlBear Kanban | `ob-kanban/*` | `mcp_ob-kanban_<tool>` | `"kanban"` |
+  | OwlBear Kanban | `ob-kanban/*` | `mcp_ob-kanban_<tool>` | `"OwlBear Kanban native job pick_jobs start_job finish_plan finish_build finish_accept finish_audit release_job recovery"` |
   | OwlBear Memory | `ob-memory/*` | `mcp_ob-memory_<tool>` | `"memory"` |
   | MarkItDown | `markitdown/*` | `mcp_markitdown_<tool>` | `"markdown convert"` |
 
