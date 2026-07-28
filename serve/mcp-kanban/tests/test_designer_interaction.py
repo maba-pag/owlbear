@@ -281,8 +281,8 @@ async def test_complete_native_design_admits_once_and_replays_exactly(tmp_path: 
     assert "agent: designer" in design_prompt
     assert "Enter discovery mode through `w-design-session`" in ideate_prompt
     assert "Enter direct design mode through `w-design-session`" in design_prompt
-    assert "Never hand off to OpenSpec" in ideate_prompt
-    assert "never hand off to OpenSpec" in design_prompt
+    assert "Never hand off to a retired specification workflow" in ideate_prompt
+    assert "never hand off to a retired specification workflow" in design_prompt
     assert all(tool in agent for tool in ("list_changes", "show_change", "validate_change", "admit_change"))
     assert "Call `validate_change(change_id, evidence)`" in workflow
     assert "call `admit_change(change_id, evidence)` with the identical evidence" in _normalized(workflow)
