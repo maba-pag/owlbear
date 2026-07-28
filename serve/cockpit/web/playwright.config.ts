@@ -28,8 +28,20 @@ export default defineConfig({
       testMatch: /native-proof-assembled\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:8423' },
     },
+    {
+      name: 'native-release-assembled',
+      testMatch: /native-release-assembled\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:8424' },
+    },
   ],
-  webServer: process.env['NATIVE_PROOF_E2E']
+  webServer: process.env['NATIVE_RELEASE_E2E']
+    ? {
+        command: 'npm run build && node e2e/support/start-native-release-stack.mjs',
+        url: 'http://127.0.0.1:8424/health',
+        reuseExistingServer: false,
+        timeout: 120_000,
+      }
+    : process.env['NATIVE_PROOF_E2E']
     ? {
         command: 'npm run build && node e2e/support/start-native-proof-stack.mjs',
         url: 'http://127.0.0.1:8423/health',

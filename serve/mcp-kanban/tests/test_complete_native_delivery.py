@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import shutil
 import subprocess
 import sys
@@ -710,3 +711,5 @@ async def test_fresh_consumer_completes_native_delivery(
     await _complete_second_node(corrected)
     await _complete_final_audit(corrected)
     assert not (scenario.consumer / ".owlbear" / "legacy").exists()
+    if export_workspace := os.environ.get("PROOF_013_EXPORT_WORKSPACE"):
+        shutil.copytree(scenario.consumer, Path(export_workspace), dirs_exist_ok=True)

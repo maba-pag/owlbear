@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 from datetime import timedelta
@@ -51,6 +52,7 @@ from owlbear_kanban.yaml_rt import make_yaml
 CHANGE_ID = "replace-delivery-pipeline"
 SCALE_CHANGE_ID = "scale-proof"
 SCALE_NODE_COUNT = 300
+PROOF_013_CHANGE_ID = "proof-013-native-delivery"
 
 
 def _git(repository: Path, *args: str) -> str:
@@ -292,6 +294,76 @@ Memory continuity over the native Cockpit shell.
     (memory_dir / "11111111-1111-4111-8111-111111111111.md").write_text(content, encoding="utf-8")
 
 
+def _seed_release_requests(revision: ChangeRevision, work_root: Path) -> None:
+    jobs = JobStore(work_root)
+    request_runtime = NativeRequestRuntime(revision, work_root)
+    for job_id, viewport in ((100, "desktop"), (101, "mobile")):
+        request_id = f"request-{viewport}"
+        _materialize(
+            jobs,
+            _job(
+                revision,
+                job_id,
+                "plan",
+                target_node_id="DN-014",
+                pending_request_ids=(request_id,),
+            ),
+        )
+        request_runtime.create_request(
+            NativeRequest(
+                request_id=request_id,
+                kind="action",
+                title=f"Provide {viewport} release attestation",
+                summary="A linked release-proof job needs a browser attestation.",
+                body="Return the observed release-proof value.",
+                agent="verifier",
+                created_at=f"2026-07-28T01:0{job_id - 100}:00Z",
+                change_id=revision.change_id,
+                delivery_digest=revision.delivery_digest,
+                target_node_id="DN-014",
+                job_ids=(job_id,),
+                evidence=("browser=real-fastapi-built-spa",),
+                resume_condition="The browser release attestation is supplied.",
+            )
+        )
+
+
+def _seed_proof_013_release(project_root: Path, workspace: Path) -> None:
+    command = [
+        "uv",
+        "run",
+        "pytest",
+        "serve/mcp-kanban/tests/test_complete_native_delivery.py",
+        "-q",
+        "--tb=short",
+        "-n",
+        "0",
+    ]
+    environment = {**os.environ, "PROOF_013_EXPORT_WORKSPACE": str(workspace)}
+    subprocess.run(command, cwd=project_root, env=environment, check=True)  # noqa: S603
+    loaded = load_change(workspace / ".owlbear" / "changes", PROOF_013_CHANGE_ID)
+    if loaded.revision is None:
+        message = f"PROOF-013 release fixture failed validation: {loaded.diagnostics}"
+        raise RuntimeError(message)
+    _seed_release_requests(loaded.revision, workspace / ".owlbear" / "kanban")
+    _seed_memory(workspace / ".owlbear" / "memory")
+    (workspace / ".owlbear" / "ideas.md").write_text(
+        "# Native release ideas\n\n- [ ] Preserve Ideas continuity\n", encoding="utf-8"
+    )
+    seed = {
+        "schema_version": 1,
+        "proof": "PROOF-013",
+        "seed_command": command,
+        "change_id": loaded.revision.change_id,
+        "delivery_digest": loaded.revision.delivery_digest,
+        "tested_git_revision": _git(workspace, "rev-parse", "HEAD"),
+        "setup_finalize_invoked": False,
+        "dn_015_invoked": False,
+        "active_legacy_surfaces": [],
+    }
+    (workspace / ".owlbear" / "proof-013-seed.json").write_text(json.dumps(seed, indent=2), encoding="utf-8")
+
+
 def _run_public_command(command: list[str], *, cwd: Path) -> dict[str, object]:
     completed = subprocess.run(  # noqa: S603 - arguments are controlled by this fixture.
         command,
@@ -491,9 +563,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--project-root", type=Path, required=True)
     parser.add_argument("--workspace", type=Path, required=True)
+    parser.add_argument("--proof-013-release", action="store_true")
     args = parser.parse_args()
     project_root = args.project_root.resolve()
     workspace = args.workspace.resolve()
+    if args.proof_013_release:
+        _seed_proof_013_release(project_root, workspace)
+        return
     changes_dir = workspace / ".owlbear" / "changes"
     work_root = workspace / ".owlbear" / "kanban"
     source = project_root / ".owlbear" / "changes" / CHANGE_ID
