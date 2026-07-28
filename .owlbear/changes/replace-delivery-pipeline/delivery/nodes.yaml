@@ -12,8 +12,8 @@ authority:
 admission:
   state: admitted
   delivery_digest:
-    6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9
-  receipt: receipts/admission-6c95c70c81a1.yaml
+    784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+  receipt: receipts/admission-784c7b96d745.yaml
   limits:
     - Admission certifies delivery completeness and feasibility, not implementation correctness.
     - Memory and Ideas continuity is preservation-only; DN-011 does not expand either utility.
@@ -28,7 +28,7 @@ nodes:
       OpenSpec artifact resolution.
     owns: [REQ-019, NEG-007]
     supports: [REQ-001, REQ-016, NEG-004, KEEP-003, KEEP-007]
-    modules: [MOD-001]
+    modules: [MOD-001, MOD-008]
     produces: [IF-001]
     consumes: []
     dependencies: []
@@ -70,7 +70,7 @@ nodes:
       - KEEP-006
       - KEEP-007
     supports: []
-    modules: [MOD-001, MOD-009]
+    modules: [MOD-001, MOD-008, MOD-009]
     produces: [IF-003]
     consumes: [IF-001, IF-002]
     dependencies: [DN-001, DN-002]
@@ -86,7 +86,7 @@ nodes:
       disposable proof checkouts.
     owns: [REQ-013, REQ-014, REQ-022, NEG-006]
     supports: [REQ-020, KEEP-006, KEEP-007]
-    modules: [MOD-001, MOD-002, MOD-003, MOD-009]
+    modules: [MOD-001, MOD-002, MOD-003, MOD-008, MOD-009]
     produces: [IF-004, IF-005, IF-015]
     consumes: [IF-003]
     dependencies: [DN-003]
@@ -101,7 +101,7 @@ nodes:
       revisions.
     owns: [REQ-001, KEEP-001, KEEP-002, KEEP-003, KEEP-008, KEEP-009]
     supports: [REQ-002, REQ-015, KEEP-005]
-    modules: [MOD-003]
+    modules: [MOD-003, MOD-008]
     produces: [IF-006]
     consumes: [IF-001, IF-002, IF-010]
     dependencies: [DN-002, DN-009]
@@ -120,7 +120,7 @@ nodes:
       before dependent builds proceed.
     owns: [REQ-004, REQ-024, REQ-025, NEG-005, NEG-008, KEEP-004]
     supports: [KEEP-003, KEEP-005]
-    modules: [MOD-001, MOD-003]
+    modules: [MOD-001, MOD-003, MOD-008]
     produces: [IF-007]
     consumes: [IF-001, IF-002, IF-003, IF-004, IF-006, IF-010]
     dependencies: [DN-003, DN-004, DN-005, DN-009]
@@ -142,7 +142,7 @@ nodes:
       - KEEP-005
       - KEEP-007
       - KEEP-008
-    modules: [MOD-003, MOD-009]
+    modules: [MOD-003, MOD-008, MOD-009]
     produces: [IF-008]
     consumes: [IF-003, IF-004, IF-007, IF-010]
     dependencies: [DN-004, DN-006, DN-009]
@@ -157,7 +157,7 @@ nodes:
       without self-patching.
     owns: [REQ-006, NEG-003, NEG-009, KEEP-005]
     supports: [REQ-008, REQ-014, KEEP-004, KEEP-007, KEEP-008]
-    modules: [MOD-001, MOD-003, MOD-009]
+    modules: [MOD-001, MOD-003, MOD-008, MOD-009]
     produces: [IF-009]
     consumes: [IF-001, IF-003, IF-004, IF-005, IF-007, IF-008, IF-010]
     dependencies: [DN-004, DN-006, DN-007, DN-009]
@@ -297,7 +297,7 @@ nodes:
       - KEEP-005
       - KEEP-007
       - KEEP-008
-    modules: [MOD-001, MOD-003, MOD-009]
+    modules: [MOD-001, MOD-003, MOD-008, MOD-009]
     produces: [IF-014]
     consumes: [IF-001, IF-003, IF-004, IF-005, IF-009, IF-010]
     dependencies: [DN-004, DN-008, DN-009]

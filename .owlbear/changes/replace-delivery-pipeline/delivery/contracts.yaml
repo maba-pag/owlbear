@@ -5,8 +5,9 @@ modules:
   - id: MOD-001
     paths:
       - serve/kanban/src/owlbear_kanban/
-    current_responsibility: Task files, statuses, claims, requests, activity,
-      health, dispatch, and archive.
+    current_responsibility: >-
+      Native change authority, delivery graphs, purpose-specific jobs, receipts,
+      invalidation, transactions, proof checkout, health, and graph-aware dispatch.
     planned_change: >-
       Replace task authority with native change, delivery graph, purpose-specific
       jobs, receipts, invalidation,
@@ -15,12 +16,12 @@ modules:
   - id: MOD-002
     paths:
       - serve/mcp-kanban/src/owlbear_mcp_kanban/
-    current_responsibility: Generic task CRUD, lifecycle, request, health, and
-      dispatch MCP tools.
+    current_responsibility: >-
+      Native change, job, completion, request, finding, rejection, evidence, health,
+      and history MCP tools over the graph-aware engine.
     planned_change: >-
       Expose intent-level change, job, completion, request, evidence, health, and
-      history tools; remove generic task
-      mutation.
+      history tools; remove generic task mutation.
   - id: MOD-003
     paths:
       - share/agents/
@@ -28,34 +29,32 @@ modules:
       - share/prompts/
       - share/instructions/
       - share/WIRING.md
-    current_responsibility: OpenSpec-facing ideation/shaping and
-      shape-build-verify-collect agent workflow.
+    current_responsibility: >-
+      Native designer, frontier planner, builder/reviewer, acceptor, auditor, and
+      graph-aware orchestration agents and workflows.
     planned_change: >-
       Install designer, frontier planner, outcome builder, inline reviewer, acceptor,
-      auditor,
-      and graph-aware orchestrator
-      contracts; retire incompatible roles and workflows.
+      auditor, and graph-aware orchestrator contracts; retire incompatible roles and
+      workflows.
   - id: MOD-004
     paths:
       - serve/cockpit/src/owlbear_cockpit/
-    current_responsibility: FastAPI task board, request, activity, health,
-      ideas, and memory APIs over KanbanEngine.
+    current_responsibility: >-
+      FastAPI native change, graph, job, request, finding, receipt, activity, health,
+      legacy inventory, ideas, and memory APIs with SSE invalidation.
     planned_change: >-
       Add change, graph, job, request, finding, receipt, legacy inventory, and SSE
-      contracts over the graph-aware
-      engine; remove arbitrary task movement/editing.
+      contracts over the graph-aware engine; remove arbitrary task movement/editing.
   - id: MOD-005
     paths:
       - serve/cockpit/web/src/
     current_responsibility: >-
-      Task-column Kanban, task editor, decisions, activity, ideas, memories, and workspace
-      health UI.
+      Peer Specification and Delivery views with Requests, Activity, Evidence, Legacy,
+      Ideas, Memories, and workspace health UI over the native Cockpit API.
     planned_change: >-
       Present Specification and Delivery as peer top-level surfaces with change authority
-      and graph
-      views, immutable-purpose job cards, request context, receipt/finding history,
-      exact proof
-      revisions, and legacy inventory.
+      and graph views, immutable-purpose job cards, request context, receipt/finding
+      history, exact proof revisions, and legacy inventory.
   - id: MOD-006
     paths:
       - setup/
@@ -64,21 +63,21 @@ modules:
       - README-consumer.md
       - share/README.md
       - .github/copilot-instructions.md
-    current_responsibility: Consumer setup, OpenSpec installation, seed assets,
-      and public documentation.
+    current_responsibility: >-
+      Native consumer setup, seed assets, workspace instructions, and public documentation
+      with OpenSpec installation and generated commands removed.
     planned_change: >-
       Scaffold the native stores and ecosystem, remove OpenSpec installation/generated
-      commands, and document only
-      the new workflow.
+      commands, and document only the new workflow.
   - id: MOD-007
     paths:
       - openspec/
       - .github/skills/openspec-*/
       - .github/prompts/opsx-*.prompt.md
-    current_responsibility: Active OpenSpec changes, stock schema, generated
-      commands, and alternate lifecycle.
-    planned_change: Remove from active product paths after immutable legacy
-      snapshot and disposition inventory.
+    current_responsibility: >-
+      No active product responsibility; OpenSpec changes, stock schema, generated
+      commands, and alternate lifecycle surfaces have been removed.
+    planned_change: Preserve verified absence from active product and consumer paths.
   - id: MOD-008
     paths:
       - tests/
@@ -87,12 +86,11 @@ modules:
       - serve/cockpit/web/e2e/
       - serve/cockpit/web/src/**/*.test.*
     current_responsibility: >-
-      Current task pipeline, APIs, agents, setup, backend, frontend, and integration
-      regression coverage.
+      Native change, delivery graph, runtime, MCP, agent, setup, backend, frontend,
+      cutover, browser, and compatibility-boundary regression coverage.
     planned_change: >-
       Replace obsolete workflow contracts and add incident fixtures, generic graph
-      properties, native end-to-end
-      workflow, cutover, and browser proof.
+      properties, native end-to-end workflow, cutover, and browser proof.
   - id: MOD-009
     paths:
       - .owlbear/hooks/
@@ -100,12 +98,11 @@ modules:
       - .owlbear/kanban/
       - seed/.owlbear/kanban/
     current_responsibility: >-
-      Agent write guards, session context, task/request stores, activity, and local
-      board configuration.
+      Agent write guards, session context, transitional task/request stores, native
+      authority/job stores, activity, and local board configuration.
     planned_change: >-
       Enforce new role write scopes, authority/job stores, proof-checkout containment,
-      and purpose-specific runtime
-      state.
+      and purpose-specific runtime state.
 
 interfaces:
   - id: IF-001
@@ -249,9 +246,10 @@ interfaces:
     producer: DN-004
     consumers: [DN-009]
     contract: >-
-      Strict pick, start, purpose-specific finish, release, and expired-claim recovery
-      tools expose IF-004 to the
-      VS Code orchestrator without adding authority or alternate lifecycle semantics.
+      The strict pick, start, purpose-specific finish, release, and expired-claim recovery
+      operation subset introduced for bootstrap exposes IF-004 to the VS Code orchestrator
+      without adding authority, duplicate registrations, or alternate lifecycle semantics;
+      after IF-010 assembly these remain the same registrations and schemas inside that API.
       For accept and audit,
       start_job composes IF-005 setup before claim creation and returns contained
       checkout context; purpose-specific
@@ -340,9 +338,13 @@ interfaces:
     producer: DN-009
     consumers: [DN-005, DN-006, DN-007, DN-008, DN-010, DN-012, DN-013, DN-014]
     contract: >-
-      Change, validation, admission, job, purpose-specific completion, request, evidence,
-      health, and history tools
-      with strict schemas, completing and superseding the bootstrap work bridge IF-015.
+      One strict native registry exposes list_changes, show_change, validate_change,
+      admit_change, list_jobs, show_job, pick_jobs, start_job, finish_plan, finish_build,
+      finish_accept, finish_audit, reject_accept, reject_audit, release_job,
+      recover_expired_claims, create_request, list_requests, show_request, list_attempts,
+      list_findings, show_finding, show_receipt, change_health, work_health, and
+      list_activity. It completes the control plane while retaining IF-015's work operations
+      as the same registrations and schemas, not a duplicate bridge.
     authority: MOD-002
     failure_semantics: Stable domain error codes map engine failures without
       leaking partial mutation.
@@ -515,8 +517,9 @@ migrations:
     title: Split delivery authority and replace shape vocabulary
     owner: DN-001
     from: >-
-      Bootstrap graph.yaml containing delivery authority and node plans plus implemented
-      shape job, receipt, profile, completion, MCP, agent, and Cockpit vocabulary.
+      The earlier bootstrap graph.yaml authority and implemented shape job, receipt,
+      profile, completion, MCP, agent, and Cockpit vocabulary that preceded the current
+      modular authority and plan-only runtime.
     to: >-
       Canonically joined delivery/obligations.yaml, delivery/contracts.yaml, and
       delivery/nodes.yaml authority; isolated plans/<node-id>.yaml records; and plan-only
@@ -755,13 +758,11 @@ risks:
       - Accept or audit claim state diverges from its prepared proof checkout
         after setup, start rejection, or cleanup.
     disposition: >-
-      Keep IF-015 closed to pick, start, purpose-specific finish, release, and expired-claim
-      recovery; adapt only
-      strict IF-004/IF-003 results while composing IF-005 for read-only starts; exercise
-      exact schemas, ordering,
-      cleanup, and diagnostics in PROOF-014; and require MIG-003/PROOF-009 absence
-      proof for residual duplicate
-      registrations after IF-010 completes the control plane.
+      Treat IF-015 as the closed work-operation subset of IF-010, with one registration and
+      schema per operation; adapt only strict IF-004/IF-003 results while composing IF-005
+      for read-only starts; exercise exact subset schemas, ordering, cleanup, and diagnostics
+      in PROOF-014; and require PROOF-011 plus MIG-003/PROOF-009 to assert the exact assembled
+      registry and absence of duplicate or legacy registrations.
     owner: DN-004
     proof: PROOF-014
   - id: RISK-014
@@ -929,6 +930,9 @@ proofs:
     method:
       - Exercise change, validation, admission, job, request, evidence, health,
         history, and completion tool contracts.
+      - >-
+        Assert the registered tool names exactly equal IF-010's declared catalog, including
+        finding reads and accept/audit rejection operations.
       - Assert generic task mutation and old lifecycle tools are absent.
     allowed_replacements: [temporary engine store]
     durable_outputs: [MCP integration tests]
@@ -983,15 +987,15 @@ proofs:
       and disposable proof-checkout operations.
     owner: DN-004
     method:
-      - Exercise the public IF-015 MCP tools over the real DispatchRuntime and
-        assert the registered tool set is exactly pick_jobs, start_job,
+      - Exercise the public IF-015 operation subset over the real DispatchRuntime and
+        assert that subset is exactly pick_jobs, start_job,
         finish_plan, finish_build, finish_accept, finish_audit, release_job, and
-        recover_expired_claims with strict schemas and stable domain-error
-        mapping.
+        recover_expired_claims, with the same registrations used by IF-010, strict schemas,
+        and stable domain-error mapping.
       - For accept and audit, assert start_job returns canonical contained
         IF-005 checkout context, setup failure creates no claim, start rejection
         removes the checkout, and finish, release, and expired recovery clean it
-        without adding a ninth tool.
+        without adding another work operation.
       - Dispatch assigned plan, build, accept, and audit agents from
         engine-selected waves without interpreting agent prose.
       - Assert tracked-file writers never overlap and accept or audit never

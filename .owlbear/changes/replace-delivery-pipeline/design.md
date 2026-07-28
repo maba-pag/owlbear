@@ -664,11 +664,11 @@ owlbear_kanban/
 
 No caller mutates stores independently. Engine transactions validate references, write temp files, fsync, rename atomically where possible, append activity, and return structured projections. Multi-file operations use a transaction manifest and deterministic recovery so a crash cannot leave a receipt without its job/graph update.
 
-The self-hosting bootstrap currently implements `shape` vocabulary in DN-003/DN-004 and the IF-015
-MCP bridge. DEC-033 and MIG-004 make this completed work stale: DN-003 must replace job, receipt,
-request, and transaction discriminators; DN-004 must replace dispatch profiles and `finish_shape`
-with `finish_plan`; DN-009 must expose only the corrected assembled API. No `shape` compatibility
-alias or dual registration survives re-admission or cutover.
+The self-hosting bootstrap initially implemented `shape` vocabulary in DN-003/DN-004 and the IF-015
+MCP bridge. DEC-033 and MIG-004 made that work stale: DN-003 replaced job, receipt, request, and
+transaction discriminators; DN-004 replaced dispatch profiles and `finish_shape` with
+`finish_plan`; DN-009 exposes only the corrected assembled API. No `shape` compatibility alias or
+dual registration survives re-admission or cutover.
 
 ## 14. MCP Contract
 
@@ -705,8 +705,11 @@ receipt. This composition does not change IF-003 or add another MCP operation.
 - `finish_plan`
 - `finish_build`
 - `finish_accept`
+- `reject_accept`
 - `finish_audit`
+- `reject_audit`
 - `release_job`
+- `recover_expired_claims`
 
 ### Request tools
 
@@ -722,6 +725,8 @@ Resolution remains user/Cockpit controlled.
 - `work_health`
 - `list_activity`
 - `list_attempts`
+- `list_findings`
+- `show_finding`
 - `show_receipt`
 
 Generic `create_task`, `edit_task`, `move_task`, arbitrary status transitions, parent mutation, and OpenSpec tools are removed. Plan and corrective transactions are the only ways implementation jobs enter Delivery.
