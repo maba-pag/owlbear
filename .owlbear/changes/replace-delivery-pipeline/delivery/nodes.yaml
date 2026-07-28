@@ -1,9 +1,7 @@
 ---
 schema_version: 1
 change_id: replace-delivery-pipeline
-# candidate_delivery_digest: 3212969f2164f0d71ae60c30405eb941b8a87b99d225a57db96062143dd4de7c
-# candidate_admission_receipt: pending challenge, baselines, validation, and user approval
-state: draft
+state: admitted
 authority:
   intent: intent.md
   design: design.md
@@ -11,7 +9,14 @@ authority:
   research:
     - ../../research/planning-workflow-root-cause-and-redesign.md
     - ../../research/delivery-operating-model-reframe.md
-admission: null
+admission:
+  state: admitted
+  delivery_digest: 3212969f2164f0d71ae60c30405eb941b8a87b99d225a57db96062143dd4de7c
+  receipt: receipts/admission-3212969f2164.yaml
+  limits:
+    - Admission certifies delivery completeness and feasibility, not implementation correctness.
+    - Verification-only nodes still require fresh independent exact-commit acceptance.
+    - DN-015 remains mandatory build-plus-accept after PROOF-013.
 nodes:
   - id: DN-001
     title: Establish native change authority and semantic identity
