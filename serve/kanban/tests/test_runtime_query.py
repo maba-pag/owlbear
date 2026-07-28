@@ -107,6 +107,25 @@ def _receipt(revision, receipt_id: str, predecessors: tuple[str, ...]) -> dict[s
     }
 
 
+def test_list_jobs_excludes_superseded_authority_before_pagination(tmp_path: Path) -> None:
+    revision = _revision(tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    jobs = JobStore(work_root)
+    _materialize(jobs, _job(revision, 1, delivery_digest="f" * 64))
+    _materialize(jobs, _job(revision, 29))
+    _materialize(jobs, _job(revision, 30))
+    runtime = NativeRuntime(revision, work_root, _History(), timedelta(minutes=5))
+
+    first = runtime.list_jobs(candidate_revision="a" * 40, limit=1)
+    second = runtime.list_jobs(candidate_revision="a" * 40, cursor=first.next_cursor, limit=1)
+
+    assert tuple(item.job_id for item in first.items) == (29,)
+    assert first.next_cursor is not None
+    assert tuple(item.job_id for item in second.items) == (30,)
+    assert second.next_cursor is None
+
+
 def test_public_invalidation_refreshes_only_returned_index_closure(tmp_path: Path) -> None:
     revision = _revision(tmp_path)
     work_root = tmp_path / "work"

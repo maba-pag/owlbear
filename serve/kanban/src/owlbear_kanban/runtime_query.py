@@ -197,7 +197,11 @@ class RuntimeQuery:
         with self._lock:
             self._ensure_indexes()
             assert self._jobs_by_id is not None
-            identities = tuple(str(job_id) for job_id in sorted(self._jobs_by_id))
+            identities = tuple(
+                str(job_id)
+                for job_id, job in sorted(self._jobs_by_id.items())
+                if job.change_id == self._revision.change_id and job.delivery_digest == self._revision.delivery_digest
+            )
             id_page = _page(identities, identities, cursor, limit)
             items = tuple(
                 self._project_job(self._jobs_by_id[int(identity)], candidate_revision) for identity in id_page.items
