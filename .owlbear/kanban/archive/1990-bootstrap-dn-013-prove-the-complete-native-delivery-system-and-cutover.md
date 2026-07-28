@@ -1,10 +1,10 @@
 ---
 id: 1990
 title: 'Bootstrap DN-013: Prove the complete native delivery system and cutover'
-status: collect
+status: archived
 priority: high
 created: 2026-07-22T01:09:02.449610+02:00
-updated: 2026-07-28T05:22:07.055758+02:00
+updated: 2026-07-28T12:06:02.365432+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -46,7 +46,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Bootstrap Projection Identity
@@ -148,3 +148,14 @@ DN-013 graph repair for `DN-013/resumed-dispatch-no-accept-job` is user-approved
 
 [[2026-07-28T05:22:07+02:00]]
 Connected graph mutation complete: DN-013 now depends directly on user-approved repair #2100, while #2097 remains the complete workflow proof owner and #2098 remains downstream. Audit confirms no DN-013 AC or authority change. Claim released without status change.
+
+[[2026-07-28T12:06:02+02:00]]
+## Collect Notes
+
+ARCHIVED. DN-013 aggregate closure is complete at repository HEAD `c93a357e7cdbd52b38027f9fecd86de558d806ad`.
+
+- AC-1: All five DN-013 leaves #2094 through #2098 carry `change:replace-delivery-pipeline`, digest `6c95c70c81a1`, node `DN-013`, MOD-008/PROOF-013 scope, and an outcome-cohesive dependency chain. All 15 aggregate dependencies are archived `completed` and unblocked.
+- AC-2: Incident, generated graph, receipt/recovery, fresh-consumer workflow, and real Cockpit release proof remain within PROOF-013. Material corrective defects were routed to owning DN-008 repairs #2099/#2100, both archived completed. No DN-015/finalizer or live-carrier mutation exists in the proof diff or manifest.
+- AC-3: Descendant verifier evidence is durable and SHA-bound. #2097 builder `45ee5478` plus verifier `b8042a8` prove the complete public setup-to-audit workflow; #2098 builder `732c751` plus verifier `d3d18d7` prove the built real-FastAPI desktop/mobile release journey. All are ancestors of current HEAD, and no later diff touches the six assembled proof files. The PROOF-013 manifest records the disposable tested revision, all digests/receipts/corrective identities, clean health, empty legacy state, and false finalization/DN-015 flags.
+
+Historical records use two heading variants: #1978 carries descendant verifier proof in aggregate Collect Notes with tested SHA, and #2097 uses `## Verifier Notes`; both contain explicit PASS evidence and challenger approval. This satisfies the verification intent without rewriting archived history. Real bootstrap carrier retirement remains exclusively DN-015/PROOF-016.
