@@ -1,10 +1,10 @@
 ---
 id: 2097
 title: 'P17-04: Execute the fresh-consumer native delivery workflow'
-status: build
+status: verify
 priority: high
 created: 2026-07-27T19:45:12.576115+02:00
-updated: 2026-07-28T06:21:19.238510+02:00
+updated: 2026-07-28T11:30:15.038013+02:00
 tags:
   - phase-17
   - scope:test
@@ -147,3 +147,22 @@ Local proof-contract repair for `PROOF-013/literal-two-node-audit-impossible`.
 
 [[2026-07-28T06:21:19+02:00]]
 Proof-contract repair complete and challenged: AC-1, complexity waiver, and proof guidance now require two delivery-work nodes/two modules plus the mandatory DN-014 audit-authority node. AC-2/AC-3, Outcome, dependencies, public assembled lifecycle, and safety exclusions are unchanged. Shaper-challenger passed; task returns to build.
+
+[[2026-07-28T11:30:15+02:00]]
+## Builder Notes
+DONE: implemented the repaired PROOF-013 fixture and closed every current failure key in one task-scoped assembled proof.
+
+- Replaced the copied 15-node authority and private `_active_accept` shortcut with a schema-valid structured fixture generated under a fresh consumer initialized by public `setup/init.py`.
+- The admitted graph is `DN-001 -> DN-002 -> DN-014`: two delivery-work nodes represent exactly two modules; mandatory DN-014 is the third graph node and reuses MOD-002 as whole-change audit authority with PROOF-008.
+- AC-1: public `show_change`, `validate_change`, and `admit_change` publish three digest-bound engine plan identities. A public DN-001 `finish_plan` attempt that escapes to DN-014 authority returns `NODE_PLAN_INVALID` and publishes no receipt, node plan, build, or accept job; the same claim then completes valid planning.
+- AC-2: every plan/build/accept is selected or identified from public runtime output and completed through public start/purpose finish. DN-001 acceptance uses a real read-only proof checkout; public rejection publishes one corrective build and immutable replacement accept. The original build receipt evaluates `ERR_RECEIPT_SUPERSEDED`, replacement accept is absent before correction, and becomes the selected accept only after a real corrected Git commit and public corrective build finish. DN-002 and DN-014 then complete independently at that corrected SHA.
+- AC-3: terminal DN-014 acceptance publishes the public audit. The disposable read-only checkout executes canonical `whole_change_audit_report` over all three actual accept receipts. Final receipt assertions cover delivery and node-plan digests, corrected SHA, all predecessor IDs, canonical whole-change closure and every admitted authority target, event evidence IDs, corrected DN-001 receipt lineage, persisted public supersession history, and empty `work_health` findings.
+- Safety: consumer, work root, change root, Git mutation, and proof checkouts are temporary and outside live OwlBear roots. The proof never invokes DN-015, `setup/finalize.py`, a live carrier, or legacy execution.
+- Current follow-up `PROOF-013/literal-two-node-audit-impossible` is closed by the challenged three-graph-node/two-module fixture; no production behavior changed.
+
+Evidence:
+- Focused assembled proof: 1 passed after final formatting.
+- Direct public lifecycle bundle (assembled proof, admission, replacement gating, acceptance, audit, health): 6 passed.
+- Focused lint: all hooks passed; editor diagnostics and diff check clean.
+- Broader four-file MCP run reached the configured 300-second session cap after 46 passed and no failures; builder-challenger independently reports a broader 57-test slice passed.
+- Builder-challenger final decision: `pass` after an initial fail drove direct AC-1/2/3 causal assertions.
