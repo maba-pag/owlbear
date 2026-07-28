@@ -1,10 +1,10 @@
 ---
 id: 2099
 title: Complete DN-008 corrective build authority
-status: verify
+status: collect
 priority: high
 created: 2026-07-28T02:34:32.523427+02:00
-updated: 2026-07-28T04:46:59.795201+02:00
+updated: 2026-07-28T04:54:40.694217+02:00
 tags:
   - phase-17
   - scope:core
@@ -134,3 +134,15 @@ DONE: explicit packet authority closes `AC-2/corrective-packet-authority`; prior
 
 [[2026-07-28T04:46:59+02:00]]
 Verifier interruption recovery: the prior verifier invocation ended on a network timeout before producing a verdict, commit, request, or implementation/test patch. Effect check found HEAD still at builder commit `5c7da2f27`, no pending request, and only claim metadata on #2099. Claim released so verification can restart cleanly against the exact builder commit.
+
+[[2026-07-28T04:54:40+02:00]]
+## Verify Notes
+PASS against builder commit `5c7da2f27`; prior network-timeout attempt was effect-checked and released in recovery commit `f6704ff9` before this clean verification.
+
+- AC-1: current `JobRecord`, corrective route/plan models, normal plan publication, and corrective job publication require/persist canonical `packet_id` only for build jobs and current `node_plan_digest`; focused packet/corrective/replay matrix passed.
+- AC-2: current invalidation authenticates route packet against immutable packet finding plus current node-plan membership before publication; current finish resolves canonical closure by persisted packet ID. Durable controls cover unknown/mismatched packet rejection and sibling closure `ERR_FINISH_EVIDENCE_INVALID` without receipt. Public fresh-consumer correction reached `reject_accept`, `start_job`, and `finish_build` with receipt/archive assertions (`1 passed, 1 xfailed`); the xfail begins only at the later DN-013 resumed-dispatch defect owned by #2097.
+- AC-3: focused replay, identity, and interruption/no-partial-publication guards passed; complete owning Kanban package passed `386 passed` with four existing Python multiprocessing deprecation warnings.
+- Direct MCP/Cockpit packet/corrective consumers passed `14 passed` with four existing Starlette deprecation warnings.
+- Ruff check/format passed on changed Python source and direct tests; editor diagnostics clean; builder patch and current drift checks clean. No verifier implementation patch was required.
+- Verifier-challenger decision: `pass`; it confirmed all ACs have direct causal evidence and the later #2097 xfail does not mask #2099.
+- All 20 recalled verifier memories were assessed successfully.
