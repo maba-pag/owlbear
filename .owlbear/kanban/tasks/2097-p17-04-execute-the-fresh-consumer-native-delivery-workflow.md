@@ -4,7 +4,7 @@ title: 'P17-04: Execute the fresh-consumer native delivery workflow'
 status: shape
 priority: high
 created: 2026-07-27T19:45:12.576115+02:00
-updated: 2026-07-28T05:19:28.656377+02:00
+updated: 2026-07-28T05:22:07.065509+02:00
 tags:
   - phase-17
   - scope:test
@@ -19,6 +19,7 @@ tags:
 parent: 1990
 depends_on:
   - 2099
+  - 2100
 ac:
   - 'AC-1: Given a temporary consumer initialized by public setup and a representative
     admitted two-node/two-module change, installed design contracts plus public MCP
@@ -86,3 +87,16 @@ Material graph repair for failure key `AC-2/corrective-build-node-plan-digest` w
 
 [[2026-07-28T05:19:28+02:00]]
 Shaping claim normalization: resumed PROOF-013 confirmed #2099 closes corrective finish, then exposed failure key `DN-013/resumed-dispatch-no-accept-job`. Current-source diagnosis, three challenger rounds, the completed Repair Closure Map, and user approval establish a material late DN-008 repair leaf. This claim is released without status change so the complete connected mutation set (#1968, #1990, #2097) can be claimed in deterministic ID order before graph writes.
+
+[[2026-07-28T05:21:16+02:00]]
+## Shape Notes
+Connected repair update after #2099 closure and resumed PROOF-013 diagnosis.
+
+- Failure key `AC-2/corrective-build-node-plan-digest` is closed by archived #2099: corrective build now completes through public `finish_build` with current packet and node-plan authority.
+- New failure key `DN-013/resumed-dispatch-no-accept-job` is proven after that finish: public `pick_jobs` returns no accept work because all-build rejection supersedes the original accept and publishes no immutable replacement.
+- Current-source owners, cheapest partial-versus-complete corrective-receipt dispatch check, negative controls, executor availability, and causality are recorded in #2100's Repair Closure Map.
+- User approved and shaper-challenger passed new root repair #2100. #2097 now depends on #2100 and remains in `shape`; after #2100 archives, it returns to `build` without AC, scope, authority, or proof-guidance changes and completes the full correction-to-audit proof.
+- The disposable/live-carrier exclusions remain binding. #2097 does not patch production or invoke DN-015.
+
+[[2026-07-28T05:22:07+02:00]]
+Connected graph mutation complete: earlier node-plan-digest failure is closed by archived #2099; resumed-dispatch failure is assigned to build-ready #2100 with complete Repair Closure Map. #2097 stays in shape and blocked on #2100, preserving its ACs and disposable full-workflow proof boundary. Claim released.

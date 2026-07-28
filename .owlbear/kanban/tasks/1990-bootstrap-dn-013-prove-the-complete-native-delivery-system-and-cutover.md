@@ -4,7 +4,7 @@ title: 'Bootstrap DN-013: Prove the complete native delivery system and cutover'
 status: collect
 priority: high
 created: 2026-07-22T01:09:02.449610+02:00
-updated: 2026-07-28T02:35:36.081596+02:00
+updated: 2026-07-28T05:22:07.055758+02:00
 tags:
   - bootstrap-projection
   - change:replace-delivery-pipeline
@@ -30,6 +30,7 @@ depends_on:
   - 2097
   - 2098
   - 2099
+  - 2100
 ac:
   - 'AC-1: Shaper reads DN-013 from the modular authority trio at digest `6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9`
     and creates one outcome-cohesive proof DAG whose leaves reference the same change/digest/node;
@@ -135,3 +136,15 @@ Material graph repair approved after #2097 routed a real DN-008 product defect i
 - Existing DN-013 intent, AC, five proof leaves, and collected parent status remain unchanged.
 - #2099 is owned by root #1968 and DN-008 lineage #1985; #2097 retains assembled workflow proof ownership.
 - Final shaper-challenger: `pass`; user approved the graph.
+
+[[2026-07-28T05:21:08+02:00]]
+## Shape Notes
+DN-013 graph repair for `DN-013/resumed-dispatch-no-accept-job` is user-approved and challenged.
+
+- New root repair #2100 owns the late DN-008 replacement-accept production contract and depends on archived #1985 and #2099.
+- #1990 now depends directly on #2100 in addition to proof leaf #2097; this prevents aggregate closure from bypassing the production repair.
+- #2097 remains the sole owner of the complete fresh-consumer correction-to-audit proof, and #2098 remains downstream of #2097.
+- No DN-013 AC, admitted authority, proof meaning, or DN-015 boundary changed. Final shaper-challenger: `pass`; user approved the material graph mutation.
+
+[[2026-07-28T05:22:07+02:00]]
+Connected graph mutation complete: DN-013 now depends directly on user-approved repair #2100, while #2097 remains the complete workflow proof owner and #2098 remains downstream. Audit confirms no DN-013 AC or authority change. Claim released without status change.

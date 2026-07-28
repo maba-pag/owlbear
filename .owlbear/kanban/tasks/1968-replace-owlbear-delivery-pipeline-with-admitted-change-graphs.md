@@ -4,7 +4,7 @@ title: Replace OwlBear delivery pipeline with admitted change graphs
 status: collect
 priority: high
 created: 2026-07-21T01:46:53.257501+02:00
-updated: 2026-07-28T02:35:35.941342+02:00
+updated: 2026-07-28T05:22:07.041758+02:00
 tags:
   - pipeline-redesign
   - architecture
@@ -52,6 +52,7 @@ depends_on:
   - 2083
   - 2084
   - 2085
+  - 2100
 ac:
   - The bootstrap native change package records the approved intent, 
     architecture decisions, complete delivery-node graph, admission 
@@ -257,3 +258,16 @@ User approved a late corrective DN-008 leaf after #2097's assembled PROOF-013 ex
 - One challenger used pre-Python-3.14 exception grammar and was disconfirmed: Python 3.14.6 `py_compile` passed all named modules, consistent with PEP 758 and the 378-test current suite.
 - User decision: approved recommended repair leaf and dependency gates.
 - Concrete board audit: #2099 is root child with #1985 lineage; #1990 and #2097 depend on #2099; no live carrier or product file changed during shaping.
+
+[[2026-07-28T05:21:03+02:00]]
+## Shape Notes
+Material late DN-008 repair approved for failure key `DN-013/resumed-dispatch-no-accept-job`.
+
+- User approved new root leaf #2100 after current-source diagnosis, three shaper-challenger rounds, and a complete Repair Closure Map.
+- #2100 depends on archived DN-008 #1985 and corrective packet authority #2099. It owns accept-only replacement identity and atomic re-acceptance readiness; it does not reopen archived aggregate authority or DN-015.
+- Root #1968 now depends directly on #2100; DN-013 #1990 and proof task #2097 are gated on the same repair. #2098 remains transitively behind #2097.
+- Admitted authority remains digest `6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9`; this is a production defect repair within DN-008/REQ-006/REQ-008/IF-009/DEC-009/PROOF-007, not an authority amendment.
+- Final shaper-challenger: `pass`.
+
+[[2026-07-28T05:22:07+02:00]]
+Connected graph mutation complete: user-approved, challenger-passed late DN-008 repair #2100 is now a direct root dependency. Board audit confirms #2100 build-ready under #1968 with archived lineage #1985/#2099; DN-013 remains blocked transitively. Claim released without status change.
