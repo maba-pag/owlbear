@@ -1186,6 +1186,31 @@ async def test_public_start_rejects_stale_checkout_at_different_revision(tmp_pat
 
 
 @pytest.mark.asyncio
+async def test_public_start_returns_plain_diagnostic_when_proof_authority_is_unavailable(tmp_path: Path) -> None:
+    revision, board, ctx, _runtime, _checkout, start, commit = await _active_accept(tmp_path)
+    released = await server.release_job(ctx, **_identity(start), released_at="2026-07-25T00:06:00Z")
+    assert released.diagnostic is None
+    shutil.rmtree(revision.source_dir)
+
+    result = await server.start_job(
+        ctx,
+        change_id=revision.change_id,
+        job_id=int(start["job_id"]),
+        attempt_id="attempt-missing-authority",
+        claim_id="claim-missing-authority",
+        actor_id=str(start["actor_id"]),
+        process_id=str(start["process_id"]),
+        claimed_at="2026-07-25T00:07:00Z",
+        candidate_revision=commit,
+    )
+
+    assert result.diagnostic is not None
+    assert result.diagnostic.code is StartJobDiagnosticCode.AUTHORITY_STALE
+    assert result.diagnostic.detail == "proof checkout setup failed"
+    assert JobStore(board).read(int(start["job_id"])).job.attempt_id is None
+
+
+@pytest.mark.asyncio
 async def test_public_accept_conflict_restores_exact_checkout_for_retry(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

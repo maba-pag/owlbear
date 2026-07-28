@@ -31,6 +31,7 @@ from owlbear_kanban import (
     InvalidationRequest,
     NativeRuntime,
     NativeWorkspace,
+    ProofCheckout,
     ProofCheckoutManager,
     RecoverExpiredClaimsRequest,
     RejectAcceptRequest,
@@ -487,7 +488,7 @@ async def start_job(  # noqa: PLR0913
         started, checkout = _dispatch_runtime(app_ctx, params.change_id).start_with_checkout(
             StartJobRequest(**params.model_dump(exclude={"change_id"}))
         )
-        if checkout is not None and hasattr(checkout, "checkout"):
+        if isinstance(checkout, ProofCheckout):
             return {"start": started, "checkout": checkout}
         return started  # noqa: TRY300
     except PydanticValidationError as exc:
