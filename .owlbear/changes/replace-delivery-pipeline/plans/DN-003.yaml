@@ -1,0 +1,175 @@
+---
+mode: build
+packets:
+  - id: DN-003-PK-001
+    outcome: Complete the graph-aware runtime so build and exact-candidate
+      verification-only plan transactions validate, publish, replay, roll back,
+      remain current, and reconcile dependents through the public engine
+      boundary without partial receipts or dangling jobs.
+    obligations:
+      - REQ-008
+      - REQ-009
+      - REQ-015
+      - REQ-016
+      - REQ-023
+      - REQ-026
+      - NEG-001
+      - NEG-002
+      - NEG-010
+      - KEEP-006
+      - KEEP-007
+    in_scope:
+      - Modify only serve/kanban/src/owlbear_kanban/native_runtime.py to
+        complete plan-mode discrimination, authority-contained closure
+        validation, downstream job cardinality and dependencies, atomic
+        finish/replay behavior, receipt currentness, and dependent
+        reconciliation.
+      - Use the existing attempt, finding, invalidation, job, node-plan,
+        receipt, request, query, transaction, and dispatch abstractions through
+        their current interfaces.
+    excluded:
+      - No edits to admitted authority, node-plan or receipt records, MCP or
+        Cockpit surfaces, agent workflows, setup, documentation, fixtures,
+        generated artifacts, test files, or runtime-store schemas.
+      - No new public interface, lifecycle kind, compatibility path, migration,
+        or proof boundary.
+    modules:
+      - MOD-001
+      - MOD-008
+      - MOD-009
+    interfaces:
+      - IF-001
+      - IF-002
+      - IF-003
+    dependencies: []
+    acceptance_scenarios:
+      - 'AC-1: Given purpose-specific plan, build, accept, or audit work at the public
+        engine boundary, transition, dependency-release, claim, crash, OCC-race, supersession,
+        request-resolution, recovery, priority, and cancellation inputs produce their
+        admitted job, immutable attempt, diagnostic, and replay outcomes without copied
+        specification truth.'
+      - 'AC-2: Given exact, non-intersecting-descendant, intersecting-path, missing,
+        non-descendant, rename, copy, malformed-history, unsafe-path, predecessor-cycle,
+        or explicit-supersession history, public receipt currentness returns the admitted
+        current or fail-closed diagnostic classification and releases no dependency
+        from non-current evidence.'
+      - 'AC-3: Given an injected participant write failure during public completion
+        or invalidation, the transaction leaves no current partial receipt or dangling
+        downstream job; replay or recovery returns the same observable authority after
+        rollback.'
+      - 'AC-4: Given complete mode evidence and matching candidate/generation, public
+        finish_plan accepts an eligible verification-only plan with zero packets,
+        zero build jobs, one accept job, and a non-empty node closure; missing mode
+        evidence, candidate/generation mismatch, empty closure, hidden delta, or zero
+        packets in build mode returns a fail-closed diagnostic with no partial mutation.'
+      - 'AC-5: Given equivalent build and verification-only completion requests, public
+        replay, transaction rollback, receipt-currentness, and dependent-reconciliation
+        queries return mode-consistent receipts, jobs, and diagnostics.'
+    impact_closure:
+      paths:
+        - serve/kanban/src/owlbear_kanban/__init__.py
+        - serve/kanban/src/owlbear_kanban/attempts.py
+        - serve/kanban/src/owlbear_kanban/change.py
+        - serve/kanban/src/owlbear_kanban/dispatch.py
+        - serve/kanban/src/owlbear_kanban/finding.py
+        - serve/kanban/src/owlbear_kanban/invalidation.py
+        - serve/kanban/src/owlbear_kanban/jobs.py
+        - serve/kanban/src/owlbear_kanban/native_runtime.py
+        - serve/kanban/src/owlbear_kanban/node_plan.py
+        - serve/kanban/src/owlbear_kanban/receipt.py
+        - serve/kanban/src/owlbear_kanban/runtime_query.py
+        - serve/kanban/src/owlbear_kanban/runtime_requests.py
+        - serve/kanban/src/owlbear_kanban/runtime_transaction.py
+        - serve/kanban/tests/test_attempts.py
+        - serve/kanban/tests/test_change_receipts.py
+        - serve/kanban/tests/test_dispatch_runtime.py
+        - serve/kanban/tests/test_invalidation.py
+        - serve/kanban/tests/test_jobs.py
+        - serve/kanban/tests/test_native_runtime.py
+        - serve/kanban/tests/test_runtime_requests.py
+        - serve/kanban/tests/test_runtime_transaction.py
+      authority_targets:
+        - DN-001
+        - DN-002
+        - DN-003
+        - IF-001
+        - IF-002
+        - IF-003
+        - KEEP-006
+        - KEEP-007
+        - MOD-001
+        - MOD-008
+        - MOD-009
+        - NEG-001
+        - NEG-002
+        - NEG-010
+        - PROOF-003
+        - REQ-008
+        - REQ-009
+        - REQ-015
+        - REQ-016
+        - REQ-023
+        - REQ-026
+        - RISK-002
+        - RISK-003
+        - RISK-006
+    proof:
+      boundary: Public engine job, claim, completion, invalidation, and health
+        operations.
+      commands:
+        - uv run pytest -n0 serve/kanban/tests/test_native_runtime.py
+          serve/kanban/tests/test_runtime_transaction.py
+          serve/kanban/tests/test_invalidation.py
+          serve/kanban/tests/test_runtime_requests.py
+          serve/kanban/tests/test_attempts.py serve/kanban/tests/test_jobs.py
+          serve/kanban/tests/test_change_receipts.py
+          serve/kanban/tests/test_dispatch_runtime.py -q
+        - uv run ruff check serve/kanban/src/owlbear_kanban/native_runtime.py
+        - uv run ruff format --check
+          serve/kanban/src/owlbear_kanban/native_runtime.py
+      baseline:
+        command: uv run pytest -n0 serve/kanban/tests/test_native_runtime.py
+          serve/kanban/tests/test_runtime_transaction.py
+          serve/kanban/tests/test_invalidation.py
+          serve/kanban/tests/test_runtime_requests.py
+          serve/kanban/tests/test_attempts.py serve/kanban/tests/test_jobs.py
+          serve/kanban/tests/test_change_receipts.py
+          serve/kanban/tests/test_dispatch_runtime.py -q
+        result: 25 failed, 244 passed in 53.11s
+      allowed_replacements:
+        - clock
+        - process identity
+        - temporary filesystem
+        - temporary Git repository
+      evidence_outputs:
+        - Complete eight-file pytest result at the packet commit.
+        - Ruff check and format-check results for the edited source file.
+        - Builder tracked-scope diff proving only
+          serve/kanban/src/owlbear_kanban/native_runtime.py changed.
+    required_outputs:
+      - Updated serve/kanban/src/owlbear_kanban/native_runtime.py implementing
+        the complete packet outcome.
+      - Passing complete eight-file PROOF-003 command with no durable test or
+        fixture edits.
+      - Scoped commit and build evidence showing no tracked delta outside
+        serve/kanban/src/owlbear_kanban/native_runtime.py.
+    profile:
+      domain: Python graph-aware lifecycle runtime
+      risks:
+        - RISK-002
+        - RISK-003
+        - RISK-006
+      tools:
+        - uv
+        - pytest
+        - ruff
+        - Git read-only inspection before scoped commit
+    context_budget:
+      expected_files: 21
+      primary_edit_files: 1
+      interfaces:
+        - IF-001
+        - IF-002
+        - IF-003
+      change_envelope: One focused source-file repair plus execution of existing
+        durable proof; no test, schema, authority, or consumer edits.

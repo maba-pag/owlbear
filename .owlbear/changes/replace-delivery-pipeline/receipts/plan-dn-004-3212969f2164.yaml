@@ -1,0 +1,117 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-004-3212969f2164
+change_id: replace-delivery-pipeline
+delivery_digest: 3212969f2164f0d71ae60c30405eb941b8a87b99d225a57db96062143dd4de7c
+issued_at: '2026-07-28T20:56:11Z'
+impact_closure:
+  paths:
+    - serve/kanban/src/owlbear_kanban/__init__.py
+    - serve/kanban/src/owlbear_kanban/attempts.py
+    - serve/kanban/src/owlbear_kanban/change.py
+    - serve/kanban/src/owlbear_kanban/dispatch.py
+    - serve/kanban/src/owlbear_kanban/jobs.py
+    - serve/kanban/src/owlbear_kanban/native_runtime.py
+    - serve/kanban/src/owlbear_kanban/node_plan.py
+    - serve/kanban/src/owlbear_kanban/proof_checkout.py
+    - serve/kanban/src/owlbear_kanban/receipt.py
+    - serve/kanban/src/owlbear_kanban/runtime_query.py
+    - serve/kanban/src/owlbear_kanban/runtime_transaction.py
+    - serve/kanban/tests/test_dispatch_runtime.py
+    - serve/kanban/tests/test_native_runtime.py
+    - serve/kanban/tests/test_proof_checkout.py
+    - serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
+    - serve/mcp-kanban/tests/test_mcp_surface_contract.py
+  authority_targets:
+    - DN-003
+    - DN-004
+    - IF-003
+    - IF-004
+    - IF-005
+    - IF-015
+    - KEEP-006
+    - KEEP-007
+    - MOD-001
+    - MOD-002
+    - MOD-003
+    - MOD-008
+    - MOD-009
+    - NEG-006
+    - PROOF-014
+    - REQ-013
+    - REQ-014
+    - REQ-020
+    - REQ-022
+    - RISK-002
+    - RISK-004
+    - RISK-013
+target_node_id: DN-004
+node_plan_digest: d8f501c09c1a988f4f8e5b1fa002b19154b129298058953f5c786f02194f9ead
+predecessor_receipt_ids: []
+evidence:
+  methods:
+    - Exercise the public IF-015 operation subset over the real DispatchRuntime and assert that subset is exactly pick_jobs, start_job, finish_plan, finish_build, finish_accept, finish_audit, release_job, and recover_expired_claims, with the same registrations used by IF-010, strict schemas, and stable domain-error mapping.
+    - For accept and audit, assert start_job returns canonical contained IF-005 checkout context, setup failure creates no claim, start rejection removes the checkout, and finish, release, and expired recovery clean it without adding another work operation.
+    - Dispatch assigned plan, build, accept, and audit agents from engine-selected waves without interpreting agent prose.
+    - Assert tracked-file writers never overlap and accept or audit never overlaps a writer.
+    - Exercise crash, expired claim, rate-limit, stale lease, proof-checkout setup, containment, exact-commit materialization, and orphan cleanup paths.
+    - Assert every structured attempt is finalized once and replanning reads current graph/job state.
+    - Prove IF-015 finish_plan accepts an empty build_job_ids tuple only for the DN-003-validated verification-only plan form, creates one accept job, and adds no tool, alias, or lifecycle semantic.
+  baseline:
+    candidate_revision: 85b4866ab44533808e36b7216845fd7733698a5d
+    collection_delta:
+      evidence_id: proof-delta-dn-004-85b4866ab445-uncollected
+      result: The supplied attempted full command with a stale node selector collected zero tests and changed no tracked state because test_profiles_release_recovery_and_replanning_use_native_tools is defined under _Proof014NativeMcpScenario, which pytest does not collect. The exact command string and exit code were not supplied and are not inferred.
+      disposition: failing-durable-proof
+    failing_command:
+      evidence_id: baseline-dn-004-85b4866ab445-8f-19p
+      command: uv run pytest -n0 serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_proof_checkout.py -q
+      exit_code: 1
+      result: 8 failed, 19 passed in 7.17s
+      tracked_state: HEAD remained at the exact candidate and scoped tracked state stayed clean.
+      breakdown:
+        - Three scheduling and wave assertions observed live jobs.
+        - Finish coordination observed invalid currentness.
+        - Four reject-audit scenarios raised TransactionConflictError because shared helpers prepared synthetic plans against live current plans.
+        - The proof-checkout tests passed.
+  source_inspection:
+    disposition: pass
+    evidence: test_dispatch_runtime.py loads live workspace authority in its revision fixture and removes only plans/DN-001.yaml in its copied-revision helper. Imported reject-audit setup reaches test_native_runtime.py::_terminal_accept_scenario, whose clean_receipts path retains jobs and non-DN-001 plans before synthetic plan publication. The PROOF-014 MCP scenario repeats the partial copy inline and its leading-underscore class prevents collection. The nearby _proof011_context already demonstrates temporary authority with receipts, jobs, and the bootstrap plan removed.
+  predecessor:
+    target_node_id: DN-003
+    plan_receipt_id: plan-dn-003-3212969f2164
+    accepted_predecessor_receipt_id: accept-dn-002-85b4866ab445-78
+    planning_basis: Initial planning consumes DN-003's admitted contract. Runtime authority remains responsible for gating DN-004 build dispatch on current predecessor acceptance.
+  proof:
+    boundary: Real orchestrator contract over public engine-selected waves, writer leases, claims, structured completion, and disposable proof-checkout operations.
+    primary_command: uv run pytest -n0 serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_proof_checkout.py serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestProof014NativeMcpScenario -q
+    collection_check: uv run pytest -n0 --collect-only serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestProof014NativeMcpScenario -q
+    additional_commands:
+      - uv run ruff check serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_dispatch_runtime.py serve/mcp-kanban/tests/test_mcp_surface_contract.py
+      - uv run ruff format --check serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_dispatch_runtime.py serve/mcp-kanban/tests/test_mcp_surface_contract.py
+  review:
+    evidence_id: plan-review-dn-004-3212969f2164-frontier
+    reviewer: planner-challenger
+    disposition: pass
+    checks:
+      plan_completeness:
+        disposition: pass
+        evidence: One acyclic build packet covers the seven owned and supported obligations and the observed fixture and collection deltas.
+      admitted_references:
+        disposition: pass
+        evidence: Obligations, modules, interfaces, risks, PROOF-014, and its seven methods match DN-004 authority.
+      impact_closures:
+        disposition: pass
+        evidence: The canonical paths contain the verified live-authority copy sites, shared audit-scenario helpers, public runtime owners, and maintained proof files.
+      dependency_order:
+        disposition: pass
+        evidence: The packet DAG is acyclic, DN-003 is the sole admitted node dependency, and downstream IDs 81 and 82 are unused.
+      proof_boundary:
+        disposition: pass
+        evidence: The primary command crosses public IF-015 MCP operations over DispatchRuntime and maintained proof-checkout behavior, with only admitted lower replacements.
+      material_expansion:
+        disposition: pass
+        evidence: The packet changes fixture isolation and test collection only; it adds no production behavior, interface, tool, alias, or lifecycle semantic.
+    findings: []
+code_revision: 85b4866ab44533808e36b7216845fd7733698a5d

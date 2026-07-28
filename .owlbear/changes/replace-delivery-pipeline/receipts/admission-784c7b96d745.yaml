@@ -1,0 +1,654 @@
+---
+schema_version: 1
+kind: admission
+receipt_id: admission-784c7b96d745
+change_id: replace-delivery-pipeline
+delivery_digest:
+  784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+issued_at: '1970-01-01T00:00:00Z'
+assessment:
+  schema_version: 1
+  revision_digest:
+    784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+  findings: []
+  limits:
+    - Admission certifies delivery completeness and feasibility, not
+      implementation correctness.
+    - Memory and Ideas continuity is preservation-only; DN-011 does not expand
+      either utility.
+    - DN-015 is not projected into the legacy board it destroys; its native
+      build/accept receipts and final commit are authoritative.
+evidence:
+  digest: 784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+  challenge:
+    REQ-001:
+      disposition: pass
+      evidence: Resumable design session via /ideate and /design with persistent
+        intent and decisions is declared in canonical intent/design authority
+        and implemented by the native designer workflow.
+    REQ-002:
+      disposition: pass
+      evidence: Layered admission validation is implemented in admission.py with
+        deterministic graph, contract, authority, challenge, baseline, approval,
+        and limits evaluation.
+    REQ-003:
+      disposition: pass
+      evidence: The canonical graph assigns every declared obligation to the
+        15-node delivery graph with proof ownership in contracts.yaml and
+        nodes.yaml.
+    REQ-004:
+      disposition: pass
+      evidence: Frontier planning authority defines resumable topological
+        planning and atomic per-node plan digests; current planner source and
+        tests implement that boundary.
+    REQ-005:
+      disposition: pass
+      evidence: Builder authority requires one packet, a global writer lease,
+        scoped commit, and mandatory inline read-only review before receipt
+        publication.
+    REQ-006:
+      disposition: pass
+      evidence: Acceptor authority and source enforce read-only exact-commit
+        disposable proof checkouts and typed pass/rejection outcomes.
+    REQ-007:
+      disposition: pass
+      evidence: Auditor authority and source enforce independent read-only
+        whole-change proof over accepted nodes and canonical Product Promise.
+    REQ-008:
+      disposition: pass
+      evidence: Typed findings, invalidation, corrective routes, and
+        supersession receipts are declared in design/contracts and implemented
+        by native runtime/MCP operations.
+    REQ-009:
+      disposition: pass
+      evidence: Native job kinds are restricted to plan, build, accept, and
+        audit while readiness, claims, staleness, and disposition remain
+        orthogonal.
+    REQ-010:
+      disposition: pass
+      evidence: Cockpit source exposes peer Specification and Delivery surfaces
+        plus requests, activity, evidence, legacy, ideas, memories, and health
+        views.
+    REQ-011:
+      disposition: pass
+      evidence: MIG-003 and PROOF-009 own removal of OpenSpec and legacy
+        task-authoritative runtime surfaces, with current source showing those
+        product paths absent.
+    REQ-012:
+      disposition: pass
+      evidence: MIG-001 and IF-013 declare hash-verified immutable legacy
+        snapshot and active-work disposition inventory.
+    REQ-013:
+      disposition: pass
+      evidence: DispatchRuntime implements one global expiring writer lease and
+        blocks overlapping plan/build tracked-file writers.
+    REQ-014:
+      disposition: pass
+      evidence: IF-005 and proof-checkout source provide isolated exact-commit
+        checkouts under .owlbear/scratch/proof for accept/audit.
+    REQ-015:
+      disposition: pass
+      evidence: Native request authority and runtime store change/job-scoped
+        decision or action requests with resolution-linked resumption.
+    REQ-016:
+      disposition: pass
+      evidence: RuntimeTransaction implements multi-file manifests, atomic
+        publication, and deterministic recovery, covered by admission/runtime
+        tests.
+    REQ-017:
+      disposition: pass
+      evidence: setup/init.py and distribution proofs install native stores,
+        prompts, agents, MCP, and Cockpit without an OpenSpec dependency.
+    REQ-018:
+      disposition: pass
+      evidence: PROOF-013 durable historical fixtures reject four defective plan
+        forms and admit corrected equivalents through the native flow.
+    REQ-019:
+      disposition: pass
+      evidence: ChangeRevision loading and delivery-v1 canonical digest are
+        implemented by load_change and compute_delivery_digest; loader returned
+        exact digest without diagnostics.
+    REQ-020:
+      disposition: pass
+      evidence: IF-010 exactly matches the assembled 26-tool native MCP registry
+        including recovery, finding reads, and accept/audit rejection
+        operations.
+    REQ-021:
+      disposition: pass
+      evidence: Cockpit FastAPI routes expose typed native change, graph, job,
+        request, attempt, finding, receipt, health, legacy, and SSE resources.
+    REQ-022:
+      disposition: pass
+      evidence: Orchestration authority uses engine-selected waves, exact
+        candidate revisions, writer serialization, and exact-commit proof
+        context.
+    REQ-023:
+      disposition: pass
+      evidence: Indexed current-validity projections and cached dependency
+        closure are declared and exercised by the passing 240-node generated
+        admission/dispatch scale proof.
+    REQ-024:
+      disposition: pass
+      evidence: Planner/designer authority provides targeted projections and
+        outcome-cohesive packet budgets rather than full-authority duplication.
+    REQ-025:
+      disposition: pass
+      evidence: Acceptance-triggered plan reconciliation and dependent build
+        blocking are declared in intent/design and enforced by native runtime
+        tests.
+    REQ-026:
+      disposition: pass
+      evidence: Priority and cancellation operations require matching delivery
+        digest and OCC identity in native runtime contracts.
+    REQ-027:
+      disposition: pass
+      evidence: DN-015 and IF-016 define terminal carrier finalization with
+        immutable manifest/receipt and exact-commit acceptance after DN-013
+        proof.
+    WF-001:
+      disposition: pass
+      evidence: WF-001 declares one resumable idea/design-to-admission flow with
+        complete authority, independent challenge, baseline, explicit approval,
+        and receipt.
+    WF-002:
+      disposition: pass
+      evidence: WF-002 declares engine-created frontier plan jobs, atomic node
+        plans, topological ordering, and reconciliation before dependent builds.
+    WF-003:
+      disposition: pass
+      evidence: WF-003 declares one writer-leased packet build with scoped
+        commit, warm read-only review, repair, and immutable build receipt.
+    WF-004:
+      disposition: pass
+      evidence: WF-004 declares exact-commit node acceptance with receipt on
+        pass or typed findings and minimum corrective work on rejection.
+    WF-005:
+      disposition: pass
+      evidence: WF-005 declares whole-change exact-commit audit after all node
+        acceptances, with final receipt or typed correction.
+    WF-006:
+      disposition: pass
+      evidence: WF-006 declares atomic cutover, immutable legacy snapshot,
+        active-work dispositions, and fresh native-only consumer installation.
+    WF-007:
+      disposition: pass
+      evidence: WF-007 declares historical failure replay and immutable
+        corrective history; PROOF-013 owns the assembled durable scenarios.
+    WF-008:
+      disposition: pass
+      evidence: WF-008 declares DN-015 terminal bootstrap finalization only
+        after DN-012/DN-013 and board readiness, followed by read-only accept.
+    IF-001:
+      disposition: pass
+      evidence: Native ChangeRevision loader returns immutable indexed authority
+        and a physical-layout-independent delivery-v1 digest.
+    IF-002:
+      disposition: pass
+      evidence: Admission evaluation, immutable receipt, and initial generation
+        are digest-bound with stable errors and atomic publication.
+    IF-003:
+      disposition: pass
+      evidence: Native runtime provides graph-linked jobs, attempts, findings,
+        receipts, supersession, requests, and impact closures.
+    IF-004:
+      disposition: pass
+      evidence: Dispatch runtime provides dependency-aware waves, one global
+        writer lease, and exact purpose-specific agent profiles.
+    IF-005:
+      disposition: pass
+      evidence: ProofCheckoutManager provides crash-safe disposable exact-commit
+        proof contexts for read-only accept/audit jobs.
+    IF-006:
+      disposition: pass
+      evidence: Native /ideate and /design authority is resumable and persists
+        complete product, decision, architecture, graph, and approval context.
+    IF-007:
+      disposition: pass
+      evidence: Frontier planner authority supports resumable atomic node plans,
+        packet DAGs, receipts, build jobs, and reconciliation supersession.
+    IF-008:
+      disposition: pass
+      evidence: Build completion contract binds scoped commit, changed paths,
+        proof, inline review, packet digest, and immutable build receipt.
+    IF-009:
+      disposition: pass
+      evidence: Acceptance contract binds independent exact-commit proof,
+        evidence, findings, receipt, and typed corrective route.
+    IF-010:
+      disposition: pass
+      evidence: 'Current MCP registry exactly contains 26 declared tools: change/admission,
+        job lifecycle, rejection/recovery, request, health/history, attempt/finding,
+        and receipt operations.'
+    IF-011:
+      disposition: pass
+      evidence: Cockpit backend HTTP/SSE API exposes typed native authority,
+        work, evidence, health, event, and legacy projections.
+    IF-012:
+      disposition: pass
+      evidence: Cockpit implements peer responsive Specification/Delivery views
+        with list/outline and virtualization; assembled and 300-node browser
+        proofs passed.
+    IF-013:
+      disposition: pass
+      evidence: Legacy snapshot contract includes immutable manifest,
+        active-work dispositions, empty native stores, and shipped-source
+        absence verification.
+    IF-014:
+      disposition: pass
+      evidence: Whole-change audit reads accepted nodes, Product Promise,
+        decisions, migrations, workflows, and current receipt validity at exact
+        commit.
+    IF-015:
+      disposition: pass
+      evidence: IF-015 is the same-registration bootstrap work-operation subset
+        of IF-010, including recovery, with no duplicate server or schemas.
+    IF-016:
+      disposition: pass
+      evidence: Public bootstrap finalizer accepts exact
+        board/disposition/revision/approval inputs and emits immutable snapshot
+        and finalization receipt.
+    MIG-001:
+      disposition: pass
+      evidence: MIG-001 orders dispatch stop, complete inventory, dispositions,
+        snapshot, verification, and self-hosting source retirement.
+    MIG-002:
+      disposition: pass
+      evidence: MIG-002 replaces mutable task files with purpose-specific
+        graph-linked jobs, immutable receipts, and invalidation.
+    MIG-003:
+      disposition: pass
+      evidence: MIG-003 inventories and replaces legacy prompts, generic task
+        tools, alternate lifecycle, and OpenSpec consumer surfaces.
+    MIG-004:
+      disposition: pass
+      evidence: MIG-004 accurately records the historical graph.yaml/shape state
+        and current modular delivery authority with isolated node plans.
+    MIG-005:
+      disposition: pass
+      evidence: MIG-005 orders terminal DN-015 preflight, writer-leased
+        finalization, immutable commit, and read-only exact-commit acceptance.
+    RISK-001:
+      disposition: pass
+      evidence: Legacy loss risk is mitigated by stopped dispatch,
+        inventory/dispositions, atomic snapshot, hashes, retained evidence, and
+        PROOF-009.
+    RISK-002:
+      disposition: pass
+      evidence: Concurrency risk is mitigated by one expiring writer lease, OCC
+        tokens, transaction manifests, recovery, and PROOF-003.
+    RISK-003:
+      disposition: pass
+      evidence: Stale authority risk is mitigated by canonical digests, frozen
+        impact closures, conservative history, supersession, and PROOF-003.
+    RISK-004:
+      disposition: pass
+      evidence: Path/security risk is mitigated by strict IDs, containment,
+        symlink policy, bounded evidence, redaction, and PROOF-001.
+    RISK-005:
+      disposition: pass
+      evidence: Partial cutover risk is mitigated by one manifest, absence
+        scans, build/tests, fresh consumer fixture, no aliases, and PROOF-009.
+    RISK-006:
+      disposition: pass
+      evidence: Scale risk is mitigated by indexed projections, cached closure,
+        pagination, and the passing 240-node runtime proof.
+    RISK-007:
+      disposition: pass
+      evidence: Scope expansion risk is mitigated by namespace-limited graph
+        transactions, subset validation, planner review, and PROOF-005.
+    RISK-008:
+      disposition: pass
+      evidence: Reviewer independence risk is mitigated by read-only
+        tools/hooks, role checks, author separation, and tracked-diff proof.
+    RISK-009:
+      disposition: pass
+      evidence: Proof-boundary risk is mitigated by declared assembled
+        boundaries, build-owned infrastructure, exact commands, replacements,
+        and PROOF-007.
+    RISK-010:
+      disposition: pass
+      evidence: Usability risk is mitigated by peer views, list/outline
+        alternatives, accessible signals, responsive requests, and PROOF-012.
+    RISK-011:
+      disposition: pass
+      evidence: Context-scale risk is mitigated by targeted projections,
+        resumable planning, cohesive packets, warm review, and PROOF-005.
+    RISK-012:
+      disposition: pass
+      evidence: Cockpit large-change risk is mitigated by virtual outline,
+        incremental projections, filtering, and passing desktop/mobile 300-node
+        proof.
+    RISK-013:
+      disposition: pass
+      evidence: Bootstrap bridge risk is mitigated by IF-015 as exact IF-010
+        subset, one registration per operation, PROOF-011, and PROOF-014.
+    RISK-014:
+      disposition: pass
+      evidence: Carrier retirement risk is mitigated by terminal DN-015
+        ordering, exact revisions, approval, writer lease, immutable evidence,
+        and read-only accept.
+    PROOF-001:
+      disposition: pass
+      evidence: Public load_change proof covers valid/invalid modular authority,
+        digest stability, receipt linkage, path safety, and symlinks.
+    PROOF-002:
+      disposition: pass
+      evidence: Public admission proof covers stable findings, immutable
+        identity, no mutation on failure, and atomic receipt/generation.
+    PROOF-003:
+      disposition: pass
+      evidence: Runtime proof covers jobs, claims, completions, invalidation,
+        health, races, crash recovery, supersession, and scale.
+    PROOF-004:
+      disposition: pass
+      evidence: Designer workflow proof covers resumability, one-question
+        decisions, independent challenge, baseline, approval, and complete
+        admission.
+    PROOF-005:
+      disposition: pass
+      evidence: Planner proof covers resumable packet DAGs, illegal expansion
+        rejection, node isolation, topological order, and reconciliation.
+    PROOF-006:
+      disposition: pass
+      evidence: Builder proof covers claim-to-receipt flow, mandatory read-only
+        review, finding repair, and material contradiction routing.
+    PROOF-007:
+      disposition: pass
+      evidence: Acceptor proof covers exact-commit checkout, authoritative node
+        contract, receipts, assembled boundary, rejection, and write prevention.
+    PROOF-008:
+      disposition: pass
+      evidence: Auditor proof covers all-accepted-node exact-commit whole-change
+        evidence; public success/replay selector passed at exact HEAD.
+    PROOF-009:
+      disposition: pass
+      evidence: Cutover proof covers public setup against populated/fresh
+        fixtures, inventory, hashes, native stores, and OpenSpec absence.
+    PROOF-011:
+      disposition: pass
+      evidence: MCP proof asserts exact equality with IF-010's 26-tool registry
+        and absence of generic/legacy operations.
+    PROOF-012:
+      disposition: pass
+      evidence: Cockpit proof exercises real FastAPI plus built SPA at
+        desktop/mobile and separately proves 300-node virtual
+        navigation/geometry.
+    PROOF-013:
+      disposition: pass
+      evidence: Complete native delivery proof owns historical incidents and
+        fresh consumer design-through-audit flow with exact receipts.
+    PROOF-014:
+      disposition: pass
+      evidence: Orchestration proof asserts IF-015's exact work subset, purpose
+        dispatch, proof checkouts, serialization, release, and recovery.
+    PROOF-015:
+      disposition: pass
+      evidence: Cockpit backend proof exercises public FastAPI native routes
+        over the real graph-aware engine.
+    PROOF-016:
+      disposition: pass
+      evidence: Finalization proof verifies DN-015 build receipt, snapshot
+        counts/hashes, finalization receipt, board absence, and no legacy
+        dispatch at exact commit.
+    DN-001:
+      disposition: pass
+      evidence: DN-001 owns native authority/digest/path safety and declares
+        MOD-008 for PROOF-001 outputs test_change_revision.py and
+        test_change_receipts.py.
+    DN-002:
+      disposition: pass
+      evidence: DN-002 owns layered admission and atomic initial generation with
+        declared proof/module ownership.
+    DN-003:
+      disposition: pass
+      evidence: DN-003 owns graph-linked runtime, receipts, invalidation,
+        transactions, and health with MOD-008 proof outputs.
+    DN-004:
+      disposition: pass
+      evidence: DN-004 owns dispatch, writer lease, exact-commit checkout, claim
+        recovery, and IF-015 with MOD-008 proof outputs.
+    DN-005:
+      disposition: pass
+      evidence: DN-005 owns resumable Specification/design/admission UX and
+        PROOF-004 with MOD-008 outputs.
+    DN-006:
+      disposition: pass
+      evidence: DN-006 owns frontier planning, packet DAGs, reconciliation, and
+        PROOF-005 with MOD-008 outputs.
+    DN-007:
+      disposition: pass
+      evidence: DN-007 owns packet build/inline review and PROOF-006 with
+        MOD-008 outputs.
+    DN-008:
+      disposition: pass
+      evidence: DN-008 owns independent node acceptance/correction and PROOF-007
+        with MOD-008 outputs.
+    DN-009:
+      disposition: pass
+      evidence: DN-009 owns the exact 26-tool native MCP control plane and
+        PROOF-011.
+    DN-010:
+      disposition: pass
+      evidence: DN-010 owns typed Cockpit backend native API/SSE and PROOF-015.
+    DN-011:
+      disposition: pass
+      evidence: DN-011 owns peer Cockpit Specification/Delivery, Memory/Ideas
+        preservation, accessibility, responsiveness, scale, and PROOF-012.
+    DN-012:
+      disposition: pass
+      evidence: DN-012 owns atomic shipped-source/consumer cutover, snapshot
+        contracts, fresh setup, and PROOF-009.
+    DN-013:
+      disposition: pass
+      evidence: DN-013 owns complete historical/fresh-consumer assembled
+        PROOF-013 and remains before terminal DN-015.
+    DN-014:
+      disposition: pass
+      evidence: DN-014 owns independent exact-commit whole-change audit and
+        PROOF-008 with MOD-008 outputs.
+    DN-015:
+      disposition: pass
+      evidence: DN-015 is a separate terminal finalization build/accept node
+        after DN-013 and owns IF-016/PROOF-016.
+  baseline:
+    digest: 784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+    git_revision: 2f492abc77198e82913f6f75b35eee9d8e9c5ed7
+    owned_paths_clean: true
+    commands:
+      - command: uv run pytest serve/kanban/tests/test_change_revision.py
+          serve/kanban/tests/test_change_receipts.py
+          serve/kanban/tests/test_generated_graph_admission.py
+          serve/kanban/tests/test_admission_transaction.py
+          serve/kanban/tests/test_admission.py
+          serve/kanban/tests/test_historical_admission.py -q
+        exit_code: 0
+        result: 142 passed
+      - command: uv run pytest
+          serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_success_closes_accepted_whole_change_and_replays
+          -q --tb=short
+        exit_code: 0
+        result: 1 passed from clean exact-commit checkout
+      - command: npm run test:e2e:native-proof
+        exit_code: 0
+        result: '2 passed: desktop and mobile assembled real-FastAPI Cockpit'
+      - command: npm run test:e2e:all -- e2e/delivery-graph-outline.spec.ts
+          --project=chromium
+        exit_code: 0
+        result: '2 passed: desktop and mobile 300-node virtual outline'
+      - command: uv run pytest
+          serve/kanban/tests/test_generated_graph_admission.py -k hundreds -q
+          --tb=short
+        exit_code: 0
+        result: '1 passed: 240-node generated admission/dispatch scale'
+      - command: load_change and git identity check
+        exit_code: 0
+        result: no diagnostics; digest and Git revision exact
+  approval:
+    approved: true
+    digest: 784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+    approved_by: user
+    method: 'VS Code explicit selection: Approve exact digest'
+  limits:
+    - Admission certifies delivery completeness and feasibility, not
+      implementation correctness.
+    - Memory and Ideas continuity is preservation-only; DN-011 does not expand
+      either utility.
+    - DN-015 is not projected into the legacy board it destroys; its native
+      build/accept receipts and final commit are authoritative.
+generation:
+  schema_version: 1
+  change_id: replace-delivery-pipeline
+  delivery_digest:
+    784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+  receipt_id: admission-784c7b96d745
+  jobs:
+    - job_id: 44
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+      target_node_id: DN-001
+      receipt_id: admission-784c7b96d745
+    - job_id: 45
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+      target_node_id: DN-002
+      receipt_id: admission-784c7b96d745
+    - job_id: 46
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+      target_node_id: DN-003
+      receipt_id: admission-784c7b96d745
+    - job_id: 47
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+      target_node_id: DN-004
+      receipt_id: admission-784c7b96d745
+    - job_id: 48
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+      target_node_id: DN-005
+      receipt_id: admission-784c7b96d745
+    - job_id: 49
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+      target_node_id: DN-006
+      receipt_id: admission-784c7b96d745
+    - job_id: 50
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+      target_node_id: DN-007
+      receipt_id: admission-784c7b96d745
+    - job_id: 51
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+      target_node_id: DN-008
+      receipt_id: admission-784c7b96d745
+    - job_id: 52
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+      target_node_id: DN-009
+      receipt_id: admission-784c7b96d745
+    - job_id: 53
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+      target_node_id: DN-010
+      receipt_id: admission-784c7b96d745
+    - job_id: 54
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+      target_node_id: DN-011
+      receipt_id: admission-784c7b96d745
+    - job_id: 55
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+      target_node_id: DN-012
+      receipt_id: admission-784c7b96d745
+    - job_id: 56
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+      target_node_id: DN-013
+      receipt_id: admission-784c7b96d745
+    - job_id: 57
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+      target_node_id: DN-014
+      receipt_id: admission-784c7b96d745
+    - job_id: 58
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest:
+        784c7b96d74528e6d8a89fd71fac27d7faf7f5ede5a253e4d70c43e2da8c6c7c
+      target_node_id: DN-015
+      receipt_id: admission-784c7b96d745

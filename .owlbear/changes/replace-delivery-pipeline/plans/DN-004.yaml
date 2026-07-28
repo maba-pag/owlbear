@@ -1,0 +1,171 @@
+---
+mode: build
+candidate_revision: 85b4866ab44533808e36b7216845fd7733698a5d
+packets:
+  - id: DN-004-PK-001
+    outcome: Isolate PROOF-014 synthetic lifecycles from live authority sidecars
+      and make the public MCP orchestrator scenario pytest-collectable while
+      preserving its dispatch, lifecycle-causality, writer, recovery, and
+      proof-checkout assertions.
+    obligations:
+      - REQ-013
+      - REQ-014
+      - REQ-022
+      - NEG-006
+      - REQ-020
+      - KEEP-006
+      - KEEP-007
+    in_scope:
+      - Reuse or minimally extend temporary-authority copy helpers so affected
+        scenarios load modular authority without workspace plans, jobs, or
+        receipts.
+      - Migrate the dispatch revision fixture, finish-coordination setup, and
+        imported active-audit setup to clean temporary authority.
+      - Reuse or extract the _proof011_context clean-copy pattern for the
+        PROOF-014 MCP scenario.
+      - Rename _Proof014NativeMcpScenario to TestProof014NativeMcpScenario while
+        preserving both methods and their assertions.
+      - Preserve the regression condition in which workspace sidecars exist
+        while temporary scenarios remain isolated.
+    excluded:
+      - Production engine, dispatch, proof-checkout, MCP schema, registration,
+        error, lifecycle, or orchestration semantic changes.
+      - Deleting or mutating live plans, jobs, receipts, legacy sidecars, or
+        tracked authority.
+      - Excluding tests, weakening assertions, or replacing public MCP calls
+        with lower-level calls.
+      - Repairing unrelated change or work health findings.
+      - Broad temporary-authority helper cleanup outside the affected scenarios.
+    modules:
+      - MOD-001
+      - MOD-002
+      - MOD-003
+      - MOD-008
+      - MOD-009
+    interfaces:
+      - IF-003
+      - IF-004
+      - IF-005
+      - IF-015
+    dependencies: []
+    acceptance_scenarios:
+      - 'AC1: Given workspace authority containing current plans, jobs, and receipts,
+        the maintained temporary-authority helper loads a scenario revision with those
+        mutable sidecars absent, and synthetic plan, receipt, and job state comes
+        only from that scenario; verify through the affected dispatch and native-runtime
+        scenario assertions.'
+      - 'AC2: Given the dispatch suite at the candidate with live workspace sidecars
+        present, its scheduling, finish-coordination, and four reject-audit scenarios
+        run against clean temporary authority and report no live-sidecar currentness
+        or transaction conflict; verify with the packet primary pytest command.'
+      - 'AC3: Given pytest collection of serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestProof014NativeMcpScenario,
+        both the public orchestrator lifecycle scenario and disposition-causality
+        guard are collected, and the scenario observes pick_jobs, start_job, finish_plan,
+        finish_build, finish_accept, finish_audit, release_job, and recover_expired_claims
+        while preserving its profile, attempt, recovery, and no-mutation assertions.'
+      - 'AC4: Given the packet primary command, dispatch runtime, proof-checkout,
+        and collected PROOF-014 MCP scenario tests complete with exit code 0 while
+        the repository remains at the supplied candidate until the builder creates
+        its scoped commit; verify command output and tracked-state evidence.'
+    impact_closure:
+      paths:
+        - serve/kanban/src/owlbear_kanban/__init__.py
+        - serve/kanban/src/owlbear_kanban/attempts.py
+        - serve/kanban/src/owlbear_kanban/change.py
+        - serve/kanban/src/owlbear_kanban/dispatch.py
+        - serve/kanban/src/owlbear_kanban/jobs.py
+        - serve/kanban/src/owlbear_kanban/native_runtime.py
+        - serve/kanban/src/owlbear_kanban/node_plan.py
+        - serve/kanban/src/owlbear_kanban/proof_checkout.py
+        - serve/kanban/src/owlbear_kanban/receipt.py
+        - serve/kanban/src/owlbear_kanban/runtime_query.py
+        - serve/kanban/src/owlbear_kanban/runtime_transaction.py
+        - serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
+        - serve/kanban/tests/test_native_runtime.py
+        - serve/kanban/tests/test_dispatch_runtime.py
+        - serve/kanban/tests/test_proof_checkout.py
+        - serve/mcp-kanban/tests/test_mcp_surface_contract.py
+      authority_targets:
+        - DN-003
+        - DN-004
+        - REQ-013
+        - REQ-014
+        - REQ-022
+        - NEG-006
+        - REQ-020
+        - KEEP-006
+        - KEEP-007
+        - MOD-001
+        - MOD-002
+        - MOD-003
+        - MOD-008
+        - MOD-009
+        - IF-003
+        - IF-004
+        - IF-005
+        - IF-015
+        - RISK-002
+        - RISK-004
+        - RISK-013
+        - PROOF-014
+    proof:
+      authority: PROOF-014
+      boundary: Real public IF-015 MCP calls over DispatchRuntime plus
+        maintained dispatch and disposable exact-commit proof-checkout suites,
+        with temporary repository or authority only below the admitted boundary.
+      primary_command: uv run pytest -n0
+        serve/kanban/tests/test_dispatch_runtime.py
+        serve/kanban/tests/test_proof_checkout.py
+        serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestProof014NativeMcpScenario
+        -q
+      collection_check: uv run pytest -n0 --collect-only
+        serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestProof014NativeMcpScenario
+        -q
+      additional_commands:
+        - uv run ruff check serve/kanban/tests/test_native_runtime.py
+          serve/kanban/tests/test_dispatch_runtime.py
+          serve/mcp-kanban/tests/test_mcp_surface_contract.py
+        - uv run ruff format --check serve/kanban/tests/test_native_runtime.py
+          serve/kanban/tests/test_dispatch_runtime.py
+          serve/mcp-kanban/tests/test_mcp_surface_contract.py
+      allowed_lower_replacements:
+        - clock
+        - subagent runner
+        - temporary repository
+      evidence_outputs:
+        - Pytest collection count naming both TestProof014NativeMcpScenario
+          methods.
+        - Primary-command exit code and per-file results.
+        - Ruff check and format-check results.
+        - Candidate and post-build Git and tracked-state evidence.
+    required_outputs:
+      - Clean temporary-authority helper behavior reused by affected kanban and
+        MCP scenarios.
+      - Dispatch and shared native-runtime fixture updates preventing live plan,
+        job, and receipt leakage.
+      - Collectable TestProof014NativeMcpScenario with its lifecycle and
+        causality assertions intact.
+      - Primary proof, collection, lint, formatting, and tracked-state evidence
+        at the scoped build commit.
+    profile:
+      domain: Python pytest fixtures for native dispatch, runtime transactions,
+        proof checkout, and MCP orchestration.
+      risks:
+        - RISK-002
+        - RISK-004
+        - RISK-013
+      tools:
+        - uv
+        - pytest
+        - ruff
+        - git-read-only-state-checks
+    context_budget:
+      expected_changed_files: 3
+      inspected_files: 16
+      interfaces:
+        - IF-003
+        - IF-004
+        - IF-005
+        - IF-015
+      change_envelope: One focused fixture and proof-collection session with no
+        production source edits.

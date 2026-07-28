@@ -1,0 +1,18 @@
+---
+schema_version: 1
+request_id: replace-delivery-pipeline-3f6c6562-15-0c5667
+kind: action
+title: Different Title
+summary: Testing native request creation
+body: "## Test\nAction body with evidence"
+agent: builder
+created_at: '2026-07-25T11:44:42.975267+02:00'
+change_id: replace-delivery-pipeline
+delivery_digest:
+  3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990
+target_node_id:
+job_ids: []
+options: []
+evidence:
+  - "## Test\nAction body with evidence"
+resume_condition: User resolution required

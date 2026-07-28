@@ -1,0 +1,99 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-003-3212969f2164
+change_id: replace-delivery-pipeline
+delivery_digest: 3212969f2164f0d71ae60c30405eb941b8a87b99d225a57db96062143dd4de7c
+issued_at: '2026-07-28T20:40:10Z'
+impact_closure:
+  paths:
+    - serve/kanban/src/owlbear_kanban/__init__.py
+    - serve/kanban/src/owlbear_kanban/attempts.py
+    - serve/kanban/src/owlbear_kanban/change.py
+    - serve/kanban/src/owlbear_kanban/dispatch.py
+    - serve/kanban/src/owlbear_kanban/finding.py
+    - serve/kanban/src/owlbear_kanban/invalidation.py
+    - serve/kanban/src/owlbear_kanban/jobs.py
+    - serve/kanban/src/owlbear_kanban/native_runtime.py
+    - serve/kanban/src/owlbear_kanban/node_plan.py
+    - serve/kanban/src/owlbear_kanban/receipt.py
+    - serve/kanban/src/owlbear_kanban/runtime_query.py
+    - serve/kanban/src/owlbear_kanban/runtime_requests.py
+    - serve/kanban/src/owlbear_kanban/runtime_transaction.py
+    - serve/kanban/tests/test_attempts.py
+    - serve/kanban/tests/test_change_receipts.py
+    - serve/kanban/tests/test_dispatch_runtime.py
+    - serve/kanban/tests/test_invalidation.py
+    - serve/kanban/tests/test_jobs.py
+    - serve/kanban/tests/test_native_runtime.py
+    - serve/kanban/tests/test_runtime_requests.py
+    - serve/kanban/tests/test_runtime_transaction.py
+  authority_targets:
+    - DN-001
+    - DN-002
+    - DN-003
+    - IF-001
+    - IF-002
+    - IF-003
+    - KEEP-006
+    - KEEP-007
+    - MOD-001
+    - MOD-008
+    - MOD-009
+    - NEG-001
+    - NEG-002
+    - NEG-010
+    - PROOF-003
+    - REQ-008
+    - REQ-009
+    - REQ-015
+    - REQ-016
+    - REQ-023
+    - REQ-026
+    - RISK-002
+    - RISK-003
+    - RISK-006
+target_node_id: DN-003
+node_plan_digest: 1fa9207a69c89bc0fe268a4a041eb7a2cc5eed22d69623610b9079fd127520ef
+predecessor_receipt_ids:
+  - accept-dn-002-85b4866ab445-78
+evidence:
+  methods:
+    - Exercise purpose-specific transitions, dependency release, claims, crashes, OCC races, supersession, request resolution, and recovery.
+    - Exercise exact, non-intersecting descendant, intersecting path, missing, non-descendant, rename, copy, malformed-history, unsafe-path, predecessor-cycle, and explicit-supersession receipt classes.
+    - Assert no partial valid receipt or dangling job after injected write failures.
+    - Accept an eligible exact-candidate verification-only plan with zero packets and zero build jobs, one accept job, and a non-empty node-level closure; reject missing mode evidence, candidate/generation mismatch, empty closure, hidden delta, and zero packets in build mode.
+    - Prove exact replay, transaction rollback, receipt currentness, and dependent reconciliation are identical across build and verification-only plan modes.
+  baseline:
+    candidate_revision: 85b4866ab44533808e36b7216845fd7733698a5d
+    command: uv run pytest -n0 serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_runtime_transaction.py serve/kanban/tests/test_invalidation.py serve/kanban/tests/test_runtime_requests.py serve/kanban/tests/test_attempts.py serve/kanban/tests/test_jobs.py serve/kanban/tests/test_change_receipts.py serve/kanban/tests/test_dispatch_runtime.py -q
+    exit_code: 1
+    result: 25 failed, 244 passed in 53.11s
+  source_inspection:
+    disposition: pass
+    evidence: Exact-candidate inspection localizes the remaining DN-003 delta to NativeRuntime plan completion, validation, replay, currentness, transaction, and dependent-reconciliation behavior in serve/kanban/src/owlbear_kanban/native_runtime.py. Existing runtime stores and the eight durable suites are proof collaborators; no source, test, documentation, fixture, generated artifact, migration, or proof-infrastructure edit outside that file is required.
+  predecessor:
+    receipt_id: accept-dn-002-85b4866ab445-78
+    code_revision: 85b4866ab44533808e36b7216845fd7733698a5d
+    current: true
+  proof:
+    boundary: Public engine job, claim, completion, invalidation, and health operations.
+    primary_command: uv run pytest -n0 serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_runtime_transaction.py serve/kanban/tests/test_invalidation.py serve/kanban/tests/test_runtime_requests.py serve/kanban/tests/test_attempts.py serve/kanban/tests/test_jobs.py serve/kanban/tests/test_change_receipts.py serve/kanban/tests/test_dispatch_runtime.py -q
+    additional_commands:
+      - uv run ruff check serve/kanban/src/owlbear_kanban/native_runtime.py
+      - uv run ruff format --check serve/kanban/src/owlbear_kanban/native_runtime.py
+  review:
+    evidence_id: plan-review-dn-003-3212969f2164-exact-methods-r2
+    disposition: pass
+    checks:
+      plan_completeness: pass
+      admitted_references: pass
+      impact_closures: pass
+      dependency_order: pass
+      proof_boundary: pass
+      material_expansion: pass
+    source_coverage: pass
+    proof_fidelity: pass
+    findings: []
+    summary: Fresh planner-challenger review confirmed the corrected 21-path closure, exact admitted authority allowlist, one-file implementation scope, unused downstream IDs 79 and 80, five canonical PROOF-003 methods, exact proof boundary, and identical eight-file baseline and primary proof commands without material expansion.
+code_revision: 85b4866ab44533808e36b7216845fd7733698a5d

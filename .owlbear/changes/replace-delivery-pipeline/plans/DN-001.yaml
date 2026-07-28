@@ -1,19 +1,80 @@
 ---
-packets:
-  - id: DN-001-PK-001
-    dependencies: []
-    impact_closure:
-      paths:
-        - serve/kanban/
-      authority_targets:
-        - DN-001
-        - PROOF-001
-  - id: DN-001-PK-002
-    dependencies:
-      - DN-001-PK-001
-    impact_closure:
-      paths:
-        - serve/kanban/
-      authority_targets:
-        - DN-001
-        - PROOF-001
+mode: verification-only
+packets: []
+candidate_revision: 619f03469ec1c431775291c306086ff49547404d
+generation:
+  job_id: 62
+  receipt_id: admission-3212969f2164
+  predecessor_job_ids: []
+source_inspection:
+  disposition: pass
+  evidence: Exact-checkout inspection maps strict joined loading, isolated
+    node-plan storage, canonical digesting, immutable receipt, path, currentness
+    and health behavior, public exports, and the DN-001-owned MIG-004 loader
+    migration effect to the six tracked source files. MIG-004 digest-parity and
+    modular-authority steps are exercised by durable tests; no remaining DN-001
+    delta exists.
+required_outputs:
+  - Tracked public owlbear_kanban strict modular ChangeRevision loading, stable
+    identities, canonical digesting, isolated node plans, containment, immutable
+    receipt, currentness and health behavior, and public exports.
+  - Tracked DN-001-owned MIG-004 loader migration state for
+    physical-layout-independent digest parity, modular joined authority, and
+    isolated node plans.
+  - Durable unit and contract proof in
+    serve/kanban/tests/test_change_revision.py and
+    serve/kanban/tests/test_change_receipts.py.
+  - No DN-001-owned documentation, generated artifact, additional migration
+    artifact, fixture, harness, client, wiring, or proof infrastructure is
+    required.
+proof_readiness:
+  disposition: pass
+  evidence: PROOF-001 executes at the exact candidate through public
+    owlbear-kanban ChangeRevision loader and receipt-store boundaries using only
+    the admitted temporary-workspace replacement; the combined proof returned 86
+    passed without tracked setup.
+  commands:
+    - uv run pytest serve/kanban/tests/test_change_revision.py
+      serve/kanban/tests/test_change_receipts.py -q
+tracked_scope:
+  clean: true
+  evidence: Detached proof checkout was at candidate
+    619f03469ec1c431775291c306086ff49547404d and pre-proof tracked status was
+    empty; proof created no required tracked output.
+review:
+  disposition: pass
+  evidence: Fresh planner-challenger independently inspected the exact checkout
+    and returned pass for plan completeness, admitted references, impact
+    closures, dependency order, proof boundary, and material expansion.
+  evidence_id: plan-review-dn-001-3212969f2164-r2
+  checks:
+    plan_completeness: pass
+    admitted_references: pass
+    impact_closures: pass
+    dependency_order: pass
+    proof_boundary: pass
+    material_expansion: pass
+impact_closure:
+  paths:
+    - serve/kanban/src/owlbear_kanban/__init__.py
+    - serve/kanban/src/owlbear_kanban/_naming.py
+    - serve/kanban/src/owlbear_kanban/change.py
+    - serve/kanban/src/owlbear_kanban/node_plan.py
+    - serve/kanban/src/owlbear_kanban/receipt.py
+    - serve/kanban/src/owlbear_kanban/runtime_transaction.py
+    - serve/kanban/tests/test_change_receipts.py
+    - serve/kanban/tests/test_change_revision.py
+  authority_targets:
+    - DN-001
+    - IF-001
+    - KEEP-003
+    - KEEP-007
+    - MOD-001
+    - MOD-008
+    - NEG-004
+    - NEG-007
+    - PROOF-001
+    - REQ-001
+    - REQ-016
+    - REQ-019
+    - RISK-004

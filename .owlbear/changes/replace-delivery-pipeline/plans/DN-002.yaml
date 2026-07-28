@@ -1,0 +1,95 @@
+---
+mode: verification-only
+packets: []
+candidate_revision: 85b4866ab44533808e36b7216845fd7733698a5d
+generation:
+  job_id: 63
+  receipt_id: admission-3212969f2164
+  predecessor_job_ids: []
+source_inspection:
+  disposition: pass
+  evidence: Exact-candidate inspection maps deterministic layered admission,
+    complete graph, contract, authority, and evidence validation, stable
+    diagnostics, public exports, and cross-root atomic receipt plus initial
+    plan-job publication to tracked source. The four proof suites and eight
+    historical fixture trees cover table-driven and property cases, graph scale
+    and topology, incident rejection and correction, no-mutation failures, and
+    success replay and recovery; no DN-002 implementation or durable-output
+    delta remains.
+required_outputs:
+  - Tracked public owlbear_kanban admission models, deterministic
+    evaluate_admission behavior, stable DV and EV findings, validate_and_admit
+    transaction behavior, and package exports.
+  - Tracked atomic admission receipt and initial plan-job generation with
+    collision rejection, replay, cross-root recovery, and no publication on
+    failed admission.
+  - Durable admission proof in serve/kanban/tests/test_admission.py,
+    serve/kanban/tests/test_admission_transaction.py,
+    serve/kanban/tests/test_generated_graph_admission.py, and
+    serve/kanban/tests/test_historical_admission.py.
+  - Four defective and four corrected tracked modular incident fixtures under
+    serve/kanban/tests/fixtures/historical-admission.
+  - No DN-002-owned documentation, generated artifact, migration artifact,
+    additional fixture, harness, client, wiring, or proof infrastructure is
+    required.
+proof_readiness:
+  disposition: pass
+  evidence: PROOF-002 executes at the exact candidate through the public
+    validate/admit operation before jobs exist, with temporary repositories and
+    work roots below admission. Immutable caller evidence reports exit 0 and 56
+    passed in 13.05s; before and after scoped status and diff were empty and
+    HEAD remained the exact candidate.
+  commands:
+    - uv run pytest -n0 serve/kanban/tests/test_admission.py
+      serve/kanban/tests/test_admission_transaction.py
+      serve/kanban/tests/test_generated_graph_admission.py
+      serve/kanban/tests/test_historical_admission.py -q
+tracked_scope:
+  clean: true
+  evidence: Caller-supplied immutable exact-candidate checks report HEAD
+    85b4866ab44533808e36b7216845fd7733698a5d and empty scoped Git status and
+    diff before and after proof for the closure source, test, and
+    historical-fixture paths; proof created no required tracked output.
+review:
+  disposition: pass
+  evidence: Fresh planner-challenger independently inspected source, tests,
+    fixtures, admitted authority, generation identity, impact closure, and
+    immutable caller proof scope and returned pass without hidden delta or
+    expansion.
+  evidence_id: plan-review-dn-002-3212969f2164-reviewed-proof
+  checks:
+    plan_completeness: pass
+    admitted_references: pass
+    impact_closures: pass
+    dependency_order: pass
+    proof_boundary: pass
+    material_expansion: pass
+  source_coverage: pass
+  caller_proof_cross_check: pass
+impact_closure:
+  paths:
+    - serve/kanban/src/owlbear_kanban/__init__.py
+    - serve/kanban/src/owlbear_kanban/admission.py
+    - serve/kanban/src/owlbear_kanban/admission_transaction.py
+    - serve/kanban/tests/fixtures/historical-admission
+    - serve/kanban/tests/test_admission.py
+    - serve/kanban/tests/test_admission_transaction.py
+    - serve/kanban/tests/test_generated_graph_admission.py
+    - serve/kanban/tests/test_historical_admission.py
+  authority_targets:
+    - DN-001
+    - DN-002
+    - IF-001
+    - IF-002
+    - KEEP-003
+    - KEEP-004
+    - KEEP-005
+    - MOD-001
+    - MOD-008
+    - NEG-010
+    - PROOF-002
+    - REQ-002
+    - REQ-003
+    - REQ-018
+    - RISK-003
+    - RISK-007

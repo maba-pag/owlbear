@@ -1,0 +1,152 @@
+---
+schema_version: 1
+kind: accept
+receipt_id: accept-dn-009-7805c43199f1-83
+change_id: replace-delivery-pipeline
+delivery_digest: 3212969f2164f0d71ae60c30405eb941b8a87b99d225a57db96062143dd4de7c
+issued_at: '2026-07-28T22:05:20Z'
+impact_closure:
+  paths:
+    - serve/mcp-kanban/src/owlbear_mcp_kanban/__init__.py
+    - serve/mcp-kanban/src/owlbear_mcp_kanban/models.py
+    - serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
+    - serve/mcp-kanban/tests/test_mcp_native_query_tools.py
+    - serve/mcp-kanban/tests/test_mcp_request_tools.py
+    - serve/mcp-kanban/tests/test_mcp_surface_contract.py
+  authority_targets:
+    - DN-004
+    - DN-009
+    - IF-001
+    - IF-002
+    - IF-003
+    - IF-004
+    - IF-010
+    - IF-015
+    - KEEP-006
+    - KEEP-007
+    - MOD-002
+    - MOD-008
+    - NEG-001
+    - PROOF-011
+    - REQ-009
+    - REQ-015
+    - REQ-016
+    - REQ-017
+    - REQ-020
+    - RISK-005
+target_node_id: DN-009
+node_plan_digest: bd66dec86350be06ea308b57507ad124acd627c8d4efc4a822888ac8aa3bb107
+predecessor_receipt_ids:
+  - plan-dn-009-3212969f2164-bounded-migration
+evidence:
+  methods:
+    - Exercise change, validation, admission, job, request, evidence, health, history, and completion tool contracts.
+    - Assert the registered tool names exactly equal IF-010's declared catalog, including finding reads and accept/audit rejection operations.
+    - Assert generic task mutation and old lifecycle tools are absent.
+  assembled_proof:
+    boundary: Public MCP tools over the real graph-aware engine.
+    durable_outputs:
+      - MCP integration tests
+    commands:
+      - uv run pytest -n0 serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestFromAC_ToolRegistryContract serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestFromAC_LegacyRegistrationAbsence serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestProof011NativeControlPlane serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestNativeAdmissionErrors serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestFinishAcceptSchema serve/mcp-kanban/tests/test_mcp_request_tools.py serve/mcp-kanban/tests/test_mcp_native_query_tools.py -q
+    results:
+      - command: uv run pytest -n0 serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestFromAC_ToolRegistryContract serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestFromAC_LegacyRegistrationAbsence serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestProof011NativeControlPlane serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestNativeAdmissionErrors serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestFinishAcceptSchema serve/mcp-kanban/tests/test_mcp_request_tools.py serve/mcp-kanban/tests/test_mcp_native_query_tools.py -q
+        exit_code: 0
+        result: 36 passed in 10.17s
+  authority:
+    delivery_digest: 3212969f2164f0d71ae60c30405eb941b8a87b99d225a57db96062143dd4de7c
+    target_node_id: DN-009
+    proof: PROOF-011
+    node_contract:
+      id: DN-009
+      title: Expose the native control plane through MCP
+      outcome: Strict MCP tools expose change admission, graph reads, plan/build/accept/audit dispatch and completion, requests, evidence, and health while finish_shape, generic task mutation, and old lifecycle tools disappear.
+      owns:
+        - REQ-020
+      supports:
+        - REQ-009
+        - REQ-015
+        - REQ-016
+        - REQ-017
+        - NEG-001
+        - KEEP-006
+        - KEEP-007
+      modules:
+        - MOD-002
+        - MOD-008
+      produces:
+        - IF-010
+      consumes:
+        - IF-001
+        - IF-002
+        - IF-003
+        - IF-004
+        - IF-015
+      dependencies:
+        - DN-004
+      risks:
+        - RISK-005
+      proof: PROOF-011
+    modules:
+      - MOD-002
+      - MOD-008
+    interfaces:
+      - IF-001
+      - IF-002
+      - IF-003
+      - IF-004
+      - IF-010
+      - IF-015
+    migrations:
+      - MIG-003
+      - MIG-004
+    risks:
+      - RISK-005
+  plan:
+    receipt_id: plan-dn-009-3212969f2164-bounded-migration
+    node_plan_digest: bd66dec86350be06ea308b57507ad124acd627c8d4efc4a822888ac8aa3bb107
+    packet_ids: []
+  packet_receipts: []
+  checkout:
+    candidate_sha: 7805c43199f1797c61912c4ef54083802724c8ef
+  replacements:
+    - temporary engine store
+  tracked_state:
+    before:
+      head: 7805c43199f1797c61912c4ef54083802724c8ef
+      status: ''
+      diff: ''
+    after:
+      head: 7805c43199f1797c61912c4ef54083802724c8ef
+      status: ''
+      diff: ''
+  changed_surfaces:
+    paths:
+      - serve/mcp-kanban/src/owlbear_mcp_kanban/__init__.py
+      - serve/mcp-kanban/src/owlbear_mcp_kanban/models.py
+      - serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
+      - serve/mcp-kanban/tests/test_mcp_native_query_tools.py
+      - serve/mcp-kanban/tests/test_mcp_request_tools.py
+      - serve/mcp-kanban/tests/test_mcp_surface_contract.py
+    authority_targets:
+      - DN-004
+      - DN-009
+      - IF-001
+      - IF-002
+      - IF-003
+      - IF-004
+      - IF-010
+      - IF-015
+      - KEEP-006
+      - KEEP-007
+      - MOD-002
+      - MOD-008
+      - NEG-001
+      - PROOF-011
+      - REQ-009
+      - REQ-015
+      - REQ-016
+      - REQ-017
+      - REQ-020
+      - RISK-005
+code_revision: 7805c43199f1797c61912c4ef54083802724c8ef
