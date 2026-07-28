@@ -67,7 +67,7 @@ for (const viewport of VIEWPORTS) {
     await page.goto(`/?change=${PRIMARY_CHANGE}&node=DN-011`)
     await expectAssembledPage(page, 'specification-page', viewport)
     await expect(page.getByRole('heading', { name: 'Authority metadata' })).toBeVisible()
-    await expect(page.getByText('admission-6c95c70c81a1')).toBeVisible()
+    await expect(page.getByText('Admission receipt', { exact: true }).locator('..')).toContainText('receipts/admission-')
     const graph = page.getByTestId('delivery-graph-outline')
     await expect(graph).toBeVisible()
     await expect(graph.getByTestId('node-detail')).toContainText('DN-011')
