@@ -1,10 +1,10 @@
 ---
 id: 2098
 title: 'P17-05: Verify the assembled Cockpit release journey'
-status: collect
+status: archived
 priority: high
 created: 2026-07-27T19:45:20.808938+02:00
-updated: 2026-07-28T12:00:30.566838+02:00
+updated: 2026-07-28T12:01:43.170749+02:00
 tags:
   - phase-17
   - scope:test
@@ -40,7 +40,7 @@ proof_bundle: existing+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -75,3 +75,13 @@ PASS. Verified committed builder state at `732c75136d908cc2c708955c4f1c4bd5d1616
 - AC-3: An independent external parser validated the generated durable manifest: tested revision; delivery plus DN-001/DN-002/DN-014 plan digests; admission and all plan/build/accept/audit/supersession identities; exact corrective IDs; whole-change `/` audit; clean work/change health; no active legacy state; real FastAPI/built SPA markers; both viewport runs; and false finalization/DN-015 flags.
 
 The first external parser attempt expected five geometry samples, but the journey intentionally inspects six routes; correcting that verifier-only assertion passed without changing product or proof code. Verifier challenger returned pass with no findings and explicitly confirmed this did not invalidate evidence.
+
+[[2026-07-28T12:01:43+02:00]]
+## Collect Notes
+
+ARCHIVED. Leaf closure is complete.
+
+- Builder commit `732c75136d908cc2c708955c4f1c4bd5d161699d` contains exactly the task-owned release stack, dedicated Playwright journey/config, seeder export mode, and #2097 export hook.
+- Verifier commit `d3d18d784eb4ffef8cbad0a11739c107a78965cc` records the committed-state PASS.
+- Dependency #2097 is archived completed; no unresolved follow-up or scope expansion remains.
+- PROOF-013 closure is supported by repeated 2/2 real browser runs, independent durable-manifest validation, clean production build/lint/Ruff/cutover regression, inspected desktop/mobile screenshots, and pass decisions from both builder and verifier challengers.
