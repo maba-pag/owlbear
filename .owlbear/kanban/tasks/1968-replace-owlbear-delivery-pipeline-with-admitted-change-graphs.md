@@ -4,7 +4,7 @@ title: Replace OwlBear delivery pipeline with admitted change graphs
 status: collect
 priority: high
 created: 2026-07-21T01:46:53.257501+02:00
-updated: 2026-07-27T03:59:58.559254+02:00
+updated: 2026-07-28T02:35:35.941342+02:00
 tags:
   - pipeline-redesign
   - architecture
@@ -243,3 +243,17 @@ User approved the minimal authority repair adding `MOD-001`, `MOD-002`, and `MOD
 ## Final Bootstrap Authority
 
 User approved exact digest `6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9` after independent challenge. It includes DEC-036 and terminal non-projected DN-015, which resolves the self-hosting cutover order without shipped compatibility: DN-012 builds and fixture-proves IF-016; DN-013 proves the complete native workflow; DN-015's engine-selected builder retires the real board/carrier under the writer lease and commits the immutable manifest/finalization receipt; an independent read-only accept job verifies that exact commit under PROOF-016. Receipt: `.owlbear/changes/replace-delivery-pipeline/receipts/admission-6c95c70c81a1.yaml`; replacement native jobs: 29-43. Completed historical packets retain their tested digests. Remaining legacy projections #1989/#1990 are re-bound to `6c95c70...`; DN-015 is intentionally absent from the legacy board it destroys.
+
+[[2026-07-28T02:35:35+02:00]]
+## Shape Notes
+
+User approved a late corrective DN-008 leaf after #2097's assembled PROOF-013 exposed that corrective build jobs could be published but not completed through public `finish_build`.
+
+- Created #2099 `Complete DN-008 corrective build authority` in `build`, parented to active root #1968 and dependent on archived DN-008 aggregate #1985, following the established late-correction convention used by #2077/#2078.
+- #2099 owns only `InvalidationRuntime` corrective-build digest construction and focused public completion proof; DN-013 assembled workflow ownership remains #2097.
+- Added #2099 as an explicit dependency of #1990 and #2097. #2098 remains dependent on #2097.
+- Current-source authority: `_corrective_jobs` omits `node_plan_digest`; normal `_prepare_plan` jobs set `compute_node_plan_digest`; `finish_build` correctly rejects missing/stale authority.
+- Graph maps, canonical diagnostics, current/stale/replay/conflict/interruption classes, temporary-repository proof, and live-carrier exclusion were challenged. Final shaper-challenger decision: `pass`.
+- One challenger used pre-Python-3.14 exception grammar and was disconfirmed: Python 3.14.6 `py_compile` passed all named modules, consistent with PEP 758 and the 378-test current suite.
+- User decision: approved recommended repair leaf and dependency gates.
+- Concrete board audit: #2099 is root child with #1985 lineage; #1990 and #2097 depend on #2099; no live carrier or product file changed during shaping.
