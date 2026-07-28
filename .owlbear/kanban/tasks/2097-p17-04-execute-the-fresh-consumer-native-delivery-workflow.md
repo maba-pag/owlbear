@@ -4,7 +4,7 @@ title: 'P17-04: Execute the fresh-consumer native delivery workflow'
 status: shape
 priority: high
 created: 2026-07-27T19:45:12.576115+02:00
-updated: 2026-07-28T02:35:36.092373+02:00
+updated: 2026-07-28T05:19:28.656377+02:00
 tags:
   - phase-17
   - scope:test
@@ -83,3 +83,6 @@ Material graph repair for failure key `AC-2/corrective-build-node-plan-digest` w
 - The committed red assembled proof remains the causal closure check and continues to exclude the live carrier, live change root, DN-015, and `setup/finalize.py`.
 - No AC, scope, authority, or proof guidance changed. This task stays in `shape` while #2099 is active; after #2099 archives, a local repair may record closure of this failure key and route #2097 back to `build`.
 - Final shaper-challenger: `pass`; user approved the graph.
+
+[[2026-07-28T05:19:28+02:00]]
+Shaping claim normalization: resumed PROOF-013 confirmed #2099 closes corrective finish, then exposed failure key `DN-013/resumed-dispatch-no-accept-job`. Current-source diagnosis, three challenger rounds, the completed Repair Closure Map, and user approval establish a material late DN-008 repair leaf. This claim is released without status change so the complete connected mutation set (#1968, #1990, #2097) can be claimed in deterministic ID order before graph writes.
