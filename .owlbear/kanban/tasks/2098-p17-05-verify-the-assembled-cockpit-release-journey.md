@@ -1,10 +1,10 @@
 ---
 id: 2098
 title: 'P17-05: Verify the assembled Cockpit release journey'
-status: verify
+status: collect
 priority: high
 created: 2026-07-27T19:45:20.808938+02:00
-updated: 2026-07-28T11:56:42.944977+02:00
+updated: 2026-07-28T12:00:30.566838+02:00
 tags:
   - phase-17
   - scope:test
@@ -64,3 +64,14 @@ DONE. Added a dedicated PROOF-013 Cockpit release stack that exports the complet
 - AC-3: `.owlbear/scratch/proof-013-cockpit.json` records setup/workflow/browser commands, tested revision, delivery and all three node-plan digests, admission/plan/build/accept/audit receipt identities, corrective identities, allowed replacements, both viewport runs, clean work/change health, empty legacy state, and explicit `setup_finalize_invoked=false` / `dn_015_invoked=false`.
 
 Focused proof: release E2E 2 passed repeatedly; Ruff clean; Cockpit production build, CSS lint, and HTML lint clean; default `tests/test_native_cutover.py` 2 passed; normal/export assembled workflow each passed. Builder challenger independently reran the release E2E and returned pass with no repair.
+
+[[2026-07-28T12:00:30+02:00]]
+## Verify Notes
+
+PASS. Verified committed builder state at `732c75136d908cc2c708955c4f1c4bd5d161699d`.
+
+- AC-1: Fresh `npm run test:e2e:native-release` passed 2/2 against the built SPA and real FastAPI/uvicorn stack. The journey asserts admitted authority, completed lifecycle receipt history, current corrected receipt state, terminal audit, supersession/invalidation/finding chain, Activity, and exact empty immutable Legacy API/UI state.
+- AC-2: Both required viewports resolve their maintained request and collect clean API/page-error arrays. The browser asserts nonblank routes, zero horizontal overflow, and pairwise non-overlap across six route samples for navigation, route headers, controls, and primary content; four screenshots per viewport were produced.
+- AC-3: An independent external parser validated the generated durable manifest: tested revision; delivery plus DN-001/DN-002/DN-014 plan digests; admission and all plan/build/accept/audit/supersession identities; exact corrective IDs; whole-change `/` audit; clean work/change health; no active legacy state; real FastAPI/built SPA markers; both viewport runs; and false finalization/DN-015 flags.
+
+The first external parser attempt expected five geometry samples, but the journey intentionally inspects six routes; correcting that verifier-only assertion passed without changing product or proof code. Verifier challenger returned pass with no findings and explicitly confirmed this did not invalidate evidence.
