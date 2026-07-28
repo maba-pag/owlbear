@@ -105,10 +105,16 @@ code_revision: <exact tested candidate SHA>
 evidence: <assembled proof, packet receipt closure, replacements, and before/after tracked state>
 evidence_ids: [<durable evidence identities>]
 impact_closure: <admitted paths and authority targets exercised by acceptance>
-reconciliation_plan_job_ids: [<one unused plan job ID per affected dependent node>]
+reconciliation_plan_job_ids: [<one plan job ID per direct dependent node in canonical graph order>]
 ```
 
-These fields map unchanged to `finish_accept`.
+Build `reconciliation_plan_job_ids` from every delivery node whose `dependencies` contains the
+accepted target, in the order those nodes appear in current delivery authority. For each direct
+dependent, use bounded `list_jobs` results to reuse its sole current-digest, pending, unclaimed plan
+job ID; choose one unused positive ID only when no such plan job exists. A claimed or ambiguous
+current plan identity returns `AcceptanceBlocked`. Do not omit a direct dependent based on impact,
+readiness, or whether acceptance changed its predecessor set. These fields map unchanged to
+`finish_accept`.
 
 ### `AcceptanceRejected`
 
