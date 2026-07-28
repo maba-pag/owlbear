@@ -1,10 +1,10 @@
 ---
 id: 1968
 title: Replace OwlBear delivery pipeline with admitted change graphs
-status: collect
+status: archived
 priority: high
 created: 2026-07-21T01:46:53.257501+02:00
-updated: 2026-07-28T05:22:07.041758+02:00
+updated: 2026-07-28T12:26:19.296433+02:00
 tags:
   - pipeline-redesign
   - architecture
@@ -67,7 +67,7 @@ ac:
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Objective
@@ -271,3 +271,16 @@ Material late DN-008 repair approved for failure key `DN-013/resumed-dispatch-no
 
 [[2026-07-28T05:22:07+02:00]]
 Connected graph mutation complete: user-approved, challenger-passed late DN-008 repair #2100 is now a direct root dependency. Board audit confirms #2100 build-ready under #1968 with archived lineage #1985/#2099; DN-013 remains blocked transitively. Claim released without status change.
+
+[[2026-07-28T12:26:19+02:00]]
+## Collect Notes
+
+Classification: aggregate. Intent source is this task's Objective, Required outcome, and Admission Projection for `replace-delivery-pipeline` at admitted digest `6c95c70c81a13ef7a59206ac63bfd9b7338ccb87520d22d90517bf67d50167e9`.
+
+- Invariant coverage: AC-1 native authority and complete graph are carried by archived direct gate tasks; AC-2 cutover and retained healthy capabilities are covered by the completed node aggregates; AC-3 scenario rejection/correction is covered by DN-013 PROOF-013 descendants.
+- Child coverage: no direct `parent=1968` child lookup is complete because this root uses an explicit aggregate dependency gate. All 40 direct dependencies report completed archive status and the parent gate is `dep_status=ok`.
+- Aggregate proof: DN-013 #1990 archived with Collect Notes at `c93a357e7cdbd52b38027f9fecd86de558d806ad`. Its tied PROOF-013 evidence records #2097 builder `45ee5478052e403b038d787da899362760287413` plus verifier `b8042a816295e71bb814d5d80292b039c2af3300` for the public disposable setup-to-audit workflow, and #2098 builder `732c75136d908cc2c708955c4f1c4bd5d161699d` plus verifier `d3d18d7` for the real FastAPI and Cockpit desktop/mobile journey. DN-013 records each as an ancestor with no later proof-file drift; the current archive lineage remains at HEAD `7a261470256eb9d558eacca4917ce42f613a5e48`.
+- Corrective closure: DN-008 repairs #2099 and #2100 are archived completed; #2100's current verifier record passed the public replacement-acceptance proof. DN-013 records no DN-015, finalizer, live-carrier, or legacy execution mutation in the proof scope.
+- Requests: no pending or resolved structured requests for #1968; board-wide pending request query is empty.
+
+Archive rationale: all aggregate gates, SHA-linked normal-path proof, corrective closure, and structured decision state satisfy the root contract.
