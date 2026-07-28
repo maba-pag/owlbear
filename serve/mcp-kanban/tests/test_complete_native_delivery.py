@@ -669,6 +669,7 @@ async def _complete_final_audit(scenario: _Scenario) -> None:
     )
     assert finished.diagnostic is None
     assert finished.receipt is not None
+    assert finished.receipt.receipt_id == "audit-proof-013"
     assert finished.receipt.payload["code_revision"] == scenario.commit
     assert finished.receipt.delivery_digest == revision.delivery_digest
     assert finished.receipt.payload["node_plan_digest"] == audit_job.node_plan_digest

@@ -1,10 +1,10 @@
 ---
 id: 2097
 title: 'P17-04: Execute the fresh-consumer native delivery workflow'
-status: verify
+status: collect
 priority: high
 created: 2026-07-27T19:45:12.576115+02:00
-updated: 2026-07-28T11:30:15.038013+02:00
+updated: 2026-07-28T11:34:06.829257+02:00
 tags:
   - phase-17
   - scope:test
@@ -166,3 +166,14 @@ Evidence:
 - Focused lint: all hooks passed; editor diagnostics and diff check clean.
 - Broader four-file MCP run reached the configured 300-second session cap after 46 passed and no failures; builder-challenger independently reports a broader 57-test slice passed.
 - Builder-challenger final decision: `pass` after an initial fail drove direct AC-1/2/3 causal assertions.
+
+[[2026-07-28T11:34:06+02:00]]
+## Verifier Notes
+PASS: independently verified the committed PROOF-013 assembled workflow and patched one exact local assertion before final approval.
+
+- Re-ran the assembled proof plus direct public admission, replacement gating, independent acceptance, terminal audit, and healthy-work owner cases: 6 passed on the committed implementation; after the verifier assertion, the same 6 passed in 31.56s.
+- Re-ran focused workspace lint: every hook passed; editor diagnostics are empty.
+- Confirmed AC-1 public authority refusal has causal no-publication assertions; AC-2 supersession blocks replacement dispatch until the corrected public build receipt; AC-3 binds final audit digest, node-plan digest, corrected SHA, predecessors, canonical closure, event evidence IDs, corrected receipt lineage, public supersession record, and clean health.
+- Verifier-challenger initially failed because the returned final audit receipt was not explicitly bound to its requested identity. Added `finished.receipt.receipt_id == "audit-proof-013"`, reran the full direct bundle and lint, and obtained final challenger `pass`.
+- The earlier broad 300-second timeout after 46 passes is non-material for this test-only change because the focused assembled/owner bundle directly covers the changed boundary; builder-challenger also independently reported a broader 57-test slice passed.
+- The repaired three-graph-node/two-module fixture faithfully closes `PROOF-013/literal-two-node-audit-impossible` with no production or live-carrier mutation.
