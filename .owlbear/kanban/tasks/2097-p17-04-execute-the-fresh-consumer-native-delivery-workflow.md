@@ -1,10 +1,10 @@
 ---
 id: 2097
 title: 'P17-04: Execute the fresh-consumer native delivery workflow'
-status: build
+status: shape
 priority: high
 created: 2026-07-27T19:45:12.576115+02:00
-updated: 2026-07-28T06:11:51.211506+02:00
+updated: 2026-07-28T06:16:00.395793+02:00
 tags:
   - phase-17
   - scope:test
@@ -111,3 +111,27 @@ Mechanical reroute after completion of the approved repair graph; no AC, scope, 
 - The previously approved Repair Closure Map and shaper-challenger pass in #2100 establish the production owner, causal public check, negative controls, and executor availability. #2100's archived completion satisfies the prior explicit route: #2097 returns to build and completes its unchanged full correction-to-audit AC boundary.
 
 Board audit: #2097 `dep_status=ok`; #2099 and #2100 are archived completed; downstream #2098 remains blocked on #2097. All 18 recalled shaper memories were assessed.
+
+[[2026-07-28T06:16:00+02:00]]
+## Builder Notes
+REJECT to shape for a newly demonstrated proof-contract contradiction; no code or test edit was made in this build attempt.
+
+The current proof artifact copies the full admitted 15-node change and shortcuts into `_active_accept`; after corrected DN-001 replacement acceptance, production correctly emits dependent reconciliation plans and cannot create final audit until every admitted node has a current accept. The operative AC/guidance instead requires a literal two-node fixture through real final audit.
+
+Current source makes literal two-node audit impossible without bypass or production change:
+- `NativeRuntime._terminal_audit_authority` resolves mandatory `DN-014` and its plan.
+- Receipt audit validation requires `PROOF-008`.
+- `_terminal_accept_jobs` requires a current accept for every admitted node before creating audit.
+- Existing task scope forbids mocked lifecycle completion or production fixes.
+
+Smallest faithful fixture: two delivery-work nodes/two modules plus the mandatory DN-014 audit-authority node (three graph nodes total). This preserves public setup, admission, engine selection, writer, Git, checkout, correction, independent acceptance, audit, and health boundaries.
+
+### Required Follow-up
+| # | Failure Key | Target Agent | Action Required | File(s) | Evidence |
+|---|---|---|---|---|---|
+| 1 | `PROOF-013/literal-two-node-audit-impossible` | shaper via task repair | Correct AC-1 and proof guidance to a three-graph-node fixture consisting of two delivery-work nodes/two modules plus mandatory DN-014 audit authority; preserve unchanged assembled lifecycle and safety exclusions. Challenge the repaired proof contract before returning to build. | task #2097; `serve/mcp-kanban/tests/test_complete_native_delivery.py` | `native_runtime.py::{_terminal_audit_authority,_terminal_accept_jobs}` and `receipt.py` audit evidence require DN-014/PROOF-008 and accepts for every admitted node; read-only exploration found no missing executor or production premise beyond fixture wording. |
+
+### Repair Closure Map
+| Failure Key | Claimed Production Boundary | Current-Source Artifacts | Cheapest Disconfirming Check | Causal Proof Or Negative Control | Executor Availability |
+|---|---|---|---|---|---|
+| `PROOF-013/literal-two-node-audit-impossible` | One disposable public setup-to-audit workflow | `native_runtime.py::{_prepare_terminal_audit,_terminal_audit_authority,_terminal_accept_jobs}`, `receipt.py` audit validation, `test_complete_native_delivery.py` | Load a reduced graph without DN-014: terminal acceptance creates no audit; include DN-014 and current accepts for all fixture nodes: audit is eligible | Public returned jobs must select every plan/build/accept/audit action; missing work-node accept or DN-014 authority prevents audit, detecting bypass | Public MCP tools, real Git/checkouts, structured change loader, and temporary consumer are available; a three-node fixture needs no production change. |
