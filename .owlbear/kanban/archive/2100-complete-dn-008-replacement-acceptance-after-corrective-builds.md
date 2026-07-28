@@ -1,10 +1,10 @@
 ---
 id: 2100
 title: Complete DN-008 replacement acceptance after corrective builds
-status: verify
+status: archived
 priority: high
 created: 2026-07-28T05:20:51.823233+02:00
-updated: 2026-07-28T06:04:50.807563+02:00
+updated: 2026-07-28T06:09:44.164598+02:00
 tags:
   - phase-17
   - scope:core
@@ -40,7 +40,7 @@ proof_bundle: critical+challenge
 blocked: false
 block_reason:
 claimed_at:
-archival_reason:
+archival_reason: completed
 archival_refs: []
 ---
 ## Outcome
@@ -104,3 +104,27 @@ Evidence:
 - AC-1 and AC-4: `test_replacement_accept_waits_for_every_corrective_build` plus `test_complete_native_delivery.py` prove persisted predecessor-gated continuation, zero/partial omission, sole full-closure eligibility, and start at corrected commit through public MCP tools.
 - AC-2: native invalid-replacement matrix and MCP schema tests prove plan/design no eager accept, mixed/cross-node fail closed, positive parameter validation, accept-only schema, and active/archive collision handling before mutation.
 - AC-3: exact replay returns the same typed replacement; changed identity conflicts; injected transaction failures preserve complete pre-rejection snapshots.
+
+[[2026-07-28T06:08:58+02:00]]
+## Verifier Notes
+PASS at builder commit `4438f6e4ec9e2d5076e64eb35e4e2f27aa0d9f05`.
+
+Direct verifier proof reran native replacement identity/atomicity, public two-build readiness, disposable-consumer corrected-commit start, and MCP accept/audit schema isolation: 33 passed, 54 deselected. The committed slice exactly matches the shaped module map and contains no uncommitted production/test changes.
+
+AC review:
+- AC-1: replacement is atomically persisted with current node-plan digest, exact corrective predecessors, no receipt, and original accept superseded; public dispatch gates on predecessor currentness.
+- AC-2: positive accept-only public parameter, no audit leakage, plan/design no eager accept, malformed mixed/cross-node closures and active/archive collisions fail before mutation.
+- AC-3: exact replay returns the stored replacement, changed identity conflicts, and interruption snapshots prove no partial finding, receipt, job, event, or archive.
+- AC-4: one/two-build public scenarios prove zero/partial/full readiness and replacement start at the corrected commit without final audit or live carrier mutation.
+
+Verifier challenger decision: pass. Memory preflight returned 20 entries and all were assessed; live adapter schema, exact replay, refined artifact-scope, and active-workspace guidance were applied. No new reusable memory candidate was identified.
+
+Known full-MCP interaction failures remain unrelated dirty agent/prompt exact-text expectations outside this task; the MCP API/lifecycle subset and all focused public paths pass.
+
+[[2026-07-28T06:09:44+02:00]]
+## Collector Notes
+ARCHIVED as completed.
+
+Leaf archive readiness is satisfied: dependencies #1985 and #2099 are archived completed, builder implementation is committed at `4438f6e4ec9e2d5076e64eb35e4e2f27aa0d9f05`, verifier reran 33 direct public/native checks, both required challengers passed, full Kanban regression passed 392 tests, and all four ACs have named public or atomicity evidence. The task introduced no unresolved request, block, scratch artifact, or uncommitted code/test change.
+
+The parent #1968 intentionally remains in collect and blocked on its other active descendants; archiving this completed leaf removes #2100 as a root blocker without claiming aggregate DN-013 or DN-015 closure.
