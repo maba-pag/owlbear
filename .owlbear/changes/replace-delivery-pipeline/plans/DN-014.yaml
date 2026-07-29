@@ -1,0 +1,213 @@
+---
+mode: build
+candidate_revision: 5a01120e937e4266bf6aa5a47025787cb3ec2c1f
+generation:
+  job_id: 75
+  receipt_id: admission-3212969f2164
+  predecessor_job_ids:
+    - 83
+  predecessor_receipt_ids:
+    - accept-dn-009-7805c43199f1-83
+packets:
+  - id: DN-014-PK-001
+    outcome: Restore durable PROOF-008 execution by giving synthetic
+      terminal-audit scenarios an explicit copied-plan cleanup option while
+      preserving normal copied-revision consumers and public audit and dispatch
+      boundaries.
+    obligations:
+      - REQ-007
+      - REQ-008
+      - REQ-014
+      - NEG-003
+      - NEG-009
+      - KEEP-004
+      - KEEP-005
+      - KEEP-007
+      - KEEP-008
+    in_scope:
+      - Add an explicit `clean_plans` keyword to `_copied_revision`, defaulting
+        false, that removes copied plan YAML only when a synthetic scenario must
+        author a complete isolated plan set.
+      - Have `_terminal_accept_scenario` request `clean_plans=True` with its
+        existing receipt cleanup before synthetic plan publication.
+      - Preserve admitted authority and normal `_copied_revision` callers,
+        including consumers that inspect published copied-plan digests.
+      - Run the complete native-runtime, dispatch-runtime, and MCP
+        acceptance-tool test modules to cover direct, transitive, audit, and
+        non-audit fixture consumers.
+      - Preserve audit success and replay, forged evidence rejection, stale
+        predecessor and unresolved request gates, tracked-edit rejection,
+        canonical correction routing, dispatch cleanup, and receipt invariance.
+    excluded:
+      - Production auditor, runtime, receipt, dispatch, proof-checkout, or MCP
+        changes.
+      - Admitted authority, interface, migration, failure semantic, lifecycle
+        kind, correction route, or allowed replacement changes.
+      - DN-008 acceptance fixture work, DN-009 catalog work, DN-015
+        finalization, Cockpit behavior, and unrelated ecosystem assertions.
+      - Bootstrap, legacy, live project plan, or ephemeral setup records as
+        audit authority.
+    modules:
+      - MOD-001
+      - MOD-003
+      - MOD-008
+      - MOD-009
+    interfaces:
+      - IF-001
+      - IF-003
+      - IF-004
+      - IF-005
+      - IF-009
+      - IF-010
+      - IF-014
+    dependencies: []
+    acceptance_scenarios:
+      - 'AC1: Given copied published plans and `_terminal_accept_scenario`, explicit
+        cleanup removes copied plan refinements before synthetic publication, and
+        setup reaches public audit and dispatch boundaries without TransactionConflictError.'
+      - 'AC2: Given a `_copied_revision` caller without plan cleanup, published copied
+        plans remain available and native-runtime regression retains its plan-digest
+        behavior.'
+      - 'AC3: Given current accept receipts and an engine checkout at the dispatched
+        commit, public start_job selects the auditor and public finish_audit publishes
+        one digest-bound receipt, cleans the checkout, closes the change, and replays
+        without another event.'
+      - 'AC4: Given forged methods, promise, decisions, migrations, workflows, receipts,
+        requests, proof, replacements, boundary, command output, or tracked state,
+        public finish_audit returns ERR_RECEIPT_PROOF_UNSATISFIED and creates no audit
+        receipt.'
+      - 'AC5: Given a stale predecessor or unresolved audit request, public start_job
+        returns PREDECESSOR_INVALID or REQUEST_PENDING, creates no checkout, and leaves
+        stores unchanged.'
+      - 'AC6: Given cross-node integration failure, migration or removal absence,
+        admitted proof omission, or tracked auditor edit, public reject_audit emits
+        the declared finding class and route, publishes only declared corrective identities,
+        and cleans the checkout.'
+      - 'AC7: Given dispatch-level audit release, rejection, cleanup failure, or replay
+        scenarios using `_active_audit_scenario`, DispatchRuntime preserves checkout
+        cleanup and receipt and store invariants in the dispatch-runtime regression
+        module.'
+    impact_closure:
+      paths:
+        - share/agents/auditor.agent.md
+        - share/skills/w-whole-change-audit/SKILL.md
+        - .owlbear/hooks/deny-writes.py
+        - serve/kanban/src/owlbear_kanban/__init__.py
+        - serve/kanban/src/owlbear_kanban/dispatch.py
+        - serve/kanban/src/owlbear_kanban/native_runtime.py
+        - serve/kanban/src/owlbear_kanban/proof_checkout.py
+        - serve/kanban/src/owlbear_kanban/receipt.py
+        - serve/kanban/tests/test_native_runtime.py
+        - serve/kanban/tests/test_dispatch_runtime.py
+        - serve/mcp-kanban/src/owlbear_mcp_kanban/models.py
+        - serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
+      authority_targets:
+        - DN-004
+        - DN-008
+        - DN-009
+        - DN-014
+        - REQ-007
+        - REQ-008
+        - REQ-014
+        - NEG-003
+        - NEG-009
+        - KEEP-004
+        - KEEP-005
+        - KEEP-007
+        - KEEP-008
+        - MOD-001
+        - MOD-003
+        - MOD-008
+        - MOD-009
+        - IF-001
+        - IF-003
+        - IF-004
+        - IF-005
+        - IF-009
+        - IF-010
+        - IF-014
+        - RISK-008
+        - RISK-009
+        - PROOF-008
+    proof:
+      authority: PROOF-008
+      boundary: Real auditor over all accepted nodes and admitted workflows in
+        one engine-created exact-commit checkout, reached through public MCP
+        start, finish, and reject functions and DispatchRuntime over real native
+        stores.
+      invocation_harness: Public owlbear_mcp_kanban.server functions receive
+        real AppContext over temporary native stores and Git-backed
+        ProofCheckoutManager; MagicMock replaces only request-context transport
+        below the public tool boundary.
+      collection_check: uv run pytest -n0 --collect-only
+        serve/kanban/tests/test_native_runtime.py
+        serve/kanban/tests/test_dispatch_runtime.py
+        serve/mcp-kanban/tests/test_mcp_acceptance_tools.py -q
+      primary_command: uv run pytest -n0
+        serve/kanban/tests/test_native_runtime.py
+        serve/kanban/tests/test_dispatch_runtime.py
+        serve/mcp-kanban/tests/test_mcp_acceptance_tools.py -q --tb=short
+      additional_commands:
+        - uv run lint serve/kanban/tests/test_native_runtime.py
+          serve/kanban/tests/test_dispatch_runtime.py
+          serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
+        - uv run python .owlbear/scripts/validate_agents.py
+        - uv run python .owlbear/scripts/validate_skills.py
+      allowed_lower_replacements:
+        - dependencies explicitly below each admitted workflow boundary
+      evidence_outputs:
+        - Complete three-module scenario inventory.
+        - Full three-module pytest result.
+        - Lint and agent and skill validation results.
+        - Invocation-harness record.
+        - Candidate and post-proof tracked state.
+    required_outputs:
+      - Opt-in copied-plan cleanup with default preservation of published copied
+        plans.
+      - '`_terminal_accept_scenario` opt-in before synthetic plan publication.'
+      - Passing complete native-runtime, dispatch-runtime, and MCP
+        acceptance-tool modules.
+      - Passing collection, lint, agent and skill validation, and tracked-state
+        evidence at the built commit.
+    profile:
+      domain: Python pytest integration coverage for independent whole-change
+        audit, dispatch, exact-commit checkout, immutable receipt closure, and
+        typed correction routing.
+      risks:
+        - RISK-008
+        - RISK-009
+      tools:
+        - uv
+        - pytest
+        - git
+        - workspace-lint
+        - git-read-only-state-checks
+      skills:
+        - h-python-conventions
+        - h-pytest-and-linting
+    context_budget:
+      expected_changed_files: 1
+      inspected_files: 13
+      interfaces:
+        - IF-001
+        - IF-003
+        - IF-004
+        - IF-005
+        - IF-009
+        - IF-010
+        - IF-014
+      change_envelope: One opt-in fixture keyword and one call-site argument in
+        serve/kanban/tests/test_native_runtime.py plus complete three-module
+        proof; production or authority deltas require a new planning
+        disposition.
+review:
+  disposition: pass
+  evidence_id: plan-challenge-dn-014-job75-5a01120e-rev3
+  checks:
+    plan_completeness: pass
+    admitted_references: pass
+    impact_closures: pass
+    dependency_order: pass
+    proof_boundary: pass
+    material_expansion: pass

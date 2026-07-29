@@ -1,0 +1,83 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-014-3212969f2164
+change_id: replace-delivery-pipeline
+delivery_digest: 3212969f2164f0d71ae60c30405eb941b8a87b99d225a57db96062143dd4de7c
+issued_at: '2026-07-29T04:07:06Z'
+impact_closure:
+  paths:
+    - .owlbear/hooks/deny-writes.py
+    - serve/kanban/src/owlbear_kanban/__init__.py
+    - serve/kanban/src/owlbear_kanban/dispatch.py
+    - serve/kanban/src/owlbear_kanban/native_runtime.py
+    - serve/kanban/src/owlbear_kanban/proof_checkout.py
+    - serve/kanban/src/owlbear_kanban/receipt.py
+    - serve/kanban/tests/test_dispatch_runtime.py
+    - serve/kanban/tests/test_native_runtime.py
+    - serve/mcp-kanban/src/owlbear_mcp_kanban/models.py
+    - serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
+    - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
+    - share/agents/auditor.agent.md
+    - share/skills/w-whole-change-audit/SKILL.md
+  authority_targets:
+    - DN-004
+    - DN-008
+    - DN-009
+    - DN-014
+    - IF-001
+    - IF-003
+    - IF-004
+    - IF-005
+    - IF-009
+    - IF-010
+    - IF-014
+    - KEEP-004
+    - KEEP-005
+    - KEEP-007
+    - KEEP-008
+    - MOD-001
+    - MOD-003
+    - MOD-008
+    - MOD-009
+    - NEG-003
+    - NEG-009
+    - PROOF-008
+    - REQ-007
+    - REQ-008
+    - REQ-014
+    - RISK-008
+    - RISK-009
+target_node_id: DN-014
+node_plan_digest: 29de7f919abae4ba86751239bd4dcd62b86e3767bd49e07b8facb2b8e064bbe5
+predecessor_receipt_ids:
+  - accept-dn-009-7805c43199f1-83
+evidence:
+  methods:
+    - Pass full promise and decisions.
+    - Reject cross-node integration, migration absence, stale acceptance, unresolved request, and tracked edit.
+  source_inspection:
+    disposition: build-required
+    evidence: The auditor agent, workflow, runtime, MCP boundary, and audit tests exist at the candidate. PROOF-008 execution is blocked because `_copied_revision` retains published plans DN-002 through DN-009 while `_terminal_accept_scenario` synthesizes another complete plan set, causing TransactionConflictError before audit assertions.
+  candidate_proof:
+    command: uv run pytest -n0 serve/kanban/tests/test_native_runtime.py serve/mcp-kanban/tests/test_mcp_acceptance_tools.py -q
+    result: Audit scenarios failed at NodePlanStore.prepare with TransactionConflictError, establishing a durable test-fixture delta and making verification-only mode ineligible.
+  tracked_scope:
+    candidate_head: 5a01120e937e4266bf6aa5a47025787cb3ec2c1f
+    implementation_surface_clean: true
+    required_delta: serve/kanban/tests/test_native_runtime.py
+  predecessor:
+    job_id: 83
+    receipt_id: accept-dn-009-7805c43199f1-83
+    target_node_id: DN-009
+  review:
+    disposition: pass
+    evidence_id: plan-challenge-dn-014-job75-5a01120e-rev3
+    plan_completeness: pass
+    admitted_references: pass
+    impact_closures: pass
+    dependency_order: pass
+    proof_boundary: pass
+    material_expansion: pass
+    evidence: Fresh planner-challenger review confirmed build-mode necessity, exact authority containment, exhaustive direct and transitive fixture-consumer coverage, an acyclic one-packet plan, unchanged PROOF-008 boundary, and no material expansion.
+code_revision: 5a01120e937e4266bf6aa5a47025787cb3ec2c1f
