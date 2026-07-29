@@ -6,8 +6,12 @@ user-invocable: false
 disable-model-invocation: true
 model: GPT-5.6 Sol (copilot)
 tools:
-  [vscode/toolSearch, read/problems, read/readFile, read/viewImage, agent, search, web, ob-kanban/list_changes, ob-kanban/show_change, ob-kanban/list_jobs, ob-kanban/show_job, ob-kanban/show_receipt, ob-kanban/list_attempts, ob-kanban/list_activity, ob-kanban/create_request, ob-kanban/list_requests, ob-kanban/show_request, ob-kanban/change_health, ob-kanban/work_health]
+  [vscode/toolSearch, execute/getTerminalOutput, execute/killTerminal, execute/runInTerminal, read/problems, read/readFile, read/terminalLastCommand, read/viewImage, agent, search, web, ob-kanban/list_changes, ob-kanban/show_change, ob-kanban/list_jobs, ob-kanban/show_job, ob-kanban/show_receipt, ob-kanban/list_attempts, ob-kanban/list_activity, ob-kanban/create_request, ob-kanban/list_requests, ob-kanban/show_request, ob-kanban/change_health, ob-kanban/work_health]
 agents: [planner-challenger, Explore]
+hooks:
+  PreToolUse:
+    - type: command
+      command: uv run python .owlbear/hooks/deny-writes.py --terminal-read-only
 ---
 
 <persona>
@@ -78,6 +82,8 @@ required by `w-frontier-planning`; the orchestrator cannot complete or reconstru
   the workflow. All repository and native control-plane inspection is read-only.
 - Repository search may be replaced below the planner in proof. The selected job, authority,
   reviewer, structured result, and public lifecycle boundary may not be replaced.
+- Terminal access is limited to exact-candidate tracked-state inspection and proof execution. The
+  read-only hook denies Git and filesystem mutation; any proof-created tracked delta blocks success.
 - Session continuity never permits stale authority reuse or cross-node packet references.
 
 </boundaries>

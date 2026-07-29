@@ -45,7 +45,7 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 |-------|-------|------------------|-----------|-------|
 | designer | GPT-5.6 Sol | `w-design-session` | designer-challenger, Explore | None; authority writes are bounded by the role and narrow native tool surface |
 | designer-challenger | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
-| planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | None; no lifecycle or tracked-write tools |
+| planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch and terminal mutation; no lifecycle tools |
 | planner-challenger | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
 | orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, acceptor, auditor, memory-curator, Explore | Native lifecycle tools plus terminal access limited by workflow to exact-HEAD lookup |
 | builder | GPT-5.6 Terra | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | `SessionStart`: repository context; `PostToolUse`: lint changed files |
@@ -136,7 +136,7 @@ The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignmen
 | Control | Attached roles | Enforcement job |
 |---------|----------------|-----------------|
 | Agent `tools:` allowlist | Every agent | Limits runtime capabilities exposed to the role |
-| `deny-writes.py` | acceptor, auditor, designer-challenger, planner-challenger, build-reviewer | Rejects durable edit-tool writes outside scratch; acceptor and auditor enable terminal read-only mode |
+| `deny-writes.py` | acceptor, auditor, planner, designer-challenger, planner-challenger, build-reviewer | Rejects durable edit-tool writes outside scratch; acceptor, auditor, and planner enable terminal read-only mode |
 | `deny-src-writes.py` | test-curator | Restricts writes to tests and scratch |
 | `session-context.py` | builder | Adds repository context at session start |
 | `lint-changed.py` | builder | Runs changed-file checks after tool use |
