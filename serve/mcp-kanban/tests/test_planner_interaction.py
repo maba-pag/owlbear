@@ -204,6 +204,10 @@ def _dispatch_shipped_planner(revision, started, *, receipt_id: str, next_job_id
     assert "Call a fresh read-only plan reviewer" in workflow
     assert "repair bounded packet-plan defects inside admitted\n" in workflow
     assert "obtain a fresh complete review of the repaired candidate" in workflow
+    assert "methods: [<every canonical method string from the selected target proof, verbatim>]" in workflow
+    assert "include every canonical target proof method in `evidence.methods`" in planner_path.read_text(
+        encoding="utf-8"
+    )
     assert "Return exactly one of these objects to the orchestrator" in workflow
     assert "do not put a migration ID anywhere in the node plan" in workflow
     assert "does not\n   become node-owned authority" in workflow

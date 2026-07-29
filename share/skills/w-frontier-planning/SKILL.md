@@ -200,7 +200,10 @@ Use only after target-bounded validation and independent review pass:
 kind: PlannerSuccess
 receipt_id: <new stable plan receipt identity>
 code_revision: <tested candidate Git revision>
-evidence: <review and proof evidence accepted by finish_plan>
+evidence:
+   methods: [<every canonical method string from the selected target proof, verbatim>]
+   review: <complete independent review evidence>
+   <other source or proof evidence>: <source-grounded value>
 evidence_ids: [<durable evidence identities>]
 impact_closure: <union of packet proof impact closures>
 node_plan: <complete reviewed build or verification-only plan>
@@ -208,8 +211,10 @@ build_job_ids: [<one unused ID per build packet; empty for verification-only>]
 accept_job_id: <one distinct unused ID>
 ```
 
-These keys match the planner-owned inputs of public `finish_plan`. The orchestrator supplies the
-unchanged change, job, attempt, claim, actor, process, and completion-time identity from dispatch.
+`evidence.methods` must contain every admitted method from the selected target's proof. Do not
+summarize, omit, or reconstruct that canonical sequence outside the planner. These keys match the
+planner-owned inputs of public `finish_plan`. The orchestrator supplies the unchanged change, job,
+attempt, claim, actor, process, and completion-time identity from dispatch.
 
 ### `RequestCreated`
 

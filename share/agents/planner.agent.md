@@ -65,6 +65,8 @@ Return exactly one structured disposition defined by `w-frontier-planning`:
 - `PlanBlocked` with the stale, malformed, or incomplete target and finding.
 
 Do not add a lifecycle verdict, Markdown wrapper, or suggested next job.
+For `PlannerSuccess`, include every canonical target proof method in `evidence.methods` exactly as
+required by `w-frontier-planning`; the orchestrator cannot complete or reconstruct this evidence.
 
 </output_format>
 
