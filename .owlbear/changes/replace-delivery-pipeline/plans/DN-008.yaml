@@ -1,0 +1,226 @@
+---
+mode: build
+candidate_revision: 4fb99e474f304eeb4003591f27ee6f77a46f7870
+packets:
+  - id: DN-008-PK-001
+    outcome: Complete durable PROOF-007 acceptance coverage by making the
+      shipped workflow assertion whitespace-stable and adding the public
+      verification-only acceptance success and rejection matrix.
+    obligations:
+      - REQ-006
+      - NEG-003
+      - NEG-009
+      - KEEP-005
+      - REQ-008
+      - REQ-014
+      - KEEP-004
+      - KEEP-007
+      - KEEP-008
+    in_scope:
+      - Normalize the existing test assertion over the shipped node-acceptance
+        workflow so Markdown line wrapping cannot falsify the unchanged
+        finish_accept handoff contract.
+      - Add a public assembled acceptance fixture that creates a
+        current-generation eligible verification-only plan with zero packets,
+        zero build jobs, one plan receipt, and one accept job without treating
+        live project plans or bootstrap records as authority.
+      - Add a success scenario proving the full admitted node proof executes at
+        the plan candidate and finish_accept publishes one new-digest native
+        accept receipt with no packet receipts, canonical evidence, clean
+        tracked state, dependent reconciliation identities, and cleanup.
+      - Add a rejection matrix for candidate mismatch, missing outputs, boundary
+        weakening, legacy/bootstrap substitution, and tracked acceptor mutation,
+        asserting no accept receipt or partial lifecycle mutation.
+      - Preserve the methods-only evidence rejection at public finish_accept so
+        successful verification-only proof remains tied to commands, outputs,
+        admitted boundary, and exact checkout state.
+      - Extend the existing acceptor frontmatter assertion to require no memory
+        tool and keep memory absent from change, plan, receipt, proof, checkout,
+        and lifecycle authority.
+      - Keep the new verification-only fixture isolated from
+        `_terminal_accept_scenario`, `_pending_public_audit`, and other DN-014
+        audit helpers; record a diff comparison proving those helpers are
+        unchanged.
+      - Preserve existing build-mode success, canonical failure routing, minimum
+        correction, cleanup, and replay scenarios.
+    excluded:
+      - Production MCP source changes; a defect in IF-010 or MOD-002 routes as a
+        typed finding to the accepted DN-009 owner rather than being patched by
+        this packet.
+      - Production kanban source changes unless the new assembled scenario
+        exposes a concrete DN-008 defect inside admitted MOD-001.
+      - DN-014 audit fixture repair, audit-helper edits, or whole-change audit
+        behavior.
+      - Agent authority, admitted graph, plan, job, receipt, migration,
+        generated artifact, compatibility, or public-interface changes.
+      - A new proof boundary, lower replacement, lifecycle kind, or
+        verification-only job alias.
+      - Mocking finish_accept, the acceptor boundary, proof checkout, or
+        canonical receipt validation.
+    modules:
+      - MOD-001
+      - MOD-003
+      - MOD-008
+      - MOD-009
+    interfaces:
+      - IF-001
+      - IF-003
+      - IF-004
+      - IF-005
+      - IF-007
+      - IF-008
+      - IF-009
+      - IF-010
+    dependencies: []
+    acceptance_scenarios:
+      - 'AC1: Given a build-mode node with current packet receipts and an engine-created
+        checkout at the dispatched commit, public finish_accept publishes one digest-bound
+        accept receipt, creates direct-dependent reconciliation plan jobs, cleans
+        the checkout, and replays without another event.'
+      - 'AC2: Given local defect, missing harness, boundary bypass, stale receipt,
+        or tracked acceptor edit, the acceptor returns the canonical typed finding
+        and route; public reject_accept publishes no more than one admitted corrective
+        job for the row and cleans or releases the checkout according to the disposition.'
+      - 'AC3: Given a current-generation verification-only plan with zero packets,
+        zero build jobs, one current plan receipt, complete required outputs, command
+        results for the full admitted proof, and clean checkout state at its candidate,
+        public finish_accept publishes one native accept receipt with an empty packet-receipt
+        list and the plan receipt as predecessor evidence; methods-only evidence is
+        rejected without cleanup or publication.'
+      - 'AC4: Given a verification-only acceptance with candidate mismatch, missing
+        outputs, weakened assembled boundary, legacy/bootstrap evidence substituted
+        for the current plan receipt, or tracked acceptor mutation, the public boundary
+        rejects or blocks the attempt and creates no accept receipt or partial lifecycle
+        state.'
+      - 'AC5: Given an acceptor terminal or tracked-file write attempt, the configured
+        read-only hook denies it; before/after checkout state remains at the dispatched
+        commit with empty tracked status and diff before success.'
+      - 'AC6: Given the shipped acceptor frontmatter, its tool list contains repository
+        reads, proof execution, and native change/job/receipt queries and contains
+        no memory tool; acceptance evidence still comes from change, plan, receipts,
+        proof, checkout, and lifecycle identity.'
+    impact_closure:
+      paths:
+        - share/agents/acceptor.agent.md
+        - share/skills/w-node-acceptance/SKILL.md
+        - .owlbear/hooks/deny-writes.py
+        - seed/.owlbear/hooks/deny-writes.py
+        - serve/kanban/src/owlbear_kanban/proof_checkout.py
+        - serve/kanban/src/owlbear_kanban/receipt.py
+        - serve/kanban/src/owlbear_kanban/invalidation.py
+        - serve/kanban/src/owlbear_kanban/native_runtime.py
+        - serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
+        - serve/kanban/tests/test_native_runtime.py
+        - tests/test_write_guard_hooks.py
+      authority_targets:
+        - DN-004
+        - DN-006
+        - DN-007
+        - DN-008
+        - DN-009
+        - REQ-006
+        - NEG-003
+        - NEG-009
+        - KEEP-005
+        - REQ-008
+        - REQ-014
+        - KEEP-004
+        - KEEP-007
+        - KEEP-008
+        - MOD-001
+        - MOD-003
+        - MOD-008
+        - MOD-009
+        - IF-001
+        - IF-003
+        - IF-004
+        - IF-005
+        - IF-007
+        - IF-008
+        - IF-009
+        - IF-010
+        - RISK-008
+        - RISK-009
+        - PROOF-007
+    proof:
+      authority: PROOF-007
+      boundary: Real acceptor over engine-created disposable checkout, node
+        contract, packet receipts, and assembled proof.
+      invocation_harness: Public owlbear_mcp_kanban.server functions receive
+        real AppContext over temporary native stores and Git-backed
+        ProofCheckoutManager; MagicMock replaces request-context transport only
+        below the public tool boundary.
+      collection_check: uv run pytest -n0 --collect-only
+        serve/mcp-kanban/tests/test_mcp_acceptance_tools.py -k 'accept and not
+        audit' -q
+      primary_command: uv run pytest -n0
+        serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
+        serve/kanban/tests/test_native_runtime.py::test_finish_plan_publishes_verification_only_accept_and_replays
+        serve/kanban/tests/test_native_runtime.py::test_verification_only_generation_accepts_reconciliation_plan
+        tests/test_write_guard_hooks.py -k 'accept and not audit or
+        verification_only or write_guard' -q --tb=short
+      additional_commands:
+        - uv run lint serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
+        - uv run python .owlbear/scripts/validate_agents.py
+        - uv run python .owlbear/scripts/validate_skills.py
+      allowed_lower_replacements:
+        - dependencies explicitly below each fixture proof boundary
+      evidence_outputs:
+        - Collected acceptance scenario inventory.
+        - Complete PROOF-007 pytest result including methods-only rejection.
+        - Focused lint and agent/skill validation results.
+        - Invocation-harness record.
+        - Candidate and post-proof tracked state.
+        - Diff comparison showing `_terminal_accept_scenario`,
+          `_pending_public_audit`, and DN-014 audit helpers unchanged.
+    required_outputs:
+      - Whitespace-stable assertion of the shipped finish_accept handoff
+        contract.
+      - Public current-generation verification-only acceptance fixture using
+        native plan and receipt authority.
+      - Verification-only success scenario with zero build and packet receipts,
+        one current plan predecessor, exact-candidate proof, native accept
+        receipt, reconciliation identities, and cleanup.
+      - Verification-only rejection matrix covering candidate mismatch, missing
+        outputs, boundary weakening, legacy/bootstrap substitution, and tracked
+        acceptor mutation without partial publication.
+      - Explicit shipped-agent tool assertion that no memory tool participates
+        in acceptance authority.
+      - Preserved methods-only rejection plus build-mode acceptance and
+        canonical correction scenarios.
+      - Diff evidence that DN-014 audit helpers remain unchanged.
+      - Passing collection, PROOF-007 pytest, lint, agent/skill validation, and
+        tracked-state evidence.
+    profile:
+      domain: Python pytest integration coverage for independent native node
+        acceptance, exact-commit proof checkout, verification-only receipt
+        closure, public MCP completion, and corrective routing.
+      risks:
+        - RISK-008
+        - RISK-009
+      tools:
+        - uv
+        - pytest
+        - git
+        - workspace-lint
+        - git-read-only-state-checks
+      skills:
+        - h-python-conventions
+        - h-pytest-and-linting
+    context_budget:
+      expected_changed_files: 1
+      inspected_files: 18
+      interfaces:
+        - IF-001
+        - IF-003
+        - IF-004
+        - IF-005
+        - IF-007
+        - IF-008
+        - IF-009
+        - IF-010
+      change_envelope: One focused durable acceptance-test fixture and scenario
+        extension in test_mcp_acceptance_tools.py; a demonstrated MOD-001 defect
+        routes back to planning before any production delta, and an
+        IF-010/MOD-002 defect routes to the accepted DN-009 owner.
