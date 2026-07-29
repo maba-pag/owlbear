@@ -77,8 +77,9 @@ material_expansion:
   evidence: <absence or presence of unadmitted delivery change>
 ```
 
-After the mapping, add at most one concise malformed-input or evidence-limit note. Never add an
-overall approval or lifecycle disposition.
+Return only the raw six-key mapping. Do not wrap it in a Markdown fence or add leading or trailing
+prose, notes, approval tokens, or lifecycle dispositions. Put every malformed-input or evidence
+limit inside the relevant row's `evidence` value.
 
 </output_format>
 

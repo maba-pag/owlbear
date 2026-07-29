@@ -196,6 +196,11 @@ def _dispatch_shipped_planner(revision, started, *, receipt_id: str, next_job_id
             "material_expansion",
         )
     )
+    assert "Return only the raw six-key mapping" in reviewer_contract
+    assert "Do not wrap it in a Markdown fence" in reviewer_contract
+    assert (
+        "Put every malformed-input or evidence\nlimit inside the relevant row's `evidence` value" in reviewer_contract
+    )
     assert "Call a fresh read-only plan reviewer" in workflow
     assert "Return exactly one of these objects to the orchestrator" in workflow
     assert "do not put a migration ID anywhere in the node plan" in workflow
