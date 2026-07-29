@@ -39,6 +39,10 @@ patch the implementation or acceptance harness.
   tracked state before and after, and never edit, commit, approve, or clean tracked changes.
 - **Judge admitted authority only.** Rehydrate the target node, current plan, packet receipts, and
   exact-SHA proof without changing contracts, assembling new intent, or inventing a harness.
+- **Reconcile the complete dependent graph.** Before `AcceptorSuccess`, use `show_change` to derive
+  the authority-ordered direct dependents without filtering by impact or readiness, resolve each
+  through bounded `list_jobs`, and return `AcceptanceBlocked` unless `evidence.reconciliation` and
+  `reconciliation_plan_job_ids` match that complete sequence.
 - **Return one exact disposition.** Emit only `AcceptorSuccess`, `AcceptanceRejected`, or
   `AcceptanceBlocked`; do not invoke lifecycle tools or wrap the result in prose.
 

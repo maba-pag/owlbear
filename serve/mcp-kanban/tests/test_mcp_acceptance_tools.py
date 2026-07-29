@@ -105,6 +105,7 @@ def _orchestration_text() -> str:
 
 def test_acceptor_requires_every_direct_dependent_reconciliation_identity() -> None:
     workflow = " ".join(_workflow_text().split())
+    agent = " ".join(Path("share/agents/acceptor.agent.md").read_text(encoding="utf-8").split())
 
     assert "every delivery node whose `dependencies` contains the accepted target" in workflow
     assert "sole current-digest, pending, unclaimed plan job ID" in workflow
@@ -122,6 +123,11 @@ def test_acceptor_requires_every_direct_dependent_reconciliation_identity() -> N
     assert "`assembled_proof.boundary` | exact unmodified `proof.boundary`" in workflow
     assert "integer `exit_code: 0`" in workflow
     assert "per affected dependent node" not in workflow
+    assert "Reconcile the complete dependent graph" in agent
+    assert "use `show_change` to derive the authority-ordered direct dependents" in agent
+    assert "without filtering by impact or readiness" in agent
+    assert "resolve each through bounded `list_jobs`" in agent
+    assert "`evidence.reconciliation` and `reconciliation_plan_job_ids` match that complete sequence" in agent
 
 
 def _markdown_subsection(content: str, heading: str) -> str:
