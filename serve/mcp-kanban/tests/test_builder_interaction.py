@@ -288,7 +288,7 @@ def _review_context(
     workflow = workflow_path.read_text(encoding="utf-8")
     orchestration = orchestration_path.read_text(encoding="utf-8")
 
-    assert builder["agents"] == ["builder-challenger", "build-reviewer"]
+    assert builder["agents"] == ["build-reviewer"]
     assert "w-packet-building" in builder_path.read_text(encoding="utf-8")
     assert not any("finish_build" in tool or "release_job" in tool for tool in builder["tools"])
     assert reviewer["hooks"]["PreToolUse"][0]["command"].endswith("deny-writes.py")
