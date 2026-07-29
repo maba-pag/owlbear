@@ -278,7 +278,13 @@ async def _assert_out_of_authority_plan_refused(
     assert published_ids.isdisjoint((build_job_id, accept_job_id))
 
 
-def _acceptance_evidence(scenario: _Scenario, checkout, job, target, proof) -> dict[str, object]:
+def _acceptance_evidence(
+    scenario: _Scenario,
+    checkout,
+    job,
+    target,
+    proof,
+) -> dict[str, object]:
     revision = scenario.revision
     interface_ids = tuple(sorted((*target.produces, *target.consumes)))
     migration_ids = tuple(
@@ -469,7 +475,18 @@ async def _finish_accept(
     job = JobStore(scenario.board).read(job_id).job
     target = revision.resolve(job.target_node_id)
     proof = revision.resolve(target.proof)
-    evidence = _acceptance_evidence(scenario, started["checkout"], job, target, proof)
+    evidence = _acceptance_evidence(
+        scenario,
+        started["checkout"],
+        job,
+        target,
+        proof,
+    )
+    dependents = tuple(node for node in revision.graph.nodes if target.id in node.dependencies)
+    evidence["reconciliation"] = [
+        {"target_node_id": dependent.id, "plan_job_id": plan_job_id}
+        for dependent, plan_job_id in zip(dependents, reconciliation_plan_job_ids, strict=True)
+    ]
     finished = await server.finish_accept(
         scenario.context,
         **_identity(start),

@@ -1750,6 +1750,10 @@ class NativeRuntime:
         predecessors = self._finish_predecessors(job, predecessor_revision or request.code_revision)
         if isinstance(predecessors, FinishJobResult):
             return predecessors
+        if isinstance(request, FinishAcceptRequest):
+            reconciliation_evidence = self._validate_accept_reconciliation_evidence(job, request)
+            if reconciliation_evidence is not None:
+                return reconciliation_evidence
 
         revision = self._revision
         participants: list[object] = []
@@ -2008,6 +2012,42 @@ class NativeRuntime:
 
     def _dependent_nodes(self, node_id: str) -> tuple[object, ...]:
         return tuple(node for node in self._revision.graph.nodes if node_id in node.dependencies)
+
+    def _validate_accept_reconciliation_evidence(
+        self,
+        job: JobRecord,
+        request: FinishAcceptRequest,
+    ) -> FinishJobResult | None:
+        if "assembled_proof" not in request.evidence:
+            return None
+        dependents = self._dependent_nodes(job.target_node_id)
+        rows = request.evidence.get("reconciliation")
+        if not isinstance(rows, (list, tuple)) or len(rows) != len(dependents):
+            return self._finish_diagnostic(
+                FinishJobDiagnosticCode.EVIDENCE_INVALID,
+                "accept reconciliation evidence does not match dependent graph",
+                target=job.target_node_id,
+            )
+        if len(request.reconciliation_plan_job_ids) != len(dependents):
+            return self._finish_diagnostic(
+                FinishJobDiagnosticCode.EVIDENCE_INVALID,
+                "accept reconciliation identities do not match dependent graph",
+                target=job.target_node_id,
+            )
+        for row, dependent, plan_job_id in zip(
+            rows,
+            dependents,
+            request.reconciliation_plan_job_ids,
+            strict=True,
+        ):
+            expected = {"target_node_id": dependent.id, "plan_job_id": plan_job_id}
+            if not isinstance(row, Mapping) or dict(row) != expected:
+                return self._finish_diagnostic(
+                    FinishJobDiagnosticCode.EVIDENCE_INVALID,
+                    "accept reconciliation evidence is malformed or out of order",
+                    target=dependent.id,
+                )
+        return None
 
     def _accept_participants(
         self, stored: StoredJob, request: FinishJobRequest

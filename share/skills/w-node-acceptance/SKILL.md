@@ -123,6 +123,7 @@ or append context to an authority string.
 | `packet_receipts` | ordered complete packet receipt identities; empty for verification-only |
 | `replacements` | complete replacement list, limited to `proof.allowed_replacements` |
 | `changed_surfaces` | exactly the returned `impact_closure` |
+| `reconciliation` | graph-ordered `{target_node_id, plan_job_id}` rows for direct dependents |
 
 For verification-only plans, additionally require `plan.receipt_id` equal to the current plan
 receipt, `plan.packet_ids: []`, and `packet_receipts: []`. Never encode clean state as the word
@@ -143,8 +144,16 @@ accepted target, in the order those nodes appear in current delivery authority. 
 dependent, use bounded `list_jobs` results to reuse its sole current-digest, pending, unclaimed plan
 job ID; choose one unused positive ID only when no such plan job exists. A claimed or ambiguous
 current plan identity returns `AcceptanceBlocked`. Do not omit a direct dependent based on impact,
-readiness, or whether acceptance changed its predecessor set. These fields map unchanged to
-`finish_accept`.
+readiness, or whether acceptance changed its predecessor set.
+
+These fields map unchanged to `finish_accept`.
+
+Before returning success, record `evidence.reconciliation` as one ordered
+`{target_node_id, plan_job_id}` row per direct dependent. Require its row count to equal the number
+of graph nodes whose `dependencies` contains the accepted target, require the target sequence to
+equal those nodes in authority order, and derive `reconciliation_plan_job_ids` from the row IDs
+without filtering or reordering. A missing, duplicate, extra, or mismatched row returns
+`AcceptanceBlocked`; do not let an inferred "primary" dependent stand in for the complete set.
 
 ### `AcceptanceRejected`
 

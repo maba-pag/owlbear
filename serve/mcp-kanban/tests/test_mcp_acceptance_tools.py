@@ -109,6 +109,11 @@ def test_acceptor_requires_every_direct_dependent_reconciliation_identity() -> N
     assert "every delivery node whose `dependencies` contains the accepted target" in workflow
     assert "sole current-digest, pending, unclaimed plan job ID" in workflow
     assert "Do not omit a direct dependent based on impact" in workflow
+    assert "`evidence.reconciliation` as one ordered" in workflow
+    assert "row count to equal the number of graph nodes" in workflow
+    assert "target sequence to equal those nodes in authority order" in workflow
+    assert "derive `reconciliation_plan_job_ids` from the row IDs" in workflow
+    assert 'an inferred "primary" dependent' in workflow
     assert "Return canonical receipt evidence, not a prose or shorthand proof summary" in workflow
     assert "`plan.receipt_id` equal to the current plan receipt" in workflow
     assert "Never encode clean state as the word `clean`" in workflow
@@ -585,6 +590,12 @@ async def _acceptor_evidence(revision, ctx, checkout, start: dict[str, object], 
 
     change = await server.show_change(ctx, change_id=revision.change_id)
     shown_job = await server.show_job(ctx, change_id=revision.change_id, job_id=int(start["job_id"]))
+    jobs = await server.list_jobs(
+        ctx,
+        change_id=revision.change_id,
+        candidate_revision=commit,
+        limit=100,
+    )
     receipts = [
         await server.show_receipt(ctx, change_id=revision.change_id, receipt_id=receipt_id)
         for receipt_id in ("build-001", "build-002")
@@ -641,6 +652,12 @@ async def _acceptor_evidence(revision, ctx, checkout, start: dict[str, object], 
             | {item_id for item_id in target.owns if item_id.startswith("MIG-")}
         )
     )
+    dependents = tuple(node for node in revision.graph.nodes if target.id in node.dependencies)
+    active_plan_ids = {
+        item.target_node_id: item.job_id
+        for item in jobs.items
+        if item.kind == "plan" and item.delivery_digest == revision.delivery_digest
+    }
     return {
         "methods": list(proof.method),
         "assembled_proof": {
@@ -681,6 +698,9 @@ async def _acceptor_evidence(revision, ctx, checkout, start: dict[str, object], 
         "checkout": {"root": str(checkout_root), "candidate_sha": commit},
         "replacements": [],
         "tracked_state": {"before": before, "after": after},
+        "reconciliation": [
+            {"target_node_id": dependent.id, "plan_job_id": active_plan_ids[dependent.id]} for dependent in dependents
+        ],
     }
 
 

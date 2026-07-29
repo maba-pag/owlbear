@@ -346,6 +346,7 @@ def _accept_evidence(
     *,
     code_revision: str = "a" * 40,
     packet_receipt_ids: tuple[str, ...] = ("build-001", "build-002"),
+    reconciliation_plan_job_ids: tuple[int, ...] = (),
 ) -> dict[str, object]:
     proof_id = revision.resolve(target_node_id).proof
     target = revision.resolve(target_node_id)
@@ -367,6 +368,7 @@ def _accept_evidence(
         closures = (parse_impact_closure(revision.read_node_plan(target_node_id)["impact_closure"]),)
     state = {"head": code_revision, "status": "", "diff": ""}
     command = "maintained assembled acceptance boundary"
+    dependents = tuple(node for node in revision.graph.nodes if target_node_id in node.dependencies)
     return {
         "methods": list(proof.method),
         "assembled_proof": {
@@ -401,6 +403,10 @@ def _accept_evidence(
         "checkout": {"candidate_sha": code_revision},
         "replacements": [],
         "tracked_state": {"before": state, "after": state},
+        "reconciliation": [
+            {"target_node_id": dependent.id, "plan_job_id": plan_job_id}
+            for dependent, plan_job_id in zip(dependents, reconciliation_plan_job_ids, strict=False)
+        ],
     }
 
 
@@ -1462,10 +1468,20 @@ def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> No
         finished_at="2026-07-24T00:05:00Z",
         receipt_id="accept-001",
         code_revision="a" * 40,
-        evidence=_accept_evidence(runtime._revision, "DN-001"),  # noqa: SLF001
+        evidence=_accept_evidence(  # noqa: SLF001
+            runtime._revision,
+            "DN-001",
+            reconciliation_plan_job_ids=(6, 7),
+        ),
         evidence_ids=("accept-proof-001",),
         reconciliation_plan_job_ids=(6, 7),
     )
+    incomplete_evidence = dict(accept_request.evidence)
+    incomplete_evidence["reconciliation"] = incomplete_evidence["reconciliation"][:1]
+    incomplete = runtime.finish_accept(accept_request.model_copy(update={"evidence": incomplete_evidence}))
+    assert incomplete.diagnostic is not None
+    assert incomplete.diagnostic.code is FinishJobDiagnosticCode.EVIDENCE_INVALID
+    assert incomplete.diagnostic.detail == "accept reconciliation evidence does not match dependent graph"
     for job_id, target_node_id in ((8, "DN-002"), (9, "DN-003")):
         _materialize(
             store,
@@ -1633,7 +1649,7 @@ def test_build_start_reconciliation_gates_are_mutation_free(tmp_path) -> None:
                 finished_at="2026-07-24T00:05:00Z",
                 receipt_id="accept-001",
                 code_revision="a" * 40,
-                evidence=_accept_evidence(revision, "DN-001"),
+                evidence=_accept_evidence(revision, "DN-001", reconciliation_plan_job_ids=(6, 7)),
                 reconciliation_plan_job_ids=(6, 7),
             )
         ).diagnostic
@@ -1830,7 +1846,7 @@ def test_three_node_fold_in_occ_updates_same_plan_job_after_two_accepts(tmp_path
         finished_at="2026-07-24T00:05:00Z",
         receipt_id="accept-001",
         code_revision="a" * 40,
-        evidence=_accept_evidence(revision, "DN-001"),
+        evidence=_accept_evidence(revision, "DN-001", reconciliation_plan_job_ids=(6, 7)),
         reconciliation_plan_job_ids=(6, 7),
     )
     assert runtime.finish_accept(first_accept).diagnostic is None
@@ -1892,7 +1908,12 @@ def test_three_node_fold_in_occ_updates_same_plan_job_after_two_accepts(tmp_path
         finished_at="2026-07-24T00:10:00Z",
         receipt_id="accept-002",
         code_revision="a" * 40,
-        evidence=_accept_evidence(revision, "DN-002", packet_receipt_ids=("build-007", "build-008")),
+        evidence=_accept_evidence(
+            revision,
+            "DN-002",
+            packet_receipt_ids=("build-007", "build-008"),
+            reconciliation_plan_job_ids=(7, 11, 12),
+        ),
         reconciliation_plan_job_ids=(7, 11, 12),
     )
     assert runtime.finish_accept(second_accept).diagnostic is None
@@ -1953,7 +1974,7 @@ def test_reconciliation_finish_releases_new_build_and_invalidation_closure(tmp_p
             finished_at="2026-07-24T00:05:00Z",
             receipt_id="accept-001",
             code_revision="a" * 40,
-            evidence=_accept_evidence(revision, "DN-001"),
+            evidence=_accept_evidence(revision, "DN-001", reconciliation_plan_job_ids=(6, 7)),
             reconciliation_plan_job_ids=(6, 7),
         )
     )
