@@ -4,9 +4,9 @@ job_id: 74
 kind: plan
 priority: 0
 created_at: '1970-01-01T00:00:00Z'
-updated_at: '2026-07-28T22:05:20Z'
+updated_at: '2026-07-29T08:00:15Z'
 change_id: replace-delivery-pipeline
-delivery_digest:
+delivery_digest: 
   3212969f2164f0d71ae60c30405eb941b8a87b99d225a57db96062143dd4de7c
 target_node_id: DN-013
 node_plan_digest:
@@ -20,6 +20,6 @@ pending_request_ids: []
 evidence_ids: []
 attempt_id:
 finding_id:
-receipt_id: admission-3212969f2164
+receipt_id: plan-dn-013-3212969f2164
 superseded_by_receipt_id:
 disposition: pending
