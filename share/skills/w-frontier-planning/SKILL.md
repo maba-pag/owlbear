@@ -180,10 +180,13 @@ Before returning success:
    material expansion. A verification-only review must inspect the claimed tracked state and proof,
    not merely review the supplied prose.
 
-Malformed or non-pass review evidence returns `PlanBlocked`. A review finding that exposes one
-material choice returns `RequestCreated` only after creating its Decision Request. A finding that
-changes admitted authority returns `SpecificationReentry`. Never weaken the plan or omit a finding
-to obtain success.
+Malformed or incomplete review evidence returns `PlanBlocked`. For a complete non-pass review,
+classify every finding before returning: repair bounded packet-plan defects inside admitted
+authority, then obtain a fresh complete review of the repaired candidate. A finding that exposes
+one material choice returns `RequestCreated` only after creating its Decision Request. A finding
+that changes admitted authority returns `SpecificationReentry`. Return `PlanBlocked` only when a
+bounded repair cannot be source-grounded or its fresh review remains non-pass. Never weaken the
+plan or omit a finding to obtain success.
 
 ## Step 6 - Return One Structured Disposition
 

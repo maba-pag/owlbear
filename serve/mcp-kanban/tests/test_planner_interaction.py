@@ -202,6 +202,8 @@ def _dispatch_shipped_planner(revision, started, *, receipt_id: str, next_job_id
         "Put every malformed-input or evidence\nlimit inside the relevant row's `evidence` value" in reviewer_contract
     )
     assert "Call a fresh read-only plan reviewer" in workflow
+    assert "repair bounded packet-plan defects inside admitted\n" in workflow
+    assert "obtain a fresh complete review of the repaired candidate" in workflow
     assert "Return exactly one of these objects to the orchestrator" in workflow
     assert "do not put a migration ID anywhere in the node plan" in workflow
     assert "does not\n   become node-owned authority" in workflow
