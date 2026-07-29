@@ -26,7 +26,7 @@ The control plane has four distinct responsibilities behind one `owlbear-kanban`
 
 ```text
 Authority plane                         Work plane
-.owlbear/changes/<change-id>/           .owlbear/kanban/
+.owlbear/changes/<change-id>/           .owlbear/native/
   intent.md                               jobs/
   design.md                               archive/
   decisions.yaml                          requests/
@@ -359,9 +359,9 @@ authorizes acceptor edits, and never weakens proof commands, boundary, outputs, 
 receipt currentness. `finish_accept` performs the same dependent-plan reconciliation and invalidation
 transitions for either plan mode.
 
-DN-015 remains a mandatory build-plus-accept terminal node. Its required board retirement,
-snapshot/finalization outputs, and commit do not exist until its engine-selected builder executes
-IF-016, so it cannot satisfy verification-only eligibility.
+DN-016 and DN-015 remain mandatory build-plus-accept terminal nodes. Their native-store handoff,
+board retirement, snapshot/finalization outputs, and commits do not exist at the admitted candidate,
+so neither can satisfy verification-only eligibility.
 
 ## 7. Kanban Job Model
 
@@ -378,7 +378,10 @@ Archive is the universal terminal disposition, not a fifth agent-work column. A 
 
 ### 7.1 Job record
 
-Job files are structured YAML under `.owlbear/kanban/jobs/`; archived jobs move to `.owlbear/kanban/archive/`. A job stores only:
+Job files are structured YAML under the configured native work root's `jobs/` directory; archived
+jobs move to its `archive/` directory. Fresh native workspaces use `.owlbear/native`, while the
+self-hosting handoff copies typed native records there from the mixed `.owlbear/kanban` carrier. A
+job stores only:
 
 - numeric job ID, kind, priority, timestamps;
 - `change_id`, authority digest, target ID, optional node-plan digest;
@@ -621,18 +624,30 @@ bootstrap uses the current pipeline as a disposable execution carrier under thes
   The native historical replay, full workflow, independent node acceptance, and whole-change audit
   in DN-013 and DN-014 must re-prove the assembled system at an exact commit before cutover.
 6. DN-012 removes the old pipeline from the product revision and consumer distribution and proves the
-  public cutover command against populated and fresh temporary repositories. The current workspace's
-  legacy board remains external bootstrap-carrier state only long enough to dispatch and record
-  DN-013's native proof and leave every legacy projection, including the root, released and ready for
-  terminal disposition. DN-015 is not projected into the board it destroys. The native engine selects
-  its `build` job, and the orchestrator invokes one builder under the global writer lease and explicit
-  finalization approval. That builder runs the finalizer, verifies the immutable manifest and hashes,
-  writes the finalization receipt, removes active board and carrier state, and commits those tracked
-  changes. Native build finalization records the commit without touching a legacy task. A distinct
-  `accept` job then verifies the exact commit in a disposable read-only checkout before issuing the
-  DN-015 accept receipt. No later legacy lifecycle mutation occurs. No bootstrap loader, legacy
-  receipt adapter, command alias, or compatibility mode enters the native runtime or consumer
-  distribution.
+  public cutover and typed native-store handoff commands against populated and fresh temporary
+  repositories. The current workspace's legacy board remains external bootstrap-carrier state only
+  long enough to dispatch and record DN-013's native proof and leave every legacy projection,
+  including the root, released and ready for terminal disposition. The engine then selects DN-016's
+  normal build job. Its claim and global writer holder are the only permitted live lifecycle
+  identities while every other native process stops. The builder invokes IF-017 to copy the complete
+  typed inventory into `.owlbear/native`, verify exact hashes and identities, and write a prepared
+  handoff record. An isolated maintenance probe starts with `OWLBEAR_WORK_ROOT=.owlbear/native` but
+  exposes only read-only parity and activation checks; normal MCP, Cockpit, and orchestration mutation
+  remains disabled. IF-017 publishes immutable activation only after destination parity and unchanged
+  source hashes plus launch readiness pass. A destination-only completion runtime suppresses expiry
+  recovery and unrelated mutation while DN-016 `finish_build` completes; normal processes then start
+  on the destination for independent acceptance. Post-activation recovery is destination-only. No
+  runtime hot-swap or jobless lease is required. Source
+  copies remain inert input to finalization. The engine selects DN-015's `build` job only from the retained root, and the
+  orchestrator invokes one builder with explicit finalization approval. That builder runs the
+  finalizer, verifies the immutable manifest and hashes, writes the finalization receipt, removes
+  active legacy board and workspace-local sibling-carrier activation state, and commits those tracked
+  changes. The separately clean sibling checkout remains on `main`. Native build finalization
+  records the commit through the retained root without touching a legacy task. A distinct `accept`
+  job then verifies the exact commit in a disposable read-only checkout before issuing the DN-015
+  accept receipt through that same root. No later legacy lifecycle mutation occurs. No bootstrap
+  loader, legacy receipt adapter, command alias, or compatibility mode enters the native runtime or
+  consumer distribution.
 7. Before any re-admission that depends on verification-only plans, the current carrier implements
     the minimum missing native capability under DN-003: discriminated plan validation, zero-build job
     publication with one accept job, non-empty node-level closure/currentness, exact-candidate accept
@@ -690,7 +705,10 @@ Requests remain structured but no longer depend only on task IDs. A request reco
 - exact evidence/resume condition for actions;
 - structured resolution and resulting invalidation disposition.
 
-During `/design`, live user choices use `askQuestions` and are written directly to `decisions.yaml`. Runtime requests live under `.owlbear/kanban/requests/{pending,resolved}/`. A resolution that changes material authority routes to `/design`; local implementation/action resolutions unblock only the dependent job slice.
+During `/design`, live user choices use `askQuestions` and are written directly to `decisions.yaml`.
+Runtime requests live under the configured native work root's `requests/{pending,resolved}/`
+directories. A resolution that changes material authority routes to `/design`; local
+implementation/action resolutions unblock only the dependent job slice.
 
 ## 12. Shared Worktree and Commit Contract
 
@@ -855,15 +873,25 @@ Memory and Ideas remain unchanged peer utilities through the shell and routing r
 
 The replacement is developed behind the current repository but is not shipped in mixed mode.
 
-For the self-hosting replacement, DN-012 completes and fixture-proves the product and distribution
-cutover below without mutating the board that still carries DN-013. DN-013 then proves the complete
-native workflow. Once every legacy projection is released and ready for terminal disposition,
-DN-015's engine-selected build job runs the fixture-proven command against that board under the writer
-lease, verifies the immutable manifest and content hashes, writes the finalization receipt, removes
-active board and carrier state, and commits the evidence. DN-015 is not projected into the board it
-destroys. Native build finalization binds that commit to the job; a separate read-only accept job
-verifies the exact commit in a disposable checkout and issues the node receipt. The operation is final
-and cannot dispatch or record more legacy work. Future consumer cutovers execute the sequence directly
+For the self-hosting replacement, DN-012 completes and fixture-proves the product, distribution,
+typed native-store handoff, and carrier cutover below without mutating the board that still carries
+DN-013. DN-013 then proves the complete native workflow. Once every legacy projection is released and
+ready for terminal disposition, the engine selects a mandatory DN-016 build. Its sole writer claim
+copies and verifies the complete native inventory under `.owlbear/native` and records immutable
+source/destination hashes while every other native process is stopped. An isolated destination probe
+runs in sealed read-only maintenance mode; activation is durable only after parity and unchanged-source
+plus launch-readiness checks pass. A destination-only completion runtime finishes DN-016 with expiry
+recovery and unrelated mutation suppressed; normal processes start afterward for read-only acceptance.
+Post-activation recovery never returns to the source. This is an offline restart boundary, not an in-process work-root
+mutation or jobless operation. The old native copies become inert carrier content before DN-015
+planning or dispatch. DN-015's engine-selected build job then runs the
+fixture-proven finalizer against that board,
+verifies the immutable manifest and content hashes, writes the finalization receipt, removes active
+legacy board and workspace-local sibling activation state, and commits the evidence without deleting
+the separately clean sibling checkout. Native build finalization binds that commit
+to the job through the retained root; a separate read-only accept job verifies the exact commit in a
+disposable checkout and issues the node receipt through the same root. The operation is final and
+cannot dispatch or record more legacy work. Future consumer cutovers use `.owlbear/native` directly
 without this one-time carrier exception.
 
 At cutover:
@@ -872,7 +900,9 @@ At cutover:
 2. Generate a manifest of every active OpenSpec change, Kanban task, archive record, pending/resolved request, and relevant evidence.
 3. Require an explicit disposition for every active item: `reintroduce-native`, `completed-history`, `dropped`, or `superseded`.
 4. Move the old stores into a versioned immutable legacy snapshot and verify manifest hashes.
-5. Install an empty native change/job store plus this change's accepted final receipt history.
+5. Install an empty native change/job store plus accepted final receipt history for fresh consumers;
+  for this self-hosting workspace only, DN-016 instead copies the complete live typed inventory under
+  IF-017 before the legacy carrier is retired.
 6. Remove OpenSpec package installation, config, generated prompts/skills, routing, tests, exclusions, docs, and source directories from active product paths.
 7. Remove old task models, APIs, statuses, agents, skills, hooks, Cockpit mutations, and compatibility loaders.
 8. Switch MCP, Cockpit, setup, seed, docs, and tests to the new contracts in the same release.

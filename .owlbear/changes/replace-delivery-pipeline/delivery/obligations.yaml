@@ -32,7 +32,8 @@ requirements:
       One resumable planner processes the plan-ready node frontier while each purpose-specific
       plan job independently validates, reviews, publishes, digests, and receipts
       either one complete outcome-cohesive packet DAG or one fail-closed exact-candidate
-      verification-only re-admission plan without unadmitted delivery expansion.
+      verification-only re-admission plan without unadmitted delivery expansion. A declared terminal
+      plan prerequisite may keep an admitted plan job non-startable until its producer node is accepted.
     workflows: [WF-002]
   - id: REQ-005
     title: Outcome-cohesive implementation with warm review
@@ -223,10 +224,22 @@ requirements:
   - id: REQ-027
     title: Terminal self-hosting carrier retirement
     statement: >-
-      After native complete-system proof and release of every legacy projection, an engine-selected
-      build job atomically snapshots and removes the real bootstrap board and sibling carrier under
-      the writer lease and commits the manifest and finalization receipt; a distinct read-only accept
-      job verifies that exact commit without any subsequent legacy lifecycle mutation.
+      After native complete-system proof, native work-root handoff, and release of every legacy
+      projection, an engine-selected build job atomically snapshots and removes the real bootstrap
+      board and workspace-local sibling-carrier activation under the writer lease and commits the
+      manifest and finalization receipt; a distinct read-only accept job verifies that exact commit
+      without any subsequent legacy lifecycle mutation while the clean sibling checkout remains on
+      `main`.
+    workflows: [WF-008]
+  - id: REQ-028
+    title: Retained native lifecycle handoff
+    statement: >-
+      Before DN-015 planning or dispatch, a dedicated engine-selected DN-016 build holds the sole
+      claim and writer lease while every other native process is stopped, copies the complete typed
+      lifecycle inventory from the mixed bootstrap carrier to `.owlbear/native`, proves exact hash and
+      identity parity through a sealed read-only destination probe, activates an immutable handoff
+      receipt only after unchanged-source checks pass, and finishes build plus independent acceptance
+      from the destination so later work never reads or mutates the retired carrier.
     workflows: [WF-008]
 
 negative_requirements:
@@ -383,6 +396,7 @@ workflows:
       DN-012 and DN-013 proof are current, every legacy projection including the root is released and
       ready for terminal disposition, no legacy claim or writer is active, and finalization inputs are complete.
     result: >-
-      The build receipt identifies the committed immutable snapshot, finalization receipt, and carrier
-      retirement; independent exact-commit acceptance proves no legacy dispatch or mutation remains possible.
+      DN-016 build and acceptance prove the native lifecycle store moved to the retained root before
+      DN-015 build identifies the committed snapshot, finalization receipt, and carrier retirement;
+      independent exact-commit acceptance proves no legacy dispatch or mutation remains possible.
     proof: PROOF-016

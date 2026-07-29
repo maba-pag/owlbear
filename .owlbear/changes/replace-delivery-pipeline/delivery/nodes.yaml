@@ -11,12 +11,12 @@ authority:
     - ../../research/delivery-operating-model-reframe.md
 admission:
   state: admitted
-  delivery_digest: 3212969f2164f0d71ae60c30405eb941b8a87b99d225a57db96062143dd4de7c
-  receipt: receipts/admission-3212969f2164.yaml
+  delivery_digest: d4bce08ac4e7fad7c79f56dc056601a7c9648248899ab8dfdb1f463df10f18e6
+  receipt: receipts/admission-d4bce08ac4e7.yaml
   limits:
-    - Admission certifies delivery completeness and feasibility, not implementation correctness.
-    - Verification-only nodes still require fresh independent exact-commit acceptance.
-    - DN-015 remains mandatory build-plus-accept after PROOF-013.
+    - Planned IF-017 and IF-018 behavior requires normal Delivery implementation and proof.
+    - The terminal IF-018 picker and start gate remains a required DN-004 implementation delta.
+    - Live PROOF-017 handoff and PROOF-016 carrier-finalization evidence belongs to DN-016 and DN-015.
 nodes:
   - id: DN-001
     title: Establish native change authority and semantic identity
@@ -221,7 +221,7 @@ nodes:
     owns: [REQ-011, REQ-012, REQ-017, NEG-004]
     supports: [NEG-007, KEEP-007]
     modules: [MOD-001, MOD-002, MOD-003, MOD-004, MOD-006, MOD-007, MOD-008, MOD-009]
-    produces: [IF-013, IF-016]
+    produces: [IF-013, IF-016, IF-017]
     consumes:
       - IF-001
       - IF-002
@@ -253,7 +253,8 @@ nodes:
       prove admission, frontier planning,
       build review, acceptance, correction, audit, Cockpit, setup, snapshot integrity,
       and absence of legacy
-      execution in the shipped product before DN-015 retires the external bootstrap carrier.
+      execution in the shipped product before DN-016 moves native lifecycle authority and DN-015
+      retires the external bootstrap carrier.
     owns: [REQ-018]
     supports: [NEG-010, KEEP-004, KEEP-005, KEEP-006, KEEP-007]
     modules: [MOD-008]
@@ -306,14 +307,31 @@ nodes:
   - id: DN-015
     title: Finalize the self-hosting bootstrap carrier
     outcome: >-
-      An engine-selected build retires the real legacy board and sibling carrier exactly once after
-      native complete-system proof, and independent exact-commit acceptance verifies the immutable
-      snapshot, finalization receipt, build commit, and absence of any later legacy mutation path.
+      After accepted DN-016 handoff establishes `.owlbear/native` as the sole lifecycle store, an
+      engine-selected build retires the real legacy board and workspace-local sibling-carrier
+      activation exactly once, and independent exact-commit acceptance verifies the immutable
+      snapshot, finalization receipt, build commit, clean sibling checkout, and absence of any later
+      legacy mutation path.
     owns: [REQ-027]
     supports: [REQ-011, REQ-012, NEG-004, KEEP-007]
     modules: [MOD-006, MOD-008, MOD-009]
     produces: []
-    consumes: [IF-004, IF-005, IF-016]
-    dependencies: [DN-012, DN-013, DN-014]
+    consumes: [IF-004, IF-005, IF-016, IF-018]
+    dependencies: [DN-016]
     risks: [RISK-014]
     proof: PROOF-016
+  - id: DN-016
+    title: Relocate the self-hosting native lifecycle store
+    outcome: >-
+      A dedicated engine-selected build claim copies the complete live typed lifecycle store into
+      `.owlbear/native`, proves exact parity through a sealed read-only destination probe, atomically
+      activates that root, completes build and independent acceptance through the destination, and
+      leaves the old copies inert before DN-015 planning or dispatch.
+    owns: [REQ-028]
+    supports: [REQ-013, REQ-016, KEEP-007]
+    modules: [MOD-001, MOD-002, MOD-004, MOD-006, MOD-008, MOD-009]
+    produces: [IF-018]
+    consumes: [IF-004, IF-005, IF-017]
+    dependencies: [DN-012, DN-013, DN-014]
+    risks: [RISK-015]
+    proof: PROOF-017

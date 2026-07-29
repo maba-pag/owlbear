@@ -95,14 +95,16 @@ modules:
     paths:
       - .owlbear/hooks/
       - seed/.owlbear/hooks/
+      - .owlbear/native/
+      - seed/.owlbear/native/
       - .owlbear/kanban/
-      - seed/.owlbear/kanban/
     current_responsibility: >-
-      Agent write guards, session context, transitional task/request stores, native
-      authority/job stores, activity, and local board configuration.
+      Agent write guards, session context, native lifecycle stores, and the transitional
+      self-hosting legacy carrier.
     planned_change: >-
       Enforce new role write scopes, authority/job stores, proof-checkout containment,
-      and purpose-specific runtime state.
+      purpose-specific runtime state, and the fail-closed bootstrap handoff from the mixed
+      carrier into retained `.owlbear/native`.
 
 interfaces:
   - id: IF-001
@@ -206,14 +208,16 @@ interfaces:
   - id: IF-004
     name: Dispatch and writer coordination
     producer: DN-004
-    consumers: [DN-006, DN-007, DN-008, DN-009, DN-012, DN-014, DN-015]
+    consumers: [DN-006, DN-007, DN-008, DN-009, DN-012, DN-014, DN-015, DN-016]
     contract: >-
       Dependency-aware waves, one global tracked-file writer, no accept/audit overlap,
       expiring
       claims, and exact assigned agent profile. Admission makes every initial plan
       job
       eligible from
-      sealed predecessor contracts, and pick_jobs orders them by stable delivery topology.
+      sealed predecessor contracts except a node with an explicit terminal plan prerequisite; DN-015's
+      admitted plan job remains non-startable until current IF-018 acceptance, and pick_jobs reports
+      that omission while ordering all eligible work by stable delivery topology.
       Build
       readiness requires a current plan receipt, current authored packet dependencies,
       and current
@@ -232,14 +236,15 @@ interfaces:
       - acceptor
       - auditor
     authority: MOD-001
-    failure_semantics: Conflicting or stale lease rejects dispatch without
-      mutation.
+    failure_semantics: >-
+      Conflicting or stale lease rejects dispatch without mutation; missing or stale terminal
+      plan-prerequisite evidence rejects plan start without a claim or attempt.
     migration: MIG-004
     proof: PROOF-014
   - id: IF-005
     name: Disposable exact-commit proof checkout
     producer: DN-004
-    consumers: [DN-008, DN-013, DN-014, DN-015]
+    consumers: [DN-008, DN-013, DN-014, DN-015, DN-016]
     contract: >-
       Contained read-only checkout under .owlbear/scratch/proof for one commit with
       normal toolchain and crash-safe
@@ -412,10 +417,11 @@ interfaces:
     contract: >-
       A fixture-proved fail-closed command accepts the real bootstrap board, complete dispositions,
       expected authority and code revisions, and an explicit finalization approval; it verifies
-      terminal readiness and zero claims, writes an immutable snapshot and finalization receipt,
-      removes active board and sibling-carrier state, verifies absence, and returns the exact paths
-      that the DN-015 builder must commit before native build finalization, without performing any
-      later legacy board mutation.
+      terminal readiness and zero source-carrier claims or writers, writes an immutable snapshot and finalization receipt,
+      removes the active legacy board plus a named canonical workspace-relative sibling-carrier
+      activation/configuration path, verifies their absence while preserving the retained native root
+      and separately clean sibling checkout, and returns the exact paths that the DN-015 builder must
+      commit before native build finalization, without performing any later legacy board mutation.
     authority: MOD-006
     failure_semantics: >-
       Missing or stale proof, nonterminal projection, active claim, source change, existing destination,
@@ -423,6 +429,58 @@ interfaces:
       finalization and preserves a recoverable source.
     migration: MIG-005
     proof: PROOF-009
+  - id: IF-017
+    name: Bootstrap native work-root handoff
+    producer: DN-012
+    consumers: [DN-016]
+    contract: >-
+      A fixture-proved fail-closed command accepts the mixed `.owlbear/kanban` carrier, empty
+      `.owlbear/native` destination, expected authority and code revisions, and explicit handoff
+      approval; under DN-016's engine-selected build claim and global writer lease, with no other
+      claims or holders, it classifies the exact relocatable work-root inventory: native job YAML,
+      archived native-job YAML distinguished from legacy Markdown, attempts, native requests,
+      findings, job sequence, dispatch coordination, and an empty recovered transaction directory.
+      Change-package authority and receipts remain in place and are parity-checked by identity rather
+      than copied; legacy tasks, Markdown archive, decisions, `activity.jsonl`, README, lock files, and
+      carrier configuration remain source-only MIG-005 input. IF-017 copies the relocatable inventory
+      through a private staging root, verifies exact hashes and semantic
+      identities, and atomically publishes the destination with a prepared handoff record. After all
+      other native processes stop, an isolated destination probe starts in a sealed maintenance mode
+      that permits only read-only parity and activation operations. The same interface verifies
+      destination queries, exact copied coordination/claim identity, declared process configuration,
+      retained change-receipt identity, launch readiness, and unchanged source hashes before publishing
+      the immutable activation receipt that irreversibly makes source copies inert. A destination-only
+      completion runtime then permits only exact-owner DN-016 commit/fail/release and forbids claim-expiry
+      recovery, planning, dispatch, requests, or other mutation until DN-016 `finish_build` completes.
+      Normal processes start only afterward for independent acceptance. It never hot-swaps a running
+      process or permits pre-activation destination mutation.
+    authority: MOD-009
+    failure_semantics: >-
+      Missing or stale proof, any claim or holder other than the owning DN-016 build, unclassified
+      native record, non-empty destination, collision, hash or identity mismatch, unsafe path, partial
+      publication, process configuration split, maintenance-mode mutation, launch-readiness failure,
+      parity-query failure, or post-copy source mutation before activation keeps the source authoritative
+      and blocks activation. After activation, the destination is sole authority: completion-runtime or
+      normal startup failure is recovered only there and cannot restore, read, or mutate the source.
+      Any failure blocks DN-016 acceptance, IF-018, DN-015 planning, and dispatch.
+    migration: MIG-006
+    proof: PROOF-009
+  - id: IF-018
+    name: Activated retained native work root
+    producer: DN-016
+    consumers: [DN-015]
+    contract: >-
+      A current DN-016 accept receipt binds the exact IF-017 prepared and activation receipts,
+      complete typed inventory, source and destination hashes, sole owning claim and writer identity,
+      sealed pre-activation probe, normal-process restart configuration, destination-completed build
+      receipt, and exact-commit read-only acceptance. Only this interface authorizes DN-015 planning
+      and dispatch from `.owlbear/native`; no source-root fallback or dual read is permitted.
+    authority: MOD-009
+    failure_semantics: >-
+      Missing, stale, rejected, superseded, source-mutated, configuration-divergent, or non-current
+      DN-016 evidence blocks DN-015 without changing either root.
+    migration: MIG-006
+    proof: PROOF-017
   - id: IF-014
     name: Whole-change audit and closure
     producer: DN-014
@@ -568,16 +626,18 @@ migrations:
     title: Retire the self-hosting bootstrap carrier
     owner: DN-015
     from: >-
-      The real owlbear-dev legacy board and separately clean sibling runtime retained only to carry
-      this replacement through DN-013 proof.
+      The real owlbear-dev legacy board and workspace-local activation/configuration for the separately
+      clean sibling runtime retained only to carry this replacement through DN-016 handoff.
     to: >-
       A versioned immutable snapshot, explicit terminal dispositions, finalization receipt, and final
-      Git commit with no active legacy board, sibling carrier, or post-finalization mutation path.
+      Git commit with no active legacy board, sibling-carrier activation, or post-finalization mutation
+      path; the sibling checkout itself remains clean on `main`.
     ordered_steps:
       - Verify DN-012 and DN-013 proof identities and the expected authority and code revisions.
       - Require every legacy projection including the root to be released and ready for terminal disposition.
       - Require zero active claims, writers, pending requests, or unclassified active records.
-      - Dispatch DN-015's native build job under the global writer lease without projecting it into the legacy board.
+      - Require current IF-018 acceptance and exact native inventory parity at `.owlbear/native`.
+      - Dispatch DN-015's native build job under the global writer lease only from the retained native root.
       - Run IF-016 against the real board with explicit finalization approval.
       - Verify every manifest hash, finalization receipt field, removed active path, and retained native path.
       - Commit the snapshot, receipt, source removals, and carrier retirement before native build finalization.
@@ -589,6 +649,40 @@ migrations:
       - final operator invocation and scoped Git commit
       - native source, consumer distribution, and immutable legacy inventory
     compatibility: One terminal self-hosting operation only; no shipped or runtime compatibility.
+    deletion_owner: DN-015
+    absence_proof: PROOF-016
+  - id: MIG-006
+    title: Relocate the self-hosting native lifecycle store
+    owner: DN-016
+    from: >-
+      Typed native lifecycle records sharing `.owlbear/kanban` with the legacy bootstrap carrier.
+    to: >-
+      One authoritative retained `.owlbear/native` store with an immutable handoff manifest and
+      receipt; source copies are inert carrier content awaiting MIG-005 retirement.
+    ordered_steps:
+      - Complete PROOF-013 and release every legacy projection for terminal disposition.
+      - Plan DN-016 normally, then start its build as the sole claim and global writer holder.
+      - Require no other claims, holders, pending mutations, or unresolved requests and explicit handoff approval.
+      - Classify the exact relocatable work-root inventory, retain change authority and receipts by identity,
+        classify legacy activity and mixed-root records as MIG-005 input, and require an empty destination.
+      - Copy through private staging, verify every byte hash and semantic identity, and publish atomically.
+      - Write a prepared handoff record bound to authority, code, source, destination, and source hashes.
+      - Stop every other native MCP, Cockpit, and orchestration process without changing either root.
+      - Start one sealed read-only probe with `OWLBEAR_WORK_ROOT=.owlbear/native`; do not hot-swap a live runtime.
+      - Verify exact job, attempt, request, finding, sequence, claim, dispatch, and retained-receipt identity parity.
+      - Recheck source hashes and destination launch readiness, then publish irreversible activation.
+      - Start destination-only completion mode, suppress expiry recovery and all unrelated mutation, and finish DN-016 build.
+      - Recover any post-activation failure only through the destination, then start normal processes and acceptance.
+      - Forbid DN-015 planning or dispatch unless IF-018 is current or if any process still reads the old root.
+    consumer_inventory:
+      - native MCP and Cockpit process configuration
+      - native planner, builder, acceptor, auditor, and orchestrator state
+      - jobs and archived-job YAML records
+      - attempts, requests, findings, sequence, empty transactions, and dispatch coordination
+      - retained change authority and receipts, checked by identity but not copied
+      - source-only legacy activity, task/archive/decision records, lock files, and carrier configuration
+      - legacy bootstrap carrier finalization input
+    compatibility: One terminal self-hosting handoff only; no dual-read or fallback path.
     deletion_owner: DN-015
     absence_proof: PROOF-016
 
@@ -807,6 +901,25 @@ risks:
       accept job under PROOF-016.
     owner: DN-015
     proof: PROOF-016
+  - id: RISK-015
+    class: migration
+    title: Native work-root handoff forks or loses lifecycle authority
+    scenarios:
+      - A typed native record is omitted or misclassified among legacy carrier files.
+      - Source and destination hashes or semantic identities diverge.
+      - A native process continues writing the old root after destination publication.
+      - Both roots appear authoritative after restart or recovery.
+      - DN-015 is planned or claimed before DN-016 acceptance and parity proof finish.
+      - The copied DN-016 claim expires while normal recovery is enabled before destination finish_build.
+    disposition: >-
+      Execute public IF-017 only inside DN-016's sole engine-selected build claim and writer lease,
+      with an empty contained destination, complete typed inventory, private staging, exact byte and
+      semantic parity, a sealed read-only destination probe, immutable activation evidence, and
+      destination-only completion mode with expiry recovery suppressed until exact-owner finish_build,
+      plus read-only acceptance; leave source authoritative on any pre-activation failure, recover
+      post-activation startup only on the destination, and block DN-015 unless current IF-018 proves one root.
+    owner: DN-016
+    proof: PROOF-017
 
 proofs:
   - id: PROOF-001
@@ -902,6 +1015,9 @@ proofs:
         Force normal packets for missing code, tests, documentation, generated output, migration,
         harness, fixture, client, wiring, ambiguous scope, or unavailable proof infrastructure, and
         reject bootstrap records as native receipt evidence.
+      - >-
+        Keep an admitted terminal plan job non-startable while its declared prerequisite interface is
+        missing or stale, then release it exactly once when the producer acceptance becomes current.
     allowed_replacements: [repository search results below the planner]
     durable_outputs: [planner scenario and transaction tests]
   - id: PROOF-006
@@ -961,10 +1077,16 @@ proofs:
       - >-
         Record the exact command, manifest, hash, and commit evidence required for DEC-036's final
         post-archive bootstrap-board operation; PROOF-009 itself remains fixture-bounded.
+      - >-
+        Fixture-prove IF-017 prepare, copy, classification, sole-claim coordination parity, sealed
+        read-only destination probe, activation, restart configuration, replay, source-mutation
+        rejection, split-root rejection, exact relocatable inventory versus retained receipt and legacy
+        activity classification, pre-activation destination-mutation denial, and destination-only
+        post-activation startup recovery.
     allowed_replacements:
       - temporary repositories
       - package installation command recorder
-    durable_outputs: [setup, snapshot, absence, and distribution tests]
+    durable_outputs: [setup, snapshot, handoff, activation, absence, and distribution tests]
   - id: PROOF-011
     title: MCP control-plane contract proof
     boundary: Public MCP tools over the real graph-aware engine.
@@ -1051,6 +1173,9 @@ proofs:
         Prove IF-015 finish_plan accepts an empty build_job_ids tuple only for the DN-003-validated
         verification-only plan form, creates one accept job, and adds no tool, alias, or lifecycle
         semantic.
+      - >-
+        Assert DN-015's admitted plan job is omitted and cannot start without current IF-018, remains
+        mutation-free on stale prerequisite evidence, and becomes eligible after DN-016 acceptance.
     allowed_replacements: [clock, subagent runner, temporary repository]
     durable_outputs:
       - bootstrap MCP contract
@@ -1072,13 +1197,19 @@ proofs:
     title: Real bootstrap carrier finalization proof
     boundary: >-
       Read-only DN-015 accept job in an engine-created disposable checkout of the exact build commit
-      that applied public IF-016 to the real self-hosting workspace and sibling carrier.
+      that required current IF-018 and applied public IF-016 to the real self-hosting workspace and
+      workspace-local sibling-carrier activation, with lifecycle completion through retained
+      `.owlbear/native`.
     owner: DN-015
     method:
+      - Verify current IF-018 binds accepted DN-016 handoff evidence, unchanged inert source, and exact
+        destination identity before finalization starts.
       - Verify the build receipt binds the expected authority, source revision, finalization approval,
-        complete terminal dispositions, zero-claim preflight evidence, and exact committed revision.
+        complete terminal dispositions, zero source-carrier claim/writer preflight evidence, and exact
+        committed revision.
       - Recompute all snapshot counts and hashes and verify finalization receipt identity, active-board
-        and sibling-carrier absence, retained native source/distribution, and no compatibility reader.
+        and sibling-carrier activation absence, retained native source/distribution, clean sibling
+        checkout on `main`, and no compatibility reader.
       - Prove the checkout remains unmodified and legacy dispatch or mutation cannot be invoked from
         the committed product or distribution.
     allowed_replacements:
@@ -1088,3 +1219,29 @@ proofs:
       - bootstrap finalization receipt
       - terminal build receipt and scoped Git commit
       - exact-commit DN-015 accept receipt
+  - id: PROOF-017
+    title: Real native work-root handoff proof
+    boundary: >-
+      Read-only DN-016 accept job in an engine-created disposable checkout of the exact build commit
+      whose claimed builder copied the live native store and completed `finish_build` through the
+      activated `.owlbear/native` destination.
+    owner: DN-016
+    method:
+      - Verify the sole DN-016 build claim and writer identity, exact relocatable work-root inventory,
+        retained change authority and receipt identities, source-only legacy activity classification,
+        prepared handoff record, exact source/destination hashes and semantic identities, and unchanged source.
+      - Verify the isolated destination probe exposed no normal mutation, activation was atomic and
+        replay-safe, destination-only completion suppressed expiry recovery and unrelated mutation until
+        exact-owner finish_build, every normal process then started only against `.owlbear/native`, and
+        source fallback or dual-read configuration is absent.
+      - Verify DN-016 build completion and acceptance use the destination record chain and that any
+        source mutation, destination mutation before activation, partial startup, copied-claim expiry,
+        or split configuration fails closed before IF-018 exists, with post-activation recovery confined
+        to the destination.
+    allowed_replacements:
+      - none; real workspace roots, process configuration, and exact build commit required
+    durable_outputs:
+      - immutable native work-root handoff manifest and prepared record
+      - immutable activation receipt and process configuration attestation
+      - destination-completed DN-016 build receipt and scoped Git commit
+      - exact-commit DN-016 accept receipt

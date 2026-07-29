@@ -1597,12 +1597,14 @@ decisions:
       DN-012 therefore builds and fixture-proves the exact destructive cutover while leaving that one
       board outside the shipped product boundary. DN-015 is the accountable terminal node and is not
       projected into the board it destroys. After DN-013 proof and after every legacy projection,
-      including the root, is released and ready for terminal disposition, the named bootstrap
-      native engine selects a DN-015 build job and the orchestrator invokes its builder under the
-      global writer lease and explicit finalization approval. The builder runs the same command,
-      verifies the immutable manifest and hashes, writes a finalization receipt, retires the sibling
-      carrier, and commits the evidence. A distinct read-only accept job verifies that exact commit
-      before issuing the DN-015 receipt, with no later legacy dispatch or task mutation.
+      including the root, is released and ready for terminal disposition, the named bootstrap native
+      engine first completes the dedicated DN-016 native-store handoff and acceptance. It then selects
+      a DN-015 build job and the orchestrator invokes its builder under the global writer lease and
+      explicit finalization approval. The builder runs the same command, verifies the immutable
+      manifest and hashes, writes a finalization receipt, retires the workspace-local sibling-carrier
+      activation state, and commits the evidence. The clean sibling checkout itself remains on `main`.
+      A distinct read-only accept job verifies that exact commit before issuing the DN-015 receipt,
+      with no later legacy dispatch or task mutation.
     options:
       - id: two-stage-bootstrap-finalization
         label: Cut shipped product in DN-012 and retire the bootstrap board in terminal DN-015
@@ -1689,3 +1691,59 @@ decisions:
           - Bypasses the native exact-digest and exact-candidate evidence boundary
         risks:
           - Legacy records silently certify contracts they never executed
+
+  - id: DEC-038
+    title: Relocate native lifecycle state before bootstrap-carrier retirement
+    status: accepted
+    decided_at: 2026-07-29
+    authority: user
+    selected: relocate-native-work-root
+    rationale: >-
+      The admitted runtime currently stores native jobs, attempts, requests, findings, sequencing,
+      and dispatch coordination under `.owlbear/kanban`, while immutable receipts remain under change
+      authority. IF-016 removes the work root before `finish_build` and independent acceptance can
+      durably close DN-015. Preserve normal
+      lifecycle ownership by moving the typed native store to retained `.owlbear/native` after
+      PROOF-013 and before DN-015 planning or dispatch. The engine selects a dedicated DN-016 build
+      job; its claim is the sole permitted claim and writer holder while every other native process is
+      stopped, the complete native inventory is copied and hash-verified, and an isolated read-only
+      probe runs with `OWLBEAR_WORK_ROOT=.owlbear/native`. An immutable activation receipt is published
+      only after exact parity, launch-readiness, and unchanged-source checks. A destination-only
+      completion runtime finishes DN-016 build with expiry recovery suppressed; normal processes then
+      start on the destination for independent acceptance. No running server is rebound in place.
+      The old copies become inert carrier input, and IF-016 later retires that unchanged legacy
+      boundary while DN-015 build and acceptance use only the retained native root.
+    options:
+      - id: relocate-native-work-root
+        label: Move native lifecycle state to a retained root before DN-015
+        confidence: 0.91
+        recommended: true
+        pros:
+          - Preserves ordinary engine-selected build and read-only acceptance semantics
+          - Keeps IF-016's complete legacy-carrier retirement boundary intact
+          - Gives native state a path that is not also the legacy deletion target
+        cons:
+          - Adds one explicit bootstrap store-handoff operation and coordinated process restart
+        risks:
+          - An incomplete inventory or split process configuration could fork lifecycle authority
+      - id: selectively-retire-legacy-state
+        label: Keep native state under `.owlbear/kanban` and delete only legacy subtrees
+        confidence: 0.48
+        recommended: false
+        pros:
+          - Avoids changing the configured native work-root path
+        cons:
+          - Weakens IF-016 from carrier retirement to selective in-place cleanup
+          - Retains a path whose legacy and native meanings are permanently mixed
+        risks:
+          - A missed legacy record or reader survives finalization
+      - id: redesign-terminal-completion
+        label: Finish DN-015 through deferred or cross-root lifecycle mutation
+        confidence: 0.22
+        recommended: false
+        pros:
+          - Could avoid a pre-dispatch store handoff
+        cons:
+          - Reopens engine transaction, receipt, and exact-commit acceptance semantics
+        risks:
+          - Finalization evidence exists without one authoritative lifecycle store

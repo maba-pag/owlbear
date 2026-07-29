@@ -99,11 +99,18 @@ The self-hosting replacement has one bootstrap-only ordering exception. DN-012 r
 pipeline from shipped source and consumer distribution and fixture-proves the destructive cutover.
 The current workspace's legacy board remains external carrier state only until DN-013 proof is
 complete and every legacy projection, including the root, is released and ready for terminal
-disposition. An engine-selected DN-015 build job then runs the same cutover against that board under
-the global writer lease, records the immutable manifest and finalization receipt, and commits the
-retirement. A distinct read-only DN-015 accept job verifies that exact commit in a disposable proof
-checkout. Neither step performs any later legacy dispatch or mutation. This exception is not
-installed, shipped, or readable by the native runtime.
+disposition. Before DN-015 planning or dispatch, a dedicated engine-selected DN-016 build runs under
+the sole writer claim, stops every other native process, copies the typed lifecycle inventory into
+retained `.owlbear/native`, and verifies exact hash and identity parity through an isolated read-only
+probe. It publishes immutable activation only after unchanged-source and launch-readiness checks pass,
+then finishes build through a destination-only completion runtime before
+normal processes start there for independent acceptance. Post-activation recovery is destination-only;
+no process is rebound in place. An engine-selected DN-015 build job then runs the same cutover against the inert
+legacy carrier, records the immutable manifest and finalization receipt, retires workspace-local
+sibling-carrier activation state without deleting the clean sibling checkout, and commits the
+retirement. A distinct read-only DN-015 accept job verifies that exact commit through the retained
+native root in a disposable proof checkout. Neither node performs later legacy dispatch or mutation.
+This exception is not installed as a compatibility path or readable through the retired legacy runtime.
 
 ### Out of Scope
 
