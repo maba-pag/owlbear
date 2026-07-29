@@ -1,0 +1,125 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-010-3212969f2164
+change_id: replace-delivery-pipeline
+delivery_digest: 3212969f2164f0d71ae60c30405eb941b8a87b99d225a57db96062143dd4de7c
+issued_at: '2026-07-29T04:27:54Z'
+impact_closure:
+  paths:
+    - serve/cockpit/src/owlbear_cockpit/deps.py
+    - serve/cockpit/src/owlbear_cockpit/main.py
+    - serve/cockpit/src/owlbear_cockpit/models.py
+    - serve/cockpit/src/owlbear_cockpit/native_http.py
+    - serve/cockpit/src/owlbear_cockpit/native_models.py
+    - serve/cockpit/src/owlbear_cockpit/routes/events.py
+    - serve/cockpit/src/owlbear_cockpit/routes/ideas.py
+    - serve/cockpit/src/owlbear_cockpit/routes/legacy.py
+    - serve/cockpit/src/owlbear_cockpit/routes/memory.py
+    - serve/cockpit/src/owlbear_cockpit/routes/native_changes.py
+    - serve/cockpit/src/owlbear_cockpit/routes/native_controls.py
+    - serve/cockpit/src/owlbear_cockpit/routes/native_work.py
+    - serve/kanban/src/owlbear_kanban/__init__.py
+    - serve/kanban/src/owlbear_kanban/attempts.py
+    - serve/kanban/src/owlbear_kanban/change.py
+    - serve/kanban/src/owlbear_kanban/dispatch.py
+    - serve/kanban/src/owlbear_kanban/finding.py
+    - serve/kanban/src/owlbear_kanban/invalidation.py
+    - serve/kanban/src/owlbear_kanban/jobs.py
+    - serve/kanban/src/owlbear_kanban/native_runtime.py
+    - serve/kanban/src/owlbear_kanban/node_plan.py
+    - serve/kanban/src/owlbear_kanban/proof_checkout.py
+    - serve/kanban/src/owlbear_kanban/receipt.py
+    - serve/kanban/src/owlbear_kanban/runtime_query.py
+    - serve/kanban/src/owlbear_kanban/runtime_requests.py
+    - serve/kanban/src/owlbear_kanban/runtime_transaction.py
+    - serve/kanban/src/owlbear_kanban/snapshot.py
+    - serve/kanban/src/owlbear_kanban/workspace.py
+    - tests/native_cockpit_fixtures.py
+    - tests/test_cockpit_native_changes.py
+    - tests/test_cockpit_native_controls.py
+    - tests/test_cockpit_native_cutover.py
+    - tests/test_cockpit_native_integration.py
+    - tests/test_cockpit_native_work.py
+  authority_targets:
+    - DN-003
+    - DN-004
+    - DN-008
+    - DN-010
+    - DN-014
+    - IF-001
+    - IF-002
+    - IF-003
+    - IF-007
+    - IF-008
+    - IF-009
+    - IF-010
+    - IF-011
+    - IF-014
+    - KEEP-006
+    - KEEP-007
+    - MOD-004
+    - MOD-008
+    - PROOF-015
+    - REQ-010
+    - REQ-015
+    - REQ-016
+    - REQ-021
+    - REQ-026
+    - RISK-005
+target_node_id: DN-010
+node_plan_digest: 9480342775adbe2e72cdc4534a9accfa21d54cf1aa2c15c88608d877d8362e3c
+predecessor_receipt_ids: []
+evidence:
+  methods:
+    - Exercise change, graph, job, request, attempt, finding, receipt, health, legacy, conflict, and event contracts.
+    - Assert arbitrary task mutation and old lifecycle routes are absent.
+  baseline:
+    command: uv run pytest -n0 tests/test_cockpit_native_changes.py tests/test_cockpit_native_work.py tests/test_cockpit_native_controls.py tests/test_cockpit_native_cutover.py tests/test_cockpit_native_integration.py -q --tb=short
+    result: 1 failed, 11 passed, 24 errors in 24.32s
+    classification: Live self-hosting plans leak into temporary Cockpit fixtures, leaving stale plan counts, packet identities, node-plan digests, and verification-only candidate identity.
+  tracked_scope:
+    clean_before_proof: true
+    clean_after_proof: true
+    candidate_head_matches: true
+  predecessors:
+    - plan-dn-003-3212969f2164
+    - plan-dn-004-3212969f2164
+    - plan-dn-008-3212969f2164
+    - plan-dn-014-3212969f2164
+  review:
+    disposition: pass
+    evidence_id: challenge-dn-010-plan-r2-12a2db0e
+    checks:
+      plan_completeness:
+        disposition: pass
+        evidence: Build mode is required because tracked PROOF-015 fixtures retain mutable self-hosting plans and cannot execute cleanly at the candidate. One packet covers the complete DN-010 outcome and seven owned or supported obligations.
+      admitted_references:
+        disposition: pass
+        evidence: Obligations, modules, interfaces, dependencies, risk, and proof match DN-010 authority; no migration identity or unadmitted target is claimed.
+      impact_closures:
+        disposition: pass
+        evidence: Declared MOD-004, engine collaborator, and MOD-008 paths are consumed by assembled proof; the new fixture helper is an explicit required output.
+      dependency_order:
+        disposition: pass
+        evidence: The single packet is acyclic, all four admitted predecessor plan receipts exist at the current digest, and downstream IDs 93 and 94 are unused and distinct.
+      proof_boundary:
+        disposition: pass
+        evidence: The plan preserves the verbatim PROOF-015 boundary, methods, and temporary-engine-store replacement while using real Git history, checkout, runtime, dispatch, and FastAPI assembly.
+      material_expansion:
+        disposition: pass
+        evidence: The plan adds no interface, producer, consumer, migration, lifecycle route, alias, or compatibility path; any production repair is bounded to DN-010-owned MOD-004 and IF-011.
+    source_coverage: Current authority, plans, predecessor receipts, job inventory, Cockpit routes and models, native runtime currentness checks, and all five PROOF-015 suites were inspected at the supplied candidate.
+    proof_fidelity: The baseline failure classes are source-correlated with copied live plans, stale DN-001-PK-001 references, and verification-only candidate mismatch. The primary command exercises both canonical methods through assembled FastAPI HTTP and SSE boundaries.
+    findings:
+      - id: F1
+        severity: observation
+        detail: Root conftest.py supplies project_root but requires no packet edit.
+      - id: F2
+        severity: observation
+        detail: A MOD-004 repair remains conditional on fixture-isolated proof exposing a genuine backend defect.
+      - id: F3
+        severity: observation
+        detail: Node-plan seeding is below-boundary setup and does not replace assembled HTTP/SSE proof.
+    summary: The repaired build plan is complete, node-bounded, source-grounded, acyclic, faithful to PROOF-015, and contains no material authority expansion.
+code_revision: 12a2db0e4a812a5f3536bea182000ffc82a4a8d5
