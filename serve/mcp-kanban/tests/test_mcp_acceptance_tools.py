@@ -571,6 +571,28 @@ def _create_unrelated_receipt(revision) -> bytes:
     return (revision.source_dir / "receipts/build-unrelated.yaml").read_bytes()
 
 
+def _reconciliation_rows(revision, jobs, target_node_id: str) -> list[dict[str, object]]:
+    dependents = tuple(node for node in revision.graph.nodes if target_node_id in node.dependencies)
+    active_plan_ids = {
+        item.target_node_id: item.job_id
+        for item in jobs.items
+        if item.kind == "plan" and item.delivery_digest == revision.delivery_digest
+    }
+    used_job_ids = {item.job_id for item in jobs.items}
+    next_job_id = max(used_job_ids, default=0) + 1
+    rows = []
+    for dependent in dependents:
+        plan_job_id = active_plan_ids.get(dependent.id)
+        if plan_job_id is None:
+            while next_job_id in used_job_ids:
+                next_job_id += 1
+            plan_job_id = next_job_id
+            used_job_ids.add(plan_job_id)
+            next_job_id += 1
+        rows.append({"target_node_id": dependent.id, "plan_job_id": plan_job_id})
+    return rows
+
+
 async def _acceptor_evidence(revision, ctx, checkout, start: dict[str, object], commit: str) -> dict[str, object]:
     checkout_root = checkout.checkout
     agent_path = checkout_root / "share" / "agents" / "acceptor.agent.md"
@@ -652,12 +674,6 @@ async def _acceptor_evidence(revision, ctx, checkout, start: dict[str, object], 
             | {item_id for item_id in target.owns if item_id.startswith("MIG-")}
         )
     )
-    dependents = tuple(node for node in revision.graph.nodes if target.id in node.dependencies)
-    active_plan_ids = {
-        item.target_node_id: item.job_id
-        for item in jobs.items
-        if item.kind == "plan" and item.delivery_digest == revision.delivery_digest
-    }
     return {
         "methods": list(proof.method),
         "assembled_proof": {
@@ -698,9 +714,7 @@ async def _acceptor_evidence(revision, ctx, checkout, start: dict[str, object], 
         "checkout": {"root": str(checkout_root), "candidate_sha": commit},
         "replacements": [],
         "tracked_state": {"before": before, "after": after},
-        "reconciliation": [
-            {"target_node_id": dependent.id, "plan_job_id": active_plan_ids[dependent.id]} for dependent in dependents
-        ],
+        "reconciliation": _reconciliation_rows(revision, jobs, target.id),
     }
 
 
