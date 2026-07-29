@@ -4,7 +4,7 @@ description: "Native admission challenger - read-only source-grounded challenge 
 argument-hint: "Challenge Design: change_id={change_id}, digest={digest}, entities=[...]"
 user-invocable: false
 disable-model-invocation: true
-model: Claude Sonnet 5 (copilot)
+model: Claude Opus 5 (copilot)
 tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search, web]
 agents: []
 hooks:

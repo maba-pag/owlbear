@@ -4,7 +4,7 @@ description: "Plan challenger - read-only source-grounded cross-check of one del
 argument-hint: "Challenge Plan: change_id={change_id}, job_id={job_id}, target={node_id}, mode={mode}"
 user-invocable: false
 disable-model-invocation: false
-model: Claude Sonnet 5 (copilot)
+model: Claude Opus 5 (copilot)
 tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search]
 agents: []
 hooks:
