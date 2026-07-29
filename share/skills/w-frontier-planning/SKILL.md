@@ -131,9 +131,15 @@ to establish all of these facts:
 Record `mode`, `packets: []`, the exact candidate revision, the selected plan job's receipt and
 predecessor generation identity, source-inspection evidence, a non-empty required-output inventory,
 proof-readiness commands and evidence, the clean tracked-scope result, the node impact closure, and
-the independent review evidence. Bootstrap or legacy records may corroborate inspection but cannot
-satisfy native receipt, currentness, predecessor, proof, or review requirements. Any uncertainty or
-delta selects normal build planning; authority expansion still returns `SpecificationReentry`.
+`acceptance_scenarios` with one numbered `h-ac-quality` scenario for each target-owned or
+target-supported obligation and node acceptance outcome, and the independent review evidence. The
+scenario set must include negative requirements and name the maintained or public boundary, concrete
+precondition or input, observable result, and verification method. The `review` mapping must contain
+`disposition: pass`, a non-empty `evidence` summary, the review evidence identity, and its complete
+typed checks; `finish_plan` mechanically requires `node_plan.review.evidence` for verification-only
+plans. Bootstrap or legacy records may corroborate inspection but cannot satisfy native receipt,
+currentness, predecessor, proof, or review requirements. Any uncertainty or delta selects normal
+build planning; authority expansion still returns `SpecificationReentry`.
 
 For normal implementation work, use `mode: build`. Load `h-module-design` and prefer a small number
 of deep outcome-cohesive packets. Do not create artifact-specific code, test, documentation,
@@ -175,7 +181,10 @@ Before returning success:
    node's allowed authority set. A migration attached to a consumed or produced interface does not
    become node-owned authority.
 3. Confirm every target obligation and acceptance outcome has one packet owner and one
-   boundary-valid proof path.
+   boundary-valid proof path. For verification-only mode, confirm the numbered
+   `acceptance_scenarios` cover owned and supported obligations, including negative requirements,
+   without replacing the admitted public or maintained proof boundary with direct private fault
+   injection or broad setup guards that can mask unrelated failures.
 4. For build mode, confirm the packet set is outcome-cohesive, sized for focused builder contexts,
    and contains no artifact-specific status work. For verification-only mode, confirm exact
    candidate and generation identity, complete source/output/proof inspection, clean tracked scope,
@@ -183,7 +192,9 @@ Before returning success:
 5. Call a fresh read-only plan reviewer. Require source-grounded disposition and evidence for
    plan completeness, admitted references, impact closures, dependency order, proof boundary, and
    material expansion. A verification-only review must inspect the claimed tracked state and proof,
-   not merely review the supplied prose.
+   not merely review the supplied prose. Preserve the complete typed review and add one non-empty
+   `node_plan.review.evidence` summary of what the reviewer inspected; a review identity or typed
+   checks without that summary is incomplete.
 
 Malformed or incomplete review evidence returns `PlanBlocked`. For a complete non-pass review,
 classify every finding before returning: repair bounded packet-plan defects inside admitted

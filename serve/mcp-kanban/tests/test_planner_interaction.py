@@ -203,9 +203,18 @@ def _dispatch_shipped_planner(revision, started, *, receipt_id: str, next_job_id
     assert (
         "Put every malformed-input or evidence\nlimit inside the relevant row's `evidence` value" in reviewer_contract
     )
-    assert "Call a fresh read-only plan reviewer" in workflow
-    assert "repair bounded packet-plan defects inside admitted\n" in workflow
-    assert "obtain a fresh complete review of the repaired candidate" in workflow
+    assert all(
+        requirement in workflow
+        for requirement in (
+            "Call a fresh read-only plan reviewer",
+            "repair bounded packet-plan defects inside admitted\n",
+            "obtain a fresh complete review of the repaired candidate",
+            "`finish_plan` mechanically requires `node_plan.review.evidence` for verification-only",
+            "`acceptance_scenarios` with one numbered `h-ac-quality` scenario",
+            "including negative requirements",
+            "broad setup guards that can mask unrelated failures",
+        )
+    )
     assert "methods: [<every canonical method string from the selected target proof, verbatim>]" in workflow
     assert "include every canonical target proof method in `evidence.methods`" in planner_path.read_text(
         encoding="utf-8"
@@ -264,7 +273,12 @@ def _dispatch_shipped_planner(revision, started, *, receipt_id: str, next_job_id
                     "modules": list(target.modules),
                     "interfaces": [*target.produces, *target.consumes],
                     "dependencies": [],
-                    "acceptance_scenarios": [f"Observe the admitted {target.id} outcome through {target.proof}"],
+                    "acceptance_scenarios": [
+                        (
+                            f"Given a claimed plan job for {target.id}, planner returns one reviewed packet whose "
+                            f"impact closure names {target.proof}; verify by inspecting the returned node_plan."
+                        )
+                    ],
                     "impact_closure": closure,
                     "proof": {"authority": target.proof, "methods": list(proof.method)},
                     "required_outputs": ["implementation and boundary-valid proof"],
