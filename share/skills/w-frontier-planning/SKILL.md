@@ -61,6 +61,11 @@ Before proposing a packet or reusing session context:
 7. Inspect focused repository evidence referenced by the authority or needed to choose current
    implementation boundaries.
 
+When `show_job` returns `ERR_JOB_NOT_FOUND` for a referenced job, page through bounded
+`list_jobs(change_id, candidate_revision)` results because that projection includes immutable archived
+jobs. Return `PlanBlocked` for a missing job only when its identity is absent from the complete
+archive-inclusive result.
+
 Report a contradiction or stale identity as `PlanBlocked`; do not reconcile competing authority by
 choosing the newest-looking artifact. Session memory from a prior node is a search aid only. Repeat
 this complete rehydration for every selected job, including another job processed in the same warm
