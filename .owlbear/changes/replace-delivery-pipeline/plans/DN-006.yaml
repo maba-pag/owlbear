@@ -1,0 +1,173 @@
+---
+mode: build
+candidate_revision: a7af7e21709df8afa483e357a6d36c0f6e4682f0
+packets:
+  - id: DN-006-PK-001
+    outcome: Complete the durable PROOF-005 planner interaction suite using real
+      Git history, bounded projections, enumerated expansion rejection,
+      multi-packet DAGs, reconciliation, invalidation, and verification-only
+      completion.
+    obligations:
+      - REQ-004
+      - REQ-024
+      - REQ-025
+      - NEG-005
+      - NEG-008
+      - KEEP-004
+      - KEEP-003
+      - KEEP-005
+    in_scope:
+      - Replace the synthetic history and fake revision with
+        GitRepositoryHistory over actual temporary-repository commits.
+      - Correct the fixture limit text to identify temporary Git history.
+      - Make the existing acceptance-reconciliation scenario pytest-collectable.
+      - Add targeted show_job projection and shipped context-contract
+        assertions.
+      - Reject unadmitted IF, MIG, RISK, and PROOF references without partial
+        publication.
+      - Add a two-packet acyclic planner DAG scenario with dependency and replay
+        assertions.
+      - Add an accepted-predecessor verification-only scenario with complete
+        eligibility evidence, zero build jobs, one accept job, and replay.
+    excluded:
+      - Production kanban or MCP source changes.
+      - Agent, workflow, authority, plan, job, receipt, generated-artifact, or
+        documentation edits.
+      - New interfaces, migrations, lifecycle kinds, compatibility paths, or
+        proof boundaries.
+      - Mocked Git history or lower runtime calls replacing public finish_plan.
+      - MCP transport proof and unrelated health repairs.
+    modules:
+      - MOD-001
+      - MOD-003
+      - MOD-008
+    interfaces:
+      - IF-001
+      - IF-002
+      - IF-003
+      - IF-004
+      - IF-006
+      - IF-007
+      - IF-010
+    dependencies: []
+    acceptance_scenarios:
+      - 'AC1: PROOF-005 scenarios use actual temporary Git commits through GitRepositoryHistory
+        and classify intersecting versus disjoint descendant history.'
+      - 'AC2: Public show_job returns the selected target projection without the complete
+        change graph, while shipped contracts require targeted authority and a focused
+        context budget.'
+      - 'AC3: Public finish_plan rejects unadmitted interface, migration, risk, and
+        proof references without partial publication and preserves earlier completed
+        nodes.'
+      - 'AC4: A two-packet acyclic planner DAG creates one ordered build job per packet,
+        one accept job, and no duplicates on replay.'
+      - 'AC5: Predecessor acceptance creates reconciliation work, blocks stale dependent
+        builds, and predecessor invalidation stales the reconciled closure.'
+      - 'AC6: An eligible accepted-predecessor verification-only plan publishes zero
+        build jobs, one accept job, complete evidence, and idempotent replay.'
+      - 'AC7: Missing or uncertain outputs or proof infrastructure force build mode,
+        and bootstrap or legacy records cannot satisfy native receipt evidence.'
+    impact_closure:
+      paths:
+        - .owlbear/changes/replace-delivery-pipeline/intent.md
+        - .owlbear/changes/replace-delivery-pipeline/design.md
+        - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
+        - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
+        - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
+        - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
+        - .owlbear/research/planning-workflow-root-cause-and-redesign.md
+        - .owlbear/research/delivery-operating-model-reframe.md
+        - share/agents/planner.agent.md
+        - share/agents/planner-challenger.agent.md
+        - share/agents/orchestrator.agent.md
+        - share/skills/w-frontier-planning/SKILL.md
+        - share/skills/w-orchestration/SKILL.md
+        - serve/kanban/src/owlbear_kanban/
+        - serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
+        - serve/mcp-kanban/tests/test_planner_interaction.py
+      authority_targets:
+        - DN-003
+        - DN-004
+        - DN-005
+        - DN-006
+        - DN-009
+        - REQ-004
+        - REQ-024
+        - REQ-025
+        - NEG-005
+        - NEG-008
+        - KEEP-003
+        - KEEP-004
+        - KEEP-005
+        - MOD-001
+        - MOD-003
+        - MOD-008
+        - IF-001
+        - IF-002
+        - IF-003
+        - IF-004
+        - IF-006
+        - IF-007
+        - IF-010
+        - RISK-007
+        - RISK-011
+        - PROOF-005
+    proof:
+      authority: PROOF-005
+      boundary: Real resumable planner contract plus engine finish_plan
+        transactions for a plan-ready frontier.
+      invocation_harness: Direct public owlbear_mcp_kanban.server functions
+        receive real AppContext through MagicMock request_context; MCP transport
+        is not claimed or replaced.
+      collection_check: uv run pytest -n0 --collect-only
+        serve/mcp-kanban/tests/test_planner_interaction.py -q
+      primary_command: uv run pytest -n0
+        serve/mcp-kanban/tests/test_planner_interaction.py -q
+      additional_commands:
+        - uv run lint serve/mcp-kanban/tests/test_planner_interaction.py
+      allowed_lower_replacements:
+        - repository search results below the planner
+      evidence_outputs:
+        - Scenario collection output.
+        - Complete PROOF-005 pytest result using GitRepositoryHistory.
+        - Focused lint result.
+        - Invocation-harness record.
+        - Candidate and post-build Git state proving one-file scope.
+    required_outputs:
+      - Real temporary Git history and commit identities.
+      - Accurate fixture limit text.
+      - Collected targeted-projection and context-contract scenario.
+      - Enumerated interface, migration, risk, and proof expansion rejection.
+      - Collected multi-packet DAG scenario.
+      - Collected acceptance-reconciliation scenario.
+      - Collected verification-only accepted-predecessor scenario.
+      - Passing collection, pytest, lint, harness, and scoped-state evidence.
+    profile:
+      domain: Python pytest integration coverage for native frontier planning,
+        Git receipt currentness, public MCP completion, runtime transactions,
+        and agent-workflow contracts.
+      risks:
+        - RISK-007
+        - RISK-011
+      tools:
+        - uv
+        - pytest
+        - git
+        - workspace-lint
+        - git-read-only-state-checks
+      skills:
+        - h-python-conventions
+        - h-pytest-and-linting
+    context_budget:
+      expected_changed_files: 1
+      inspected_files: 16
+      interfaces:
+        - IF-001
+        - IF-002
+        - IF-003
+        - IF-004
+        - IF-006
+        - IF-007
+        - IF-010
+      change_envelope: One focused durable-test fixture repair and scenario
+        extension in test_planner_interaction.py.
