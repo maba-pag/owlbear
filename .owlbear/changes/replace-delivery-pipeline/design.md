@@ -634,7 +634,13 @@ bootstrap uses the current pipeline as a disposable execution carrier under thes
   handoff record. An isolated maintenance probe starts with `OWLBEAR_WORK_ROOT=.owlbear/native` but
   exposes only read-only parity and activation checks; normal MCP, Cockpit, and orchestration mutation
   remains disabled. IF-017 publishes immutable activation only after destination parity and unchanged
-  source hashes plus launch readiness pass. A destination-only completion runtime suppresses expiry
+  source hashes plus launch readiness pass. The same atomic activation publishes retained
+  `.owlbear/native-root.yaml` outside both lifecycle stores. Before activation, selector absence
+  preserves the existing `.owlbear/kanban` startup default. After activation, shared setup, MCP, and
+  Cockpit startup resolution validates the selector and chooses exactly `.owlbear/native`; malformed,
+  unsafe, conflicting, or destination-inconsistent state fails startup without source fallback or a
+  second lifecycle-store read. Environment configuration may select a root only when no activation
+  selector exists and must not override an activated selector. A destination-only completion runtime suppresses expiry
   recovery and unrelated mutation while DN-016 `finish_build` completes; normal processes then start
   on the destination for independent acceptance. Post-activation recovery is destination-only. No
   runtime hot-swap or jobless lease is required. Source

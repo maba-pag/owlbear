@@ -1,7 +1,7 @@
 ---
 schema_version: 1
 change_id: replace-delivery-pipeline
-state: admitted
+state: draft
 authority:
   intent: intent.md
   design: design.md
@@ -9,14 +9,7 @@ authority:
   research:
     - ../../research/planning-workflow-root-cause-and-redesign.md
     - ../../research/delivery-operating-model-reframe.md
-admission:
-  state: admitted
-  delivery_digest: d4bce08ac4e7fad7c79f56dc056601a7c9648248899ab8dfdb1f463df10f18e6
-  receipt: receipts/admission-d4bce08ac4e7.yaml
-  limits:
-    - Planned IF-017 and IF-018 behavior requires normal Delivery implementation and proof.
-    - The terminal IF-018 picker and start gate remains a required DN-004 implementation delta.
-    - Live PROOF-017 handoff and PROOF-016 carrier-finalization evidence belongs to DN-016 and DN-015.
+admission: null
 nodes:
   - id: DN-001
     title: Establish native change authority and semantic identity
@@ -217,7 +210,8 @@ nodes:
       history while setup, seed,
       hooks, docs, generated assets, agents, APIs, and stores switch entirely to the
       native control plane in shipped source and consumer distribution; the public cutover is
-      fixture-proved for DEC-036's final bootstrap-board operation.
+      fixture-proved for DEC-036's final bootstrap-board operation, including shared validated
+      startup selection for DEC-039's retained native root.
     owns: [REQ-011, REQ-012, REQ-017, NEG-004]
     supports: [NEG-007, KEEP-007]
     modules: [MOD-001, MOD-002, MOD-003, MOD-004, MOD-006, MOD-007, MOD-008, MOD-009]
@@ -325,7 +319,8 @@ nodes:
     outcome: >-
       A dedicated engine-selected build claim copies the complete live typed lifecycle store into
       `.owlbear/native`, proves exact parity through a sealed read-only destination probe, atomically
-      activates that root, completes build and independent acceptance through the destination, and
+      activates that root and its retained fail-closed startup selector, completes build and
+      independent acceptance through the destination, and
       leaves the old copies inert before DN-015 planning or dispatch.
     owns: [REQ-028]
     supports: [REQ-013, REQ-016, KEEP-007]

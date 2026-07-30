@@ -95,6 +95,7 @@ modules:
     paths:
       - .owlbear/hooks/
       - seed/.owlbear/hooks/
+      - .owlbear/native-root.yaml
       - .owlbear/native/
       - seed/.owlbear/native/
       - .owlbear/kanban/
@@ -449,7 +450,13 @@ interfaces:
       that permits only read-only parity and activation operations. The same interface verifies
       destination queries, exact copied coordination/claim identity, declared process configuration,
       retained change-receipt identity, launch readiness, and unchanged source hashes before publishing
-      the immutable activation receipt that irreversibly makes source copies inert. A destination-only
+      the immutable activation receipt and retained `.owlbear/native-root.yaml` selector that
+      irreversibly make source copies inert. The selector is published atomically outside both
+      lifecycle stores, binds the activation and destination identities, and is the sole startup
+      locator after activation. Shared setup, MCP, and Cockpit startup resolution validates it and
+      selects exactly `.owlbear/native`; malformed, unsafe, conflicting, or destination-inconsistent
+      selector state blocks startup, and neither environment configuration nor the old default may
+      override or fall back from an activated selector. A destination-only
       completion runtime then permits only exact-owner DN-016 commit/fail/release and forbids claim-expiry
       recovery, planning, dispatch, requests, or other mutation until DN-016 `finish_build` completes.
       Normal processes start only afterward for independent acceptance. It never hot-swaps a running
@@ -458,7 +465,7 @@ interfaces:
     failure_semantics: >-
       Missing or stale proof, any claim or holder other than the owning DN-016 build, unclassified
       native record, non-empty destination, collision, hash or identity mismatch, unsafe path, partial
-      publication, process configuration split, maintenance-mode mutation, launch-readiness failure,
+      publication, selector mismatch or corruption, process configuration split, maintenance-mode mutation, launch-readiness failure,
       parity-query failure, or post-copy source mutation before activation keeps the source authoritative
       and blocks activation. After activation, the destination is sole authority: completion-runtime or
       normal startup failure is recovered only there and cannot restore, read, or mutate the source.
@@ -472,7 +479,7 @@ interfaces:
     contract: >-
       A current DN-016 accept receipt binds the exact IF-017 prepared and activation receipts,
       complete typed inventory, source and destination hashes, sole owning claim and writer identity,
-      sealed pre-activation probe, normal-process restart configuration, destination-completed build
+      sealed pre-activation probe, retained validated startup selector, normal-process restart configuration, destination-completed build
       receipt, and exact-commit read-only acceptance. Only this interface authorizes DN-015 planning
       and dispatch from `.owlbear/native`; no source-root fallback or dual read is permitted.
     authority: MOD-009
@@ -671,6 +678,8 @@ migrations:
       - Start one sealed read-only probe with `OWLBEAR_WORK_ROOT=.owlbear/native`; do not hot-swap a live runtime.
       - Verify exact job, attempt, request, finding, sequence, claim, dispatch, and retained-receipt identity parity.
       - Recheck source hashes and destination launch readiness, then publish irreversible activation.
+      - Atomically publish retained `.owlbear/native-root.yaml` bound to activation and destination;
+        require shared startup resolution to reject invalid selectors and forbid environment or default fallback.
       - Start destination-only completion mode, suppress expiry recovery and all unrelated mutation, and finish DN-016 build.
       - Recover any post-activation failure only through the destination, then start normal processes and acceptance.
       - Forbid DN-015 planning or dispatch unless IF-018 is current or if any process still reads the old root.
@@ -909,12 +918,14 @@ risks:
       - Source and destination hashes or semantic identities diverge.
       - A native process continues writing the old root after destination publication.
       - Both roots appear authoritative after restart or recovery.
+      - The retained startup selector is absent, corrupt, unsafe, overridden, or inconsistent with activation evidence.
       - DN-015 is planned or claimed before DN-016 acceptance and parity proof finish.
       - The copied DN-016 claim expires while normal recovery is enabled before destination finish_build.
     disposition: >-
       Execute public IF-017 only inside DN-016's sole engine-selected build claim and writer lease,
       with an empty contained destination, complete typed inventory, private staging, exact byte and
       semantic parity, a sealed read-only destination probe, immutable activation evidence, and
+      an atomic retained selector consumed by fail-closed shared startup resolution, plus
       destination-only completion mode with expiry recovery suppressed until exact-owner finish_build,
       plus read-only acceptance; leave source authoritative on any pre-activation failure, recover
       post-activation startup only on the destination, and block DN-015 unless current IF-018 proves one root.
@@ -1231,7 +1242,9 @@ proofs:
         retained change authority and receipt identities, source-only legacy activity classification,
         prepared handoff record, exact source/destination hashes and semantic identities, and unchanged source.
       - Verify the isolated destination probe exposed no normal mutation, activation was atomic and
-        replay-safe, destination-only completion suppressed expiry recovery and unrelated mutation until
+        replay-safe, `.owlbear/native-root.yaml` was published atomically and validated identically by
+        setup, MCP, and Cockpit startup, invalid or conflicting selector state failed without environment
+        or default fallback, destination-only completion suppressed expiry recovery and unrelated mutation until
         exact-owner finish_build, every normal process then started only against `.owlbear/native`, and
         source fallback or dual-read configuration is absent.
       - Verify DN-016 build completion and acceptance use the destination record chain and that any
@@ -1243,5 +1256,6 @@ proofs:
     durable_outputs:
       - immutable native work-root handoff manifest and prepared record
       - immutable activation receipt and process configuration attestation
+      - immutable retained work-root selector and startup-resolution attestation
       - destination-completed DN-016 build receipt and scoped Git commit
       - exact-commit DN-016 accept receipt

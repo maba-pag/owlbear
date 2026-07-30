@@ -1747,3 +1747,53 @@ decisions:
           - Reopens engine transaction, receipt, and exact-commit acceptance semantics
         risks:
           - Finalization evidence exists without one authoritative lifecycle store
+
+  - id: DEC-039
+    title: Bind post-activation startup through one validated work-root selector
+    status: accepted
+    decided_at: 2026-07-30
+    authority: user
+    selected: validated-work-root-selector
+    rationale: >-
+      DN-016 cannot prove destination-only restart while normal MCP and Cockpit startup silently
+      default to `.owlbear/kanban`, and protected workspace configuration is not delivery authority.
+      Extend IF-017 to atomically publish `.owlbear/native-root.yaml` beside the two lifecycle roots
+      when activation makes `.owlbear/native` authoritative. Before activation, selector absence
+      preserves the existing `.owlbear/kanban` default. After activation, shared startup resolution
+      validates the selector and selects exactly `.owlbear/native`; malformed, conflicting, unsafe,
+      or destination-inconsistent state fails startup without source fallback or dual reads. The
+      selector is retained through MIG-005 and is detected by setup, MCP, and Cockpit without editing
+      `.vscode/mcp.json`, `.vscode/settings.json`, or `share/WIRING.md`.
+    options:
+      - id: validated-work-root-selector
+        label: Publish and validate one retained work-root selector
+        confidence: 0.94
+        recommended: true
+        pros:
+          - Makes post-activation startup deterministic and fail-closed
+          - Preserves pre-activation and fresh-consumer defaults
+          - Avoids protected configuration edits and external launch assumptions
+        cons:
+          - Adds one retained bootstrap locator outside both lifecycle stores
+        risks:
+          - Corruption or disagreement must block all normal startup until repaired from activation evidence
+      - id: change-global-default
+        label: Change every default work root to `.owlbear/native`
+        confidence: 0.42
+        recommended: false
+        pros:
+          - Avoids a selector read during startup
+        cons:
+          - Breaks pre-migration workspaces and couples code rollout to live activation
+        risks:
+          - A failed or incomplete handoff leaves normal startup pointed at an unusable destination
+      - id: external-launch-environment
+        label: Require wrappers to set `OWLBEAR_WORK_ROOT`
+        confidence: 0.18
+        recommended: false
+        pros:
+          - Requires no startup resolver change
+        cons:
+          - VS Code MCP and direct Cockpit launches can silently retain the old default
+        risks:
+          - Process-specific environment drift forks lifecycle authority

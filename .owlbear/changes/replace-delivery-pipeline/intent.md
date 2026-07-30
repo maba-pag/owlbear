@@ -103,7 +103,10 @@ disposition. Before DN-015 planning or dispatch, a dedicated engine-selected DN-
 the sole writer claim, stops every other native process, copies the typed lifecycle inventory into
 retained `.owlbear/native`, and verifies exact hash and identity parity through an isolated read-only
 probe. It publishes immutable activation only after unchanged-source and launch-readiness checks pass,
-then finishes build through a destination-only completion runtime before
+then atomically publishes retained `.owlbear/native-root.yaml`. Shared startup resolution validates
+that selector and starts normal MCP and Cockpit processes against exactly `.owlbear/native`; invalid
+or conflicting selector state blocks startup without source fallback. DN-016 finishes build through
+a destination-only completion runtime before
 normal processes start there for independent acceptance. Post-activation recovery is destination-only;
 no process is rebound in place. An engine-selected DN-015 build job then runs the same cutover against the inert
 legacy carrier, records the immutable manifest and finalization receipt, retires workspace-local
