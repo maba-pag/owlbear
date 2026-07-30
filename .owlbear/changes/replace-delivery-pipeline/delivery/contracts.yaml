@@ -101,6 +101,8 @@ modules:
       - .owlbear/native/
       - seed/.owlbear/native/
       - .owlbear/kanban/
+      - .gitignore
+      - seed/.gitignore
     current_responsibility: >-
       Agent write guards, session context, native lifecycle stores, and the transitional
       self-hosting legacy carrier.
@@ -695,7 +697,9 @@ migrations:
       - jobs and archived-job YAML records
       - attempts, requests, findings, sequence, empty transactions, and dispatch coordination
       - retained change authority and receipts, checked by identity but not copied
-      - source-only legacy activity, task/archive/decision records, lock files, and carrier configuration
+      - source-only legacy task/archive/decision records and carrier configuration
+      - destination-local activity and lock sidecars classified as ignored runtime artifacts by
+        tracked root and seed `.gitignore` rules
       - legacy bootstrap carrier finalization input
     compatibility: One terminal self-hosting handoff only; no dual-read or fallback path.
     deletion_owner: DN-015
@@ -958,7 +962,7 @@ proofs:
     boundary: Public validate/admit change operation before any jobs exist.
     owner: DN-002
     method:
-      - Execute A1-A10-equivalent table-driven and property cases.
+      - Execute table-driven and property cases for every rejection class listed in design section 9.1.
       - Assert stable finding codes and zero job mutation on failure.
       - Assert receipt and initial plan jobs are atomic on success.
     allowed_replacements:
