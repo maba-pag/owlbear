@@ -192,9 +192,12 @@ Before returning success:
 5. Call a fresh read-only plan reviewer. Require source-grounded disposition and evidence for
    plan completeness, admitted references, impact closures, dependency order, proof boundary, and
    material expansion. A verification-only review must inspect the claimed tracked state and proof,
-   not merely review the supplied prose. Preserve the complete typed review and add one non-empty
-   `node_plan.review.evidence` summary of what the reviewer inspected; a review identity or typed
-   checks without that summary is incomplete.
+   not merely review the supplied prose. The reviewer returns the raw six-row mapping defined by
+   `planner-challenger`; preserve those rows unchanged as `node_plan.review.checks` and construct the
+   review envelope as the owning planner: aggregate `disposition`, one non-empty `evidence` summary
+   of what the reviewer inspected, and one stable `evidence_id`. A review identity, summary, or typed
+   checks without the other two is incomplete. Do not require the reviewer to return an overall
+   lifecycle verdict or planner-owned evidence metadata.
 
 Malformed or incomplete review evidence returns `PlanBlocked`. For a complete non-pass review,
 classify every finding before returning: repair bounded packet-plan defects inside admitted

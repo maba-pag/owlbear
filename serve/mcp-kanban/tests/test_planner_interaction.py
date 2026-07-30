@@ -207,6 +207,9 @@ def _dispatch_shipped_planner(revision, started, *, receipt_id: str, next_job_id
         requirement in workflow
         for requirement in (
             "Call a fresh read-only plan reviewer",
+            "preserve those rows unchanged as `node_plan.review.checks`",
+            "construct the\n   review envelope as the owning planner",
+            "Do not require the reviewer to return an overall",
             "repair bounded packet-plan defects inside admitted\n",
             "obtain a fresh complete review of the repaired candidate",
             "`finish_plan` mechanically requires `node_plan.review.evidence` for verification-only",
