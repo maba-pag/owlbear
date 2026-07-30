@@ -462,8 +462,10 @@ interfaces:
       lifecycle stores, binds the activation and destination identities, and is the sole startup
       locator after activation. Shared setup, MCP, and Cockpit startup resolution validates it and
       selects exactly `.owlbear/native`; malformed, unsafe, conflicting, or destination-inconsistent
-      selector state blocks startup, and neither environment configuration nor the old default may
-      override or fall back from an activated selector. A destination-only
+      selector state blocks startup. Selector absence selects the old default only when
+      `.owlbear/native` is also absent; a retained destination without the selector blocks startup,
+      so selector loss cannot rebind to source. Neither environment configuration nor the old default
+      may override or fall back from an activated selector. A destination-only
       completion runtime then permits only exact-owner DN-016 commit/fail/release and forbids claim-expiry
       recovery, planning, dispatch, requests, or other mutation until DN-016 `finish_build` completes.
       Normal processes start only afterward for independent acceptance. It never hot-swaps a running
@@ -472,7 +474,8 @@ interfaces:
     failure_semantics: >-
       Missing or stale proof, any claim or holder other than the owning DN-016 build, unclassified
       native record, non-empty destination, collision, hash or identity mismatch, unsafe path, partial
-      publication, selector mismatch or corruption, process configuration split, maintenance-mode mutation, launch-readiness failure,
+      publication, selector absence with a retained destination, selector mismatch or corruption,
+      process configuration split, maintenance-mode mutation, launch-readiness failure,
       parity-query failure, or post-copy source mutation before activation keeps the source authoritative
       and blocks activation. After activation, the destination is sole authority: completion-runtime or
       normal startup failure is recovered only there and cannot restore, read, or mutate the source.
@@ -687,7 +690,8 @@ migrations:
       - Verify exact job, attempt, request, finding, sequence, claim, dispatch, and retained-receipt identity parity.
       - Recheck source hashes and destination launch readiness, then publish irreversible activation.
       - Atomically publish retained `.owlbear/native-root.yaml` bound to activation and destination;
-        require shared startup resolution to reject invalid selectors and forbid environment or default fallback.
+        require shared startup resolution to reject invalid selectors and selector absence with a
+        retained destination, and forbid environment or default fallback.
       - Start destination-only completion mode, suppress expiry recovery and all unrelated mutation, and finish DN-016 build.
       - Recover any post-activation failure only through the destination, then start normal processes and acceptance.
       - Forbid DN-015 planning or dispatch unless IF-018 is current or if any process still reads the old root.
@@ -936,6 +940,7 @@ risks:
       with an empty contained destination, complete typed inventory, private staging, exact byte and
       semantic parity, a sealed read-only destination probe, immutable activation evidence, and
       an atomic retained selector consumed by fail-closed shared startup resolution, plus
+      a retained-destination sentinel that makes selector absence fail closed after publication, plus
       destination-only completion mode with expiry recovery suppressed until exact-owner finish_build,
       plus read-only acceptance; leave source authoritative on any pre-activation failure, recover
       post-activation startup only on the destination, and block DN-015 unless current IF-018 proves one root.
@@ -1254,7 +1259,9 @@ proofs:
       - Verify the isolated destination probe exposed no normal mutation, activation was atomic and
         replay-safe, `.owlbear/native-root.yaml` was published atomically and validated identically by
         setup, MCP, and Cockpit startup, invalid or conflicting selector state failed without environment
-        or default fallback, destination-only completion suppressed expiry recovery and unrelated mutation until
+        or default fallback, selector absence selected `.owlbear/kanban` only when `.owlbear/native`
+        was absent and failed closed when the retained destination existed, destination-only completion
+        suppressed expiry recovery and unrelated mutation until
         exact-owner finish_build, every normal process then started only against `.owlbear/native`, and
         source fallback or dual-read configuration is absent.
       - Verify DN-016 build completion and acceptance use the destination record chain and that any

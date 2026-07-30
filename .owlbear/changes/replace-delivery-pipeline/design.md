@@ -637,7 +637,10 @@ bootstrap uses the current pipeline as a disposable execution carrier under thes
   source hashes plus launch readiness pass. The same atomic activation publishes retained
   `.owlbear/native-root.yaml` outside both lifecycle stores. Before activation, selector absence
   preserves the existing `.owlbear/kanban` startup default, including for a fresh consumer; setup and
-  seed do not pre-create `.owlbear/native` or the selector. After activation, one MOD-001 resolver
+  seed do not pre-create `.owlbear/native` or the selector. This default applies only while the
+  retained destination is absent; `.owlbear/native` without the selector is transitional or corrupt
+  state and blocks startup, so selector loss cannot silently rebind processes to source. After
+  activation, one MOD-001 resolver
   shared by setup, MCP, and
   Cockpit startup resolution validates the selector and chooses exactly `.owlbear/native`; malformed,
   unsafe, conflicting, or destination-inconsistent state fails startup without source fallback or a

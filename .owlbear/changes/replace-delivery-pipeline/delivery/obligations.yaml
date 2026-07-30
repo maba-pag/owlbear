@@ -145,7 +145,8 @@ requirements:
       prompts,
       agents, skills, MCP configuration, and Cockpit bundle, and requires no OpenSpec
       or compatibility runtime. A fresh consumer has no activation selector and starts from the
-      existing `.owlbear/kanban` work root; `.owlbear/native` and its retained selector arise only
+      existing `.owlbear/kanban` work root because `.owlbear/native` is also absent; the retained
+      destination and its selector arise only
       from the explicit MIG-006 handoff, never from seed data or an implicit setup migration.
     workflows: [WF-006]
   - id: REQ-018
