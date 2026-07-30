@@ -1,7 +1,7 @@
 ---
 schema_version: 1
 change_id: replace-delivery-pipeline
-state: draft
+state: admitted
 authority:
   intent: intent.md
   design: design.md
@@ -9,7 +9,14 @@ authority:
   research:
     - ../../research/planning-workflow-root-cause-and-redesign.md
     - ../../research/delivery-operating-model-reframe.md
-admission: null
+admission:
+  state: admitted
+  delivery_digest: e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+  receipt: receipts/admission-e17a3e0e37bd.yaml
+  limits:
+    - DN-004 must implement and prove generic interface-declared terminal plan prerequisites.
+    - DN-012 must implement and fixture-prove shared selector resolution, including fail-closed selector loss.
+    - DN-016 and DN-015 must produce live handoff and finalization evidence while protected configuration remains byte-unchanged.
 nodes:
   - id: DN-001
     title: Establish native change authority and semantic identity
