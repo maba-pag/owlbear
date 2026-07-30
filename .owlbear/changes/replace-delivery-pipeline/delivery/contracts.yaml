@@ -11,8 +11,8 @@ modules:
     planned_change: >-
       Replace task authority with native change, delivery graph, purpose-specific
       jobs, receipts, invalidation,
-      transactions, proof checkout, and graph-aware dispatch behind a reorganized
-      engine facade.
+      transactions, proof checkout, graph-aware dispatch, and one shared fail-closed
+      startup work-root resolver behind a reorganized engine facade.
   - id: MOD-002
     paths:
       - serve/mcp-kanban/src/owlbear_mcp_kanban/
@@ -21,7 +21,8 @@ modules:
       and history MCP tools over the graph-aware engine.
     planned_change: >-
       Expose intent-level change, job, completion, request, evidence, health, and
-      history tools; remove generic task mutation.
+      history tools; remove generic task mutation; and consume MOD-001's shared
+      startup work-root resolver before constructing the native runtime.
   - id: MOD-003
     paths:
       - share/agents/
@@ -44,7 +45,8 @@ modules:
       legacy inventory, ideas, and memory APIs with SSE invalidation.
     planned_change: >-
       Add change, graph, job, request, finding, receipt, legacy inventory, and SSE
-      contracts over the graph-aware engine; remove arbitrary task movement/editing.
+      contracts over the graph-aware engine; consume MOD-001's shared startup work-root
+      resolver; and remove arbitrary task movement/editing.
   - id: MOD-005
     paths:
       - serve/cockpit/web/src/
@@ -105,7 +107,8 @@ modules:
     planned_change: >-
       Enforce new role write scopes, authority/job stores, proof-checkout containment,
       purpose-specific runtime state, and the fail-closed bootstrap handoff from the mixed
-      carrier into retained `.owlbear/native`.
+      carrier into retained `.owlbear/native`, with custody of the retained selector artifact
+      but no independent startup-resolution implementation.
 
 interfaces:
   - id: IF-001
@@ -217,8 +220,10 @@ interfaces:
       job
       eligible from
       sealed predecessor contracts except a node with an explicit terminal plan prerequisite; DN-015's
-      admitted plan job remains non-startable until current IF-018 acceptance, and pick_jobs reports
-      that omission while ordering all eligible work by stable delivery topology.
+      admitted plan job remains non-startable because IF-018 declares itself a terminal prerequisite
+      for its graph-declared consumer DN-015. The engine resolves DN-016 as producer and DN-015 as
+      consumer from IF-018 rather than from a hardcoded node pair; pick_jobs reports that omission
+      while ordering all eligible work by stable delivery topology.
       Build
       readiness requires a current plan receipt, current authored packet dependencies,
       and current
@@ -461,7 +466,7 @@ interfaces:
       recovery, planning, dispatch, requests, or other mutation until DN-016 `finish_build` completes.
       Normal processes start only afterward for independent acceptance. It never hot-swaps a running
       process or permits pre-activation destination mutation.
-    authority: MOD-009
+    authority: MOD-001
     failure_semantics: >-
       Missing or stale proof, any claim or holder other than the owning DN-016 build, unclassified
       native record, non-empty destination, collision, hash or identity mismatch, unsafe path, partial
@@ -481,7 +486,8 @@ interfaces:
       complete typed inventory, source and destination hashes, sole owning claim and writer identity,
       sealed pre-activation probe, retained validated startup selector, normal-process restart configuration, destination-completed build
       receipt, and exact-commit read-only acceptance. Only this interface authorizes DN-015 planning
-      and dispatch from `.owlbear/native`; no source-root fallback or dual read is permitted.
+      and dispatch from `.owlbear/native`; it explicitly declares itself the terminal plan prerequisite
+      for its graph-declared consumers, and no source-root fallback or dual read is permitted.
     authority: MOD-009
     failure_semantics: >-
       Missing, stale, rejected, superseded, source-mutated, configuration-divergent, or non-current
@@ -1251,6 +1257,8 @@ proofs:
         source mutation, destination mutation before activation, partial startup, copied-claim expiry,
         or split configuration fails closed before IF-018 exists, with post-activation recovery confined
         to the destination.
+      - Verify `.vscode/mcp.json`, `.vscode/settings.json`, and `share/WIRING.md` bytes are unchanged
+        across prepare, activation, destination-only completion, normal restart, and acceptance.
     allowed_replacements:
       - none; real workspace roots, process configuration, and exact build commit required
     durable_outputs:

@@ -636,7 +636,9 @@ bootstrap uses the current pipeline as a disposable execution carrier under thes
   remains disabled. IF-017 publishes immutable activation only after destination parity and unchanged
   source hashes plus launch readiness pass. The same atomic activation publishes retained
   `.owlbear/native-root.yaml` outside both lifecycle stores. Before activation, selector absence
-  preserves the existing `.owlbear/kanban` startup default. After activation, shared setup, MCP, and
+  preserves the existing `.owlbear/kanban` startup default, including for a fresh consumer; setup and
+  seed do not pre-create `.owlbear/native` or the selector. After activation, one MOD-001 resolver
+  shared by setup, MCP, and
   Cockpit startup resolution validates the selector and chooses exactly `.owlbear/native`; malformed,
   unsafe, conflicting, or destination-inconsistent state fails startup without source fallback or a
   second lifecycle-store read. Environment configuration may select a root only when no activation
@@ -644,7 +646,9 @@ bootstrap uses the current pipeline as a disposable execution carrier under thes
   recovery and unrelated mutation while DN-016 `finish_build` completes; normal processes then start
   on the destination for independent acceptance. Post-activation recovery is destination-only. No
   runtime hot-swap or jobless lease is required. Source
-  copies remain inert input to finalization. The engine selects DN-015's `build` job only from the retained root, and the
+  copies remain inert input to finalization. IF-018 declares itself the terminal plan prerequisite;
+  dispatch resolves its producer DN-016 and consumer DN-015 from the admitted interface graph rather
+  than a hardcoded node pair. The engine selects DN-015's `build` job only from the retained root, and the
   orchestrator invokes one builder with explicit finalization approval. That builder runs the
   finalizer, verifies the immutable manifest and hashes, writes the finalization receipt, removes
   active legacy board and workspace-local sibling-carrier activation state, and commits those tracked

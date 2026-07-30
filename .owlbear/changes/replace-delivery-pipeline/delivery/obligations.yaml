@@ -32,8 +32,9 @@ requirements:
       One resumable planner processes the plan-ready node frontier while each purpose-specific
       plan job independently validates, reviews, publishes, digests, and receipts
       either one complete outcome-cohesive packet DAG or one fail-closed exact-candidate
-      verification-only re-admission plan without unadmitted delivery expansion. A declared terminal
-      plan prerequisite may keep an admitted plan job non-startable until its producer node is accepted.
+      verification-only re-admission plan without unadmitted delivery expansion. An interface contract
+      may declare itself a terminal plan prerequisite; the engine resolves its producer and consumers
+      from the admitted graph and keeps each consumer plan job non-startable until the producer is accepted.
     workflows: [WF-002]
   - id: REQ-005
     title: Outcome-cohesive implementation with warm review
@@ -143,8 +144,9 @@ requirements:
       Setup creates the native empty authority/work stores, installs only the new
       prompts,
       agents, skills, MCP configuration, and Cockpit bundle, and requires no OpenSpec
-      or
-      compatibility runtime.
+      or compatibility runtime. A fresh consumer has no activation selector and starts from the
+      existing `.owlbear/kanban` work root; `.owlbear/native` and its retained selector arise only
+      from the explicit MIG-006 handoff, never from seed data or an implicit setup migration.
     workflows: [WF-006]
   - id: REQ-018
     title: Failure-derived and generic workflow proof

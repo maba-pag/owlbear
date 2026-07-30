@@ -105,7 +105,9 @@ retained `.owlbear/native`, and verifies exact hash and identity parity through 
 probe. It publishes immutable activation only after unchanged-source and launch-readiness checks pass,
 then atomically publishes retained `.owlbear/native-root.yaml`. Shared startup resolution validates
 that selector and starts normal MCP and Cockpit processes against exactly `.owlbear/native`; invalid
-or conflicting selector state blocks startup without source fallback. DN-016 finishes build through
+or conflicting selector state blocks startup without source fallback. Fresh consumers and
+pre-activation workspaces have no selector and retain the existing `.owlbear/kanban` default; setup
+does not seed the retained destination. DN-016 finishes build through
 a destination-only completion runtime before
 normal processes start there for independent acceptance. Post-activation recovery is destination-only;
 no process is rebound in place. An engine-selected DN-015 build job then runs the same cutover against the inert
