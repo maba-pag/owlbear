@@ -11,13 +11,12 @@ authority:
     - ../../research/delivery-operating-model-reframe.md
 admission:
   state: admitted
-  delivery_digest: e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
-  receipt: receipts/admission-e17a3e0e37bd.yaml
+  delivery_digest: 5b2c7be03be970fd7da4d62385b7a57b6a932f85f10053e21799b34410b796fc
+  receipt: receipts/admission-5b2c7be03be9.yaml
   limits:
     - DN-004 must implement and prove generic interface-declared terminal plan prerequisites.
     - DN-012 must implement and fixture-prove shared selector resolution, including fail-closed selector loss.
     - DN-016 and DN-015 must produce live handoff and finalization evidence while protected configuration remains byte-unchanged.
-    - Before re-admission, the bootstrap carrier must implement and prove DN-003 prospective build-receipt coverage so tracked packets do not invalidate their own plan authorization.
 nodes:
   - id: DN-001
     title: Establish native change authority and semantic identity
