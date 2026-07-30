@@ -199,6 +199,11 @@ change-authority targets. Receipt issuance fails when the required closure is mi
 be derived without ambiguity. Changed paths and receipt diffs are evidence, not authority for widening or narrowing
 the frozen closure.
 
+A packet may consume a predecessor receipt's paths and authority targets only by copying that predecessor's complete
+canonical closure into its own closure and rerunning the predecessor proof it supersedes. This evidence dependency
+does not transfer product ownership. Partial overlap remains stale; a packet cannot preserve predecessor evidence by
+naming only the path it intends to edit.
+
 #### 4.3.2 Code-revision currency
 
 The engine owns a repository-history protocol with two deterministic operations: resolve whether the tested commit
@@ -229,6 +234,15 @@ invalid predecessors, and cycles return `ERR_RECEIPT_PREDECESSOR_MISSING`, `ERR_
 non-empty sorted `invalidated_receipt_ids` set and its corrective finding/job identities. Any such reference returns
 `ERR_RECEIPT_SUPERSEDED` for the named receipt regardless of receipt ID order or `issued_at`; timestamps are evidence,
 not causal ordering. Repeated evaluation of a shared predecessor returns the same immutable projection.
+
+When a successor receipt's closure fully covers a predecessor receipt's closure, currentness still evaluates the
+predecessor's schema, authority, node-plan digest, supersession state, and recursive predecessors but does not reuse
+the predecessor's code-revision result; the successor proof now owns that complete evidence boundary. This rule also
+applies prospectively during `finish_build`: the engine evaluates the candidate build closure against its plan receipt
+before issuing the build receipt. Full coverage permits the packet's intended descendant changes, while partial
+coverage or an uncovered stale predecessor returns `ERR_RECEIPT_PREDECESSOR_INVALID`. Without this prospective check,
+a packet commit would invalidate the plan receipt whose closure authorized the same paths and no tracked build could
+finish.
 
 ## 5. Delivery Graph
 
@@ -324,6 +338,9 @@ Each packet records:
 
 The planner must validate and canonicalize each packet impact closure before publishing its node plan. Packet
 dependencies do not imply path ownership: a packet names the paths and authority targets its own proof consumes.
+When a packet changes a path inside a predecessor receipt closure, the planner either includes and reruns that
+predecessor's complete closure under §4.3.3 or returns Specification re-entry; it never treats an overlapping accepted
+predecessor as current through a narrower local proof.
 
 ### 6.4 Verification-only re-admission contract
 
@@ -581,6 +598,11 @@ Stable diagnostics reject at least:
 - node scope exceeding declared modules/interfaces or proof boundary;
 - stale digests or unsupported exceptions.
 
+The canonical proof model makes the two proof-ownership checks structural: `Proof.owner` resolves only to a delivery
+node, and deterministic validation requires that node to own the proof and precede each node that consumes it.
+Acceptance and audit are job stages, not delivery-node identities, so they cannot satisfy `Proof.owner`; tracked proof
+infrastructure therefore has a build-capable node owner before either read-only stage runs.
+
 Diagnostics contain code, severity, target ID, evidence, detail, and remediation.
 
 ### 9.2 Repository-grounded challenge
@@ -679,6 +701,15 @@ bootstrap uses the current pipeline as a disposable execution carrier under thes
   the result. Candidate `be82c31005d41ccd888af8a1d90b33a817b51d0c` now implements the missing carrier
   capability and focused runtime proof. These carrier results are supporting implementation evidence,
   not native receipts or final certification.
+
+8. Before the re-admission following the DN-002 planning re-entry, the current carrier implements the
+   minimum DN-003 receipt-currentness correction: packet target validation admits the complete canonical
+   closure of a consumed predecessor receipt, and `finish_build` applies §4.3.3 successor coverage to the
+   prospective build receipt before evaluating its plan predecessor. Focused runtime tests prove that a
+   fully covering packet can finish after intended descendant changes, while partial overlap and uncovered
+   predecessor drift remain mutation-free failures. The carrier commit is supporting bootstrap evidence only;
+   the new digest must independently plan and accept DN-003, and any DN-002 packet that overlaps DN-001 must
+   rerun the complete DN-001 proof boundary.
 
 The admission receipt limit states that bootstrap task mutation is not atomic with receipt creation.
 Task creation is idempotent by `(change_id, delivery_digest, delivery_node_id, packet_id)` and dispatch

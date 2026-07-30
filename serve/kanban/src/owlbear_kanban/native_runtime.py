@@ -42,6 +42,8 @@ from owlbear_kanban.receipt import (
     compute_node_plan_digest,
     evaluate_code_revision_currency,
     evaluate_receipt_currentness,
+    impact_closure_covers,
+    impact_closures_intersect,
     parse_impact_closure,
 )
 from owlbear_kanban.runtime_query import (
@@ -1747,7 +1749,17 @@ class NativeRuntime:
                 "audit job has unresolved requests",
                 target=job.pending_request_ids[0],
             )
-        predecessors = self._finish_predecessors(job, predecessor_revision or request.code_revision)
+        prospective_closure: ImpactClosure | None = None
+        if kind == "build":
+            prepared_closure = self._finish_closure(job, request)
+            if isinstance(prepared_closure, FinishJobResult):
+                return prepared_closure
+            prospective_closure = prepared_closure
+        predecessors = self._finish_predecessors(
+            job,
+            predecessor_revision or request.code_revision,
+            successor_closure=prospective_closure,
+        )
         if isinstance(predecessors, FinishJobResult):
             return predecessors
         if isinstance(request, FinishAcceptRequest):
@@ -1766,11 +1778,13 @@ class NativeRuntime:
             revision, graph_participant, created_jobs, closure = prepared
             participants.append(graph_participant)
             participants.extend(self._jobs.create_participant(item) for item in created_jobs)
-        else:
+        elif prospective_closure is None:
             prepared_closure = self._finish_closure(job, request)
             if isinstance(prepared_closure, FinishJobResult):
                 return prepared_closure
             closure = prepared_closure
+        else:
+            closure = prospective_closure
         if participant_factory is not None:
             try:
                 participants.extend(participant_factory(stored, request))
@@ -1982,7 +1996,13 @@ class NativeRuntime:
             return self._finish_diagnostic(FinishJobDiagnosticCode.NON_OWNER, "attempt identity is not current")
         return None
 
-    def _finish_predecessors(self, job: JobRecord, code_revision: str) -> tuple[str, ...] | FinishJobResult:
+    def _finish_predecessors(
+        self,
+        job: JobRecord,
+        code_revision: str,
+        *,
+        successor_closure: ImpactClosure | None = None,
+    ) -> tuple[str, ...] | FinishJobResult:
         receipt_ids: list[str] = []
         for predecessor_job_id in job.predecessor_job_ids:
             try:
@@ -1999,7 +2019,12 @@ class NativeRuntime:
                     "predecessor receipt is missing",
                     target=str(predecessor_job_id),
                 )
-            validity = self._receipts.evaluate_currentness(predecessor.receipt_id, self._history, code_revision)
+            validity = self._receipts.evaluate_currentness(
+                predecessor.receipt_id,
+                self._history,
+                code_revision,
+                successor_closure=successor_closure,
+            )
             if not validity.current:
                 return self._finish_diagnostic(
                     FinishJobDiagnosticCode.PREDECESSOR_INVALID,
@@ -2289,7 +2314,7 @@ class NativeRuntime:
             raise ValueError(msg)
         return current[0] if current else None
 
-    def _prepare_plan(
+    def _prepare_plan(  # noqa: PLR0911
         self,
         stored: StoredJob,
         request: FinishPlanRequest,
@@ -2301,6 +2326,9 @@ class NativeRuntime:
         if isinstance(plan, FinishJobResult):
             return plan
         mode, packet_ids, dependencies, closures = plan
+        predecessor_coverage = self._validate_plan_predecessor_coverage(job, closures)
+        if predecessor_coverage is not None:
+            return predecessor_coverage
         if mode == "verification-only":
             expected_generation = {
                 "job_id": job.job_id,
@@ -2562,18 +2590,53 @@ class NativeRuntime:
         return "verification-only", (), {}, (closure,)
 
     def _allowed_packet_targets(self, target: str) -> set[str]:
-        node = self._revision.resolve(target)
-        return {
-            target,
-            node.proof,
-            *node.owns,
-            *node.supports,
-            *node.modules,
-            *node.produces,
-            *node.consumes,
-            *node.dependencies,
-            *node.risks,
-        }
+        allowed: set[str] = set()
+        visited: set[str] = set()
+        pending = [target]
+        while pending:
+            node_id = pending.pop()
+            if node_id in visited:
+                continue
+            visited.add(node_id)
+            node = self._revision.resolve(node_id)
+            allowed.update(
+                {
+                    node.id,
+                    node.proof,
+                    *node.owns,
+                    *node.supports,
+                    *node.modules,
+                    *node.produces,
+                    *node.consumes,
+                    *node.dependencies,
+                    *node.risks,
+                }
+            )
+            pending.extend(node.dependencies)
+        return allowed
+
+    def _validate_plan_predecessor_coverage(
+        self,
+        job: JobRecord,
+        closures: tuple[ImpactClosure, ...],
+    ) -> FinishJobResult | None:
+        for predecessor_job_id in job.predecessor_job_ids:
+            predecessor_job = self._read_job(predecessor_job_id).job
+            if predecessor_job.kind != "accept" or predecessor_job.receipt_id is None:
+                continue
+            predecessor = self._receipts.read(predecessor_job.receipt_id).receipt
+            if predecessor is None or predecessor.impact_closure is None:
+                continue
+            for closure in closures:
+                if impact_closures_intersect(closure, predecessor.impact_closure) and not impact_closure_covers(
+                    closure, predecessor.impact_closure
+                ):
+                    return self._finish_diagnostic(
+                        FinishJobDiagnosticCode.NODE_PLAN_INVALID,
+                        "packet partially overlaps a predecessor receipt closure",
+                        target=predecessor.receipt_id,
+                    )
+        return None
 
     @classmethod
     def _escaped_plan_reference(cls, value: object, allowed_targets: set[str]) -> str | None:

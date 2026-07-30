@@ -420,7 +420,8 @@ def _intersecting_selector(path: str, selectors: tuple[str, ...]) -> str | None:
     return None
 
 
-def _impact_closure_covers(successor: ImpactClosure, predecessor: ImpactClosure) -> bool:
+def impact_closure_covers(successor: ImpactClosure, predecessor: ImpactClosure) -> bool:
+    """Return whether one closure contains another closure's complete evidence boundary."""
     if not set(predecessor.authority_targets) <= set(successor.authority_targets):
         return False
     return all(
@@ -430,6 +431,20 @@ def _impact_closure_covers(successor: ImpactClosure, predecessor: ImpactClosure)
             for successor_selector in successor.paths
         )
         for predecessor_selector in predecessor.paths
+    )
+
+
+def impact_closures_intersect(left: ImpactClosure, right: ImpactClosure) -> bool:
+    """Return whether two closures share a path or authority target."""
+    if set(left.authority_targets) & set(right.authority_targets):
+        return True
+    return any(
+        left_selector in ("/", right_selector)
+        or right_selector == "/"
+        or (left_selector.endswith("/") and right_selector.startswith(left_selector))
+        or (right_selector.endswith("/") and left_selector.startswith(right_selector))
+        for left_selector in left.paths
+        for right_selector in right.paths
     )
 
 
@@ -1310,6 +1325,8 @@ class ReceiptStore:
         receipt_id: str,
         history: RepositoryHistory,
         candidate_revision: str,
+        *,
+        successor_closure: ImpactClosure | None = None,
     ) -> ReceiptValidity:
         """Evaluate local, code, predecessor, and supersession receipt currentness."""
         entries, diagnostic = self._scan()
@@ -1327,13 +1344,21 @@ class ReceiptStore:
             for target in (receipt.payload.get("invalidated_receipt_ids") or ())
             if isinstance(target, str)
         }
-        return _CompleteCurrentnessEvaluator(
+        evaluator = _CompleteCurrentnessEvaluator(
             self._revision,
             records,
             superseded,
             history,
             candidate_revision,
-        ).evaluate(receipt_id)
+        )
+        receipt = records.get(receipt_id)
+        covered = (
+            successor_closure is not None
+            and receipt is not None
+            and receipt.impact_closure is not None
+            and impact_closure_covers(successor_closure, receipt.impact_closure)
+        )
+        return evaluator.evaluate(receipt_id, evaluate_code=not covered)
 
     def _scan(
         self,
@@ -1465,7 +1490,7 @@ class _CompleteCurrentnessEvaluator:
                 predecessor_record is not None
                 and receipt.impact_closure is not None
                 and predecessor_record.impact_closure is not None
-                and _impact_closure_covers(receipt.impact_closure, predecessor_record.impact_closure)
+                and impact_closure_covers(receipt.impact_closure, predecessor_record.impact_closure)
             )
             predecessor = self.evaluate(predecessor_id, evaluate_code=not predecessor_is_covered)
             if not predecessor.current:

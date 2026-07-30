@@ -17,6 +17,7 @@ admission:
     - DN-004 must implement and prove generic interface-declared terminal plan prerequisites.
     - DN-012 must implement and fixture-prove shared selector resolution, including fail-closed selector loss.
     - DN-016 and DN-015 must produce live handoff and finalization evidence while protected configuration remains byte-unchanged.
+    - Before re-admission, the bootstrap carrier must implement and prove DN-003 prospective build-receipt coverage so tracked packets do not invalidate their own plan authorization.
 nodes:
   - id: DN-001
     title: Establish native change authority and semantic identity
@@ -55,7 +56,8 @@ nodes:
       transaction, recovery,
       and health models provide one graph-aware runtime with plan-only lifecycle vocabulary
       and no copied specification truth, including fail-closed discriminated build and
-      exact-candidate verification-only plan transactions.
+      exact-candidate verification-only plan transactions plus prospective successor-closure
+      validation for tracked build completion.
     owns:
       - REQ-008
       - REQ-009

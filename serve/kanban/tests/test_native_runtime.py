@@ -169,10 +169,19 @@ def _copied_revision(tmp_path: Path, *, clean_receipts: bool = False):
     return result.revision
 
 
-def _plan_request(revision, *, target_node_id: str = "DN-001", **changes: object) -> FinishPlanRequest:
+def _plan_request(
+    revision,
+    *,
+    target_node_id: str = "DN-001",
+    predecessor_authority_targets: tuple[str, ...] = (),
+    **changes: object,
+) -> FinishPlanRequest:
     target = revision.resolve(target_node_id)
     proof = revision.resolve(target.proof)
-    closure = {"paths": ["serve/kanban/"], "authority_targets": [target.id, target.proof]}
+    closure = {
+        "paths": ["serve/kanban/"],
+        "authority_targets": [target.id, target.proof, *predecessor_authority_targets],
+    }
     return FinishPlanRequest.model_validate(
         {
             "job_id": 1,
@@ -439,6 +448,7 @@ def _terminal_accept_scenario(
                 }
             ],
         }
+        (revision.source_dir / "plans" / f"{node.id}.yaml").unlink(missing_ok=True)
         RuntimeTransaction(
             work_root,
             f"plan-{node.id}",
@@ -1341,6 +1351,125 @@ def test_finish_plan_rejects_invalid_packet_authority_without_publication(tmp_pa
     assert AttemptStore(work_root).read("attempt-001", 2).event is None
 
 
+@pytest.mark.parametrize("complete_coverage", [False, True])
+def test_finish_plan_requires_complete_predecessor_receipt_closure(tmp_path, complete_coverage) -> None:
+    revision = _copied_revision(tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    predecessor_closure = {
+        "paths": [
+            "serve/kanban/src/owlbear_kanban/native_runtime.py",
+            "serve/kanban/src/owlbear_kanban/receipt.py",
+        ],
+        "authority_targets": ["DN-001", "KEEP-007", "PROOF-001"],
+    }
+    predecessor_plan = dict(_verification_plan_request(revision).node_plan)
+    predecessor_plan["impact_closure"] = predecessor_closure
+    RuntimeTransaction(
+        work_root,
+        "predecessor-plan",
+        (NodePlanStore(revision).prepare("DN-001", predecessor_plan),),
+    ).commit()
+    predecessor_plan_receipt_id = "plan-predecessor"
+    predecessor_plan_receipt = {
+        "schema_version": 1,
+        "kind": "plan",
+        "receipt_id": predecessor_plan_receipt_id,
+        "change_id": revision.change_id,
+        "delivery_digest": revision.delivery_digest,
+        "issued_at": "2026-07-24T00:00:00Z",
+        "impact_closure": predecessor_closure,
+        "target_node_id": "DN-001",
+        "node_plan_digest": compute_node_plan_digest(revision, "DN-001"),
+        "predecessor_receipt_ids": [],
+        "evidence": {"methods": list(revision.resolve("PROOF-001").method)},
+        "code_revision": "a" * 40,
+    }
+    assert ReceiptStore(revision).create(predecessor_plan_receipt_id, predecessor_plan_receipt).receipt is not None
+    predecessor_receipt_id = "accept-predecessor"
+    predecessor_evidence = _accept_evidence(revision, "DN-001", packet_receipt_ids=())
+    predecessor_evidence["plan"]["receipt_id"] = predecessor_plan_receipt_id
+    predecessor_receipt = {
+        "schema_version": 1,
+        "kind": "accept",
+        "receipt_id": predecessor_receipt_id,
+        "change_id": revision.change_id,
+        "delivery_digest": revision.delivery_digest,
+        "issued_at": "2026-07-24T00:01:00Z",
+        "impact_closure": predecessor_closure,
+        "target_node_id": "DN-001",
+        "node_plan_digest": compute_node_plan_digest(revision, "DN-001"),
+        "predecessor_receipt_ids": [predecessor_plan_receipt_id],
+        "evidence": predecessor_evidence,
+        "code_revision": "a" * 40,
+    }
+    assert ReceiptStore(revision).create(predecessor_receipt_id, predecessor_receipt).receipt is not None
+    _materialize(
+        store,
+        _record(
+            revision,
+            job_id=1,
+            kind="accept",
+            target_node_id="DN-001",
+            receipt_id=predecessor_receipt_id,
+        ),
+    )
+    _materialize(
+        store,
+        _record(
+            revision,
+            job_id=2,
+            kind="plan",
+            target_node_id="DN-002",
+            predecessor_job_ids=(1,),
+            receipt_id="bootstrap-001",
+        ),
+    )
+    runtime = _runtime(revision, work_root)
+    start = _request().model_copy(update={"job_id": 2, "attempt_id": "attempt-002", "claim_id": "claim-002"})
+    assert runtime.start_job(start).diagnostic is None
+    packet_closure = (
+        predecessor_closure
+        if complete_coverage
+        else {
+            "paths": [predecessor_closure["paths"][0]],
+            "authority_targets": predecessor_closure["authority_targets"],
+        }
+    )
+    request = _plan_request(
+        revision,
+        target_node_id="DN-002",
+        job_id=2,
+        attempt_id=start.attempt_id,
+        claim_id=start.claim_id,
+        node_plan={
+            "mode": "build",
+            "packets": [
+                {
+                    "id": "DN-002-PK-001",
+                    "dependencies": [],
+                    "impact_closure": packet_closure,
+                }
+            ],
+        },
+        build_job_ids=(3,),
+        accept_job_id=4,
+    )
+    existing_plan = (revision.source_dir / "plans/DN-002.yaml").read_bytes()
+
+    result = runtime.finish_plan(request)
+
+    if complete_coverage:
+        assert result.diagnostic is None
+        assert result.receipt is not None
+    else:
+        assert result.diagnostic is not None
+        assert result.diagnostic.code is FinishJobDiagnosticCode.NODE_PLAN_INVALID
+        assert result.diagnostic.target == predecessor_receipt_id
+        assert (revision.source_dir / "plans/DN-002.yaml").read_bytes() == existing_plan
+
+
 def test_finish_plan_transaction_failure_publishes_nothing(tmp_path, monkeypatch) -> None:
     revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
@@ -1569,6 +1698,14 @@ def test_finish_build_refuses_stale_predecessor_and_keeps_job_active(tmp_path) -
     runtime = NativeRuntime(revision, work_root, history, timedelta(minutes=5))
     runtime.start_job(_request())
     plan = _plan_request(revision)
+    packets = list(plan.node_plan["packets"])
+    packets[1] = packets[1] | {
+        "impact_closure": {
+            "paths": ["tests/"],
+            "authority_targets": packets[1]["impact_closure"]["authority_targets"],
+        }
+    }
+    plan = plan.model_copy(update={"node_plan": plan.node_plan | {"packets": packets}})
     plan_result = runtime.finish_plan(plan)
     assert plan_result.diagnostic is None
     runtime.start_job(_request().model_copy(update={"job_id": 2, "attempt_id": "attempt-002", "claim_id": "claim-002"}))
@@ -1595,6 +1732,49 @@ def test_finish_build_refuses_stale_predecessor_and_keeps_job_active(tmp_path) -
     assert store.read(2).job.attempt_id == "attempt-002"
     assert AttemptStore(work_root).read("attempt-002", 2).event is None
     assert store.list(archived=True)[0].job.job_id == 1
+
+
+def test_finish_build_accepts_changed_path_when_packet_covers_plan_receipt(tmp_path) -> None:
+    revision = _copied_revision(tmp_path)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    _materialize(store, _record(revision, kind="plan", receipt_id="bootstrap-001"))
+    history = _History()
+    runtime = NativeRuntime(revision, work_root, history, timedelta(minutes=5))
+    runtime.start_job(_request())
+    plan = _plan_request(revision)
+    packet = plan.node_plan["packets"][0]
+    plan = plan.model_copy(
+        update={
+            "node_plan": plan.node_plan | {"packets": [packet]},
+            "build_job_ids": (2,),
+            "accept_job_id": 3,
+        }
+    )
+    assert runtime.finish_plan(plan).diagnostic is None
+    start = _request().model_copy(update={"job_id": 2, "attempt_id": "attempt-002", "claim_id": "claim-002"})
+    assert runtime.start_job(start).diagnostic is None
+    history.changed_paths = b"M\0serve/kanban/src/owlbear_kanban/native_runtime.py\0"
+
+    result = runtime.finish_build(
+        FinishJobRequest(
+            job_id=2,
+            attempt_id=start.attempt_id,
+            claim_id=start.claim_id,
+            actor_id=start.actor_id,
+            process_id=start.process_id,
+            finished_at="2026-07-24T00:03:00Z",
+            receipt_id="build-001",
+            code_revision="b" * 40,
+            evidence=plan.evidence,
+            impact_closure=parse_impact_closure(packet["impact_closure"]),
+        )
+    )
+
+    assert result.diagnostic is None
+    assert result.receipt is not None
+    assert result.receipt.payload["predecessor_receipt_ids"] == ("plan-001",)
 
 
 def test_build_start_reconciliation_gates_are_mutation_free(tmp_path) -> None:
@@ -1858,6 +2038,7 @@ def test_three_node_fold_in_occ_updates_same_plan_job_after_two_accepts(tmp_path
     second_plan = _plan_request(
         revision,
         target_node_id="DN-002",
+        predecessor_authority_targets=("DN-001", revision.resolve("DN-001").proof),
         job_id=6,
         attempt_id="attempt-006",
         claim_id="claim-006",
@@ -2003,6 +2184,7 @@ def test_reconciliation_finish_releases_new_build_and_invalidation_closure(tmp_p
     reconciliation_plan = _plan_request(
         revision,
         target_node_id="DN-002",
+        predecessor_authority_targets=("DN-001", revision.resolve("DN-001").proof),
         job_id=6,
         attempt_id="attempt-006",
         claim_id="claim-006",

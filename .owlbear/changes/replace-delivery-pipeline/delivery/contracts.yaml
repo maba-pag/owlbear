@@ -188,7 +188,11 @@ interfaces:
       least one packet and one build job per packet. Verification-only mode requires complete
       exact-candidate re-admission evidence and a non-empty node-level impact closure, permits zero
       packets and zero build jobs, and creates exactly one accept job whose predecessor set retains
-      normal plan and predecessor-node gates.
+      normal plan and predecessor-node gates. Packet target validation may include a consumed
+      predecessor receipt's complete canonical path and authority-target closure without transferring
+      product ownership. During `finish_build`, prospective successor coverage evaluates a fully
+      covered plan or predecessor receipt without reusing its code-revision result while preserving
+      schema, authority, node-plan, supersession, and recursive-predecessor checks.
     authority: MOD-001
     failure_semantics: >-
       Atomic transaction abort or recoverable manifest; no partial valid receipt.
@@ -209,6 +213,8 @@ interfaces:
       outcomes without duplication. Empty packets outside a complete eligible verification-only
       record, mismatched candidate/generation evidence, an empty closure, or any build-job cardinality
       mismatch rejects the whole plan transaction without a plan, receipt, job, or attempt outcome.
+      Partial predecessor-closure overlap, an uncovered stale predecessor, or descendant changes
+      outside the prospective packet closure reject build completion without a receipt or attempt outcome.
     migration: MIG-004
     proof: PROOF-003
   - id: IF-004
@@ -993,6 +999,10 @@ proofs:
       - >-
         Prove exact replay, transaction rollback, receipt currentness, and dependent reconciliation
         are identical across build and verification-only plan modes.
+      - >-
+        Finish a build whose prospective packet closure fully covers its plan and an overlapping
+        predecessor receipt after intended descendant changes; reject partial coverage, uncovered
+        predecessor drift, and changed paths outside the packet closure without mutation.
     allowed_replacements:
       - clock
       - process identity
