@@ -122,6 +122,10 @@ def test_acceptor_requires_every_direct_dependent_reconciliation_identity() -> N
     assert "`authority.modules` | ordered target module ID list, not module records" in workflow
     assert "`assembled_proof.boundary` | exact unmodified `proof.boundary`" in workflow
     assert "integer `exit_code: 0`" in workflow
+    assert "Copy `plan.node_plan_digest` directly from the supplied started job" in workflow
+    assert "never retype, recompute, or copy it from prose" in workflow
+    assert "compare the complete scalar byte-for-byte with the started job's `node_plan_digest`" in workflow
+    assert "Apply the same direct-copy check to `code_revision`" in workflow
     assert "per affected dependent node" not in workflow
     assert "Reconcile the complete dependent graph" in agent
     assert "use `show_change` to derive the authority-ordered direct dependents" in agent

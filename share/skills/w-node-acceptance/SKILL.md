@@ -125,6 +125,12 @@ or append context to an authority string.
 | `changed_surfaces` | exactly the returned `impact_closure` |
 | `reconciliation` | graph-ordered `{target_node_id, plan_job_id}` rows for direct dependents |
 
+Copy `plan.node_plan_digest` directly from the supplied started job; never retype, recompute, or
+copy it from prose, a displayed plan, or prior session context. Before returning success, compare
+the complete scalar byte-for-byte with the started job's `node_plan_digest` and return
+`AcceptanceBlocked` if they differ. Apply the same direct-copy check to `code_revision`,
+`checkout.candidate_sha`, `authority.delivery_digest`, and `authority.target_node_id`.
+
 For verification-only plans, additionally require `plan.receipt_id` equal to the current plan
 receipt, `plan.packet_ids: []`, and `packet_receipts: []`. Never encode clean state as the word
 `clean`.
