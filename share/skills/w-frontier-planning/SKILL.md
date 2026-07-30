@@ -207,6 +207,14 @@ that changes admitted authority returns `SpecificationReentry`. Return `PlanBloc
 bounded repair cannot be source-grounded or its fresh review remains non-pass. Never weaken the
 plan or omit a finding to obtain success.
 
+When a verification-only review identifies a concrete tracked output, proof-infrastructure gap,
+invalid impact path, or unreproducible observation inside the node's admitted modules and proof,
+the review has disproved verification-only eligibility. Redraft the candidate in build mode with a
+bounded packet that owns those corrections, remove escaped paths rather than borrowing their module
+authority, and obtain a fresh review. Do not return `PlanBlocked` merely because the current tracked
+state cannot support verification-only; block only when the required build packet itself cannot be
+source-grounded inside admitted authority.
+
 ## Step 6 - Return One Structured Disposition
 
 Return exactly one of these objects to the orchestrator. Do not wrap it in prose.
