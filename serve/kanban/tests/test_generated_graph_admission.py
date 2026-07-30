@@ -330,6 +330,10 @@ def _proof_authorization(document: dict) -> None:
     document["proofs"][0]["allowed_replacements"] = []
 
 
+def _proof_boundary_collision(document: dict) -> None:
+    document["proofs"][0]["boundary"] = "  TEMPORARY FILESYSTEM  "
+
+
 def test_generated_dangling_reference_is_rejected_by_canonical_loader(tmp_path: Path) -> None:
     revision = _generated_revision(tmp_path, "dangling", 5)
     _mutate_document(
@@ -356,6 +360,7 @@ def test_generated_dangling_reference_is_rejected_by_canonical_loader(tmp_path: 
         ("delivery/contracts.yaml", _migration_gap, "DV-005"),
         ("delivery/contracts.yaml", _risk_disposition, "DV-006"),
         ("delivery/contracts.yaml", _proof_authorization, "DV-007"),
+        ("delivery/contracts.yaml", _proof_boundary_collision, "DV-009"),
     ],
 )
 def test_generated_yaml_mutations_return_exact_admission_code_before_publication(

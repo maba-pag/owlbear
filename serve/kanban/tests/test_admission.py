@@ -207,6 +207,21 @@ def test_free_form_pass_does_not_satisfy_challenge_gate() -> None:
     assert any(item.code == "EV-002" for item in assessment.errors)
 
 
+def test_proof_challenge_error_blocks_admission_at_proof_target() -> None:
+    result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
+    assert result.revision is not None
+    proof = result.revision.graph.proofs[0]
+    evidence = _admission_evidence(result.revision)
+    challenge = dict(evidence.challenge)
+    challenge[proof.id] = {"disposition": "error", "evidence": "review found a demonstrated substitution"}
+
+    assessment = evaluate_admission(result.revision, evidence.model_copy(update={"challenge": challenge}))
+
+    finding = next(item for item in assessment.errors if item.code == "EV-002" and item.target == proof.id)
+    assert finding.severity.value == "error"
+    assert not assessment.admitted
+
+
 def test_baseline_and_approval_must_bind_to_revision_digest() -> None:
     result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
     assert result.revision is not None
@@ -288,3 +303,26 @@ def test_proof_owner_outside_acceptance_predecessors_returns_dv007() -> None:
     assessment = evaluate_admission(revision, _admission_evidence(revision))
 
     assert any(item.code == "DV-007" and item.target == proof.id for item in assessment.errors)
+
+
+@pytest.mark.parametrize(
+    ("boundary", "expected_count"),
+    [
+        ("  TEMPORARY WORKSPACE FILESYSTEM  ", 1),
+        ("Public workspace behavior", 0),
+    ],
+)
+def test_referenced_proof_boundary_must_differ_from_allowed_replacement(boundary: str, expected_count: int) -> None:
+    result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
+    assert result.revision is not None
+    graph = result.revision.graph
+    proof = next(item for item in graph.proofs if "temporary workspace filesystem" in item.allowed_replacements)
+    proofs = tuple(
+        proof.model_copy(update={"boundary": boundary}) if item.id == proof.id else item for item in graph.proofs
+    )
+    revision = result.revision.model_copy(update={"graph": graph.model_copy(update={"proofs": proofs})})
+
+    assessment = evaluate_admission(revision, _admission_evidence(revision))
+
+    findings = [item for item in assessment.errors if item.code == "DV-009" and item.target == proof.id]
+    assert len(findings) == expected_count

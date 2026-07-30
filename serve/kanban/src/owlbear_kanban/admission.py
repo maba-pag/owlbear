@@ -342,6 +342,22 @@ def _evaluate_delivery_contracts(revision: ChangeRevision) -> list[AdmissionFind
                     "Populate proof fields and assign it to the predecessor delivery node.",
                 )
             )
+        if (
+            proof.id in referenced_proofs
+            and proof.boundary.strip()
+            and any(
+                proof.boundary.strip().casefold() == replacement.strip().casefold()
+                for replacement in proof.allowed_replacements
+            )
+        ):
+            findings.append(
+                _finding(
+                    "DV-009",
+                    proof.id,
+                    "proof boundary is also declared as an allowed lower replacement",
+                    "Claim a boundary distinct from every allowed lower replacement.",
+                )
+            )
     return findings
 
 
