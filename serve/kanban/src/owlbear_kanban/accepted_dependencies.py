@@ -7,11 +7,6 @@ from enum import StrEnum
 from functools import cache
 from typing import TYPE_CHECKING
 
-from owlbear_kanban.receipt import (
-    _CompleteCurrentnessEvaluator,
-    impact_closure_covers,
-)
-
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
@@ -77,23 +72,6 @@ def resolve_accepted_dependencies(  # noqa: C901, PLR0913, PLR0917
     """Resolve an accepted set while allowing only causal full-closure coverage."""
     requested = tuple(node_ids)
     nodes = {node.id: node for node in revision.graph.nodes}
-    receipt_records = {
-        result.receipt.receipt_id: result.receipt for result in receipts.list() if result.receipt is not None
-    }
-    superseded = {
-        target
-        for receipt in receipt_records.values()
-        if receipt.kind == "supersession"
-        for target in (receipt.payload.get("invalidated_receipt_ids") or ())
-        if isinstance(target, str)
-    }
-    evaluator = _CompleteCurrentnessEvaluator(
-        revision,
-        receipt_records,
-        superseded,
-        history,
-        candidate_revision,
-    )
     candidates: dict[str, list[JobRecord]] = {node_id: [] for node_id in requested}
     for job in accept_jobs:
         if job.kind == "accept" and job.target_node_id in candidates:
@@ -131,21 +109,20 @@ def resolve_accepted_dependencies(  # noqa: C901, PLR0913, PLR0917
         for job in candidates[node_id]:
             if job.receipt_id is None:
                 continue
-            validity = evaluator.evaluate(job.receipt_id)
+            validity = receipts.evaluate_currentness(job.receipt_id, history, candidate_revision)
             if not validity.current:
                 for descendant in descendants:
                     if not descendant.current or descendant.impact_closure is None:
                         continue
-                    receipt = receipt_records.get(job.receipt_id)
-                    covered = (
-                        receipt is not None
-                        and receipt.impact_closure is not None
-                        and impact_closure_covers(descendant.impact_closure, receipt.impact_closure)
+                    validity = receipts.evaluate_currentness(
+                        job.receipt_id,
+                        history,
+                        candidate_revision,
+                        successor_closure=descendant.impact_closure,
                     )
-                    validity = evaluator.evaluate(job.receipt_id, evaluate_code=not covered)
                     if validity.current:
                         break
-            receipt = receipt_records.get(job.receipt_id) if validity.current else None
+            receipt = receipts.read(job.receipt_id).receipt if validity.current else None
             if receipt is not None and receipt.impact_closure is not None:
                 current.append(
                     AcceptedDependency(
