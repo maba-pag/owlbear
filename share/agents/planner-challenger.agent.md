@@ -43,6 +43,9 @@ candidate is complete and bounded enough to return as structured success.
   material expansion, using only `pass`, `warning`, or `error`.
 - **Make each row discriminating.** Name the authority target, source path, interface, dependency,
   command, or observable boundary that supports the disposition.
+- **Keep migration effects distinct from plan authority.** Require the plan to inspect and record an
+  interface-attached migration's effects, but do not require its stable ID in the node plan unless
+  that ID belongs to the selected node's admitted authority set.
 - **Review verification-only evidence within available tools.** Cross-check source coverage and the
   caller-supplied immutable candidate, command result, and before/after tracked state. Record a
   warning or error only for a concrete inconsistency, omission, or uncovered boundary, never merely
