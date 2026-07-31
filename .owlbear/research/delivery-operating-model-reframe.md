@@ -3,7 +3,7 @@
 > **Owning task:** #1968 — Replace OwlBear delivery pipeline with admitted change graphs
 > **Date:** 2026-07-25
 > **Question:** How should the admitted graph-authoritative design be refined after implementation showed that specification work dominates delivery cost, one-node-at-a-time shaping is sequential, and the monolithic graph is difficult to author?
-> **Status:** Authority admitted at `3f6c65628991`; corrective projection planning active
+> **Status:** Authority admitted at `1ec9888c522d`; native generation planning active
 
 ## 1. Context and Question
 
@@ -166,14 +166,14 @@ requires a current plan receipt, authored packet dependencies, and predecessor a
 `finish_accept` causally marks dependent plans reconciliation-required and blocks dependent builds
 until superseding plan receipts are current.
 7. MIG-001 through MIG-004 are interface-reachable; MIG-004 owns modular storage and `plan` lifecycle correction across IF-001/003/004/007/015.
-8. Exact digest `3f6c656289911320bb5e7faf37b5e86ffa8511e729ade201a03a19913e33d990` is admitted with zero deterministic findings and a passing independent challenge. All 14 nodes are initially plan-eligible from admitted contracts and ordered by delivery topology; implementation still has one dependency root.
+8. Exact normalized digest `1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15` is admitted with zero deterministic findings, a complete passing independent challenge, and 89 passing authority/admission baseline tests. All 16 nodes have initial plan jobs in generation `admission-1ec9888c522d`; delivery remains engine-gated by admitted topology.
 
 Remaining sequence:
 
-1. Publish the challenged corrective graph for DN-001 modular loading, isolated plans, DN-002 plan admission, DN-003 lifecycle/reconciliation, and DN-004 dispatch/MCP routing.
-2. Refresh #1968 and affected projections while preserving DN-009 containment until its replacement graph is complete.
-3. Implement the corrective graph before DN-009 consumes IF-015 or DN-005/DN-006 teach the interim format.
-4. Re-plan DN-009, frontier planning in DN-006, and peer Specification/Delivery Cockpit work in DN-011 against current authority.
+1. Dispatch fresh planner invocations for generation jobs 260 through 275 under the orchestrator agent's explicit role allowlist; do not claim a job from a parent that cannot invoke its engine-selected profile.
+2. Build and independently accept current-generation nodes in engine-selected order, preserving DN-013 independence and the IF-018 terminal prerequisite that requires accepted DN-016 before DN-015.
+3. Complete the exact-commit whole-change audit, including protected-configuration byte parity and preserved Memory/Ideas behavior.
+4. Close the self-hosting carrier only after the native work-root handoff, finalization evidence, and final audit are current.
 
 ### Confidence
 
