@@ -198,6 +198,84 @@ def test_invalid_graph_findings_are_sorted() -> None:
     )
 
 
+def test_undeclared_stable_reference_returns_dv002_at_referencing_requirement() -> None:
+    result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
+    assert result.revision is not None
+    graph = result.revision.graph
+    requirement = graph.requirements[0]
+    requirements = (
+        requirement.model_copy(update={"workflows": (*requirement.workflows, "WF-999")}),
+        *graph.requirements[1:],
+    )
+    revision = result.revision.model_copy(update={"graph": graph.model_copy(update={"requirements": requirements})})
+
+    assessment = evaluate_admission(revision, _admission_evidence(revision))
+
+    assert any(item.code == "DV-002" and item.target == requirement.id for item in assessment.errors)
+    assert not assessment.admitted
+
+
+def test_workflow_without_requirement_path_returns_dv008_at_workflow() -> None:
+    result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
+    assert result.revision is not None
+    graph = result.revision.graph
+    workflow = graph.workflows[0]
+    requirements = tuple(
+        requirement.model_copy(
+            update={"workflows": tuple(item for item in requirement.workflows if item != workflow.id)}
+        )
+        for requirement in graph.requirements
+    )
+    revision = result.revision.model_copy(update={"graph": graph.model_copy(update={"requirements": requirements})})
+
+    assessment = evaluate_admission(revision, _admission_evidence(revision))
+
+    assert any(item.code == "DV-008" and item.target == workflow.id for item in assessment.errors)
+    assert not assessment.admitted
+
+
+def test_digest_mismatch_returns_ev001() -> None:
+    result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
+    assert result.revision is not None
+
+    assessment = evaluate_admission(
+        result.revision,
+        _admission_evidence(result.revision).model_copy(update={"digest": "0" * 64}),
+    )
+
+    assert any(item.code == "EV-001" and item.target == result.revision.change_id for item in assessment.errors)
+    assert not assessment.admitted
+
+
+def test_warning_challenge_evidence_is_visible_but_nonblocking() -> None:
+    result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
+    assert result.revision is not None
+    evidence = _admission_evidence(result.revision)
+    target = result.revision.graph.proofs[0].id
+    challenge = dict(evidence.challenge)
+    challenge[target] = {"disposition": "warning", "evidence": "documented limitation"}
+
+    assessment = evaluate_admission(result.revision, evidence.model_copy(update={"challenge": challenge}))
+
+    finding = next(item for item in assessment.findings if item.code == "EV-002" and item.target == target)
+    assert finding.severity.value == "warning"
+    assert assessment.admitted
+
+
+def test_known_limits_are_required_and_preserved() -> None:
+    result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
+    assert result.revision is not None
+    evidence = _admission_evidence(result.revision)
+
+    missing = evaluate_admission(result.revision, evidence.model_copy(update={"limits": ()}))
+    preserved = evaluate_admission(result.revision, evidence.model_copy(update={"limits": ("known limit",)}))
+
+    assert any(item.code == "EV-005" for item in missing.errors)
+    assert not missing.admitted
+    assert preserved.limits == ("known limit",)
+    assert preserved.admitted
+
+
 def test_admitted_revision_evaluates_without_findings() -> None:
     result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
     assert result.revision is not None
