@@ -455,8 +455,26 @@ def test_delivery_digest_normalizes_markdown_mapping_and_decision_order(tmp_path
     )
 
     canonical_digest = _revision_digest(changes_dir, "canonical-a")
-    assert canonical_digest == "08c3810d58cfae26e15fc507c0f34436e16b67233c67ab78a7fdeedd54fa0b17"
+    assert canonical_digest == "90e349806d2e1c46d15489dcff653a2de127d130cc883c9a761ee30c855a1d72"
     assert canonical_digest == _revision_digest(changes_dir, "canonical-b")
+
+
+def test_delivery_digest_normalizes_explicit_interface_defaults(tmp_path: Path) -> None:
+    changes_dir = tmp_path / ".owlbear" / "changes"
+    omitted_decisions, omitted_graph = _documents("defaults-omitted")
+    _write_package(changes_dir, "defaults-omitted", authority=(omitted_decisions, omitted_graph))
+
+    explicit_decisions, explicit_graph = _documents("defaults-explicit")
+    interface = explicit_graph["interfaces"][0]
+    assert isinstance(interface, dict)
+    interface.update(
+        terminal_plan_prerequisite=False,
+        runtime_producer=None,
+        runtime_consumers=[],
+    )
+    _write_package(changes_dir, "defaults-explicit", authority=(explicit_decisions, explicit_graph))
+
+    assert _revision_digest(changes_dir, "defaults-omitted") == _revision_digest(changes_dir, "defaults-explicit")
 
 
 def test_delivery_digest_changes_with_semantic_authority(tmp_path: Path) -> None:

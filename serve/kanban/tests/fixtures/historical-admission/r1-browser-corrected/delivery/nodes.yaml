@@ -10,8 +10,8 @@ authority:
     - ../../research/planning-workflow-root-cause-and-redesign.md
 admission:
   state: admitted
-  delivery_digest: e021c32f12692495bdfe027d5842df02fa5a33872728da80d493220d9cb1618c
-  receipt: receipts/admission-9387dea789fb.yaml
+  delivery_digest: 8d37daa27c7d9c979a19345e15c3a03a9551c455fe018b25ab2318f0c5cf4a48
+  receipt: receipts/admission-8d37daa27c7d.yaml
   limits:
     - Implementation packet boundaries remain intentionally unshaped until delivery-node shape jobs run.
     - Admission certifies delivery completeness and feasibility, not implementation correctness.

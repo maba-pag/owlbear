@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_kanban import AdmissionEvidence, evaluate_admission, load_change
+from owlbear_kanban import AdmissionEvidence, compute_delivery_digest, evaluate_admission, load_change
 
 
 def _admission_evidence(revision):
@@ -132,6 +132,40 @@ def test_authority_mutations_return_dv010(mutation) -> None:
     revision = mutation(result.revision)
     assessment = evaluate_admission(revision, _admission_evidence(revision))
 
+    assert any(item.code == "DV-010" for item in assessment.errors)
+
+
+def test_interface_defaults_normalize_without_masking_admission_drift() -> None:
+    result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
+    assert result.revision is not None
+    revision = result.revision
+    interface = revision.resolve("IF-001")
+
+    explicit_interface = interface.model_copy(
+        update={
+            "terminal_plan_prerequisite": interface.terminal_plan_prerequisite,
+            "runtime_producer": interface.runtime_producer,
+            "runtime_consumers": interface.runtime_consumers,
+        }
+    )
+    explicit_graph = revision.graph.model_copy(
+        update={"interfaces": (explicit_interface, *revision.graph.interfaces[1:])}
+    )
+    assert (
+        compute_delivery_digest(revision.intent, revision.design, revision.decisions, explicit_graph)
+        == revision.delivery_digest
+    )
+
+    changed_interface = interface.model_copy(update={"runtime_consumers": ("digest-probe",)})
+    changed_graph = revision.graph.model_copy(
+        update={"interfaces": (changed_interface, *revision.graph.interfaces[1:])}
+    )
+    changed_digest = compute_delivery_digest(revision.intent, revision.design, revision.decisions, changed_graph)
+    changed_revision = revision.model_copy(update={"graph": changed_graph, "delivery_digest": changed_digest})
+
+    assessment = evaluate_admission(changed_revision, _admission_evidence(changed_revision))
+
+    assert changed_digest != revision.delivery_digest
     assert any(item.code == "DV-010" for item in assessment.errors)
 
 

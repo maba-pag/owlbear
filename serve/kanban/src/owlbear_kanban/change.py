@@ -598,15 +598,11 @@ def compute_delivery_digest(
 ) -> str:
     """Return the canonical ``delivery-v1`` SHA-256 digest."""
     accepted = sorted(
-        (
-            item.model_dump(mode="json", by_alias=True, exclude_unset=True)
-            for item in decisions.decisions
-            if item.status == "accepted"
-        ),
+        (item.model_dump(mode="json", by_alias=True) for item in decisions.decisions if item.status == "accepted"),
         key=lambda item: item["id"],
     )
     delivery = {
-        section: [item.model_dump(mode="json", by_alias=True, exclude_unset=True) for item in getattr(graph, section)]
+        section: [item.model_dump(mode="json", by_alias=True) for item in getattr(graph, section)]
         for section in DELIVERY_SECTION_NAMES
     }
     envelope = {

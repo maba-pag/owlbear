@@ -11,8 +11,8 @@ authority:
     - ../../research/delivery-operating-model-reframe.md
 admission:
   state: admitted
-  delivery_digest: d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
-  receipt: receipts/admission-d241933d6345.yaml
+  delivery_digest: 1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+  receipt: receipts/admission-1ec9888c522d.yaml
   limits:
     - DN-003 must implement and prove accepted dependency-set currentness before dependent delivery proceeds.
     - DN-004 must implement and prove generic `terminal_plan_prerequisite` interface declarations.
