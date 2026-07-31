@@ -148,6 +148,7 @@ class Interface(_BoundaryModel):
     name: str
     producer: StableId
     consumers: FrozenSequence[StableId]
+    terminal_plan_prerequisite: bool = False
     contract: str
     authority: StableId
     failure_semantics: str

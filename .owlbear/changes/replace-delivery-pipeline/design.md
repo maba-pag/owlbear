@@ -686,7 +686,8 @@ bootstrap uses the current pipeline as a disposable execution carrier under thes
   recovery and unrelated mutation while DN-016 `finish_build` completes; normal processes then start
   on the destination for independent acceptance. Post-activation recovery is destination-only. No
   runtime hot-swap or jobless lease is required. Source
-  copies remain inert input to finalization. IF-018 declares itself the terminal plan prerequisite;
+  copies remain inert input to finalization. IF-018 sets `terminal_plan_prerequisite: true` and
+  declares itself the terminal plan prerequisite;
   dispatch resolves its producer DN-016 and consumer DN-015 from the admitted interface graph rather
   than a hardcoded node pair. The engine selects DN-015's `build` job only from the retained root, and the
   orchestrator invokes one builder with explicit finalization approval. That builder runs the

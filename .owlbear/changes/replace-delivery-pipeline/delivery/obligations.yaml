@@ -33,7 +33,7 @@ requirements:
       plan job independently validates, reviews, publishes, digests, and receipts
       either one complete outcome-cohesive packet DAG or one fail-closed exact-candidate
       verification-only re-admission plan without unadmitted delivery expansion. An interface contract
-      may declare itself a terminal plan prerequisite; the engine resolves its producer and consumers
+      may set `terminal_plan_prerequisite: true`; the engine resolves its producer and consumers
       from the admitted graph and keeps each consumer plan job non-startable until the producer is accepted.
     workflows: [WF-002]
   - id: REQ-005

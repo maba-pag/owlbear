@@ -237,10 +237,11 @@ interfaces:
       job
       eligible from
       sealed predecessor contracts except a node with an explicit terminal plan prerequisite; DN-015's
-      admitted plan job remains non-startable because IF-018 declares itself a terminal prerequisite
-      for its graph-declared consumer DN-015. The engine resolves DN-016 as producer and DN-015 as
-      consumer from IF-018 rather than from a hardcoded node pair; pick_jobs reports that omission
-      while ordering all eligible work by stable delivery topology.
+      admitted plan job remains non-startable because IF-018 sets
+      `terminal_plan_prerequisite: true` for its graph-declared consumer DN-015. The engine discovers
+      marked interfaces and resolves their producer and consumers from structured authority rather than
+      from hardcoded interface or node identities; pick_jobs reports that omission while ordering all
+      eligible work by stable delivery topology.
       Build
       readiness requires a current plan receipt, current authored packet dependencies,
       and current
@@ -502,13 +503,15 @@ interfaces:
     name: Activated retained native work root
     producer: DN-016
     consumers: [DN-015]
+    terminal_plan_prerequisite: true
     contract: >-
       A current DN-016 accept receipt binds the exact IF-017 prepared and activation receipts,
       complete typed inventory, source and destination hashes, sole owning claim and writer identity,
       sealed pre-activation probe, retained validated startup selector, normal-process restart configuration, destination-completed build
       receipt, and exact-commit read-only acceptance. Only this interface authorizes DN-015 planning
-      and dispatch from `.owlbear/native`; it explicitly declares itself the terminal plan prerequisite
-      for its graph-declared consumers, and no source-root fallback or dual read is permitted.
+      and dispatch from `.owlbear/native`; `terminal_plan_prerequisite: true` explicitly declares the
+      interface as the terminal plan prerequisite for its graph-declared consumers, and no source-root
+      fallback or dual read is permitted.
     authority: MOD-009
     failure_semantics: >-
       Missing, stale, rejected, superseded, source-mutated, configuration-divergent, or non-current

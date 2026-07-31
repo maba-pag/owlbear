@@ -11,11 +11,11 @@ authority:
     - ../../research/delivery-operating-model-reframe.md
 admission:
   state: admitted
-  delivery_digest: 7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
-  receipt: receipts/admission-7da5c669f6ef.yaml
+  delivery_digest: d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+  receipt: receipts/admission-d241933d6345.yaml
   limits:
     - DN-003 must implement and prove accepted dependency-set currentness before dependent delivery proceeds.
-    - DN-004 must implement and prove generic interface-declared terminal plan prerequisites.
+    - DN-004 must implement and prove generic `terminal_plan_prerequisite` interface declarations.
     - DN-012 must implement and fixture-prove shared selector resolution, including fail-closed selector loss.
     - DN-016 and DN-015 must produce live handoff and finalization evidence while protected configuration remains byte-unchanged.
 nodes:
