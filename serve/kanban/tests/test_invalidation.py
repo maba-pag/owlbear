@@ -15,12 +15,14 @@ from owlbear_kanban import (
     JobGeneration,
     JobRecord,
     JobStore,
+    NodePlanStore,
     ReceiptStore,
     PlanJob,
     compute_node_plan_digest,
     load_change,
     plan_corrective_route,
 )
+from owlbear_kanban.runtime_transaction import RuntimeTransaction
 
 
 @pytest.mark.parametrize(
@@ -80,6 +82,7 @@ def _copied_revision(tmp_path: Path):
     change_id = "replace-delivery-pipeline"
     shutil.copytree(Path(f".owlbear/changes/{change_id}"), changes_dir / change_id)
     shutil.rmtree(changes_dir / change_id / "receipts")
+    shutil.rmtree(changes_dir / change_id / "plans")
     result = load_change(changes_dir, change_id)
     assert result.revision is not None
     return result.revision
@@ -96,7 +99,7 @@ def _receipt(revision, receipt_id: str, predecessors: tuple[str, ...]) -> dict[s
         "issued_at": "2026-07-24T00:00:00Z",
         "impact_closure": {"paths": ["serve/kanban/"], "authority_targets": [node.id, node.proof]},
         "target_node_id": node.id,
-        "node_plan_digest": "b" * 64,
+        "node_plan_digest": compute_node_plan_digest(revision, node.id),
         "packet_id": f"{node.id}-PK-001",
         "predecessor_receipt_ids": list(predecessors),
         "evidence": {"commands": ["focused proof"]},
@@ -135,11 +138,29 @@ def _scenario(tmp_path: Path):
     revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
+    node = revision.graph.nodes[0]
+    plan = {
+        "mode": "build",
+        "packets": [
+            {
+                "id": f"{node.id}-PK-001",
+                "dependencies": [],
+                "impact_closure": {
+                    "paths": ["serve/kanban/"],
+                    "authority_targets": [node.id, node.proof],
+                },
+            }
+        ],
+    }
+    RuntimeTransaction(
+        work_root,
+        "seed-invalidation-plan",
+        (NodePlanStore(revision).prepare(node.id, plan),),
+    ).commit()
     receipts = ReceiptStore(revision)
     assert receipts.create("build-root", _receipt(revision, "build-root", ())).receipt is not None
     assert receipts.create("build-child", _receipt(revision, "build-child", ("build-root",))).receipt is not None
     assert receipts.create("build-unrelated", _receipt(revision, "build-unrelated", ())).receipt is not None
-    node = revision.graph.nodes[0]
     base = {
         "schema_version": 1,
         "kind": "build",
@@ -149,7 +170,7 @@ def _scenario(tmp_path: Path):
         "change_id": revision.change_id,
         "delivery_digest": revision.delivery_digest,
         "target_node_id": node.id,
-        "node_plan_digest": "b" * 64,
+        "node_plan_digest": compute_node_plan_digest(revision, node.id),
         "packet_id": f"{node.id}-PK-001",
     }
     jobs = JobStore(work_root)

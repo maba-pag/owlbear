@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -18,8 +19,13 @@ from owlbear_kanban.runtime_requests import (
 
 
 @pytest.fixture
-def revision():
-    result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
+def revision(tmp_path: Path):
+    change_id = "replace-delivery-pipeline"
+    changes_dir = tmp_path / "authority"
+    shutil.copytree(Path(f".owlbear/changes/{change_id}"), changes_dir / change_id)
+    shutil.rmtree(changes_dir / change_id / "plans")
+    shutil.rmtree(changes_dir / change_id / "receipts")
+    result = load_change(changes_dir, change_id)
     assert result.revision is not None
     return result.revision
 

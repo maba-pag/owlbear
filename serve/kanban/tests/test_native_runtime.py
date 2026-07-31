@@ -561,10 +561,32 @@ def _terminal_accept_scenario(
 
 
 def _active_audit_scenario(tmp_path: Path):
-    revision, work_root, runtime, accept_request, _predecessor_ids = _terminal_accept_scenario(tmp_path)
-    accepted = runtime.finish_accept(accept_request)
-    assert accepted.diagnostic is None
-    audit_job = accepted.created_jobs[0]
+    revision = _copied_revision(tmp_path, clean_receipts=True)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    audit_node = revision.resolve("DN-014")
+    _seed_accepted_dependency(
+        revision,
+        work_root,
+        node_id=audit_node.id,
+        job_id=14,
+        code_revision="a" * 40,
+        closure={
+            "paths": ["serve/kanban/"],
+            "authority_targets": [audit_node.id, audit_node.proof],
+        },
+        accept_receipt_id="accept-final",
+    )
+    audit_job = _record(
+        revision,
+        job_id=15,
+        kind="audit",
+        target_node_id=audit_node.id,
+        node_plan_digest=compute_node_plan_digest(revision, audit_node.id),
+        predecessor_job_ids=(14,),
+    )
+    _materialize(JobStore(work_root), audit_job)
+    runtime = _runtime(revision, work_root)
     start = StartJobRequest(
         job_id=audit_job.job_id,
         attempt_id="attempt-audit",
@@ -1351,8 +1373,8 @@ def test_finish_plan_rejects_invalid_packet_authority_without_publication(tmp_pa
     assert AttemptStore(work_root).read("attempt-001", 2).event is None
 
 
-@pytest.mark.parametrize("complete_coverage", [False, True])
-def test_finish_plan_requires_complete_predecessor_receipt_closure(tmp_path, complete_coverage) -> None:
+@pytest.mark.parametrize("coverage", ["partial", "complete", "declared"])
+def test_finish_plan_requires_complete_predecessor_receipt_closure(tmp_path, coverage: str) -> None:
     revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
@@ -1431,12 +1453,19 @@ def test_finish_plan_requires_complete_predecessor_receipt_closure(tmp_path, com
     assert runtime.start_job(start).diagnostic is None
     packet_closure = (
         predecessor_closure
-        if complete_coverage
+        if coverage == "complete"
         else {
             "paths": [predecessor_closure["paths"][0]],
             "authority_targets": predecessor_closure["authority_targets"],
         }
     )
+    packet = {
+        "id": "DN-002-PK-001",
+        "dependencies": [],
+        "impact_closure": packet_closure,
+    }
+    if coverage == "declared":
+        packet["predecessor_acceptance"] = [predecessor_receipt_id]
     request = _plan_request(
         revision,
         target_node_id="DN-002",
@@ -1445,13 +1474,7 @@ def test_finish_plan_requires_complete_predecessor_receipt_closure(tmp_path, com
         claim_id=start.claim_id,
         node_plan={
             "mode": "build",
-            "packets": [
-                {
-                    "id": "DN-002-PK-001",
-                    "dependencies": [],
-                    "impact_closure": packet_closure,
-                }
-            ],
+            "packets": [packet],
         },
         build_job_ids=(3,),
         accept_job_id=4,
@@ -1460,7 +1483,7 @@ def test_finish_plan_requires_complete_predecessor_receipt_closure(tmp_path, com
 
     result = runtime.finish_plan(request)
 
-    if complete_coverage:
+    if coverage != "partial":
         assert result.diagnostic is None
         assert result.receipt is not None
     else:
@@ -1470,15 +1493,42 @@ def test_finish_plan_requires_complete_predecessor_receipt_closure(tmp_path, com
         assert (revision.source_dir / "plans/DN-002.yaml").read_bytes() == existing_plan
 
 
-def test_finish_plan_transaction_failure_publishes_nothing(tmp_path, monkeypatch) -> None:
+@pytest.mark.parametrize("mode", ["build", "verification-only"])
+def test_finish_plan_transaction_failure_publishes_nothing(tmp_path, monkeypatch, mode: str) -> None:
     revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
+    if mode == "verification-only":
+        _materialize(
+            store,
+            _record(
+                revision,
+                job_id=99,
+                kind="plan",
+                delivery_digest="b" * 64,
+                receipt_id="admission-prior",
+            ),
+        )
+        prior = store.read(99)
+        store.archive(99, prior.token)
     _materialize(store, _record(revision, kind="plan", receipt_id="bootstrap-001"))
     runtime = _runtime(revision, work_root)
+    if mode == "verification-only":
+        read_receipt = runtime._receipts.read  # noqa: SLF001 - isolate admission-generation eligibility.
+        monkeypatch.setattr(
+            runtime._receipts,  # noqa: SLF001 - isolate admission-generation eligibility.
+            "read",
+            lambda receipt_id: (
+                SimpleNamespace(receipt=SimpleNamespace(kind="admission"))
+                if receipt_id == "bootstrap-001"
+                else read_receipt(receipt_id)
+            ),
+        )
     runtime.start_job(_request())
     plan_path = revision.source_dir / "plans" / "DN-001.yaml"
+    work_before = _snapshot(work_root)
+    receipts_before = {path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")}
 
     def reject_transaction(_transaction) -> None:
         raise TransactionConflictError
@@ -1486,12 +1536,15 @@ def test_finish_plan_transaction_failure_publishes_nothing(tmp_path, monkeypatch
     monkeypatch.setattr(RuntimeTransaction, "commit", reject_transaction)
 
     with pytest.raises(TransactionConflictError):
-        runtime.finish_plan(_plan_request(revision))
+        runtime.finish_plan(
+            _verification_plan_request(revision) if mode == "verification-only" else _plan_request(revision)
+        )
 
     assert not plan_path.exists()
-    assert tuple(item.job.job_id for item in store.list()) == (1,)
-    assert store.list(archived=True) == ()
-    assert AttemptStore(work_root).read("attempt-001", 2).event is None
+    assert _snapshot(work_root) == work_before
+    assert receipts_before == {
+        path.name: path.read_bytes() for path in (revision.source_dir / "receipts").glob("*.yaml")
+    }
     assert not (revision.source_dir / "receipts/plan-001.yaml").exists()
 
 
@@ -1539,7 +1592,7 @@ def test_finish_build_rejects_different_admitted_packet_closure_without_publicat
 
 
 def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> None:  # noqa: PLR0915
-    revision = _copied_revision(tmp_path)
+    revision = _copied_revision(tmp_path, clean_receipts=True)
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
@@ -1874,8 +1927,319 @@ def test_build_start_reconciliation_gates_are_mutation_free(tmp_path) -> None:
     assert released.event.kind == "released"
 
 
-def test_build_start_rejects_missing_and_ambiguous_predecessor_accepts_without_mutation(tmp_path) -> None:
-    missing_revision = _copied_revision(tmp_path / "missing")
+def _causal_dependency_scenario(
+    tmp_path: Path,
+    *,
+    complete_coverage: bool = True,
+) -> tuple[object, Path, _History, JobRecord]:
+    revision = _copied_revision(tmp_path, clean_receipts=True)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    store = JobStore(work_root)
+    receipts = ReceiptStore(revision)
+    candidate_revision = "b" * 40
+    history = _History()
+    history.changed_paths = b"M\0serve/kanban/src/owlbear_kanban/native_runtime.py\0"
+    predecessor_closure = {
+        "paths": ["serve/kanban/"],
+        "authority_targets": ["DN-001", "DN-002", "PROOF-001", "PROOF-002"],
+    }
+    descendant_closure = (
+        predecessor_closure
+        if complete_coverage
+        else {
+            "paths": ["serve/kanban/src/owlbear_kanban/admission.py"],
+            "authority_targets": predecessor_closure["authority_targets"],
+        }
+    )
+    predecessor_plan = {
+        "mode": "build",
+        "packets": [
+            {
+                "id": "DN-001-PK-001",
+                "dependencies": [],
+                "impact_closure": predecessor_closure,
+            }
+        ],
+    }
+    descendant_plan = {
+        "mode": "build",
+        "packets": [
+            {
+                "id": "DN-002-PK-001",
+                "dependencies": [],
+                "impact_closure": descendant_closure,
+            }
+        ],
+    }
+    (revision.source_dir / "plans/DN-002.yaml").unlink()
+    RuntimeTransaction(
+        work_root,
+        "seed-causal-plans",
+        (
+            NodePlanStore(revision).prepare("DN-001", predecessor_plan),
+            NodePlanStore(revision).prepare("DN-002", descendant_plan),
+        ),
+    ).commit()
+    closures = {}
+    for node_id in ("DN-001", "DN-002"):
+        packet_closures = tuple(
+            parse_impact_closure(packet["impact_closure"]) for packet in revision.read_node_plan(node_id)["packets"]
+        )
+        closures[node_id] = {
+            "paths": sorted({path for item in packet_closures for path in item.paths}),
+            "authority_targets": sorted({target for item in packet_closures for target in item.authority_targets}),
+        }
+    for job_id, node_id, code_revision in ((10, "DN-001", "a" * 40), (11, "DN-002", candidate_revision)):
+        receipt_id = f"accept-{job_id:03d}"
+        build_receipt_id = f"build-{job_id:03d}"
+        build_receipt = {
+            "schema_version": 1,
+            "kind": "build",
+            "receipt_id": build_receipt_id,
+            "change_id": revision.change_id,
+            "delivery_digest": revision.delivery_digest,
+            "issued_at": f"2026-07-23T00:{job_id:02d}:00Z",
+            "impact_closure": closures[node_id],
+            "target_node_id": node_id,
+            "node_plan_digest": compute_node_plan_digest(revision, node_id),
+            "predecessor_receipt_ids": [],
+            "evidence": {"methods": list(revision.resolve(revision.resolve(node_id).proof).method)},
+            "code_revision": code_revision,
+        }
+        assert receipts.create(build_receipt_id, build_receipt).receipt is not None
+        receipt = {
+            "schema_version": 1,
+            "kind": "accept",
+            "receipt_id": receipt_id,
+            "change_id": revision.change_id,
+            "delivery_digest": revision.delivery_digest,
+            "issued_at": f"2026-07-24T00:{job_id:02d}:00Z",
+            "impact_closure": closures[node_id],
+            "target_node_id": node_id,
+            "node_plan_digest": compute_node_plan_digest(revision, node_id),
+            "predecessor_receipt_ids": [build_receipt_id],
+            "evidence": _accept_evidence(
+                revision,
+                node_id,
+                code_revision=code_revision,
+                packet_receipt_ids=(build_receipt_id,),
+            ),
+            "code_revision": code_revision,
+        }
+        assert receipts.create(receipt_id, receipt).receipt is not None
+        _materialize(
+            store,
+            _record(
+                revision,
+                job_id=job_id,
+                kind="accept",
+                target_node_id=node_id,
+                node_plan_digest=compute_node_plan_digest(revision, node_id),
+                receipt_id=receipt_id,
+            ),
+        )
+        stored = store.read(job_id)
+        store.archive(job_id, stored.token)
+    assert receipts.evaluate_currentness("accept-011", history, candidate_revision).current
+    assert not receipts.evaluate_currentness("accept-010", history, candidate_revision).current
+    assert (
+        receipts.evaluate_currentness(
+            "accept-010",
+            history,
+            candidate_revision,
+            successor_closure=parse_impact_closure(closures["DN-002"]),
+        ).current
+        is complete_coverage
+    )
+    build_job = _record(
+        revision,
+        job_id=20,
+        target_node_id="DN-003",
+        node_plan_digest=compute_node_plan_digest(revision, "DN-003"),
+        packet_id="DN-003-PK-001",
+    )
+    _materialize(store, build_job)
+    return revision, work_root, history, build_job
+
+
+def test_build_start_uses_causal_accepted_dependency_coverage(tmp_path: Path) -> None:
+    revision, work_root, history, build_job = _causal_dependency_scenario(tmp_path)
+    runtime = _runtime(revision, work_root, history=history)
+    request = _request().model_copy(
+        update={
+            "job_id": build_job.job_id,
+            "attempt_id": "attempt-020",
+            "claim_id": "claim-020",
+            "candidate_revision": "b" * 40,
+        }
+    )
+
+    result = runtime.start_job(request)
+
+    assert result.diagnostic is None
+    assert result.job is not None
+    assert result.job.job.job_id == build_job.job_id
+
+
+def _seed_accepted_dependency(  # noqa: PLR0913
+    revision,
+    work_root: Path,
+    *,
+    node_id: str,
+    job_id: int,
+    code_revision: str,
+    closure: dict[str, object],
+    accept_receipt_id: str | None = None,
+) -> None:
+    plan = {
+        "mode": "build",
+        "packets": [
+            {
+                "id": f"{node_id}-PK-001",
+                "dependencies": [],
+                "impact_closure": closure,
+            }
+        ],
+    }
+    (revision.source_dir / "plans" / f"{node_id}.yaml").unlink(missing_ok=True)
+    RuntimeTransaction(
+        work_root,
+        f"seed-plan-{node_id}",
+        (NodePlanStore(revision).prepare(node_id, plan),),
+    ).commit()
+    node_plan_digest = compute_node_plan_digest(revision, node_id)
+    build_receipt_id = f"build-{job_id:03d}"
+    accept_receipt_id = accept_receipt_id or f"accept-{job_id:03d}"
+    receipts = ReceiptStore(revision)
+    build_receipt = {
+        "schema_version": 1,
+        "kind": "build",
+        "receipt_id": build_receipt_id,
+        "change_id": revision.change_id,
+        "delivery_digest": revision.delivery_digest,
+        "issued_at": f"2026-07-23T00:{job_id:02d}:00Z",
+        "impact_closure": closure,
+        "target_node_id": node_id,
+        "node_plan_digest": node_plan_digest,
+        "predecessor_receipt_ids": [],
+        "evidence": {"methods": list(revision.resolve(revision.resolve(node_id).proof).method)},
+        "code_revision": code_revision,
+    }
+    assert receipts.create(build_receipt_id, build_receipt).receipt is not None
+    accept_receipt = {
+        **build_receipt,
+        "kind": "accept",
+        "receipt_id": accept_receipt_id,
+        "issued_at": f"2026-07-24T00:{job_id:02d}:00Z",
+        "predecessor_receipt_ids": [build_receipt_id],
+        "evidence": _accept_evidence(
+            revision,
+            node_id,
+            code_revision=code_revision,
+            packet_receipt_ids=(build_receipt_id,),
+        ),
+    }
+    assert receipts.create(accept_receipt_id, accept_receipt).receipt is not None
+    jobs = JobStore(work_root)
+    _materialize(
+        jobs,
+        _record(
+            revision,
+            job_id=job_id,
+            kind="accept",
+            target_node_id=node_id,
+            node_plan_digest=node_plan_digest,
+            receipt_id=accept_receipt_id,
+        ),
+    )
+    stored = jobs.read(job_id)
+    jobs.archive(job_id, stored.token)
+
+
+def test_build_start_does_not_union_sibling_dependency_closures(tmp_path: Path) -> None:
+    revision = _copied_revision(tmp_path, clean_receipts=True)
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    candidate_revision = "c" * 40
+    stale_revision = "9" * 40
+
+    class SelectiveHistory(_History):
+        def name_status(self, tested_revision: str, _candidate_revision: str) -> bytes:
+            if tested_revision == stale_revision:
+                return b"M\0serve/a.py\0M\0serve/b.py\0"
+            return b""
+
+    target = revision.resolve("DN-012")
+    for job_id, node_id in enumerate(target.dependencies, start=30):
+        node = revision.resolve(node_id)
+        paths = ["serve/"]
+        authority_targets = [node.id, node.proof]
+        if node_id == "DN-009":
+            paths = ["serve/a.py", "serve/b.py"]
+        elif node_id == "DN-005":
+            paths = ["serve/a.py"]
+            authority_targets.extend(("DN-009", revision.resolve("DN-009").proof))
+        elif node_id == "DN-014":
+            paths = ["serve/b.py"]
+            authority_targets.extend(("DN-009", revision.resolve("DN-009").proof))
+        _seed_accepted_dependency(
+            revision,
+            work_root,
+            node_id=node_id,
+            job_id=job_id,
+            code_revision=stale_revision if node_id == "DN-009" else candidate_revision,
+            closure={"paths": paths, "authority_targets": authority_targets},
+        )
+    target_plan = {
+        "mode": "build",
+        "packets": [
+            {
+                "id": "DN-012-PK-001",
+                "dependencies": [],
+                "impact_closure": {
+                    "paths": ["serve/kanban/"],
+                    "authority_targets": [target.id, target.proof],
+                },
+            }
+        ],
+    }
+    (revision.source_dir / "plans/DN-012.yaml").unlink(missing_ok=True)
+    RuntimeTransaction(
+        work_root,
+        "seed-plan-DN-012",
+        (NodePlanStore(revision).prepare("DN-012", target_plan),),
+    ).commit()
+    build_job = _record(
+        revision,
+        job_id=50,
+        target_node_id="DN-012",
+        node_plan_digest=compute_node_plan_digest(revision, "DN-012"),
+        packet_id="DN-012-PK-001",
+    )
+    _materialize(JobStore(work_root), build_job)
+    runtime = _runtime(revision, work_root, history=SelectiveHistory())
+    request = _request().model_copy(
+        update={
+            "job_id": build_job.job_id,
+            "attempt_id": "attempt-sibling-closure",
+            "claim_id": "claim-sibling-closure",
+            "candidate_revision": candidate_revision,
+        }
+    )
+    before = _snapshot(work_root)
+
+    result = runtime.start_job(request)
+
+    assert result.diagnostic is not None
+    assert result.diagnostic.code is StartJobDiagnosticCode.PREDECESSOR_INVALID
+    assert _snapshot(work_root) == before
+
+
+def test_build_start_rejects_missing_and_ambiguous_predecessor_accepts_without_mutation(  # noqa: PLR0915
+    tmp_path,
+) -> None:
+    missing_revision = _copied_revision(tmp_path / "missing", clean_receipts=True)
     missing_work_root = tmp_path / "missing" / "work"
     missing_work_root.mkdir()
     _materialize(
@@ -1897,7 +2261,28 @@ def test_build_start_rejects_missing_and_ambiguous_predecessor_accepts_without_m
     assert missing.diagnostic.code is StartJobDiagnosticCode.PREDECESSOR_INVALID
     assert _snapshot(missing_work_root) == missing_before
 
-    ambiguous_revision = _copied_revision(tmp_path / "ambiguous")
+    missing_store = JobStore(missing_work_root)
+    _materialize(
+        missing_store,
+        _record(
+            missing_revision,
+            job_id=11,
+            kind="accept",
+            target_node_id="DN-001",
+            receipt_id="accept-missing",
+        ),
+    )
+    represented = missing_store.read(11)
+    missing_store.archive(11, represented.token)
+    represented_before = _snapshot(missing_work_root)
+
+    represented_missing = missing_runtime.start_job(missing_start)
+
+    assert represented_missing.diagnostic is not None
+    assert represented_missing.diagnostic.code is StartJobDiagnosticCode.PREDECESSOR_INVALID
+    assert _snapshot(missing_work_root) == represented_before
+
+    ambiguous_revision = _copied_revision(tmp_path / "ambiguous", clean_receipts=True)
     ambiguous_work_root = tmp_path / "ambiguous" / "work"
     ambiguous_work_root.mkdir()
     ambiguous_store = JobStore(ambiguous_work_root)
@@ -1975,7 +2360,7 @@ def test_build_start_rejects_missing_and_ambiguous_predecessor_accepts_without_m
 
 
 def test_three_node_fold_in_occ_updates_same_plan_job_after_two_accepts(tmp_path) -> None:  # noqa: PLR0915
-    revision = _copied_revision(tmp_path)
+    revision = _copied_revision(tmp_path, clean_receipts=True)
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
@@ -2408,7 +2793,7 @@ def test_start_job_stores_claim_and_started_event_then_replays(revision, tmp_pat
 
 
 def test_runtime_queries_project_orthogonal_state_and_deterministic_history(revision, tmp_path) -> None:
-    revision = _copied_revision(tmp_path)
+    revision = _copied_revision(tmp_path, clean_receipts=True)
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
@@ -2440,7 +2825,9 @@ def test_runtime_queries_project_orthogonal_state_and_deterministic_history(revi
 def test_runtime_queries_bound_scale_pages_and_reuse_indexes(revision, tmp_path, monkeypatch) -> None:
     node = revision.graph.nodes[0]
     nodes = tuple(node.model_copy(update={"id": f"DN-{index:03d}"}) for index in range(1, 501))
-    revision = revision.model_copy(update={"graph": revision.graph.model_copy(update={"nodes": nodes})})
+    revision = type(revision).model_validate(
+        revision.model_dump() | {"graph": revision.graph.model_copy(update={"nodes": nodes})}
+    )
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)

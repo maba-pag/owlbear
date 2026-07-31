@@ -12,6 +12,12 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from owlbear_kanban.accepted_dependencies import (
+    AcceptedDependencySet,
+    AcceptedDependencyStatus,
+    ProspectiveAcceptance,
+    resolve_accepted_dependencies,
+)
 from owlbear_kanban.attempts import AttemptEvent, AttemptStore
 from owlbear_kanban.change import DeliveryNode, load_change
 from owlbear_kanban.finding import Finding, FindingStore
@@ -1791,7 +1797,7 @@ class NativeRuntime:
             except ValueError as exc:
                 return self._finish_diagnostic(FinishJobDiagnosticCode.IDENTITY_CONFLICT, str(exc))
         if isinstance(request, FinishAcceptRequest):
-            prepared_audit = self._prepare_terminal_audit(stored, request)
+            prepared_audit = self._prepare_terminal_audit(stored, request, closure)
             if isinstance(prepared_audit, FinishJobResult):
                 return prepared_audit
             audit_job, audit_participants = prepared_audit
@@ -2059,14 +2065,13 @@ class NativeRuntime:
                 "accept reconciliation identities do not match dependent graph",
                 target=job.target_node_id,
             )
-        for row, dependent, plan_job_id in zip(
-            rows,
-            dependents,
-            request.reconciliation_plan_job_ids,
-            strict=True,
-        ):
-            expected = {"target_node_id": dependent.id, "plan_job_id": plan_job_id}
-            if not isinstance(row, Mapping) or dict(row) != expected:
+        for row, dependent in zip(rows, dependents, strict=True):
+            if (
+                not isinstance(row, Mapping)
+                or row.get("target_node_id") != dependent.id
+                or not isinstance(row.get("plan_job_id"), int)
+                or row["plan_job_id"] <= 0
+            ):
                 return self._finish_diagnostic(
                     FinishJobDiagnosticCode.EVIDENCE_INVALID,
                     "accept reconciliation evidence is malformed or out of order",
@@ -2074,10 +2079,21 @@ class NativeRuntime:
                 )
         return None
 
-    def _accept_participants(
-        self, stored: StoredJob, request: FinishJobRequest
+    def _accept_participants(  # noqa: C901
+        self,
+        stored: StoredJob,
+        request: FinishJobRequest,
+        closure: ImpactClosure | None = None,
     ) -> tuple[TransactionParticipant | ReplacementTransactionParticipant, ...]:
         assert isinstance(request, FinishAcceptRequest)
+        if closure is None:
+            prepared_closure = self._finish_closure(stored.job, request)
+            if isinstance(prepared_closure, FinishJobResult):
+                detail = (
+                    prepared_closure.diagnostic.detail if prepared_closure.diagnostic is not None else "invalid closure"
+                )
+                raise ValueError(detail)
+            closure = prepared_closure
         dependents = self._dependent_nodes(stored.job.target_node_id)
         if len(request.reconciliation_plan_job_ids) != len(dependents):
             msg = "dependent reconciliation identities do not correspond"
@@ -2089,7 +2105,12 @@ class NativeRuntime:
             raise ValueError(msg)
         participants: list[ReplacementTransactionParticipant] = []
         for dependent, job_id in zip(dependents, request.reconciliation_plan_job_ids, strict=True):
-            predecessors = self._reconciliation_job_ids(dependent, stored.job, request.code_revision)
+            predecessors = self._reconciliation_job_ids(
+                dependent,
+                stored.job,
+                request.code_revision,
+                closure,
+            )
             active = tuple(
                 item
                 for item in self._jobs.list()
@@ -2142,6 +2163,7 @@ class NativeRuntime:
         self,
         stored: StoredJob,
         request: FinishAcceptRequest,
+        closure: ImpactClosure,
     ) -> (
         tuple[
             JobRecord | None,
@@ -2153,12 +2175,12 @@ class NativeRuntime:
         if request.reconciliation_plan_job_ids or authority is None:
             return None, ()
         audit_node, audit_plan = authority
-        accepted = self._terminal_accept_jobs(stored.job, request.code_revision)
+        accepted = self._terminal_accept_jobs(stored.job, request.code_revision, closure)
         if isinstance(accepted, FinishJobResult):
             return accepted
         if accepted is None:
             return None, ()
-        predecessor_ids = tuple(sorted(job.job_id for job in accepted))
+        predecessor_ids = tuple(job.job_id for job in accepted)
         audit_plan_digest = compute_node_plan_digest(self._revision, audit_node.id, audit_plan)
         existing, diagnostic = self._existing_audit_identity(
             audit_node.id,
@@ -2198,20 +2220,26 @@ class NativeRuntime:
         return audit_node, audit_plan
 
     def _terminal_accept_jobs(
-        self, accepted: JobRecord, code_revision: str
+        self,
+        accepted: JobRecord,
+        code_revision: str,
+        closure: ImpactClosure,
     ) -> tuple[JobRecord, ...] | FinishJobResult | None:
-        jobs = [accepted]
-        try:
-            for node in self._revision.graph.nodes:
-                if node.id == accepted.target_node_id:
-                    continue
-                current = self._current_accept_job(node.id, code_revision)
-                if current is None:
-                    return None
-                jobs.append(current)
-        except ValueError as exc:
-            return self._finish_diagnostic(FinishJobDiagnosticCode.IDENTITY_CONFLICT, str(exc))
-        return tuple(jobs)
+        resolved = self._accepted_dependencies(
+            tuple(node.id for node in self._revision.graph.nodes),
+            code_revision,
+            prospective=ProspectiveAcceptance(job=accepted, impact_closure=closure),
+        )
+        for entry in resolved.entries:
+            if entry.status is AcceptedDependencyStatus.NOT_YET_ACCEPTED:
+                return None
+            if not entry.current:
+                return self._finish_diagnostic(
+                    FinishJobDiagnosticCode.IDENTITY_CONFLICT,
+                    "terminal acceptance set is invalid or ambiguous",
+                    target=entry.node_id,
+                )
+        return resolved.current_jobs
 
     def _existing_audit_identity(
         self,
@@ -2254,16 +2282,25 @@ class NativeRuntime:
             and item.job.created_at == finished_at
         )
 
-    def _reconciliation_job_ids(self, dependent: object, accepted: JobRecord, code_revision: str) -> tuple[int, ...]:
-        predecessor_ids: list[int] = []
-        for predecessor_node_id in dependent.dependencies:
-            if predecessor_node_id == accepted.target_node_id:
-                predecessor_ids.append(accepted.job_id)
+    def _reconciliation_job_ids(
+        self,
+        dependent: object,
+        accepted: JobRecord,
+        code_revision: str,
+        closure: ImpactClosure,
+    ) -> tuple[int, ...]:
+        resolved = self._accepted_dependencies(
+            dependent.dependencies,
+            code_revision,
+            prospective=ProspectiveAcceptance(job=accepted, impact_closure=closure),
+        )
+        for entry in resolved.entries:
+            if entry.status is AcceptedDependencyStatus.NOT_YET_ACCEPTED:
                 continue
-            current = self._current_accept_job(predecessor_node_id, code_revision)
-            if current is not None:
-                predecessor_ids.append(current.job_id)
-        return tuple(predecessor_ids)
+            if not entry.current:
+                msg = f"dependent acceptance set is invalid or ambiguous: {entry.node_id}"
+                raise ValueError(msg)
+        return tuple(job.job_id for job in resolved.current_jobs)
 
     def _reconciliation_predecessors(self, node_id: str, code_revision: str) -> StartJobResult | None:
         active_plan = next(
@@ -2283,36 +2320,39 @@ class NativeRuntime:
                 target=str(active_plan.job_id),
             )
         node = self._revision.resolve(node_id)
-        for predecessor_node_id in node.dependencies:
-            try:
-                current = self._current_accept_job(predecessor_node_id, code_revision)
-            except ValueError:
+        resolved = self._accepted_dependencies(node.dependencies, code_revision)
+        for entry in resolved.entries:
+            if entry.status is AcceptedDependencyStatus.AMBIGUOUS_CURRENT:
                 return self._diagnostic(
                     StartJobDiagnosticCode.PREDECESSOR_INVALID,
                     "predecessor acceptance is ambiguous",
-                    target=predecessor_node_id,
+                    target=entry.node_id,
                 )
-            if current is None:
+            if not entry.current:
                 return self._diagnostic(
                     StartJobDiagnosticCode.PREDECESSOR_INVALID,
                     "predecessor acceptance is unavailable",
-                    target=predecessor_node_id,
+                    target=entry.node_id,
                 )
         return None
 
-    def _current_accept_job(self, node_id: str, code_revision: str) -> JobRecord | None:
-        current = tuple(
-            item.job
-            for item in self._jobs.list(archived=True)
-            if item.job.kind == "accept"
-            and item.job.target_node_id == node_id
-            and item.job.receipt_id is not None
-            and self._receipts.evaluate_currentness(item.job.receipt_id, self._history, code_revision).current
+    def _accepted_dependencies(
+        self,
+        node_ids: tuple[str, ...],
+        code_revision: str,
+        *,
+        prospective: ProspectiveAcceptance | None = None,
+    ) -> AcceptedDependencySet:
+        accept_jobs = tuple(item.job for item in self._jobs.list(archived=True) if item.job.kind == "accept")
+        return resolve_accepted_dependencies(
+            self._revision,
+            accept_jobs,
+            self._receipts,
+            self._history,
+            code_revision,
+            node_ids,
+            prospective=prospective,
         )
-        if len(current) > 1:
-            msg = "predecessor acceptance is ambiguous"
-            raise ValueError(msg)
-        return current[0] if current else None
 
     def _prepare_plan(  # noqa: PLR0911
         self,
@@ -2326,7 +2366,7 @@ class NativeRuntime:
         if isinstance(plan, FinishJobResult):
             return plan
         mode, packet_ids, dependencies, closures = plan
-        predecessor_coverage = self._validate_plan_predecessor_coverage(job, closures)
+        predecessor_coverage = self._validate_plan_predecessor_coverage(job, closures, request.node_plan)
         if predecessor_coverage is not None:
             return predecessor_coverage
         if mode == "verification-only":
@@ -2619,7 +2659,10 @@ class NativeRuntime:
         self,
         job: JobRecord,
         closures: tuple[ImpactClosure, ...],
+        node_plan: Mapping[str, object],
     ) -> FinishJobResult | None:
+        packets = node_plan.get("packets")
+        packet_values = tuple(packets) if isinstance(packets, list | tuple) else ()
         for predecessor_job_id in job.predecessor_job_ids:
             predecessor_job = self._read_job(predecessor_job_id).job
             if predecessor_job.kind != "accept" or predecessor_job.receipt_id is None:
@@ -2627,9 +2670,13 @@ class NativeRuntime:
             predecessor = self._receipts.read(predecessor_job.receipt_id).receipt
             if predecessor is None or predecessor.impact_closure is None:
                 continue
-            for closure in closures:
-                if impact_closures_intersect(closure, predecessor.impact_closure) and not impact_closure_covers(
-                    closure, predecessor.impact_closure
+            for index, closure in enumerate(closures):
+                packet = packet_values[index] if index < len(packet_values) else None
+                declared = packet.get("predecessor_acceptance", ()) if isinstance(packet, Mapping) else ()
+                if (
+                    impact_closures_intersect(closure, predecessor.impact_closure)
+                    and not impact_closure_covers(closure, predecessor.impact_closure)
+                    and predecessor.receipt_id not in declared
                 ):
                     return self._finish_diagnostic(
                         FinishJobDiagnosticCode.NODE_PLAN_INVALID,

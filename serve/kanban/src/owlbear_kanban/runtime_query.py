@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, ConfigDict
 from ruamel.yaml.error import YAMLError
 
+from owlbear_kanban.accepted_dependencies import resolve_accepted_dependencies
 from owlbear_kanban.attempts import AttemptEvent, AttemptStore
 from owlbear_kanban.change import ChangeRevision, Digest
 from owlbear_kanban.finding import Finding, FindingStore
@@ -317,9 +318,7 @@ class RuntimeQuery:
             modules=authority.modules,
             interfaces=authority.interfaces,
             proof=authority.proof,
-            dependency_ready=all(
-                self._dependency_current(item, candidate_revision) for item in job.predecessor_job_ids
-            ),
+            dependency_ready=self._dependency_ready(job, candidate_revision),
             claim_id=job.claim_id,
             requests=tuple(
                 self._requests_by_id[request_id]
@@ -341,6 +340,31 @@ class RuntimeQuery:
             validity=self._receipt_validity(receipt.receipt_id, candidate_revision) if receipt else None,
             disposition=job.disposition,
         )
+
+    def _dependency_ready(self, job: JobRecord, candidate_revision: str) -> bool:
+        if not all(self._dependency_current(item, candidate_revision) for item in job.predecessor_job_ids):
+            return False
+        if job.kind != "build":
+            return True
+        assert self._jobs_by_id is not None
+        try:
+            target = self._revision.resolve(job.target_node_id)
+        except KeyError:
+            return False
+        accept_jobs = tuple(
+            predecessor
+            for job_id, predecessor in self._jobs_by_id.items()
+            if job_id in self._archived_ids and predecessor.kind == "accept"
+        )
+        resolved = resolve_accepted_dependencies(
+            self._revision,
+            accept_jobs,
+            self._receipts,
+            self._history,
+            candidate_revision,
+            target.dependencies,
+        )
+        return all(entry.current for entry in resolved.entries)
 
     def _dependency_current(self, job_id: int, candidate_revision: str) -> bool:
         assert self._jobs_by_id is not None

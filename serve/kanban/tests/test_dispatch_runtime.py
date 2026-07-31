@@ -19,6 +19,7 @@ from owlbear_kanban import (
     JobRecord,
     JobStore,
     NativeRuntime,
+    NodePlanStore,
     ProofCheckoutManager,
     ReceiptStore,
     RecoverExpiredClaimsRequest,
@@ -87,8 +88,13 @@ class _ProofCheckouts:
 
 
 @pytest.fixture
-def revision():
-    result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
+def revision(tmp_path: Path):
+    change_id = "replace-delivery-pipeline"
+    changes_dir = tmp_path / "authority"
+    shutil.copytree(Path(f".owlbear/changes/{change_id}"), changes_dir / change_id)
+    shutil.rmtree(changes_dir / change_id / "plans")
+    shutil.rmtree(changes_dir / change_id / "receipts")
+    result = load_change(changes_dir, change_id)
     assert result.revision is not None
     return result.revision
 
@@ -152,7 +158,8 @@ def _request(job_id: int) -> StartJobRequest:
 def _copied_revision(revision, tmp_path):
     changes_dir = tmp_path / "changes"
     shutil.copytree(revision.source_dir, changes_dir / revision.change_id)
-    (changes_dir / revision.change_id / "plans" / "DN-001.yaml").unlink()
+    shutil.rmtree(changes_dir / revision.change_id / "plans", ignore_errors=True)
+    shutil.rmtree(changes_dir / revision.change_id / "receipts", ignore_errors=True)
     result = load_change(changes_dir, revision.change_id)
     assert result.revision is not None
     return result.revision
@@ -693,6 +700,22 @@ def test_pick_waves_separates_dependent_readers(revision, tmp_path) -> None:
     )
     node = revision.graph.nodes[0]
     proof = revision.resolve(node.proof)
+    closure = {"paths": ["serve/kanban/"], "authority_targets": [node.id, node.proof]}
+    plan = {
+        "mode": "build",
+        "packets": [
+            {
+                "id": f"{node.id}-PK-001",
+                "dependencies": [],
+                "impact_closure": closure,
+            }
+        ],
+    }
+    RuntimeTransaction(
+        work_root,
+        "seed-dependent-reader-plan",
+        (NodePlanStore(revision).prepare(node.id, plan),),
+    ).commit()
     receipts = ReceiptStore(revision)
     seed_receipt_id = "build-seed-001"
     seed = receipts.create(
@@ -709,7 +732,7 @@ def test_pick_waves_separates_dependent_readers(revision, tmp_path) -> None:
             "predecessor_receipt_ids": [],
             "evidence": {"methods": list(proof.method)},
             "code_revision": "a" * 40,
-            "impact_closure": {"paths": ["serve/kanban/"], "authority_targets": [node.id, node.proof]},
+            "impact_closure": closure,
         },
     )
     assert seed.receipt is not None
@@ -727,7 +750,7 @@ def test_pick_waves_separates_dependent_readers(revision, tmp_path) -> None:
             "predecessor_receipt_ids": [seed_receipt_id],
             "evidence": _accept_evidence(revision, node.id, packet_receipt_ids=(seed_receipt_id,)),
             "code_revision": "a" * 40,
-            "impact_closure": {"paths": ["serve/kanban/"], "authority_targets": [node.id, node.proof]},
+            "impact_closure": closure,
         },
     )
     assert receipt.receipt is not None

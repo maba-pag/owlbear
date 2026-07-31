@@ -4,6 +4,8 @@ import shutil
 from datetime import timedelta
 from pathlib import Path
 
+import pytest
+
 from owlbear_kanban import (
     CorrectiveRouteRequest,
     FindingStore,
@@ -12,13 +14,17 @@ from owlbear_kanban import (
     JobRecord,
     JobStore,
     NativeRuntime,
+    NodePlanStore,
     ReceiptStore,
     PlanJob,
+    compute_node_plan_digest,
     load_change,
     plan_corrective_route,
 )
 from owlbear_kanban.runtime_requests import NativeRequest, NativeRequestRuntime, RequestResolution
 from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionParticipant
+
+from .test_native_runtime import _causal_dependency_scenario, _request, _snapshot
 
 
 class _History:
@@ -32,11 +38,43 @@ class _History:
         return b""
 
 
+@pytest.mark.parametrize("coverage", ["partial", "complete"])
+def test_build_dependency_projection_matches_start_eligibility(tmp_path: Path, coverage: str) -> None:
+    complete_coverage = coverage == "complete"
+    revision, work_root, history, build_job = _causal_dependency_scenario(
+        tmp_path,
+        complete_coverage=complete_coverage,
+    )
+    runtime = NativeRuntime(revision, work_root, history, timedelta(minutes=5))
+    projection = next(
+        item
+        for item in runtime.list_jobs(candidate_revision="b" * 40, limit=100).items
+        if item.job_id == build_job.job_id
+    )
+    request = _request().model_copy(
+        update={
+            "job_id": build_job.job_id,
+            "attempt_id": "attempt-query-parity",
+            "claim_id": "claim-query-parity",
+            "candidate_revision": "b" * 40,
+        }
+    )
+    before = _snapshot(work_root)
+
+    started = runtime.start_job(request)
+
+    assert projection.dependency_ready is complete_coverage
+    assert (started.diagnostic is None) is complete_coverage
+    if not complete_coverage:
+        assert _snapshot(work_root) == before
+
+
 def _revision(tmp_path: Path):
     changes = tmp_path / "changes"
     change_id = "replace-delivery-pipeline"
     shutil.copytree(Path(f".owlbear/changes/{change_id}"), changes / change_id)
     shutil.rmtree(changes / change_id / "receipts")
+    shutil.rmtree(changes / change_id / "plans")
     result = load_change(changes, change_id)
     assert result.revision is not None
     return result.revision
@@ -100,7 +138,7 @@ def _receipt(revision, receipt_id: str, predecessors: tuple[str, ...]) -> dict[s
         "issued_at": "2026-07-24T00:00:00Z",
         "impact_closure": {"paths": ["serve/kanban/"], "authority_targets": [node.id, node.proof]},
         "target_node_id": node.id,
-        "node_plan_digest": "b" * 64,
+        "node_plan_digest": compute_node_plan_digest(revision, node.id),
         "predecessor_receipt_ids": list(predecessors),
         "evidence": {"commands": ["focused proof"]},
         "code_revision": "a" * 40,
@@ -130,6 +168,25 @@ def test_public_invalidation_refreshes_only_returned_index_closure(tmp_path: Pat
     revision = _revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
+    node = revision.graph.nodes[0]
+    plan = {
+        "mode": "build",
+        "packets": [
+            {
+                "id": f"{node.id}-PK-001",
+                "dependencies": [],
+                "impact_closure": {
+                    "paths": ["serve/kanban/"],
+                    "authority_targets": [node.id, node.proof],
+                },
+            }
+        ],
+    }
+    RuntimeTransaction(
+        work_root,
+        "seed-query-invalidation-plan",
+        (NodePlanStore(revision).prepare(node.id, plan),),
+    ).commit()
     receipts = ReceiptStore(revision)
     assert receipts.create("build-root", _receipt(revision, "build-root", ())).receipt is not None
     assert receipts.create("build-child", _receipt(revision, "build-child", ("build-root",))).receipt is not None
