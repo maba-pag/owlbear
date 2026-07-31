@@ -1676,6 +1676,19 @@ def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> No
                 receipt_id="admission-stale",
             ),
         )
+    _materialize(
+        store,
+        _record(
+            runtime._revision,  # noqa: SLF001 - foreign-generation acceptance must not represent current state.
+            job_id=10,
+            kind="accept",
+            target_node_id="DN-002",
+            delivery_digest="b" * 64,
+            receipt_id="accept-stale",
+        ),
+    )
+    stale_accept = store.read(10)
+    store.archive(10, stale_accept.token)
     accept = runtime.finish_accept(accept_request)
     assert accept.diagnostic is None
     assert accept.created_jobs == ()
@@ -1726,7 +1739,7 @@ def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> No
     assert audit.event.kind == "succeeded"
     assert runtime.finish_audit(audit_request).receipt == audit.receipt
     assert runtime.finish_plan(plan).receipt is not None
-    assert tuple(item.job.job_id for item in store.list(archived=True)) == (1, 2, 3, 4, 5)
+    assert tuple(item.job.job_id for item in store.list(archived=True)) == (1, 2, 3, 4, 5, 10)
     assert tuple(event.kind for event in AttemptStore(work_root).list()) == (
         "started",
         "succeeded",

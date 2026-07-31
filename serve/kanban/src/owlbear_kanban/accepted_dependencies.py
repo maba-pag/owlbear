@@ -74,7 +74,11 @@ def resolve_accepted_dependencies(  # noqa: C901, PLR0913, PLR0917
     nodes = {node.id: node for node in revision.graph.nodes}
     candidates: dict[str, list[JobRecord]] = {node_id: [] for node_id in requested}
     for job in accept_jobs:
-        if job.kind == "accept" and job.target_node_id in candidates:
+        if (
+            job.kind == "accept"
+            and job.delivery_digest == revision.delivery_digest
+            and job.target_node_id in candidates
+        ):
             candidates[job.target_node_id].append(job)
 
     @cache
