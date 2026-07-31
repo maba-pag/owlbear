@@ -11,9 +11,10 @@ authority:
     - ../../research/delivery-operating-model-reframe.md
 admission:
   state: admitted
-  delivery_digest: 5b2c7be03be970fd7da4d62385b7a57b6a932f85f10053e21799b34410b796fc
-  receipt: receipts/admission-5b2c7be03be9.yaml
+  delivery_digest: 7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+  receipt: receipts/admission-7da5c669f6ef.yaml
   limits:
+    - DN-003 must implement and prove accepted dependency-set currentness before dependent delivery proceeds.
     - DN-004 must implement and prove generic interface-declared terminal plan prerequisites.
     - DN-012 must implement and fixture-prove shared selector resolution, including fail-closed selector loss.
     - DN-016 and DN-015 must produce live handoff and finalization evidence while protected configuration remains byte-unchanged.
@@ -56,7 +57,8 @@ nodes:
       and health models provide one graph-aware runtime with plan-only lifecycle vocabulary
       and no copied specification truth, including fail-closed discriminated build and
       exact-candidate verification-only plan transactions plus prospective successor-closure
-      validation for tracked build completion.
+      validation for tracked build completion and causal full-closure currentness across accepted
+      dependency sets used by reconciliation, build readiness, and terminal-audit assembly.
     owns:
       - REQ-008
       - REQ-009
@@ -82,7 +84,7 @@ nodes:
       Graph-aware dispatch and orchestrator contracts release only engine-selected
       plan/build/accept/audit jobs,
       serialize shared-worktree writers, recover attempts, replan from current state,
-      and provide crash-safe
+      refresh long-lived runtime caches on semantic re-admission, and provide crash-safe
       disposable proof checkouts.
     owns: [REQ-013, REQ-014, REQ-022, NEG-006]
     supports: [REQ-020, KEEP-006, KEEP-007]

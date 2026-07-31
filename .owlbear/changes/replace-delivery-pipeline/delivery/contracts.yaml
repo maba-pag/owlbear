@@ -192,7 +192,13 @@ interfaces:
       predecessor receipt's complete canonical path and authority-target closure without transferring
       product ownership. During `finish_build`, prospective successor coverage evaluates a fully
       covered plan or predecessor receipt without reusing its code-revision result while preserving
-      schema, authority, node-plan, supersession, and recursive-predecessor checks.
+      schema, authority, node-plan, supersession, and recursive-predecessor checks. Reconciliation
+      publication, dependent build readiness, and terminal-audit assembly resolve the complete accepted
+      dependency set in canonical authority order: direct dependencies retain the node's authored `dependencies`
+      sequence, and dependent or terminal-node enumeration retains `DeliveryGraph.nodes` order. A current
+      causally downstream acceptance may cover an earlier accepted dependency's complete closure and suppress
+      only its code-currency evaluation while the covered receipt, every other currentness dimension, and every
+      direct dependency's authored acceptance identity remain required.
     authority: MOD-001
     failure_semantics: >-
       Atomic transaction abort or recoverable manifest; no partial valid receipt.
@@ -215,6 +221,9 @@ interfaces:
       mismatch rejects the whole plan transaction without a plan, receipt, job, or attempt outcome.
       Partial predecessor-closure overlap, an uncovered stale predecessor, or descendant changes
       outside the prospective packet closure reject build completion without a receipt or attempt outcome.
+      Missing accepted dependencies, more than one current accept job for the same dependency, partial
+      dependency-closure coverage, and coverage from an unrelated sibling reject reconciliation publication,
+      dependent build start, or terminal-audit assembly without mutation.
     migration: MIG-004
     proof: PROOF-003
   - id: IF-004
@@ -241,7 +250,8 @@ interfaces:
       keeps dependent
       builds blocked until a superseding plan receipt is current. A verification-only accept job has
       no build-job predecessors but remains gated by its current plan receipt, exact candidate, and
-      predecessor-node acceptance requirements.
+      predecessor-node acceptance requirements. A long-lived dispatch facade reloads its cached runtime
+      when the loaded semantic digest changes, so re-admission cannot project or mutate the prior generation.
     runtime_producer: owlbear_kanban.dispatch
     runtime_consumers:
       - orchestrator
@@ -1003,6 +1013,18 @@ proofs:
         Finish a build whose prospective packet closure fully covers its plan and an overlapping
         predecessor receipt after intended descendant changes; reject partial coverage, uncovered
         predecessor drift, and changed paths outside the packet closure without mutation.
+      - >-
+        Resolve a complete accepted dependency set after a causally downstream acceptance changes and
+        re-proves an earlier direct dependency's shared paths; retain every direct acceptance job ID in the
+        dependent plan's `predecessor_job_ids` in authored `dependencies` order, permit dependent build
+        readiness, retain terminal acceptance job IDs in `DeliveryGraph.nodes` order, and reject partial,
+        sibling-only, missing, or multiple-current-acceptance coverage without mutation.
+      - >-
+        When an enforced runner limit prevents the unchanged case set from completing in one process,
+        execute bounded partitions at the same exact revision and require zero exit for every partition;
+        record the limit name and configured bound, exact revision, each partition's selector, collected
+        case identities, and exit status, plus expected and observed aggregate case identities proving
+        complete coverage without deselection or replacement of the public engine boundary.
     allowed_replacements:
       - clock
       - process identity
@@ -1205,6 +1227,10 @@ proofs:
         paths.
       - Assert every structured attempt is finalized once and replanning reads
         current graph/job state.
+      - >-
+        Re-admit the same change identity with a new semantic digest while the dispatch facade remains
+        alive; the next public operation must rebuild runtime state from the new revision, select only
+        new-generation jobs, and reject prior-generation authority without requiring process restart.
       - >-
         Prove IF-015 finish_plan accepts an empty build_job_ids tuple only for the DN-003-validated
         verification-only plan form, creates one accept job, and adds no tool, alias, or lifecycle

@@ -244,6 +244,16 @@ coverage or an uncovered stale predecessor returns `ERR_RECEIPT_PREDECESSOR_INVA
 a packet commit would invalidate the plan receipt whose closure authorized the same paths and no tracked build could
 finish.
 
+Graph dependency gates apply the same rule to the complete accepted dependency set. Reconciliation publication,
+dependent build start, and terminal-audit assembly resolve accepted nodes in canonical authority order: direct
+dependencies retain the node's authored `dependencies` sequence, while dependent and terminal-node enumeration retain
+`DeliveryGraph.nodes` order. A current, causally downstream accepted dependency may suppress only the code-currency
+evaluation of an earlier accepted dependency whose complete closure it covers; the covered receipt and every other
+currentness dimension remain required. Partial coverage, coverage from an unrelated sibling, a missing acceptance, or
+more than one current accept job for the same dependency remains fail-closed. This keeps a dependent build eligible
+after a later accepted dependency has intentionally changed and re-proved shared paths while preserving the authored
+acceptance identities for every direct graph dependency.
+
 ## 5. Delivery Graph
 
 The admitted delivery graph is complete before implementation work enters Kanban. It models general obligations, not historical incident-specific fields.
@@ -306,6 +316,11 @@ A packet plan may:
 - split work by genuine dependency, authority, failure domain, incompatible tool, or context limit;
 - combine production code, tests, documentation, generated artifacts, migration, and focused proof for one outcome;
 - add implementation detail and proportionate proof commands inside the admitted proof boundary.
+- partition one unchanged proof case set into bounded commands when an enforced runner limit prevents
+  one process from completing; every partition must run at the same exact revision with zero exit,
+  and the combined evidence must record the limit name and configured bound, exact revision, each
+  partition's selector, collected case identities, and exit status, plus the expected and observed
+  aggregate case identities demonstrating complete coverage without deselection or boundary replacement.
 
 ### 6.2 Illegal expansion
 
