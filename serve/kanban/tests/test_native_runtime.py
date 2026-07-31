@@ -66,13 +66,14 @@ class _History:
 
 
 def _priority_process(
-    work_root: str,
+    roots: tuple[str, str],
     request_payload: dict[str, object],
     ready: object,
     start: object,
     results: object,
 ) -> None:
-    revision_result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
+    changes_dir, work_root = roots
+    revision_result = load_change(Path(changes_dir), "replace-delivery-pipeline")
     assert revision_result.revision is not None
     runtime = _runtime(revision_result.revision, Path(work_root))
     ready.put("ready")
@@ -82,10 +83,8 @@ def _priority_process(
 
 
 @pytest.fixture
-def revision():
-    result = load_change(Path(".owlbear/changes"), "replace-delivery-pipeline")
-    assert result.revision is not None
-    return result.revision
+def revision(tmp_path):
+    return _copied_revision(tmp_path / "fixture-authority")
 
 
 def _record(revision, **changes: object) -> JobRecord:
@@ -157,13 +156,13 @@ def _runtime(
     return NativeRuntime(revision, work_root, history if history is not None else _History(), claim_expiry)
 
 
-def _copied_revision(tmp_path: Path, *, clean_receipts: bool = False):
+def _copied_revision(tmp_path: Path):
     changes_dir = tmp_path / "changes"
     change_id = "replace-delivery-pipeline"
     shutil.copytree(Path(f".owlbear/changes/{change_id}"), changes_dir / change_id)
-    (changes_dir / change_id / "plans" / "DN-001.yaml").unlink()
-    if clean_receipts:
-        shutil.rmtree(changes_dir / change_id / "receipts")
+    for directory in ("plans", "jobs", "receipts"):
+        shutil.rmtree(changes_dir / change_id / directory)
+        (changes_dir / change_id / directory).mkdir()
     result = load_change(changes_dir, change_id)
     assert result.revision is not None
     return result.revision
@@ -259,7 +258,7 @@ def _snapshot(work_root: Path) -> tuple[dict[str, bytes], tuple[AttemptEvent, ..
 
 
 def _active_accept_scenario(tmp_path: Path):  # noqa: PLR0915 - assembles the public lifecycle under proof.
-    revision = _copied_revision(tmp_path, clean_receipts=True)
+    revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
@@ -425,7 +424,7 @@ def _terminal_accept_scenario(
     code_revision: str = "a" * 40,
     history=None,
 ):
-    revision = _copied_revision(tmp_path, clean_receipts=True)
+    revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
@@ -561,7 +560,7 @@ def _terminal_accept_scenario(
 
 
 def _active_audit_scenario(tmp_path: Path):
-    revision = _copied_revision(tmp_path, clean_receipts=True)
+    revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
     audit_node = revision.resolve("DN-014")
@@ -1479,7 +1478,8 @@ def test_finish_plan_requires_complete_predecessor_receipt_closure(tmp_path, cov
         build_job_ids=(3,),
         accept_job_id=4,
     )
-    existing_plan = (revision.source_dir / "plans/DN-002.yaml").read_bytes()
+    plan_path = revision.source_dir / "plans/DN-002.yaml"
+    assert not plan_path.exists()
 
     result = runtime.finish_plan(request)
 
@@ -1490,7 +1490,7 @@ def test_finish_plan_requires_complete_predecessor_receipt_closure(tmp_path, cov
         assert result.diagnostic is not None
         assert result.diagnostic.code is FinishJobDiagnosticCode.NODE_PLAN_INVALID
         assert result.diagnostic.target == predecessor_receipt_id
-        assert (revision.source_dir / "plans/DN-002.yaml").read_bytes() == existing_plan
+        assert not plan_path.exists()
 
 
 @pytest.mark.parametrize("mode", ["build", "verification-only"])
@@ -1592,7 +1592,7 @@ def test_finish_build_rejects_different_admitted_packet_closure_without_publicat
 
 
 def test_finish_build_accept_and_audit_publish_complete_outcomes(tmp_path) -> None:  # noqa: PLR0915
-    revision = _copied_revision(tmp_path, clean_receipts=True)
+    revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
@@ -1945,7 +1945,7 @@ def _causal_dependency_scenario(
     *,
     complete_coverage: bool = True,
 ) -> tuple[object, Path, _History, JobRecord]:
-    revision = _copied_revision(tmp_path, clean_receipts=True)
+    revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
@@ -1985,7 +1985,7 @@ def _causal_dependency_scenario(
             }
         ],
     }
-    (revision.source_dir / "plans/DN-002.yaml").unlink()
+    (revision.source_dir / "plans/DN-002.yaml").unlink(missing_ok=True)
     RuntimeTransaction(
         work_root,
         "seed-causal-plans",
@@ -2171,7 +2171,7 @@ def _seed_accepted_dependency(  # noqa: PLR0913
 
 
 def test_build_start_does_not_union_sibling_dependency_closures(tmp_path: Path) -> None:
-    revision = _copied_revision(tmp_path, clean_receipts=True)
+    revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
     candidate_revision = "c" * 40
@@ -2252,7 +2252,7 @@ def test_build_start_does_not_union_sibling_dependency_closures(tmp_path: Path) 
 def test_build_start_rejects_missing_and_ambiguous_predecessor_accepts_without_mutation(  # noqa: PLR0915
     tmp_path,
 ) -> None:
-    missing_revision = _copied_revision(tmp_path / "missing", clean_receipts=True)
+    missing_revision = _copied_revision(tmp_path / "missing")
     missing_work_root = tmp_path / "missing" / "work"
     missing_work_root.mkdir()
     _materialize(
@@ -2295,7 +2295,7 @@ def test_build_start_rejects_missing_and_ambiguous_predecessor_accepts_without_m
     assert represented_missing.diagnostic.code is StartJobDiagnosticCode.PREDECESSOR_INVALID
     assert _snapshot(missing_work_root) == represented_before
 
-    ambiguous_revision = _copied_revision(tmp_path / "ambiguous", clean_receipts=True)
+    ambiguous_revision = _copied_revision(tmp_path / "ambiguous")
     ambiguous_work_root = tmp_path / "ambiguous" / "work"
     ambiguous_work_root.mkdir()
     ambiguous_store = JobStore(ambiguous_work_root)
@@ -2373,7 +2373,7 @@ def test_build_start_rejects_missing_and_ambiguous_predecessor_accepts_without_m
 
 
 def test_three_node_fold_in_occ_updates_same_plan_job_after_two_accepts(tmp_path) -> None:  # noqa: PLR0915
-    revision = _copied_revision(tmp_path, clean_receipts=True)
+    revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
@@ -2506,7 +2506,7 @@ def test_three_node_fold_in_occ_updates_same_plan_job_after_two_accepts(tmp_path
 
 
 def test_reconciliation_finish_releases_new_build_and_invalidation_closure(tmp_path) -> None:  # noqa: PLR0915
-    revision = _copied_revision(tmp_path, clean_receipts=True)
+    revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
@@ -2700,7 +2700,7 @@ def test_start_job_accepts_only_current_unsuperseded_receipt_history_without_mut
     history_case: str,
     expected_lower_code: str | None,
 ) -> None:
-    revision = _copied_revision(tmp_path, clean_receipts=True)
+    revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
     jobs = JobStore(work_root)
@@ -2806,7 +2806,7 @@ def test_start_job_stores_claim_and_started_event_then_replays(revision, tmp_pat
 
 
 def test_runtime_queries_project_orthogonal_state_and_deterministic_history(revision, tmp_path) -> None:
-    revision = _copied_revision(tmp_path, clean_receipts=True)
+    revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
@@ -3104,7 +3104,7 @@ def test_job_administration_conflicts_preserve_complete_state(revision, tmp_path
 
 
 def test_stale_plan_job_does_not_block_current_build(tmp_path) -> None:
-    revision = _copied_revision(tmp_path, clean_receipts=True)
+    revision = _copied_revision(tmp_path)
     work_root = tmp_path / "work"
     work_root.mkdir()
     store = JobStore(work_root)
@@ -3144,7 +3144,13 @@ def test_job_priority_process_race_has_one_winner_and_interrupted_publication_re
     processes = [
         context.Process(
             target=_priority_process,
-            args=(str(work_root), base | {"priority": priority, "updated_at": timestamp}, ready, start, results),
+            args=(
+                (str(revision.source_dir.parent), str(work_root)),
+                base | {"priority": priority, "updated_at": timestamp},
+                ready,
+                start,
+                results,
+            ),
         )
         for priority, timestamp in ((8, "2026-07-24T00:02:00Z"), (9, "2026-07-24T00:03:00Z"))
     ]

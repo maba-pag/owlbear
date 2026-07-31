@@ -92,8 +92,8 @@ def revision(tmp_path: Path):
     change_id = "replace-delivery-pipeline"
     changes_dir = tmp_path / "authority"
     shutil.copytree(Path(f".owlbear/changes/{change_id}"), changes_dir / change_id)
-    shutil.rmtree(changes_dir / change_id / "plans")
-    shutil.rmtree(changes_dir / change_id / "receipts")
+    for directory in ("jobs", "plans", "receipts"):
+        shutil.rmtree(changes_dir / change_id / directory)
     result = load_change(changes_dir, change_id)
     assert result.revision is not None
     return result.revision
@@ -158,8 +158,9 @@ def _request(job_id: int) -> StartJobRequest:
 def _copied_revision(revision, tmp_path):
     changes_dir = tmp_path / "changes"
     shutil.copytree(revision.source_dir, changes_dir / revision.change_id)
-    shutil.rmtree(changes_dir / revision.change_id / "plans", ignore_errors=True)
-    shutil.rmtree(changes_dir / revision.change_id / "receipts", ignore_errors=True)
+    assert not any(
+        (changes_dir / revision.change_id / directory).exists() for directory in ("jobs", "plans", "receipts")
+    )
     result = load_change(changes_dir, revision.change_id)
     assert result.revision is not None
     return result.revision
@@ -685,6 +686,9 @@ def test_pick_waves_omits_stale_node_plan_digest(revision, tmp_path) -> None:
 def test_pick_waves_separates_dependent_readers(revision, tmp_path) -> None:
     changes_dir = tmp_path / "changes"
     shutil.copytree(revision.source_dir, changes_dir / revision.change_id)
+    assert not any(
+        (changes_dir / revision.change_id / directory).exists() for directory in ("jobs", "plans", "receipts")
+    )
     loaded = load_change(changes_dir, revision.change_id)
     assert loaded.revision is not None
     revision = loaded.revision

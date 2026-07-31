@@ -81,8 +81,8 @@ def _copied_revision(tmp_path: Path):
     changes_dir = tmp_path / "changes"
     change_id = "replace-delivery-pipeline"
     shutil.copytree(Path(f".owlbear/changes/{change_id}"), changes_dir / change_id)
-    shutil.rmtree(changes_dir / change_id / "receipts")
-    shutil.rmtree(changes_dir / change_id / "plans")
+    for directory in ("jobs", "plans", "receipts"):
+        shutil.rmtree(changes_dir / change_id / directory)
     result = load_change(changes_dir, change_id)
     assert result.revision is not None
     return result.revision

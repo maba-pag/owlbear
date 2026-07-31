@@ -39,8 +39,8 @@ def revision(tmp_path: Path):
     change_id = "replace-delivery-pipeline"
     changes_dir = tmp_path / "authority"
     shutil.copytree(Path(f".owlbear/changes/{change_id}"), changes_dir / change_id)
-    shutil.rmtree(changes_dir / change_id / "plans")
-    shutil.rmtree(changes_dir / change_id / "receipts")
+    for directory in ("jobs", "plans", "receipts"):
+        shutil.rmtree(changes_dir / change_id / directory)
     result = load_change(changes_dir, change_id)
     assert result.revision is not None
     return result.revision
