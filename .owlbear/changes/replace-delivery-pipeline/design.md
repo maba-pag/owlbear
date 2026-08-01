@@ -523,6 +523,12 @@ The user-facing designer owns one resumable pre-Kanban session. `/ideate` create
 
 The designer may write only the current change authority, focused research, and scratch diagnostics. It does not implement product code or create Kanban work before admission.
 
+PROOF-004 executes resume, validation, refusal, admission, and replay through the real public MCP
+tools over a native fixture. Because the hosted Copilot designer has no deterministic repository
+executor, pytest verifies structural conformance of the `/ideate`, `/design`, designer-agent, and
+design-session contracts without claiming to execute hosted reasoning. IF-006 behavior remains a
+required product outcome; the automated boundary and this limitation are explicit under DEC-040.
+
 ### 8.2 Frontier planner
 
 The resumable planner processes engine-selected initial or reconciliation `plan` jobs from the

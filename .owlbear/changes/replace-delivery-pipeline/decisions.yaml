@@ -1799,3 +1799,50 @@ decisions:
           - VS Code MCP and direct Cockpit launches can silently retain the old default
         risks:
           - Process-specific environment drift forks lifecycle authority
+
+  - id: DEC-040
+    title: Prove designer behavior through public tools and hosted-contract conformance
+    status: accepted
+    decided_at: 2026-08-01
+    authority: user
+    selected: public-tools-and-contract-conformance
+    rationale: >-
+      The repository can deterministically execute native resume, validation, refusal, admission,
+      and replay through public MCP tools, but the hosted Copilot designer remains declarative
+      prompt, agent, and workflow Markdown with no exact-commit pytest executor. PROOF-004 therefore
+      proves real native state transitions and static structural conformance of the hosted contracts
+      without claiming to execute hosted reasoning. The IF-006 product behavior remains required;
+      this decision narrows only the automated proof claim and avoids duplicating the host runtime.
+    options:
+      - id: public-tools-and-contract-conformance
+        label: Combine real public-tool behavior with static hosted-contract conformance
+        confidence: 0.94
+        recommended: true
+        pros:
+          - Keeps proof hermetic, deterministic, and exact-commit reproducible
+          - Matches the existing ownership boundary without adding a second agent runtime
+        cons:
+          - Automated tests do not execute the hosted designer's reasoning
+        risks:
+          - Structurally valid contracts can still behave unexpectedly in the host
+      - id: repository-designer-executor
+        label: Build a deterministic repository-owned designer executor
+        confidence: 0.31
+        recommended: false
+        pros:
+          - Makes hosted-style designer behavior executable under pytest
+        cons:
+          - Adds a new runtime, interface, and substantial implementation scope
+          - Duplicates behavior owned by the Copilot host
+        risks:
+          - Repository and hosted execution semantics diverge
+      - id: live-hosted-agent-acceptance
+        label: Run the hosted designer during acceptance
+        confidence: 0.46
+        recommended: false
+        pros:
+          - Exercises the actual hosted participant
+        cons:
+          - Is nondeterministic and cannot provide hermetic exact-commit replay
+        risks:
+          - Availability or model variation blocks otherwise valid delivery

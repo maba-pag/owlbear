@@ -853,13 +853,16 @@ risks:
       - Scratch fixture invents an ungrounded contract.
       - Mock replaces the endpoint, command, or UI under test.
       - Bootstrap execution records replace fresh exact-candidate acceptance.
+      - Static hosted-agent contract conformance is reported as execution of hosted reasoning.
     disposition: >-
       Proof contracts name assembled boundary and allowed lower replacements; receipts
       enumerate setup/replacements;
       accept/audit reject boundary substitution, and native receipt issuance ignores legacy records
-      as dependency or certification authority.
+      as dependency or certification authority. A hosted participant without a deterministic
+      repository executor is proved only through explicitly labeled contract conformance plus real
+      public-tool behavior; the residual host-behavior risk remains an admission limit.
     owner: DN-008
-    supporting_nodes: [DN-014]
+    supporting_nodes: [DN-005, DN-014]
     proof: PROOF-007
   - id: RISK-010
     class: usability
@@ -1037,16 +1040,22 @@ proofs:
   - id: PROOF-004
     title: Resumable design and admission interaction proof
     boundary: >-
-      Real /ideate and /design prompt/agent contracts operating on a native fixture
-      change through public tools.
+      Real native resume, validation, refusal, admission, and replay behavior over a fixture change
+      through public MCP tools, plus static structural conformance of the hosted /ideate, /design,
+      designer-agent, and design-session contracts. The deterministic proof does not execute hosted
+      designer reasoning.
     owner: DN-005
     method:
-      - Resume after interruption without losing decisions.
-      - Verify one-question options include tradeoffs, recommendation, and
-        confidence.
-      - Reject unresolved authority and admit a complete fixture.
-    allowed_replacements: [external research response below designer workflow]
-    durable_outputs: [agent scenario tests]
+      - Resume the native fixture through public show operations without losing decisions or
+        mutating authority.
+      - Inspect shipped hosted contracts for one-question options with tradeoffs, recommendation,
+        confidence, and the required resumable workflow wiring.
+      - Reject unresolved or challenged authority through public validation without publication,
+        then admit and exactly replay a complete approved fixture through public tools.
+    allowed_replacements:
+      - external research response below designer workflow
+      - MCP request context transport below public handler functions
+    durable_outputs: [public MCP interaction and hosted-contract conformance tests]
   - id: PROOF-005
     title: Frontier planning boundary proof
     boundary: >-
@@ -1180,9 +1189,8 @@ proofs:
     title: Complete native delivery audit
     boundary: >-
       Public native validation over durable incident/generic fixtures plus a fresh
-      consumer workspace running the
-      complete /design to plan/build/accept/audit flow through real MCP, engine,
-      shared writer policy, proof
+      consumer workspace running the complete public admission to
+      plan/build/accept/audit flow through real MCP, engine, shared writer policy, proof
       checkout, and Cockpit.
     owner: DN-013
     method:
