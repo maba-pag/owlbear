@@ -1198,7 +1198,8 @@ class ReceiptStore:
                 target=receipt_id,
             )
         if (
-            record.impact_closure is not None
+            record.delivery_digest == self._revision.delivery_digest
+            and record.impact_closure is not None
             and (undeclared_target := _undeclared_authority_target(self._revision, record.impact_closure)) is not None
         ):
             _fail(
@@ -1316,6 +1317,13 @@ class ReceiptStore:
     def list(self) -> tuple[ReceiptResult, ...]:
         """List canonical receipts in ascending receipt-ID order."""
         entries, diagnostic = self._scan()
+        if diagnostic is not None:
+            return (ReceiptResult(diagnostics=(diagnostic,)),)
+        return tuple(result for _path, result in entries)
+
+    def list_history(self) -> tuple[ReceiptResult, ...]:
+        """List canonical receipts across all delivery revisions."""
+        entries, diagnostic = self._scan(require_current_revision=False)
         if diagnostic is not None:
             return (ReceiptResult(diagnostics=(diagnostic,)),)
         return tuple(result for _path, result in entries)

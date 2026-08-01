@@ -364,7 +364,7 @@ class InvalidationRuntime:
         return InvalidationResult(diagnostic=InvalidationDiagnostic(code=code, detail=detail))
 
     def _receipt_records(self) -> dict[str, ReceiptRecord]:
-        results = self._receipts.list()
+        results = self._receipts.list_history()
         if any(result.receipt is None for result in results):
             msg = "receipt storage contains invalid records"
             raise ValueError(msg)

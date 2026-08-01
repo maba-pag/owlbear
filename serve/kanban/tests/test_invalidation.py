@@ -23,6 +23,7 @@ from owlbear_kanban import (
     plan_corrective_route,
 )
 from owlbear_kanban.runtime_transaction import RuntimeTransaction
+from owlbear_kanban.yaml_rt import make_yaml
 
 
 @pytest.mark.parametrize(
@@ -262,6 +263,22 @@ def test_invalidation_applies_minimum_closure_and_replays_without_rewriting_hist
         for path in (revision.source_dir / "receipts").glob("*.yaml")
         if path.name != "supersession-001.yaml"
     }
+
+
+def test_invalidation_accepts_receipt_history_from_prior_revision(tmp_path: Path) -> None:
+    revision, work_root, request = _scenario(tmp_path)
+    historical = _receipt(revision, "build-historical", ())
+    historical["delivery_digest"] = "f" * 64
+    historical_path = revision.source_dir / "receipts/build-historical.yaml"
+    with historical_path.open("w", encoding="utf-8") as stream:
+        make_yaml().dump(historical, stream)
+    historical_before = historical_path.read_bytes()
+
+    applied = InvalidationRuntime(revision, work_root).apply(request)
+
+    assert applied.outcome is not None
+    assert applied.outcome.affected_receipt_ids == ("build-child", "build-root")
+    assert historical_path.read_bytes() == historical_before
 
 
 def test_invalidation_leaves_corrective_plan_without_node_plan_digest(tmp_path: Path) -> None:
