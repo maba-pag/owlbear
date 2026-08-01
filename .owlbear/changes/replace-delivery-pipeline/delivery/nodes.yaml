@@ -12,7 +12,7 @@ authority:
 admission:
   state: admitted
   delivery_digest: f11b5af05ac31cc255668bd953fdb085cf0c533ed797ba422a839a567beaf83c
-  receipt: receipts/admission-1ec9888c522d.yaml
+  receipt: receipts/admission-f11b5af05ac3.yaml
   limits:
     - PROOF-004 verifies hosted designer contracts structurally but does not execute hosted reasoning; real native resume, validation, refusal, admission, and replay remain public-tool proof.
     - DN-003 must implement and prove accepted dependency-set currentness before dependent delivery proceeds.
