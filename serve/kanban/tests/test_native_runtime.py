@@ -1269,6 +1269,68 @@ def test_verification_only_generation_accepts_reconciliation_plan(revision, tmp_
     assert runtime._verification_generation_is_eligible(store.read(2).job)  # noqa: SLF001
 
 
+@pytest.mark.parametrize("target_kind", ["proof", "packet"])
+def test_verification_only_generation_limits_corrective_plan_to_proof_omission(
+    revision,
+    tmp_path,
+    target_kind: str,
+) -> None:
+    work_root = tmp_path / "work"
+    work_root.mkdir()
+    finding = Finding.model_validate(
+        {
+            "schema_version": 1,
+            "finding_id": "finding-001",
+            "source_attempt_id": "attempt-001",
+            "source_job_id": 1,
+            "change_id": revision.change_id,
+            "delivery_digest": revision.delivery_digest,
+            "target_kind": target_kind,
+            "target_id": revision.graph.nodes[0].proof,
+            "finding_class": "planning-omission",
+            "detail": "proof plan cannot execute in the read-only acceptance checkout",
+            "created_at": "2026-07-24T00:00:00Z",
+        }
+    )
+    assert FindingStore(work_root).create(finding.finding_id, finding.model_dump(mode="json")).finding is not None
+    receipt_id = "supersession-001"
+    receipt = {
+        "schema_version": 1,
+        "kind": "supersession",
+        "receipt_id": receipt_id,
+        "change_id": revision.change_id,
+        "delivery_digest": revision.delivery_digest,
+        "issued_at": "2026-07-24T00:00:00Z",
+        "impact_closure": {
+            "paths": ["serve/kanban/"],
+            "authority_targets": [revision.graph.nodes[0].id, revision.graph.nodes[0].proof],
+        },
+        "invalidation_id": "invalidation-001",
+        "invalidated_receipt_ids": ["plan-001"],
+        "corrective_finding_ids": [finding.finding_id],
+        "corrective_job_ids": [2],
+        "predecessor_receipt_ids": ["plan-001"],
+        "evidence": {"finding_ids": [finding.finding_id]},
+        "code_revision": "a" * 40,
+    }
+    assert ReceiptStore(revision).create(receipt_id, receipt).receipt is not None
+    store = JobStore(work_root)
+    _materialize(
+        store,
+        _record(
+            revision,
+            job_id=2,
+            kind="plan",
+            packet_id=None,
+            finding_id=finding.finding_id,
+            receipt_id=receipt_id,
+        ),
+    )
+    runtime = _runtime(revision, work_root)
+
+    assert runtime._verification_generation_is_eligible(store.read(2).job) is (target_kind == "proof")  # noqa: SLF001
+
+
 @pytest.mark.parametrize(
     "case",
     [

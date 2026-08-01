@@ -2450,20 +2450,15 @@ class NativeRuntime:
 
     def _verification_generation_is_eligible(self, job: JobRecord) -> bool:
         if job.predecessor_job_ids:
-            try:
-                predecessors = tuple(self._read_job(job_id).job for job_id in job.predecessor_job_ids)
-            except FileNotFoundError:
-                return False
-            return all(
-                predecessor.kind == "accept"
-                and predecessor.delivery_digest == self._revision.delivery_digest
-                and predecessor.receipt_id is not None
-                for predecessor in predecessors
-            )
+            return self._verification_predecessors_are_accepted(job)
         if job.receipt_id is None:
             return False
-        admission = self._receipts.read(job.receipt_id).receipt
-        if admission is None or admission.kind != "admission":
+        generation_receipt = self._receipts.read(job.receipt_id).receipt
+        if generation_receipt is None:
+            return False
+        if generation_receipt.kind == "supersession":
+            return self._corrective_verification_generation_is_eligible(job, generation_receipt)
+        if generation_receipt.kind != "admission":
             return False
         return any(
             item.job.kind == "plan"
@@ -2471,6 +2466,37 @@ class NativeRuntime:
             and item.job.delivery_digest != job.delivery_digest
             and item.job.receipt_id is not None
             for item in (*self._jobs.list(), *self._jobs.list(archived=True))
+        )
+
+    def _verification_predecessors_are_accepted(self, job: JobRecord) -> bool:
+        try:
+            predecessors = tuple(self._read_job(job_id).job for job_id in job.predecessor_job_ids)
+        except FileNotFoundError:
+            return False
+        return all(
+            predecessor.kind == "accept"
+            and predecessor.delivery_digest == self._revision.delivery_digest
+            and predecessor.receipt_id is not None
+            for predecessor in predecessors
+        )
+
+    def _corrective_verification_generation_is_eligible(
+        self,
+        job: JobRecord,
+        supersession: ReceiptRecord,
+    ) -> bool:
+        if job.finding_id is None or supersession.delivery_digest != self._revision.delivery_digest:
+            return False
+        finding = self._findings.read(job.finding_id).finding
+        corrective_ids = supersession.payload.get("corrective_finding_ids") or ()
+        return (
+            finding is not None
+            and finding.finding_id in corrective_ids
+            and finding.change_id == job.change_id
+            and finding.delivery_digest == job.delivery_digest
+            and finding.finding_class == "planning-omission"
+            and finding.target_kind == "proof"
+            and finding.target_id == self._revision.resolve(job.target_node_id).proof
         )
 
     def _validate_node_plan(  # noqa: C901, PLR0911
