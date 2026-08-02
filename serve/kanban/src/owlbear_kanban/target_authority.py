@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from owlbear_kanban.change import ChangeId
+from owlbear_kanban.identities import ChangeId
 
 AuthorityId = Annotated[str, StringConstraints(strict=True, pattern=r"^[A-Z]+-[0-9]{3}$")]
 

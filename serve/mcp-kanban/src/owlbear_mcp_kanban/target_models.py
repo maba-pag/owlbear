@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_kanban.change import ChangeId
+from owlbear_kanban.identities import ChangeId
 from owlbear_kanban.target_runtime import RuntimeId
 from owlbear_kanban.work_items import WorkItemProjection
 

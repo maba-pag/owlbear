@@ -15,7 +15,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic import ValidationError as PydanticValidationError
 
-from owlbear_kanban.change import Digest
+from owlbear_kanban.identities import Digest
 from owlbear_kanban.runtime_transaction import TransactionParticipant
 
 _DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW

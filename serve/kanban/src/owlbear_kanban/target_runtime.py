@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Annotated, Literal, Never
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter, model_validator
 
 from owlbear_kanban.attempts import AttemptEvent, AttemptStore
-from owlbear_kanban.change import ChangeId, Digest
+from owlbear_kanban.identities import ChangeId, Digest
 from owlbear_kanban.runtime_transaction import (
     ReplacementTransactionParticipant,
     RuntimeTransaction,
