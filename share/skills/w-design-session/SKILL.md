@@ -1,14 +1,14 @@
 ---
 name: w-design-session
-description: "Workflow: Create or resume one native change session and admit only a complete approved delivery revision"
+description: "Workflow: Create or resume one target design session and admit only complete approved semantic authority"
 user-invocable: false
 ---
 
-# Native Design Session
+# Target Design Session
 
-Turn a rough idea or a named change into one durable OwlBear change authority. Preserve confirmed
-intent and decisions across interruptions, resolve one material choice at a time, and admit only a
-complete revision that passes validation, independent challenge, baseline, and explicit approval.
+Turn a rough idea or named change into durable OwlBear target authority. Preserve confirmed intent
+and decisions across interruptions, resolve one material choice at a time, and admit only a complete
+candidate that passes validation, independent challenge, baseline, and explicit approval.
 
 This workflow owns Specification. It does not implement product code, create Delivery jobs directly,
 or turn conversation history into a second authority.
@@ -27,18 +27,18 @@ Load these with `read_file` immediately before the named work:
 
 ## Authority Boundary
 
-One session is rooted at `.owlbear/changes/<change_id>/` and has four semantic authority parts:
+One draft session is rooted at `.owlbear/design/<change_id>/` and has four parts:
 
 | Authority | Owns |
 |-----------|------|
 | `intent.md` | Problem, actors, Product Promise, normal workflows, scope, accepted exclusions, preserved behavior, success, assumptions, and technically-done-but-wrong outcomes |
 | `design.md` | Current ownership, proposed architecture and interfaces, tradeoffs, weaknesses, migration, and proof approach |
 | `decisions.yaml` | Material user choices, status, options, tradeoffs, risks, recommendation, confidence, rationale, and decision authority |
-| `delivery/{obligations,contracts,nodes}.yaml` | Stable obligations, workflows, modules, interfaces, migrations, risks, proofs, delivery nodes, dependencies, and ownership |
+| `authority.json` | One schema-version-one `TargetAuthority`: provenance-classed commitments, user-facing outcomes, dependencies, and task-plan scopes |
 
 The designer may also write focused research under `.owlbear/research/` and diagnostics under
-`.owlbear/scratch/`. Jobs, plans, receipts, tracked product files, Kanban records, and authority for
-another change are outside this workflow's write boundary.
+`.owlbear/scratch/`. `.owlbear/target/`, jobs, attempts, receipts, tracked product files, and another
+change are outside this workflow's direct write boundary; `admit_change` alone publishes target state.
 
 Treat conversation as working context only. Confirmed meaning must be persisted in its owning
 artifact before another material branch begins. Never replace confirmed authority merely because a
@@ -48,33 +48,32 @@ later session starts with less context.
 
 Determine the entry mode from the caller:
 
-- `/ideate <rough idea>` enters discovery. Use `list_changes` to find an existing matching change.
-  Select it when the user identifies it or the identity is unambiguous; otherwise derive one stable
-  lowercase hyphenated `change_id` and create its native authority package.
-- `/design [change_id]` enters design directly. Use the supplied identity or `list_changes` to select
-  one unambiguous existing change. If no matching session exists, create the named native authority
-  package rather than handing off to another planning system.
+- `/ideate <rough idea>` enters discovery. Inspect `.owlbear/design/` and use `list_changes` to find a
+  matching draft or admitted change. Select it when identity is unambiguous; otherwise derive one
+  stable lowercase hyphenated `change_id` and create its draft package.
+- `/design [change_id]` enters design directly. Use the supplied identity or inspect drafts and
+  `list_changes` to select one unambiguous session. If none exists, create the named draft package.
 
 Do not maintain separate ideation and design records. Both entries resolve to the same `change_id`
 and authority root. If multiple existing changes plausibly match, ask one identity-selection
 question and stop.
 
-For a new package, create only the semantic authority files above using the current native schemas.
-Initialize unknown content explicitly as draft or unresolved; do not invent decisions, evidence,
-entity IDs, or approval. Runtime directories and artifacts are engine-owned.
+For a new package, create only the four draft files above. Initialize unknown content explicitly as
+draft or unresolved; do not invent decisions, evidence, stable IDs, or approval. The target runtime
+and admission receipt are engine-owned.
 
 ## Step 2 - Rehydrate Before Writing
 
-For an existing session, call `show_change(change_id)` and read all four authority parts before any
-mutation. Also inspect focused research referenced by the authority. Build a private session state
-with:
+For an admitted session, call `show_change(change_id)`; for any session, read all four draft parts
+before mutation. If an admitted change has no draft yet, seed one from its shown target authority
+without changing confirmed meaning. Also inspect focused research. Build private session state with:
 
 - confirmed intent and Product Promise;
 - accepted exclusions and preserved remainder;
 - accepted, pending, and superseded decisions;
 - observed, documented, assumed, and user-confirmed claims;
 - current architecture, interfaces, migrations, risks, and proof boundaries;
-- declared delivery entities, ownership, and dependencies;
+- declared commitments, outcomes, task-plan scopes, ownership, and dependencies;
 - validation or admission findings that remain unresolved.
 
 Report contradictions instead of silently choosing a newer-looking statement. Preserve every
@@ -164,44 +163,43 @@ Take an evidence-based position. Do not invent alternatives when one boundary is
 and do not hide a material weakness to preserve momentum. Any unresolved material architecture fork
 returns to Step 5.
 
-## Step 7 - Build Complete Delivery Authority
+## Step 7 - Build Complete Target Authority
 
-Translate confirmed intent and design into the three modular delivery files. Use stable typed IDs and
-assign every active item before admission:
+Translate confirmed intent and design into `authority.json`. Use stable uppercase typed IDs and
+complete every active semantic identity before admission:
 
-- requirements, negative requirements, and preserved behaviors;
-- normal workflows and user-visible failure behavior;
-- modules and changed interfaces;
-- ordered migrations and deletion proofs;
-- material risks and mitigations;
-- durable proofs at real assembled boundaries;
-- outcome-cohesive delivery nodes, dependency edges, and exactly one accountable owner or explicit
-  support path for each obligation.
+- provenance-classed commitments for dealbreakers, protected requests, important reviewed meaning,
+  agreed paths, and implementation discretion;
+- user-facing outcomes with promises, observable acceptance, commitment links, and dependency IDs;
+- exactly one outcome task-plan scope for every active outcome;
+- a change-assembly scope only when accepted composition authority is already required;
+- persisted Design re-entry briefings, semantic updates, and completion summaries only when they
+  already exist as durable authority.
 
-Keep delivery authority declarative. Nodes describe outcomes and contract ownership, not mutable
-claims, attempts, task prose, implementation steps, or chat history. Present the complete Product
-Promise, decisions, architecture, delivery graph, known limits, and proof coverage to the user before
-requesting approval.
+Keep target authority semantic. It does not contain claims, attempts, mutable task prose,
+implementation steps, or chat history. Present the complete Product Promise, decisions,
+architecture, commitments, outcomes, dependencies, known limits, and proof coverage before approval.
 
 ## Step 8 - Challenge, Baseline, And Validate
 
-Run these gates against the same immutable candidate revision and digest:
+Run these gates against the same immutable candidate object:
 
-1. Call `show_change(change_id)` and capture the current semantic digest.
+1. Parse `authority.json` as a strict schema-version-one `TargetAuthority`; parsing failure keeps the
+  draft and names the exact field error.
 2. Call a fresh read-only designer challenger. Require one source-grounded
-   `{disposition, evidence}` entry using `pass`, `warning`, or `error` for every declared requirement,
-   workflow, interface, migration, risk, proof, and node. Free-form approval is invalid.
+  `{disposition, evidence}` entry using `pass`, `warning`, or `error` for the change identity and
+  every commitment, outcome, and task-plan scope. Free-form approval is invalid.
 3. Run proportionate clean baselines: affected builds or typechecks, generated-contract checks,
    focused tests, and the cheapest existing normal-boundary smoke. Baselines establish starting
    feasibility; they do not prove unimplemented behavior.
-4. Assemble `AdmissionEvidence` for exactly that digest with structured challenge, baseline,
-   approval, and non-empty known limits.
-5. Call `validate_change(change_id, evidence)`.
+4. Assemble `TargetAdmissionCandidate` with the exact authority, only `pass` or `warning` challenge
+  entries, baseline command evidence, visible known limits, and `prepared_at`.
+5. Call `validate_change(candidate)` and retain its `authority_digest` and exact initial jobs.
 
 A non-pass challenge, failing baseline, digest mismatch, deterministic validation error, unresolved
-material authority, or missing approval keeps the candidate draft. Record and report the exact
-finding, repair its owning authority, and restart from the earliest affected step. Do not invoke
-`admit_change`, publish jobs manually, or weaken evidence to force a pass.
+material authority keeps the candidate draft. Record and report the exact finding, repair its owning
+authority, and restart from the earliest affected step. Do not invoke `admit_change`, publish target
+files manually, or weaken evidence to force a pass.
 
 Warnings must be visible in the complete review and represented in known limits. They do not become
 silent assumptions.
@@ -209,17 +207,18 @@ silent assumptions.
 ## Step 9 - Obtain Explicit Approval And Admit
 
 Ask one final admission question only after the complete candidate and all gate evidence are ready.
-The approval covers product intent, accepted exclusions, material decisions, architecture, delivery
-node boundaries, and known limits for the displayed digest. The user does not certify graph
-mechanics.
+The approval covers product intent, accepted exclusions, material decisions, architecture,
+commitments, outcomes, planning scopes, and known limits for the displayed digest. The user does not
+certify dependency mechanics.
 
-Record approval against that digest, rebuild `AdmissionEvidence`, and call `validate_change` again.
-Proceed only when the returned assessment is admitted and still names the current digest. Then call
-`admit_change(change_id, evidence)` with the identical evidence.
+Record approval against the returned authority digest, then call `validate_change` again with the
+identical candidate. Proceed only when it returns the same digest and initial jobs. Build
+`TargetAdmissionRequest` from that candidate, `approved_digest`, `approved_by`, and `approved_at`,
+then call `admit_change(request)`.
 
-Record and report the persisted admission receipt ID, delivery digest, generation identity, and
-initial plan-job identities returned by the public tool. An identical retry must return the persisted
-artifacts; it must not create another generation or job set.
+Record and report the persisted admission receipt ID, authority digest, and initial plan-job
+identities. An identical retry must return `replayed: true` and the same artifacts. A revision of an
+admitted change archives the prior authority and runtime by digest; active target work blocks it.
 
 If authority changes after validation or approval, the digest is stale: discard the pending approval,
 keep the revision draft, and repeat challenge, baseline, validation, and approval. Admission failure
@@ -234,13 +233,13 @@ return:
 ## Design Session
 
 - Change: <change_id>
-- Revision: <delivery_digest>
+- Revision: <authority_digest>
 - Product Promise: <complete promised outcome and accepted exclusions>
 - Decisions: <accepted and unresolved counts; unresolved must be zero>
 - Architecture: <owners, changed interfaces, migrations, and known weaknesses>
-- Delivery graph: <node count, dependency frontier, obligation and proof coverage>
+- Target authority: <commitment and outcome counts, dependency frontier, scope coverage>
 - Evidence: <challenge disposition, baseline commands, validation result, known limits>
-- Admission: <receipt ID, generation ID, and initial plan-job IDs>
+- Admission: <receipt ID and initial plan-job IDs>
 ```
 
 Before admission, replace the final line with `Draft: <blocking finding and owning authority>` and do
@@ -248,13 +247,13 @@ not imply that Delivery can begin.
 
 ## Known Pitfalls
 
-- **Cross-command handoff:** `/ideate` and `/design` must rehydrate the same native authority.
+- **Cross-command handoff:** `/ideate` and `/design` must rehydrate the same target authority.
 - **Chat-only choice:** a decision is not durable until `decisions.yaml` owns it.
 - **Fact polling:** inspect repository evidence before asking the user.
 - **Question batching:** one material choice per `askQuestions` call.
 - **Promise erosion:** require explicit acceptance for every reduction in user-stated value.
 - **Memory authority:** corroborate memory; never let it decide current truth.
 - **Shallow architecture:** adapt review depth to novelty and risk while preserving interface detail.
-- **Partial graph:** every active obligation and boundary needs delivery ownership and proof.
+- **Partial authority:** every active outcome needs commitments, acceptance, dependencies, and one plan scope.
 - **Validator substitution:** challenge, baseline, approval, and deterministic validation are distinct.
 - **Premature admission:** any unresolved gate keeps the draft and forbids `admit_change`.

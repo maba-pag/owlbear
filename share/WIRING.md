@@ -43,7 +43,7 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 
 | Agent | Model | Required reading | Delegates | Hooks |
 |-------|-------|------------------|-----------|-------|
-| designer | GPT-5.6 Sol | `w-design-session` | designer-challenger, Explore | None; authority writes are bounded by the role and narrow native tool surface |
+| designer | GPT-5.6 Sol | `w-design-session` | designer-challenger, Explore | None; draft writes are role-bounded and target publication uses the admission tool surface |
 | designer-challenger | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
 | planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch and terminal mutation; owns one target plan claim |
 | planner-challenger | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
@@ -62,8 +62,8 @@ Tool allowlists remain in agent frontmatter; they are not duplicated here.
 
 | Prompt | Entry route | Initial loading behavior |
 |--------|-------------|--------------------------|
-| `ideate` | `prompt` -> designer in discovery mode | Agent required-reading loads `w-design-session`; selects or creates one native session |
-| `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same native session |
+| `ideate` | `prompt` -> designer in discovery mode | Agent required-reading loads `w-design-session`; selects or creates one target Design session |
+| `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same target Design session |
 | `orchestrate` | `prompt` -> orchestrator | Agent required-reading loads `w-orchestration` |
 | `test-curation` | `prompt` -> test-curator | Agent required-reading loads `w-test-curation` |
 | `kb-ingest` | `prompt` -> knowledge-ingestor | Agent required-reading loads `h-knowledge-ops` |
