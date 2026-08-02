@@ -13,6 +13,7 @@ from owlbear_kanban.target_authority import Commitment, CommitmentClass, Outcome
 from owlbear_kanban.target_cutover import (
     TargetAdapterRef,
     TargetCutoverClassification,
+    TargetCutoverPathError,
     TargetCutoverPublicationError,
     TargetCutoverReadiness,
     TargetCutoverReadinessError,
@@ -364,3 +365,21 @@ def test_consumer_store_without_receipt_names_required_actions(tmp_path: Path) -
         "classify unfinished changes, outcomes, and C1-C3 commitments",
     )
     assert "snapshot and classification are required" in str(raised.value)
+
+
+def test_cutover_rejects_symlinked_transaction_path(tmp_path: Path) -> None:
+    request, source, _adapter = _workspace_request(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    adapter_parent = tmp_path / ".owlbear/adapters"
+    (adapter_parent / "delivery").unlink()
+    adapter_parent.rmdir()
+    adapter_parent.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(TargetCutoverPathError):
+        cut_over_target_runtime(tmp_path, request, smoke=_smoke)
+
+    assert source.is_dir()
+    assert not any(outside.iterdir())
+    assert not (tmp_path / request.snapshot_path).exists()
+    assert not (tmp_path / request.target_path).exists()

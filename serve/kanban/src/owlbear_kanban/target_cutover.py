@@ -598,7 +598,7 @@ def _replay_completed(
         _fail_receipt("reintroduced authority differs from the cutover request")
     for snapshot in receipt.snapshots:
         query_target_snapshot(paths.root, request, snapshot.snapshot_name)
-    _verify_source_absence(paths.sources)
+    _verify_source_absence(paths.root, paths.sources)
     _verify_adapter_refs(paths, receipt.adapter_refs)
     _remove_retired_sources(paths, request)
     _remove_path(paths.root, paths.pending)
@@ -633,8 +633,8 @@ def _verify_adapter_refs(paths: _CutoverPaths, refs: tuple[TargetAdapterRef, ...
             _fail_receipt(f"adapter ref differs from receipt: {reference.relative_path}")
 
 
-def _verify_source_absence(sources: tuple[Path, ...]) -> None:
-    remaining = tuple(str(path) for path in sources if os.path.lexists(path))
+def _verify_source_absence(root: Path, sources: tuple[Path, ...]) -> None:
+    remaining = tuple(str(path) for path in sources if _workspace_path_kind(root, path) != "missing")
     if remaining:
         _fail_receipt(f"bootstrap source paths remain active: {remaining}")
 
