@@ -300,7 +300,6 @@ def cut_over_target_runtime(
     """Snapshot bootstrap stores and activate reintroduced target authority."""
     validate_target_cutover_readiness(request)
     paths = _resolve_paths(workspace_root, request)
-    _validate_source_currentness(paths, request, allow_absent=paths.receipt.exists())
     with locked_roots((paths.root,)):
         return _cut_over_locked(paths, request, smoke=smoke, failure=failure)
 
@@ -313,10 +312,9 @@ def _cut_over_locked(
     failure: TargetCutoverFailureHook | None,
 ) -> TargetCutoverResult:
     fingerprint = _request_fingerprint(request)
-    if paths.receipt.exists():
+    if _workspace_path_kind(paths.root, paths.receipt) != "missing":
         return _replay_completed(paths, request, fingerprint)
     _recover_pending(paths, request, fingerprint)
-    _require_sources(paths.sources)
     _validate_source_currentness(paths, request)
     pending = _create_pending(paths, fingerprint)
     try:
@@ -330,6 +328,7 @@ def _cut_over_locked(
         smoke(paths.root, request)
         _invoke_failure(failure, "smoke-verification", paths.target)
         _retire_sources(paths, request)
+        _invoke_failure(failure, "source-retirement", paths.snapshot)
         receipt = _build_receipt(request, fingerprint, manifest, snapshots)
         _publish_receipt(paths, receipt, failure)
     except Exception as exc:
@@ -345,13 +344,9 @@ def _cut_over_locked(
 def _validate_source_currentness(
     paths: _CutoverPaths,
     request: TargetCutoverRequest,
-    *,
-    allow_absent: bool = False,
 ) -> None:
     for source, specification in zip(paths.sources, request.sources, strict=True):
-        if allow_absent and not source.exists():
-            continue
-        if not source.is_dir():
+        if _workspace_path_kind(paths.root, source) != "directory":
             _fail_path(f"cutover source is absent: {source}")
         actual = inventory_legacy_source(source, (), {}).source_digest
         if actual != specification.expected_source_digest:
@@ -364,7 +359,15 @@ def authorize_target_mutation(
 ) -> TargetMutationAuthority:
     """Require a valid receipt and reject reappearing current-schema jobs."""
     paths = _resolve_paths(workspace_root, request)
-    if not paths.receipt.exists():
+    with locked_roots((paths.root,)):
+        return _authorize_target_mutation_locked(paths, request)
+
+
+def _authorize_target_mutation_locked(
+    paths: _CutoverPaths,
+    request: TargetCutoverRequest,
+) -> TargetMutationAuthority:
+    if _workspace_path_kind(paths.root, paths.receipt) == "missing":
         actions = (
             "snapshot current authority and runtime stores",
             "classify unfinished changes, outcomes, and C1-C3 commitments",
@@ -372,9 +375,9 @@ def authorize_target_mutation(
         detail = "target mutation requires a cutover receipt; snapshot and classification are required"
         _fail_gate("ERR_TARGET_CUTOVER_REQUIRED", detail, actions)
     for source in paths.sources:
-        legacy_job = next(source.glob("jobs/**/*.md"), None) if source.is_dir() else None
+        legacy_job = _find_current_job(paths.root, source)
         if legacy_job is not None:
-            detail = f"current-schema job cannot become active target work: {legacy_job.relative_to(paths.root)}"
+            detail = f"current-schema job cannot become active target work: {legacy_job}"
             _fail_gate("ERR_TARGET_CUTOVER_LEGACY_ACTIVE_WORK", detail)
     result = _replay_completed(paths, request, _request_fingerprint(request))
     return TargetMutationAuthority(receipt=result.receipt, authorities=result.authorities)
@@ -416,12 +419,6 @@ def _resolve_paths(
     return paths
 
 
-def _require_sources(sources: tuple[Path, ...]) -> None:
-    absent = tuple(str(source) for source in sources if not source.is_dir())
-    if absent:
-        _fail_path(f"cutover source is absent: {absent}")
-
-
 def _resolve_workspace_path(root: Path, value: str) -> Path:
     path = root.joinpath(*PurePosixPath(value).parts)
     current = root
@@ -453,8 +450,11 @@ def _create_pending(paths: _CutoverPaths, fingerprint: str) -> _PendingCutover:
 
 
 def _recover_pending(paths: _CutoverPaths, request: TargetCutoverRequest, fingerprint: str) -> None:
-    if not paths.pending.exists():
-        if paths.snapshot.exists() or paths.target.exists():
+    if _workspace_path_kind(paths.root, paths.pending) == "missing":
+        if (
+            _workspace_path_kind(paths.root, paths.snapshot) != "missing"
+            or _workspace_path_kind(paths.root, paths.target) != "missing"
+        ):
             _fail_receipt("unowned target cutover state exists without a receipt")
         return
     try:
@@ -497,7 +497,7 @@ def _snapshot_record(
 
 
 def _initialize_target(paths: _CutoverPaths, request: TargetCutoverRequest) -> TargetStoreManifest:
-    if paths.target.exists():
+    if _workspace_path_kind(paths.root, paths.target) != "missing":
         _fail_path("target store already exists")
     authority_paths = tuple(f"changes/{item.change_id}/authority.json" for item in request.authorities)
     runtime_paths = tuple(f"changes/{item.change_id}/target-runtime/state.json" for item in request.authorities)
@@ -675,8 +675,8 @@ def _restore_refs(paths: _CutoverPaths, pending: _PendingCutover) -> None:
 def _restore_sources(paths: _CutoverPaths, request: TargetCutoverRequest) -> None:
     retired_paths = _retired_paths(paths, request)
     for source, retired in zip(paths.sources, retired_paths, strict=True):
-        if retired.exists():
-            if source.exists():
+        if _workspace_path_kind(paths.root, retired) != "missing":
+            if _workspace_path_kind(paths.root, source) != "missing":
                 _fail_receipt(f"source and retired source both exist: {source}")
             _rename_directory(paths.root, retired, source)
 
@@ -795,6 +795,67 @@ def _read_workspace_file(root: Path, path: Path) -> bytes:
         return _read_descriptor_file(parent_fd, path.name)
     finally:
         os.close(parent_fd)
+
+
+def _workspace_path_kind(root: Path, path: Path) -> Literal["missing", "file", "directory"]:
+    try:
+        parent_fd = _open_parent_descriptor(root, path, create=False)
+    except FileNotFoundError:
+        return "missing"
+    try:
+        try:
+            metadata = os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            return "missing"
+    finally:
+        os.close(parent_fd)
+    if stat.S_ISREG(metadata.st_mode):
+        return "file"
+    if stat.S_ISDIR(metadata.st_mode):
+        return "directory"
+    raise TargetCutoverPathError(path)
+
+
+def _find_current_job(root: Path, source: Path) -> str | None:
+    if _workspace_path_kind(root, source) == "missing":
+        return None
+    source_parent_fd = _open_parent_descriptor(root, source, create=False)
+    source_fd = -1
+    jobs_fd = -1
+    try:
+        source_fd = os.open(source.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=source_parent_fd)
+        try:
+            jobs_fd = os.open("jobs", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=source_fd)
+        except FileNotFoundError:
+            return None
+        relative = _find_regular_file(jobs_fd, PurePosixPath("jobs"))
+        if relative is None:
+            return None
+        return f"{source.relative_to(root).as_posix()}/{relative}"
+    finally:
+        if jobs_fd >= 0:
+            os.close(jobs_fd)
+        if source_fd >= 0:
+            os.close(source_fd)
+        os.close(source_parent_fd)
+
+
+def _find_regular_file(directory_fd: int, prefix: PurePosixPath) -> str | None:
+    for name in sorted(os.listdir(directory_fd)):
+        metadata = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        relative = prefix / name
+        if stat.S_ISREG(metadata.st_mode):
+            return relative.as_posix()
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise TargetCutoverPathError(relative.as_posix())
+        child_fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory_fd)
+        try:
+            found = _find_regular_file(child_fd, relative)
+        finally:
+            os.close(child_fd)
+        if found is not None:
+            return found
+    return None
 
 
 def _request_fingerprint(request: TargetCutoverRequest) -> str:

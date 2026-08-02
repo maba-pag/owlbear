@@ -19,6 +19,7 @@ from owlbear_kanban.target_cutover import (
     TargetCutoverRequest,
     TargetCutoverSource,
     TargetCutoverSubjectKind,
+    TargetMutationAuthority,
     TargetMutationGateError,
     authorize_target_mutation,
     cut_over_target_runtime,
@@ -245,28 +246,30 @@ def test_cutover_rejects_stale_source_before_durable_intent(tmp_path: Path) -> N
 
 def test_concurrent_cutovers_serialize_without_losing_source_or_snapshot(tmp_path: Path) -> None:
     request, source, _adapter = _workspace_request(tmp_path)
-    first_smoke_started = Event()
+    source_retired = Event()
     release_first = Event()
     second_done = Event()
     results: list[object] = []
 
-    def first_smoke(_root: Path, _request: TargetCutoverRequest) -> None:
-        first_smoke_started.set()
-        assert release_first.wait(timeout=2)
+    def pause_after_retirement(stage: str, _path: Path) -> None:
+        if stage == "source-retirement":
+            source_retired.set()
+            assert release_first.wait(timeout=2)
 
-    def run(smoke: object) -> None:
+    def run(failure: object | None) -> None:
         try:
-            results.append(cut_over_target_runtime(tmp_path, request, smoke=smoke))  # type: ignore[arg-type]
+            result = cut_over_target_runtime(tmp_path, request, smoke=_smoke, failure=failure)  # type: ignore[arg-type]
+            results.append(result)
         except BaseException as exc:  # noqa: BLE001 - retain thread failure for assertion.
             results.append(exc)
         finally:
-            if smoke is _smoke:
+            if failure is None:
                 second_done.set()
 
-    first = Thread(target=run, args=(first_smoke,))
-    second = Thread(target=run, args=(_smoke,))
+    first = Thread(target=run, args=(pause_after_retirement,))
+    second = Thread(target=run, args=(None,))
     first.start()
-    assert first_smoke_started.wait(timeout=2)
+    assert source_retired.wait(timeout=2)
     second.start()
     assert not second_done.wait(timeout=0.1)
     release_first.set()
@@ -279,6 +282,43 @@ def test_concurrent_cutovers_serialize_without_losing_source_or_snapshot(tmp_pat
     assert sorted(item.replayed for item in results) == [False, True]  # type: ignore[union-attr]
     assert not source.exists()
     assert query_target_snapshot(tmp_path, request, "runtime").manifest.source_digest
+
+
+def test_mutation_authorization_waits_for_cutover_receipt(tmp_path: Path) -> None:
+    request, _source, _adapter = _workspace_request(tmp_path)
+    source_retired = Event()
+    release_cutover = Event()
+    authorization_done = Event()
+    results: list[object] = []
+
+    def pause_after_retirement(stage: str, _path: Path) -> None:
+        if stage == "source-retirement":
+            source_retired.set()
+            assert release_cutover.wait(timeout=2)
+
+    def activate() -> None:
+        results.append(cut_over_target_runtime(tmp_path, request, smoke=_smoke, failure=pause_after_retirement))
+
+    def authorize() -> None:
+        try:
+            results.append(authorize_target_mutation(tmp_path, request))
+        finally:
+            authorization_done.set()
+
+    activation = Thread(target=activate)
+    authorization = Thread(target=authorize)
+    activation.start()
+    assert source_retired.wait(timeout=2)
+    authorization.start()
+    assert not authorization_done.wait(timeout=0.1)
+    release_cutover.set()
+    activation.join(timeout=2)
+    authorization.join(timeout=2)
+
+    assert not activation.is_alive()
+    assert not authorization.is_alive()
+    assert len(results) == 2
+    assert any(isinstance(item, TargetMutationAuthority) for item in results)
 
 
 def test_cutover_recovers_durable_pending_intent_after_process_death(tmp_path: Path) -> None:
