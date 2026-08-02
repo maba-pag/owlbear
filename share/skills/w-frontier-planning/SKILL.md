@@ -28,6 +28,18 @@ design meaning. One unresolved material question may use `create_request` with e
 authority digest, work item, commitment, optional task, timestamp, and summary; then return blocked
 until it is resolved.
 
+### Replanning A Returned Scope
+
+A `plan` job whose scope already carries completed work is a replan: an earlier claim returned at
+`task-plan` or `solution-plan` level, so the engine superseded that scope's unfinished jobs and
+published this job in their place. Reviewed tasks and their receipts survive and are immutable — plan
+around them, never re-plan them.
+
+Recover what already landed before writing tasks: `list_work_item_activity` yields the scope's
+attempt events, whose `evidence_ids` name issued receipts; `show_receipt` then yields each receipt's
+`task_id`, claim, and `planned_tasks`. Every task you publish needs a fresh `task_id`; reusing a
+retired identity is rejected as a conflict.
+
 ## Step 2 - Build Immutable Review Context
 
 Construct one candidate claim containing execution identity, admitted semantic scope, proposed task

@@ -6,6 +6,7 @@ from pydantic import ValidationError as PydanticValidationError
 from owlbear_kanban.target_authority import (
     Commitment,
     CommitmentClass,
+    DesignReentryBriefing,
     Outcome,
     PlanScopeKind,
     TargetAuthority,
@@ -17,6 +18,7 @@ from owlbear_kanban.target_runtime import (
     FinishTargetJobRequest,
     RecoverInterruptedTaskRequest,
     RespondToReviewRequest,
+    ReturnLevel,
     ReviewDisposition,
     StartTargetJobRequest,
     TargetAttemptState,
@@ -26,8 +28,10 @@ from owlbear_kanban.target_runtime import (
     TargetRuntime,
     TargetRuntimeConflictError,
     TargetRecoveryError,
+    TargetRuntimeReferenceError,
     TargetTask,
 )
+from owlbear_kanban.work_items import WorkItemAttention, WorkItemProjector, WorkItemStage
 
 
 def _job() -> dict[str, object]:
@@ -383,3 +387,98 @@ def test_expiry_and_known_dead_recovery_are_guarded(tmp_path) -> None:
         runtime.recover_interrupted_task(recovery, process_is_alive=lambda _process: False).state
         == TargetJobState.PENDING
     )
+
+
+def _briefing(**changes: object) -> DesignReentryBriefing:
+    return DesignReentryBriefing.model_validate(
+        {
+            "work_item_id": "OUT-001",
+            "failed_claim": "Outcome A cannot be delivered under its accepted commitments.",
+            "affected_commitment_ids": ("COM-001",),
+            "evidence": ("focused proof contradicts the accepted acceptance",),
+            "blocked_work_item_ids": ("OUT-003",),
+            "resume_condition": "The user re-scopes COM-001.",
+            **changes,
+        }
+    )
+
+
+def test_plan_return_republishes_the_scope_and_drops_superseded_tasks(tmp_path) -> None:
+    runtime = _runtime(tmp_path)
+    jobs = (
+        _target_job(runtime, 1, "OUT-001", task_id="TASK-001"),
+        _target_job(runtime, 2, "OUT-001", task_id="TASK-002"),
+    )
+    tasks = (
+        _task("TASK-001", "OUT-001").model_copy(update={"reviewed": True, "build_receipt_id": "receipt-old"}),
+        _task("TASK-002", "OUT-001"),
+    )
+    runtime.materialize(jobs, tasks)
+    _start(runtime, 2, "attempt-001", "reviewer-one")
+
+    result = _finish(
+        runtime,
+        2,
+        "attempt-001",
+        "reviewer-one",
+        disposition=ReviewDisposition.TASK_PLAN,
+        review_id="review-001",
+    )
+
+    assert result.job.state == TargetJobState.RETURNED
+    assert result.job.return_level == ReturnLevel.TASK_PLAN
+    frontier = runtime.list_frontier()
+    assert tuple((job.job_id, job.kind) for job in frontier) == ((3, "plan"),)
+    assert runtime.show_job(1).state == TargetJobState.RETURNED
+    progress = runtime.work_item_evidence().task_progress
+    assert tuple((item.scope_id, item.task_count, item.reviewed_task_count) for item in progress) == (
+        ("PLAN-001", 1, 1),
+    )
+
+
+def test_design_return_blocks_the_semantic_slice_and_surfaces_the_briefing(tmp_path) -> None:
+    runtime = _runtime(tmp_path)
+    runtime.materialize(tuple(_target_job(runtime, index, f"OUT-00{index}", kind="plan") for index in range(1, 4)))
+    _start(runtime, 1, "attempt-001", "reviewer-one")
+
+    _finish(
+        runtime,
+        1,
+        "attempt-001",
+        "reviewer-one",
+        disposition=ReviewDisposition.DESIGN,
+        review_id="review-001",
+        design_reentry=_briefing(),
+    )
+
+    assert tuple(job.work_item_id for job in runtime.list_frontier()) == ("OUT-002",)
+    projector = WorkItemProjector(_authority(), runtime.work_item_evidence())
+    projection = projector.show("OUT-001").projection
+    assert (projection.stage, projection.attention) == (WorkItemStage.DESIGN, WorkItemAttention.USER)
+    assert projector.show("OUT-001").briefing == _briefing()
+
+
+def test_design_return_requires_a_briefing_that_matches_its_authority(tmp_path) -> None:
+    runtime = _runtime(tmp_path)
+    runtime.materialize((_target_job(runtime, 1, "OUT-001", kind="plan"),))
+    _start(runtime, 1, "attempt-001", "reviewer-one")
+
+    with pytest.raises(PydanticValidationError):
+        _finish(
+            runtime,
+            1,
+            "attempt-001",
+            "reviewer-one",
+            disposition=ReviewDisposition.DESIGN,
+            review_id="review-001",
+        )
+    with pytest.raises(TargetRuntimeReferenceError):
+        _finish(
+            runtime,
+            1,
+            "attempt-001",
+            "reviewer-one",
+            disposition=ReviewDisposition.DESIGN,
+            review_id="review-001",
+            design_reentry=_briefing(work_item_id="OUT-002"),
+        )

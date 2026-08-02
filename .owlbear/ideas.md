@@ -64,3 +64,43 @@ And for `agent_view.py`:
 ## Memory
 
 - allow searching for memory IDs in cockpit
+
+## Code index — push detail into file headers, keep the index thin
+
+### Status quo
+
+`serve/tools` already generates navigation indexes (`uv run indexes` → `doc-index`, `py-index`,
+`ts-index`), and `h-codebase-orientation` already tells agents to use them as wayfinders. Two
+problems in practice:
+
+- **The indexes are too long to read.** `.owlbear/py-index.md` is ~3,000 lines, `ts-index.md` ~1,100,
+  `doc-index.md` ~1,100. An agent looking for one module pays to scan thousands of lines — the
+  index costs nearly as much attention as searching the source it was meant to replace.
+- **Nothing regenerates them.** They are not wired into any hook or CI step, so they drift silently.
+  As of 2026-08-02 the newest `serve/` change was 2026-08-02 while `py-index.md` was last
+  regenerated 2026-07-14.
+
+### Proposal
+
+Invert where the detail lives, the way a C/C++ header declares an interface next to the code it
+belongs to:
+
+- **Full detail moves into an auto-generated header block at the top of each source file** — roughly
+  the first 20 lines: what the module is for, what it exports, what it depends on. An agent that
+  opens the file gets the summary immediately, with zero index lookup.
+- **The index file shrinks to a routing table** — one line per file: path plus a one-sentence
+  purpose. Enough to pick the right file, nothing more.
+
+Generation stays a script, not an agent, so it costs no tokens and cannot drift into opinion.
+Regeneration should run as part of the linter pass so headers and index are always current.
+
+**Open questions:**
+
+- Is there an existing standard or tool for generated per-file header summaries worth adopting
+  instead of hand-rolling one? Check before building.
+- Header blocks are generated content inside human-edited files — needs a stable delimiter and a
+  check that regeneration never eats hand-written content below it.
+- Does the same treatment fit `doc-index`, or is that one already short enough to leave alone?
+
+**Expected outcome:** An agent finds the right file from a short index, then gets that file's full
+structure from its own first lines. No 1,000-line index reads, no stale indexes.

@@ -18,12 +18,14 @@ from owlbear_kanban.runtime_transaction import (
     RuntimeTransaction,
     TransactionParticipant,
 )
+from owlbear_kanban.target_authority import DesignReentryBriefing
 from owlbear_kanban.work_items import TaskProgress, WorkItemEvidence
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_kanban.target_authority import TargetAuthority
+
 
 RuntimeId = Annotated[str, StringConstraints(strict=True, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")]
 CommitSha = Annotated[str, StringConstraints(strict=True, pattern=r"^[0-9a-f]{40}$")]
@@ -148,11 +150,15 @@ class FinishTargetJobRequest(_TargetModel):
     claim: str = Field(min_length=1)
     evidence: tuple[str, ...] = Field(min_length=1)
     planned_tasks: tuple[TargetTask, ...] = ()
+    design_reentry: DesignReentryBriefing | None = None
 
     @model_validator(mode="after")
     def _validate_receipt_identity(self) -> FinishTargetJobRequest:
         if (self.disposition == ReviewDisposition.ACCEPTABLE) != (self.receipt_id is not None):
             msg = "only acceptable reviews require a receipt identity"
+            raise ValueError(msg)
+        if (self.disposition == ReviewDisposition.DESIGN) != (self.design_reentry is not None):
+            msg = "only design returns require a re-entry briefing"
             raise ValueError(msg)
         return self
 
@@ -194,11 +200,15 @@ class ArbitrateTargetAttemptRequest(_TargetModel):
     decided_at: str = Field(min_length=1)
     disposition: Literal["acceptable", "restart", "task-plan", "solution-plan", "design"]
     rationale: str = Field(min_length=1)
+    design_reentry: DesignReentryBriefing | None = None
 
     @model_validator(mode="after")
     def _validate_receipt_identity(self) -> ArbitrateTargetAttemptRequest:
         if (self.disposition == "acceptable") != (self.receipt_id is not None):
             msg = "only acceptable arbitration requires a receipt identity"
+            raise ValueError(msg)
+        if (self.disposition == "design") != (self.design_reentry is not None):
+            msg = "only design returns require a re-entry briefing"
             raise ValueError(msg)
         return self
 
@@ -349,6 +359,7 @@ class _ClosingEvidence(_TargetModel):
     evidence: tuple[str, ...]
     planned_tasks: tuple[TargetTask, ...] = ()
     arbiter_id: str | None = None
+    design_reentry: DesignReentryBriefing | None = None
 
 
 class _AttemptEventContext(_TargetModel):
@@ -366,6 +377,7 @@ class TargetRuntimeState(_TargetModel):
     attempts: tuple[TargetAttempt, ...] = ()
     requests: tuple[TargetRequest, ...] = ()
     receipts: tuple[TargetReceipt, ...] = ()
+    design_reentries: tuple[DesignReentryBriefing, ...] = ()
 
     @model_validator(mode="after")
     def _validate_identities(self) -> TargetRuntimeState:
@@ -701,6 +713,7 @@ class TargetRuntime:
             task_progress=progress,
             completed_assembly_scope_ids=assembly,
             pending_request_work_item_ids=pending,
+            design_reentry_briefings=state.design_reentries,
         )
 
     def _validate_materialization(self, jobs: tuple[TargetJob, ...], tasks: tuple[TargetTask, ...]) -> None:
@@ -816,6 +829,7 @@ class TargetRuntime:
                 claim=request.claim,
                 evidence=request.evidence,
                 planned_tasks=request.planned_tasks,
+                design_reentry=request.design_reentry,
             ),
         )
 
@@ -841,6 +855,7 @@ class TargetRuntime:
                 evidence=(*last_review.evidence, request.rationale),
                 planned_tasks=last_review.planned_tasks,
                 arbiter_id=request.arbiter_id,
+                design_reentry=request.design_reentry,
             ),
         )
         if result[4] is None:
@@ -881,12 +896,82 @@ class TargetRuntime:
                 "receipts": (*state.receipts, receipt) if receipt is not None else state.receipts,
             }
         )
+        detail: str | None = None
+        if receipt is None and closing.disposition != ReviewDisposition.RESTART:
+            updated, detail = self._apply_return(updated, closed_job, closing)
         context = _AttemptEventContext(
             timestamp=closing.timestamp,
             evidence_ids=(receipt.receipt_id,) if receipt is not None else (),
+            detail=detail,
         )
         event = self._attempt_event(job, closed_attempt, event_kind, context)
         return updated, closed_job, closed_attempt, receipt, event
+
+    def _apply_return(
+        self,
+        state: TargetRuntimeState,
+        job: TargetJob,
+        closing: _ClosingEvidence,
+    ) -> tuple[TargetRuntimeState, str]:
+        """Reopen the owning artifact so a returned job leaves a live successor behind."""
+        if closing.disposition == ReviewDisposition.DESIGN:
+            briefing = self._validated_briefing(closing.design_reentry, job)
+            updated = state.model_copy(update={"design_reentries": (*state.design_reentries, briefing)})
+            return updated, f"design re-entry opened for {job.work_item_id}"
+        return self._republish_plan(state, job, ReturnLevel(closing.disposition.value), closing.timestamp)
+
+    def _republish_plan(
+        self,
+        state: TargetRuntimeState,
+        job: TargetJob,
+        level: ReturnLevel,
+        timestamp: str,
+    ) -> tuple[TargetRuntimeState, str]:
+        scope_id = job.plan_scope_id
+        superseded = tuple(
+            item.job_id
+            for item in state.jobs
+            if item.plan_scope_id == scope_id
+            and item.job_id != job.job_id
+            and item.state in {TargetJobState.PENDING, TargetJobState.ACTIVE}
+        )
+        jobs = tuple(_returned_job(item, level) if item.job_id in superseded else item for item in state.jobs)
+        attempts = tuple(
+            item.model_copy(update={"state": TargetAttemptState.RETURNED})
+            if item.job_id in superseded and item.state in {TargetAttemptState.ACTIVE, TargetAttemptState.REPAIR}
+            else item
+            for item in state.attempts
+        )
+        # Unreviewed tasks belonged to the superseded plan; keeping them would pin the
+        # work item below full reviewed progress forever.
+        tasks = tuple(task for task in state.tasks if task.plan_scope_id != scope_id or task.reviewed)
+        replanned = TargetJob(
+            job_id=max((item.job_id for item in state.jobs), default=0) + 1,
+            kind="plan",
+            change_id=job.change_id,
+            authority_digest=job.authority_digest,
+            work_item_id=job.work_item_id,
+            plan_scope_id=scope_id,
+            created_at=timestamp,
+        )
+        updated = state.model_copy(update={"jobs": (*jobs, replanned), "tasks": tasks, "attempts": attempts})
+        detail = f"plan job {replanned.job_id} replaces scope {scope_id}"
+        if superseded:
+            detail = f"{detail}; superseded jobs {', '.join(str(item) for item in sorted(superseded))}"
+        return updated, detail
+
+    def _validated_briefing(self, briefing: DesignReentryBriefing | None, job: TargetJob) -> DesignReentryBriefing:
+        if briefing is None:
+            _conflict("design return requires a re-entry briefing")
+        work_items = {self._authority.change_id, *(item.outcome_id for item in self._authority.outcomes)}
+        commitments = {item.commitment_id for item in self._authority.commitments}
+        if briefing.work_item_id != job.work_item_id:
+            _reference("briefing does not describe the returned work item")
+        if not set(briefing.affected_commitment_ids) <= commitments:
+            _reference("briefing names absent commitments")
+        if not {*briefing.blocked_work_item_ids, *briefing.continuing_work_item_ids} <= work_items:
+            _reference("briefing names absent work items")
+        return briefing
 
     def _publish_accepted_plan(
         self,
@@ -1014,6 +1099,7 @@ class TargetRuntime:
             for request in state.requests
             if request.status == TargetRequestStatus.PENDING and request.authority_digest == self.authority_digest
         }
+        blocked.update(briefing.work_item_id for briefing in state.design_reentries)
         changed = True
         while changed:
             expanded = {

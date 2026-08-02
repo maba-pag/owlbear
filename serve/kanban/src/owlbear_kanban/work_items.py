@@ -63,6 +63,7 @@ class WorkItemEvidence(_ProjectionModel):
     task_progress: tuple[TaskProgress, ...] = ()
     completed_assembly_scope_ids: tuple[str, ...] = ()
     pending_request_work_item_ids: tuple[str, ...] = ()
+    design_reentry_briefings: tuple[DesignReentryBriefing, ...] = ()
 
     @model_validator(mode="after")
     def _validate_unique_progress(self) -> WorkItemEvidence:
@@ -108,7 +109,10 @@ class WorkItemProjector:
         self._evidence = evidence
         self._scopes = {scope.target_id: scope for scope in authority.task_plan_scopes}
         self._progress = {item.scope_id: item for item in evidence.task_progress}
-        self._briefings = {item.work_item_id: item for item in authority.design_reentries}
+        # A runtime briefing describes a later failure than the admitted one, so it wins.
+        self._briefings = {
+            item.work_item_id: item for item in (*authority.design_reentries, *evidence.design_reentry_briefings)
+        }
         self._items = self._project_items()
 
     def list_items(self) -> tuple[WorkItemProjection, ...]:
