@@ -2,7 +2,6 @@ import { spawnSync } from "node:child_process";
 
 const fastGateSpecs = [
   "e2e/smoke.spec.ts",
-  "e2e/mutation-error-banner.spec.ts",
   "e2e/pds-runtime-csp.spec.ts",
 ];
 

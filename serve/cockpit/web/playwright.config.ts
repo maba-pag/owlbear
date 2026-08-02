@@ -31,7 +31,7 @@ export default defineConfig({
   ],
   webServer: process.env['WORK_PORTFOLIO_E2E']
     ? {
-        command: 'vite --host 127.0.0.1 --port 4175',
+        command: 'npm run build && vite preview --host 127.0.0.1 --port 4175',
         url: 'http://127.0.0.1:4175/work',
         reuseExistingServer: false,
         timeout: 120_000,

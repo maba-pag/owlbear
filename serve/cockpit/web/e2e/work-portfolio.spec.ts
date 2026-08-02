@@ -74,7 +74,7 @@ for (const viewport of [
   test(`${viewport.name}: work portfolio remains bounded and detail is reachable`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport)
     await seed(page)
-    await page.goto('/work')
+    await page.goto('/')
 
     await expect(page).toHaveURL(/\/work$/)
     await expect(page.getByTestId('cockpit-shell')).toBeVisible()

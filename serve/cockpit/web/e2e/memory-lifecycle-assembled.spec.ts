@@ -59,7 +59,9 @@ test.describe('assembled Memory lifecycle', () => {
 
       const contested = await openEntry(page, 'Contested memory')
       await expect(contested.getByTestId('memory-entry-state')).toHaveText('contested')
-      await expect(contested.getByTestId('memory-contested-task')).toHaveText('1960')
+      const contestedTask = contested.getByText('Contested task', { exact: true }).locator('..')
+      await expect(contestedTask).toContainText('1960')
+      await expect(contestedTask.getByRole('button')).toHaveCount(0)
       await expect(contested.getByTestId('memory-edit-btn')).toBeVisible()
       await expect(contested.getByTestId('memory-resolve-btn')).toBeVisible()
       await expect(contested).not.toContainText('Unremarkable')
@@ -72,15 +74,6 @@ test.describe('assembled Memory lifecycle', () => {
       } else {
         await contested.screenshot({ path: 'test-results/memory-lifecycle-desktop-detail.png' })
       }
-
-      await contested.getByTestId('memory-contested-task').click()
-      const taskModal = page.getByTestId('task-detail-modal')
-      await expect(taskModal).toBeVisible()
-      await expect(taskModal.locator('[data-region="task-detail-window"]')).toHaveAttribute('data-selected-task-id', '1960')
-      await taskModal.evaluate((element) => {
-        element.dispatchEvent(new CustomEvent('dismiss', { bubbles: true }))
-      })
-      await expect(taskModal).toHaveCount(0)
 
       const deleted = await openEntry(page, 'Deleted memory')
       await expect(deleted.getByTestId('memory-edit-btn')).toHaveCount(0)

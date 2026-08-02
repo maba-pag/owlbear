@@ -21,7 +21,7 @@ export default function CockpitShell() {
   )
 
   return (
-    <div className="flex min-h-dvh min-w-0 flex-col overflow-x-hidden bg-canvas text-primary" data-testid="cockpit-shell">
+    <div className="flex min-h-dvh min-w-0 flex-col overflow-x-hidden bg-canvas text-primary" data-testid="cockpit-shell" data-region="workspace">
       <header className="sticky top-0 z-20 border-b border-contrast-low bg-canvas/95 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-[1440px] items-center justify-between gap-static-md px-static-md py-static-sm md:px-static-xl">
           <div className="min-w-0">
