@@ -356,6 +356,14 @@ def test_target_delivery_workflows_enforce_review_and_remove_obsolete_controls()
         _SKILLS_ROOT / "w-packet-building" / "SKILL.md",
     )
     content = "\n".join(path.read_text(encoding="utf-8") for path in delivery_paths)
+    ecosystem_paths = (
+        *sorted(_AGENTS_ROOT.glob("*.agent.md")),
+        *sorted(_SKILLS_ROOT.glob("*/SKILL.md")),
+        *sorted(_INSTRUCTIONS_ROOT.glob("*.instructions.md")),
+        _REPO_ROOT / "share/WIRING.md",
+        _REPO_ROOT / ".github/copilot-instructions.md",
+    )
+    ecosystem_content = "\n".join(path.read_text(encoding="utf-8") for path in ecosystem_paths)
 
     for operation in _TARGET_DELIVERY_TOOLS:
         if operation in {"show_completion_summary", "show_work_item_activity"}:
@@ -377,4 +385,6 @@ def test_target_delivery_workflows_enforce_review_and_remove_obsolete_controls()
         "Priority",
         "Cancel",
     )
-    assert not {term for term in obsolete if term in content}
+    assert not {term for term in obsolete if term in ecosystem_content}
+    retired = ("accept job", "audit job", "acceptor", "auditor", "w-node-acceptance", "w-whole-change-audit")
+    assert not {term for term in retired if term in ecosystem_content.lower()}

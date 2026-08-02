@@ -126,8 +126,8 @@ scope, input, output, or verification method and give bad -> good rewrite guidan
 | B3 | "Reviewer checks every scenario correctly." | "Plan review returns one evidenced row for packet completeness, admitted references, impact closure, dependency order, proof boundary, and material expansion." |
 | B4 | "Given an injected workflow runner, the CLI command returns JSON." | "Given the real CLI application with remote HTTP transport replaced, invoking `alerts prepare` resolves normal configuration, crosses the assembled workflow boundary, and writes one JSON document to stdout." |
 | P1 | "Add validation before Delivery." | "Designer runs deterministic validation and complete source-grounded challenge before requesting admission approval." |
-| P2 | "The plan should be prepared." | "PlannerSuccess returns one isolated node plan, one build job ID per packet, and one distinct accept job ID." |
-| P3 | "Auditor confirms completion." | "Auditor queries accepted node receipts, unresolved requests/findings, and admitted normal workflows before returning its exact-commit disposition." |
+| P2 | "The plan should be prepared." | "The plan claim returns one bounded task set, explicit dependencies, and maintained-boundary proof for independent review." |
+| P3 | "Review confirms completion." | "Build review compares the exact candidate commit, admitted task claim, complete diff, and focused proof before returning one typed disposition." |
 
 ## Canonical Literal Verification
 
