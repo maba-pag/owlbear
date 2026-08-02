@@ -1,4 +1,4 @@
-"""Guardrail tests that keep storage-suite writes scoped to tmp_path.
+"""Guardrail tests that keep Kanban storage test writes scoped to tmp_path.
 
 These checks are static and intentionally conservative: write targets must be
 provably derived from tmp_path-like roots and must not escape via parent hops.
@@ -12,9 +12,11 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).parent.parent
 _KANBAN_TESTS = _REPO_ROOT / "serve" / "kanban" / "tests"
 _TARGET_PATTERNS = (
-    "test_storage*.py",
-    "test_activity_store*.py",
-    "test_corruption*.py",
+    "test_runtime_transaction.py",
+    "test_snapshot.py",
+    "test_target_admission.py",
+    "test_target_cutover.py",
+    "test_target_runtime.py",
 )
 _WRITE_METHODS = {"write_text", "write_bytes", "touch", "mkdir", "rmdir", "unlink"}
 
@@ -35,7 +37,10 @@ def _name_is_tmp_root(name: str) -> bool:
         "archive_dir",
         "quarantine_dir",
         "path",
+        "source",
+        "staging",
         "task_path",
+        "worktree",
     }
 
 
@@ -130,6 +135,10 @@ def _collect_safe_names(tree: ast.AST) -> set[str]:  # noqa: C901
         "tasks_dir",
         "archive_dir",
         "quarantine_dir",
+        "source",
+        "staging",
+        "tracked",
+        "worktree",
     }
 
     # Seed with function parameters that are commonly tmp roots in helpers/fixtures.
@@ -172,11 +181,11 @@ def _extract_write_target(node: ast.Call) -> ast.AST | None:
 
 
 class TestDenyCodeWrites:
-    def test_storage_related_test_files_exist(self) -> None:
+    def test_kanban_storage_test_files_exist(self) -> None:
         files = _target_files()
-        assert files, "Expected storage-related tests under serve/kanban/tests/"
+        assert files, "Expected storage tests under serve/kanban/tests/"
 
-    def test_storage_tests_write_only_to_tmp_path_derived_targets(self) -> None:  # noqa: C901
+    def test_kanban_storage_tests_write_only_to_tmp_path_derived_targets(self) -> None:  # noqa: C901
         violations: list[str] = []
 
         for path in _target_files():
@@ -200,7 +209,7 @@ class TestDenyCodeWrites:
                     violations.append(f"{rel}:{node.lineno} -> not tmp_path-derived: {target_src}")
 
         assert not violations, (
-            "Storage-related tests must not write outside tmp_path; "
+            "Kanban storage tests must not write outside tmp_path; "
             "found non-compliant write targets:\n" + "\n".join(violations)
         )
 
