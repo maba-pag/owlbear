@@ -1,18 +1,68 @@
 ---
 mode: verification-only
 packets: []
-candidate_revision: 305227201c3541df024d52d92977a09c0bfcffef
+candidate_revision: 38e27ae3ed5d6215ef8a5fe25c2db82470ec6452
 generation:
-  job_id: 102
-  receipt_id: admission-d4bce08ac4e7
+  job_id: 303
+  receipt_id: supersession-accept-302-proof-007
   predecessor_job_ids: []
+correction:
+  finding_id: finding-accept-302-proof-007
+  finding_class: planning-omission
+  target_kind: proof
+  target_id: PROOF-002
+  invalidated_receipt_id: plan-dn-002-f11b5af05ac3
+  superseded_accept_job_id: 302
+  closure: Remove the intrinsically mutating `uv run lint` proof command; retain
+    public pytest proof because acceptance found no implementation defect.
 source_inspection:
   disposition: pass
-  evidence: Exact-candidate inspection maps the public admission operations to
-    layered deterministic validation, stable diagnostics, failure non-mutation,
-    atomic publication, replay, collision handling, and recovery. The candidate
-    source and six semantic authority inputs are clean, and no DN-002 delta
-    remains.
+  evidence: Exact-candidate inspection preserves the complete prior DN-002
+    refinement and accepted DN-001 closure. Current receipt-history parsing,
+    invalidation consumption, and typed corrective eligibility establish that
+    job 303 can carry this correction; they are generation context, not DN-002
+    required outputs or replacement proof methods. No implementation or
+    durable-output delta remains.
+  inspected_paths:
+    - pyproject.toml
+    - conftest.py
+    - serve/kanban/pyproject.toml
+    - .owlbear/changes/replace-delivery-pipeline/intent.md
+    - .owlbear/changes/replace-delivery-pipeline/design.md
+    - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
+    - serve/kanban/src/owlbear_kanban/
+    - serve/kanban/tests/conftest.py
+    - serve/kanban/tests/fixtures/historical-admission/
+    - serve/kanban/tests/test_admission.py
+    - serve/kanban/tests/test_admission_transaction.py
+    - serve/kanban/tests/test_change_receipts.py
+    - serve/kanban/tests/test_change_revision.py
+    - serve/kanban/tests/test_generated_graph_admission.py
+    - serve/kanban/tests/test_historical_admission.py
+    - serve/kanban/tests/test_invalidation.py
+    - serve/kanban/tests/test_native_runtime.py
+  generation_context:
+    - ReceiptStore.list_history and InvalidationRuntime preserve canonical
+      supersession history.
+    - The retired malformed shape receipt is absent, so canonical history
+      parses.
+    - NativeRuntime permits this exact current-digest proof planning-omission
+      correction and rejects non-proof corrections.
+    - These facts establish job 303 eligibility without becoming DN-002 product
+      outputs or proof methods.
+closure_basis:
+  source_module: Conservative MOD-001 inspection covers admission and the
+    current carrier path.
+  toolchain: Root and package configuration consumed by uv and pytest.
+  authority: Change package files consumed by public load_change and digest
+    binding.
+  proof: Public admission suites execute PROOF-002; public receipt and
+    invalidation suites corroborate current history consumption.
+  predecessor: Accepted DN-001 source closure and both predecessor tests are
+    included.
 required_outputs:
   - Public admission models, evaluate_admission, validate_and_admit, transaction
     behavior, and package exports.
@@ -20,35 +70,82 @@ required_outputs:
     baseline, approval, limits, and digest identity.
   - Atomic immutable admission receipt and initial plan-job generation with
     failure non-mutation, collision rejection, replay, and recovery.
-  - Durable coverage in the four PROOF-002 suites and four defective/corrected
+  - Durable coverage in canonical PROOF-002 suites and four defective/corrected
     historical fixture pairs.
   - No additional code, test, documentation, generated artifact, migration,
     fixture, harness, client, wiring, or proof infrastructure.
 proof_readiness:
   disposition: pass
+  boundary: Public validate/admit change operation before any jobs exist, with
+    public receipt and invalidation operations corroborating current history
+    consumption.
   commands:
     - uv run pytest -n0 serve/kanban/tests/test_admission.py
       serve/kanban/tests/test_admission_transaction.py
+      serve/kanban/tests/test_change_receipts.py
+      serve/kanban/tests/test_change_revision.py
       serve/kanban/tests/test_generated_graph_admission.py
-      serve/kanban/tests/test_historical_admission.py -q
-  evidence: At candidate 305227201c3541df024d52d92977a09c0bfcffef the command
-    returned exit 0 with 56 passed in 11.24s. Closure paths and semantic
-    authority inputs had empty scoped status and diff before and after proof.
+      serve/kanban/tests/test_historical_admission.py
+      serve/kanban/tests/test_invalidation.py -q --tb=short
+  evidence: Exact-candidate command returned exit 0 with 191 passed in 14.70s;
+    scoped tracked status was empty before and after. No command invokes lint,
+    format, fixers, generated setup, or tracked output creation.
 tracked_scope:
   clean: true
-  evidence: The eight MOD-001/MOD-008 closure paths and six semantic authority
-    inputs were clean at the candidate. Wider unrelated runtime outputs and the
-    DN-001 plan are excluded; admission does not read node plans.
+  evidence: HEAD is 38e27ae3ed5d6215ef8a5fe25c2db82470ec6452; the listed
+    authority/source/test scope had empty tracked status before and after proof.
+reconciliation:
+  predecessor_job_id: 301
+  predecessor_receipt_id: accept-dn-001-f11b5af05ac3
+  evidence: Accepted DN-001 closure is consumed completely and re-proved at the
+    exact candidate.
+  consumed_paths:
+    - serve/kanban/src/owlbear_kanban/__init__.py
+    - serve/kanban/src/owlbear_kanban/_naming.py
+    - serve/kanban/src/owlbear_kanban/change.py
+    - serve/kanban/src/owlbear_kanban/node_plan.py
+    - serve/kanban/src/owlbear_kanban/receipt.py
+    - serve/kanban/src/owlbear_kanban/runtime_transaction.py
+    - serve/kanban/src/owlbear_kanban/storage_io.py
+    - serve/kanban/src/owlbear_kanban/yaml_rt.py
+    - serve/kanban/tests/test_change_receipts.py
+    - serve/kanban/tests/test_change_revision.py
+  consumed_authority_targets:
+    - DN-001
+    - IF-001
+    - KEEP-003
+    - KEEP-007
+    - MOD-001
+    - MOD-008
+    - NEG-004
+    - NEG-007
+    - PROOF-001
+    - REQ-001
+    - REQ-016
+    - REQ-019
+    - RISK-004
 impact_closure:
   paths:
-    - serve/kanban/src/owlbear_kanban/__init__.py
-    - serve/kanban/src/owlbear_kanban/admission.py
-    - serve/kanban/src/owlbear_kanban/admission_transaction.py
-    - serve/kanban/tests/fixtures/historical-admission
+    - pyproject.toml
+    - conftest.py
+    - serve/kanban/pyproject.toml
+    - .owlbear/changes/replace-delivery-pipeline/intent.md
+    - .owlbear/changes/replace-delivery-pipeline/design.md
+    - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
+    - serve/kanban/src/owlbear_kanban/
+    - serve/kanban/tests/conftest.py
+    - serve/kanban/tests/fixtures/historical-admission/
     - serve/kanban/tests/test_admission.py
     - serve/kanban/tests/test_admission_transaction.py
+    - serve/kanban/tests/test_change_receipts.py
+    - serve/kanban/tests/test_change_revision.py
     - serve/kanban/tests/test_generated_graph_admission.py
     - serve/kanban/tests/test_historical_admission.py
+    - serve/kanban/tests/test_invalidation.py
+    - serve/kanban/tests/test_native_runtime.py
   authority_targets:
     - DN-001
     - DN-002
@@ -57,89 +154,108 @@ impact_closure:
     - KEEP-003
     - KEEP-004
     - KEEP-005
+    - KEEP-007
     - MOD-001
     - MOD-008
+    - NEG-004
+    - NEG-007
     - NEG-010
+    - PROOF-001
     - PROOF-002
+    - REQ-001
     - REQ-002
     - REQ-003
+    - REQ-016
     - REQ-018
+    - REQ-019
     - RISK-003
+    - RISK-004
     - RISK-007
 acceptance_scenarios:
   - id: AC-001
     authority_target: REQ-002
-    scenario: Given a semantic ChangeRevision whose deterministic validation,
-      source-grounded challenge, clean baseline, explicit approval, and known
-      limits pass, public validate_and_admit returns an immutable admission
-      receipt and initial plan-job generation; a failed named layer emits stable
-      findings and leaves job storage unchanged, verified by PROOF-002 output.
+    scenario: Given passing deterministic validation, repository-grounded
+      challenge, baseline, approval, and limits, public validate_and_admit
+      publishes an immutable receipt and initial jobs; public tests verify
+      publication and failure non-mutation.
   - id: AC-002
     authority_target: REQ-003
-    scenario: Given a ChangeRevision with an unowned obligation, contract
-      defect, proof ownership defect, dependency cycle, or disconnected node,
-      public evaluate_admission emits the corresponding DV finding and blocks
-      publication, verified by table-driven and generated-graph test output.
+    scenario: Given uncovered authority, interface, migration, risk, proof,
+      workflow, or topology, public evaluate_admission emits a stable DV finding
+      and creates no jobs; generated-graph tests verify it.
   - id: AC-003
     authority_target: REQ-018
-    scenario: Given four defective and four corrected historical packages plus
-      generated graph mutations, public validate_and_admit rejects defective
-      packages without publication, admits corrected packages, and replays
-      stored results without duplication, verified by historical and
-      generated-graph tests.
+    scenario: Given defective and corrected historical packages, public
+      admission rejects defects without publication and admits corrections
+      without duplicate jobs; historical tests verify both.
   - id: AC-004
     authority_target: NEG-010
-    scenario: Given evidence bound to a different delivery digest or replay data
-      differing from the persisted admission result, public validate_and_admit
-      emits EV-001 or raises AdmissionConflictError and creates no replacement
-      jobs, verified by admission and transaction test output.
+    scenario: Given stale, superseded, bootstrap, or legacy records, public
+      operations refuse them as dependency authority and preserve state;
+      admission, receipt, and invalidation tests verify refusal.
   - id: AC-005
     authority_target: KEEP-003
-    scenario: Given AdmissionEvidence keyed by declared authority targets and
-      the loaded digest, public validate_and_admit persists challenge
-      dispositions, baseline results, approval, and limits in the immutable
-      receipt, verified by receipt inspection in transaction tests.
+    scenario: Given repository, generated-contract, or external claims, public
+      admission evidence names canonical authority and state in the immutable
+      digest-bound receipt; admission tests inspect it.
   - id: AC-006
     authority_target: KEEP-004
-    scenario: Given the exact candidate, Planner inspection maps the cohesive
-      admission outcome to the declared source and proof paths without a build
-      packet; artifact inspection, scoped diff, and PROOF-002 output verify the
-      boundary.
+    scenario: Given the exact candidate with complete behavior and no tracked
+      delta, planning yields one verification-only plan with proportional public
+      proof and no build packet; plan inspection verifies it.
   - id: AC-007
     authority_target: KEEP-005
-    scenario: Given missing or non-pass challenge evidence, public
-      evaluate_admission emits EV-002 and prevents publication; a fresh
-      planner-challenger inspects source, proof, closure, and admitted
-      references before pass review, verified by test output and review
-      evidence.
+    scenario: Given independent planning and acceptance gates, a fresh
+      challenger returns six source-grounded pass rows and the acceptor executes
+      public proof in a read-only exact checkout; review and accept evidence
+      verify both.
   - id: AC-008
-    authority_target: REQ-002
-    scenario: Given a semantic delivery revision before implementation jobs
-      exist, public validate_and_admit publishes initial plan jobs only after
-      deterministic validation, challenge, baseline, approval, and limits
-      succeed; a failed gate returns findings and leaves work storage unchanged,
-      verified through assembled PROOF-002.
+    authority_target: DN-002
+    acceptance_outcome_index: 1
+    scenario: Given a revision before implementation jobs exist, public
+      admission creates no implementation job until validation, challenge,
+      baseline, approval, and limits pass; transaction tests verify both states.
   - id: AC-009
-    authority_target: REQ-003
-    scenario: Given a graph missing accountability for an active outcome,
-      preserved behavior, design obligation, changed interface, migration,
-      material risk, or normal-workflow proof, public evaluate_admission emits a
-      blocking DV finding and validate_and_admit creates no jobs; the complete
-      fixture publishes one plan job per node, verified by generated-graph and
-      transaction test output.
+    authority_target: DN-002
+    acceptance_outcome_index: 2
+    scenario: Given missing graph accountability, public admission blocks and
+      creates no jobs; given a complete graph, it publishes one initial plan per
+      node; generated-graph and admission tests verify both.
 review:
   disposition: pass
-  evidence_id: plan-review-dn-002-d4bce08ac4e7-3052272-r2
-  evidence: Fresh independent inspection covered admitted authority,
-    implementation, durable proof, exact generation identity, canonical closure,
-    dependency order, proof boundary, and material expansion. All repaired
-    checks passed.
+  evidence_id: plan-review-dn-002-proof-007-r2-38e27ae3
+  evidence: Fresh independent review inspected the exact candidate, corrective
+    identity, accepted predecessor closure, current invalidation behavior,
+    read-only proof safety, and all six typed checks.
   checks:
-    plan_completeness: pass
-    admitted_references: pass
-    impact_closures: pass
-    dependency_order: pass
-    proof_boundary: pass
-    material_expansion: pass
-  source_coverage: pass
-  caller_proof_cross_check: pass
+    plan_completeness:
+      disposition: pass
+      evidence: Verification-only eligibility is source-confirmed at the exact
+        candidate; the durable planning-omission finding targets PROOF-002 and
+        asserts no implementation failure, and removing the mutating lint
+        command is the minimum correction.
+    admitted_references:
+      disposition: pass
+      evidence: Every authority target is inside DN-002 or its transitive DN-001
+        dependency authority, with no unadmitted interface, migration, proof,
+        risk, or obligation.
+    impact_closures:
+      disposition: pass
+      evidence: The closure fully covers accepted DN-001 source, tests, and all
+        13 authority targets; added invalidation and runtime tests are
+        proof-consumed or inspection-only generation context.
+    dependency_order:
+      disposition: pass
+      evidence: DN-002 depends only on accepted DN-001; corrective job 303 has
+        the exact current-digest supersession and proof-finding identity
+        required by the bounded eligibility rule.
+    proof_boundary:
+      disposition: pass
+      evidence: The single pytest command is read-only in tracked state, invokes
+        no formatter or fixer, exercises public admission operations, and uses
+        only admitted lower replacements.
+    material_expansion:
+      disposition: pass
+      evidence: The plan has no packets, product mutation, new authority, or
+        durable-output delta; runtime correction mechanics are generation
+        context, not new DN-002 outputs.

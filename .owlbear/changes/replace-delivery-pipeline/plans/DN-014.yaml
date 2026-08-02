@@ -1,19 +1,22 @@
 ---
 mode: build
-candidate_revision: 5a01120e937e4266bf6aa5a47025787cb3ec2c1f
+candidate_revision: 38e27ae3ed5d6215ef8a5fe25c2db82470ec6452
 generation:
-  job_id: 75
-  receipt_id: admission-3212969f2164
-  predecessor_job_ids:
-    - 83
-  predecessor_receipt_ids:
-    - accept-dn-009-7805c43199f1-83
+  job_id: 298
+  receipt_id: admission-f11b5af05ac3
+  predecessor_job_ids: []
+  predecessor_receipt_ids: []
+predecessor_contracts:
+  - target_node_id: DN-004
+    plan_receipt_id: plan-dn-004-f11b5af05ac3
+  - target_node_id: DN-008
+    plan_receipt_id: plan-dn-008-f11b5af05ac3
+  - target_node_id: DN-009
+    plan_receipt_id: plan-dn-009-f11b5af05ac3
 packets:
   - id: DN-014-PK-001
-    outcome: Restore durable PROOF-008 execution by giving synthetic
-      terminal-audit scenarios an explicit copied-plan cleanup option while
-      preserving normal copied-revision consumers and public audit and dispatch
-      boundaries.
+    outcome: Make the assembled public audit success proof executable under the
+      normal workspace command with a source-grounded 120-second test bound.
     obligations:
       - REQ-007
       - REQ-008
@@ -25,83 +28,83 @@ packets:
       - KEEP-007
       - KEEP-008
     in_scope:
-      - Add an explicit `clean_plans` keyword to `_copied_revision`, defaulting
-        false, that removes copied plan YAML only when a synthetic scenario must
-        author a complete isolated plan set.
-      - Have `_terminal_accept_scenario` request `clean_plans=True` with its
-        existing receipt cleanup before synthetic plan publication.
-      - Preserve admitted authority and normal `_copied_revision` callers,
-        including consumers that inspect published copied-plan digests.
-      - Run the complete native-runtime, dispatch-runtime, and MCP
-        acceptance-tool test modules to cover direct, transitive, audit, and
-        non-audit fixture consumers.
-      - Preserve audit success and replay, forged evidence rejection, stale
-        predecessor and unresolved request gates, tracked-edit rejection,
-        canonical correction routing, dispatch cleanup, and receipt invariance.
+      - Add @pytest.mark.timeout(120) to
+        test_public_audit_success_closes_accepted_whole_change_and_replays.
+      - Preserve the test body, public MCP path, checkout, assertions, and
+        collected node ID.
+      - Execute exact PROOF-008 success and rejection scenarios.
     excluded:
-      - Production auditor, runtime, receipt, dispatch, proof-checkout, or MCP
-        changes.
-      - Admitted authority, interface, migration, failure semantic, lifecycle
-        kind, correction route, or allowed replacement changes.
-      - DN-008 acceptance fixture work, DN-009 catalog work, DN-015
-        finalization, Cockpit behavior, and unrelated ecosystem assertions.
-      - Bootstrap, legacy, live project plan, or ephemeral setup records as
-        audit authority.
+      - Production, schema, authority, lifecycle, interface, migration, Cockpit,
+        setup, and documentation changes.
+      - Assertion weakening, deselection, boundary replacement, or unrelated
+        timeout changes.
+    modified_paths:
+      - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
     modules:
       - MOD-001
       - MOD-003
       - MOD-008
       - MOD-009
     interfaces:
-      - IF-001
-      - IF-003
-      - IF-004
-      - IF-005
-      - IF-009
-      - IF-010
-      - IF-014
+      produces:
+        - IF-014
+      consumes:
+        - IF-001
+        - IF-003
+        - IF-004
+        - IF-005
+        - IF-009
+        - IF-010
     dependencies: []
     acceptance_scenarios:
-      - 'AC1: Given copied published plans and `_terminal_accept_scenario`, explicit
-        cleanup removes copied plan refinements before synthetic publication, and
-        setup reaches public audit and dispatch boundaries without TransactionConflictError.'
-      - 'AC2: Given a `_copied_revision` caller without plan cleanup, published copied
-        plans remain available and native-runtime regression retains its plan-digest
-        behavior.'
-      - 'AC3: Given current accept receipts and an engine checkout at the dispatched
-        commit, public start_job selects the auditor and public finish_audit publishes
-        one digest-bound receipt, cleans the checkout, closes the change, and replays
-        without another event.'
-      - 'AC4: Given forged methods, promise, decisions, migrations, workflows, receipts,
-        requests, proof, replacements, boundary, command output, or tracked state,
-        public finish_audit returns ERR_RECEIPT_PROOF_UNSATISFIED and creates no audit
-        receipt.'
-      - 'AC5: Given a stale predecessor or unresolved audit request, public start_job
-        returns PREDECESSOR_INVALID or REQUEST_PENDING, creates no checkout, and leaves
-        stores unchanged.'
-      - 'AC6: Given cross-node integration failure, migration or removal absence,
-        admitted proof omission, or tracked auditor edit, public reject_audit emits
-        the declared finding class and route, publishes only declared corrective identities,
-        and cleans the checkout.'
-      - 'AC7: Given dispatch-level audit release, rejection, cleanup failure, or replay
-        scenarios using `_active_audit_scenario`, DispatchRuntime preserves checkout
-        cleanup and receipt and store invariants in the dispatch-runtime regression
-        module.'
+      - 'AC-1 [KEEP-004, PROOF-008]: The source-declared 120-second bound lets the
+        normal public audit success test exit zero without changing its identity or
+        assertions.'
+      - 'AC-2 [REQ-007, REQ-014, IF-014]: Current accept receipts produce a final
+        audit receipt, closed change, cleaned checkout, and idempotent replay.'
+      - 'AC-3 [REQ-008, KEEP-005]: Integration failure, migration absence, or proof
+        omission persists the declared finding and minimum corrective route.'
+      - 'AC-4 [REQ-007, KEEP-005]: Stale acceptance or an unresolved request returns
+        PREDECESSOR_INVALID or REQUEST_PENDING without mutation.'
+      - 'AC-5 [NEG-003, RISK-008]: A tracked auditor edit produces ERR_PROOF_TRACKED_MUTATION
+        and no audit receipt.'
+      - 'AC-6 [NEG-009, RISK-009]: Forged audit evidence produces ERR_RECEIPT_PROOF_UNSATISFIED
+        and leaves the audit active.'
+      - 'AC-7 [KEEP-007]: Cleanup failure, transaction conflict, and replay preserve
+        dispatch and checkout state.'
+      - 'AC-8 [KEEP-008]: Audit authority derives from ChangeRevision and native stores,
+        never memory records.'
     impact_closure:
       paths:
+        - pyproject.toml
+        - .owlbear/changes/replace-delivery-pipeline/intent.md
+        - .owlbear/changes/replace-delivery-pipeline/design.md
+        - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
+        - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
+        - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
+        - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
+        - .owlbear/changes/replace-delivery-pipeline/plans/DN-014.yaml
         - share/agents/auditor.agent.md
         - share/skills/w-whole-change-audit/SKILL.md
-        - .owlbear/hooks/deny-writes.py
         - serve/kanban/src/owlbear_kanban/__init__.py
+        - serve/kanban/src/owlbear_kanban/accepted_dependencies.py
+        - serve/kanban/src/owlbear_kanban/change.py
         - serve/kanban/src/owlbear_kanban/dispatch.py
+        - serve/kanban/src/owlbear_kanban/finding.py
+        - serve/kanban/src/owlbear_kanban/jobs.py
         - serve/kanban/src/owlbear_kanban/native_runtime.py
+        - serve/kanban/src/owlbear_kanban/node_plan.py
         - serve/kanban/src/owlbear_kanban/proof_checkout.py
         - serve/kanban/src/owlbear_kanban/receipt.py
-        - serve/kanban/tests/test_native_runtime.py
+        - serve/kanban/src/owlbear_kanban/runtime_requests.py
+        - serve/kanban/src/owlbear_kanban/runtime_transaction.py
         - serve/kanban/tests/test_dispatch_runtime.py
+        - serve/kanban/tests/test_native_runtime.py
+        - serve/kanban/tests/test_proof_checkout.py
         - serve/mcp-kanban/src/owlbear_mcp_kanban/models.py
         - serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
         - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
+        - serve/mcp-kanban/tests/test_mcp_surface_contract.py
       authority_targets:
         - DN-004
         - DN-008
@@ -133,62 +136,72 @@ packets:
     proof:
       authority: PROOF-008
       boundary: Real auditor over all accepted nodes and admitted workflows in
-        one engine-created exact-commit checkout, reached through public MCP
-        start, finish, and reject functions and DispatchRuntime over real native
-        stores.
-      invocation_harness: Public owlbear_mcp_kanban.server functions receive
-        real AppContext over temporary native stores and Git-backed
-        ProofCheckoutManager; MagicMock replaces only request-context transport
-        below the public tool boundary.
-      collection_check: uv run pytest -n0 --collect-only
+        one exact-commit checkout.
+      collection_command: uv run pytest -n0 --collect-only
         serve/kanban/tests/test_native_runtime.py
         serve/kanban/tests/test_dispatch_runtime.py
         serve/mcp-kanban/tests/test_mcp_acceptance_tools.py -q
-      primary_command: uv run pytest -n0
-        serve/kanban/tests/test_native_runtime.py
-        serve/kanban/tests/test_dispatch_runtime.py
-        serve/mcp-kanban/tests/test_mcp_acceptance_tools.py -q --tb=short
-      additional_commands:
-        - uv run lint serve/kanban/tests/test_native_runtime.py
-          serve/kanban/tests/test_dispatch_runtime.py
+      commands:
+        - uv run pytest -n0
+          serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_success_closes_accepted_whole_change_and_replays
+          -q --tb=short
+        - uv run pytest -n0
+          serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejection_routes_canonical_minimum_correction
+          -q --tb=short
+        - uv run pytest -n0
+          serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_start_job_rejects_stale_predecessor_without_mutation
+          serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_start_job_rejects_pending_request_without_mutation
+          -q --tb=short
+        - uv run pytest -n0
+          serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_tracked_edit_publishes_typed_minimum_correction
+          -q --tb=short
+        - uv run pytest -n0
+          serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejects_incomplete_or_forged_evidence
+          -q --tb=short
+        - uv run pytest -n0
+          serve/kanban/tests/test_dispatch_runtime.py::test_reject_audit_releases_reader_cleans_checkout_and_replays
+          serve/kanban/tests/test_dispatch_runtime.py::test_reject_audit_cleanup_failure_preserves_all_runtime_state
+          serve/kanban/tests/test_dispatch_runtime.py::test_reject_audit_transaction_conflict_restores_checkout_and_publishes_nothing
+          -q --tb=short
+        - uv run pytest -n0
+          serve/kanban/tests/test_native_runtime.py::test_reject_audit_atomically_publishes_design_reentry_and_replays
+          serve/kanban/tests/test_native_runtime.py::test_reject_audit_creates_only_declared_affected_node_corrections
+          -q --tb=short
+        - uv run ruff check serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
+        - uv run ruff format --check
           serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
-        - uv run python .owlbear/scripts/validate_agents.py
-        - uv run python .owlbear/scripts/validate_skills.py
       allowed_lower_replacements:
         - dependencies explicitly below each admitted workflow boundary
       evidence_outputs:
-        - Complete three-module scenario inventory.
-        - Full three-module pytest result.
-        - Lint and agent and skill validation results.
-        - Invocation-harness record.
-        - Candidate and post-proof tracked state.
+        - Stable collection inventory.
+        - Public success result under the source-declared bound.
+        - Exact rejection, stale-receipt, pending-request, tracked-edit,
+          forged-evidence, cleanup, and correction results.
+        - Scoped Ruff and tracked-state results.
     required_outputs:
-      - Opt-in copied-plan cleanup with default preservation of published copied
-        plans.
-      - '`_terminal_accept_scenario` opt-in before synthetic plan publication.'
-      - Passing complete native-runtime, dispatch-runtime, and MCP
-        acceptance-tool modules.
-      - Passing collection, lint, agent and skill validation, and tracked-state
-        evidence at the built commit.
+      - Source-declared bounded timeout for the maintained public audit success
+        test.
+      - Unchanged public test identity, body, assertions, and assembled
+        boundary.
+      - Passing collection and PROOF-008 scenario commands.
+      - Passing Ruff and tracked-state evidence.
     profile:
-      domain: Python pytest integration coverage for independent whole-change
-        audit, dispatch, exact-commit checkout, immutable receipt closure, and
-        typed correction routing.
+      domain: Python integration proof for whole-change audit and closure.
       risks:
         - RISK-008
         - RISK-009
       tools:
         - uv
         - pytest
-        - git
-        - workspace-lint
+        - pytest-timeout
+        - ruff
         - git-read-only-state-checks
       skills:
         - h-python-conventions
         - h-pytest-and-linting
     context_budget:
       expected_changed_files: 1
-      inspected_files: 13
+      inspected_files: 28
       interfaces:
         - IF-001
         - IF-003
@@ -197,17 +210,38 @@ packets:
         - IF-009
         - IF-010
         - IF-014
-      change_envelope: One opt-in fixture keyword and one call-site argument in
-        serve/kanban/tests/test_native_runtime.py plus complete three-module
-        proof; production or authority deltas require a new planning
-        disposition.
+      change_envelope: One bounded pytest timeout marker; production, assertion,
+        authority, or test-selection changes require a new planning disposition.
 review:
   disposition: pass
-  evidence_id: plan-challenge-dn-014-job75-5a01120e-rev3
+  evidence_id: plan-review-dn-014-job298-38e27ae3-r3
+  evidence: Independent review passed completeness, admitted references,
+    canonical closures, dependency ordering, proof boundary, and material
+    expansion.
   checks:
-    plan_completeness: pass
-    admitted_references: pass
-    impact_closures: pass
-    dependency_order: pass
-    proof_boundary: pass
-    material_expansion: pass
+    plan_completeness:
+      disposition: pass
+      evidence: The one-packet build plan covers all nine DN-014 obligations and
+        the only observed tracked proof-infrastructure delta.
+    admitted_references:
+      disposition: pass
+      evidence: All referenced obligations, modules, interfaces, dependencies,
+        risks, and proof IDs match DN-014 authority.
+    impact_closures:
+      disposition: pass
+      evidence: Closure paths are canonical and source-grounded; the modified
+        test is included in proof and tracked-state scopes.
+    dependency_order:
+      disposition: pass
+      evidence: The packet is acyclic, and initial planning correctly consumes
+        sealed DN-004, DN-008, and DN-009 contracts while later readiness
+        remains engine-gated.
+    proof_boundary:
+      disposition: pass
+      evidence: Exact public and runtime scenario IDs cover the complete
+        PROOF-008 method through real MCP, runtime, receipt, and checkout
+        boundaries.
+    material_expansion:
+      disposition: pass
+      evidence: The bounded timeout marker changes one maintained test and
+        introduces no production or authority expansion.

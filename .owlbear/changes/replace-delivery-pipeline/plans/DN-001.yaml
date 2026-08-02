@@ -1,21 +1,15 @@
 ---
 mode: verification-only
 packets: []
-candidate_revision: e1da35bad5951e6c3a86a07e7470041487075119
+candidate_revision: a1f02f378d4281e15a5aa4e61d3d98c0381fa190
 generation:
-  job_id: 101
-  receipt_id: admission-d4bce08ac4e7
+  job_id: 285
+  receipt_id: admission-f11b5af05ac3
   predecessor_job_ids: []
 source_inspection:
   disposition: pass
-  evidence: Exact-candidate inspection found strict joined modular
-    ChangeRevision loading, isolated node-plan storage, canonical semantic
-    digesting, immutable receipt storage and currentness, read-only health
-    diagnostics, path containment, pinned-directory handling, crash-safe
-    transaction recovery, and intended public exports. Concrete IF-001
-    modular-layout and isolated-plan effects were inspected without claiming
-    migration authority. No DN-001 implementation or durable-output delta
-    remains.
+  evidence: Complete implementation is tracked, clean, and unchanged from the
+    prior accepted candidate.
   inspected_paths:
     - serve/kanban/src/owlbear_kanban/__init__.py
     - serve/kanban/src/owlbear_kanban/_naming.py
@@ -28,34 +22,24 @@ source_inspection:
     - serve/kanban/tests/test_change_receipts.py
     - serve/kanban/tests/test_change_revision.py
 required_outputs:
-  - Tracked owlbear_kanban implementation for ChangeRevision loading, stable
-    identity resolution, canonical digesting, isolated node plans, receipt
-    storage, currentness and health, containment, transaction recovery, and
-    intended public loader and receipt exports.
-  - Tracked IF-001 behavior for physical-layout-independent digest parity,
-    joined three-document delivery authority, isolated node plans, rejection of
-    legacy graph.yaml authority, and no fallback translation.
-  - Durable unit and contract proof in
-    serve/kanban/tests/test_change_revision.py and
-    serve/kanban/tests/test_change_receipts.py.
-  - No DN-001 documentation, generated artifact, fixture, harness, client,
-    wiring, migration artifact, or proof-infrastructure output is required.
+  - Tracked modular ChangeRevision loading, stable identity resolution,
+    canonical semantic digesting across equivalent physical serialization
+    wrapping, isolated node-plan storage, immutable receipt storage, health
+    diagnostics, containment, recovery, and public exports.
+  - Tracked IF-001 joined authority with rejection of legacy graph translation.
+  - Durable PROOF-001 unit and contract coverage.
+  - No additional implementation or proof-infrastructure output is required.
 proof_readiness:
   disposition: pass
   boundary: Public owlbear-kanban ChangeRevision loader and receipt store over a
     temporary workspace.
   commands:
-    - uv run pytest serve/kanban/tests/test_change_revision.py
-      serve/kanban/tests/test_change_receipts.py -q
-  evidence: Executed at the candidate with Python 3.14.6 and reported 86 passed
-    in 1.35s. Tests use the admitted temporary workspace and bounded
-    lower-boundary history and fault injections without replacing the public
-    loader or receipt-store boundary.
+    - uv run pytest -n0 serve/kanban/tests/test_change_revision.py
+      serve/kanban/tests/test_change_receipts.py -q --tb=short
+  evidence: 87 passed in 1.09s at the candidate revision.
 tracked_scope:
   clean: true
-  evidence: HEAD equals the candidate; after compilation and proof, scoped Git
-    status over the ten closure paths was empty. Unrelated control,
-    configuration, and documentation changes remain outside this closure.
+  evidence: The impact paths were clean before and after proof.
 impact_closure:
   paths:
     - serve/kanban/src/owlbear_kanban/__init__.py
@@ -85,92 +69,79 @@ impact_closure:
 acceptance_scenarios:
   - id: AC-1
     obligation: REQ-019
-    scenario: Given a temporary package containing intent.md, design.md,
-      decisions.yaml, delivery/obligations.yaml, delivery/contracts.yaml, and
-      delivery/nodes.yaml plus plans/DN-001.yaml, calling load_change returns
-      one immutable ChangeRevision whose resolve lookup and delivery_digest
-      represent the joined semantic authority; malformed YAML, duplicate IDs,
-      missing participants, traversal IDs, and symlink redirects return
-      structured diagnostics with revision set to null. Verify through the
-      public loader tests.
+    scenario: Given modular native authority and an isolated node plan, exported
+      load_change returns an immutable joined ChangeRevision; malformed,
+      duplicate, missing, traversal, or symlink input returns a structured
+      diagnostic, verified by focused pytest output.
   - id: AC-2
     obligation: NEG-007
-    scenario: Given the owlbear_kanban public API inventory and authority
-      source, enumerating __all__ and inspecting the loader models exposes fixed
-      native authority types, no specification plugin registration surface, and
-      no writable Git mirror; given graph.yaml authority, load_change returns a
-      schema diagnostic rather than translating it. Verify through public API
-      inventory output, source inspection, and the legacy-authority rejection
-      test.
+    scenario: Given native authority and receipt identifiers, exported
+      load_change and ReceiptStore use the fixed schema and Git-bound revision
+      identity; unsupported authority or receipt kinds are rejected, verified by
+      contract-test assertions.
   - id: AC-3
     obligation: REQ-001
-    scenario: Given persisted intent, design, decisions, and modular delivery
-      documents in a temporary workspace, loading the package twice returns the
-      same authored content and semantic digest without chat state or a
-      cross-command handoff. Verify through the public loader tests and digest
-      comparison.
+    scenario: Given persisted authority documents, repeated exported load_change
+      calls return the authored content and the same semantic digest without
+      chat state, verified by loader-test output.
   - id: AC-4
     obligation: REQ-016
-    scenario: Given interrupted node-plan publication, repeated receipt
-      creation, and directory or file substitution races, NodePlanStore and
-      ReceiptStore recover committed content or preserve immutable bytes, while
-      change_health reports containment failures without tracked mutation.
-      Verify through transaction, receipt-store, and health contract tests.
+    scenario: Given interrupted publication, repeated receipt creation, or
+      filesystem substitution, exported loader, node-plan, receipt, and health
+      APIs expose recovered content or containment diagnostics while preserving
+      immutable bytes, verified by focused assertions.
   - id: AC-5
     obligation: NEG-004
-    scenario: Given legacy graph.yaml authority or a shape-kind receipt,
-      load_change or change_health returns a schema diagnostic and does not
-      translate the input into native revision or receipt evidence. Verify
-      through legacy-authority rejection tests and the public health query.
+    scenario: Given legacy graph authority or a removed shape receipt kind,
+      exported load_change or change_health returns a schema diagnostic without
+      translation, verified by negative contract tests.
   - id: AC-6
     obligation: KEEP-003
-    scenario: Given accepted decisions in reverse authored order and stable IDs
-      referenced across modular documents, ChangeRevision.accepted_decisions
-      returns stable identity order and resolve returns the named canonical
-      entity; a missing reference returns a structured diagnostic. Verify
-      through loader contract tests.
+    scenario: Given canonical schema declarations and stable IDs, exported
+      ChangeRevision.resolve returns the declared entity while an undeclared
+      reference yields a diagnostic, verified against source-declared literals.
   - id: AC-7
     obligation: KEEP-007
-    scenario: Given traversal IDs, symlinked paths, replaced directories,
-      interrupted plan writes, or receipt substitutions, public stores reject
-      escaping access, recover committed content, preserve prior bytes, and
-      report the affected path through health diagnostics. Verify through path,
-      transaction, receipt-race, and health tests.
+    scenario: Given traversal, symlink, replacement, interruption, or
+      substitution, exported loader and receipt boundaries reject escape or
+      recover committed bytes without modifying outside targets, verified by
+      path-safety tests.
   - id: AC-8
     obligation: DN-001 acceptance outcome
-    scenario: Given candidate e1da35bad5951e6c3a86a07e7470041487075119 and the
-      admitted temporary-workspace replacement, running the PROOF-001 command
-      crosses the public ChangeRevision loader and ReceiptStore boundaries,
-      reports 86 passed, and leaves the ten-path tracked closure empty. Verify
-      through command output and scoped Git-status comparison.
+    scenario: Given the candidate in a disposable proof checkout, PROOF-001
+      reports 87 passing tests and leaves the tracked closure clean, verified by
+      command output and scoped diff comparison.
 review:
   disposition: pass
-  evidence_id: plan-review-dn-001-d4bce08ac4e7-r4
-  evidence: Fresh independent review inspected admitted authority, current
-    source, transitive proof paths, Python 3.14 grammar, generation identity,
-    and PROOF-001; all typed checks passed.
+  evidence_id: plan-review-dn-001-f11b5af0-r2
+  evidence: Fresh independent review inspected the repaired exact-candidate
+    verification-only plan and source.
   checks:
     plan_completeness:
       disposition: pass
-      evidence: Required verification-only fields and outputs are complete,
-        source-grounded, and free of a hidden implementation delta.
+      evidence: The ten paths contain the complete tracked loader, node-plan,
+        receipt, containment, recovery, health, and export behavior; the focused
+        tests cover the four PROOF-001 methods.
     admitted_references:
       disposition: pass
-      evidence: References remain inside DN-001 authority, and no migration
-        identity is claimed.
+      evidence: Authority targets match DN-001 ownership, support, modules,
+        produced interface, risk, and proof without claiming an unadmitted
+        migration identity.
     impact_closures:
       disposition: pass
-      evidence: Ten canonical paths cover direct and transitive source consumed
-        by PROOF-001.
+      evidence: Paths are canonical and bounded to MOD-001 and MOD-008;
+        runtime_transaction.py is reached through exported loader recovery and
+        node-plan publication under REQ-016.
     dependency_order:
       disposition: pass
-      evidence: No predecessors or packets exist, and accept job ID 117 is
-        unused.
+      evidence: DN-001 has no consumed interfaces, delivery dependencies,
+        predecessor jobs, or packet graph.
     proof_boundary:
       disposition: pass
-      evidence: Public loader and receipt-store behavior passed 86 tests under
-        Python 3.14.6 without tracked closure mutation.
+      evidence: Proof observes exported loader, node-plan, receipt, and health
+        APIs over temporary workspaces; internal transaction setup remains below
+        the maintained boundary.
     material_expansion:
       disposition: pass
-      evidence: No unadmitted outcome, interface, module, migration, dependency,
-        compatibility path, or proof boundary is introduced.
+      evidence: No packet, module, interface, migration identity, risk, proof
+        boundary, export, or tracked delta is proposed.
