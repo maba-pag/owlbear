@@ -487,6 +487,26 @@ class TargetRuntime:
         state, _previous = self._store.read()
         return _find(state.receipts, "receipt_id", receipt_id, "receipt")
 
+    def list_attempts(self, work_item_id: str | None = None) -> tuple[TargetAttempt, ...]:
+        """Return attempts, optionally scoped to one semantic work item."""
+        state, _previous = self._store.read()
+        job_ids = {job.job_id for job in state.jobs if work_item_id is None or job.work_item_id == work_item_id}
+        return tuple(attempt for attempt in state.attempts if attempt.job_id in job_ids)
+
+    def list_requests(self, work_item_id: str | None = None) -> tuple[TargetRequest, ...]:
+        """Return requests, optionally scoped to one semantic work item."""
+        state, _previous = self._store.read()
+        return tuple(
+            request for request in state.requests if work_item_id is None or request.work_item_id == work_item_id
+        )
+
+    def list_receipts(self, work_item_id: str | None = None) -> tuple[TargetReceipt, ...]:
+        """Return receipts, optionally scoped to one semantic work item."""
+        state, _previous = self._store.read()
+        return tuple(
+            receipt for receipt in state.receipts if work_item_id is None or receipt.work_item_id == work_item_id
+        )
+
     def list_frontier(self) -> tuple[TargetJob, ...]:
         """Return pending dependency-ready jobs outside the blocked semantic slice."""
         state, _previous = self._store.read()

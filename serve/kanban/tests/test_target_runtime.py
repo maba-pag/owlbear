@@ -225,6 +225,10 @@ def test_acceptable_build_publishes_receipt_and_marks_task_reviewed(tmp_path) ->
     assert result.receipt is not None
     assert result.receipt.candidate_commit == "b" * 40
     assert runtime.show_receipt("build-receipt-001") == result.receipt
+    assert runtime.list_attempts("OUT-001") == (result.attempt,)
+    assert runtime.list_receipts("OUT-001") == (result.receipt,)
+    assert runtime.list_attempts("OUT-002") == ()
+    assert runtime.list_receipts("OUT-002") == ()
     assert (tmp_path / "target-runtime/receipts/build-receipt-001.json").is_file()
     assert runtime.work_item_evidence().task_progress[0].reviewed_task_count == 1
 
@@ -332,7 +336,7 @@ def test_one_evidence_response_routes_to_one_final_arbiter(tmp_path) -> None:
 def test_request_blocks_only_target_and_semantic_dependents(tmp_path) -> None:
     runtime = _runtime(tmp_path)
     runtime.materialize(tuple(_target_job(runtime, index, f"OUT-00{index}", kind="plan") for index in range(1, 4)))
-    runtime.create_request(
+    request = runtime.create_request(
         TargetRequest(
             request_id="request-001",
             change_id="target-runtime",
@@ -344,6 +348,8 @@ def test_request_blocks_only_target_and_semantic_dependents(tmp_path) -> None:
         )
     )
 
+    assert runtime.list_requests("OUT-001") == (request,)
+    assert runtime.list_requests("OUT-002") == ()
     assert tuple(job.work_item_id for job in runtime.list_frontier()) == ("OUT-002",)
 
 
