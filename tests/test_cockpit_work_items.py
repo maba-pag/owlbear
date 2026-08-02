@@ -183,6 +183,20 @@ def test_target_routes_are_mounted_on_live_app() -> None:
     assert any(path.startswith("/api/work-items") for path in app.openapi()["paths"])
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/changes/change-a/jobs/1/release",
+        "/api/changes/change-a/jobs/1/priority",
+        "/api/changes/change-a/jobs/1/cancel",
+    ],
+)
+def test_removed_job_controls_return_404(tmp_path: Path, path: str) -> None:
+    client, _context = _client(tmp_path)
+
+    assert client.post(path, json={}).status_code == 404
+
+
 def test_live_context_requires_receipt_and_refreshes_post_cutover_admissions(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     source = workspace / ".owlbear/kanban"
