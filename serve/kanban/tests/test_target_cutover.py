@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Event, Thread
 
 import pytest
 
@@ -193,7 +194,14 @@ def test_cutover_publishes_gate_and_retains_queryable_snapshot(tmp_path: Path) -
 
 @pytest.mark.parametrize(
     "interruption_stage",
-    ["snapshot", "initialization", "adapter-staging", "smoke-verification", "receipt-publication"],
+    [
+        "snapshot",
+        "initialization",
+        "adapter-staging",
+        "smoke-verification",
+        "receipt-publication",
+        "receipt-publication-linked",
+    ],
 )
 def test_cutover_rolls_back_every_pre_receipt_interruption(
     tmp_path: Path,
@@ -216,6 +224,61 @@ def test_cutover_rolls_back_every_pre_receipt_interruption(
     assert not (tmp_path / request.snapshot_path).exists()
     assert not (tmp_path / request.receipt_path).exists()
     assert not (tmp_path / ".owlbear/target-cutover.pending").exists()
+
+
+def test_cutover_rejects_stale_source_before_durable_intent(tmp_path: Path) -> None:
+    request, source, adapter = _workspace_request(tmp_path)
+    request = request.model_copy(
+        update={"sources": (request.sources[0].model_copy(update={"expected_source_digest": "b" * 64}),)}
+    )
+
+    with pytest.raises(TargetCutoverReadinessError) as raised:
+        cut_over_target_runtime(tmp_path, request, smoke=_smoke)
+
+    assert raised.value.code == "ERR_TARGET_CUTOVER_SOURCE_STALE"
+    assert source.is_dir()
+    assert adapter.read_bytes() == b"bootstrap\n"
+    assert not (tmp_path / request.snapshot_path).exists()
+    assert not (tmp_path / request.target_path).exists()
+    assert not (tmp_path / ".owlbear/target-cutover.pending").exists()
+
+
+def test_concurrent_cutovers_serialize_without_losing_source_or_snapshot(tmp_path: Path) -> None:
+    request, source, _adapter = _workspace_request(tmp_path)
+    first_smoke_started = Event()
+    release_first = Event()
+    second_done = Event()
+    results: list[object] = []
+
+    def first_smoke(_root: Path, _request: TargetCutoverRequest) -> None:
+        first_smoke_started.set()
+        assert release_first.wait(timeout=2)
+
+    def run(smoke: object) -> None:
+        try:
+            results.append(cut_over_target_runtime(tmp_path, request, smoke=smoke))  # type: ignore[arg-type]
+        except BaseException as exc:  # noqa: BLE001 - retain thread failure for assertion.
+            results.append(exc)
+        finally:
+            if smoke is _smoke:
+                second_done.set()
+
+    first = Thread(target=run, args=(first_smoke,))
+    second = Thread(target=run, args=(_smoke,))
+    first.start()
+    assert first_smoke_started.wait(timeout=2)
+    second.start()
+    assert not second_done.wait(timeout=0.1)
+    release_first.set()
+    first.join(timeout=2)
+    second.join(timeout=2)
+
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert not any(isinstance(item, BaseException) for item in results)
+    assert sorted(item.replayed for item in results) == [False, True]  # type: ignore[union-attr]
+    assert not source.exists()
+    assert query_target_snapshot(tmp_path, request, "runtime").manifest.source_digest
 
 
 def test_cutover_recovers_durable_pending_intent_after_process_death(tmp_path: Path) -> None:

@@ -6,11 +6,12 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import stat
-import tempfile
 from base64 import b64decode, b64encode
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -25,6 +26,7 @@ from owlbear_kanban.snapshot import (
     inventory_legacy_source,
     verify_legacy_snapshot,
 )
+from owlbear_kanban.storage_io import locked_roots
 from owlbear_kanban.target_authority import AuthorityStatus, CommitmentClass, TargetAuthority
 from owlbear_kanban.target_runtime import TargetRuntimeState
 
@@ -298,11 +300,24 @@ def cut_over_target_runtime(
     """Snapshot bootstrap stores and activate reintroduced target authority."""
     validate_target_cutover_readiness(request)
     paths = _resolve_paths(workspace_root, request)
+    _validate_source_currentness(paths, request, allow_absent=paths.receipt.exists())
+    with locked_roots((paths.root,)):
+        return _cut_over_locked(paths, request, smoke=smoke, failure=failure)
+
+
+def _cut_over_locked(
+    paths: _CutoverPaths,
+    request: TargetCutoverRequest,
+    *,
+    smoke: TargetCutoverSmokeCheck,
+    failure: TargetCutoverFailureHook | None,
+) -> TargetCutoverResult:
     fingerprint = _request_fingerprint(request)
     if paths.receipt.exists():
         return _replay_completed(paths, request, fingerprint)
     _recover_pending(paths, request, fingerprint)
     _require_sources(paths.sources)
+    _validate_source_currentness(paths, request)
     pending = _create_pending(paths, fingerprint)
     try:
         snapshots = _snapshot_sources(paths, request)
@@ -314,16 +329,33 @@ def cut_over_target_runtime(
         _verify_staging(paths, request, manifest, snapshots)
         smoke(paths.root, request)
         _invoke_failure(failure, "smoke-verification", paths.target)
-        _remove_sources(paths.sources)
+        _retire_sources(paths, request)
         receipt = _build_receipt(request, fingerprint, manifest, snapshots)
-        _publish_receipt(paths.receipt, receipt, failure)
+        _publish_receipt(paths, receipt, failure)
     except Exception as exc:
         _rollback(paths, request, pending)
         if isinstance(exc, TargetCutoverError):
             raise
         raise TargetCutoverPublicationError(str(exc)) from exc
-    paths.pending.unlink(missing_ok=True)
+    _remove_retired_sources(paths, request)
+    _remove_path(paths.root, paths.pending)
     return TargetCutoverResult(receipt=receipt, authorities=request.authorities, replayed=False)
+
+
+def _validate_source_currentness(
+    paths: _CutoverPaths,
+    request: TargetCutoverRequest,
+    *,
+    allow_absent: bool = False,
+) -> None:
+    for source, specification in zip(paths.sources, request.sources, strict=True):
+        if allow_absent and not source.exists():
+            continue
+        if not source.is_dir():
+            _fail_path(f"cutover source is absent: {source}")
+        actual = inventory_legacy_source(source, (), {}).source_digest
+        if actual != specification.expected_source_digest:
+            _fail_readiness("ERR_TARGET_CUTOVER_SOURCE_STALE", "source inventory is stale", specification.source_path)
 
 
 def authorize_target_mutation(
@@ -355,7 +387,7 @@ def query_target_snapshot(
 ) -> LegacySnapshotResult:
     """Verify and return one receipt-retained bootstrap snapshot."""
     paths = _resolve_paths(workspace_root, request)
-    receipt = _read_receipt(paths.receipt)
+    receipt = _read_receipt(paths.root, paths.receipt)
     if receipt.request_fingerprint != _request_fingerprint(request):
         _fail_receipt("target cutover receipt belongs to another request")
     snapshot = next((item for item in receipt.snapshots if item.snapshot_name == snapshot_name), None)
@@ -412,11 +444,11 @@ def _validate_distinct_paths(paths: _CutoverPaths) -> None:
 
 def _create_pending(paths: _CutoverPaths, fingerprint: str) -> _PendingCutover:
     refs = tuple(
-        _RefBackup(relative_path=str(path.relative_to(paths.root)), content_base64=_backup(path))
+        _RefBackup(relative_path=str(path.relative_to(paths.root)), content_base64=_backup(paths.root, path))
         for path in paths.adapter_refs
     )
     pending = _PendingCutover(request_fingerprint=fingerprint, refs=refs)
-    _publish_file(paths.pending, _model_content(pending), immutable=True)
+    _publish_file(paths.root, paths.pending, _model_content(pending), immutable=True)
     return pending
 
 
@@ -426,7 +458,7 @@ def _recover_pending(paths: _CutoverPaths, request: TargetCutoverRequest, finger
             _fail_receipt("unowned target cutover state exists without a receipt")
         return
     try:
-        pending = _PendingCutover.model_validate_json(paths.pending.read_bytes())
+        pending = _PendingCutover.model_validate_json(_read_workspace_file(paths.root, paths.pending))
     except (OSError, ValueError) as exc:
         message = "pending target cutover intent is invalid"
         raise TargetCutoverReceiptError(message) from exc
@@ -477,15 +509,20 @@ def _initialize_target(paths: _CutoverPaths, request: TargetCutoverRequest) -> T
     for authority, authority_path, runtime_path in zip(
         request.authorities, authority_paths, runtime_paths, strict=True
     ):
-        _publish_file(paths.target / authority_path, _model_content(authority), immutable=True)
-        _publish_file(paths.target / runtime_path, _model_content(TargetRuntimeState()), immutable=True)
-    _publish_file(paths.target / "manifest.json", _model_content(manifest), immutable=True)
+        _publish_file(paths.root, paths.target / authority_path, _model_content(authority), immutable=True)
+        _publish_file(
+            paths.root,
+            paths.target / runtime_path,
+            _model_content(TargetRuntimeState()),
+            immutable=True,
+        )
+    _publish_file(paths.root, paths.target / "manifest.json", _model_content(manifest), immutable=True)
     return manifest
 
 
 def _stage_adapter_refs(paths: _CutoverPaths, request: TargetCutoverRequest) -> None:
     for path, reference in zip(paths.adapter_refs, request.adapter_refs, strict=True):
-        _publish_file(path, reference.target.encode() + b"\n", immutable=False)
+        _publish_file(paths.root, path, reference.target.encode() + b"\n", immutable=False)
 
 
 def _verify_staging(
@@ -494,17 +531,19 @@ def _verify_staging(
     manifest: TargetStoreManifest,
     snapshots: tuple[TargetCutoverSnapshot, ...],
 ) -> None:
-    if TargetStoreManifest.model_validate_json((paths.target / "manifest.json").read_bytes()) != manifest:
+    manifest_content = _read_workspace_file(paths.root, paths.target / "manifest.json")
+    if TargetStoreManifest.model_validate_json(manifest_content) != manifest:
         _fail_publication("target manifest verification failed")
     if _read_target_authorities(paths, manifest) != request.authorities:
         _fail_publication("target authority verification failed")
     for relative_path in manifest.runtime_paths:
-        TargetRuntimeState.model_validate_json((paths.target / relative_path).read_bytes())
+        content = _read_workspace_file(paths.root, paths.target / relative_path)
+        TargetRuntimeState.model_validate_json(content)
     for snapshot in snapshots:
         if verify_legacy_snapshot(paths.root / snapshot.snapshot_path).manifest_sha256 != snapshot.manifest_sha256:
             _fail_publication(f"snapshot verification failed: {snapshot.snapshot_name}")
     for path, reference in zip(paths.adapter_refs, request.adapter_refs, strict=True):
-        if path.read_bytes() != reference.target.encode() + b"\n":
+        if _read_workspace_file(paths.root, path) != reference.target.encode() + b"\n":
             _fail_publication(f"adapter ref verification failed: {reference.relative_path}")
 
 
@@ -529,16 +568,16 @@ def _build_receipt(
 
 
 def _publish_receipt(
-    path: Path,
+    paths: _CutoverPaths,
     receipt: TargetCutoverReceipt,
     failure: TargetCutoverFailureHook | None,
 ) -> None:
-    _invoke_failure(failure, "receipt-publication", path)
-    _publish_file(path, _model_content(receipt), immutable=True)
+    _invoke_failure(failure, "receipt-publication", paths.receipt)
+    _publish_file(paths.root, paths.receipt, _model_content(receipt), immutable=True)
     try:
-        _invoke_failure(failure, "receipt-publication-linked", path)
+        _invoke_failure(failure, "receipt-publication-linked", paths.receipt)
     except Exception:
-        path.unlink(missing_ok=True)
+        _remove_path(paths.root, paths.receipt)
         raise
 
 
@@ -547,10 +586,11 @@ def _replay_completed(
     request: TargetCutoverRequest,
     fingerprint: str,
 ) -> TargetCutoverResult:
-    receipt = _read_receipt(paths.receipt)
+    receipt = _read_receipt(paths.root, paths.receipt)
     if receipt.request_fingerprint != fingerprint:
         _fail_receipt("target cutover receipt belongs to another request")
-    manifest = TargetStoreManifest.model_validate_json((paths.target / "manifest.json").read_bytes())
+    manifest_content = _read_workspace_file(paths.root, paths.target / "manifest.json")
+    manifest = TargetStoreManifest.model_validate_json(manifest_content)
     if hashlib.sha256(_model_content(manifest)).hexdigest() != receipt.target_manifest_sha256:
         _fail_receipt("target store differs from its cutover receipt")
     authorities = _read_target_authorities(paths, manifest)
@@ -560,13 +600,14 @@ def _replay_completed(
         query_target_snapshot(paths.root, request, snapshot.snapshot_name)
     _verify_source_absence(paths.sources)
     _verify_adapter_refs(paths, receipt.adapter_refs)
-    paths.pending.unlink(missing_ok=True)
+    _remove_retired_sources(paths, request)
+    _remove_path(paths.root, paths.pending)
     return TargetCutoverResult(receipt=receipt, authorities=authorities, replayed=True)
 
 
-def _read_receipt(path: Path) -> TargetCutoverReceipt:
+def _read_receipt(root: Path, path: Path) -> TargetCutoverReceipt:
     try:
-        return TargetCutoverReceipt.model_validate_json(path.read_bytes())
+        return TargetCutoverReceipt.model_validate_json(_read_workspace_file(root, path))
     except (OSError, ValueError) as exc:
         message = "target cutover receipt is absent or invalid"
         raise TargetCutoverReceiptError(message) from exc
@@ -578,7 +619,7 @@ def _read_target_authorities(
 ) -> tuple[TargetAuthority, ...]:
     try:
         return tuple(
-            TargetAuthority.model_validate_json((paths.target / relative).read_bytes())
+            TargetAuthority.model_validate_json(_read_workspace_file(paths.root, paths.target / relative))
             for relative in manifest.authority_paths
         )
     except (OSError, ValueError) as exc:
@@ -588,7 +629,7 @@ def _read_target_authorities(
 
 def _verify_adapter_refs(paths: _CutoverPaths, refs: tuple[TargetAdapterRef, ...]) -> None:
     for path, reference in zip(paths.adapter_refs, refs, strict=True):
-        if path.read_bytes() != reference.target.encode() + b"\n":
+        if _read_workspace_file(paths.root, path) != reference.target.encode() + b"\n":
             _fail_receipt(f"adapter ref differs from receipt: {reference.relative_path}")
 
 
@@ -598,20 +639,27 @@ def _verify_source_absence(sources: tuple[Path, ...]) -> None:
         _fail_receipt(f"bootstrap source paths remain active: {remaining}")
 
 
-def _remove_sources(sources: tuple[Path, ...]) -> None:
-    for source in sources:
-        if source.is_symlink() or not source.is_dir():
-            raise TargetCutoverPathError(source)
-        shutil.rmtree(source)
+def _retire_sources(paths: _CutoverPaths, request: TargetCutoverRequest) -> None:
+    for source, retired in zip(paths.sources, _retired_paths(paths, request), strict=True):
+        _rename_directory(paths.root, source, retired)
+
+
+def _remove_retired_sources(paths: _CutoverPaths, request: TargetCutoverRequest) -> None:
+    for retired in _retired_paths(paths, request):
+        _remove_path(paths.root, retired)
+
+
+def _retired_paths(paths: _CutoverPaths, request: TargetCutoverRequest) -> tuple[Path, ...]:
+    return tuple(paths.snapshot / ".retired" / item.snapshot_name for item in request.sources)
 
 
 def _rollback(paths: _CutoverPaths, request: TargetCutoverRequest, pending: _PendingCutover) -> None:
-    paths.receipt.unlink(missing_ok=True)
+    _remove_path(paths.root, paths.receipt)
     _restore_refs(paths, pending)
     _restore_sources(paths, request)
-    _remove_path(paths.target)
-    _remove_path(paths.snapshot)
-    paths.pending.unlink(missing_ok=True)
+    _remove_path(paths.root, paths.target)
+    _remove_path(paths.root, paths.snapshot)
+    _remove_path(paths.root, paths.pending)
 
 
 def _restore_refs(paths: _CutoverPaths, pending: _PendingCutover) -> None:
@@ -619,50 +667,72 @@ def _restore_refs(paths: _CutoverPaths, pending: _PendingCutover) -> None:
     for path in paths.adapter_refs:
         content = backups[str(path.relative_to(paths.root))]
         if content is None:
-            path.unlink(missing_ok=True)
+            _remove_path(paths.root, path)
         else:
-            _publish_file(path, b64decode(content), immutable=False)
+            _publish_file(paths.root, path, b64decode(content), immutable=False)
 
 
 def _restore_sources(paths: _CutoverPaths, request: TargetCutoverRequest) -> None:
-    for source, specification in zip(paths.sources, request.sources, strict=True):
-        snapshot = paths.snapshot / specification.snapshot_name
-        if not snapshot.exists():
-            continue
-        verified = verify_legacy_snapshot(snapshot)
-        if verified.manifest.source_digest != specification.expected_source_digest:
-            _fail_receipt(f"rollback snapshot changed: {specification.snapshot_name}")
-        _remove_path(source)
-        source.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(snapshot / "content", source)
+    retired_paths = _retired_paths(paths, request)
+    for source, retired in zip(paths.sources, retired_paths, strict=True):
+        if retired.exists():
+            if source.exists():
+                _fail_receipt(f"source and retired source both exist: {source}")
+            _rename_directory(paths.root, retired, source)
 
 
-def _remove_path(path: Path) -> None:
-    if path.is_symlink():
-        raise TargetCutoverPathError(path)
-    if path.is_dir():
-        shutil.rmtree(path)
-    elif path.exists():
-        path.unlink()
-
-
-def _backup(path: Path) -> str | None:
+def _remove_path(root: Path, path: Path) -> None:
     try:
-        metadata = path.lstat()
+        parent_fd = _open_parent_descriptor(root, path, create=False)
+    except FileNotFoundError:
+        return
+    try:
+        try:
+            metadata = os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            return
+        if stat.S_ISLNK(metadata.st_mode):
+            raise TargetCutoverPathError(path)
+        if stat.S_ISDIR(metadata.st_mode):
+            shutil.rmtree(path.name, dir_fd=parent_fd)
+        elif stat.S_ISREG(metadata.st_mode):
+            os.unlink(path.name, dir_fd=parent_fd)
+        else:
+            raise TargetCutoverPathError(path)
+    finally:
+        os.close(parent_fd)
+
+
+def _rename_directory(root: Path, source: Path, destination: Path) -> None:
+    source_parent_fd = _open_parent_descriptor(root, source, create=False)
+    destination_parent_fd = _open_parent_descriptor(root, destination, create=True)
+    try:
+        metadata = os.stat(source.name, dir_fd=source_parent_fd, follow_symlinks=False)
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise TargetCutoverPathError(source)
+        os.rename(
+            source.name,
+            destination.name,
+            src_dir_fd=source_parent_fd,
+            dst_dir_fd=destination_parent_fd,
+        )
+    finally:
+        os.close(destination_parent_fd)
+        os.close(source_parent_fd)
+
+
+def _backup(root: Path, path: Path) -> str | None:
+    try:
+        content = _read_workspace_file(root, path)
     except FileNotFoundError:
         return None
-    if not stat.S_ISREG(metadata.st_mode):
-        raise TargetCutoverPathError(path)
-    return b64encode(path.read_bytes()).decode("ascii")
+    return b64encode(content).decode("ascii")
 
 
-def _publish_file(path: Path, content: bytes, *, immutable: bool) -> None:
-    _prepare_parent(path.parent)
-    if immutable and path.exists():
-        if path.read_bytes() == content:
-            return
-        _fail_receipt(f"cutover destination already exists: {path}")
-    descriptor, temporary = tempfile.mkstemp(prefix=".tmp-cutover-", dir=path.parent)
+def _publish_file(root: Path, path: Path, content: bytes, *, immutable: bool) -> None:
+    parent_fd = _open_parent_descriptor(root, path, create=True)
+    temporary = f".tmp-cutover-{secrets.token_hex(12)}-{path.name}"
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent_fd)
     try:
         with os.fdopen(descriptor, "wb") as output:
             output.write(content)
@@ -670,25 +740,61 @@ def _publish_file(path: Path, content: bytes, *, immutable: bool) -> None:
             os.fsync(output.fileno())
         if immutable:
             try:
-                os.link(temporary, path, follow_symlinks=False)
+                os.link(temporary, path.name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd, follow_symlinks=False)
             except FileExistsError:
-                if path.read_bytes() != content:
+                if _read_descriptor_file(parent_fd, path.name) != content:
                     _fail_receipt(f"cutover destination already exists: {path}")
         else:
-            Path(temporary).replace(path)
+            os.replace(temporary, path.name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+        os.fsync(parent_fd)
     finally:
-        Path(temporary).unlink(missing_ok=True)
+        with suppress(FileNotFoundError):
+            os.unlink(temporary, dir_fd=parent_fd)
+        os.close(parent_fd)
 
 
-def _prepare_parent(path: Path) -> None:
-    current = Path(path.anchor)
-    for part in path.parts[1:]:
-        current /= part
-        if current.is_symlink():
-            raise TargetCutoverPathError(current)
-        current.mkdir(exist_ok=True)
-        if not current.is_dir():
-            raise TargetCutoverPathError(current)
+def _open_parent_descriptor(root: Path, path: Path, *, create: bool) -> int:
+    try:
+        parts = path.relative_to(root).parts[:-1]
+    except ValueError as exc:
+        raise TargetCutoverPathError(path) from exc
+    descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for part in parts:
+            try:
+                child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
+            except FileNotFoundError:
+                if not create:
+                    raise
+                os.mkdir(part, mode=0o755, dir_fd=descriptor)
+                child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child
+    except Exception:
+        os.close(descriptor)
+        raise
+    return descriptor
+
+
+def _read_descriptor_file(parent_fd: int, name: str) -> bytes:
+    descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent_fd)
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise TargetCutoverPathError(name)
+        with os.fdopen(descriptor, "rb") as source:
+            descriptor = -1
+            return source.read()
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _read_workspace_file(root: Path, path: Path) -> bytes:
+    parent_fd = _open_parent_descriptor(root, path, create=False)
+    try:
+        return _read_descriptor_file(parent_fd, path.name)
+    finally:
+        os.close(parent_fd)
 
 
 def _request_fingerprint(request: TargetCutoverRequest) -> str:
