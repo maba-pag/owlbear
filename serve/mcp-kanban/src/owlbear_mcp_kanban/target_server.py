@@ -1,4 +1,4 @@
-"""Dormant FastMCP adapter for the target delivery runtime."""
+"""FastMCP adapter for the target delivery runtime."""
 
 from __future__ import annotations
 
@@ -14,6 +14,14 @@ from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 
+from owlbear_kanban.target_admission import (
+    TargetAdmissionCandidate,
+    TargetAdmissionConflictError,
+    TargetAdmissionReferenceError,
+    TargetAdmissionRequest,
+    TargetAdmissionValidationError,
+    TargetAuthorityRegistry,
+)
 from owlbear_kanban.target_runtime import (
     ArbitrateTargetAttemptRequest,
     FinishTargetJobRequest,
@@ -48,13 +56,15 @@ class TargetChangeBinding:
     runtime: TargetRuntime
 
 
-@dataclass(frozen=True)
+@dataclass
 class TargetAppContext:
     """Resolved dependencies shared by every target MCP tool."""
 
     changes: dict[str, TargetChangeBinding]
     process_is_alive: Callable[[str], bool]
     work_item_activity: Callable[[str, str], tuple[dict[str, object], ...]]
+    authority_registry: TargetAuthorityRegistry | None = None
+    bind_authority: Callable[[TargetAuthority], TargetChangeBinding] | None = None
 
     @property
     def authority_identity(self) -> str:
@@ -68,6 +78,37 @@ class TargetMCPAdapter:
 
     def __init__(self, context: TargetAppContext) -> None:
         self._context = context
+
+    async def list_changes(self) -> list[dict[str, object]]:
+        """List admitted semantic authority across the loaded portfolio."""
+        return [binding.authority.model_dump(mode="json") for _, binding in sorted(self._context.changes.items())]
+
+    async def show_change(self, change_id: str) -> dict[str, object]:
+        """Show one exact admitted semantic authority."""
+        return self._binding(change_id).authority.model_dump(mode="json")
+
+    async def validate_change(self, candidate: dict[str, object]) -> dict[str, object]:
+        """Validate one complete target candidate and derive its initial frontier."""
+        parsed = self._validate(TargetAdmissionCandidate, candidate)
+        registry = self._authority_registry()
+        return self._invoke_admission(lambda: registry.validate(parsed))
+
+    async def admit_change(self, request: dict[str, object]) -> dict[str, object]:
+        """Atomically admit approved semantic authority and bind it into the portfolio."""
+        parsed = self._validate(TargetAdmissionRequest, request)
+        registry = self._authority_registry()
+        result = self._invoke_admission_model(lambda: registry.admit(parsed))
+        binder = self._context.bind_authority
+        if binder is None:
+            self._raise_diagnostic(
+                "ERR_TARGET_ADMISSION_UNAVAILABLE",
+                "target authority binding is not configured",
+                parsed.candidate.authority.change_id,
+                retry_safe=False,
+            )
+        binding = binder(result.authority)
+        self._context.changes[result.authority.change_id] = binding
+        return result.model_dump(mode="json")
 
     async def list_work_items(
         self,
@@ -262,6 +303,30 @@ class TargetMCPAdapter:
             retry_safe = isinstance(exc, TargetRuntimeConflictError)
             self._raise_diagnostic(exc.code, str(exc), change_id, retry_safe=retry_safe)
 
+    def _invoke_admission(self, operation: Callable[[], BaseModel]) -> dict[str, object]:
+        return self._invoke_admission_model(operation).model_dump(mode="json")
+
+    def _invoke_admission_model[ModelT: BaseModel](self, operation: Callable[[], ModelT]) -> ModelT:
+        try:
+            return operation()
+        except (
+            TargetAdmissionConflictError,
+            TargetAdmissionReferenceError,
+            TargetAdmissionValidationError,
+        ) as exc:
+            self._raise_diagnostic(exc.code, str(exc), None, retry_safe=False)
+
+    def _authority_registry(self) -> TargetAuthorityRegistry:
+        registry = self._context.authority_registry
+        if registry is None:
+            self._raise_diagnostic(
+                "ERR_TARGET_ADMISSION_UNAVAILABLE",
+                "target authority admission is not configured",
+                None,
+                retry_safe=False,
+            )
+        return registry
+
     def _validate[ModelT: BaseModel](self, model: type[ModelT], payload: dict[str, object]) -> ModelT:
         try:
             return model.model_validate_json(json.dumps(payload))
@@ -327,7 +392,7 @@ class TargetMCPAdapter:
 
 
 def assemble_target_server(context: TargetAppContext) -> FastMCP:
-    """Assemble the isolated target registry without mutating the live MCP server."""
+    """Assemble a target registry around an explicit application context."""
 
     @asynccontextmanager
     async def lifespan(_server: FastMCP) -> AsyncGenerator[TargetAppContext]:
@@ -335,14 +400,21 @@ def assemble_target_server(context: TargetAppContext) -> FastMCP:
 
     server = FastMCP("owlbear-kanban-target", lifespan=lifespan)
     adapter = TargetMCPAdapter(context)
+    register_target_tools(server, adapter)
+    return server
+
+
+def register_target_tools(server: FastMCP, adapter: TargetMCPAdapter) -> None:
+    """Register the complete target query and mutation surface."""
     _register_queries(server, adapter)
     _register_mutations(server, adapter)
-    return server
 
 
 def _register_queries(server: FastMCP, adapter: TargetMCPAdapter) -> None:
     for name in (
+        "list_changes",
         "list_work_items",
+        "show_change",
         "show_work_item",
         "list_work_item_activity",
         "list_semantic_updates",
@@ -351,12 +423,14 @@ def _register_queries(server: FastMCP, adapter: TargetMCPAdapter) -> None:
         "show_job",
         "show_attempt",
         "show_receipt",
+        "validate_change",
     ):
         server.tool(name=name, annotations=_READ)(getattr(adapter, name))
 
 
 def _register_mutations(server: FastMCP, adapter: TargetMCPAdapter) -> None:
     for name in (
+        "admit_change",
         "create_request",
         "resolve_request",
         "start_job",
@@ -370,4 +444,10 @@ def _register_mutations(server: FastMCP, adapter: TargetMCPAdapter) -> None:
         server.tool(name=name, annotations=_WRITE)(getattr(adapter, name))
 
 
-__all__ = ["TargetAppContext", "TargetChangeBinding", "TargetMCPAdapter", "assemble_target_server"]
+__all__ = [
+    "TargetAppContext",
+    "TargetChangeBinding",
+    "TargetMCPAdapter",
+    "assemble_target_server",
+    "register_target_tools",
+]

@@ -1,6 +1,8 @@
-# owlbear-mcp-kanban — Delivery MCP Server
+# owlbear-mcp-kanban — Target Delivery MCP Server
 
-MCP server for admitting delivery changes and operating their native job, request, evidence, and health records. It is registered in VS Code as `ob-kanban` and uses the filesystem-backed OwlBear delivery stores.
+MCP server for querying the global semantic work portfolio and operating reviewed plan, build, and
+assembly transformations. It is registered in VS Code as `ob-kanban` and loads receipt-authorized
+target stores through `owlbear-kanban`.
 
 → Parent: [README.md](../../README.md)
 
@@ -16,47 +18,47 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 ### Tools
 
-The active bootstrap server exposes 26 tools:
+The server exposes 22 tools:
 
 | Area | Tools |
 |------|-------|
-| Change admission | `list_changes`, `show_change`, `validate_change`, `change_health`, `admit_change` |
-| Dispatch and claims | `pick_jobs`, `start_job`, `release_job`, `recover_expired_claims` |
-| Completion | `finish_plan`, `finish_build`, `finish_accept`, `finish_audit` |
-| Correction | `reject_accept`, `reject_audit` |
-| Work inspection | `list_jobs`, `show_job`, `list_attempts`, `list_activity`, `show_receipt`, `work_health` |
-| Findings | `list_findings`, `show_finding` |
-| Requests | `create_request`, `list_requests`, `show_request` |
+| Design authority | `list_changes`, `show_change`, `validate_change`, `admit_change` |
+| Portfolio | `list_work_items`, `show_work_item`, `list_work_item_activity`, `list_semantic_updates`, `show_completion_summary` |
+| Execution trace | `list_frontier`, `show_job`, `show_attempt`, `show_receipt` |
+| Requests | `create_request`, `resolve_request` |
+| Transformations | `start_job`, `finish_plan`, `finish_build`, `finish_assembly` |
+| Review correction | `respond_to_review`, `arbitrate_attempt` |
+| Recovery | `recover_interrupted_task` |
 
-Change operations use a `change_id` and immutable delivery digest. Work operations additionally validate the candidate revision and claim or attempt identity appropriate to the operation. Completion tools persist immutable receipt evidence through the native runtime transaction boundary.
+Portfolio queries can span every loaded change and return stable cursor pages bound to the current
+authority identity. Mutation calls require exact change, job, attempt, claim, owner, and reviewer
+identities as appropriate. The server exposes no Priority, Cancel, owner Release, accept-completion,
+or audit-completion operation.
 
-`admit_change` validates a change revision before atomically publishing its admission receipt, generation, native jobs, and reserved job-ID sequence. `pick_jobs` returns dependency-eligible dispatch waves; `start_job` creates a claimed attempt; the four `finish_*` tools enforce phase-specific evidence and state transitions.
+`validate_change` accepts one complete target authority plus per-identity challenge and baseline
+evidence, then derives the exact initial plan frontier. `admit_change` additionally requires explicit
+approval for that authority digest and atomically publishes authority, runtime state, and an immutable
+admission receipt. An inactive admitted change may be revised; the prior revision is retained by
+digest. Active work blocks revision.
 
-The request tools create and inspect structured decision or action requests for an admitted revision. Text bodies normalize literal `\n` sequences at ingress; send `\\n` in JSON to preserve a literal sequence.
-
-### Dormant Target Assembly
-
-`owlbear_mcp_kanban.target_server.assemble_target_server()` assembles the replacement registry for
-integration tests and preparation for receipt-gated activation. It exposes global work-item queries,
-work-item activity, semantic updates and completion summaries, plan/build/assembly completion, typed
-review correction, scoped requests, and guarded interrupted-task recovery. It does not register
-Priority, Cancel, owner Release, accept-completion, or audit-completion operations.
-
-The target assembly is not the package launch entry point yet. The live `owlbear-kanban` registry
-remains the bootstrap control plane until cutover publishes its activation receipt.
+At process startup the server validates the configured cutover request and receipt, confirms the
+bootstrap source remains retired, loads every authority and runtime from `.owlbear/target/changes/`,
+and refuses startup if that boundary is absent or stale.
 
 ## Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `KANBAN_TOOLS_EXCLUDE` | _(none)_ | Comma-separated native tool names to remove from the live registry at startup. |
-| `OWLBEAR_WORK_ROOT` | `.owlbear/kanban` | Optional native work-root override. Relative values resolve from process working directory, then normalize to absolute paths. |
+| `OWLBEAR_WORKSPACE_ROOT` | Current working directory | Workspace containing `.owlbear/target` and the cutover receipt. |
+| `OWLBEAR_TARGET_CUTOVER_REQUEST` | `.owlbear/target-cutover-request.json` | Absolute path or workspace-relative path to the exact request used for cutover. |
 
-If `OWLBEAR_WORK_ROOT` is unset or empty, the server uses `.owlbear/kanban` relative to the current working directory.
+The cutover request is runtime configuration and must remain byte-valid for the published receipt.
+Use `setup/finalize.py` to perform the activation transaction; do not create target stores or receipts
+manually.
 
 ## Dependencies
 
 | Package | Purpose |
 |---------|---------|
 | `mcp[cli]` | FastMCP server framework |
-| `owlbear-kanban` | Kanban engine (workspace package) |
+| `owlbear-kanban` | Target authority, execution, evidence, and cutover engine |

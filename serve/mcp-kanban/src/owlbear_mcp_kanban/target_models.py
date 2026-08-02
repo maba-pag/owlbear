@@ -1,4 +1,4 @@
-"""Protocol models for the dormant target delivery MCP surface."""
+"""Protocol models for the target delivery MCP surface."""
 
 from __future__ import annotations
 
