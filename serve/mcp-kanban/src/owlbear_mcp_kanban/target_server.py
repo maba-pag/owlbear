@@ -264,7 +264,7 @@ class TargetMCPAdapter:
 
     def _validate[ModelT: BaseModel](self, model: type[ModelT], payload: dict[str, object]) -> ModelT:
         try:
-            return model.model_validate(payload)
+            return model.model_validate_json(json.dumps(payload))
         except ValidationError as exc:
             self._raise_diagnostic("ERR_TARGET_PARAM_VALIDATION", str(exc), None, retry_safe=False)
 

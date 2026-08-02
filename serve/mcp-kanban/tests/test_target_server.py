@@ -9,7 +9,13 @@ import pytest
 from mcp.server.fastmcp.exceptions import ToolError
 
 from owlbear_kanban.target_authority import Outcome, PlanScopeKind, TargetAuthority, TaskPlanScope
-from owlbear_kanban.target_runtime import StartTargetJobRequest, TargetJob, TargetRuntime
+from owlbear_kanban.target_runtime import (
+    FinishTargetJobRequest,
+    ReviewDisposition,
+    StartTargetJobRequest,
+    TargetJob,
+    TargetRuntime,
+)
 from owlbear_mcp_kanban.target_server import TargetAppContext, TargetChangeBinding, assemble_target_server
 
 TARGET_TOOLS = frozenset(
@@ -165,3 +171,49 @@ async def test_target_diagnostic_preserves_authority_identity_and_retry_safety(t
         "current_authority_identity": binding.runtime.authority_digest,
         "retry_safe": True,
     }
+
+
+@pytest.mark.asyncio
+async def test_request_validation_and_kind_mismatch_use_target_diagnostics(tmp_path: Path) -> None:
+    context = _context(tmp_path)
+    tools = _tools(assemble_target_server(context))
+
+    with pytest.raises(ToolError) as invalid_request:
+        await tools["create_request"].fn(
+            {
+                "request_id": "INVALID_REQUEST",
+                "change_id": "change-a",
+                "authority_digest": context.changes["change-a"].runtime.authority_digest,
+                "work_item_id": "OUT-001",
+                "commitment_id": "COM-001",
+                "created_at": "2026-08-03T00:01:00+00:00",
+                "summary": "Need evidence",
+            }
+        )
+
+    invalid_diagnostic = json.loads(str(invalid_request.value))
+    assert invalid_diagnostic["code"] == "ERR_TARGET_PARAM_VALIDATION"
+    assert invalid_diagnostic["current_authority_identity"] == context.authority_identity
+    assert invalid_diagnostic["retry_safe"] is False
+
+    finish = FinishTargetJobRequest(
+        job_id=1,
+        attempt_id="attempt-one",
+        claim_id="claim-one",
+        owner_id="builder-one",
+        reviewer_id="reviewer-one",
+        review_id="review-one",
+        receipt_id="receipt-one",
+        candidate_commit="a" * 40,
+        reviewed_at="2026-08-03T00:02:00+00:00",
+        disposition=ReviewDisposition.ACCEPTABLE,
+        claim="The build is correct",
+        evidence=("focused proof",),
+    ).model_dump(mode="json")
+    with pytest.raises(ToolError) as wrong_kind:
+        await tools["finish_build"].fn("change-a", finish)
+
+    kind_diagnostic = json.loads(str(wrong_kind.value))
+    assert kind_diagnostic["code"] == "ERR_TARGET_RUNTIME_REFERENCE"
+    assert kind_diagnostic["current_authority_identity"] == context.changes["change-a"].runtime.authority_digest
+    assert kind_diagnostic["retry_safe"] is False

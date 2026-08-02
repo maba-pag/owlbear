@@ -6,6 +6,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from owlbear_kanban.change import ChangeId
+from owlbear_kanban.target_runtime import RuntimeId
 from owlbear_kanban.work_items import WorkItemProjection
 
 
@@ -41,8 +43,8 @@ class TargetCursor(_TargetProtocolModel):
 class TargetRequestParams(_TargetProtocolModel):
     """Validate one scoped target request at the MCP boundary."""
 
-    request_id: str = Field(min_length=1)
-    change_id: str = Field(min_length=1)
+    request_id: RuntimeId
+    change_id: ChangeId
     authority_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     work_item_id: str = Field(min_length=1)
     commitment_id: str = Field(min_length=1)
