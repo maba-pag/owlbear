@@ -1,176 +1,101 @@
 ---
 name: w-orchestration
-description: "Workflow: Orchestration — plan, dispatch, and verify agent execution cycles"
+description: "Workflow: Dispatch and finalize reviewed target transformations across the portfolio"
 user-invocable: false
 ---
 
-# Orchestration
+# Target Orchestration
 
-Dispatch fresh engine plans until no work remains.
+Run the portfolio until no ready target transformations remain. The runtime owns readiness,
+attempt state, receipts, typed correction, and recovery. Orchestration owns reviewer assignment,
+cross-change capacity, exact dispatch context, and identity-preserving lifecycle calls.
 
-## Context Budget
+## Step 1 - Discover Current Frontiers
 
-- `rate_limited` starts `False`. After one rate-limit error, use `wave_size=1` for the rest of the session.
-- `cycle_count` starts at 1 and increments after each cycle.
-- Keep no board state between plans.
+If target tools are deferred, load them once with `tool_search` using:
 
-## Native Dispatch Contract
+`OwlBear Kanban target portfolio list_work_items list_frontier start_job finish_plan finish_build finish_assembly respond_to_review arbitrate_attempt recover_interrupted_task`
 
-For an admitted `change_id`, call `pick_jobs` for the current candidate revision, call `start_job` for
-one returned entry, dispatch only its assigned profile, and pattern-match its structured disposition.
-The profile-specific success object selects the matching `finish_plan`, `finish_build`,
-`finish_accept`, or `finish_audit`;
-`RateLimited` selects `release_job`; `Crash` selects strict-expiry `recover_expired_claims`. Then obtain
-a fresh plan. Each profile processes exactly one started job and stops. Do not route by prose or
-bridge native jobs to task lifecycle state.
+Call `list_work_items` to discover current changes, then `list_frontier(change_id)` for each change.
+From the returned frontiers, dispatch stable topology/creation order while admitting at most one
+writer per change and respecting the configured global limit. Do not infer readiness from agent
+output or cached portfolio state.
 
-For an engine-selected `planner`, dispatch `runSubagent(agentName="planner")` with only the complete
-successful `start_job` result serialized as its prompt. Pattern-match one exact disposition:
+## Step 2 - Start One Distinct Claim
 
-- `PlannerSuccess`: call `finish_plan` with the unchanged change, job, attempt, claim, actor, and
-   process identity from the started job, an orchestrator-owned completion timestamp, and the
-   returned `receipt_id`, `code_revision`, `evidence`, `evidence_ids`, `impact_closure`, `node_plan`,
-   `build_job_ids`, and `accept_job_id`. Do not inspect, complete, or reconstruct `node_plan`.
-- `RequestCreated`: call `release_job` with the unchanged active identity, then obtain a fresh
-   `pick_jobs` result. The pending request is an engine dispatch gate.
-- `SpecificationReentry`: call `release_job`, halt native mode, and report the returned target,
-   finding, and evidence for user-facing `/design` re-entry. Do not edit Specification or legacy task
-   state.
-- `PlanBlocked`: call `release_job`, halt native mode, and report the returned target and finding.
+For each selected job, create fresh `attempt_id`, `claim_id`, `owner_id`, `reviewer_id`, and
+`process_id` values plus orchestrator-owned RFC 3339 `started_at` and `lease_expires_at`. The owner
+and reviewer must differ, and a restarted job's `excluded_reviewer_ids` cannot be reused.
 
-Malformed planner output is an unstructured return and follows crash recovery. The orchestrator
-never creates a planner Decision Request or node plan itself.
+Call `start_job(change_id, request)` with all fields above and the selected `job_id`. Combine its
+complete successful result with the change coordination supplied by the dispatch boundary:
+`branch`, `worktree_path`, `integration_target`, `target_head`, and `last_reviewed_commit`. This is
+the immutable dispatch context. Never substitute a familiar branch or workspace.
 
-For an engine-selected `builder`, dispatch `runSubagent(agentName="builder")` with only the complete
-successful `start_job` result serialized as its prompt. Pattern-match one exact disposition:
+Dispatch `planner` for `plan`; dispatch `builder` for `build` or `assembly`. Each agent receives only
+that serialized context. A build or assembly owner writes only in `worktree_path`; a planner is
+hard read-only. Keep the assigned reviewer available for the attempt's review and repair rounds.
 
-- `BuilderSuccess`: call `finish_build` with the unchanged change, job, attempt, claim, actor, and
-   process identity from the started job, an orchestrator-owned completion timestamp, and the
-   returned `receipt_id`, `code_revision`, `evidence`, `evidence_ids`, and `impact_closure`. Do not
-   inspect, reconstruct, or supplement those returned fields.
-- `SpecificationReentry`: call `release_job` with the unchanged active identity, halt native mode,
-   and report the returned finding class, target, finding, and evidence for user-facing `/design`
-   re-entry. Do not create a corrective job, request, receipt, or authority edit.
-- `CommitFailed`: call `release_job` with the unchanged active identity, halt native mode, and report
-   the returned command, error, and changed paths. Do not broaden or retry the commit from the
-   orchestrator and do not issue a receipt.
-- `BuildBlocked`: call `release_job` with the unchanged active identity, halt native mode, and report
-   the returned target and finding. Do not create corrective work or issue a receipt.
+## Step 3 - Persist One Review Decision
 
-Malformed builder output is an unstructured return and follows crash recovery. The orchestrator
-never reviews, repairs, commits, classifies findings, or assembles build evidence itself.
+Require the agent result to preserve the started job, attempt, claim, owner, reviewer, candidate
+commit, claim text, and non-empty evidence. Call the finish operation matching the job kind:
 
-For an engine-selected `acceptor`, dispatch `runSubagent(agentName="acceptor")` with only the complete
-successful `start_job` result, including the engine checkout, serialized as its prompt. Pattern-match
-one exact disposition:
+- `finish_plan(change_id, request)` for `plan`;
+- `finish_build(change_id, request)` for `build`;
+- `finish_assembly(change_id, request)` for `assembly`.
 
-- `AcceptorSuccess`: call `finish_accept` with the unchanged change, job, attempt, claim, actor, and
-   process identity from the started job, an orchestrator-owned completion timestamp, and the returned
-   `receipt_id`, `code_revision`, `evidence`, `evidence_ids`, `impact_closure`, and
-   `reconciliation_plan_job_ids`. Forward every returned field unchanged.
-- `AcceptanceRejected`: call `reject_accept` with the unchanged active identity, an orchestrator-owned
-   rejection timestamp, and the returned `detail`, `evidence_ids`, `findings`, and `invalidation`.
-   Forward every returned field unchanged.
-- `AcceptanceBlocked`: call `release_job` with only the unchanged active identity and an
-   orchestrator-owned release timestamp, halt native mode, and report the returned target and finding.
+The request contains `job_id`, `attempt_id`, `claim_id`, `owner_id`, `reviewer_id`, `review_id`,
+`candidate_commit`, `reviewed_at`, `disposition`, `claim`, `evidence`, and a fresh `receipt_id` only
+for `acceptable`. Forward owner/reviewer evidence unchanged; never reconstruct it.
 
-Malformed acceptor output is an unstructured return and follows crash recovery. The orchestrator
-never executes acceptance proof, classifies findings, plans corrective routes, assembles evidence,
-alters replacements, or supplements a disposition.
+Disposition handling is finite:
 
-For an engine-selected `auditor`, dispatch `runSubagent(agentName="auditor")` with only the complete
-successful `start_job` result, including the engine checkout, serialized as its prompt. Pattern-match
-one exact disposition:
+| Disposition | Runtime result | Next action |
+|-------------|----------------|-------------|
+| `acceptable` | Receipt closes the job | Query fresh frontiers |
+| `repair` | Same attempt awaits correction | Redispatch same owner, reviewer, claim, and worktree with persisted review evidence |
+| `restart` | Attempt closes; job becomes pending | Preserve rejected head; restart from last reviewed commit with a fresh reviewer |
+| `task-plan` | Job returns to task planning | Query fresh authority/frontiers |
+| `solution-plan` | Job returns to solution planning | Query fresh authority/frontiers |
+| `design` | Protected meaning needs collaboration | Stop affected work and report its design re-entry briefing |
 
-- `AuditorSuccess`: call `finish_audit` with the unchanged change, job, attempt, claim, actor, and
-   process identity from the started job, an orchestrator-owned completion timestamp, and the returned
-   `receipt_id`, `code_revision`, `evidence`, `evidence_ids`, and optional `impact_closure`. Forward
-   every returned field unchanged.
-- `AuditRejected`: call `reject_audit` with the unchanged active identity, an orchestrator-owned
-   rejection timestamp, and the returned `detail`, `evidence_ids`, `findings`, and `invalidation`.
-   Forward every returned field unchanged.
-- `AuditBlocked`: call `release_job` with only the unchanged active identity and an
-   orchestrator-owned release timestamp, halt native mode, and report the returned `target` and
-   `finding`.
+Every materially changed candidate is a distinct claim and receives exactly one review decision.
+Repair is not permission for an informal review loop.
 
-Malformed auditor output is an unstructured return and follows crash recovery. The orchestrator
-never executes audit proof, classifies findings, assembles evidence, plans corrections, alters
-replacements, or supplements a disposition. It preserves the returned fields verbatim.
+## Step 4 - Resolve One Disagreement
 
-Before `start_job`, resolve the selected profile against the installed subagent allowlist. If it is unavailable,
-report the profile and halt without claiming or running the job. Role bodies remain in their owning
-agent and workflow files.
+When an owner disputes a persisted `repair`, allow exactly one evidence response. Call
+`respond_to_review(change_id, request)` with the unchanged `job_id`, `attempt_id`, `claim_id`, and
+`owner_id`, plus a fresh `response_id`, `responded_at`, and non-empty `evidence`.
 
-For `accept` and `audit`, `start_job` returns the engine-owned exact-commit checkout context. The orchestrator
-does not materialize or clean it independently; finish, release, and recovery own checkout cleanup.
+Then dispatch `claim-arbiter` with the immutable claim, review, and response. The arbiter must differ
+from owner and reviewer. Call `arbitrate_attempt(change_id, request)` with fresh `arbiter_id` and
+`decision_id`, `decided_at`, one terminal disposition (`acceptable`, `restart`, `task-plan`,
+`solution-plan`, or `design`), rationale, and a fresh `receipt_id` only for `acceptable`. Arbitration
+is final for the attempt. A second response, review negotiation, or arbitration is forbidden.
 
-## Step 1 — Housekeeping
+## Step 5 - Recover A Dead Owner
 
-Every 10th cycle (`cycle_count % 10 == 0`), dispatch:
+Use `recover_interrupted_task` only when the recorded process is known dead. Pass unchanged
+`job_id`, `attempt_id`, `claim_id`, and `process_id` plus `recovered_at`. Never use recovery to
+preempt a live owner, rebalance capacity, or abandon an inconvenient review.
 
-```
-runSubagent(agentName="memory-curator", prompt="Curate: Periodic curation", description="Curation")
-```
+## Step 6 - Continue
 
-Curator failure does not stop dispatch.
+After every transition, discard cached frontier state and query again. Continue independent changes
+when another change returns earlier. Stop only when current frontiers are empty, a collaboration
+boundary requires the user, or a fail-closed diagnostic prevents safe progress.
 
-## Step 2 — Plan
+## Output
 
-If the native lifecycle tools are deferred, call `tool_search` once with
-`OwlBear Kanban native job pick_jobs start_job finish_plan finish_build finish_accept finish_audit
-release_job recovery` before continuing.
+Report completed receipt identities, returned work items and levels, active blockers, and cycle
+count. Do not report a claim as complete without its runtime receipt.
 
-Before each `pick_jobs`, run `git rev-parse HEAD` in the shared worktree and use that SHA unchanged as
-`candidate_revision` for `pick_jobs` and the selected `start_job`. A delivery digest or admission receipt
-digest is not a code revision. Do not use the terminal for any other orchestration action. Use
-`wave_size=1` after a rate limit.
+## Known Pitfalls
 
-If no entries are returned, report completion and stop.
-
-## Step 3 — Dispatch
-
-Dispatch waves in returned order without re-bucketing. Start and dispatch each returned job once. A
-structured result never authorizes the next job; only a fresh `pick_jobs` plan does.
-
-### Dispatch Mechanics
-
-Before each `start_job`, generate fresh revision-local `attempt_id` and `claim_id` values, set
-`actor_id` to `orchestrator`, set `process_id` to the selected profile, and set `claimed_at` to an
-orchestrator-owned RFC 3339 UTC timestamp. Preserve that complete identity tuple unchanged in every
-finish, reject, or release call for the attempt; never recover or invent replacement values from job
-projection fields. Require the successful start result to contain the same `candidate_revision` before
-dispatching it.
-
-Use `runSubagent(agentName=profile, prompt=serialized_start_result, description=description)`. The
-prompt contains only the complete successful `start_job` result; the description is display-only.
-
-**Error handling:** Classify agent returns top-to-bottom. First match wins.
-
-1. **Unstructured return contains `rate-limited | rate_limited | rate limits`:** set
-   `rate_limited=True`, retry the same pair once, and keep later plans sequential.
-2. **Crash or unstructured return:** call `release_job` with the unchanged active identity and an
-   orchestrator-owned timestamp, then retry once from a fresh plan. A second crash halts orchestration.
-
-## Step 4 — Loop
-
-After all waves, increment `cycle_count` and re-plan. Normal completion requires empty waves; user
-intervention or a halting error above may stop earlier.
-
-## Output Format
-
-During execution:
-
-```
-Cycle 1 (Plan): Running pick_jobs(change_id=replace-cache)...
-Cycle 1 (Wave 1/2): job 103 (builder)
-Cycle 1 (Done): 3/4 succeeded, 1 crashed (job 112)
-```
-
-At end of session:
-
-```
-Session complete:
-  Completed: #101, #103, #105
-  Failed: #112 (crashed twice)
-  Cycles: 2
-```
+- **Stale dispatch:** every transition requires fresh frontiers.
+- **Reviewer substitution:** repair retains the assigned reviewer; restart excludes it.
+- **Workspace assumption:** dispatch uses recorded coordination, never a hard-coded target.
+- **Owner impersonation:** there is no owner-style claim release.
+- **Open review:** one review, one optional evidence response, and one final arbitration is the limit.

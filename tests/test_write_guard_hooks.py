@@ -106,11 +106,11 @@ class TestDenyWrites:
         assert _is_denied(_invoke(deny_writes_module, payload))
 
 
-class TestAcceptorTerminalGuard:
+class TestReadOnlyTerminalGuard:
     @pytest.fixture
     def module(self) -> types.ModuleType:
         path = _REPO_ROOT / ".owlbear" / "hooks" / "deny-writes.py"
-        return _load_hook(path, "deny_writes_acceptor")
+        return _load_hook(path, "deny_writes_read_only")
 
     @pytest.mark.parametrize(
         "command",

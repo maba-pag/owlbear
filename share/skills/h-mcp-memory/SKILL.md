@@ -263,7 +263,7 @@ save_memory(
 ```text
 list_memories(states=["pending"], categories=["tool-usage"])
 read_memory(entry_id="...")
-curate_memory(entry_id="...", scope_agents=["builder", "acceptor"])
+curate_memory(entry_id="...", scope_agents=["builder", "build-reviewer"])
 ```
 
 ```text

@@ -72,7 +72,7 @@ Channel B does not apply — the curation actions and Channel A summary signal a
 (pruned), 4 generic observations (pruned — restated common knowledge),
 2 contradictory retry strategies (left pending with entry IDs and conflict
 summary), and 4 actionable patterns promoted via curate_memory with targeted
-builder/acceptor scopes. 2 items deferred for manual curation.
+builder/build-reviewer scopes. 2 items deferred for manual curation.
 Final: 4 promoted, 9 pruned, 2 deferred.
 </good_example>
 
