@@ -37,14 +37,15 @@ mkdir my-project
 
 # 3. Bootstrap the OwlBear workspace from inside your project directory
 cd my-project
-python ../owlbear/setup/init.py
+uv run --project ../owlbear python ../owlbear/setup/init.py
 
 # 4. Open the project in VS Code
 code .
 ```
 
-> **Windows:** use backslashes: `python ..\owlbear\setup\init.py`. owlbear and your
-> project must be on the same drive.
+> **Windows:** use backslashes:
+> `uv run --project ..\owlbear python ..\owlbear\setup\init.py`. owlbear and your project
+> must be on the same drive.
 
 ---
 
@@ -56,11 +57,10 @@ Running `init.py` writes the following files into your project directory:
 |------------------|---------|-------------|
 | `.vscode/settings.json` | Points VS Code at owlbear agents, skills, and instructions; enables `mermaid-chat.enabled` for Mermaid diagram rendering in chat | Merged (owlbear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 5 MCP servers (4 owlbear stdio, including browser access, + markitdown) | Merged (owlbear servers as defaults; your existing servers are preserved) |
-| `.owlbear/changes/` | Native product intent, design, decisions, delivery graph, plans, and receipts | Created if missing; existing change records are preserved |
-| `.owlbear/kanban/jobs/` and `archive/` | Active and completed native delivery jobs | Created if missing; existing jobs are preserved |
-| `.owlbear/kanban/requests/{pending,resolved}/` | Native Decision and Action Requests | Created if missing; existing requests are preserved |
-| `.owlbear/kanban/attempts/` and `findings/` | Immutable attempt events and corrective findings | Created if missing; existing evidence is preserved |
-| `.owlbear/kanban/activity.jsonl` | Native delivery activity stream | Created if missing; never truncated on rerun |
+| `.owlbear/target/changes/` | Admitted semantic authority and per-change runtime evidence | Fresh setup activates an empty store; reruns preserve target records |
+| `.owlbear/target-cutover-request.json` | Exact activation request loaded by target MCP and Cockpit startup | Published for a fresh workspace; preserved on rerun |
+| `.owlbear/target-cutover.json` | Immutable receipt authorizing target mutation | Published only after snapshot, staging, and smoke verification succeed |
+| `.owlbear/legacy/target-cutover/` | Hash-verified snapshot of the retired bootstrap source | Created during activation; never runtime authority |
 | `.owlbear/hooks/allow-stances-only.py` | Restricts ideation agents to approved stance outputs | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-src-writes.py` | Constrains test-only roles to `tests/`, `__tests__/`, and scratch surfaces | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-writes.py` | Constrains read-only roles to scratch workspace writes only | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
@@ -78,15 +78,40 @@ Running `init.py` writes the following files into your project directory:
 | `.markdownlintignore` | Markdown lint exclusion patterns | Skipped if file already exists |
 | `.yamllint.yml` | YAML linting configuration | Always written |
 
-`init.py` creates only native authority and work stores. It does not create the retired
-`tasks/`, `decisions/`, or board configuration paths, and reruns do not overwrite native records.
+For a fresh workspace, `init.py` activates only the empty target authority store. It does not create
+retired task, decision, board, accept, or audit stores, and reruns do not overwrite target records.
+If `.owlbear/kanban/` already exists, setup preserves it and publishes no target store or receipt.
+
+### Existing Pre-Cutover Workspaces
+
+1. Run `init.py` with the command above.
+
+  Expected outcome: copied setup files are refreshed, while `.owlbear/kanban/` remains unchanged
+  and target mutation remains blocked.
+
+2. Place the reviewed migration request at `.owlbear/target-cutover-request.json`. The request must
+  contain current source digests, explicit classifications, target authority, code revision, and
+  activation approval; do not hand-create a receipt.
+
+  Expected outcome: the request names every source and unfinished semantic identity that must be
+  preserved or reintroduced.
+
+3. Invoke the cutover service directly from the project root:
+
+  ```shell
+  uv run --project ../owlbear python ../owlbear/setup/finalize.py \
+    --workspace . --request .owlbear/target-cutover-request.json
+  ```
+
+  Expected outcome: the command returns `"ok": true`, snapshots and retires the source stores,
+  smoke-checks target authority/runtime, and only then publishes `.owlbear/target-cutover.json`.
 
 ## Shared vs Copied
 
 OwlBear uses two different update models:
 
 - **Shared live surfaces:** `share/agents/`, `share/skills/`, `share/instructions/`, and `share/prompts/` stay in the owlbear clone and are read live by VS Code.
-- **Copied runtime surfaces:** files under `seed/` are copied into your project by `init.py`; this includes `.owlbear/hooks/`, `.owlbear/kanban/`, and other project-local runtime state.
+- **Copied runtime surfaces:** files under `seed/` are copied into your project by `init.py`; this includes `.owlbear/hooks/` and project-local editor/runtime configuration.
 
 This split is why `git pull` updates shared agents and skills immediately, while copied
 runtime files may need a later `init.py` run to refresh.
@@ -97,28 +122,29 @@ entry, so setup does not seed a separate memory store.
 
 ---
 
-## Native Delivery Workflow
+## Target Delivery Workflow
 
 Use `/ideate` when the starting idea needs a one-question-at-a-time refinement interview. Use
-`/design` to create or resume the durable native change under `.owlbear/changes/<change-id>/`.
-The designer keeps product intent, decisions, technical design, delivery obligations, and proof
-boundaries together, then validates and admits the exact approved revision.
+`/design` to create or resume one durable target design session. The designer keeps product intent,
+decisions, technical design, delivery obligations, and proof boundaries together, then validates
+and admits the exact approved revision under `.owlbear/target/changes/<change-id>/`.
 
 After admission, invoke `/orchestrate <change-id>`. The orchestrator asks the engine for eligible
-native jobs and delegates each started job to its purpose-specific planner, builder, acceptor, or
-auditor. Jobs reference authoritative change targets; they do not copy specifications into task
-files.
+jobs, delegates `plan` to a planner and `build` or conditional `assembly` to a builder, and preserves
+an independent reviewer for each attempt. Jobs reference semantic authority; they do not copy it
+into task files.
 
 ```text
 /ideate -> /design -> explicit admission -> /orchestrate
-Specification: design and validate
-Delivery: plan -> build -> accept -> audit
+Authority: design -> validate -> explicit admission
+Delivery: plan -> build -> conditional assembly
+Review: acceptable | repair | restart | task-plan | solution-plan | design
 ```
 
-Successful work creates immutable receipts in the native change. Attempts, requests, findings, and
-activity remain inspectable in the work store. Historical records from the retired workflow, when
-present, live under `.owlbear/legacy/` as hash-verified read-only inventory and are never execution
-authority.
+An `acceptable` independent review creates an immutable target receipt. One repair round may retain
+the same owner and reviewer; restart and planning/design dispositions route correction explicitly.
+Historical records under `.owlbear/legacy/` are hash-verified read-only inventory and never
+execution authority.
 
 ---
 
@@ -144,9 +170,9 @@ this shows chronological tool calls, LLM requests, and prompt discovery events.
 
 ## Launch Cockpit
 
-Cockpit is the browser UI for native changes, delivery jobs, requests, evidence, Memory, Ideas, and
+Cockpit is the browser UI for target changes, delivery jobs, requests, evidence, Memory, Ideas, and
 immutable legacy inventory. Launch it from the project root
-so it reads this project's `.owlbear/kanban/` and `.owlbear/memory/` directories.
+so it reads this project's target request/receipt, `.owlbear/target/`, and `.owlbear/memory/`.
 
 1. Open a terminal in the project directory.
 
@@ -166,8 +192,8 @@ so it reads this project's `.owlbear/kanban/` and `.owlbear/memory/` directories
    uv run --project ..\owlbear cockpit
    ```
 
-   Expected outcome: Cockpit opens `http://127.0.0.1:8420` and shows this project's
-  native workspace. Use `COCKPIT_NO_OPEN=1` to suppress browser auto-open.
+  Expected outcome: Cockpit opens `http://127.0.0.1:8420` and shows this project's
+  target workspace. Use `COCKPIT_NO_OPEN=1` to suppress browser auto-open.
 
 3. If your owlbear clone is not a sibling directory, replace `../owlbear` with the path
    to the clone.
@@ -267,7 +293,8 @@ Set these in `.vscode/mcp.json` under the server's `env` key:
 | Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
 | `uv run cockpit` says the command is missing | Command was run from the consumer project without `--project` | Use `uv run --project ../owlbear cockpit` from the project root |
-| Cockpit shows the wrong workspace or cannot find `.owlbear/kanban` | Cockpit was launched from the wrong working directory | Run from the project root, add `--directory /path/to/project`, or set `OWLBEAR_WORK_ROOT` explicitly |
+| Target MCP or Cockpit refuses to start after an update | A pre-cutover store has no valid target request and receipt | Prepare the reviewed request and invoke `setup/finalize.py` directly as described above |
+| Cockpit shows the wrong workspace or cannot find `.owlbear/target` | Cockpit was launched from the wrong working directory | Run from the project root, add `--directory /path/to/project`, or set `OWLBEAR_WORKSPACE_ROOT` explicitly |
 | `ValueError` on setup | Cross-drive path resolution | Place owlbear and your project on the same Windows drive |
 | Hook file not refreshed on rerun | Existing local `.owlbear/hooks/` file differs from seed | Re-run `init.py --replace-hooks` to overwrite, or choose `replace` when prompted interactively |
 | Agent name conflict | Same-name agent in both owlbear and project locations | Give project agents unique names (see Customization section above) |

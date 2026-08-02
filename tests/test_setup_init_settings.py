@@ -10,6 +10,7 @@ import types
 from unittest.mock import patch
 
 import pytest
+from owlbear_kanban import TargetCutoverRequest, authorize_target_mutation
 
 _REPO_ROOT = Path(__file__).parent.parent
 _INIT_PATH = _REPO_ROOT / "setup" / "init.py"
@@ -63,7 +64,7 @@ def test_init_writes_settings_without_hook_locations_and_with_local_hints(
     ]
 
 
-def test_init_creates_only_empty_native_control_plane_stores(
+def test_init_creates_only_empty_target_control_plane_stores(
     tmp_path: Path,
     init_module: types.ModuleType,
 ) -> None:
@@ -73,19 +74,14 @@ def test_init_creates_only_empty_native_control_plane_stores(
     with patch("subprocess.run") as package_install:
         init_module.init(target_dir, _REPO_ROOT, interactive=False)
 
-    expected_directories = {
-        ".owlbear/changes",
-        ".owlbear/kanban/jobs",
-        ".owlbear/kanban/archive",
-        ".owlbear/kanban/requests/pending",
-        ".owlbear/kanban/requests/resolved",
-        ".owlbear/kanban/attempts",
-        ".owlbear/kanban/findings",
-    }
-    assert all((target_dir / path).is_dir() for path in expected_directories)
-    assert (target_dir / ".owlbear/kanban/activity.jsonl").read_bytes() == b""
-    assert not (target_dir / ".owlbear/kanban/tasks").exists()
-    assert not (target_dir / ".owlbear/kanban/decisions").exists()
+    assert (target_dir / ".owlbear/target/changes").is_dir()
+    request_path = target_dir / ".owlbear/target-cutover-request.json"
+    request = TargetCutoverRequest.model_validate_json(request_path.read_bytes())
+    assert request.receipt_path == ".owlbear/target-cutover.json"
+    activation = authorize_target_mutation(target_dir, request)
+    assert activation.authorities == ()
+    assert not (target_dir / ".owlbear/changes").exists()
+    assert not (target_dir / ".owlbear/kanban").exists()
     assert not (target_dir / "openspec").exists()
     settings = json.loads((target_dir / ".vscode/settings.json").read_text(encoding="utf-8"))
     shared_locations = {
@@ -120,7 +116,7 @@ def test_init_creates_only_empty_native_control_plane_stores(
     package_install.assert_not_called()
 
 
-def test_init_rerun_preserves_user_settings_and_native_records(
+def test_init_rerun_preserves_user_settings_and_target_records(
     tmp_path: Path,
     init_module: types.ModuleType,
 ) -> None:
@@ -135,12 +131,8 @@ def test_init_rerun_preserves_user_settings_and_native_records(
     settings_path.write_text(json.dumps(settings), encoding="utf-8")
 
     records = {
-        ".owlbear/changes/example/intent.md": b"# Preserved intent\n",
-        ".owlbear/kanban/jobs/000001.yaml": b"job: preserved\n",
-        ".owlbear/kanban/requests/pending/REQ-001.yaml": b"request: preserved\n",
-        ".owlbear/kanban/attempts/attempt-1/000001.json": b'{"event":"preserved"}\n',
-        ".owlbear/kanban/findings/finding-1.yaml": b"finding: preserved\n",
-        ".owlbear/kanban/activity.jsonl": b'{"activity":"preserved"}\n',
+        ".owlbear/target/changes/example/authority.json": b'{"authority":"preserved"}\n',
+        ".owlbear/target/changes/example/target-runtime/state.json": b'{"runtime":"preserved"}\n',
     }
     for relative_path, content in records.items():
         path = target_dir / relative_path
@@ -157,3 +149,19 @@ def test_init_rerun_preserves_user_settings_and_native_records(
     assert merged_settings["chat.tools.terminal.autoApprove"]["example-command"] is False
     assert all((target_dir / path).read_bytes() == content for path, content in records.items())
     assert second_rerun == first_rerun
+
+
+def test_init_preserves_pre_cutover_store_without_creating_target(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+) -> None:
+    target_dir = tmp_path / "project"
+    legacy_record = target_dir / ".owlbear/kanban/jobs/000001.yaml"
+    legacy_record.parent.mkdir(parents=True)
+    legacy_record.write_text("job: preserved\n", encoding="utf-8")
+
+    init_module.init(target_dir, _REPO_ROOT, interactive=False)
+
+    assert legacy_record.read_text(encoding="utf-8") == "job: preserved\n"
+    assert not (target_dir / ".owlbear/target").exists()
+    assert not (target_dir / ".owlbear/target-cutover.json").exists()

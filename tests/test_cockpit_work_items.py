@@ -5,8 +5,17 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+import pytest
 
 from owlbear_cockpit.routes.target_work import TargetCockpitBinding, TargetCockpitContext, assemble_target_app
+from owlbear_cockpit.target_context import load_target_context
+from owlbear_kanban.snapshot import LegacyDisposition, inventory_legacy_source
+from owlbear_kanban.target_admission import (
+    TargetAdmissionCandidate,
+    TargetAdmissionRequest,
+    TargetAuthorityRegistry,
+    TargetChallengeEntry,
+)
 from owlbear_kanban.target_authority import (
     Commitment,
     CommitmentClass,
@@ -18,6 +27,16 @@ from owlbear_kanban.target_authority import (
     TargetAuthority,
     TaskPlanScope,
 )
+from owlbear_kanban.target_cutover import (
+    TargetAdapterRef,
+    TargetCutoverClassification,
+    TargetCutoverReadiness,
+    TargetCutoverRequest,
+    TargetCutoverSource,
+    TargetCutoverSubjectKind,
+    cut_over_target_runtime,
+    target_authority_digest,
+)
 from owlbear_kanban.target_runtime import (
     StartTargetJobRequest,
     TargetJob,
@@ -25,6 +44,22 @@ from owlbear_kanban.target_runtime import (
     TargetRuntime,
     TargetTask,
 )
+
+
+def _simple_authority(change_id: str, outcome_id: str, scope_id: str) -> TargetAuthority:
+    return TargetAuthority(
+        change_id=change_id,
+        title=f"Change {change_id}",
+        outcomes=(
+            Outcome(
+                outcome_id=outcome_id,
+                title=f"Outcome {outcome_id}",
+                promise=f"Deliver {outcome_id}",
+                acceptance=(f"Observe {outcome_id}",),
+            ),
+        ),
+        task_plan_scopes=(TaskPlanScope(scope_id=scope_id, kind=PlanScopeKind.OUTCOME, target_id=outcome_id),),
+    )
 
 
 def _binding(root: Path, change_id: str, outcome_id: str, *, design: bool) -> TargetCockpitBinding:
@@ -142,14 +177,105 @@ def test_portfolio_returns_mixed_change_cards_and_attention_counts(tmp_path: Pat
     assert payload["attention_counts"] == {"user": 1, "agent": 1, "waiting": 0, "none": 0}
 
 
-def test_target_routes_are_not_mounted_on_live_app() -> None:
+def test_target_routes_are_mounted_on_live_app() -> None:
     from owlbear_cockpit.main import app  # noqa: PLC0415
 
-    assert not any(
-        path.startswith("/api/work-items")
-        for route in app.routes
-        if isinstance(path := getattr(route, "path", None), str)
+    assert any(path.startswith("/api/work-items") for path in app.openapi()["paths"])
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/changes/change-a/jobs/1/release",
+        "/api/changes/change-a/jobs/1/priority",
+        "/api/changes/change-a/jobs/1/cancel",
+    ],
+)
+def test_removed_job_controls_return_404(tmp_path: Path, path: str) -> None:
+    client, _context = _client(tmp_path)
+
+    assert client.post(path, json={}).status_code == 404
+
+
+def test_live_context_requires_receipt_and_refreshes_post_cutover_admissions(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    source = workspace / ".owlbear/kanban"
+    source.mkdir(parents=True)
+    (source / "bootstrap.json").write_text('{"state":"current"}\n', encoding="utf-8")
+    adapter = workspace / ".owlbear/adapters/delivery"
+    adapter.parent.mkdir(parents=True)
+    adapter.write_text("bootstrap\n", encoding="utf-8")
+    initial_authority = _simple_authority("change-a", "OUT-001", "PLAN-001")
+    request = TargetCutoverRequest(
+        sources=(
+            TargetCutoverSource(
+                source_path=".owlbear/kanban",
+                snapshot_name="runtime",
+                expected_source_digest=inventory_legacy_source(source, (), {}).source_digest,
+            ),
+        ),
+        snapshot_path=".owlbear/legacy/target-cutover",
+        target_path=".owlbear/target",
+        receipt_path=".owlbear/target-cutover.json",
+        adapter_refs=(TargetAdapterRef(relative_path=".owlbear/adapters/delivery", target="target"),),
+        authorities=(initial_authority,),
+        classifications=(
+            TargetCutoverClassification(
+                change_id="change-a",
+                subject_kind=TargetCutoverSubjectKind.CHANGE,
+                subject_id="change-a",
+                disposition=LegacyDisposition.REINTRODUCE_NATIVE,
+            ),
+            TargetCutoverClassification(
+                change_id="change-a",
+                subject_kind=TargetCutoverSubjectKind.OUTCOME,
+                subject_id="OUT-001",
+                disposition=LegacyDisposition.REINTRODUCE_NATIVE,
+            ),
+        ),
+        expected_authority_digest=target_authority_digest((initial_authority,)),
+        actual_code_revision="a" * 64,
+        expected_code_revision="a" * 64,
+        readiness=TargetCutoverReadiness(),
+        approval="ACTIVATE_TARGET_RUNTIME",
     )
+    request_path = workspace / ".owlbear/target-cutover-request.json"
+    request_path.write_text(request.model_dump_json(), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="valid target cutover request and receipt"):
+        load_target_context(workspace, request_path)
+
+    cut_over_target_runtime(workspace, request, smoke=lambda _root, _request: None)
+    context = load_target_context(workspace, request_path)
+    client = TestClient(assemble_target_app(context))
+    assert [item["change_id"] for item in client.get("/api/work-items").json()["items"]] == ["change-a"]
+
+    admitted_authority = _simple_authority("change-b", "OUT-002", "PLAN-002")
+    candidate = TargetAdmissionCandidate(
+        authority=admitted_authority,
+        challenge=tuple(
+            TargetChallengeEntry(subject_id=identity, disposition="pass", evidence=f"evidence for {identity}")
+            for identity in ("change-b", "OUT-002", "PLAN-002")
+        ),
+        baseline=("uv run pytest -q",),
+        known_limits=(),
+        prepared_at="2026-08-05T00:00:00+00:00",
+    )
+    registry = TargetAuthorityRegistry(workspace / ".owlbear/target")
+    assessment = registry.validate(candidate)
+    registry.admit(
+        TargetAdmissionRequest(
+            candidate=candidate,
+            approved_digest=assessment.authority_digest,
+            approved_by="user",
+            approved_at="2026-08-05T00:01:00+00:00",
+        )
+    )
+
+    assert [item["change_id"] for item in client.get("/api/work-items").json()["items"]] == [
+        "change-a",
+        "change-b",
+    ]
 
 
 def test_detail_composes_semantics_progress_correction_and_trace_links(tmp_path: Path) -> None:

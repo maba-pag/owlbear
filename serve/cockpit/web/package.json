@@ -18,8 +18,6 @@
     "test:e2e:work": "cross-env WORK_PORTFOLIO_E2E=1 playwright test --project=work-portfolio",
     "test:e2e:memory-purge": "cross-env PURGE_E2E=1 playwright test --project=memory-purge-assembled",
     "test:e2e:memory-lifecycle": "cross-env LIFECYCLE_E2E=1 playwright test --project=memory-lifecycle-assembled",
-    "test:e2e:native-proof": "cross-env NATIVE_PROOF_E2E=1 playwright test --project=native-proof-assembled",
-    "test:e2e:native-release": "cross-env NATIVE_RELEASE_E2E=1 playwright test --project=native-release-assembled",
     "test:e2e:all": "playwright test"
   },
   "dependencies": {

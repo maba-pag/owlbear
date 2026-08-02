@@ -74,9 +74,14 @@ for (const viewport of [
   test(`${viewport.name}: work portfolio remains bounded and detail is reachable`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport)
     await seed(page)
-    await page.goto('/work')
+    await page.goto('/')
 
     await expect(page).toHaveURL(/\/work$/)
+    await expect(page.getByTestId('cockpit-shell')).toBeVisible()
+    const productAreas = page.getByRole('navigation', { name: 'Product areas' })
+    for (const label of ['Work', 'Memory', 'Ideas']) {
+      await expect(productAreas.getByText(label, { exact: true })).toBeVisible()
+    }
     await expect(page.getByTestId('work-shown-count')).toHaveText('Showing 16 of 16')
     for (const label of ['Design', 'Planning', 'Implementation', 'Assembly']) {
       await expect(page.getByText(label, { exact: true })).toBeVisible()
@@ -103,6 +108,7 @@ for (const viewport of [
     expect(actionBox).not.toBeNull()
     expect(actionBox!.x).toBeGreaterThanOrEqual(cardBox!.x)
     expect(actionBox!.x + actionBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width + 1)
+    await page.evaluate(() => window.scrollTo(0, 0))
     await page.screenshot({ path: testInfo.outputPath(`work-${viewport.name}-portfolio.png`) })
     await inspect.click()
 

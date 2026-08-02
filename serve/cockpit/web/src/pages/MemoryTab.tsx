@@ -32,7 +32,6 @@ import { WorkspaceHeader, WorkspaceHeaderMetric, WorkspaceHeaderPill } from '../
 import { useMemoryPurgeFlow } from '../hooks/useCleanupFlow'
 import { MEMORY_PENDING_COUNT_EVENT } from '../hooks/usePendingMemoryCount'
 import { usePollingFetch } from '../hooks/usePollingFetch'
-import { openTaskDetail } from '../utils/openTaskDetail'
 
 interface MemoryFilterState {
   states: MemoryState[]
@@ -180,14 +179,6 @@ function isAllAgentsScope(scopeAgents: string[]): boolean {
 
 function formatScopeAgents(scopeAgents: string[]): string {
   return isAllAgentsScope(scopeAgents) ? 'All agents' : scopeAgents.join(', ')
-}
-
-function parseContestedTaskId(value: string | null): number | null {
-  if (value === null || !/^\d+$/.test(value)) {
-    return null
-  }
-  const taskId = Number(value)
-  return Number.isSafeInteger(taskId) && taskId >= 0 ? taskId : null
 }
 
 function toFilterableScopeAgents(scopeAgents: string[]): string[] {
@@ -869,16 +860,7 @@ function MemoryTab() {
                         <div className="min-w-0"><dt className="font-semibold text-contrast-high">Outstanding marks</dt><dd className="m-0 break-words text-primary">★ {entry.outstanding_count}</dd></div>
                         <div className="min-w-0"><dt className="font-semibold text-contrast-high">Score</dt><dd className="m-0 break-words text-primary">{formatConfidence(entry.score)}</dd></div>
                         <div className="min-w-0"><dt className="font-semibold text-contrast-high">Contested task</dt><dd className="m-0 break-words text-primary">
-                          {entry.contested_by_task === null ? '—' : parseContestedTaskId(entry.contested_by_task) === null ? entry.contested_by_task : (
-                            <button
-                              type="button"
-                              className="text-primary underline"
-                              data-testid="memory-contested-task"
-                              onClick={() => openTaskDetail(parseContestedTaskId(entry.contested_by_task) as number)}
-                            >
-                              {entry.contested_by_task}
-                            </button>
-                          )}
+                          {entry.contested_by_task ?? '—'}
                         </dd></div>
                         <div className="min-w-0"><dt className="font-semibold text-contrast-high">Created</dt><dd className="m-0 break-words text-primary">{entry.created_at}</dd></div>
                         <div className="min-w-0"><dt className="font-semibold text-contrast-high">Updated</dt><dd className="m-0 break-words text-primary">{entry.updated_at}</dd></div>

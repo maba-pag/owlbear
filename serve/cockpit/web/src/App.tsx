@@ -1,26 +1,23 @@
 import { useMemo } from 'react'
-import { createBrowserRouter, RouterProvider } from 'react-router'
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
-import NativeShell from './NativeShell'
+import CockpitShell from './CockpitShell'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { NativeInvalidationProvider } from './hooks/NativeInvalidationProvider'
-import { NativeChangeProvider } from './hooks/NativeChangeProvider'
 
 function CockpitRuntime() {
   return (
-    <NativeInvalidationProvider>
-      <NativeChangeProvider>
-        <ErrorBoundary label="Cockpit">
-          <NativeShell />
-        </ErrorBoundary>
-      </NativeChangeProvider>
-    </NativeInvalidationProvider>
+    <ErrorBoundary label="Cockpit">
+      <CockpitShell />
+    </ErrorBoundary>
   )
 }
 
 function App() {
   const router = useMemo(
-    () => createBrowserRouter([{ path: '*', element: <CockpitRuntime /> }]),
+    () => createBrowserRouter([
+      { path: '/', element: <Navigate to="/work" replace /> },
+      { path: '*', element: <CockpitRuntime /> },
+    ]),
     [],
   )
 

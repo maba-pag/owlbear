@@ -1,4 +1,4 @@
-"""Contract tests for the dormant target FastMCP assembly."""
+"""Contract tests for the target FastMCP assembly."""
 
 from __future__ import annotations
 
@@ -8,24 +8,44 @@ from pathlib import Path
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
 
+from owlbear_kanban.snapshot import LegacyDisposition, inventory_legacy_source
+from owlbear_kanban.target_admission import (
+    TargetAdmissionCandidate,
+    TargetAdmissionRequest,
+    TargetChallengeEntry,
+)
 from owlbear_kanban.target_authority import Outcome, PlanScopeKind, TargetAuthority, TaskPlanScope
+from owlbear_kanban.target_cutover import (
+    TargetAdapterRef,
+    TargetCutoverClassification,
+    TargetCutoverReadiness,
+    TargetCutoverRequest,
+    TargetCutoverSource,
+    TargetCutoverSubjectKind,
+    cut_over_target_runtime,
+    target_authority_digest,
+)
 from owlbear_kanban.target_runtime import (
     FinishTargetJobRequest,
     ReviewDisposition,
     StartTargetJobRequest,
     TargetJob,
     TargetRuntime,
+    TargetTask,
 )
+from owlbear_mcp_kanban.server import load_target_context, mcp
 from owlbear_mcp_kanban.target_server import TargetAppContext, TargetChangeBinding, assemble_target_server
 
 TARGET_TOOLS = frozenset(
     {
+        "admit_change",
         "arbitrate_attempt",
         "create_request",
         "finish_assembly",
         "finish_build",
         "finish_plan",
         "list_frontier",
+        "list_changes",
         "list_semantic_updates",
         "list_work_item_activity",
         "list_work_items",
@@ -33,11 +53,13 @@ TARGET_TOOLS = frozenset(
         "resolve_request",
         "respond_to_review",
         "show_attempt",
+        "show_change",
         "show_completion_summary",
         "show_job",
         "show_receipt",
         "show_work_item",
         "start_job",
+        "validate_change",
     }
 )
 REMOVED_TOOLS = frozenset(
@@ -53,8 +75,8 @@ REMOVED_TOOLS = frozenset(
 )
 
 
-def _binding(root: Path, change_id: str, outcome_id: str, job_id: int) -> TargetChangeBinding:
-    authority = TargetAuthority(
+def _authority(change_id: str, outcome_id: str, job_id: int) -> TargetAuthority:
+    return TargetAuthority(
         change_id=change_id,
         title=f"Change {change_id}",
         outcomes=(
@@ -73,6 +95,10 @@ def _binding(root: Path, change_id: str, outcome_id: str, job_id: int) -> Target
             ),
         ),
     )
+
+
+def _binding(root: Path, change_id: str, outcome_id: str, job_id: int) -> TargetChangeBinding:
+    authority = _authority(change_id, outcome_id, job_id)
     runtime = TargetRuntime(authority, root / change_id)
     runtime.materialize(
         (
@@ -107,6 +133,102 @@ def _tools(server) -> dict[str, object]:
     return dict(server._tool_manager._tools)  # noqa: SLF001
 
 
+def test_live_registry_is_the_target_registry() -> None:
+    assert _tools(mcp).keys() == TARGET_TOOLS
+
+
+@pytest.mark.asyncio
+async def test_live_context_requires_receipt_and_hot_binds_admitted_authority(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    source = workspace / ".owlbear/kanban"
+    source.mkdir(parents=True)
+    (source / "bootstrap.json").write_text('{"state":"current"}\n', encoding="utf-8")
+    adapter = workspace / ".owlbear/adapters/delivery"
+    adapter.parent.mkdir(parents=True)
+    adapter.write_text("bootstrap\n", encoding="utf-8")
+    authority = _binding(tmp_path / "staging", "change-a", "OUT-001", 1).authority
+    request = TargetCutoverRequest(
+        sources=(
+            TargetCutoverSource(
+                source_path=".owlbear/kanban",
+                snapshot_name="runtime",
+                expected_source_digest=inventory_legacy_source(source, (), {}).source_digest,
+            ),
+        ),
+        snapshot_path=".owlbear/legacy/target-cutover",
+        target_path=".owlbear/target",
+        receipt_path=".owlbear/target-cutover.json",
+        adapter_refs=(TargetAdapterRef(relative_path=".owlbear/adapters/delivery", target="target"),),
+        authorities=(authority,),
+        classifications=(
+            TargetCutoverClassification(
+                change_id="change-a",
+                subject_kind=TargetCutoverSubjectKind.CHANGE,
+                subject_id="change-a",
+                disposition=LegacyDisposition.REINTRODUCE_NATIVE,
+            ),
+            TargetCutoverClassification(
+                change_id="change-a",
+                subject_kind=TargetCutoverSubjectKind.OUTCOME,
+                subject_id="OUT-001",
+                disposition=LegacyDisposition.REINTRODUCE_NATIVE,
+            ),
+        ),
+        expected_authority_digest=target_authority_digest((authority,)),
+        actual_code_revision="a" * 64,
+        expected_code_revision="a" * 64,
+        readiness=TargetCutoverReadiness(),
+        approval="ACTIVATE_TARGET_RUNTIME",
+    )
+    request_path = workspace / ".owlbear/target-cutover-request.json"
+    request_path.write_text(request.model_dump_json(), encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="valid cutover request and receipt"):
+        load_target_context(workspace, request_path)
+
+    initial_cutover = cut_over_target_runtime(workspace, request, smoke=lambda _root, _request: None)
+    context = load_target_context(workspace, request_path)
+
+    assert context.changes.keys() == {"change-a"}
+    assert context.changes["change-a"].authority == authority
+    assert context.changes["change-a"].runtime.list_frontier() == ()
+
+    tools = _tools(assemble_target_server(context))
+    new_authority = _authority("change-b", "OUT-002", 2)
+    candidate = TargetAdmissionCandidate(
+        authority=new_authority,
+        challenge=tuple(
+            TargetChallengeEntry(subject_id=identity, disposition="pass", evidence=f"evidence for {identity}")
+            for identity in ("change-b", "OUT-002", "PLAN-002")
+        ),
+        baseline=("uv run pytest -q",),
+        known_limits=(),
+        prepared_at="2026-08-03T00:02:00+00:00",
+    )
+    assessment = await tools["validate_change"].fn(candidate.model_dump(mode="json"))
+    admission = TargetAdmissionRequest(
+        candidate=candidate,
+        approved_digest=assessment["authority_digest"],
+        approved_by="user",
+        approved_at="2026-08-03T00:03:00+00:00",
+    )
+    admitted = await tools["admit_change"].fn(admission.model_dump(mode="json"))
+    replayed = await tools["admit_change"].fn(admission.model_dump(mode="json"))
+
+    cutover_replay = cut_over_target_runtime(workspace, request, smoke=lambda _root, _request: None)
+    restarted_context = load_target_context(workspace, request_path)
+    restarted_tools = _tools(assemble_target_server(restarted_context))
+    restarted_replay = await restarted_tools["admit_change"].fn(admission.model_dump(mode="json"))
+
+    assert admitted["replayed"] is False
+    assert replayed["replayed"] is True
+    assert context.changes["change-b"].runtime.list_frontier()[0].work_item_id == "OUT-002"
+    assert cutover_replay.replayed is True
+    assert cutover_replay.receipt.receipt_id == initial_cutover.receipt.receipt_id
+    assert restarted_context.changes.keys() == {"change-a", "change-b"}
+    assert restarted_replay["replayed"] is True
+
+
 def test_target_registry_has_three_kind_lifecycle_without_removed_controls(tmp_path: Path) -> None:
     tools = _tools(assemble_target_server(_context(tmp_path)))
 
@@ -116,7 +238,90 @@ def test_target_registry_has_three_kind_lifecycle_without_removed_controls(tmp_p
         assert tool.annotations is not None
         assert tool.annotations.idempotentHint is True
         assert tool.annotations.destructiveHint is False
-        assert tool.annotations.readOnlyHint is (name.startswith(("list_", "show_")))
+        assert tool.annotations.readOnlyHint is (name.startswith(("list_", "show_")) or name == "validate_change")
+
+
+@pytest.mark.asyncio
+async def test_acceptable_plan_publishes_build_frontier_and_completion(tmp_path: Path) -> None:
+    tools = _tools(assemble_target_server(_context(tmp_path)))
+    await tools["start_job"].fn(
+        "change-a",
+        StartTargetJobRequest(
+            job_id=1,
+            attempt_id="plan-attempt",
+            claim_id="plan-claim",
+            owner_id="planner",
+            reviewer_id="plan-reviewer",
+            process_id="plan-process",
+            started_at="2026-08-03T00:01:00Z",
+            lease_expires_at="2026-08-03T01:01:00Z",
+        ).model_dump(mode="json"),
+    )
+    planned = await tools["finish_plan"].fn(
+        "change-a",
+        FinishTargetJobRequest(
+            job_id=1,
+            attempt_id="plan-attempt",
+            claim_id="plan-claim",
+            owner_id="planner",
+            reviewer_id="plan-reviewer",
+            review_id="plan-review",
+            receipt_id="plan-receipt",
+            candidate_commit="a" * 40,
+            reviewed_at="2026-08-03T00:02:00Z",
+            disposition=ReviewDisposition.ACCEPTABLE,
+            claim="The reviewed plan defines one sufficient task.",
+            evidence=("plan challenge passed",),
+            planned_tasks=(
+                TargetTask(
+                    task_id="TASK-001",
+                    work_item_id="OUT-001",
+                    plan_scope_id="PLAN-001",
+                    title="Build the observable result",
+                ),
+            ),
+        ).model_dump(mode="json"),
+    )
+
+    frontier = await tools["list_frontier"].fn("change-a")
+    assert planned["receipt"]["planned_tasks"][0]["task_id"] == "TASK-001"
+    assert [(job["job_id"], job["kind"], job["task_id"]) for job in frontier] == [(2, "build", "TASK-001")]
+
+    await tools["start_job"].fn(
+        "change-a",
+        StartTargetJobRequest(
+            job_id=2,
+            attempt_id="build-attempt",
+            claim_id="build-claim",
+            owner_id="builder",
+            reviewer_id="build-reviewer",
+            process_id="build-process",
+            started_at="2026-08-03T00:03:00Z",
+            lease_expires_at="2026-08-03T01:03:00Z",
+        ).model_dump(mode="json"),
+    )
+    built = await tools["finish_build"].fn(
+        "change-a",
+        FinishTargetJobRequest(
+            job_id=2,
+            attempt_id="build-attempt",
+            claim_id="build-claim",
+            owner_id="builder",
+            reviewer_id="build-reviewer",
+            review_id="build-review",
+            receipt_id="build-receipt",
+            candidate_commit="b" * 40,
+            reviewed_at="2026-08-03T00:04:00Z",
+            disposition=ReviewDisposition.ACCEPTABLE,
+            claim="The task satisfies its accepted plan.",
+            evidence=("focused build proof passed",),
+        ).model_dump(mode="json"),
+    )
+    detail = await tools["show_work_item"].fn("OUT-001", "change-a")
+
+    assert built["receipt"]["task_id"] == "TASK-001"
+    assert detail["projection"]["stage"] == "completed"
+    assert await tools["list_frontier"].fn("change-a") == []
 
 
 @pytest.mark.asyncio

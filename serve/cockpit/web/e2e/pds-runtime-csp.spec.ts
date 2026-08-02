@@ -9,39 +9,6 @@ import { test, expect, type Page } from '@playwright/test'
 
 // ─── Minimal API fixtures ──────────────────────────────────────────────────────
 
-const STATUSES = ['research', 'backlog', 'todo', 'in-progress', 'review', 'docs', 'done']
-const PRIORITIES = ['critical', 'needed', 'important', 'nice-to-have', 'someday']
-
-const BOARD = {
-  statuses: STATUSES.map((name) => ({ name })),
-  priorities: PRIORITIES,
-  valid_transitions: {
-    research: ['backlog'],
-    backlog: ['research', 'todo'],
-    todo: ['backlog', 'in-progress'],
-    'in-progress': ['todo', 'review'],
-    review: ['in-progress', 'docs'],
-    docs: ['review', 'done'],
-    done: [],
-  } as Record<string, string[]>,
-}
-
-const TASKS = {
-  tasks: [
-    {
-      id: 1,
-      title: 'Sample Task',
-      status: 'todo',
-      priority: 'important',
-      tags: [],
-      blocked: false,
-      block_reason: null,
-      claimed: false,
-    },
-  ],
-  mtime: 1713456000,
-}
-
 // ─── Shared stub helper ────────────────────────────────────────────────────────
 // Routes registered first have LOWER priority (Playwright LIFO) — catch-all
 // registered first ensures specific handlers always win.
@@ -64,9 +31,10 @@ async function stubApis(page: Page): Promise<void> {
     }),
   )
 
-  // Core data routes — registered last so they take priority over catch-all
-  await page.route('/api/tasks', (route) => route.fulfill({ json: TASKS }))
-  await page.route('/api/board', (route) => route.fulfill({ json: BOARD }))
+  // Core data route — registered last so it takes priority over catch-all
+  await page.route('/api/work-items', (route) => route.fulfill({
+    json: { items: [], attention_counts: { user: 0, agent: 0, waiting: 0, none: 0 } },
+  }))
 }
 
 // ─── AC1: PDS custom elements registered from local bundles ───────────────────
@@ -148,7 +116,7 @@ test.describe('TestFromAC_NoCDNCSPViolations', () => {
   })
 })
 
-// ─── AC3: p-button shadowRoot is populated (component fully initialized) ───────
+// ─── AC3: p-link shadowRoot is populated (component fully initialized) ─────────
 // A non-empty shadowRoot proves the custom element's internal rendering
 // activated — not just the tag being present as an undefined/empty element.
 
@@ -159,13 +127,12 @@ test.describe('TestFromAC_PDSShadowRootActivation', () => {
     await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
   })
 
-  // Happy path: p-button (rendered in nav-rail) has shadowRoot with child elements
-  test('p-button element has non-empty shadowRoot after page stabilizes', async ({ page }) => {
-    // Wait for p-button to appear in DOM (it renders in the nav-rail unconditionally)
-    await page.locator('p-button').first().waitFor({ state: 'attached' })
+  // Happy path: p-link (rendered in product navigation) has shadowRoot with child elements
+  test('p-link element has non-empty shadowRoot after page stabilizes', async ({ page }) => {
+    await page.locator('p-link').first().waitFor({ state: 'attached' })
 
     const shadowRootChildCount = await page.evaluate(() => {
-      const el = document.querySelector('p-button')
+      const el = document.querySelector('p-link')
       // Returns -1 if element not found, 0 if shadowRoot is null/empty
       if (!el) return -1
       if (!el.shadowRoot) return 0
@@ -173,6 +140,6 @@ test.describe('TestFromAC_PDSShadowRootActivation', () => {
     })
 
     // shadowRoot must exist and contain at least one element
-    expect(shadowRootChildCount, 'p-button.shadowRoot must be non-null and non-empty').toBeGreaterThan(0)
+    expect(shadowRootChildCount, 'p-link.shadowRoot must be non-null and non-empty').toBeGreaterThan(0)
   })
 })

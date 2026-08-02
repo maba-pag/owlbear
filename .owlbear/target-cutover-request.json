@@ -1,0 +1,34 @@
+{
+  "sources": [
+    {
+      "source_path": ".owlbear/changes",
+      "snapshot_name": "changes",
+      "expected_source_digest": "80532dc1a1a00d32fd7898e468e0b75d3ecf6c361dc5b4ae2ce09709461ce1e9"
+    },
+    {
+      "source_path": ".owlbear/kanban",
+      "snapshot_name": "kanban",
+      "expected_source_digest": "7360ae1921a0a19dc58b28ad78ec98985bbc055b703a0e3cd7a7fb1df9646b30"
+    }
+  ],
+  "snapshot_path": ".owlbear/legacy/target-cutover",
+  "target_path": ".owlbear/target",
+  "receipt_path": ".owlbear/target-cutover.json",
+  "adapter_refs": [
+    {
+      "relative_path": ".owlbear/adapters/delivery",
+      "target": "target"
+    }
+  ],
+  "authorities": [],
+  "classifications": [],
+  "expected_authority_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "actual_code_revision": "c8248f3e3ccdb71d85925a2e8f81a77481d3cf081dee3e72d3ecb2d4365ca240",
+  "expected_code_revision": "c8248f3e3ccdb71d85925a2e8f81a77481d3cf081dee3e72d3ecb2d4365ca240",
+  "readiness": {
+    "current_request_ids": [],
+    "active_claim_ids": [],
+    "active_writer_ids": []
+  },
+  "approval": "ACTIVATE_TARGET_RUNTIME"
+}

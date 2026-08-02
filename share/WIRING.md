@@ -43,16 +43,15 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 
 | Agent | Model | Required reading | Delegates | Hooks |
 |-------|-------|------------------|-----------|-------|
-| designer | GPT-5.6 Sol | `w-design-session` | conceptual-design-reviewer, designer-challenger, Explore | None; authority writes are bounded by the role and narrow native tool surface |
+| designer | GPT-5.6 Sol | `w-design-session` | conceptual-design-reviewer, designer-challenger, Explore | None; draft writes are role-bounded and target publication uses the admission tool surface |
 | conceptual-design-reviewer | Claude Opus 5 | `r-challenger-protocol`, `h-module-design`, `h-frontend-design` | None | `PreToolUse`: deny writes except scratch |
 | designer-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
-| planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch and terminal mutation; no lifecycle tools |
+| planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch and terminal mutation; owns one target plan claim |
 | planner-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
-| orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, acceptor, auditor, memory-curator, Explore | Native lifecycle tools plus terminal access limited by workflow to exact-HEAD lookup |
-| builder | GPT-5.6 Terra | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | `SessionStart`: repository context; `PostToolUse`: lint changed files |
+| orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, claim-arbiter, memory-curator, Explore | Target portfolio and plan/build/assembly mutation tools; no repository write tools |
+| builder | GPT-5.6 Terra | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; `SessionStart`: repository context; `PostToolUse`: lint changed files |
 | build-reviewer | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | `PreToolUse`: deny writes except scratch |
-| acceptor | GPT-5.6 Terra | `w-node-acceptance` | None | `PreToolUse`: deny writes except scratch and terminal mutation; exact-HEAD/tracked-state checks |
-| auditor | GPT-5.6 Terra | `w-whole-change-audit` | None | `PreToolUse`: deny writes except scratch and terminal mutation; whole-change audit scope |
+| claim-arbiter | Claude Opus 5 | `r-challenger-protocol` | None | `PreToolUse`: deny writes except scratch; final isolated disagreement decision |
 | test-curator | GPT-5.6 Terra | `w-test-curation` | None | `PreToolUse`: deny source writes |
 | memory-curator | GPT-5.6 Terra | `w-mem-curation` | None | None |
 | knowledge-ingestor | GPT-5.6 Luna | `h-knowledge-ops` | None | None |
@@ -64,8 +63,8 @@ Tool allowlists remain in agent frontmatter; they are not duplicated here.
 
 | Prompt | Entry route | Initial loading behavior |
 |--------|-------------|--------------------------|
-| `ideate` | `prompt` -> designer in discovery mode | Agent required-reading loads `w-design-session`; selects or creates one native session |
-| `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same native session |
+| `ideate` | `prompt` -> designer in discovery mode | Agent required-reading loads `w-design-session`; selects or creates one target Design session |
+| `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same target Design session |
 | `orchestrate` | `prompt` -> orchestrator | Agent required-reading loads `w-orchestration` |
 | `test-curation` | `prompt` -> test-curator | Agent required-reading loads `w-test-curation` |
 | `kb-ingest` | `prompt` -> knowledge-ingestor | Agent required-reading loads `h-knowledge-ops` |
@@ -102,8 +101,6 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | `w-design-session` | designer |
 | `w-frontier-planning` | planner |
 | `w-packet-building` | builder |
-| `w-node-acceptance` | acceptor |
-| `w-whole-change-audit` | auditor |
 | `r-challenger-protocol` | conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer |
 | `h-codebase-orientation` | designer-challenger, planner-challenger, builder, build-reviewer |
 | `h-module-design` | designer-challenger, planner-challenger |
@@ -123,11 +120,10 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | conceptual-design-reviewer | designer | A consequential product, workflow, or interaction concept proceeds without independent conceptual challenge |
 | designer-challenger | designer | Native admission lacks required repository-grounded entity challenge evidence |
 | planner | orchestrator | Engine-selected native plan jobs cannot be refined or completed |
-| acceptor | orchestrator | Engine-selected native accept jobs cannot produce independent success, rejection, or blocked dispositions |
-| auditor | orchestrator | Engine-selected native audit jobs cannot produce independent success, rejection, or blocked dispositions |
-| planner-challenger | planner | A node plan cannot satisfy the independent plan review gate |
-| builder | orchestrator | Engine-selected native build jobs cannot be completed |
-| build-reviewer | builder | A native packet commit cannot satisfy mandatory independent inline review |
+| planner-challenger | planner | A target task-plan claim cannot satisfy independent review |
+| builder | orchestrator | Target build and assembly jobs cannot produce reviewed exact-commit claims |
+| build-reviewer | builder | A target build or assembly claim cannot satisfy independent review |
+| claim-arbiter | orchestrator | A persisted owner-reviewer disagreement cannot receive its one final decision |
 | memory-curator | orchestrator | Periodic memory housekeeping is skipped |
 | Explore | designer, planner, orchestrator | Broad read-only orientation must be performed by the caller or omitted |
 
@@ -139,7 +135,7 @@ The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignmen
 | Control | Attached roles | Enforcement job |
 |---------|----------------|-----------------|
 | Agent `tools:` allowlist | Every agent | Limits runtime capabilities exposed to the role |
-| `deny-writes.py` | acceptor, auditor, planner, conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer | Rejects durable edit-tool writes outside scratch; acceptor, auditor, and planner enable terminal read-only mode |
+| `deny-writes.py` | planner, conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer, claim-arbiter | Rejects durable edit-tool writes outside scratch; planner also enables terminal read-only mode |
 | `deny-src-writes.py` | test-curator | Restricts writes to tests and scratch |
 | `session-context.py` | builder | Adds repository context at session start |
 | `lint-changed.py` | builder | Runs changed-file checks after tool use |

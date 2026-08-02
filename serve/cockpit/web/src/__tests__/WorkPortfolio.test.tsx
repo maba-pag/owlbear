@@ -129,7 +129,9 @@ it('creates a scoped request and loads technical trace only on demand', async ()
   const input = container.querySelector('p-input-text[name="work-request-summary"]') as HTMLElement & { value: string }
   input.value = 'Clarify the proof boundary'
   fireEvent(input, new CustomEvent('change', { detail: { value: input.value } }))
-  fireEvent.click(screen.getByText('Create request'))
+  const createButton = screen.getByText('Create request').closest('p-button')
+  await waitFor(() => expect(createButton).not.toHaveAttribute('disabled'))
+  fireEvent.click(createButton!)
   await waitFor(() => expect(api.createRequest).toHaveBeenCalledWith(
     'OUT-001',
     'change-1',

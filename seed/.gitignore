@@ -76,6 +76,6 @@ playwright-report/
 .owlbear/memory/*.db
 
 # Lock files (transient runtime artifacts)
-.owlbear/kanban/.storage.lock
-.owlbear/kanban/activity.jsonl
+.owlbear/target/**/.storage.lock
+.owlbear/target-cutover.pending
 .coverage.*

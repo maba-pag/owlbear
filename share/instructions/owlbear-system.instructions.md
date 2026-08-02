@@ -28,8 +28,9 @@ applyTo: "**"
   and a Kanban execution board.
 - **Distribution and safety.** Clone = install; `setup/init.py` wires workspace configuration. Git
   history and audit logs provide review and recovery.
-- **Delivery.** `design → plan → build → accept → audit`. The engine owns graph readiness, claims,
-  receipts, and correction routing; use `r-workspace-governance` for packet commits and OwlBear-managed
+- **Delivery.** `design → plan → build → optional assembly → completed`. Independent review is
+  nested in each transformation attempt. The engine owns readiness, claims, receipts, typed
+  correction, and recovery; use `r-workspace-governance` for scoped commits and OwlBear-managed
   artifact placement.
 
 ## 3. Memory Governance
@@ -53,7 +54,7 @@ Before completing material work, decide whether you learned a specific, non-obvi
 
   | MCP server | `tools:` prefix | Runtime tool ID | `tool_search` query |
   |---|---|---|---|
-  | OwlBear Kanban | `ob-kanban/*` | `mcp_ob-kanban_<tool>` | `"OwlBear Kanban native job pick_jobs start_job finish_plan finish_build finish_accept finish_audit release_job recovery"` |
+  | OwlBear Kanban | `ob-kanban/*` | `mcp_ob-kanban_<tool>` | `"OwlBear Kanban target portfolio list_work_items list_frontier start_job finish_plan finish_build finish_assembly respond_to_review arbitrate_attempt recover_interrupted_task"` |
   | OwlBear Memory | `ob-memory/*` | `mcp_ob-memory_<tool>` | `"memory"` |
   | MarkItDown | `markitdown/*` | `mcp_markitdown_<tool>` | `"markdown convert"` |
 

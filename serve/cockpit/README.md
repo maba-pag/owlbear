@@ -1,9 +1,9 @@
 # owlbear-cockpit — Steering Cockpit Package
 
 Cockpit combines a FastAPI backend (`src/owlbear_cockpit/`) with a React frontend (`web/`),
-served as built static assets from `dist/`. The backend binds a `NativeWorkspace` and exposes
-native changes, jobs, requests, evidence, health, Memory, Ideas, and immutable legacy inventory.
-The frontend provides purpose-specific delivery controls rather than arbitrary status mutation.
+served as built static assets from `dist/`. The backend verifies the target cutover receipt and
+projects admitted semantic work items, requests, evidence, Memory, and Ideas without becoming
+delivery authority.
 
 → Parent: [README.md](../../README.md)
 
@@ -48,9 +48,9 @@ uv run --project ../owlbear cockpit
 
 `uv run cockpit` serves `serve/cockpit/dist/`, starts on `127.0.0.1:8420` by default,
 and opens a browser unless disabled with `COCKPIT_NO_OPEN=1`. Cockpit reads
-`.owlbear/kanban/` and `.owlbear/memory/` relative to the process working directory, so
-consumer launches must set the working directory to the target project or override
-`OWLBEAR_WORK_ROOT` and `MEMORY_DIR`.
+`.owlbear/target-cutover-request.json`, its immutable receipt, and `.owlbear/memory/` relative
+to the workspace root. Consumer launches must use the target project as their working directory
+or set `OWLBEAR_WORKSPACE_ROOT`.
 
 ## Frontend Surface
 
@@ -68,14 +68,14 @@ repository.
 
 ## Delivery Evidence
 
-Cockpit projects the native evidence model without becoming authority:
+Cockpit projects the target evidence model without becoming authority:
 
 | Surface | Authority |
 |---------|-----------|
-| Change intent, design, decisions, and delivery graph | `.owlbear/changes/<change-id>/` |
-| Jobs, attempts, requests, findings, and activity | `.owlbear/kanban/` native stores |
-| Successful delivery evidence | Immutable receipts in the owning change |
-| Retired workflow records | Hash-verified read-only inventory under `.owlbear/legacy/` |
+| Admitted commitments, outcomes, scopes, and design re-entry | `.owlbear/target/changes/<change-id>/authority.json` |
+| Jobs, tasks, attempts, requests, and receipts | `.owlbear/target/changes/<change-id>/target-runtime/` |
+| Cockpit activation authority | `.owlbear/target-cutover-request.json` and its immutable receipt |
+| Successful delivery evidence | Immutable target runtime receipts |
 
 ## Configuration
 
@@ -83,8 +83,10 @@ Cockpit projects the native evidence model without becoming authority:
 |----------|---------|---------|
 | `COCKPIT_PORT` | `8420` | Override listen port (1-65535) |
 | `COCKPIT_NO_OPEN` | unset | Set to `1` to suppress browser auto-open |
-| `OWLBEAR_WORK_ROOT` | `$PWD/.owlbear/kanban/` | Override the native delivery work root |
-| `MEMORY_DIR` | `$PWD/.owlbear/memory/` | Override memory directory path used by `MemoryEngine` |
+| `COCKPIT_DIST_DIR` | package `dist/` | Override the built frontend asset directory |
+| `OWLBEAR_WORKSPACE_ROOT` | `$PWD` | Override the workspace containing target authority |
+| `OWLBEAR_TARGET_CUTOVER_REQUEST` | `.owlbear/target-cutover-request.json` | Override the cutover request path |
+| `MEMORY_DIR` | workspace `.owlbear/memory/` | Override memory directory path used by `MemoryEngine` |
 
 ## Delivery Packaging
 
@@ -101,8 +103,5 @@ Cockpit projects the native evidence model without becoming authority:
 | `fastapi` | HTTP framework |
 | `uvicorn` | ASGI server |
 | `pydantic` | Request/response model validation |
-| `sse-starlette` | SSE streaming for the `GET /api/events` invalidation endpoint |
-| `watchfiles` | File-system watcher used by the events endpoint |
-| `owlbear-kanban` | Native change and delivery control plane |
+| `owlbear-kanban` | Target authority, runtime, admission, and receipt verification |
 | `owlbear-memory` | Memory engine (workspace package) |
-| `ruamel.yaml` | Canonical native authority and evidence YAML parsing |

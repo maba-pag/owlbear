@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Literal, Never
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from owlbear_kanban.change import ChangeId
+from owlbear_kanban.identities import ChangeId
 from owlbear_kanban.runtime_transaction import (
     ReplacementTransactionParticipant,
     RuntimeTransaction,

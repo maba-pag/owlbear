@@ -3,7 +3,6 @@ import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import babel from '@rolldown/plugin-babel'
 import { Features } from 'lightningcss'
-import type { Plugin } from 'vite'
 import * as fs from 'node:fs'
 import { join } from 'node:path'
 
@@ -64,28 +63,12 @@ function pdsVersionCheckPlugin() {
   }
 }
 
-function workPortfolioHarnessPlugin(): Plugin {
-  return {
-    name: 'work-portfolio-harness',
-    apply: 'serve' as const,
-    configureServer(server) {
-      server.middlewares.use((request, _response, next) => {
-        if (process.env['WORK_PORTFOLIO_E2E'] && request.url?.split('?')[0] === '/work') {
-          request.url = '/e2e/support/work-harness.html'
-        }
-        next()
-      })
-    },
-  }
-}
-
 export default defineConfig({
   plugins: [
     tailwindcss(),
     react(),
     babel({ presets: [reactCompilerPreset()] }),
     pdsVersionCheckPlugin(),
-    workPortfolioHarnessPlugin(),
     cspPlugin(),
   ],
   build: {

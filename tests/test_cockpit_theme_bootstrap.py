@@ -9,19 +9,14 @@ from unittest.mock import patch
 import pytest
 
 
-_KANBAN_CONFIG = """\
-next_id: 1
-"""
-
-
-def _make_kanban_dir(base: Path) -> Path:
-    """Create a minimal kanban board directory. Returns kanban_dir path."""
-    kanban_dir = base / ".owlbear" / "kanban"
-    kanban_dir.mkdir(parents=True)
-    (kanban_dir / "config.yml").write_text(_KANBAN_CONFIG, encoding="utf-8")
-    (kanban_dir / "tasks").mkdir()
-    (kanban_dir / "archive").mkdir()
-    return kanban_dir
+def _configure_run(base: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    dist = base / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<!doctype html><html></html>\n", encoding="utf-8")
+    (dist / "theme-bootstrap.js").write_text("document.documentElement.dataset.theme = 'auto';\n", encoding="utf-8")
+    monkeypatch.setenv("OWLBEAR_WORKSPACE_ROOT", str(base))
+    monkeypatch.setenv("COCKPIT_DIST_DIR", str(dist))
+    monkeypatch.setenv("COCKPIT_NO_OPEN", "1")
 
 
 @pytest.fixture(autouse=True)
@@ -36,8 +31,9 @@ def _reset_app_after_run() -> object:
     saved_routes = list(_m.app.routes)
     yield
     _m.app.routes[:] = saved_routes
-    with contextlib.suppress(AttributeError, KeyError):
-        del _m.app.state.workspace
+    for attribute in ("workspace_root", "target_context", "memory_engine"):
+        with contextlib.suppress(AttributeError, KeyError):
+            delattr(_m.app.state, attribute)
 
 
 class TestThemeBootstrapServing:
@@ -47,11 +43,9 @@ class TestThemeBootstrapServing:
         """GET /theme-bootstrap.js returns 200, JavaScript content-type, and non-HTML body."""
         from fastapi.testclient import TestClient  # noqa: PLC0415
 
-        kanban_dir = _make_kanban_dir(tmp_path)
-        monkeypatch.setenv("KANBAN_DIR", str(kanban_dir))
-        monkeypatch.setenv("COCKPIT_NO_OPEN", "1")
+        _configure_run(tmp_path, monkeypatch)
 
-        with patch("uvicorn.run"):
+        with patch("owlbear_cockpit.main.load_target_context", return_value=object()), patch("uvicorn.run"):
             from owlbear_cockpit.main import app, run  # noqa: PLC0415
 
             run()
@@ -71,11 +65,9 @@ class TestThemeBootstrapServing:
         """Content-type for /theme-bootstrap.js must not be text/html."""
         from fastapi.testclient import TestClient  # noqa: PLC0415
 
-        kanban_dir = _make_kanban_dir(tmp_path)
-        monkeypatch.setenv("KANBAN_DIR", str(kanban_dir))
-        monkeypatch.setenv("COCKPIT_NO_OPEN", "1")
+        _configure_run(tmp_path, monkeypatch)
 
-        with patch("uvicorn.run"):
+        with patch("owlbear_cockpit.main.load_target_context", return_value=object()), patch("uvicorn.run"):
             from owlbear_cockpit.main import app, run  # noqa: PLC0415
 
             run()
@@ -94,11 +86,9 @@ class TestThemeBootstrapServing:
         """Response body for /theme-bootstrap.js must not be an HTML document."""
         from fastapi.testclient import TestClient  # noqa: PLC0415
 
-        kanban_dir = _make_kanban_dir(tmp_path)
-        monkeypatch.setenv("KANBAN_DIR", str(kanban_dir))
-        monkeypatch.setenv("COCKPIT_NO_OPEN", "1")
+        _configure_run(tmp_path, monkeypatch)
 
-        with patch("uvicorn.run"):
+        with patch("owlbear_cockpit.main.load_target_context", return_value=object()), patch("uvicorn.run"):
             from owlbear_cockpit.main import app, run  # noqa: PLC0415
 
             run()

@@ -1,4 +1,4 @@
-import { cp, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { once } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -6,12 +6,10 @@ import { spawn } from 'node:child_process'
 
 const root = resolve(import.meta.dirname, '../../../../..')
 const fixture = await mkdtemp(join(tmpdir(), 'owlbear-memory-lifecycle-'))
-const kanbanDir = join(fixture, 'kanban')
 const memoryDir = join(fixture, 'memory')
 const fixtureManifest = resolve(import.meta.dirname, '../../test-results/memory-lifecycle-fixture.json')
 const mcpProof = resolve(import.meta.dirname, '../../test-results/memory-lifecycle-mcp.json')
 await mkdir(memoryDir)
-await cp(join(root, '.owlbear', 'kanban'), kanbanDir, { recursive: true })
 
 const entries = [
   ['11111111-1111-4111-8111-111111111111', 'Approved memory', 'approved', 0.95, null],
@@ -37,6 +35,22 @@ await mkdir(resolve(fixtureManifest, '..'), { recursive: true })
 await writeFile(fixtureManifest, JSON.stringify({ memoryDir }))
 await rm(mcpProof, { force: true })
 
+const cutoverSeed = spawn('uv', [
+  'run',
+  '--project',
+  root,
+  'python',
+  resolve(import.meta.dirname, 'seed-target-cockpit-workspace.py'),
+  '--workspace',
+  fixture,
+], { cwd: root, stdio: 'inherit' })
+const [cutoverSeedExit] = await once(cutoverSeed, 'exit')
+if (cutoverSeedExit !== 0) {
+  await rm(fixtureManifest, { force: true })
+  await rm(fixture, { recursive: true, force: true })
+  process.exit(cutoverSeedExit ?? 1)
+}
+
 const mcpProbe = spawn('uv', [
   'run',
   '--project',
@@ -61,7 +75,7 @@ const server = spawn('uv', ['run', '--project', root, '--package', 'owlbear-cock
   cwd: root,
   env: {
     ...process.env,
-    OWLBEAR_WORK_ROOT: kanbanDir,
+    OWLBEAR_WORKSPACE_ROOT: fixture,
     MEMORY_DIR: memoryDir,
     COCKPIT_PORT: '8422',
     COCKPIT_NO_OPEN: '1',

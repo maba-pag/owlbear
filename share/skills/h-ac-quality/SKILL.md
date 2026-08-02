@@ -126,8 +126,8 @@ scope, input, output, or verification method and give bad -> good rewrite guidan
 | B3 | "Reviewer checks every scenario correctly." | "Plan review returns one evidenced row for packet completeness, admitted references, impact closure, dependency order, proof boundary, and material expansion." |
 | B4 | "Given an injected workflow runner, the CLI command returns JSON." | "Given the real CLI application with remote HTTP transport replaced, invoking `alerts prepare` resolves normal configuration, crosses the assembled workflow boundary, and writes one JSON document to stdout." |
 | P1 | "Add validation before Delivery." | "Designer runs deterministic validation and complete source-grounded challenge before requesting admission approval." |
-| P2 | "The plan should be prepared." | "PlannerSuccess returns one isolated node plan, one build job ID per packet, and one distinct accept job ID." |
-| P3 | "Auditor confirms completion." | "Auditor queries accepted node receipts, unresolved requests/findings, and admitted normal workflows before returning its exact-commit disposition." |
+| P2 | "The plan should be prepared." | "The plan claim returns one bounded task set, explicit dependencies, and maintained-boundary proof for independent review." |
+| P3 | "Review confirms completion." | "Build review compares the exact candidate commit, admitted task claim, complete diff, and focused proof before returning one typed disposition." |
 
 ## Canonical Literal Verification
 
@@ -157,13 +157,13 @@ Use this when AC lines cite concrete literals that must match source-of-truth to
 
 - Bad: "Orchestrator moves work to the next valid phase."
 - Good: "After `BuilderSuccess`, orchestrator forwards the unchanged claim identity and returned
-  completion fields to `finish_build`, then obtains a fresh `pick_jobs` plan."
+  completion fields to `finish_build`, then queries current target frontiers."
 
 ### Authority Discovery
 
 Locate the strongest authority available in the target project. Prefer sources in this order:
 
-| Priority | Authority | Suitable claims |
+| Order | Authority | Suitable claims |
 |----------|-----------|-----------------|
 | 1 | Checked-in schema, type, configuration, or public source declaration | Allowed literals, fields, transitions, tokens, defaults |
 | 2 | Generated public inventory, command tree, API schema, or compiled contract | Registered operations and assembled public surface |

@@ -1,13 +1,14 @@
-"""Unregistered target work-item router and isolated test application."""
+"""Target work-item HTTP adapter."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 
+from owlbear_cockpit.deps import get_target_context
 from owlbear_cockpit.target_models import (
     AttentionCounts,
     CompletionSummaryResponse,
@@ -56,6 +57,7 @@ class TargetCockpitContext:
     work_item_trace: Callable[[str, str], tuple[dict[str, object], ...]]
     work_item_requests: Callable[[str, str], tuple[dict[str, object], ...]]
     process_is_alive: Callable[[str], bool]
+    refresh: Callable[[], None] = lambda: None
 
 
 class TargetCockpitService:
@@ -71,6 +73,7 @@ class TargetCockpitService:
         attention: WorkItemAttention | None,
     ) -> WorkItemPortfolioResponse:
         """Return filtered mixed-change cards and counts for the filtered result."""
+        self._context.refresh()
         bindings = (
             ((change_id, self._binding(change_id)),) if change_id else tuple(sorted(self._context.changes.items()))
         )
@@ -183,6 +186,7 @@ class TargetCockpitService:
         )
 
     def _resolve(self, work_item_id: str, change_id: str | None) -> tuple[str, TargetCockpitBinding, WorkItemProjector]:
+        self._context.refresh()
         identities = (change_id,) if change_id else tuple(sorted(self._context.changes))
         matches = []
         for identity in identities:
@@ -220,24 +224,35 @@ class TargetCockpitService:
         return result.model_dump(mode="json")
 
 
+def _get_target_service(
+    context: Annotated[TargetCockpitContext, Depends(get_target_context)],
+) -> TargetCockpitService:
+    return TargetCockpitService(context)
+
+
+_TargetService = Annotated[TargetCockpitService, Depends(_get_target_service)]
+
+
 def assemble_target_app(context: TargetCockpitContext) -> FastAPI:
-    """Assemble the target router for tests without changing the live Cockpit app."""
+    """Assemble the target router with an explicit test context."""
     app = FastAPI(title="OwlBear Cockpit Target")
-    app.include_router(_target_router(TargetCockpitService(context)), prefix="/api")
+    app.dependency_overrides[get_target_context] = lambda: context
+    app.include_router(router, prefix="/api")
     return app
 
 
-def _target_router(service: TargetCockpitService) -> APIRouter:
+def _target_router() -> APIRouter:
     router = APIRouter(prefix="/work-items", tags=["target-work-items"])
-    _register_target_queries(router, service)
-    _register_target_mutations(router, service)
+    _register_target_queries(router)
+    _register_target_mutations(router)
     return router
 
 
-def _register_target_queries(router: APIRouter, service: TargetCockpitService) -> None:
+def _register_target_queries(router: APIRouter) -> None:
 
     @router.get("", response_model=WorkItemPortfolioResponse)
     def list_work_items(
+        service: _TargetService,
         change_id: str | None = None,
         stage: WorkItemStage | None = None,
         attention: WorkItemAttention | None = None,
@@ -245,35 +260,60 @@ def _register_target_queries(router: APIRouter, service: TargetCockpitService) -
         return service.list_items(change_id, stage, attention)
 
     @router.get("/{work_item_id}", response_model=WorkItemDetailResponse)
-    def show_work_item(work_item_id: str, change_id: str | None = None) -> WorkItemDetailResponse:
+    def show_work_item(
+        work_item_id: str,
+        service: _TargetService,
+        change_id: str | None = None,
+    ) -> WorkItemDetailResponse:
         return service.show_item(work_item_id, change_id)
 
     @router.get("/{work_item_id}/resume-design", response_model=ResumeDesignResponse)
-    def resume_design(work_item_id: str, change_id: str | None = None) -> ResumeDesignResponse:
+    def resume_design(
+        work_item_id: str,
+        service: _TargetService,
+        change_id: str | None = None,
+    ) -> ResumeDesignResponse:
         return service.resume_design(work_item_id, change_id)
 
     @router.get("/{work_item_id}/trace", response_model=WorkItemTraceResponse)
-    def show_trace(work_item_id: str, change_id: str | None = None) -> WorkItemTraceResponse:
+    def show_trace(
+        work_item_id: str,
+        service: _TargetService,
+        change_id: str | None = None,
+    ) -> WorkItemTraceResponse:
         return service.trace(work_item_id, change_id)
 
     @router.get("/{work_item_id}/updates", response_model=SemanticUpdatesResponse)
-    def list_updates(work_item_id: str, change_id: str | None = None) -> SemanticUpdatesResponse:
+    def list_updates(
+        work_item_id: str,
+        service: _TargetService,
+        change_id: str | None = None,
+    ) -> SemanticUpdatesResponse:
         return service.updates(work_item_id, change_id)
 
     @router.get("/{work_item_id}/completion", response_model=CompletionSummaryResponse)
-    def show_completion(work_item_id: str, change_id: str | None = None) -> CompletionSummaryResponse:
+    def show_completion(
+        work_item_id: str,
+        service: _TargetService,
+        change_id: str | None = None,
+    ) -> CompletionSummaryResponse:
         return service.completion(work_item_id, change_id)
 
     @router.get("/{work_item_id}/requests", response_model=WorkItemRequestsResponse)
-    def list_requests(work_item_id: str, change_id: str | None = None) -> WorkItemRequestsResponse:
+    def list_requests(
+        work_item_id: str,
+        service: _TargetService,
+        change_id: str | None = None,
+    ) -> WorkItemRequestsResponse:
         return service.requests(work_item_id, change_id)
 
 
-def _register_target_mutations(router: APIRouter, service: TargetCockpitService) -> None:
+def _register_target_mutations(router: APIRouter) -> None:
     @router.post("/{work_item_id}/requests")
     def create_request(
         work_item_id: str,
         body: CreateWorkItemRequestBody,
+        service: _TargetService,
         change_id: str | None = None,
     ) -> dict[str, object]:
         return service.create_request(work_item_id, body, change_id)
@@ -283,6 +323,7 @@ def _register_target_mutations(router: APIRouter, service: TargetCockpitService)
         work_item_id: str,
         request_id: str,
         body: ResolveWorkItemRequestBody,
+        service: _TargetService,
         change_id: str | None = None,
     ) -> dict[str, object]:
         return service.resolve_request(work_item_id, request_id, body, change_id)
@@ -291,6 +332,7 @@ def _register_target_mutations(router: APIRouter, service: TargetCockpitService)
     def recover_task(
         work_item_id: str,
         body: RecoverWorkItemBody,
+        service: _TargetService,
         change_id: str | None = None,
     ) -> dict[str, object]:
         return service.recover(work_item_id, body, change_id)
@@ -332,4 +374,7 @@ def _http_error(
     raise HTTPException(status_code=status_code, detail=payload)
 
 
-__all__ = ["TargetCockpitBinding", "TargetCockpitContext", "assemble_target_app"]
+router = _target_router()
+
+
+__all__ = ["TargetCockpitBinding", "TargetCockpitContext", "assemble_target_app", "router"]
