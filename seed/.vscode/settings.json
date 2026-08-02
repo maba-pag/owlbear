@@ -57,7 +57,7 @@
     "**/*.egg-info": true
   },
   "files.watcherExclude": {
-    ".owlbear/kanban/**": true
+    ".owlbear/target/**": true
   },
   "git.autorefresh": false,
   "github.copilot.chat.additionalReadAccessPaths": [
@@ -102,8 +102,7 @@
   "scm.defaultViewMode": "tree",
   "scm.graph.pageOnScroll": false,
   "search.exclude": {
-    ".owlbear/kanban/activity.jsonl": true,
-    ".owlbear/kanban/archive/**": true,
+    ".owlbear/legacy/**": true,
     ".owlbear/scratch/**": true,
     ".venv": true,
     "**/__pycache__": true,

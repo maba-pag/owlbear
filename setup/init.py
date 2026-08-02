@@ -10,6 +10,7 @@ the location of this script.
 from __future__ import annotations
 
 import difflib
+import hashlib
 import json
 import os
 import re
@@ -18,6 +19,17 @@ import sys
 import warnings
 from contextlib import suppress
 from pathlib import Path
+
+from owlbear_kanban import (
+    TargetAdapterRef,
+    TargetAuthorityRegistry,
+    TargetCutoverReadiness,
+    TargetCutoverRequest,
+    TargetCutoverSource,
+    cut_over_target_runtime,
+    inventory_legacy_source,
+    target_authority_digest,
+)
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -61,15 +73,8 @@ _SKIP_IF_EXISTS_REL = frozenset(
 
 _OWLBEAR_GITIGNORE_MARKER = "# --- OwlBear managed paths ---"
 _HOOKS_REL_PREFIX = ".owlbear/hooks/"
-_NATIVE_STORE_DIRS = (
-    Path("changes"),
-    Path("kanban/jobs"),
-    Path("kanban/archive"),
-    Path("kanban/requests/pending"),
-    Path("kanban/requests/resolved"),
-    Path("kanban/attempts"),
-    Path("kanban/findings"),
-)
+_TARGET_REQUEST_PATH = Path(".owlbear/target-cutover-request.json")
+_TARGET_RECEIPT_PATH = Path(".owlbear/target-cutover.json")
 
 # Regex: match // line-comments outside of strings.  Handles the common JSONC
 # patterns VS Code uses (trailing comments like `true, // old value`).  Does
@@ -207,6 +212,83 @@ def _write_seed_file(src: Path, dest: Path, replacements: dict[str, str]) -> Non
     shutil.copy2(src, dest)
 
 
+def _target_code_revision(owlbear_dir: Path) -> str:
+    """Identify the installed target runtime and agent distribution."""
+    serve_root = owlbear_dir / "serve"
+    package_sources = (
+        tuple(path / "src" for path in sorted(serve_root.iterdir()) if path.is_dir()) if serve_root.exists() else ()
+    )
+    roots = (
+        owlbear_dir / "seed",
+        owlbear_dir / "setup",
+        owlbear_dir / "share" / "agents",
+        owlbear_dir / "share" / "instructions",
+        owlbear_dir / "share" / "prompts",
+        owlbear_dir / "share" / "skills",
+        owlbear_dir / "serve" / "cockpit" / "dist",
+        *package_sources,
+    )
+    files = [path for name in ("pyproject.toml", "uv.lock") if (path := owlbear_dir / name).is_file()]
+    files.extend(path for root in roots if root.exists() for path in root.rglob("*") if path.is_file())
+    digest = hashlib.sha256()
+    for path in sorted(files):
+        relative = path.relative_to(owlbear_dir).as_posix().encode()
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        content = path.read_bytes()
+        digest.update(len(content).to_bytes(8, "big"))
+        digest.update(content)
+    return digest.hexdigest()
+
+
+def _activate_fresh_target(target_dir: Path, owlbear_dir: Path) -> None:
+    """Publish a receipt-authorized empty target runtime for a fresh workspace."""
+    request_path = target_dir / _TARGET_REQUEST_PATH
+    if (target_dir / _TARGET_RECEIPT_PATH).exists():
+        return
+    if (target_dir / ".owlbear/target").exists():
+        message = "target store exists without its activation receipt"
+        raise RuntimeError(message)
+
+    if request_path.exists():
+        request = TargetCutoverRequest.model_validate_json(request_path.read_bytes())
+    else:
+        source = target_dir / ".owlbear/bootstrap/target-runtime"
+        source.mkdir(parents=True)
+        revision = _target_code_revision(owlbear_dir)
+        (source / "distribution-revision").write_text(revision + "\n", encoding="utf-8")
+        source_digest = inventory_legacy_source(source, (), {}).source_digest
+        request = TargetCutoverRequest(
+            sources=(
+                TargetCutoverSource(
+                    source_path=".owlbear/bootstrap/target-runtime",
+                    snapshot_name="bootstrap",
+                    expected_source_digest=source_digest,
+                ),
+            ),
+            snapshot_path=".owlbear/legacy/target-cutover",
+            target_path=".owlbear/target",
+            receipt_path=_TARGET_RECEIPT_PATH.as_posix(),
+            adapter_refs=(TargetAdapterRef(relative_path=".owlbear/adapters/delivery", target="target"),),
+            authorities=(),
+            classifications=(),
+            expected_authority_digest=target_authority_digest(()),
+            actual_code_revision=revision,
+            expected_code_revision=revision,
+            readiness=TargetCutoverReadiness(),
+            approval="ACTIVATE_TARGET_RUNTIME",
+        )
+        request_path.write_text(request.model_dump_json(indent=2) + "\n", encoding="utf-8")
+
+    def smoke(workspace: Path, cutover_request: TargetCutoverRequest) -> None:
+        authorities = TargetAuthorityRegistry(workspace / cutover_request.target_path).list_authorities()
+        if authorities:
+            message = "fresh target runtime contains unexpected authority"
+            raise RuntimeError(message)
+
+    cut_over_target_runtime(target_dir, request, smoke=smoke)
+
+
 def _hook_files_match(src: Path, dest: Path) -> bool:
     """Return True when the existing hook file already matches the seed file."""
     return dest.exists() and src.read_bytes() == dest.read_bytes()
@@ -319,7 +401,9 @@ def init(  # noqa: C901
     Walks the seed/ tree inside *owlbear_dir*, copies static files, and
     replaces ``{{placeholder}}`` tokens in ``.json`` / ``.yml`` templates.
     ``settings.json`` and ``mcp.json`` are deep-merged with existing files.
-    Also creates empty native authority and work-plane stores under ``.owlbear/``.
+    Also receipt-activates an empty target authority store for fresh workspaces.
+    Existing pre-cutover stores remain untouched until ``setup/finalize.py``
+    activates them.
 
     Args:
         target_dir: Destination project directory.
@@ -375,9 +459,8 @@ def init(  # noqa: C901
         _write_seed_file(src, dest, replacements)
 
     ops_root = target_dir / ".owlbear"
-    for rel_dir in _NATIVE_STORE_DIRS:
-        (ops_root / rel_dir).mkdir(parents=True, exist_ok=True)
-    (ops_root / "kanban/activity.jsonl").touch(exist_ok=True)
+    if not (ops_root / "kanban").exists():
+        _activate_fresh_target(target_dir, owlbear_dir)
 
 
 # ---------------------------------------------------------------------------

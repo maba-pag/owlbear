@@ -1,13 +1,14 @@
 # OwlBear
 
-On-demand AI development through native change authority, graph-aware delivery, and GitHub Copilot.
+On-demand AI development through semantic authority, reviewed delivery, and GitHub Copilot.
 
 ## Overview
 
-OwlBear runs inside VS Code. A designer turns user intent into one durable native change, validates
+OwlBear runs inside VS Code. A designer turns user intent into durable target authority, validates
 the exact revision, and admits it only after explicit approval. The delivery engine then selects
-purpose-specific plan, build, accept, and audit jobs. MCP servers expose the control plane,
-Knowledge, Memory, and browser automation; Cockpit provides the human operating surface.
+independently reviewed plan, build, and conditional assembly transformations, with finite correction
+routing when review does not accept a claim. MCP servers expose the control plane, Knowledge,
+Memory, and browser automation; Cockpit provides the human operating surface.
 
 The `dev` branch is the development workspace. The `main` branch is a generated consumer subset and
 must not be edited directly. Immutable records from the retired workflow may remain under
@@ -18,14 +19,14 @@ must not be edited directly. Immutable records from the retired workflow may rem
 | Directory | Purpose |
 |-----------|---------|
 | `serve/` | Python runtime and MCP packages; Cockpit also contains its React source and consumer bundle |
-| `share/agents/` | Native Copilot role definitions |
+| `share/agents/` | Copilot role definitions |
 | `share/skills/` | Reusable workflows, rules, and handbooks |
 | `share/instructions/` | Contextual instruction stubs and universal authority |
 | `share/prompts/` | User-facing workflow entry points |
 | `seed/` | Project-local templates copied by `setup/init.py` |
 | `setup/` | Workspace initializer and installer documentation |
-| `.owlbear/changes/` | Native Specification authority and immutable receipts |
-| `.owlbear/kanban/` | Native jobs, attempts, requests, findings, and activity |
+| `.owlbear/target/` | Receipt-authorized semantic authority, runtime evidence, and immutable receipts |
+| `.owlbear/target-cutover-request.json` | Exact activation request required by the target runtime |
 | `.owlbear/legacy/` | Optional immutable legacy inventory, never executable state |
 | `store/` | Knowledge and Memory data |
 | `tests/` | Workspace regression and integration tests |

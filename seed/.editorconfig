@@ -19,15 +19,11 @@ max_line_length = unset
 indent_size = unset
 max_line_length = unset
 
-# Native change YAML is schema-validated; wrapping it creates semantic diff noise
-[.owlbear/changes/**/*.yaml]
-max_line_length = unset
-
 [*.excalidraw]
 max_line_length = unset
 
-# Kanban files — machine-managed YAML+markdown, allow long lines
-[.owlbear/kanban/**]
+# Target authority and evidence are machine-managed structured records
+[.owlbear/target/**]
 max_line_length = unset
 
 # Keep data files minified — do not reformat

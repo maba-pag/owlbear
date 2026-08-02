@@ -9,9 +9,9 @@ and MCP servers that work together out of the box. Clone once, run one setup com
 every project on your machine gains access to a consistent set of AI-powered development
 tools without any per-project configuration overhead.
 
-Native agents design and admit durable changes, then plan, build, accept, and audit engine-selected
-delivery jobs. Skills carry domain knowledge that loads automatically by relevance, and MCP servers
-give agents access to native changes and work, the knowledge base, persistent Memory, and browser
+Agents design and admit durable semantic authority, then execute independently reviewed plan,
+build, and conditional assembly transformations. Skills carry domain knowledge that loads
+automatically by relevance, and MCP servers give agents access to target changes and work, the knowledge base, persistent Memory, and browser
 automation, all scoped to your project directory and shared through the filesystem.
 
 ## Prerequisites
@@ -38,16 +38,16 @@ mkdir C:\Dev\my-project
 cd C:\Dev\my-project
 
 # 3. Bootstrap the OwlBear workspace
-python ..\owlbear\setup\init.py
+uv run --project ..\owlbear python ..\owlbear\setup\init.py
 
 # 4. Open the project in VS Code
 code .
 ```
 
-Setup creates merged VS Code settings/MCP config plus copied runtime files such as
-`.owlbear/hooks/`, `.owlbear/changes/`, and the native `.owlbear/kanban/` work store in your project
-directory. Agents, skills, instructions, and prompts still load live from the owlbear clone via
-relative paths, so the same owlbear repo can be shared across multiple projects on your machine.
+Setup creates merged VS Code settings/MCP config, copied runtime files such as `.owlbear/hooks/`,
+and a receipt-authorized empty target store under `.owlbear/target/`. Agents, skills, instructions,
+and prompts still load live from the owlbear clone via relative paths, so the same owlbear repo can
+be shared across multiple projects on your machine.
 
 For more detail on what each file does and how to customise see
 [setup/setup-guide.md](setup/setup-guide.md).
@@ -59,7 +59,7 @@ For more detail on what each file does and how to customise see
 | `share/agents/` | Agent definitions (`.agent.md`) — loaded into VS Code automatically |
 | `share/skills/` | Agent skills (`SKILL.md`) — domain knowledge loaded by relevance |
 | `share/instructions/` | Shared instruction files (`*.instructions.md`) |
-| `serve/mcp-kanban/` | MCP server for native change admission and delivery jobs |
+| `serve/mcp-kanban/` | MCP server for target authority, reviewed transformations, and recovery |
 | `serve/mcp-memory/` | MCP server for persistent agent memory (markdown-file backed) |
 | `serve/mcp-knowledge/` | MCP server exposing the knowledge base |
 | `serve/cockpit/` | Cockpit backend package and prebuilt frontend bundle (`dist/`) used by consumers |
@@ -74,7 +74,7 @@ run Cockpit.
 
 Run Cockpit from the consumer project root, not from the owlbear clone. `--project`
 points uv at the shared owlbear installation; the current directory keeps Cockpit scoped
-to the project so `.owlbear/kanban/` and `.owlbear/memory/` resolve correctly.
+to the project so `.owlbear/target/` and `.owlbear/memory/` resolve correctly.
 
 macOS / Linux:
 
@@ -96,21 +96,23 @@ bundled `dist/` directory in the owlbear clone.
 `uv run cockpit` without `--project` is only for running from inside the owlbear
 repository itself. If you launch Cockpit from outside the consumer project directory,
 use `uv run --project ../owlbear --directory /path/to/project cockpit` or set
-`OWLBEAR_WORK_ROOT` and `MEMORY_DIR` explicitly.
+`OWLBEAR_WORKSPACE_ROOT` and `MEMORY_DIR` explicitly.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `COCKPIT_PORT` | `8420` | Override listen port (1-65535) |
 | `COCKPIT_NO_OPEN` | unset | Set to `1` to suppress browser auto-open |
-| `OWLBEAR_WORK_ROOT` | `$PWD/.owlbear/kanban/` | Override the native delivery work root |
+| `OWLBEAR_WORKSPACE_ROOT` | `$PWD` | Override the workspace containing target authority |
+| `OWLBEAR_TARGET_CUTOVER_REQUEST` | `.owlbear/target-cutover-request.json` | Override the exact activation request path |
 | `MEMORY_DIR` | `$PWD/.owlbear/memory/` | Override memory directory path |
 
-## Native Workflow
+## Target Workflow
 
 Use `/ideate` to refine a rough idea, then `/design` to create or resume one durable change under
-`.owlbear/changes/`. The designer validates the exact revision and asks for explicit approval before
-admission. Run `/orchestrate <change-id>` only after admission; the engine then selects native
-`plan`, `build`, `accept`, and `audit` jobs.
+the target design session. The designer validates the exact semantic revision and asks for explicit
+approval before admission to `.owlbear/target/changes/`. Run `/orchestrate <change-id>` only after
+admission; the engine then selects `plan`, `build`, and conditional `assembly` jobs and requires an
+independent review decision for every material claim.
 
 Cockpit exposes the same changes, jobs, requests, receipts, findings, and activity. Any migrated
 records under `.owlbear/legacy/` are immutable history for inspection, never executable work.
@@ -160,5 +162,5 @@ differ.
 ## Sharing with Teammates
 
 To give a teammate access on their machine, they need to clone both the owlbear repository
-and your project, then run `setup/init.py` from their project directory. See
+and your project, then run `setup/init.py` through the shared uv project from their project directory. See
 [setup/sharing-guide.md](setup/sharing-guide.md) for the step-by-step walkthrough.

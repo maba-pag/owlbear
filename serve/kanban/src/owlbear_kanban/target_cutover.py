@@ -150,7 +150,7 @@ class TargetCutoverRequest(_CutoverModel):
     target_path: str
     receipt_path: str
     adapter_refs: tuple[TargetAdapterRef, ...] = Field(min_length=1)
-    authorities: tuple[TargetAuthority, ...] = Field(min_length=1)
+    authorities: tuple[TargetAuthority, ...]
     classifications: tuple[TargetCutoverClassification, ...]
     expected_authority_digest: str
     actual_code_revision: str
@@ -499,6 +499,7 @@ def _snapshot_record(
 def _initialize_target(paths: _CutoverPaths, request: TargetCutoverRequest) -> TargetStoreManifest:
     if _workspace_path_kind(paths.root, paths.target) != "missing":
         _fail_path("target store already exists")
+    (paths.target / "changes").mkdir(parents=True)
     authority_paths = tuple(f"changes/{item.change_id}/authority.json" for item in request.authorities)
     runtime_paths = tuple(f"changes/{item.change_id}/target-runtime/state.json" for item in request.authorities)
     manifest = TargetStoreManifest(

@@ -3,7 +3,7 @@
     ".owlbear/doc-index.md",
     ".owlbear/briefs/**",
     ".owlbear/hooks/**",
-    ".owlbear/kanban/archive/**",
+    ".owlbear/legacy/**",
     ".owlbear/research/**",
     ".owlbear/memory/**",
     ".owlbear/sources/**",

@@ -1,4 +1,4 @@
-"""Canonical consumer distribution inventory for the native control plane."""
+"""Canonical consumer distribution inventory for the target control plane."""
 
 from __future__ import annotations
 
@@ -46,13 +46,13 @@ _SHIPPED_DIAGRAMS = {
 }
 
 _MAINTAINED_DOC_CONTRACTS = {
-    Path("README.md"): (".owlbear/changes/", "plan, build, accept, and audit"),
-    Path("README-consumer.md"): ("/design", "/orchestrate", ".owlbear/legacy/"),
+    Path("README.md"): (".owlbear/target/", "plan, build, and conditional assembly"),
+    Path("README-consumer.md"): ("/design", "/orchestrate", "OWLBEAR_WORKSPACE_ROOT"),
     Path("SECURITY.md"): ("## Supported Versions", "## Reporting a Vulnerability", "## Disclosure Policy"),
-    Path("setup/setup-guide.md"): ("## Native Delivery Workflow", "OWLBEAR_WORK_ROOT"),
-    Path("setup/sharing-guide.md"): (".owlbear/changes/", "Immutable legacy inventory"),
+    Path("setup/setup-guide.md"): ("## Target Delivery Workflow", "setup/finalize.py"),
+    Path("setup/sharing-guide.md"): (".owlbear/target/changes/", "Immutable legacy inventory"),
     Path("share/README.md"): ("## Product Boundary", "WIRING.md"),
-    Path("share/WIRING.md"): ("planner", "acceptor", "auditor", "orchestrator"),
+    Path("share/WIRING.md"): ("planner", "builder", "claim-arbiter", "orchestrator"),
 }
 
 _MARKDOWN_LINK = re.compile(r"\[[^]]*]\(([^)]+)\)")
@@ -78,7 +78,7 @@ def test_retired_openspec_history_is_hash_verified_and_immutable() -> None:
     assert snapshot.manifest.file_count == 22
 
 
-def test_consumer_sync_scopes_have_current_native_owners() -> None:
+def test_consumer_sync_scopes_have_current_target_owners() -> None:
     workflow = (_ROOT / ".github/workflows/sync-to-main.yml").read_text(encoding="utf-8")
 
     assert all((_ROOT / path).exists() for path in _SHIPPED_OWNERS.values())
@@ -94,7 +94,7 @@ def test_consumer_sync_scopes_have_current_native_owners() -> None:
     assert {path.name for path in (_ROOT / "share/diagrams").iterdir()} == _SHIPPED_DIAGRAMS
 
 
-def test_maintained_docs_have_native_contracts_and_valid_local_links() -> None:
+def test_maintained_docs_have_target_contracts_and_valid_local_links() -> None:
     for relative_path, required_phrases in _MAINTAINED_DOC_CONTRACTS.items():
         path = _ROOT / relative_path
         content = path.read_text(encoding="utf-8")

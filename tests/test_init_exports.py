@@ -1,4 +1,4 @@
-"""Public import inventory for the native delivery package."""
+"""Public import inventory for the target delivery package."""
 
 from __future__ import annotations
 
@@ -7,14 +7,14 @@ import importlib
 import owlbear_kanban
 
 
-def test_native_and_snapshot_exports_remain_callable() -> None:
+def test_target_and_snapshot_exports_remain_callable() -> None:
     required = {
-        "DispatchRuntime",
-        "NativeRuntime",
-        "NativeWorkspace",
-        "RuntimePage",
+        "TargetAuthorityRegistry",
+        "TargetRuntime",
+        "WorkItemProjector",
+        "authorize_target_mutation",
+        "cut_over_target_runtime",
         "create_legacy_snapshot",
-        "load_change",
     }
 
     assert required <= set(owlbear_kanban.__all__)
