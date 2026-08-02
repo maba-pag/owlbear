@@ -98,6 +98,7 @@ class TargetCockpitService:
         )
         return WorkItemDetailResponse(
             card=detail.projection,
+            authority_identity=binding.runtime.authority_digest,
             commitments=commitments,
             acceptance=detail.acceptance,
             task_progress=tuple(item for item in evidence.task_progress if item.scope_id in scope_ids),

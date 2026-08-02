@@ -42,6 +42,7 @@ class WorkItemDetailResponse(_TargetHTTPModel):
     """Compose semantic authority, progress, correction history, and trace links."""
 
     card: WorkItemProjection
+    authority_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
     commitments: tuple[Commitment, ...]
     acceptance: tuple[str, ...]
     task_progress: tuple[TaskProgress, ...]

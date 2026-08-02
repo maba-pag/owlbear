@@ -153,13 +153,14 @@ def test_target_routes_are_not_mounted_on_live_app() -> None:
 
 
 def test_detail_composes_semantics_progress_correction_and_trace_links(tmp_path: Path) -> None:
-    client, _context = _client(tmp_path)
+    client, context = _client(tmp_path)
 
     response = client.get("/api/work-items/OUT-001", params={"change_id": "change-a"})
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["commitments"][0]["commitment_id"] == "COM-001"
+    assert payload["authority_identity"] == context.changes["change-a"].runtime.authority_digest
     assert payload["acceptance"] == ["Observe OUT-001"]
     assert payload["task_progress"] == [{"scope_id": "PLAN-001", "task_count": 1, "reviewed_task_count": 0}]
     assert payload["correction_history"][0]["kind"] == "returned"
