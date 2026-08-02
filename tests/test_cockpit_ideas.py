@@ -265,15 +265,11 @@ class TestIdeasPathDep:
         assert callable(get_ideas_path)
 
     def test_get_ideas_path_returns_path_instance(self, tmp_path: Path) -> None:
-        """AC3: default get_ideas_path implementation returns a Path for a native workspace."""
+        """AC3: default get_ideas_path implementation returns the workspace ideas path."""
         from owlbear_cockpit.deps import get_ideas_path  # noqa: PLC0415
-        from owlbear_kanban import NativeWorkspace  # noqa: PLC0415
 
-        work_root = tmp_path / "kanban"
-        work_root.mkdir()
-
-        result = get_ideas_path(workspace=NativeWorkspace(work_root))
-        assert isinstance(result, Path)
+        result = get_ideas_path(workspace_root=tmp_path)
+        assert result == tmp_path / ".owlbear" / "ideas.md"
 
     def test_dependency_overridable_for_test_isolation(self, tmp_path: Path) -> None:
         """AC3: get_ideas_path is overridable via app.dependency_overrides."""

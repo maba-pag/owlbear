@@ -26,23 +26,16 @@ from owlbear_memory.errors import (
 
 from owlbear_cockpit.deps import get_ideas_path, get_memory_engine
 from owlbear_cockpit.models import HealthModule, IdeasHealth
-from owlbear_cockpit.routes.events import router as events_router
 from owlbear_cockpit.routes.ideas import router as ideas_router
-from owlbear_cockpit.routes.legacy import router as legacy_router
 from owlbear_cockpit.routes.memory import router as memory_router
-from owlbear_cockpit.routes.native_changes import router as native_changes_router
-from owlbear_cockpit.routes.native_controls import router as native_controls_router
-from owlbear_cockpit.routes.native_work import router as native_work_router
+from owlbear_cockpit.routes.target_work import router as target_work_router
+from owlbear_cockpit.target_context import load_target_context
 
 _DEFAULT_PORT = 8420
 _MAX_PORT = 65535
 
 app = FastAPI(title="OwlBear Cockpit")
-app.include_router(events_router, prefix="/api")
-app.include_router(legacy_router, prefix="/api")
-app.include_router(native_changes_router, prefix="/api")
-app.include_router(native_work_router, prefix="/api")
-app.include_router(native_controls_router, prefix="/api")
+app.include_router(target_work_router, prefix="/api")
 app.include_router(ideas_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")
 
@@ -174,13 +167,7 @@ def ideas_health(ideas_path: _IdeasPath) -> IdeasHealth:
     return _ideas_health(ideas_path)
 
 
-def run() -> None:
-    """Start the Cockpit server — entry point for `uv run cockpit`."""
-    from owlbear_memory.engine import MemoryEngine  # noqa: PLC0415
-
-    from owlbear_kanban import NativeWorkspace  # noqa: PLC0415
-
-    # --- port resolution and validation ---
+def _resolve_port() -> int:
     port_str = os.environ.get("COCKPIT_PORT", str(_DEFAULT_PORT))
     try:
         port = int(port_str)
@@ -190,26 +177,47 @@ def run() -> None:
     if not (1 <= port <= _MAX_PORT):
         sys.stderr.write(f"Error: COCKPIT_PORT={port} is out of range (1-{_MAX_PORT}).\n")
         sys.exit(1)
+    return port
 
-    # --- native work root ---
-    work_root_str = os.environ.get("OWLBEAR_WORK_ROOT")
-    work_root = Path(work_root_str) if work_root_str else Path.cwd() / ".owlbear" / "kanban"
-    if not work_root.is_dir():
-        sys.stderr.write(f"Error: native work root not found: {work_root}\n")
+
+def _load_target_runtime() -> tuple[Path, object]:
+    configured_root = os.environ.get("OWLBEAR_WORKSPACE_ROOT", "").strip()
+    workspace_root = (Path(configured_root) if configured_root else Path.cwd()).resolve()
+    configured_request = os.environ.get("OWLBEAR_TARGET_CUTOVER_REQUEST", "").strip()
+    request_path = Path(configured_request) if configured_request else Path(".owlbear/target-cutover-request.json")
+    if not request_path.is_absolute():
+        request_path = workspace_root / request_path
+    try:
+        target_context = load_target_context(workspace_root, request_path.resolve())
+    except RuntimeError as exc:
+        sys.stderr.write(f"Error: {exc}\n")
         sys.exit(1)
+    return workspace_root, target_context
 
-    # --- dist/ directory ---
-    dist_dir = Path(__file__).parent.parent.parent / "dist"
+
+def _resolve_dist_dir() -> Path:
+    configured_dist = os.environ.get("COCKPIT_DIST_DIR", "").strip()
+    dist_dir = Path(configured_dist).resolve() if configured_dist else Path(__file__).parent.parent.parent / "dist"
     if not dist_dir.is_dir():
         sys.stderr.write(f"Error: dist/ directory not found at {dist_dir}. Run `npm run build` first.\n")
         sys.exit(1)
+    return dist_dir
+
+
+def run() -> None:
+    """Start the Cockpit server — entry point for `uv run cockpit`."""
+    from owlbear_memory.engine import MemoryEngine  # noqa: PLC0415
+
+    port = _resolve_port()
+    workspace_root, target_context = _load_target_runtime()
+    dist_dir = _resolve_dist_dir()
 
     # --- runtime init (before uvicorn starts) ---
-    workspace = NativeWorkspace(work_root)
     memory_dir_str = os.environ.get("MEMORY_DIR")
-    memory_dir = Path(memory_dir_str) if memory_dir_str else Path.cwd() / ".owlbear" / "memory"
+    memory_dir = Path(memory_dir_str) if memory_dir_str else workspace_root / ".owlbear" / "memory"
     memory_engine = MemoryEngine(memory_dir)
-    app.state.workspace = workspace
+    app.state.workspace_root = workspace_root
+    app.state.target_context = target_context
     app.state.memory_engine = memory_engine
 
     # --- static file mount and SPA catch-all (inside run() for test isolation) ---

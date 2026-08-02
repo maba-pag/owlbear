@@ -9,9 +9,6 @@ dependencies = [
   "fastapi",
   "uvicorn",
   "pydantic",
-  "ruamel.yaml",
-  "sse-starlette",
-  "watchfiles",
 ]
 
 [build-system]
