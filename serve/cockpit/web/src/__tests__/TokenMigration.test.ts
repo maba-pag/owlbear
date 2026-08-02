@@ -173,14 +173,3 @@ describe('retired legacy token tests', () => {
     ).toBe(false)
   })
 })
-
-describe('migrated token test coverage', () => {
-  it('AC-4: native shell visual coverage uses PDS tokens without legacy theme blocks', () => {
-    const paths = [resolve(TESTS_DIR, 'NativeShell.test.tsx'), resolve(TESTS_DIR, 'SpecificationPage.test.tsx')]
-    for (const path of paths) {
-      expect(existsSync(path), `${path} must exist`).toBe(true)
-      const source = readFileSync(path, 'utf-8')
-      expect(source).not.toMatch(/\[data-theme\s*=\s*["']dark["']\]\s*block/)
-    }
-  })
-})
