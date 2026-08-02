@@ -22,6 +22,7 @@ _EXPECTED_AGENTS = {
     "auditor",
     "build-reviewer",
     "builder",
+    "conceptual-design-reviewer",
     "designer",
     "designer-challenger",
     "knowledge-enricher",
@@ -254,6 +255,7 @@ def test_installed_delivery_ecosystem_is_native_only() -> None:
         "ob-kanban/finish_audit",
     } <= set(orchestrator["tools"])
     assert metadata["builder"]["agents"] == ["build-reviewer"]
+    assert metadata["designer"]["agents"] == ["conceptual-design-reviewer", "designer-challenger", "Explore"]
 
     declared_tools = {tool for agent in metadata.values() for tool in agent.get("tools", []) if isinstance(tool, str)}
     assert declared_tools.isdisjoint(_GENERIC_TASK_TOOLS)

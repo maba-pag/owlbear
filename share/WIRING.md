@@ -43,10 +43,11 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 
 | Agent | Model | Required reading | Delegates | Hooks |
 |-------|-------|------------------|-----------|-------|
-| designer | GPT-5.6 Sol | `w-design-session` | designer-challenger, Explore | None; authority writes are bounded by the role and narrow native tool surface |
-| designer-challenger | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
+| designer | GPT-5.6 Sol | `w-design-session` | conceptual-design-reviewer, designer-challenger, Explore | None; authority writes are bounded by the role and narrow native tool surface |
+| conceptual-design-reviewer | Claude Opus 5 | `r-challenger-protocol`, `h-module-design`, `h-frontend-design` | None | `PreToolUse`: deny writes except scratch |
+| designer-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
 | planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch and terminal mutation; no lifecycle tools |
-| planner-challenger | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
+| planner-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
 | orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, acceptor, auditor, memory-curator, Explore | Native lifecycle tools plus terminal access limited by workflow to exact-HEAD lookup |
 | builder | GPT-5.6 Terra | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | `SessionStart`: repository context; `PostToolUse`: lint changed files |
 | build-reviewer | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | `PreToolUse`: deny writes except scratch |
@@ -103,9 +104,10 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | `w-packet-building` | builder |
 | `w-node-acceptance` | acceptor |
 | `w-whole-change-audit` | auditor |
-| `r-challenger-protocol` | designer-challenger, planner-challenger, build-reviewer |
+| `r-challenger-protocol` | conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer |
 | `h-codebase-orientation` | designer-challenger, planner-challenger, builder, build-reviewer |
 | `h-module-design` | designer-challenger, planner-challenger |
+| `h-frontend-design` | conceptual-design-reviewer |
 | `r-workspace-governance` | builder |
 | `h-ac-quality` | planner-challenger |
 | `w-orchestration` | orchestrator |
@@ -118,6 +120,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 
 | Delegate | Caller | Runtime consequence if unavailable |
 |----------|--------|------------------------------------|
+| conceptual-design-reviewer | designer | A consequential product, workflow, or interaction concept proceeds without independent conceptual challenge |
 | designer-challenger | designer | Native admission lacks required repository-grounded entity challenge evidence |
 | planner | orchestrator | Engine-selected native plan jobs cannot be refined or completed |
 | acceptor | orchestrator | Engine-selected native accept jobs cannot produce independent success, rejection, or blocked dispositions |
@@ -136,7 +139,7 @@ The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignmen
 | Control | Attached roles | Enforcement job |
 |---------|----------------|-----------------|
 | Agent `tools:` allowlist | Every agent | Limits runtime capabilities exposed to the role |
-| `deny-writes.py` | acceptor, auditor, planner, designer-challenger, planner-challenger, build-reviewer | Rejects durable edit-tool writes outside scratch; acceptor, auditor, and planner enable terminal read-only mode |
+| `deny-writes.py` | acceptor, auditor, planner, conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer | Rejects durable edit-tool writes outside scratch; acceptor, auditor, and planner enable terminal read-only mode |
 | `deny-src-writes.py` | test-curator | Restricts writes to tests and scratch |
 | `session-context.py` | builder | Adds repository context at session start |
 | `lint-changed.py` | builder | Runs changed-file checks after tool use |
