@@ -1,4 +1,4 @@
-"""Contained disposable checkouts for acceptance and audit proof."""
+"""Contained exact-commit checkouts for independent target review."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from owlbear_kanban.yaml_rt import make_yaml
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from owlbear_kanban.jobs import JobRecord
+    from owlbear_kanban.target_runtime import TargetJob
 
 
 class ProofCheckoutDiagnosticCode(StrEnum):
@@ -85,19 +85,17 @@ class ProofCheckoutManager:
     def __init__(self, repository: Path, proof_root: Path, authority_root: Path | None = None) -> None:
         self._repository = repository
         self._proof_root = proof_root
-        self._authority_root = authority_root or repository / ".owlbear/changes"
+        self._authority_root = authority_root or repository / ".owlbear/target/changes"
 
-    def materialize(  # noqa: PLR0911
+    def materialize(
         self,
-        job: JobRecord,
+        job: TargetJob,
         commit: str,
         *,
         environment: Mapping[str, str] | None = None,
         replacements: Sequence[str] = (),
     ) -> ProofCheckoutResult:
-        """Create one detached, read-only worktree for an accept or audit job."""
-        if job.kind not in {"accept", "audit"}:
-            return self._diagnostic(ProofCheckoutDiagnosticCode.PATH_UNSAFE, "job kind is not eligible for proof")
+        """Create one detached, read-only worktree for a target claim."""
         paths = self._paths(job.job_id)
         if paths is None:
             return self._diagnostic(ProofCheckoutDiagnosticCode.PATH_UNSAFE, "proof path is not contained")
@@ -118,7 +116,8 @@ class ProofCheckoutManager:
             root.mkdir(mode=0o700)
             root_created = True
             self._git("worktree", "add", "--detach", str(checkout), resolved_commit)
-            shutil.copytree(authority_source, authority, symlinks=True)
+            authority.mkdir(mode=0o700)
+            shutil.copy2(authority_source, authority / "authority.json")
             authority_digest = self._tree_digest(authority)
             self._make_tree_read_only(authority)
             self._make_tracked_files_read_only(checkout)
@@ -137,7 +136,7 @@ class ProofCheckoutManager:
         return ProofCheckoutResult(
             checkout=ProofCheckout(
                 job_id=job.job_id,
-                target=job.target_node_id,
+                target=job.work_item_id,
                 commit=resolved_commit,
                 root=root,
                 checkout=checkout,
@@ -168,11 +167,11 @@ class ProofCheckoutManager:
         except OSError, TypeError, ValueError:
             return None
 
-    def restore(self, job: JobRecord, snapshot: ProofCheckoutSnapshot) -> bool:
+    def restore(self, job: TargetJob, snapshot: ProofCheckoutSnapshot) -> bool:
         """Restore one previously cleaned checkout from its exact manifest authority."""
         if (
             job.job_id != snapshot.job_id
-            or job.target_node_id != snapshot.target
+            or job.work_item_id != snapshot.target
             or self.existing(job.job_id) is not None
         ):
             return False
@@ -307,14 +306,14 @@ class ProofCheckoutManager:
     def _authority_source(self, change_id: str) -> Path | None:
         if self._authority_root.is_symlink():
             return None
-        source = self._authority_root / change_id
+        source = self._authority_root / change_id / "authority.json"
         try:
             root = self._authority_root.resolve(strict=True)
             resolved = source.resolve(strict=True)
             resolved.relative_to(root)
         except OSError, ValueError:
             return None
-        if source.is_symlink() or not resolved.is_dir() or any(path.is_symlink() for path in resolved.rglob("*")):
+        if source.is_symlink() or not resolved.is_file():
             return None
         return resolved
 
@@ -382,7 +381,7 @@ class ProofCheckoutManager:
     @staticmethod
     def _write_manifest(  # noqa: PLR0913, PLR0917
         path: Path,
-        job: JobRecord,
+        job: TargetJob,
         commit: str,
         authority_digest: str,
         environment: Mapping[str, str],
@@ -392,7 +391,7 @@ class ProofCheckoutManager:
         make_yaml(explicit_start=True).dump(
             {
                 "job_id": job.job_id,
-                "target": job.target_node_id,
+                "target": job.work_item_id,
                 "commit": commit,
                 "authority_digest": authority_digest,
                 "environment": dict(sorted(environment.items())),

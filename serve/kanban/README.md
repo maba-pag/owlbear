@@ -1,9 +1,9 @@
 # owlbear-kanban
 
-`owlbear-kanban` is the transport-free native control plane for durable change authority and
-graph-aware Delivery. It validates and admits change revisions, stores purpose-specific jobs and
-attempts, manages Decision and Action Requests, writes immutable receipts and findings, derives
-activity and health views, and preserves hash-verified legacy inventory outside runtime state.
+`owlbear-kanban` is the transport-free control plane for target delivery. It projects semantic work
+items from admitted authority, runs reviewed plan, build, and assembly transformations, coordinates
+one writable worktree per change, preserves exact-commit review evidence, and gates activation with
+an immutable cutover receipt and hash-verified legacy snapshots.
 
 Parent project: [README.md](../../README.md)
 
@@ -15,37 +15,35 @@ The package has no standalone service. Import its public contracts directly, or 
 ```python
 from pathlib import Path
 
-from owlbear_kanban import NativeWorkspace, load_change
+from owlbear_kanban import TargetAuthority, TargetRuntime
 
-workspace = NativeWorkspace(Path(".owlbear/kanban"))
-revision = load_change(workspace.changes_dir, "replace-cache")
+change_root = Path(".owlbear/target/changes/replace-cache")
+authority = TargetAuthority.model_validate_json((change_root / "authority.json").read_bytes())
+runtime = TargetRuntime(authority, change_root)
+ready_jobs = runtime.list_frontier()
 ```
 
 The main public areas are:
 
 | Area | Contracts |
 |------|-----------|
-| Change authority | `load_change`, validation, admission assessment, admission transaction |
-| Work selection | `DispatchRuntime`, dependency-aware job waves, claims, expiry recovery |
-| Job lifecycle | `NativeRuntime`, purpose-specific finish and reject operations |
-| Evidence | Receipt, attempt, finding, activity, health, and proof-checkout contracts |
-| Requests | Native Decision and Action Request creation, inspection, and resolution |
-| History | Immutable legacy snapshot creation and manifest verification |
+| Semantic authority | Commitments, outcomes, task-plan scopes, design re-entry, updates, and summaries |
+| Work projection | Portfolio work items with stage, attention, dependency, and task progress |
+| Transformations | `TargetRuntime` plan, build, and conditional assembly claims with nested review |
+| Coordination | Per-change writers, global capacity, warm worktrees, and merge-only integration |
+| Evidence | Immutable attempts, reviews, receipts, and contained exact-commit proof checkouts |
+| Activation | Snapshot, readiness, mutation authorization, atomic cutover, and receipt verification |
 
-Authority lives under `.owlbear/changes/<change-id>/`. Operational jobs, attempts, requests,
-findings, and activity live under `.owlbear/kanban/`. Successful receipts are immutable authority
-inside the owning change. Legacy snapshots live under `.owlbear/legacy/` and have no compatibility
-reader into the active runtime.
+Authority lives at `.owlbear/target/changes/<change-id>/authority.json`; each sibling
+`target-runtime/` stores that change's job, attempt, request, and receipt evidence. Legacy snapshots
+remain queryable evidence but never become active runtime input.
 
 ## Configuration
 
-`NativeWorkspace` accepts an explicit native work root and an optional positive claim-expiry
-duration. The default claim expiry is one hour. `parse_claim_expiry` accepts positive values such as
-`30m`, `2h`, or `1d`.
-
-The package itself reads no environment variables. Adapters own process configuration; the MCP and
-Cockpit adapters use `OWLBEAR_WORK_ROOT`, defaulting to `.owlbear/kanban` relative to the process
-working directory.
+The package reads no environment variables. Callers pass repository, target-store, proof-checkout,
+worktree, integration-target, and capacity configuration explicitly. MCP, Cockpit, and setup own
+their process-level configuration and must authorize target mutation through the published cutover
+receipt before writing runtime state.
 
 ## Dependencies
 
@@ -53,8 +51,8 @@ working directory.
 |---------|---------|
 | `pydantic` | Strict native schemas and validation |
 | `ruamel.yaml` | Canonical YAML parsing and serialization |
-| `pyyaml` | Delivery document loading |
+| `pyyaml` | Manifest loading |
 
 Filesystem writes use contained paths, locking, immutable create/replay semantics, and transactional
-recovery. Callers should use the package stores and runtimes rather than writing control-plane files
-directly.
+recovery. Callers should use the public target runtimes, coordinators, and cutover operations rather
+than writing authority or runtime files directly.
