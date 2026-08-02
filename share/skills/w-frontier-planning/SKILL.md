@@ -54,6 +54,11 @@ owner_id: <assigned owner>
 reviewer_id: <assigned reviewer>
 candidate_commit: <exact candidate commit>
 plan_claim: <complete task set and proof claim>
+planned_tasks:
+  - task_id: <stable task identity>
+    work_item_id: <started job work item>
+    plan_scope_id: <started job plan scope>
+    title: <bounded implementation result>
 review:
   review_id: <review identity>
   reviewer_id: <assigned reviewer>
@@ -62,6 +67,10 @@ review:
   claim: <specific reviewed claim>
   evidence: [<source-grounded observations>]
 ```
+
+`planned_tasks` is the exact reviewed task set. Return it on every plan disposition so an
+`acceptable` finish can atomically publish the build frontier and repair or arbitration evidence
+retains the reviewed candidate unchanged.
 
 For invalid execution or malformed review evidence, return:
 

@@ -47,7 +47,10 @@ commit, claim text, and non-empty evidence. Call the finish operation matching t
 
 The request contains `job_id`, `attempt_id`, `claim_id`, `owner_id`, `reviewer_id`, `review_id`,
 `candidate_commit`, `reviewed_at`, `disposition`, `claim`, `evidence`, and a fresh `receipt_id` only
-for `acceptable`. Forward owner/reviewer evidence unchanged; never reconstruct it.
+for `acceptable`. For `finish_plan`, also forward the planner's exact `planned_tasks`; the runtime
+binds them into review evidence and publishes build jobs only when the plan is acceptable. Build and
+assembly finishes never carry plan tasks. Forward owner/reviewer evidence unchanged; never
+reconstruct it.
 
 Disposition handling is finite:
 

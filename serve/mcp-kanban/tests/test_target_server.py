@@ -31,6 +31,7 @@ from owlbear_kanban.target_runtime import (
     StartTargetJobRequest,
     TargetJob,
     TargetRuntime,
+    TargetTask,
 )
 from owlbear_mcp_kanban.server import load_target_context, mcp
 from owlbear_mcp_kanban.target_server import TargetAppContext, TargetChangeBinding, assemble_target_server
@@ -238,6 +239,89 @@ def test_target_registry_has_three_kind_lifecycle_without_removed_controls(tmp_p
         assert tool.annotations.idempotentHint is True
         assert tool.annotations.destructiveHint is False
         assert tool.annotations.readOnlyHint is (name.startswith(("list_", "show_")) or name == "validate_change")
+
+
+@pytest.mark.asyncio
+async def test_acceptable_plan_publishes_build_frontier_and_completion(tmp_path: Path) -> None:
+    tools = _tools(assemble_target_server(_context(tmp_path)))
+    await tools["start_job"].fn(
+        "change-a",
+        StartTargetJobRequest(
+            job_id=1,
+            attempt_id="plan-attempt",
+            claim_id="plan-claim",
+            owner_id="planner",
+            reviewer_id="plan-reviewer",
+            process_id="plan-process",
+            started_at="2026-08-03T00:01:00Z",
+            lease_expires_at="2026-08-03T01:01:00Z",
+        ).model_dump(mode="json"),
+    )
+    planned = await tools["finish_plan"].fn(
+        "change-a",
+        FinishTargetJobRequest(
+            job_id=1,
+            attempt_id="plan-attempt",
+            claim_id="plan-claim",
+            owner_id="planner",
+            reviewer_id="plan-reviewer",
+            review_id="plan-review",
+            receipt_id="plan-receipt",
+            candidate_commit="a" * 40,
+            reviewed_at="2026-08-03T00:02:00Z",
+            disposition=ReviewDisposition.ACCEPTABLE,
+            claim="The reviewed plan defines one sufficient task.",
+            evidence=("plan challenge passed",),
+            planned_tasks=(
+                TargetTask(
+                    task_id="TASK-001",
+                    work_item_id="OUT-001",
+                    plan_scope_id="PLAN-001",
+                    title="Build the observable result",
+                ),
+            ),
+        ).model_dump(mode="json"),
+    )
+
+    frontier = await tools["list_frontier"].fn("change-a")
+    assert planned["receipt"]["planned_tasks"][0]["task_id"] == "TASK-001"
+    assert [(job["job_id"], job["kind"], job["task_id"]) for job in frontier] == [(2, "build", "TASK-001")]
+
+    await tools["start_job"].fn(
+        "change-a",
+        StartTargetJobRequest(
+            job_id=2,
+            attempt_id="build-attempt",
+            claim_id="build-claim",
+            owner_id="builder",
+            reviewer_id="build-reviewer",
+            process_id="build-process",
+            started_at="2026-08-03T00:03:00Z",
+            lease_expires_at="2026-08-03T01:03:00Z",
+        ).model_dump(mode="json"),
+    )
+    built = await tools["finish_build"].fn(
+        "change-a",
+        FinishTargetJobRequest(
+            job_id=2,
+            attempt_id="build-attempt",
+            claim_id="build-claim",
+            owner_id="builder",
+            reviewer_id="build-reviewer",
+            review_id="build-review",
+            receipt_id="build-receipt",
+            candidate_commit="b" * 40,
+            reviewed_at="2026-08-03T00:04:00Z",
+            disposition=ReviewDisposition.ACCEPTABLE,
+            claim="The task satisfies its accepted plan.",
+            evidence=("focused build proof passed",),
+        ).model_dump(mode="json"),
+    )
+    detail = await tools["show_work_item"].fn("OUT-001", "change-a")
+
+    assert built["receipt"]["task_id"] == "TASK-001"
+    assert detail["projection"]["stage"] == "completed"
+    assert await tools["list_frontier"].fn("change-a") == []
 
 
 @pytest.mark.asyncio

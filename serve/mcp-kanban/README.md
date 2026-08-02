@@ -41,6 +41,10 @@ approval for that authority digest and atomically publishes authority, runtime s
 admission receipt. An inactive admitted change may be revised; the prior revision is retained by
 digest. Active work blocks revision.
 
+An acceptable `finish_plan` carries the independently reviewed `planned_tasks` and atomically
+publishes their build jobs. The plan receipt retains that exact task payload; build receipts then
+advance task progress, and a declared composition claim adds an assembly job after its builds.
+
 At process startup the server validates the configured cutover request and receipt, confirms the
 bootstrap source remains retired, loads every authority and runtime from `.owlbear/target/changes/`,
 and refuses startup if that boundary is absent or stale.

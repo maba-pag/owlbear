@@ -113,6 +113,24 @@ class StartTargetJobRequest(_TargetModel):
     lease_expires_at: str = Field(min_length=1)
 
 
+class TargetTask(_TargetModel):
+    """One accepted task under a reviewed plan scope."""
+
+    task_id: str = Field(min_length=1)
+    work_item_id: str = Field(min_length=1)
+    plan_scope_id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    reviewed: bool = False
+    build_receipt_id: RuntimeId | None = None
+
+    @model_validator(mode="after")
+    def _validate_reviewed_receipt(self) -> TargetTask:
+        if self.reviewed != (self.build_receipt_id is not None):
+            msg = "reviewed tasks require exactly one build receipt"
+            raise ValueError(msg)
+        return self
+
+
 class FinishTargetJobRequest(_TargetModel):
     """Submit candidate evidence and one independent review disposition."""
 
@@ -129,6 +147,7 @@ class FinishTargetJobRequest(_TargetModel):
     disposition: ReviewDisposition
     claim: str = Field(min_length=1)
     evidence: tuple[str, ...] = Field(min_length=1)
+    planned_tasks: tuple[TargetTask, ...] = ()
 
     @model_validator(mode="after")
     def _validate_receipt_identity(self) -> FinishTargetJobRequest:
@@ -195,24 +214,6 @@ type TargetMutation = Annotated[
 TARGET_MUTATION_ADAPTER = TypeAdapter(TargetMutation)
 
 
-class TargetTask(_TargetModel):
-    """One accepted task under a reviewed plan scope."""
-
-    task_id: str = Field(min_length=1)
-    work_item_id: str = Field(min_length=1)
-    plan_scope_id: str = Field(min_length=1)
-    title: str = Field(min_length=1)
-    reviewed: bool = False
-    build_receipt_id: RuntimeId | None = None
-
-    @model_validator(mode="after")
-    def _validate_reviewed_receipt(self) -> TargetTask:
-        if self.reviewed != (self.build_receipt_id is not None):
-            msg = "reviewed tasks require exactly one build receipt"
-            raise ValueError(msg)
-        return self
-
-
 class TargetReview(_TargetModel):
     """One immutable reviewer decision nested beneath an attempt."""
 
@@ -223,6 +224,7 @@ class TargetReview(_TargetModel):
     disposition: ReviewDisposition
     claim: str = Field(min_length=1)
     evidence: tuple[str, ...] = Field(min_length=1)
+    planned_tasks: tuple[TargetTask, ...] = ()
 
 
 class TargetEvidenceResponse(_TargetModel):
@@ -320,6 +322,7 @@ class TargetReceipt(_TargetModel):
     issued_at: str = Field(min_length=1)
     claim: str = Field(min_length=1)
     evidence: tuple[str, ...] = Field(min_length=1)
+    planned_tasks: tuple[TargetTask, ...] = ()
 
 
 class StartedTargetJob(_TargetModel):
@@ -344,6 +347,7 @@ class _ClosingEvidence(_TargetModel):
     candidate_commit: str
     claim: str
     evidence: tuple[str, ...]
+    planned_tasks: tuple[TargetTask, ...] = ()
     arbiter_id: str | None = None
 
 
@@ -574,6 +578,7 @@ class TargetRuntime:
         state, previous = self._store.read()
         job, attempt = self._active_attempt(state, request.job_id, request.attempt_id, request.claim_id)
         self._validate_review(state, attempt, request)
+        self._validate_planned_tasks(state, job, request.planned_tasks)
         review = TargetReview(
             review_id=request.review_id,
             reviewer_id=request.reviewer_id,
@@ -582,12 +587,14 @@ class TargetRuntime:
             disposition=request.disposition,
             claim=request.claim,
             evidence=request.evidence,
+            planned_tasks=request.planned_tasks,
         )
         reviewed = attempt.model_copy(update={"reviews": (*attempt.reviews, review)})
         transition = self._review_transition(state, job, reviewed, request)
+        updated = self._publish_accepted_plan(transition[0], transition[1], transition[3])
         self._store.replace(
             previous,
-            transition[0],
+            updated,
             receipt=transition[3],
             attempt_events=(transition[4],) if transition[4] is not None else (),
         )
@@ -747,6 +754,23 @@ class TargetRuntime:
         if any(review.review_id == request.review_id for item in state.attempts for review in item.reviews):
             _conflict("review identity already exists")
 
+    def _validate_planned_tasks(
+        self,
+        state: TargetRuntimeState,
+        job: TargetJob,
+        tasks: tuple[TargetTask, ...],
+    ) -> None:
+        if job.kind != "plan" and tasks:
+            _reference("only plan reviews may publish tasks")
+        identities = [task.task_id for task in tasks]
+        if len(identities) != len(set(identities)) or set(identities) & {task.task_id for task in state.tasks}:
+            _conflict("planned task identity already exists")
+        if any(
+            task.work_item_id != job.work_item_id or task.plan_scope_id != job.plan_scope_id or task.reviewed
+            for task in tasks
+        ):
+            _reference("planned task does not belong to the reviewed plan scope")
+
     def _validate_arbitration(self, attempt: TargetAttempt, request: ArbitrateTargetAttemptRequest) -> None:
         if attempt.state != TargetAttemptState.REPAIR or attempt.evidence_response is None:
             _conflict("attempt has no unresolved reviewed disagreement")
@@ -791,6 +815,7 @@ class TargetRuntime:
                 candidate_commit=request.candidate_commit,
                 claim=request.claim,
                 evidence=request.evidence,
+                planned_tasks=request.planned_tasks,
             ),
         )
 
@@ -814,6 +839,7 @@ class TargetRuntime:
                 candidate_commit=last_review.candidate_commit,
                 claim=last_review.claim,
                 evidence=(*last_review.evidence, request.rationale),
+                planned_tasks=last_review.planned_tasks,
                 arbiter_id=request.arbiter_id,
             ),
         )
@@ -862,6 +888,51 @@ class TargetRuntime:
         event = self._attempt_event(job, closed_attempt, event_kind, context)
         return updated, closed_job, closed_attempt, receipt, event
 
+    def _publish_accepted_plan(
+        self,
+        state: TargetRuntimeState,
+        job: TargetJob,
+        receipt: TargetReceipt | None,
+    ) -> TargetRuntimeState:
+        if job.kind != "plan" or receipt is None:
+            return state
+        next_job_id = max((item.job_id for item in state.jobs), default=0) + 1
+        build_jobs = tuple(
+            TargetJob(
+                job_id=next_job_id + index,
+                kind="build",
+                change_id=job.change_id,
+                authority_digest=job.authority_digest,
+                work_item_id=job.work_item_id,
+                plan_scope_id=job.plan_scope_id,
+                task_id=task.task_id,
+                predecessor_job_ids=(job.job_id,),
+                created_at=receipt.issued_at,
+            )
+            for index, task in enumerate(receipt.planned_tasks)
+        )
+        scope = next(item for item in self._authority.task_plan_scopes if item.scope_id == job.plan_scope_id)
+        assembly_jobs: tuple[TargetJob, ...] = ()
+        if scope.composition_claim:
+            assembly_jobs = (
+                TargetJob(
+                    job_id=next_job_id + len(build_jobs),
+                    kind="assembly",
+                    change_id=job.change_id,
+                    authority_digest=job.authority_digest,
+                    work_item_id=job.work_item_id,
+                    plan_scope_id=job.plan_scope_id,
+                    predecessor_job_ids=tuple(item.job_id for item in build_jobs) or (job.job_id,),
+                    created_at=receipt.issued_at,
+                ),
+            )
+        return state.model_copy(
+            update={
+                "jobs": (*state.jobs, *build_jobs, *assembly_jobs),
+                "tasks": (*state.tasks, *receipt.planned_tasks),
+            }
+        )
+
     def _target_receipt(
         self,
         job: TargetJob,
@@ -886,6 +957,7 @@ class TargetRuntime:
             issued_at=closing.timestamp,
             claim=closing.claim,
             evidence=closing.evidence,
+            planned_tasks=closing.planned_tasks,
         )
 
     @staticmethod
