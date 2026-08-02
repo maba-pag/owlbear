@@ -33,8 +33,20 @@ export default defineConfig({
       testMatch: /native-release-assembled\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:8424' },
     },
+    {
+      name: 'work-portfolio',
+      testMatch: /work-portfolio\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:4175' },
+    },
   ],
-  webServer: process.env['NATIVE_RELEASE_E2E']
+  webServer: process.env['WORK_PORTFOLIO_E2E']
+    ? {
+        command: 'vite --host 127.0.0.1 --port 4175',
+        url: 'http://127.0.0.1:4175/work',
+        reuseExistingServer: false,
+        timeout: 120_000,
+      }
+    : process.env['NATIVE_RELEASE_E2E']
     ? {
         command: 'npm run build && node e2e/support/start-native-release-stack.mjs',
         url: 'http://127.0.0.1:8424/health',
