@@ -115,6 +115,5 @@ store/audit/
 .owlbear/memory/*.db
 
 # Lock files (transient runtime artifacts)
-/.storage.lock
-.owlbear/kanban/.storage.lock
+**/.storage.lock
 .owlbear/kanban/activity.jsonl
