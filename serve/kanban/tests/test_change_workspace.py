@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event
 from unittest.mock import patch
 
 import pytest
@@ -15,6 +17,7 @@ from owlbear_kanban.change_workspace import (
     PortfolioDispatcher,
     WriterIdentity,
 )
+from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionParticipant
 from owlbear_kanban.target_authority import Outcome, PlanScopeKind, TargetAuthority, TaskPlanScope
 from owlbear_kanban.target_runtime import TargetJob, TargetRuntime
 
@@ -130,6 +133,31 @@ def _commit_file(worktree: Path, content: str, message: str) -> str:
     return _git(worktree, "rev-parse", "HEAD")
 
 
+def _commit_new_file(worktree: Path, name: str, content: str, message: str) -> str:
+    (worktree / name).write_text(content, encoding="utf-8")
+    _git(worktree, "add", name)
+    _git(worktree, "commit", "-m", message)
+    return _git(worktree, "rev-parse", "HEAD")
+
+
+def test_coordinator_recovers_pending_runtime_transaction(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    participant = TransactionParticipant(state_root, Path("target-runtime/recovered.json"), b"{}\n")
+
+    def interrupt(stage: str) -> None:
+        if stage == "before-publication":
+            message = "injected"
+            raise RuntimeError(message)
+
+    with pytest.raises(RuntimeError, match="injected"):
+        RuntimeTransaction(state_root, "pending-portfolio", (participant,)).commit(failure=interrupt)
+
+    PortfolioCoordinator(state_root, capacity=1)
+
+    assert (state_root / "target-runtime/recovered.json").read_bytes() == b"{}\n"
+    assert not (state_root / ".runtime-transactions/pending-portfolio.yaml").exists()
+
+
 def test_restart_preserves_rejected_head_and_returns_to_reviewed_commit(tmp_path: Path) -> None:
     repository, initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)
@@ -173,6 +201,53 @@ def test_restart_recovers_after_git_succeeds_before_writer_release(tmp_path: Pat
     assert original_release("recover-restart", "claim-recover-restart") == recovered
 
 
+@pytest.mark.parametrize("interruption", ["attempt-ref", "worktree-remove", "branch-reset", "worktree-add"])
+def test_restart_recovers_from_each_git_interruption(tmp_path: Path, interruption: str) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.create(f"restart-{interruption}")
+    rejected = _commit_file(coordination.worktree_path, "rejected\n", "rejected attempt")
+    coordinator.acquire(
+        coordination.change_id,
+        ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build"),
+    )
+    original_git = manager._git
+
+    def interrupt_after_git(*arguments: str, **kwargs) -> str:
+        result = original_git(*arguments, **kwargs)
+        if _restart_stage(arguments, coordination, interruption):
+            message = "injected"
+            raise RuntimeError(message)
+        return result
+
+    with (
+        patch.object(manager, "_git", side_effect=interrupt_after_git),
+        pytest.raises(RuntimeError, match="injected"),
+    ):
+        manager.restart(coordination.change_id, _identity(coordination.change_id).attempt_id, rejected)
+
+    recovered = manager.restart(coordination.change_id, _identity(coordination.change_id).attempt_id, rejected)
+
+    assert _git(repository, "rev-parse", recovered.branch) == initial
+    assert _git(recovered.worktree_path, "rev-parse", "HEAD") == initial
+    assert recovered.writer is None
+
+
+def _restart_stage(
+    arguments: tuple[str, ...],
+    coordination: ChangeCoordination,
+    interruption: str,
+) -> bool:
+    checks = {
+        "attempt-ref": arguments[:2]
+        == ("update-ref", f"refs/owlbear/attempts/{coordination.change_id}/attempt-{coordination.change_id}"),
+        "worktree-remove": arguments[:2] == ("worktree", "remove"),
+        "branch-reset": arguments[:2] == ("update-ref", f"refs/heads/{coordination.branch}"),
+        "worktree-add": arguments[:2] == ("worktree", "add"),
+    }
+    return checks[interruption]
+
+
 def test_integration_uses_merge_commit_and_configured_target_cas(tmp_path: Path) -> None:
     repository, initial = _repository(tmp_path, target="release")
     _coordinator, manager = _manager(tmp_path, repository, target="release")
@@ -211,6 +286,75 @@ def test_integration_retry_recovers_after_target_cas_before_coordination_update(
     assert recovered.merge_commit == target_after_interruption
     assert coordinator.show("recover-integration").target_head == target_after_interruption
     assert _git(coordination.worktree_path, "rev-parse", "HEAD") == target_after_interruption
+
+
+def test_integration_serializes_independent_managers(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    _coordinator_a, manager_a = _manager(tmp_path, repository)
+    coordinator_b = PortfolioCoordinator(tmp_path / "state", capacity=2)
+    manager_b = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator_b, "release")
+    coordination_a = manager_a.create("parallel-a")
+    coordination_b = manager_b.create("parallel-b")
+    reviewed_a = _commit_new_file(coordination_a.worktree_path, "a.txt", "a\n", "change a")
+    reviewed_b = _commit_new_file(coordination_b.worktree_path, "b.txt", "b\n", "change b")
+    manager_a.record_reviewed("parallel-a", reviewed_a)
+    manager_b.record_reviewed("parallel-b", reviewed_b)
+    first_entered = Event()
+    release_first = Event()
+    second_entered = Event()
+    original_a = manager_a._integrate_locked
+    original_b = manager_b._integrate_locked
+
+    def hold_first(change_id: str, reviewed: tuple[str, ...]):
+        first_entered.set()
+        assert release_first.wait(timeout=2)
+        return original_a(change_id, reviewed)
+
+    def mark_second(change_id: str, reviewed: tuple[str, ...]):
+        second_entered.set()
+        return original_b(change_id, reviewed)
+
+    with (
+        patch.object(manager_a, "_integrate_locked", side_effect=hold_first),
+        patch.object(manager_b, "_integrate_locked", side_effect=mark_second),
+        ThreadPoolExecutor(max_workers=2) as executor,
+    ):
+        first = executor.submit(manager_a.integrate, "parallel-a", (reviewed_a,))
+        assert first_entered.wait(timeout=2)
+        second = executor.submit(manager_b.integrate, "parallel-b", (reviewed_b,))
+        assert not second_entered.wait(timeout=0.1)
+        release_first.set()
+        result_a = first.result(timeout=2)
+        result_b = second.result(timeout=2)
+
+    assert result_a.merge_commit is not None
+    assert result_b.merge_commit == _git(repository, "rev-parse", "release")
+    _git(repository, "merge-base", "--is-ancestor", reviewed_a, result_b.merge_commit)
+    _git(repository, "merge-base", "--is-ancestor", reviewed_b, result_b.merge_commit)
+
+
+def test_integration_reports_typed_target_cas_loss_and_retries(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.create("cas-loss")
+    reviewed = _commit_file(coordination.worktree_path, "reviewed\n", "reviewed task")
+    manager.record_reviewed("cas-loss", reviewed)
+    original_git = manager._git
+
+    def reject_target_cas(*arguments: str, **kwargs) -> str:
+        if arguments[:2] == ("update-ref", "refs/heads/release"):
+            raise subprocess.CalledProcessError(1, arguments)
+        return original_git(*arguments, **kwargs)
+
+    with (
+        patch.object(manager, "_git", side_effect=reject_target_cas),
+        pytest.raises(CoordinationConflictError, match="target changed concurrently"),
+    ):
+        manager.integrate("cas-loss", (reviewed,))
+
+    assert _git(repository, "rev-parse", "release") == initial
+    recovered = manager.integrate("cas-loss", (reviewed,))
+    assert recovered.merge_commit == _git(repository, "rev-parse", "release")
 
 
 def test_integration_conflict_emits_finding_without_advancing_target(tmp_path: Path) -> None:

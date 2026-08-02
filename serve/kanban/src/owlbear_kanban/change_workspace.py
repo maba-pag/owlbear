@@ -17,10 +17,12 @@ from owlbear_kanban.runtime_transaction import (
     TransactionConflictError,
     TransactionParticipant,
 )
+from owlbear_kanban.storage_io import locked_roots
 from owlbear_kanban.target_runtime import TargetJob
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from contextlib import AbstractContextManager
 
     from owlbear_kanban.target_runtime import TargetRuntime
 
@@ -128,7 +130,13 @@ class PortfolioCoordinator:
         self._ledger_path = state_root / "target-runtime" / "capacity.json"
         self._capacity = capacity
         state_root.mkdir(parents=True, exist_ok=True)
+        RuntimeTransaction.recover_all(state_root)
         self._initialize_ledger()
+
+    def integration_lock(self) -> AbstractContextManager[None]:
+        """Serialize shared integration-target mutations across portfolio writers."""
+        lock_root = self._state_root / "target-runtime" / "integration-lock"
+        return locked_roots((lock_root,))
 
     def register(self, coordination: ChangeCoordination) -> ChangeCoordination:
         """Create one replayable per-change coordination record."""
@@ -389,6 +397,10 @@ class ChangeWorkspaceManager:
 
     def integrate(self, change_id: str, reviewed_commits: tuple[str, ...]) -> IntegrationResult:
         """Merge one change without rewriting reviewed commits and CAS the configured target."""
+        with self._coordinator.integration_lock():
+            return self._integrate_locked(change_id, reviewed_commits)
+
+    def _integrate_locked(self, change_id: str, reviewed_commits: tuple[str, ...]) -> IntegrationResult:
         coordination = self._coordinator.show(change_id)
         change_head = self._resolve(coordination.branch)
         for commit in reviewed_commits:
@@ -406,12 +418,16 @@ class ChangeWorkspaceManager:
         if merge_commit is None:
             return IntegrationResult(finding=self._publish_integration_finding(coordination, change_head, target_head))
         self._require_merge_commit(merge_commit, reviewed_commits, cwd=coordination.worktree_path)
-        self._git(
-            "update-ref",
-            f"refs/heads/{coordination.integration_target}",
-            merge_commit,
-            target_head,
-        )
+        try:
+            self._git(
+                "update-ref",
+                f"refs/heads/{coordination.integration_target}",
+                merge_commit,
+                target_head,
+            )
+        except subprocess.CalledProcessError as exc:
+            msg = "integration target changed concurrently"
+            raise CoordinationConflictError(msg) from exc
         self._refresh_checked_out_target(coordination.integration_target, merge_commit)
         updated = coordination.model_copy(update={"target_head": merge_commit, "last_reviewed_commit": merge_commit})
         self._coordinator.update(updated)
