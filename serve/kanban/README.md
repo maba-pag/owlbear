@@ -28,6 +28,7 @@ The main public areas are:
 | Area | Contracts |
 |------|-----------|
 | Semantic authority | Commitments, outcomes, task-plan scopes, design re-entry, updates, and summaries |
+| Authority admission | Evidence-complete validation, deterministic initial frontier, revision history, and immutable receipts |
 | Work projection | Portfolio work items with stage, attention, dependency, and task progress |
 | Transformations | `TargetRuntime` plan, build, and conditional assembly claims with nested review |
 | Coordination | Per-change writers, global capacity, warm worktrees, and merge-only integration |

@@ -9,6 +9,7 @@ def test_package_root_exports_target_runtime_without_retired_execution() -> None
     required = {
         "ChangeWorkspaceManager",
         "PortfolioDispatcher",
+        "TargetAuthorityRegistry",
         "TargetAuthority",
         "TargetRuntime",
         "TargetCutoverResult",

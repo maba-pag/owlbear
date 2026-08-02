@@ -1,4 +1,4 @@
-"""Semantic authority for the dormant target delivery runtime."""
+"""Semantic authority for the target delivery runtime."""
 
 from __future__ import annotations
 
