@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 
 _GIT_EXECUTABLE = "/usr/bin/git"
 _MERGE_RECORD_PARTS = 3
+_OCC_RETRY_LIMIT = 8
 
 
 class _WorkspaceModel(BaseModel):
@@ -179,27 +180,30 @@ class PortfolioCoordinator:
 
     def release(self, change_id: str, claim_id: str) -> ChangeCoordination:
         """Release one exact writer and its capacity slot."""
-        coordination_path = self._coordination_path(change_id)
-        coordination_bytes = coordination_path.read_bytes()
-        coordination = ChangeCoordination.model_validate_json(coordination_bytes)
-        ledger_bytes = self._ledger_path.read_bytes()
-        ledger = CapacityLedger.model_validate_json(ledger_bytes)
-        if coordination.writer is None or coordination.writer.claim_id != claim_id:
-            _coordination_conflict("writer claim does not own the change workspace")
-        released = coordination.model_copy(update={"writer": None})
-        available = ledger.model_copy(
-            update={"change_ids": tuple(item for item in ledger.change_ids if item != change_id)}
-        )
-        participants = (
-            _replacement(self._state_root, coordination_path, coordination_bytes, released),
-            _replacement(self._state_root, self._ledger_path, ledger_bytes, available),
-        )
-        try:
-            self._commit(f"release-{change_id}-{claim_id}", participants)
-        except TransactionConflictError as exc:
-            msg = "writer coordination changed concurrently"
-            raise CoordinationConflictError(msg) from exc
-        return released
+        for _attempt in range(_OCC_RETRY_LIMIT):
+            coordination_path = self._coordination_path(change_id)
+            coordination_bytes = coordination_path.read_bytes()
+            coordination = ChangeCoordination.model_validate_json(coordination_bytes)
+            ledger_bytes = self._ledger_path.read_bytes()
+            ledger = CapacityLedger.model_validate_json(ledger_bytes)
+            if coordination.writer is None and change_id not in ledger.change_ids:
+                return coordination
+            if coordination.writer is None or coordination.writer.claim_id != claim_id:
+                _coordination_conflict("writer claim does not own the change workspace")
+            released = coordination.model_copy(update={"writer": None})
+            available = ledger.model_copy(
+                update={"change_ids": tuple(item for item in ledger.change_ids if item != change_id)}
+            )
+            participants = (
+                _replacement(self._state_root, coordination_path, coordination_bytes, released),
+                _replacement(self._state_root, self._ledger_path, ledger_bytes, available),
+            )
+            try:
+                self._commit(f"release-{change_id}-{claim_id}", participants)
+            except TransactionConflictError:
+                continue
+            return released
+        return _coordination_conflict("writer coordination remained concurrent")
 
     def update(self, coordination: ChangeCoordination) -> ChangeCoordination:
         """OCC-replace one registered per-change record without touching capacity."""
@@ -354,24 +358,33 @@ class ChangeWorkspaceManager:
         coordination = self._coordinator.show(change_id)
         if coordination.writer is None or coordination.writer.attempt_id != attempt_id:
             _coordination_conflict("restart attempt does not own the change writer")
-        if self._resolve(coordination.branch) != rejected_head:
-            _workspace_failure("rejected head is not the current change branch")
+        branch_head = self._resolve(coordination.branch)
         worktree = coordination.worktree_path
-        if self._git("-C", str(worktree), "status", "--porcelain"):
-            _workspace_failure("restart requires a clean committed change worktree")
         attempt_ref = f"refs/owlbear/attempts/{change_id}/{attempt_id}"
         self._git("check-ref-format", attempt_ref)
-        if self._resolve(attempt_ref, missing_ok=True) is not None:
-            _workspace_failure("attempt history ref already exists")
-        self._git("update-ref", attempt_ref, rejected_head, "0" * 40)
-        self._git("worktree", "remove", str(worktree))
-        self._git(
-            "update-ref",
-            f"refs/heads/{coordination.branch}",
-            coordination.last_reviewed_commit,
-            rejected_head,
-        )
-        self._git("worktree", "add", str(worktree), coordination.branch)
+        preserved = self._resolve(attempt_ref, missing_ok=True)
+        if preserved is not None and preserved != rejected_head:
+            _workspace_failure("attempt history ref names another rejected head")
+        if branch_head not in {rejected_head, coordination.last_reviewed_commit}:
+            _workspace_failure("change branch is outside the recoverable restart states")
+        if preserved is None:
+            if branch_head != rejected_head:
+                _workspace_failure("rejected head is not the current change branch")
+            self._git("update-ref", attempt_ref, rejected_head, "0" * 40)
+        if branch_head == rejected_head:
+            if worktree.exists():
+                if self._git("-C", str(worktree), "status", "--porcelain"):
+                    _workspace_failure("restart requires a clean committed change worktree")
+                self._git("worktree", "remove", str(worktree))
+            self._git(
+                "update-ref",
+                f"refs/heads/{coordination.branch}",
+                coordination.last_reviewed_commit,
+                rejected_head,
+            )
+        if not worktree.exists():
+            self._git("worktree", "add", str(worktree), coordination.branch)
+        self._require_worktree(worktree, coordination.branch, coordination.last_reviewed_commit)
         return self._coordinator.release(change_id, coordination.writer.claim_id)
 
     def integrate(self, change_id: str, reviewed_commits: tuple[str, ...]) -> IntegrationResult:
@@ -381,31 +394,65 @@ class ChangeWorkspaceManager:
         for commit in reviewed_commits:
             self._require_ancestor(commit, change_head)
         target_head = self._resolve(coordination.integration_target)
-        integration_worktree = self._worktree_root / f".integration-{change_id}"
-        if integration_worktree.exists():
-            _workspace_failure("integration worktree already exists")
+        if target_head == change_head:
+            self._require_merge_commit(change_head, reviewed_commits, cwd=coordination.worktree_path)
+            synchronized = coordination.model_copy(
+                update={"target_head": change_head, "last_reviewed_commit": change_head}
+            )
+            self._coordinator.update(synchronized)
+            return IntegrationResult(merge_commit=change_head)
         self._require_clean_checked_out_target(coordination.integration_target)
-        self._git("worktree", "add", "--detach", str(integration_worktree), target_head)
-        try:
-            self._git("-C", str(integration_worktree), "merge", "--no-ff", "--no-edit", coordination.branch)
-        except subprocess.CalledProcessError:
-            self._git("-C", str(integration_worktree), "merge", "--abort", check=False)
-            self._git("worktree", "remove", "--force", str(integration_worktree))
+        merge_commit = self._merge_target(coordination, change_head, target_head)
+        if merge_commit is None:
             return IntegrationResult(finding=self._publish_integration_finding(coordination, change_head, target_head))
-        merge_commit = self._resolve("HEAD", cwd=integration_worktree)
-        self._require_merge_commit(merge_commit, reviewed_commits, cwd=integration_worktree)
-        self._git("worktree", "remove", str(integration_worktree))
+        self._require_merge_commit(merge_commit, reviewed_commits, cwd=coordination.worktree_path)
         self._git(
             "update-ref",
             f"refs/heads/{coordination.integration_target}",
             merge_commit,
             target_head,
         )
-        self._git("-C", str(coordination.worktree_path), "merge", "--ff-only", merge_commit)
         self._refresh_checked_out_target(coordination.integration_target, merge_commit)
         updated = coordination.model_copy(update={"target_head": merge_commit, "last_reviewed_commit": merge_commit})
         self._coordinator.update(updated)
         return IntegrationResult(merge_commit=merge_commit)
+
+    def _merge_target(
+        self,
+        coordination: ChangeCoordination,
+        change_head: str,
+        target_head: str,
+    ) -> str | None:
+        worktree = coordination.worktree_path
+        if self._git("-C", str(worktree), "status", "--porcelain"):
+            _workspace_failure("integration requires a clean change worktree")
+        if self._is_ancestor(target_head, change_head, cwd=worktree):
+            tree = self._git("-C", str(worktree), "rev-parse", f"{change_head}^{{tree}}")
+            merge_commit = self._git(
+                "-C",
+                str(worktree),
+                "commit-tree",
+                tree,
+                "-p",
+                change_head,
+                "-p",
+                target_head,
+                "-m",
+                f"Integrate {coordination.change_id}",
+            )
+            self._git(
+                "update-ref",
+                f"refs/heads/{coordination.branch}",
+                merge_commit,
+                change_head,
+            )
+            return merge_commit
+        try:
+            self._git("-C", str(worktree), "merge", "--no-ff", "--no-edit", target_head)
+        except subprocess.CalledProcessError:
+            self._git("-C", str(worktree), "merge", "--abort", check=False)
+            return None
+        return self._resolve("HEAD", cwd=worktree)
 
     def _publish_integration_finding(
         self,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -147,6 +148,31 @@ def test_restart_preserves_rejected_head_and_returns_to_reviewed_commit(tmp_path
     assert restarted.writer is None
 
 
+def test_restart_recovers_after_git_succeeds_before_writer_release(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.create("recover-restart")
+    rejected = _commit_file(coordination.worktree_path, "rejected\n", "rejected attempt")
+    coordinator.acquire(
+        "recover-restart",
+        ChangeWriter(**_identity("recover-restart").model_dump(), job_id=1, kind="build"),
+    )
+    original_release = coordinator.release
+
+    with (
+        patch.object(coordinator, "release", side_effect=CoordinationConflictError("injected")),
+        pytest.raises(CoordinationConflictError, match="injected"),
+    ):
+        manager.restart("recover-restart", "attempt-recover-restart", rejected)
+
+    recovered = manager.restart("recover-restart", "attempt-recover-restart", rejected)
+
+    assert _git(repository, "rev-parse", "refs/owlbear/attempts/recover-restart/attempt-recover-restart") == rejected
+    assert _git(repository, "rev-parse", recovered.branch) == initial
+    assert recovered.writer is None
+    assert original_release("recover-restart", "claim-recover-restart") == recovered
+
+
 def test_integration_uses_merge_commit_and_configured_target_cas(tmp_path: Path) -> None:
     repository, initial = _repository(tmp_path, target="release")
     _coordinator, manager = _manager(tmp_path, repository, target="release")
@@ -160,9 +186,31 @@ def test_integration_uses_merge_commit_and_configured_target_cas(tmp_path: Path)
     assert result.merge_commit is not None
     assert _git(repository, "rev-parse", "release") == result.merge_commit
     assert _git(repository, "rev-parse", "main") == initial
-    assert len(_git(repository, "rev-list", "--parents", "-n", "1", result.merge_commit).split()) == 3
+    merge_record = _git(repository, "rev-list", "--parents", "-n", "1", result.merge_commit).split()
+    assert merge_record == [result.merge_commit, reviewed, initial]
     _git(repository, "merge-base", "--is-ancestor", reviewed, result.merge_commit)
     assert _git(coordination.worktree_path, "rev-parse", "HEAD") == result.merge_commit
+
+
+def test_integration_retry_recovers_after_target_cas_before_coordination_update(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.create("recover-integration")
+    reviewed = _commit_file(coordination.worktree_path, "reviewed\n", "reviewed task")
+    manager.record_reviewed("recover-integration", reviewed)
+
+    with (
+        patch.object(coordinator, "update", side_effect=CoordinationConflictError("injected")),
+        pytest.raises(CoordinationConflictError, match="injected"),
+    ):
+        manager.integrate("recover-integration", (reviewed,))
+
+    target_after_interruption = _git(repository, "rev-parse", "release")
+    recovered = manager.integrate("recover-integration", (reviewed,))
+
+    assert recovered.merge_commit == target_after_interruption
+    assert coordinator.show("recover-integration").target_head == target_after_interruption
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == target_after_interruption
 
 
 def test_integration_conflict_emits_finding_without_advancing_target(tmp_path: Path) -> None:
