@@ -185,7 +185,7 @@ async def test_live_context_requires_receipt_and_hot_binds_admitted_authority(tm
     with pytest.raises(RuntimeError, match="valid cutover request and receipt"):
         load_target_context(workspace, request_path)
 
-    cut_over_target_runtime(workspace, request, smoke=lambda _root, _request: None)
+    initial_cutover = cut_over_target_runtime(workspace, request, smoke=lambda _root, _request: None)
     context = load_target_context(workspace, request_path)
 
     assert context.changes.keys() == {"change-a"}
@@ -214,9 +214,18 @@ async def test_live_context_requires_receipt_and_hot_binds_admitted_authority(tm
     admitted = await tools["admit_change"].fn(admission.model_dump(mode="json"))
     replayed = await tools["admit_change"].fn(admission.model_dump(mode="json"))
 
+    cutover_replay = cut_over_target_runtime(workspace, request, smoke=lambda _root, _request: None)
+    restarted_context = load_target_context(workspace, request_path)
+    restarted_tools = _tools(assemble_target_server(restarted_context))
+    restarted_replay = await restarted_tools["admit_change"].fn(admission.model_dump(mode="json"))
+
     assert admitted["replayed"] is False
     assert replayed["replayed"] is True
     assert context.changes["change-b"].runtime.list_frontier()[0].work_item_id == "OUT-002"
+    assert cutover_replay.replayed is True
+    assert cutover_replay.receipt.receipt_id == initial_cutover.receipt.receipt_id
+    assert restarted_context.changes.keys() == {"change-a", "change-b"}
+    assert restarted_replay["replayed"] is True
 
 
 def test_target_registry_has_three_kind_lifecycle_without_removed_controls(tmp_path: Path) -> None:
