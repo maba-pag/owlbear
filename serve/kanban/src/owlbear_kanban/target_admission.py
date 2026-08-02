@@ -172,6 +172,16 @@ class TargetAuthorityRegistry:
             _model_content(receipt),
         )
         participants, replayed = self._publication_participants(relative_root, content)
+        if replayed:
+            current_state = TargetRuntimeState.model_validate_json(
+                (self._target_root / relative_root / "target-runtime/state.json").read_bytes()
+            )
+            return TargetAdmissionResult(
+                authority=authority,
+                runtime_state=current_state,
+                receipt=receipt,
+                replayed=True,
+            )
         transaction_id = f"admit-{authority.change_id}-{assessment.authority_digest}"
         try:
             RuntimeTransaction(self._target_root, transaction_id, participants).commit()
@@ -203,11 +213,8 @@ class TargetAuthorityRegistry:
         current = tuple(
             path.read_bytes() if present else None for path, present in zip(destinations, existing, strict=True)
         )
-        if current == content:
-            return tuple(
-                TransactionParticipant(self._target_root, path, replacement)
-                for path, replacement in zip(relative_paths, content, strict=True)
-            ), True
+        if current[0] == content[0] and current[2] == content[2]:
+            return (), True
         return self._revision_participants(relative_paths, current, content), False
 
     def _revision_participants(

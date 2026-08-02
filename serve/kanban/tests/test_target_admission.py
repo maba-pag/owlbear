@@ -89,6 +89,34 @@ def test_admission_atomically_publishes_dependency_frontier_and_replays(tmp_path
     assert registry.show_authority("target-change") == candidate.authority
 
 
+def test_admission_replay_preserves_advanced_runtime_state(tmp_path: Path) -> None:
+    target_root = tmp_path / "target"
+    registry = TargetAuthorityRegistry(target_root)
+    candidate = _candidate()
+    request = _request(registry, candidate)
+    registry.admit(request)
+    runtime = TargetRuntime(candidate.authority, target_root / "changes/target-change")
+    active = runtime.start_job(
+        StartTargetJobRequest(
+            job_id=1,
+            attempt_id="attempt-one",
+            claim_id="claim-one",
+            owner_id="owner-one",
+            reviewer_id="reviewer-one",
+            process_id="123",
+            started_at="2026-08-04T00:02:00+00:00",
+            lease_expires_at="2026-08-04T01:02:00+00:00",
+        )
+    )
+
+    replay = registry.admit(request)
+
+    assert replay.replayed is True
+    assert replay.runtime_state.jobs[0] == active.job
+    assert replay.runtime_state.attempts == (active.attempt,)
+    assert runtime.show_job(1) == active.job
+
+
 def test_validation_rejects_incomplete_challenge_and_stale_approval(tmp_path: Path) -> None:
     registry = TargetAuthorityRegistry(tmp_path / "target")
     candidate = _candidate()
