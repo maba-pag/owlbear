@@ -15,6 +15,13 @@ from owlbear_kanban.change_workspace import (
     WriterGrant,
     WriterIdentity,
 )
+from owlbear_kanban.design_package import (
+    DesignCheckpointResult,
+    DesignPackageConflictError,
+    DesignPackageManifest,
+    DesignPackageResult,
+    DesignPackageStore,
+)
 from owlbear_kanban.proof_checkout import (
     ProofCheckout,
     ProofCheckoutDiagnostic,
@@ -138,6 +145,11 @@ __all__ = [
     "CommitmentClass",
     "CompletionSummary",
     "CoordinationConflictError",
+    "DesignCheckpointResult",
+    "DesignPackageConflictError",
+    "DesignPackageManifest",
+    "DesignPackageResult",
+    "DesignPackageStore",
     "DesignReentryBriefing",
     "FinishTargetJobRequest",
     "FinishedTargetJob",
