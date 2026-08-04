@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from owlbear_kanban.identities import ChangeId, Digest
 from owlbear_kanban.runtime_transaction import (
+    ReplacementTransactionParticipant,
     RuntimeTransaction,
     TransactionConflictError,
     TransactionParticipant,
@@ -82,6 +83,17 @@ class DesignPackageResult(_PackageModel):
     replayed: bool
 
 
+class VerifiedDesignPackage(_PackageModel):
+    """Exact verified bytes and identity of one active Design package."""
+
+    change_id: ChangeId
+    package_id: Digest
+    intent_bytes: bytes
+    design_bytes: bytes
+    authority_bytes: bytes
+    manifest: DesignPackageManifest
+
+
 class DesignCheckpointResult(_PackageModel):
     """One package-history checkpoint selected by its dedicated ref."""
 
@@ -145,6 +157,90 @@ class DesignPackageStore:
                 raise DesignPackageConflictError(message) from exc
             raise
         return self._result(change_id, manifest, package_id, replayed=False)
+
+    def read_verified(self, change_id: str) -> VerifiedDesignPackage:
+        """Return exact package bytes after validating their manifest binding."""
+        _validate_change_id(change_id)
+        RuntimeTransaction.recover_all(self._active_root)
+        with locked_roots((self._active_root,)):
+            manifest, content = self._verify_package(change_id)
+            return VerifiedDesignPackage(
+                change_id=change_id,
+                package_id=_digest(manifest.canonical_bytes()),
+                intent_bytes=content["intent.md"],
+                design_bytes=content["design.md"],
+                authority_bytes=content["authority.json"],
+                manifest=manifest,
+            )
+
+    def publish_contract(
+        self,
+        change_id: str,
+        expected_package_id: str,
+        contract_bytes: bytes,
+        validation_callback: Callable[[bytes, bytes, bytes], None],
+    ) -> VerifiedDesignPackage:
+        """Atomically bind validated generated authority to unchanged authored bytes."""
+        package = self.read_verified(change_id)
+        if package.package_id != expected_package_id:
+            message = f"Design package changed before contract publication: {change_id}"
+            raise DesignPackageConflictError(message)
+        manifest = DesignPackageManifest.from_content(
+            change_id,
+            package.intent_bytes,
+            package.design_bytes,
+            contract_bytes,
+        )
+        relative_root = Path(change_id)
+        participants = (
+            ReplacementTransactionParticipant(
+                self._active_root,
+                relative_root / "intent.md",
+                package.intent_bytes,
+                package.intent_bytes,
+            ),
+            ReplacementTransactionParticipant(
+                self._active_root,
+                relative_root / "design.md",
+                package.design_bytes,
+                package.design_bytes,
+            ),
+            ReplacementTransactionParticipant(
+                self._active_root,
+                relative_root / "authority.json",
+                package.authority_bytes,
+                contract_bytes,
+            ),
+            ReplacementTransactionParticipant(
+                self._active_root,
+                relative_root / _MANIFEST_NAME,
+                package.manifest.canonical_bytes(),
+                manifest.canonical_bytes(),
+            ),
+        )
+        transaction = RuntimeTransaction(
+            self._active_root,
+            f"design-contract-{change_id}-{expected_package_id}-{_digest(contract_bytes)}",
+            participants,
+        )
+
+        def validate(stage: str) -> None:
+            if stage == "before-publication":
+                validation_callback(package.intent_bytes, package.design_bytes, contract_bytes)
+
+        try:
+            transaction.commit(failure=validate)
+        except Exception:
+            transaction.abort()
+            raise
+        return VerifiedDesignPackage(
+            change_id=change_id,
+            package_id=_digest(manifest.canonical_bytes()),
+            intent_bytes=package.intent_bytes,
+            design_bytes=package.design_bytes,
+            authority_bytes=contract_bytes,
+            manifest=manifest,
+        )
 
     def checkpoint(self, change_id: str) -> DesignCheckpointResult:
         """Checkpoint verified package bytes without touching product Git state."""
