@@ -431,42 +431,12 @@ class PortfolioApplication:
                 if isinstance(source, DeliveryAcquisitionFailure):
                     failures.append(source)
                     continue
-                coordination = source.coordination
-                claim = self._new_claim(candidate.role, candidate.task_id)
-                candidate.runtime.activate_claim(
-                    ActivateDeliveryClaim(outcome_id=candidate.binding.outcome_id, claim=claim)
-                )
+                launch = self._activate_candidate(candidate, source)
                 available -= 1
-                writer = None
-                if candidate.role == DeliveryWorkerRole.BUILDER:
-                    try:
-                        coordination = self._coordinator.acquire(
-                            candidate.change_id,
-                            ChangeWriter(
-                                attempt_id=claim.attempt_id,
-                                claim_id=claim.claim_id,
-                                actor_id=claim.owner_id,
-                                process_id=claim.process_id,
-                                claimed_at=claim.started_at,
-                                job_id=1,
-                                kind="build",
-                            ),
-                        )
-                    except CoordinationConflictError as exc:
-                        failures.append(
-                            DeliveryAcquisitionFailure(
-                                change_id=candidate.change_id,
-                                outcome_id=candidate.binding.outcome_id,
-                                attempt_id=claim.attempt_id,
-                                claim_id=claim.claim_id,
-                                code=exc.code,
-                                detail=str(exc),
-                                retry_condition="Remove the exact failed claim after reconciling writer custody.",
-                            )
-                        )
-                        continue
-                    writer = coordination.writer
-                launches.append(self._launch_package(candidate, claim, source, writer))
+                if isinstance(launch, DeliveryAcquisitionFailure):
+                    failures.append(launch)
+                    continue
+                launches.append(launch)
             return DeliveryAcquisitionResult(
                 launch_packages=tuple(launches),
                 integration_ready_change_ids=integration_ready,
@@ -845,6 +815,41 @@ class PortfolioApplication:
                 retry_condition="Restore the admitted package and clean reviewed source boundary.",
             )
         return _PreparedSource(package, coordination, source_head)
+
+    def _activate_candidate(
+        self,
+        candidate: _Candidate,
+        source: _PreparedSource,
+    ) -> DeliveryLaunchPackage | DeliveryAcquisitionFailure:
+        claim = self._new_claim(candidate.role, candidate.task_id)
+        candidate.runtime.activate_claim(ActivateDeliveryClaim(outcome_id=candidate.binding.outcome_id, claim=claim))
+        writer = None
+        if candidate.role == DeliveryWorkerRole.BUILDER:
+            try:
+                coordination = self._coordinator.acquire(
+                    candidate.change_id,
+                    ChangeWriter(
+                        attempt_id=claim.attempt_id,
+                        claim_id=claim.claim_id,
+                        actor_id=claim.owner_id,
+                        process_id=claim.process_id,
+                        claimed_at=claim.started_at,
+                        job_id=1,
+                        kind="build",
+                    ),
+                )
+            except CoordinationConflictError as exc:
+                return DeliveryAcquisitionFailure(
+                    change_id=candidate.change_id,
+                    outcome_id=candidate.binding.outcome_id,
+                    attempt_id=claim.attempt_id,
+                    claim_id=claim.claim_id,
+                    code=exc.code,
+                    detail=str(exc),
+                    retry_condition="Remove the exact failed claim after reconciling writer custody.",
+                )
+            writer = coordination.writer
+        return self._launch_package(candidate, claim, source, writer)
 
     def _current_launch(
         self,
