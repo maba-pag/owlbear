@@ -31,6 +31,8 @@ The server exposes 23 tools:
 ## Configuration
 
 `OWLBEAR_DELIVERY_CONFIG` is required and names a strict JSON document:
+`setup/init.py` creates `.owlbear/delivery-config.json`, wires its absolute path into the seeded
+`ob-kanban` environment, and preserves local edits on later setup runs.
 
 ```json
 {
@@ -57,7 +59,7 @@ The server exposes 23 tools:
   "assembly-reviewer": {
    "worker_agent": "build-reviewer",
    "worker_model": "review-model",
-   "reviewer_agent": "integration-reviewer",
+    "reviewer_agent": "build-reviewer",
    "reviewer_model": "review-model"
   }
  }

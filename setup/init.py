@@ -63,6 +63,7 @@ _SKIP_NAMES = frozenset({"scratch-pad.txt"})
 _SKIP_IF_EXISTS_REL = frozenset(
     {
         ".github/copilot-instructions.md",
+        ".owlbear/delivery-config.json",
         ".editorconfig",
         ".gitattributes",
         ".markdownlint-cli2.jsonc",
@@ -120,6 +121,7 @@ def _build_replacements(owlbear_dir: Path, target_dir: Path) -> dict[str, str]:
     return {
         "owlbear_rel_path": Path(os.path.relpath(owlbear_dir, target_dir)).as_posix(),
         "owlbear_abs_path": str(owlbear_dir.resolve()),
+        "target_abs_path": str(target_dir.resolve()),
     }
 
 

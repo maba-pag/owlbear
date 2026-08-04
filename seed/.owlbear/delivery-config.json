@@ -1,0 +1,29 @@
+{
+  "package_root": "{{target_abs_path}}/.owlbear/delivery/packages",
+  "target_root": "{{target_abs_path}}/.owlbear/target",
+  "repository_root": "{{target_abs_path}}",
+  "worktree_root": "{{target_abs_path}}/.owlbear/worktrees",
+  "execution_capacity": 4,
+  "writer_capacity": 1,
+  "integration_target": "main",
+  "role_policies": {
+    "planner": {
+      "worker_agent": "planner",
+      "worker_model": "GPT-5.6 Sol (copilot)",
+      "reviewer_agent": "planner-challenger",
+      "reviewer_model": "Claude Opus 5 (copilot)"
+    },
+    "builder": {
+      "worker_agent": "builder",
+      "worker_model": "GPT-5.6 Terra (copilot)",
+      "reviewer_agent": "build-reviewer",
+      "reviewer_model": "Claude Sonnet 5 (copilot)"
+    },
+    "assembly-reviewer": {
+      "worker_agent": "build-reviewer",
+      "worker_model": "Claude Sonnet 5 (copilot)",
+      "reviewer_agent": "build-reviewer",
+      "reviewer_model": "Claude Sonnet 5 (copilot)"
+    }
+  }
+}

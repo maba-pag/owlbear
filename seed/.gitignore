@@ -75,6 +75,9 @@ playwright-report/
 .owlbear/knowledge/vectors/
 .owlbear/memory/*.db
 
+# Host-local Delivery startup configuration
+/.owlbear/delivery-config.json
+
 # Lock files (transient runtime artifacts)
 .owlbear/target/**/.storage.lock
 .owlbear/target-cutover.pending

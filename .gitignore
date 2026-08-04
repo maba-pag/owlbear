@@ -114,6 +114,9 @@ store/audit/
 .owlbear/knowledge/vectors/
 .owlbear/memory/*.db
 
+# Host-local Delivery startup configuration
+/.owlbear/delivery-config.json
+
 # Lock files (transient runtime artifacts)
 **/.storage.lock
 .owlbear/kanban/activity.jsonl
