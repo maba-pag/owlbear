@@ -16,6 +16,7 @@ from owlbear_kanban.completed_history import (
     CompletedHistoryMissingError,
 )
 from owlbear_kanban.delivery_runtime import DeliveryRuntimeReferenceError
+from owlbear_kanban.design_package import DesignPackageConflictError
 from owlbear_kanban.runtime_transaction import TransactionPathError
 from owlbear_mcp_kanban.target_server import (
     DELIVERY_OPERATION_ANNOTATIONS,
@@ -99,6 +100,13 @@ def _requests() -> dict[str, dict[str, object]]:
     claim = {**change, "outcome_id": "OUT-001", "attempt_id": "attempt", "claim_id": "claim"}
     return {
         "create_design_session": {**change, "intent_bytes": "intent", "design_bytes": "design"},
+        "read_design_session": change,
+        "revise_design_session": {
+            **change,
+            "expected_package_id": DIGEST,
+            "intent_bytes": "intent",
+            "design_bytes": "design",
+        },
         "publish_design_checkpoint": change,
         "derive_delivery_contract": change,
         "validate_delivery_contract": change,
@@ -180,6 +188,7 @@ async def test_invalid_parameters_fail_before_application_delegation(operation_n
 
 def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact() -> None:
     reads = {
+        "read_design_session",
         "derive_delivery_contract",
         "validate_delivery_contract",
         "list_work_items",
@@ -217,6 +226,20 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
 
 
 @pytest.mark.asyncio
+async def test_revise_design_session_rejects_non_digest_identity_before_delegation() -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+    request = {**_requests()["revise_design_session"], "expected_package_id": "not-a-digest"}
+
+    with pytest.raises(ToolError) as exc_info:
+        await adapter.revise_design_session(request)
+
+    diagnostic = json.loads(str(exc_info.value))
+    assert diagnostic["code"] == "ERR_TARGET_PARAM_VALIDATION"
+    assert application.calls == []
+
+
+@pytest.mark.asyncio
 async def test_named_runtime_catalog_and_integration_failures_preserve_diagnostics() -> None:
     catalog_error = CompletedHistoryMissingError(
         CompletedHistoryDiagnostic(
@@ -237,6 +260,12 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             "admit_reviewed_integration_repair",
             CoordinationConflictError("repair authority is stale"),
             "ERR_TARGET_COORDINATION_CONFLICT",
+            True,
+        ),
+        (
+            "revise_design_session",
+            DesignPackageConflictError("package identity is stale"),
+            "ERR_DESIGN_PACKAGE_CONFLICT",
             True,
         ),
         ("integrate_ready_change", TransactionPathError(), "ERR_TRANSACTION_PATH_UNSAFE", False),

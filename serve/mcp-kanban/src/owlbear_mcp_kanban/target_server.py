@@ -34,6 +34,7 @@ from owlbear_mcp_kanban.target_models import (
     IntegrationRepairParams,
     PublishDeliveryPlanParams,
     PublishDeliveryResultParams,
+    ReviseDesignSessionParams,
     SearchCompletedParams,
     ShowCompletedParams,
     TargetDiagnostic,
@@ -47,6 +48,8 @@ _ACQUIRE = ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructive
 
 DELIVERY_OPERATION_NAMES = (
     "create_design_session",
+    "read_design_session",
+    "revise_design_session",
     "publish_design_checkpoint",
     "derive_delivery_contract",
     "validate_delivery_contract",
@@ -70,6 +73,7 @@ DELIVERY_OPERATION_NAMES = (
 )
 _DELIVERY_READS = frozenset(
     {
+        "read_design_session",
         "derive_delivery_contract",
         "validate_delivery_contract",
         "list_work_items",
@@ -132,6 +136,24 @@ class TargetMCPAdapter:
             params,
             lambda: self._application.create_design_session(
                 params.change_id,
+                params.intent_bytes,
+                params.design_bytes,
+            ),
+        )
+
+    async def read_design_session(self, request: dict[str, object]) -> dict[str, object]:
+        """Read one verified authored Design session and its current identity."""
+        params = self._validate(ChangeParams, request)
+        return self._call(params, lambda: self._application.read_design_session(params.change_id))
+
+    async def revise_design_session(self, request: dict[str, object]) -> dict[str, object]:
+        """Replace authored Design bytes for one exact package identity."""
+        params = self._validate(ReviseDesignSessionParams, request)
+        return self._call(
+            params,
+            lambda: self._application.revise_design_session(
+                params.change_id,
+                params.expected_package_id,
                 params.intent_bytes,
                 params.design_bytes,
             ),

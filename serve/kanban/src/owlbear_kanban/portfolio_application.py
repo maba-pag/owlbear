@@ -490,6 +490,20 @@ class PortfolioApplication:
         """Create or replay one exact authored Design package."""
         return self._package_store.create(change_id, intent_bytes, design_bytes)
 
+    def read_design_session(self, change_id: str) -> VerifiedDesignPackage:
+        """Return one verified authored Design package and its current identity."""
+        return self._package_store.read_verified(change_id)
+
+    def revise_design_session(
+        self,
+        change_id: str,
+        expected_package_id: str,
+        intent_bytes: bytes,
+        design_bytes: bytes,
+    ) -> VerifiedDesignPackage:
+        """Replace authored Design bytes for one exact package identity."""
+        return self._package_store.revise(change_id, expected_package_id, intent_bytes, design_bytes)
+
     def publish_design_checkpoint(self, change_id: str) -> DesignCheckpointResult:
         """Checkpoint one verified active package without touching product refs."""
         return self._package_store.checkpoint(change_id)

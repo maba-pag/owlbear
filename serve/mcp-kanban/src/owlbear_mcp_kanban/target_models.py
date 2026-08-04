@@ -73,6 +73,12 @@ class CreateDesignSessionParams(ChangeParams):
     design_bytes: bytes
 
 
+class ReviseDesignSessionParams(CreateDesignSessionParams):
+    """Validate one compare-and-swap authored Design revision."""
+
+    expected_package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class WorkItemParams(ChangeParams):
     """Validate one exact work item within a Delivery change."""
 
@@ -150,6 +156,7 @@ __all__ = [
     "IntegrationRepairParams",
     "PublishDeliveryPlanParams",
     "PublishDeliveryResultParams",
+    "ReviseDesignSessionParams",
     "SearchCompletedParams",
     "ShowCompletedParams",
     "TargetDiagnostic",

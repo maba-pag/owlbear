@@ -342,6 +342,25 @@ def test_delivery_loader_rejects_git_and_state_identity_before_composition(tmp_p
     assert not (runtime_root / "target-runtime").exists()
 
 
+def test_design_session_read_and_revision_delegate_to_package_store(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(tmp_path, {})
+    created = application.create_design_session("composed-delivery", b"intent\n", b"design\n")
+
+    current = application.read_design_session("composed-delivery")
+    revised = application.revise_design_session(
+        "composed-delivery",
+        current.package_id,
+        b"revised intent\n",
+        b"revised design\n",
+    )
+
+    assert current.package_id == created.package_id
+    assert revised == application.read_design_session("composed-delivery")
+    assert revised.intent_bytes == b"revised intent\n"
+    assert revised.design_bytes == b"revised design\n"
+    assert revised.authority_bytes == b""
+
+
 def test_design_compilation_and_admission_delegate_without_extra_mutation(tmp_path: Path) -> None:
     application, _runtimes, _coordinator, state_root = _portfolio(tmp_path, {})
     intent = b"""# Composed Delivery

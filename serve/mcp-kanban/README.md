@@ -18,11 +18,11 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 ### Tools
 
-The server exposes 21 tools:
+The server exposes 23 tools:
 
 | Area | Tools |
 |------|-------|
-| Design | `create_design_session`, `publish_design_checkpoint`, `derive_delivery_contract`, `validate_delivery_contract`, `admit_delivery_change` |
+| Design | `create_design_session`, `read_design_session`, `revise_design_session`, `publish_design_checkpoint`, `derive_delivery_contract`, `validate_delivery_contract`, `admit_delivery_change` |
 | Portfolio | `list_work_items`, `show_work_item`, `acquire_frontier_work`, `show_plan_context`, `show_build_context` |
 | Delivery | `publish_delivery_plan`, `publish_delivery_result`, `transition_delivery`, `recover_claim` |
 | Integration | `list_integration_ready_changes`, `show_integration_attention`, `integrate_ready_change`, `admit_reviewed_integration_repair` |

@@ -86,6 +86,103 @@ def test_previsibility_failure_leaves_no_package_and_clean_replay_succeeds(repos
     assert _package_bytes(active_root)["authority.json"] == b""
 
 
+def test_revise_cas_replaces_authored_bytes_and_clears_generated_authority(
+    repository: Path,
+    tmp_path: Path,
+) -> None:
+    active_root = tmp_path / "active-packages"
+    store = DesignPackageStore(active_root, repository)
+    created = store.create("sample-change", b"intent\n", b"design\n")
+
+    replayed = store.revise("sample-change", created.package_id, b"intent\n", b"design\n")
+    published = store.publish_contract(
+        "sample-change",
+        replayed.package_id,
+        b'{"authority":true}\n',
+        lambda *_content: None,
+    )
+    cleared = store.revise("sample-change", published.package_id, b"intent\n", b"design\n")
+    republished = store.publish_contract(
+        "sample-change",
+        cleared.package_id,
+        b'{"authority":true}\n',
+        lambda *_content: None,
+    )
+    revised = store.revise("sample-change", republished.package_id, b"new intent\n", b"new design\n")
+
+    assert replayed.package_id == created.package_id
+    assert published.package_id != created.package_id
+    assert cleared.package_id == created.package_id
+    assert cleared.authority_bytes == b""
+    assert revised.package_id not in {created.package_id, republished.package_id}
+    assert revised.intent_bytes == b"new intent\n"
+    assert revised.design_bytes == b"new design\n"
+    assert revised.authority_bytes == b""
+    assert store.read_verified("sample-change") == revised
+
+
+def test_revise_rejects_stale_identity_without_mutation(repository: Path, tmp_path: Path) -> None:
+    active_root = tmp_path / "active-packages"
+    store = DesignPackageStore(active_root, repository)
+    store.create("sample-change", b"intent\n", b"design\n")
+    original = _package_bytes(active_root)
+
+    with pytest.raises(DesignPackageConflictError, match="changed before authored revision"):
+        store.revise("sample-change", "0" * 64, b"new intent\n", b"new design\n")
+
+    assert _package_bytes(active_root) == original
+
+
+@pytest.mark.parametrize("failure_stage", ["before-publication", "before-manifest-cleanup"])
+def test_revise_handled_failure_restores_verified_old_package(
+    failure_stage: str,
+    repository: Path,
+    tmp_path: Path,
+) -> None:
+    active_root = tmp_path / "active-packages"
+    original_store = DesignPackageStore(active_root, repository)
+    created = original_store.create("sample-change", b"intent\n", b"design\n")
+    original = original_store.read_verified("sample-change")
+
+    def interrupt(stage: str) -> None:
+        if stage == failure_stage:
+            message = "injected revision failure"
+            raise RuntimeError(message)
+
+    failing_store = DesignPackageStore(active_root, repository, failure=interrupt)
+    with pytest.raises(RuntimeError, match="injected revision failure"):
+        failing_store.revise("sample-change", created.package_id, b"new intent\n", b"new design\n")
+
+    assert DesignPackageStore(active_root, repository).read_verified("sample-change") == original
+    assert not list((active_root / ".runtime-transactions").glob("*.yaml"))
+
+
+def test_revise_recovers_interrupted_publication_to_verified_new_package(
+    repository: Path,
+    tmp_path: Path,
+) -> None:
+    active_root = tmp_path / "active-packages"
+    original_store = DesignPackageStore(active_root, repository)
+    created = original_store.create("sample-change", b"intent\n", b"design\n")
+
+    class SimulatedProcessExit(BaseException):
+        pass
+
+    def interrupt(stage: str) -> None:
+        if stage == "after-first-publication":
+            raise SimulatedProcessExit
+
+    interrupted_store = DesignPackageStore(active_root, repository, failure=interrupt)
+    with pytest.raises(SimulatedProcessExit):
+        interrupted_store.revise("sample-change", created.package_id, b"new intent\n", b"new design\n")
+
+    recovered = DesignPackageStore(active_root, repository).read_verified("sample-change")
+    assert recovered.intent_bytes == b"new intent\n"
+    assert recovered.design_bytes == b"new design\n"
+    assert recovered.authority_bytes == b""
+    assert not list((active_root / ".runtime-transactions").glob("*.yaml"))
+
+
 def test_checkpoint_updates_only_package_history_and_replays_identical_content(
     repository: Path,
     tmp_path: Path,

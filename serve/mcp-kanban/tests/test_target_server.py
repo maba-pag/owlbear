@@ -37,6 +37,8 @@ from owlbear_mcp_kanban.target_server import assemble_target_server
 
 DELIVERY_TOOLS = {
     "create_design_session",
+    "read_design_session",
+    "revise_design_session",
     "publish_design_checkpoint",
     "derive_delivery_contract",
     "validate_delivery_contract",
@@ -59,6 +61,7 @@ DELIVERY_TOOLS = {
     "show_completed_change",
 }
 READ_TOOLS = {
+    "read_design_session",
     "derive_delivery_contract",
     "validate_delivery_contract",
     "list_work_items",

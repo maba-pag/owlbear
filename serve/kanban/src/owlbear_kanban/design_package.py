@@ -223,6 +223,62 @@ class DesignPackageStore:
                 manifest=manifest,
             )
 
+    def revise(
+        self,
+        change_id: str,
+        expected_package_id: str,
+        intent_bytes: bytes,
+        design_bytes: bytes,
+    ) -> VerifiedDesignPackage:
+        """Atomically replace authored bytes for one exact package identity."""
+        package = self.read_verified(change_id)
+        if package.package_id != expected_package_id:
+            message = f"Design package changed before authored revision: {change_id}"
+            raise DesignPackageConflictError(message)
+        manifest = DesignPackageManifest.from_content(change_id, intent_bytes, design_bytes)
+        current = {
+            "authority.json": package.authority_bytes,
+            "design.md": package.design_bytes,
+            "intent.md": package.intent_bytes,
+            _MANIFEST_NAME: package.manifest.canonical_bytes(),
+        }
+        replacement = {
+            "authority.json": b"",
+            "design.md": design_bytes,
+            "intent.md": intent_bytes,
+            _MANIFEST_NAME: manifest.canonical_bytes(),
+        }
+        relative_root = Path(change_id)
+        transaction = RuntimeTransaction(
+            self._active_root,
+            f"design-revision-{change_id}-{expected_package_id}-{_digest(manifest.canonical_bytes())}",
+            tuple(
+                ReplacementTransactionParticipant(
+                    self._active_root,
+                    relative_root / name,
+                    current[name],
+                    replacement[name],
+                )
+                for name in _PACKAGE_NAMES
+            ),
+        )
+        try:
+            transaction.commit(failure=self._failure)
+        except Exception as exc:
+            transaction.abort()
+            if isinstance(exc, TransactionConflictError):
+                message = f"Design package changed during authored revision: {change_id}"
+                raise DesignPackageConflictError(message) from exc
+            raise
+        return VerifiedDesignPackage(
+            change_id=change_id,
+            package_id=_digest(manifest.canonical_bytes()),
+            intent_bytes=intent_bytes,
+            design_bytes=design_bytes,
+            authority_bytes=b"",
+            manifest=manifest,
+        )
+
     def publish_contract(
         self,
         change_id: str,
