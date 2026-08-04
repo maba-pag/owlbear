@@ -68,14 +68,20 @@ repository.
 
 ## Delivery Evidence
 
-Cockpit projects the target evidence model without becoming authority:
+Cockpit projects current Delivery state and user-owned controls without becoming authority:
 
 | Surface | Authority |
 |---------|-----------|
-| Admitted commitments, outcomes, scopes, and design re-entry | `.owlbear/target/changes/<change-id>/authority.json` |
-| Jobs, tasks, attempts, requests, and receipts | `.owlbear/target/changes/<change-id>/target-runtime/` |
+| Outcome portfolio | Admitted outcomes, dependencies, Planning/Build stages, and task progress from `PortfolioApplication` |
+| Actionable attention | Typed requests, requestless blocks, long-idle claims, revision attention, and Integration attention |
+| User controls | Answer request, clear block, recover a confirmed-dead exact claim, move backward, and retry Integration |
+| Completed history | Bounded list, semantic search, and exact completed-change lookup |
 | Cockpit activation authority | `.owlbear/target-cutover-request.json` and its immutable receipt |
-| Successful delivery evidence | Immutable target runtime receipts |
+
+Cockpit calls the same transport-free application owners used by the MCP adapter but exposes the
+answer-bearing and administrative controls reserved for users. It does not schedule work, choose
+worker transitions, interpret reviewer evidence, repair source, or update the Integration target on
+its own.
 
 ## Configuration
 

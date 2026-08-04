@@ -46,7 +46,7 @@ _SHIPPED_DIAGRAMS = {
 }
 
 _MAINTAINED_DOC_CONTRACTS = {
-    Path("README.md"): (".owlbear/target/", "plan, build, and conditional assembly"),
+    Path("README.md"): (".owlbear/target/",),
     Path("README-consumer.md"): ("/design", "/orchestrate", "OWLBEAR_WORKSPACE_ROOT"),
     Path("SECURITY.md"): ("## Supported Versions", "## Reporting a Vulnerability", "## Disclosure Policy"),
     Path("setup/setup-guide.md"): ("## Target Delivery Workflow", "setup/finalize.py"),

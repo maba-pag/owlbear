@@ -5,10 +5,12 @@ On-demand AI development through semantic authority, reviewed delivery, and GitH
 ## Overview
 
 OwlBear runs inside VS Code. A designer turns user intent into durable target authority, validates
-the exact revision, and admits it only after explicit approval. The delivery engine then selects
-independently reviewed plan, build, and conditional assembly transformations, with finite correction
-routing when review does not accept a claim. MCP servers expose the control plane, Knowledge,
-Memory, and browser automation; Cockpit provides the human operating surface.
+the exact Specification revision, and admits it only after explicit approval. The Delivery engine
+then acquires dependency-ready Planning and Build work under explicit capacity, gives each worker
+bounded typed context, and applies only worker-owned transitions. Reviewers provide advisory
+evidence; the runtime owns state, recovery, Integration, and completed history. MCP servers expose
+that control plane plus Knowledge, Memory, and browser automation; Cockpit provides the human
+operating and recovery surface.
 
 The `dev` branch is the development workspace. The `main` branch is a generated consumer subset and
 must not be edited directly. Immutable records from the retired workflow may remain under

@@ -124,27 +124,93 @@ entry, so setup does not seed a separate memory store.
 
 ## Target Delivery Workflow
 
-Use `/ideate` when the starting idea needs a one-question-at-a-time refinement interview. Use
-`/design` to create or resume one durable target design session. The designer keeps product intent,
-decisions, technical design, delivery obligations, and proof boundaries together, then validates
-and admits the exact approved revision under `.owlbear/target/changes/<change-id>/`.
+This section is the canonical operator procedure. The
+[Kanban MCP reference](../serve/mcp-kanban/README.md) lists the exact public tools and startup
+configuration, [WIRING.md](../share/WIRING.md) maps agent authority and loading, and the
+[Cockpit package guide](../serve/cockpit/README.md) covers launch and configuration for the human
+control surface.
 
-After admission, invoke `/orchestrate <change-id>`. The orchestrator asks the engine for eligible
-jobs, delegates `plan` to a planner and `build` or conditional `assembly` to a builder, and preserves
-an independent reviewer for each attempt. Jobs reference semantic authority; they do not copy it
-into task files.
+### Specification
+
+Use `/ideate` when a rough idea needs a one-question-at-a-time refinement interview. Use `/design`
+to create or resume one durable change. The Designer reads the current owner-computed package
+identity, revises the complete authored intent and design through compare-and-swap, checkpoints the
+unchanged revision, derives and validates Delivery authority, and asks for explicit approval before
+admission. A stale package identity returns to read and reconcile; agents never edit package
+internals or reconstruct package identity.
+
+Expected outcome: one approved Specification revision is admitted under the configured target root
+with deterministic outcomes, dependencies, commitments, and proof boundaries.
+
+### Delivery
+
+After admission, invoke `/orchestrate <change-id>`. Each cycle lists current work, acquires a bounded
+ordered set of launch packages, dispatches only the worker named by each package, forwards the
+worker's transition unchanged, and invokes Integration only for engine-provided ready change IDs.
+
+- Planning reads one typed plan context, publishes one independently reviewed task chain, and
+  returns `advance`, `retry`, `return`, or `block`.
+- Build reads one typed task and custody context, commits only its maintained surfaces, publishes
+  one independently reviewed exact-commit result, and returns the same transition set.
+- Reviewers return only `pass` or `finding` with source-grounded evidence. They never publish,
+  repair, choose transitions, or mutate lifecycle state.
+
+Expected outcome: outcomes move through Planning and Build under separate execution and writer
+capacity without Orchestrator scheduling judgment or conversation-derived authority.
+
+### Correction And Recovery
+
+Worker transitions keep correction finite and typed:
+
+| Condition | Owner and control | Resume behavior |
+|-----------|-------------------|-----------------|
+| Local implementation defect | Builder creates a bounded follow-up commit and requests fresh exact-commit review | Continue the same Build claim only after a fresh pass |
+| Missing user decision or action | Worker returns `block` with an embedded request | Answer the request in Cockpit; fresh context carries the structured resolution |
+| Requestless condition is satisfied | User clears the block in Cockpit | Engine recomputes eligibility |
+| Retryable worker condition | Worker returns `retry` with exact claim and source boundary | Runtime clears the claim and recomputes same-stage eligibility |
+| Planning or Design premise failed | Worker returns `return` with evidence and target | Runtime persists successor context; Design reopen is currently manual through `/design` |
+| Claim owner is confirmed dead | User recovers the exact claim in Cockpit | Runtime preserves or clears custody according to exact workspace evidence |
+| Earlier valid stage is required | User selects an invariant-checked backward move in Cockpit | Runtime resets only the selected outcome and its affected successors |
+
+Do not recover a live claim or infer recovery from elapsed time alone. Request answers, requestless
+unblock, confirmed-dead claim recovery, backward movement, and Integration retry remain user-owned
+Cockpit controls rather than agent MCP operations.
+
+### Integration And Completed History
+
+When every outcome is complete and the reviewed source boundary is current, a normal orchestration
+cycle asks the runtime to integrate the engine-provided ready change ID. Integration validates the
+package, reviewed source, target identity, and completed-history boundary before publishing the
+product tree and recoverable package snapshot atomically to the configured target.
+
+Failure preserves completed outcomes and publishes typed Integration attention with unchanged
+heads and a retry condition. Use Cockpit to inspect the attention and retry conditions that do not
+require source repair. For `merge-conflict`, invoke `/integration-repair <change-id>`: Builder may
+create one additive repair commit limited to the original conflict paths, obtain independent review,
+and admit only a pass. Repair admission advances the reviewed source boundary; it does not update
+the target. Run normal `/orchestrate <change-id>` afterward so the runtime owns the Integration
+retry. Cockpit and the MCP completed-change tools provide bounded list, search, and exact lookup of
+published history.
+
+### Current Manual Boundaries
+
+- Assembly remains a live stage, projection, and required startup policy type, but current compiled
+  contracts do not require it and the agent MCP surface has no Assembly context or result-publication
+  operation. An unexpected Assembly launch is recovered by exact claim identity rather than run.
+- Design return persists structured successor context, but reopening and revising the Specification
+  currently starts with a manual `/design` invocation.
+- Merge-conflict repair is deliberately user-invoked; neither Orchestrator nor Integration edits
+  source automatically.
+- Files under `.owlbear/research/` are frozen comparison evidence, not operational or runtime
+  authority. Files under `.owlbear/legacy/` are immutable historical evidence only.
 
 ```text
 /ideate -> /design -> explicit admission -> /orchestrate
-Authority: design -> validate -> explicit admission
-Delivery: plan -> build -> conditional assembly
-Review: acceptable | repair | restart | task-plan | solution-plan | design
+Specification: read/revise -> checkpoint -> derive -> validate -> approve/admit
+Delivery: acquire -> plan/build -> publish -> worker transition
+Correction: retry | return | block -> typed successor context
+Integration: ready -> publish target + completed package -> completed lookup
 ```
-
-An `acceptable` independent review creates an immutable target receipt. One repair round may retain
-the same owner and reviewer; restart and planning/design dispositions route correction explicitly.
-Historical records under `.owlbear/legacy/` are hash-verified read-only inventory and never
-execution authority.
 
 ---
 
@@ -170,8 +236,8 @@ this shows chronological tool calls, LLM requests, and prompt discovery events.
 
 ## Launch Cockpit
 
-Cockpit is the browser UI for target changes, delivery jobs, requests, evidence, Memory, Ideas, and
-immutable legacy inventory. Launch it from the project root
+Cockpit is the browser UI for target work items, requests, typed attention, recovery controls,
+completed history, Memory, Ideas, and immutable legacy inventory. Launch it from the project root
 so it reads this project's target request/receipt, `.owlbear/target/`, and `.owlbear/memory/`.
 
 1. Open a terminal in the project directory.
