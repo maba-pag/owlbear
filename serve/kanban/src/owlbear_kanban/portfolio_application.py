@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -32,27 +32,45 @@ from owlbear_kanban.delivery_runtime import (
     DeliveryIntegrationCandidate,
     DeliveryIntegrationCompletion,
     DeliveryIntegrationRepair,
+    DeliveryPlanCandidate,
     DeliveryRecoveryAttention,
     DeliveryRequest,
+    DeliveryResultCandidate,
     DeliveryReturnContext,
     DeliveryRuntime,
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
+    DeliveryTransition,
     DeliveryWorkerRole,
     OutcomeAuthorityBinding,
+    PublishDeliveryPlan,
+    PublishDeliveryResult,
 )
 from owlbear_kanban.design_package import (
     CompletionCapture,
     CompletionPackageSnapshot,
+    DesignCheckpointResult,
     DesignPackageConflictError,
+    DesignPackageResult,
 )
-from owlbear_kanban.target_contract import DeliveryCommitment, DeliveryOutcome
+from owlbear_kanban.target_contract import (
+    DeliveryCommitment,
+    DeliveryCompilationResult,
+    DeliveryOutcome,
+    compile_delivery_contract,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from owlbear_kanban.design_package import DesignPackageStore, VerifiedDesignPackage
+    from owlbear_kanban.target_admission import (
+        DeliveryAdmissionRequest,
+        DeliveryAdmissionResult,
+        DeliveryAuthorityRegistry,
+    )
+    from owlbear_kanban.work_items import WorkItemDetail, WorkItemProjection, WorkItemProjector
 
 _COMPLETED_ROOT = ".owlbear/completed"
 
@@ -239,9 +257,11 @@ class PortfolioApplicationDependencies:
     """Existing state owners composed by the portfolio application service."""
 
     package_store: DesignPackageStore
+    authority_registry: DeliveryAuthorityRegistry
     coordinator: PortfolioCoordinator
     workspace_manager: ChangeWorkspaceManager
     candidate_proof: Callable[[DeliveryIntegrationCandidate, str], tuple[str, ...]] = _reject_unconfigured_candidate
+    work_item_projectors: Mapping[str, WorkItemProjector] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -291,10 +311,12 @@ class PortfolioApplication:
             raise ValueError(message)
         self._runtimes = dict(runtimes)
         self._package_store = dependencies.package_store
+        self._authority_registry = dependencies.authority_registry
         self._package_root = config.package_root.resolve()
         self._coordinator = dependencies.coordinator
         self._workspace_manager = dependencies.workspace_manager
         self._candidate_proof = dependencies.candidate_proof
+        self._work_item_projectors = dict(dependencies.work_item_projectors)
         self._execution_capacity = config.execution_capacity
         self._policies = {policy.worker_role: policy for policy in config.role_policies}
         self._identity_factory = hooks.identity_factory if hooks else lambda: str(uuid.uuid4())
@@ -304,14 +326,94 @@ class PortfolioApplication:
             else lambda: datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         )
 
+    def create_design_session(
+        self,
+        change_id: str,
+        intent_bytes: bytes,
+        design_bytes: bytes,
+    ) -> DesignPackageResult:
+        """Create or replay one exact authored Design package."""
+        return self._package_store.create(change_id, intent_bytes, design_bytes)
+
+    def publish_design_checkpoint(self, change_id: str) -> DesignCheckpointResult:
+        """Checkpoint one verified active package without touching product refs."""
+        return self._package_store.checkpoint(change_id)
+
+    def derive_delivery_contract(self, change_id: str) -> DeliveryCompilationResult:
+        """Compile one verified package without publishing generated authority."""
+        package = self._package_store.read_verified(change_id)
+        return compile_delivery_contract(change_id, package.intent_bytes, package.design_bytes)
+
+    def validate_delivery_contract(self, change_id: str) -> DeliveryCompilationResult:
+        """Return deterministic compiler diagnostics for one verified package."""
+        return self.derive_delivery_contract(change_id)
+
+    def admit_delivery_change(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult:
+        """Admit source-bound Delivery authority through the owning registry."""
+        return self._authority_registry.admit(request)
+
+    def publish_delivery_plan(
+        self,
+        change_id: str,
+        request: PublishDeliveryPlan,
+    ) -> DeliveryPlanCandidate:
+        """Publish one validated Planning candidate through its exact runtime."""
+        return self._runtime(change_id).publish_plan(request)
+
+    def publish_delivery_result(
+        self,
+        change_id: str,
+        request: PublishDeliveryResult,
+    ) -> DeliveryResultCandidate:
+        """Publish one validated Build result through its exact runtime."""
+        return self._runtime(change_id).publish_result(request)
+
+    def transition_delivery(
+        self,
+        change_id: str,
+        request: DeliveryTransition,
+    ) -> OutcomeAuthorityBinding:
+        """Apply one validated mechanical transition through its exact runtime."""
+        return self._runtime(change_id).transition(request)
+
+    def list_integration_ready_changes(self) -> tuple[str, ...]:
+        """List unclaimed Integration-ready changes in stable identity order."""
+        return tuple(
+            change_id
+            for change_id, runtime in sorted(self._runtimes.items())
+            if runtime.change_stage() == DeliveryChangeStage.INTEGRATION and not runtime.active_claims()
+        )
+
+    def show_integration_attention(self, change_id: str) -> DeliveryIntegrationAttention | None:
+        """Return current typed Integration attention without mutating runtime state."""
+        return self._runtime(change_id).integration_attention()
+
+    def list_work_items(self) -> tuple[WorkItemProjection, ...]:
+        """List bounded work-item projections in stable portfolio order."""
+        projections = (item for projector in self._work_item_projectors.values() for item in projector.list_items())
+        return tuple(
+            sorted(
+                projections,
+                key=lambda item: (
+                    item.stage.value == "completed",
+                    item.change_id,
+                    item.work_item_id,
+                ),
+            )
+        )
+
+    def show_work_item(self, change_id: str, work_item_id: str) -> WorkItemDetail:
+        """Show bounded semantic detail from one exact change projector."""
+        try:
+            projector = self._work_item_projectors[change_id]
+        except KeyError as exc:
+            self._fail(f"work-item projector is absent: {change_id}", exc)
+        return projector.show(work_item_id)
+
     def acquire_frontier_work(self) -> DeliveryAcquisitionResult:
         """Start stable ready claims and reserve writer custody only for Build."""
         with self._coordinator.acquisition_lock():
-            integration_ready = tuple(
-                change_id
-                for change_id, runtime in sorted(self._runtimes.items())
-                if runtime.change_stage() == DeliveryChangeStage.INTEGRATION
-            )
+            integration_ready = self.list_integration_ready_changes()
             occupied = sum(len(runtime.active_claims()) for runtime in self._runtimes.values())
             available = max(self._execution_capacity - occupied, 0)
             launches: list[DeliveryLaunchPackage] = []
