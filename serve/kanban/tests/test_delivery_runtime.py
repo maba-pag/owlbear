@@ -285,3 +285,24 @@ def test_administrative_backward_move_invalidates_completed_dependents_only(tmp_
     assert runtime.show_binding("OUT-003").stage == DeliveryStage.COMPLETED
     assert runtime.show_binding("OUT-003").result_ids == ("RESULT-003",)
     assert runtime.change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
+
+
+def test_administrative_move_preserves_active_dependent_claim(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.IMPLEMENTATION, DeliveryStage.COMPLETED),
+    )
+    runtime.activate_claim(ActivateDeliveryClaim(outcome_id="OUT-002", claim_id="claim-002"))
+    active_dependent = runtime.show_binding("OUT-002")
+
+    result = runtime.administrative_move(
+        AdministrativeDeliveryMove(
+            move_id="move-001",
+            outcome_id="OUT-001",
+            target=DeliveryStage.PLANNING,
+            reason="The foundation result was invalidated by operator evidence.",
+        )
+    )
+
+    assert result.invalidated_outcome_ids == ("OUT-001",)
+    assert runtime.show_binding("OUT-002") == active_dependent

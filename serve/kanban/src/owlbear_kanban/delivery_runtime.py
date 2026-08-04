@@ -437,7 +437,7 @@ class DeliveryRuntime:
         binding = _find_binding(frontier, request.outcome_id)
         if _STAGE_ORDER[request.target] >= _STAGE_ORDER[binding.stage]:
             _conflict("administrative movement must target an earlier stage")
-        invalidated = _dependent_closure(self._contract, request.outcome_id)
+        invalidated = _completed_dependent_closure(self._contract, frontier, request.outcome_id)
         updated_bindings = tuple(
             _reset_binding(item, request.target if item.outcome_id == request.outcome_id else DeliveryStage.PLANNING)
             if item.outcome_id in invalidated
@@ -579,11 +579,19 @@ def _reset_binding(binding: OutcomeAuthorityBinding, stage: DeliveryStage) -> Ou
     )
 
 
-def _dependent_closure(contract: DeliveryContract, outcome_id: str) -> set[str]:
+def _completed_dependent_closure(
+    contract: DeliveryContract,
+    frontier: DeliveryFrontier,
+    outcome_id: str,
+) -> set[str]:
+    bindings = {binding.outcome_id: binding for binding in frontier.bindings}
     invalidated = {outcome_id}
     while True:
         expanded = invalidated | {
-            outcome.outcome_id for outcome in contract.outcomes if set(outcome.dependency_ids) & invalidated
+            outcome.outcome_id
+            for outcome in contract.outcomes
+            if bindings[outcome.outcome_id].stage == DeliveryStage.COMPLETED
+            if set(outcome.dependency_ids) & invalidated
         }
         if expanded == invalidated:
             return invalidated
