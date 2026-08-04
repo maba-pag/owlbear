@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
 
 import pytest
 
-from owlbear_kanban import DeliveryCompilationDiagnosticCode, compile_delivery_contract
+from owlbear_kanban import DeliveryCommitmentClass, DeliveryCompilationDiagnosticCode, compile_delivery_contract
 
 _COMMITMENT = """```yaml target-contract
 kind: commitment
@@ -26,55 +25,129 @@ commitments: [COM-001]
 dependencies: [{dependencies}]
 ```
 """
-_CANONICAL_SOURCE_HASHES = (
-    "bca743da07b4ca5ec6a48c5e52cc2ea45578948f1f644c3098ebff58cdc0a9a2",
-    "de43d9fb3e31f8cf6f483bf1af324ddc1b5d2e764522ae1a36ff71526b828bde",
+_INTENT_COMMITMENTS = (
+    ("COM-001", "dealbreaker", "Compilation is deterministic."),
+    ("COM-002", "protected-request", "Invalid definitions fail closed."),
+    ("COM-003", "important-reviewed", "Authored order is preserved."),
+    ("COM-004", "agreed-path", "Every outcome receives a planning scope."),
+    ("COM-005", "implementation-discretion", "Diagnostics use stable categories."),
+    ("COM-006", "dealbreaker", "Source bytes remain bound to authority."),
 )
-_CANONICAL_CONTRACT_DIGEST = "f2fb4744738f28222124ff2add50cb2562e52f4e73d94c796ec315708cfe1a9e"
+_DESIGN_COMMITMENTS = (
+    ("COM-007", "agreed-path", "Intent definitions precede design definitions."),
+    ("COM-008", "important-reviewed", "Outcome dependencies form a directed acyclic graph."),
+    ("COM-009", "protected-request", "Canonical JSON has one stable encoding."),
+    ("COM-010", "agreed-path", "Architecture definitions share the public schema."),
+    ("COM-011", "implementation-discretion", "Internal parsing strategy may vary."),
+)
+_INTENT_OUTCOMES = (
+    ("OUT-001", ("COM-001", "COM-002"), ()),
+    ("OUT-002", ("COM-003",), ("OUT-001",)),
+    ("OUT-003", ("COM-004",), ("OUT-001",)),
+    ("OUT-004", ("COM-005",), ("OUT-002",)),
+    ("OUT-005", ("COM-006",), ("OUT-003",)),
+)
+_DESIGN_OUTCOMES = (
+    ("OUT-006", ("COM-007",), ("OUT-003", "OUT-005")),
+    ("OUT-007", ("COM-008",), ("OUT-006",)),
+    ("OUT-008", ("COM-009",), ("OUT-004",)),
+    ("OUT-009", ("COM-010",), ("OUT-007", "OUT-008")),
+    ("OUT-010", ("COM-011",), ("OUT-009",)),
+)
 
 
-def _canonical_sources() -> tuple[bytes, bytes]:
-    relative = Path(".owlbear/design/target-delivery-cutover")
-    source_root = next(
-        (parent / relative for parent in Path(__file__).resolve().parents if (parent / relative).is_dir()),
-        None,
+def _commitment_block(identity: str, commitment_class: str, statement: str, source: str) -> str:
+    return f"""```yaml target-contract
+kind: commitment
+id: {identity}
+class: {commitment_class}
+provenance: {source} fixture
+statement: {statement}
+```
+"""
+
+
+def _outcome_block(identity: str, commitments: tuple[str, ...], dependencies: tuple[str, ...]) -> str:
+    commitment_list = ", ".join(commitments)
+    dependency_list = ", ".join(dependencies)
+    return f"""```yaml target-contract
+kind: outcome
+id: {identity}
+title: Fixture result {identity}
+promise: Deliver the observable result for {identity}.
+acceptance: [{identity} can be observed.]
+commitments: [{commitment_list}]
+dependencies: [{dependency_list}]
+```
+"""
+
+
+def _specification_fixture() -> tuple[bytes, bytes]:
+    intent = "# Self-Contained Delivery Contract\n\nRepresentative intent.\n\n" + "\n".join(
+        [
+            *(_commitment_block(*definition, "intent") for definition in _INTENT_COMMITMENTS),
+            *(_outcome_block(*definition) for definition in _INTENT_OUTCOMES),
+        ]
     )
-    if source_root is None:
-        pytest.skip("canonical operational Design sources are not distributed")
-    return (source_root / "intent.md").read_bytes(), (source_root / "design.md").read_bytes()
+    design = "# Fixture Architecture\n\nRepresentative architecture.\n\n" + "\n".join(
+        [
+            *(_commitment_block(*definition, "design") for definition in _DESIGN_COMMITMENTS),
+            *(_outcome_block(*definition) for definition in _DESIGN_OUTCOMES),
+        ]
+    )
+    return intent.encode(), design.encode()
 
 
-def test_real_specification_compiles_to_complete_replayable_contract() -> None:
-    intent_bytes, design_bytes = _canonical_sources()
+def test_specification_compiles_to_complete_replayable_contract() -> None:
+    intent_bytes, design_bytes = _specification_fixture()
 
-    result = compile_delivery_contract("target-delivery-cutover", intent_bytes, design_bytes)
-    replay = compile_delivery_contract("target-delivery-cutover", intent_bytes, design_bytes)
+    result = compile_delivery_contract("fixture-delivery", intent_bytes, design_bytes)
+    replay = compile_delivery_contract("fixture-delivery", intent_bytes, design_bytes)
 
     assert result.diagnostics == ()
     assert result.contract is not None
     assert result.canonical_bytes is not None
     assert result.digest is not None
     assert result == replay
-    assert result.contract.title == "Target Delivery Cutover"
+    assert result.contract.title == "Self-Contained Delivery Contract"
     assert len(result.contract.commitments) == 11
     assert len(result.contract.outcomes) == len(result.contract.plan_scopes) == 10
-    assert result.contract.commitments[0].commitment_id == "COM-001"
-    assert result.contract.commitments[-1].commitment_id == "COM-012"
-    assert result.contract.outcomes[1].outcome_id == "OUT-002"
-    assert result.contract.outcomes[1].commitment_ids[-1] == "COM-012"
-    assert result.contract.plan_scopes[1].scope_id == "SCOPE-002"
-    assert result.contract.plan_scopes[1].outcome_id == "OUT-002"
-    assert tuple(binding.sha256 for binding in result.contract.source_bindings) == _CANONICAL_SOURCE_HASHES
-    assert json.loads(result.canonical_bytes) == result.contract.model_dump(mode="json")
+    assert tuple(item.commitment_id for item in result.contract.commitments) == tuple(
+        definition[0] for definition in (*_INTENT_COMMITMENTS, *_DESIGN_COMMITMENTS)
+    )
+    assert tuple(item.outcome_id for item in result.contract.outcomes) == tuple(
+        definition[0] for definition in (*_INTENT_OUTCOMES, *_DESIGN_OUTCOMES)
+    )
+    assert result.contract.commitments[-1].commitment_class is DeliveryCommitmentClass.IMPLEMENTATION_DISCRETION
+    assert result.contract.outcomes[5].dependency_ids == ("OUT-003", "OUT-005")
+    assert tuple((scope.scope_id, scope.outcome_id) for scope in result.contract.plan_scopes) == tuple(
+        (f"SCOPE-{index:03}", f"OUT-{index:03}") for index in range(1, 11)
+    )
+    assert tuple(binding.sha256 for binding in result.contract.source_bindings) == tuple(
+        hashlib.sha256(source).hexdigest() for source in (intent_bytes, design_bytes)
+    )
+    expected_canonical = (
+        json.dumps(
+            result.contract.model_dump(mode="json"),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode()
+    assert result.canonical_bytes == expected_canonical
     assert result.digest == hashlib.sha256(result.canonical_bytes).hexdigest()
-    assert result.digest == _CANONICAL_CONTRACT_DIGEST
 
-    changed = compile_delivery_contract("target-delivery-cutover", intent_bytes, design_bytes + b"\n")
+    changed_design = design_bytes + b"\nNon-normative architecture note.\n"
+    changed = compile_delivery_contract("fixture-delivery", intent_bytes, changed_design)
     assert changed.diagnostics == ()
     assert changed.contract is not None
+    assert changed.contract.title == result.contract.title
     assert changed.contract.commitments == result.contract.commitments
     assert changed.contract.outcomes == result.contract.outcomes
-    assert changed.contract.source_bindings[1].sha256 != result.contract.source_bindings[1].sha256
+    assert changed.contract.plan_scopes == result.contract.plan_scopes
+    assert changed.contract.source_bindings[1].sha256 == hashlib.sha256(changed_design).hexdigest()
+    assert changed.contract.source_bindings[1] != result.contract.source_bindings[1]
     assert changed.digest != result.digest
 
 
