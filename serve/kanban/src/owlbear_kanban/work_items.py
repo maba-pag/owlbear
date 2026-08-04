@@ -8,11 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from owlbear_kanban.target_authority import (
     AuthorityStatus,
-    CompletionSummary,
     DesignReentryBriefing,
     Outcome,
     PlanScopeKind,
-    SemanticUpdate,
     TargetAuthority,
     TaskPlanScope,
 )
@@ -133,22 +131,6 @@ class WorkItemProjector:
             acceptance=outcome.acceptance if outcome is not None else (),
             briefing=self._briefings.get(work_item_id),
         )
-
-    def list_semantic_updates(self, _work_item_id: str) -> tuple[SemanticUpdate, ...]:
-        """Retired: projectors no longer expose semantic update queries.
-
-        Use the persisted `TargetAuthority.semantic_updates` collection instead.
-        """
-        msg = "list_semantic_updates is retired from WorkItemProjector; use authority.semantic_updates"
-        raise AttributeError(msg)
-
-    def show_completion_summary(self, _work_item_id: str) -> CompletionSummary | None:
-        """Retired: projectors no longer expose completion summary queries.
-
-        Use the persisted `TargetAuthority.completion_summaries` collection instead.
-        """
-        msg = "show_completion_summary is retired from WorkItemProjector; use authority.completion_summaries"
-        raise AttributeError(msg)
 
     def _project_items(self) -> dict[str, WorkItemProjection]:
         if not self._authority.outcomes:

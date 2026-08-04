@@ -11,6 +11,7 @@ from unittest.mock import patch
 import pytest
 
 from owlbear_kanban import (
+    AdministrativeDeliveryMove,
     CapacityLedger,
     AdvanceDelivery,
     BlockDelivery,
@@ -18,6 +19,7 @@ from owlbear_kanban import (
     ChangeWorkspaceManager,
     ChangeWriter,
     CoordinationConflictError,
+    DeliveryApplicationLoadError,
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryAdmissionConflictError,
@@ -35,10 +37,14 @@ from owlbear_kanban import (
     DeliveryRequest,
     DeliveryRequestKind,
     DeliveryRequestOption,
+    DeliveryRequestResolution,
+    DeliveryRoleIdentityConfig,
+    DeliveryRolePoliciesConfig,
     DeliveryRolePolicy,
     DeliveryRuntime,
     DeliveryRuntimeConflictError,
     DeliveryStage,
+    DeliveryStartupConfig,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryWorkerRole,
@@ -54,7 +60,7 @@ from owlbear_kanban import (
     PublishDeliveryPlan,
     PublishDeliveryResult,
     RetryDelivery,
-    WorkItemProjector,
+    load_delivery_application,
 )
 from owlbear_kanban.runtime_transaction import RuntimeTransaction
 
@@ -181,13 +187,48 @@ def _policies() -> tuple[DeliveryRolePolicy, ...]:
     )
 
 
+def _startup_config(tmp_path: Path, repository: Path, target_root: Path) -> DeliveryStartupConfig:
+    identity = DeliveryRoleIdentityConfig(
+        worker_agent="worker",
+        worker_model="worker-model",
+        reviewer_agent="reviewer",
+        reviewer_model="reviewer-model",
+    )
+    role_policies = DeliveryRolePoliciesConfig(
+        planner=identity,
+        builder=identity,
+        **{"assembly-reviewer": identity},
+    )
+    return DeliveryStartupConfig(
+        package_root=tmp_path / "packages",
+        target_root=target_root,
+        repository_root=repository,
+        worktree_root=tmp_path / "worktrees",
+        execution_capacity=3,
+        writer_capacity=1,
+        integration_target="main",
+        role_policies=role_policies,
+    )
+
+
+def _repository(tmp_path: Path) -> Path:
+    repository = tmp_path / "repository"
+    repository.mkdir(parents=True)
+    _git(repository, "init", "-b", "main")
+    _git(repository, "config", "user.name", "Loader Test")
+    _git(repository, "config", "user.email", "loader@example.invalid")
+    (repository / "product.txt").write_text("baseline\n", encoding="utf-8")
+    _git(repository, "add", "product.txt")
+    _git(repository, "commit", "-m", "baseline")
+    return repository
+
+
 def _portfolio(
     tmp_path: Path,
     stages: dict[str, DeliveryStage],
     *,
     writer_capacity: int = 1,
     candidate_proof: Callable[[DeliveryIntegrationCandidate, str], tuple[str, ...]] | None = None,
-    work_item_projectors: dict[str, WorkItemProjector] | None = None,
 ):
     repository = tmp_path / "repository"
     repository.mkdir()
@@ -216,13 +257,13 @@ def _portfolio(
     application = PortfolioApplication(
         dict(reversed(tuple(runtimes.items()))),
         PortfolioApplicationDependencies(
-            store,
-            authority_registry,
-            coordinator,
-            manager,
-            candidate_proof or (lambda _candidate, _commit: ("candidate proof dependency is not configured",)),
-            work_item_projectors or {},
-            CompletedHistoryCatalog(repository, "main"),
+            package_store=store,
+            authority_registry=authority_registry,
+            coordinator=coordinator,
+            workspace_manager=manager,
+            candidate_proof=candidate_proof
+            or (lambda _candidate, _commit: ("candidate proof dependency is not configured",)),
+            completed_history_catalog=CompletedHistoryCatalog(repository, "main"),
         ),
         PortfolioApplicationConfig(
             package_root=package_root,
@@ -235,6 +276,70 @@ def _portfolio(
         ),
     )
     return application, runtimes, coordinator, state_root
+
+
+def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    target_root = tmp_path / "target"
+    application = load_delivery_application(
+        _startup_config(tmp_path, repository, target_root),
+        authorized_target_root=target_root,
+    )
+    assert application.list_work_items() == ()
+    assert (target_root / "target-runtime/capacity.json").is_file()
+
+
+def test_delivery_loader_rejects_unauthorized_root_before_owner_mutation(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    target_root = tmp_path / "target"
+    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
+        load_delivery_application(
+            _startup_config(tmp_path, repository, target_root),
+            authorized_target_root=tmp_path / "other-target",
+        )
+    assert exc_info.value.field == "target_root"
+    assert not target_root.exists()
+
+
+def test_delivery_loader_rejects_git_and_state_identity_before_composition(tmp_path: Path) -> None:
+    non_repository = tmp_path / "not-a-repository"
+    non_repository.mkdir()
+    target_root = tmp_path / "invalid-git-target"
+    with pytest.raises(DeliveryApplicationLoadError) as git_error:
+        load_delivery_application(
+            _startup_config(tmp_path, non_repository, target_root),
+            authorized_target_root=target_root,
+        )
+    assert git_error.value.field == "repository_root"
+    assert not target_root.exists()
+
+    repository = _repository(tmp_path / "valid")
+    state_root = tmp_path / "invalid-state-target"
+    change_root = state_root / "delivery/changes/change-a"
+    change_root.mkdir(parents=True)
+    contract = _contract("change-b", b"intent\n", b"design\n")
+    (change_root / "contract.json").write_bytes(_canonical(contract))
+    with pytest.raises(DeliveryApplicationLoadError) as state_error:
+        load_delivery_application(
+            _startup_config(tmp_path, repository, state_root),
+            authorized_target_root=state_root,
+        )
+    assert state_error.value.field == "target_root"
+    assert not (state_root / "target-runtime").exists()
+
+    runtime_root = tmp_path / "invalid-runtime-target"
+    runtime_change = runtime_root / "delivery/changes/change-a"
+    runtime_change.mkdir(parents=True)
+    valid_contract = _contract("change-a", b"intent\n", b"design\n")
+    (runtime_change / "contract.json").write_bytes(_canonical(valid_contract))
+    (runtime_change / "frontier.json").write_bytes(b"not-json\n")
+    with pytest.raises(DeliveryApplicationLoadError) as runtime_error:
+        load_delivery_application(
+            _startup_config(tmp_path, repository, runtime_root),
+            authorized_target_root=runtime_root,
+        )
+    assert runtime_error.value.field == "target_root"
+    assert not (runtime_root / "target-runtime").exists()
 
 
 def test_design_compilation_and_admission_delegate_without_extra_mutation(tmp_path: Path) -> None:
@@ -429,6 +534,123 @@ def test_work_item_queries_use_bounded_projector_models_only(tmp_path: Path) -> 
     assert shown.acceptance == ("The launch is observable.",)
     assert "internal semantic body sentinel" not in serialized
     assert "internal completion body sentinel" not in serialized
+
+
+def test_operator_request_resolution_updates_context_and_resumed_plan(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    launch = application.acquire_frontier_work().launch_packages[0]
+    context = application.show_operator_context("change-a", "OUT-001")
+    serialized_claim = context.active_claim.model_dump(mode="json") if context.active_claim else {}
+    assert serialized_claim == {
+        "attempt_id": launch.claim.attempt_id,
+        "claim_id": launch.claim.claim_id,
+        "started_at": launch.claim.started_at,
+        "worker_role": "planner",
+        "task_id": None,
+    }
+    assert not {"owner_id", "process_id", "output", "reviewer_id"} & serialized_claim.keys()
+    before = runtimes["change-a"].frontier_bytes()
+    with pytest.raises(DeliveryRuntimeConflictError, match="execution identity"):
+        application.recover_claim("change-a", "OUT-001", "stale-attempt", launch.claim.claim_id)
+    assert runtimes["change-a"].frontier_bytes() == before
+
+    request = DeliveryRequest(
+        request_id="request-operator",
+        kind=DeliveryRequestKind.DECISION,
+        outcome_id="OUT-001",
+        summary="Choose the source.",
+        options=(DeliveryRequestOption(option_id="local", label="Use local source"),),
+    )
+    application.transition_delivery(
+        "change-a",
+        BlockDelivery(
+            outcome_id="OUT-001",
+            claim_id=launch.claim.claim_id,
+            block_id="block-operator",
+            reason="A decision is required.",
+            unblock_condition="The source is selected.",
+            expected_evidence=("Selected source",),
+            locators=("COM-001",),
+            request=request,
+        ),
+    )
+    pending = application.show_operator_context("change-a", "OUT-001")
+    assert pending.block is not None
+    assert not pending.block.resolved
+    resolved = application.resolve_request(
+        "change-a",
+        request.request_id,
+        DeliveryRequestResolution(selected_option_id="local", response_text="Use the checked-in source."),
+    )
+    assert resolved.resolution is not None
+    current = application.show_operator_context("change-a", "OUT-001")
+    assert current.block is not None
+    assert current.block.resolved
+    resumed = application.acquire_frontier_work().launch_packages[0]
+    plan_context = application.show_plan_context(
+        "change-a",
+        "OUT-001",
+        resumed.claim.attempt_id,
+        resumed.claim.claim_id,
+    )
+    assert plan_context.requests[0].resolution == resolved.resolution
+
+
+def test_requestless_clear_requires_evidence_and_exact_outcome(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    launch = application.acquire_frontier_work().launch_packages[0]
+    application.transition_delivery(
+        "change-a",
+        BlockDelivery(
+            outcome_id="OUT-001",
+            claim_id=launch.claim.claim_id,
+            block_id="block-manual",
+            reason="Verification is pending.",
+            unblock_condition="Verification is recorded.",
+            expected_evidence=("Verification locator",),
+            locators=("RESULT-001",),
+        ),
+    )
+    before = runtimes["change-a"].frontier_bytes()
+    with pytest.raises(ValueError, match="operator note and locators"):
+        application.clear_block("change-a", "OUT-001", "block-manual", "Verified.", ())
+    assert runtimes["change-a"].frontier_bytes() == before
+    cleared = application.clear_block(
+        "change-a",
+        "OUT-001",
+        "block-manual",
+        "Verified.",
+        ("RESULT-001",),
+    )
+    assert cleared.block is not None
+    assert cleared.block.resolved
+
+
+def test_administrative_move_updates_live_projection_and_rejects_same_stage(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    assert application.show_work_item("change-a", "OUT-001").projection.stage.value == "completed"
+    move = AdministrativeDeliveryMove(
+        move_id="move-operator",
+        outcome_id="OUT-001",
+        target=DeliveryStage.PLANNING,
+        reason="Operator evidence invalidated the reviewed result.",
+    )
+    result = application.administrative_move("change-a", move)
+    assert result.invalidated_outcome_ids == ("OUT-001",)
+    assert application.show_work_item("change-a", "OUT-001").projection.stage.value == "planning"
+    before = runtimes["change-a"].frontier_bytes()
+    with pytest.raises(DeliveryRuntimeConflictError, match="earlier stage"):
+        application.administrative_move("change-a", move)
+    assert runtimes["change-a"].frontier_bytes() == before
 
 
 def _review_product_change(coordinator: PortfolioCoordinator, change_id: str, content: str) -> tuple[str, str]:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -28,6 +28,7 @@ from owlbear_kanban.delivery_runtime import (
     AdministrativeDeliveryMove,
     AdministrativeDeliveryMoveResult,
     DeliveryActiveClaim,
+    DeliveryBlock,
     DeliveryChangeStage,
     DeliveryFrontier,
     DeliveryIntegrationAttention,
@@ -42,7 +43,6 @@ from owlbear_kanban.delivery_runtime import (
     DeliveryResultCandidate,
     DeliveryReturnContext,
     DeliveryRuntime,
-    DeliveryRuntimeReferenceError,
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
@@ -70,6 +70,7 @@ from owlbear_kanban.target_authority import (
 from owlbear_kanban.target_contract import (
     DeliveryCommitment,
     DeliveryCompilationResult,
+    DeliveryContract,
     DeliveryOutcome,
     compile_delivery_contract,
 )
@@ -99,6 +100,99 @@ def _reject_unconfigured_candidate(
     _commit: str,
 ) -> tuple[str, ...]:
     return ("candidate proof dependency is not configured",)
+
+
+def _project_runtime_authority(contract: DeliveryContract, frontier: DeliveryFrontier) -> TargetAuthority:
+    bindings = {binding.outcome_id: binding for binding in frontier.bindings}
+    return TargetAuthority(
+        change_id=contract.change_id,
+        title=contract.title,
+        commitments=tuple(
+            Commitment(
+                commitment_id=item.commitment_id,
+                commitment_class=CommitmentClass(item.commitment_class.value),
+                provenance=item.provenance,
+                statement=item.statement,
+            )
+            for item in contract.commitments
+        ),
+        outcomes=tuple(Outcome.model_validate(item.model_dump()) for item in contract.outcomes),
+        task_plan_scopes=tuple(
+            TaskPlanScope(
+                scope_id=scope.scope_id,
+                kind=PlanScopeKind.OUTCOME,
+                target_id=scope.outcome_id,
+                composition_claim="Assemble reviewed Delivery outputs"
+                if bindings[scope.outcome_id].assembly_required
+                else None,
+            )
+            for scope in contract.plan_scopes
+        ),
+    )
+
+
+def _project_runtime_evidence(contract: DeliveryContract, frontier: DeliveryFrontier) -> WorkItemEvidence:
+    scopes = {scope.outcome_id: scope.scope_id for scope in contract.plan_scopes}
+    progressed = tuple(
+        binding for binding in frontier.bindings if binding.stage not in {DeliveryStage.DESIGN, DeliveryStage.PLANNING}
+    )
+    return WorkItemEvidence(
+        planned_scope_ids=tuple(scopes[item.outcome_id] for item in progressed),
+        task_progress=tuple(
+            TaskProgress(
+                scope_id=scopes[item.outcome_id],
+                task_count=len(item.tasks),
+                reviewed_task_count=len(item.results),
+            )
+            for item in progressed
+        ),
+        completed_assembly_scope_ids=tuple(
+            scopes[item.outcome_id]
+            for item in frontier.bindings
+            if item.assembly_required and item.stage == DeliveryStage.COMPLETED
+        ),
+        pending_request_work_item_ids=tuple(
+            item.outcome_id for item in frontier.bindings if item.block is not None and not item.block.resolved
+        ),
+    )
+
+
+def _operator_claim(claim: DeliveryActiveClaim | None) -> DeliveryOperatorClaim | None:
+    if claim is None:
+        return None
+    return DeliveryOperatorClaim(
+        attempt_id=claim.attempt_id,
+        claim_id=claim.claim_id,
+        started_at=claim.started_at,
+        worker_role=claim.worker_role,
+        task_id=claim.task_id,
+    )
+
+
+def _operator_recovery_attention(
+    attention: DeliveryRecoveryAttention | None,
+) -> DeliveryOperatorRecoveryAttention | None:
+    if attention is None:
+        return None
+    return DeliveryOperatorRecoveryAttention(
+        attempt_id=attention.attempt_id,
+        claim_id=attention.claim_id,
+        reason=attention.reason,
+        custody_retained=attention.custody_retained,
+        retry_condition=attention.retry_condition,
+    )
+
+
+def _operator_integration_attention(
+    attention: DeliveryIntegrationAttention | None,
+) -> DeliveryOperatorIntegrationAttention | None:
+    if attention is None:
+        return None
+    return DeliveryOperatorIntegrationAttention(
+        code=attention.code,
+        diagnostics=attention.diagnostics,
+        retry_condition=attention.retry_condition,
+    )
 
 
 class _ApplicationModel(BaseModel):
@@ -202,6 +296,48 @@ class DeliveryBuildContext(_ApplicationModel):
     recovery_attention: DeliveryRecoveryAttention | None = None
 
 
+class DeliveryOperatorClaim(_ApplicationModel):
+    """Bounded active-claim identity required for explicit operator recovery."""
+
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    started_at: str = Field(min_length=1)
+    worker_role: DeliveryWorkerRole
+    task_id: str | None = None
+
+
+class DeliveryOperatorRecoveryAttention(_ApplicationModel):
+    """Recovery evidence without workspace or Git custody internals."""
+
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+    custody_retained: bool
+    retry_condition: str = Field(min_length=1)
+
+
+class DeliveryOperatorIntegrationAttention(_ApplicationModel):
+    """Integration attention without raw Git boundary identities."""
+
+    code: DeliveryIntegrationAttentionCode
+    diagnostics: tuple[str, ...] = Field(min_length=1)
+    retry_condition: str = Field(min_length=1)
+
+
+class DeliveryOperatorContext(_ApplicationModel):
+    """Current bounded state consumed by user-owned Delivery controls."""
+
+    change_id: str = Field(min_length=1)
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    stage: DeliveryStage
+    block: DeliveryBlock | None = None
+    requests: tuple[DeliveryRequest, ...] = ()
+    active_claim: DeliveryOperatorClaim | None = None
+    return_context: DeliveryReturnContext | None = None
+    recovery_attention: DeliveryOperatorRecoveryAttention | None = None
+    integration_attention: DeliveryOperatorIntegrationAttention | None = None
+
+
 class DeliveryClaimRecoveryStatus(StrEnum):
     """Observable disposition of one exact-claim recovery request."""
 
@@ -280,7 +416,6 @@ class PortfolioApplicationDependencies:
     coordinator: PortfolioCoordinator
     workspace_manager: ChangeWorkspaceManager
     candidate_proof: Callable[[DeliveryIntegrationCandidate, str], tuple[str, ...]] = _reject_unconfigured_candidate
-    work_item_projectors: Mapping[str, WorkItemProjector] = field(default_factory=dict)
     completed_history_catalog: CompletedHistoryCatalog | None = None
 
 
@@ -336,10 +471,6 @@ class PortfolioApplication:
         self._coordinator = dependencies.coordinator
         self._workspace_manager = dependencies.workspace_manager
         self._candidate_proof = dependencies.candidate_proof
-        # projectors are no longer injected as immutable snapshots; projections are
-        # derived from runtimes on every list/show query. Keep the mapping for
-        # compatibility but ignore prebuilt projectors.
-        self._work_item_projectors = {}
         self._completed_history_catalog = dependencies.completed_history_catalog
         self._execution_capacity = config.execution_capacity
         self._policies = {policy.worker_role: policy for policy in config.role_policies}
@@ -416,12 +547,9 @@ class PortfolioApplication:
         """List bounded work-item projections in stable portfolio order."""
         projections = []
         for runtime in self._runtimes.values():
-            # exclude completed Integration runtimes from the active portfolio projection
             if runtime.change_stage() == DeliveryChangeStage.COMPLETED:
                 continue
-            authority, evidence = self._authority_and_evidence(runtime)
-            projector = WorkItemProjector(authority, evidence)
-            projections.extend(projector.list_items())
+            projections.extend(self._work_item_projector(runtime).list_items())
         return tuple(
             sorted(
                 projections,
@@ -435,121 +563,64 @@ class PortfolioApplication:
 
     def show_work_item(self, change_id: str, work_item_id: str) -> WorkItemDetail:
         """Show bounded semantic detail from one exact change projector."""
-        runtime = self._runtime(change_id)
-        authority, evidence = self._authority_and_evidence(runtime)
-        projector = WorkItemProjector(authority, evidence)
         try:
-            return projector.show(work_item_id)
+            return self._work_item_projector(self._runtime(change_id)).show(work_item_id)
         except KeyError as exc:
             self._fail(f"work item is absent: {work_item_id}", exc)
 
-    def resolve_request(self, request_id: str, resolution: DeliveryRequestResolution) -> DeliveryRequest:
+    def show_operator_context(self, change_id: str, outcome_id: str) -> DeliveryOperatorContext:
+        """Show current bounded operator state from one exact runtime binding."""
+        runtime = self._runtime(change_id)
+        binding = runtime.show_binding(outcome_id)
+        return DeliveryOperatorContext(
+            change_id=change_id,
+            outcome_id=outcome_id,
+            stage=binding.stage,
+            block=binding.block,
+            requests=binding.requests,
+            active_claim=_operator_claim(binding.active_claim),
+            return_context=binding.return_context,
+            recovery_attention=_operator_recovery_attention(binding.recovery_attention),
+            integration_attention=_operator_integration_attention(runtime.integration_attention()),
+        )
+
+    def resolve_request(
+        self,
+        change_id: str,
+        request_id: str,
+        resolution: DeliveryRequestResolution,
+    ) -> DeliveryRequest:
         """Persist one request resolution by delegating to the owning runtime."""
         with self._coordinator.acquisition_lock():
-            # delegate resolution to the owning runtime by locating the request
-            for runtime in self._runtimes.values():
-                try:
-                    # runtime.resolve_request will raise DeliveryRuntimeReferenceError if request absent
-                    return runtime.resolve_request(request_id, resolution)
-                except DeliveryRuntimeReferenceError:
-                    continue
-        self._fail(f"request is absent: {request_id}")
-        _msg = "unreachable: request resolution failed"
-        raise PortfolioApplicationError(_msg)
+            return self._runtime(change_id).resolve_request(request_id, resolution)
 
     def clear_block(
         self,
         change_id: str,
+        outcome_id: str,
         block_id: str,
         operator_note: str,
         locators: tuple[str, ...],
     ) -> OutcomeAuthorityBinding:
         """Clear a requestless same-stage block with operator evidence via runtime."""
         with self._coordinator.acquisition_lock():
-            runtime = self._runtime(change_id)
-            # runtime.unblock expects outcome_id first; map by finding binding that contains block_id
-            frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
-            for binding in frontier.bindings:
-                if binding.block is not None and binding.block.block_id == block_id:
-                    return runtime.unblock(binding.outcome_id, block_id, operator_note, locators)
-            self._fail(f"block is absent: {block_id}")
-            return runtime.show_binding(block_id)
+            return self._runtime(change_id).unblock(outcome_id, block_id, operator_note, locators)
 
-    def administrative_move(self, request: AdministrativeDeliveryMove) -> AdministrativeDeliveryMoveResult:
+    def administrative_move(
+        self,
+        change_id: str,
+        request: AdministrativeDeliveryMove,
+    ) -> AdministrativeDeliveryMoveResult:
         """Delegate an authorized operator backward movement to the owning runtime."""
         with self._coordinator.acquisition_lock():
-            # locate the runtime owning the change and delegate directly
-            for runtime in self._runtimes.values():
-                if any(outcome.outcome_id == request.outcome_id for outcome in runtime.contract.outcomes):
-                    return runtime.administrative_move(request)
-        self._fail("administrative move target is absent or invalid")
-        _msg = "unreachable: administrative move target absent"
-        raise PortfolioApplicationError(_msg)
+            return self._runtime(change_id).administrative_move(request)
 
-    def _authority_and_evidence(self, runtime: DeliveryRuntime) -> tuple[TargetAuthority, WorkItemEvidence]:
-        """Build a read-only TargetAuthority and work-item evidence from a Delivery runtime."""
-        # map contract commitments/outcomes/scopes to TargetAuthority shapes
-        contract = runtime.contract
-        commitments = tuple(
-            Commitment(
-                commitment_id=item.commitment_id,
-                commitment_class=CommitmentClass[item.commitment_class.name],
-                provenance=item.provenance,
-                statement=item.statement,
-            )
-            for item in contract.commitments
+    def _work_item_projector(self, runtime: DeliveryRuntime) -> WorkItemProjector:
+        frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+        return WorkItemProjector(
+            _project_runtime_authority(runtime.contract, frontier),
+            _project_runtime_evidence(runtime.contract, frontier),
         )
-        outcomes = tuple(
-            Outcome(
-                outcome_id=item.outcome_id,
-                title=item.title,
-                promise=item.promise,
-                acceptance=item.acceptance,
-                commitment_ids=item.commitment_ids,
-                dependency_ids=item.dependency_ids,
-            )
-            for item in contract.outcomes
-        )
-        scopes = tuple(
-            TaskPlanScope(scope_id=scope.scope_id, kind=PlanScopeKind.OUTCOME, target_id=scope.outcome_id)
-            for scope in contract.plan_scopes
-        )
-        authority = TargetAuthority(
-            change_id=contract.change_id,
-            title=contract.title,
-            commitments=commitments,
-            outcomes=outcomes,
-            task_plan_scopes=scopes,
-        )
-
-        # derive evidence from current runtime frontier
-        planned: list[str] = []
-        progress: list[TaskProgress] = []
-        assembly: list[str] = []
-        pending: list[str] = []
-        for scope in contract.plan_scopes:
-            try:
-                binding = runtime.show_binding(scope.outcome_id)
-            except DeliveryRuntimeReferenceError:
-                # outcome absent in this runtime
-                continue
-            if binding.stage != DeliveryStage.DESIGN:
-                planned.append(scope.scope_id)
-            task_count = len(binding.tasks)
-            reviewed = len(binding.results)
-            progress.append(TaskProgress(scope_id=scope.scope_id, task_count=task_count, reviewed_task_count=reviewed))
-            if binding.stage == DeliveryStage.COMPLETED and binding.assembly_required:
-                assembly.append(scope.scope_id)
-            pending.extend([binding.outcome_id for request in binding.requests if request.resolution is None])
-
-        evidence = WorkItemEvidence(
-            planned_scope_ids=tuple(planned),
-            task_progress=tuple(progress),
-            completed_assembly_scope_ids=tuple(assembly),
-            pending_request_work_item_ids=tuple(pending),
-            design_reentry_briefings=(),
-        )
-        return authority, evidence
 
     def list_completed_changes(self, cursor: str | None = None, limit: int = 100) -> CompletedChangePage:
         """List one bounded page rebuilt from configured target history."""
