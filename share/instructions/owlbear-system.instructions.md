@@ -54,7 +54,7 @@ Before completing material work, decide whether you learned a specific, non-obvi
 
   | MCP server | `tools:` prefix | Runtime tool ID | `tool_search` query |
   |---|---|---|---|
-  | OwlBear Kanban | `ob-kanban/*` | `mcp_ob-kanban_<tool>` | `"OwlBear Kanban target portfolio list_work_items list_frontier start_job finish_plan finish_build finish_assembly respond_to_review arbitrate_attempt recover_interrupted_task"` |
+  | OwlBear Kanban | `ob-kanban/*` | `mcp_ob-kanban_<tool>` | `"OwlBear Kanban create_design_session read_design_session revise_design_session publish_design_checkpoint derive_delivery_contract validate_delivery_contract admit_delivery_change list_work_items show_work_item acquire_frontier_work show_plan_context show_build_context publish_delivery_plan publish_delivery_result transition_delivery recover_claim list_integration_ready_changes show_integration_attention integrate_ready_change admit_reviewed_integration_repair list_completed_changes search_completed_changes show_completed_change"` |
   | OwlBear Memory | `ob-memory/*` | `mcp_ob-memory_<tool>` | `"memory"` |
   | MarkItDown | `markitdown/*` | `mcp_markitdown_<tool>` | `"markdown convert"` |
 

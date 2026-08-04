@@ -27,18 +27,21 @@ Load these with `read_file` immediately before the named work:
 
 ## Authority Boundary
 
-One draft session is rooted at `.owlbear/design/<change_id>/` and has four parts:
+One active Design session is a manifest-bound package owned by Kanban:
 
-| Authority | Owns |
-|-----------|------|
-| `intent.md` | Problem, actors, Product Promise, normal workflows, scope, accepted exclusions, preserved behavior, success, assumptions, and technically-done-but-wrong outcomes |
-| `design.md` | Current ownership, proposed architecture and interfaces, tradeoffs, weaknesses, migration, and proof approach |
-| `decisions.yaml` | Material user choices, status, options, tradeoffs, risks, recommendation, confidence, rationale, and decision authority |
-| `authority.json` | One schema-version-one `TargetAuthority`: provenance-classed commitments, user-facing outcomes, dependencies, and task-plan scopes |
+| Package part | Owns |
+|--------------|------|
+| `intent.md` | Problem, actors, Product Promise, normal workflows, scope, accepted exclusions, preserved behavior, material user decisions, success, assumptions, and technically-done-but-wrong outcomes |
+| `design.md` | Current ownership, proposed architecture and interfaces, tradeoffs, weaknesses, migration, proof approach, and decision consequences |
+| `authority.json` | Generated Delivery contract bytes; authored revision clears this authority |
+| `manifest.json` | Kanban-owned hashes binding the exact package identity |
 
-The designer may also write focused research under `.owlbear/research/` and diagnostics under
-`.owlbear/scratch/`. `.owlbear/target/`, jobs, attempts, receipts, tracked product files, and another
-change are outside this workflow's direct write boundary; `admit_change` alone publishes target state.
+The Designer never writes these files directly. `create_design_session` creates one new package;
+`read_design_session` returns its verified complete bytes and package ID; and
+`revise_design_session` compare-and-swap replaces complete intent and design bytes while clearing
+generated authority. The Designer may write focused research under `.owlbear/research/` and
+diagnostics under `.owlbear/scratch/`. Product files, active package files, target runtime, jobs,
+attempts, receipts, and another change are outside this workflow's direct write boundary.
 
 Treat conversation as working context only. Confirmed meaning must be persisted in its owning
 artifact before another material branch begins. Never replace confirmed authority merely because a
@@ -48,40 +51,50 @@ later session starts with less context.
 
 Determine the entry mode from the caller:
 
-- `/ideate <rough idea>` enters discovery. Inspect `.owlbear/design/` and use `list_changes` to find a
-  matching draft or admitted change. Select it when identity is unambiguous; otherwise derive one
-  stable lowercase hyphenated `change_id` and create its draft package.
-- `/design [change_id]` enters design directly. Use the supplied identity or inspect drafts and
-  `list_changes` to select one unambiguous session. If none exists, create the named draft package.
+- `/ideate <rough idea>` enters discovery. If the input identifies an existing change, call
+  `read_design_session(change_id)`. Otherwise derive one stable lowercase hyphenated `change_id`
+  and call `create_design_session` once with initial complete intent and design bytes.
+- `/design <change_id>` enters design directly. Require the supplied identity and call
+  `read_design_session(change_id)`. If the user intends a new named change and the package is absent,
+  call `create_design_session` once; otherwise preserve the missing-package diagnostic.
 
-Do not maintain separate ideation and design records. Both entries resolve to the same `change_id`
-and authority root. If multiple existing changes plausibly match, ask one identity-selection
-question and stop.
+Do not maintain separate ideation and design records or enumerate portfolio state to infer identity.
+Both entries resolve to the same `change_id` and active package. Initialize unknown content
+explicitly as draft or unresolved; do not invent decisions, evidence, stable contract IDs, or
+approval. Retain the returned `package_id` as the only revision token.
 
-For a new package, create only the four draft files above. Initialize unknown content explicitly as
-draft or unresolved; do not invent decisions, evidence, stable IDs, or approval. The target runtime
-and admission receipt are engine-owned.
+## Step 2 - Rehydrate Before Revision
 
-## Step 2 - Rehydrate Before Writing
-
-For an admitted session, call `show_change(change_id)`; for any session, read all four draft parts
-before mutation. If an admitted change has no draft yet, seed one from its shown target authority
-without changing confirmed meaning. Also inspect focused research. Build private session state with:
+Call `read_design_session(change_id)` and use only its verified intent bytes, design bytes, manifest,
+authority bytes, and package ID. Also inspect focused research. Build private session state with:
 
 - confirmed intent and Product Promise;
 - accepted exclusions and preserved remainder;
 - accepted, pending, and superseded decisions;
 - observed, documented, assumed, and user-confirmed claims;
 - current architecture, interfaces, migrations, risks, and proof boundaries;
-- declared commitments, outcomes, task-plan scopes, ownership, and dependencies;
-- validation or admission findings that remain unresolved.
+- derived commitments, outcomes, task-plan scopes, ownership, and dependencies when generated
+  authority is present;
+- compiler, validation, or admission findings that remain unresolved.
 
-Report contradictions instead of silently choosing a newer-looking statement. Preserve every
-confirmed item unless the user explicitly changes it through a material decision. On resume, state
-the persisted current position and continue from the earliest unresolved gate; do not replay settled
-questions.
+Report contradictions instead of silently choosing a newer-looking statement. Preserve confirmed
+meaning unless the user explicitly changes it through a material decision. On resume, state the
+persisted current position and continue from the earliest unresolved gate; do not replay settled
+questions or compute the package identity from manifest bytes.
 
-## Step 3 - Discover Intent And Preserve The Product Promise
+## Step 3 - Persist Authored Revisions By Compare-And-Swap
+
+Before each authored mutation, form complete replacement `intent_bytes` and `design_bytes` from the
+verified package plus the confirmed change. Call `revise_design_session(change_id,
+expected_package_id, intent_bytes, design_bytes)` and retain the returned package ID as the next
+token. The call clears generated authority, so any checkpoint, derivation, validation, challenge,
+baseline, or approval for the prior identity is stale.
+
+If revision reports a stale package identity, call `read_design_session` again, compare the returned
+complete bytes with the proposed revision, and reconcile without overwriting another writer. Do not
+edit intent, design, authority, or manifest files directly and do not calculate package hashes.
+
+## Step 4 - Discover Intent And Preserve The Product Promise
 
 When discovery is needed, follow `w-idea-refinement` until the intended outcome, beneficiary, normal
 workflow, observable result, boundaries, and success are concrete. Persist confirmed understanding
@@ -96,9 +109,9 @@ Maintain a Product Promise ledger in that authority:
 - technically-correct-but-wrong outcomes.
 
 Do not reduce the requested outcome to make delivery easier. An omission from the Product Promise is
-accepted only through an explicit user decision recorded in `decisions.yaml`.
+accepted only through an explicit user decision persisted in the complete package intent and design.
 
-## Step 4 - Ground Claims And Use Qualified Memory
+## Step 5 - Ground Claims And Use Qualified Memory
 
 Investigate repository-answerable facts before asking the user. Load `h-codebase-orientation` and use
 the smallest read-only source, history, runtime, or test boundary that can distinguish the claim.
@@ -121,7 +134,7 @@ applicability, and corroborate load-bearing claims against current authority or 
 as supporting provenance, never as execution or specification authority. Propose new institutional
 learning only after the design work establishes a specific, non-obvious, reusable fact.
 
-## Step 5 - Resolve One Material Decision
+## Step 6 - Resolve One Material Decision
 
 A material decision changes product behavior, Product Promise, scope, architecture, public
 interface, migration, compatibility, security, delivery ownership, or proof meaning. Choose the
@@ -142,11 +155,11 @@ Use `askQuestions` for exactly one material decision and then stop for the user'
 ```
 
 Do not bundle a second choice into the prompt. Do not ask for facts discoverable from source. After
-the answer, write the decision to `decisions.yaml`, update affected intent or design authority, mark
-superseded decisions explicitly, and recompute dependent open questions. Ambiguous answers remain
-pending and do not authorize downstream admission.
+the answer, persist the decision and affected intent or design through Step 3, mark superseded
+decisions explicitly in authored bytes, and recompute dependent open questions. Ambiguous answers
+remain pending and do not authorize downstream admission.
 
-## Step 6 - Review Adaptive Architecture
+## Step 7 - Review Adaptive Architecture
 
 Once product intent is stable enough to constrain implementation, load `h-module-design` and review
 architecture at depth proportional to novelty, coupling, irreversibility, and risk. Persist in
@@ -163,10 +176,11 @@ Take an evidence-based position. Do not invent alternatives when one boundary is
 and do not hide a material weakness to preserve momentum. Any unresolved material architecture fork
 returns to Step 5.
 
-## Step 7 - Build Complete Target Authority
+## Step 8 - Build Complete Delivery Contract
 
-Translate confirmed intent and design into `authority.json`. Use stable uppercase typed IDs and
-complete every active semantic identity before admission:
+Encode confirmed intent and design in the compiler-owned target-contract blocks consumed by
+`derive_delivery_contract`. Use stable uppercase typed IDs and complete each active semantic
+identity before admission:
 
 - provenance-classed commitments for dealbreakers, protected requests, important reviewed meaning,
   agreed paths, and implementation discretion;
@@ -176,53 +190,57 @@ complete every active semantic identity before admission:
 - persisted Design re-entry briefings, semantic updates, and completion summaries only when they
   already exist as durable authority.
 
-Keep target authority semantic. It does not contain claims, attempts, mutable task prose,
-implementation steps, or chat history. Present the complete Product Promise, decisions,
-architecture, commitments, outcomes, dependencies, known limits, and proof coverage before approval.
+Keep contract source semantic. It does not contain claims, attempts, mutable task prose,
+implementation steps, or chat history. Call `derive_delivery_contract(change_id)` and retain the
+returned canonical contract bytes and digest. Compiler diagnostics return to the owning intent or
+design revision. Present the complete Product Promise, decisions, architecture, commitments,
+outcomes, dependencies, known limits, and proof coverage before approval.
 
-## Step 8 - Challenge, Baseline, And Validate
+## Step 9 - Challenge, Baseline, Checkpoint, And Validate
 
-Run these gates against the same immutable candidate object:
+Run these gates against one unchanged package ID:
 
-1. Parse `authority.json` as a strict schema-version-one `TargetAuthority`; parsing failure keeps the
-  draft and names the exact field error.
+1. Call `derive_delivery_contract(change_id)` and require a contract with no compiler diagnostics.
 2. Call a fresh read-only designer challenger. Require one source-grounded
   `{disposition, evidence}` entry using `pass`, `warning`, or `error` for the change identity and
   every commitment, outcome, and task-plan scope. Free-form approval is invalid.
 3. Run proportionate clean baselines: affected builds or typechecks, generated-contract checks,
    focused tests, and the cheapest existing normal-boundary smoke. Baselines establish starting
    feasibility; they do not prove unimplemented behavior.
-4. Assemble `TargetAdmissionCandidate` with the exact authority, only `pass` or `warning` challenge
-  entries, baseline command evidence, visible known limits, and `prepared_at`.
-5. Call `validate_change(candidate)` and retain its `authority_digest` and exact initial jobs.
+4. Call `publish_design_checkpoint(change_id)` and require its returned package ID to equal the
+  unchanged current package ID.
+5. Call `validate_delivery_contract(change_id)` and require its contract bytes and digest to equal
+  the derivation from step 1 with no diagnostics.
 
-A non-pass challenge, failing baseline, digest mismatch, deterministic validation error, unresolved
-material authority keeps the candidate draft. Record and report the exact finding, repair its owning
-authority, and restart from the earliest affected step. Do not invoke `admit_change`, publish target
-files manually, or weaken evidence to force a pass.
+A non-pass challenge, failing baseline, package-ID mismatch, derivation mismatch, compiler diagnostic,
+or unresolved material authority keeps the package unadmitted. Record and report the exact finding,
+repair its owning authority through Step 3, and restart from the earliest affected step. Do not
+invoke `admit_delivery_change`, publish target files manually, or weaken evidence to force a pass.
 
 Warnings must be visible in the complete review and represented in known limits. They do not become
 silent assumptions.
 
-## Step 9 - Obtain Explicit Approval And Admit
+## Step 10 - Obtain Explicit Approval And Admit
 
 Ask one final admission question only after the complete candidate and all gate evidence are ready.
 The approval covers product intent, accepted exclusions, material decisions, architecture,
 commitments, outcomes, planning scopes, and known limits for the displayed digest. The user does not
 certify dependency mechanics.
 
-Record approval against the returned authority digest, then call `validate_change` again with the
-identical candidate. Proceed only when it returns the same digest and initial jobs. Build
-`TargetAdmissionRequest` from that candidate, `approved_digest`, `approved_by`, and `approved_at`,
-then call `admit_change(request)`.
+Record approval against the unchanged package ID and derived contract digest. Call
+`read_design_session(change_id)` again and proceed only when its package ID and complete authored
+bytes match the approved package. Call `validate_delivery_contract(change_id)` again and require the
+same canonical contract bytes and digest, then call `admit_delivery_change` with
+`DeliveryAdmissionRequest(change_id=change_id, active_claim_ids=())`.
 
-Record and report the persisted admission receipt ID, authority digest, and initial plan-job
-identities. An identical retry must return `replayed: true` and the same artifacts. A revision of an
-admitted change archives the prior authority and runtime by digest; active target work blocks it.
+Require the admission result contract bytes and digest to match the approved derivation. Record and
+report its persisted receipt ID, contract digest, frontier IDs, checkpoint commit, and carry-forward
+result. An identical retry must return `replayed: true` with the same contract, frontier, and receipt.
+Active target work blocks a semantic revision.
 
-If authority changes after validation or approval, the digest is stale: discard the pending approval,
-keep the revision draft, and repeat challenge, baseline, validation, and approval. Admission failure
-always leaves the authority available for `/design` resume and creates no jobs.
+If the package changes after checkpoint, validation, or approval, discard pending approval and repeat
+challenge, baseline, checkpoint, validation, and approval against the new identity. Admission failure
+leaves the active package available for `/design` resume and publishes no partial target authority.
 
 ## Session Output
 
@@ -233,13 +251,14 @@ return:
 ## Design Session
 
 - Change: <change_id>
-- Revision: <authority_digest>
+- Package: <package_id>
+- Contract: <contract_digest>
 - Product Promise: <complete promised outcome and accepted exclusions>
 - Decisions: <accepted and unresolved counts; unresolved must be zero>
 - Architecture: <owners, changed interfaces, migrations, and known weaknesses>
-- Target authority: <commitment and outcome counts, dependency frontier, scope coverage>
+- Delivery contract: <commitment and outcome counts, dependency frontier, scope coverage>
 - Evidence: <challenge disposition, baseline commands, validation result, known limits>
-- Admission: <receipt ID and initial plan-job IDs>
+- Admission: <receipt ID, frontier IDs, checkpoint commit, and carry-forward result>
 ```
 
 Before admission, replace the final line with `Draft: <blocking finding and owning authority>` and do
@@ -248,12 +267,13 @@ not imply that Delivery can begin.
 ## Known Pitfalls
 
 - **Cross-command handoff:** `/ideate` and `/design` must rehydrate the same target authority.
-- **Chat-only choice:** a decision is not durable until `decisions.yaml` owns it.
+- **Chat-only choice:** a decision is not durable until a package revision owns it.
 - **Fact polling:** inspect repository evidence before asking the user.
 - **Question batching:** one material choice per `askQuestions` call.
 - **Promise erosion:** require explicit acceptance for every reduction in user-stated value.
 - **Memory authority:** corroborate memory; never let it decide current truth.
 - **Shallow architecture:** adapt review depth to novelty and risk while preserving interface detail.
-- **Partial authority:** every active outcome needs commitments, acceptance, dependencies, and one plan scope.
-- **Validator substitution:** challenge, baseline, approval, and deterministic validation are distinct.
-- **Premature admission:** any unresolved gate keeps the draft and forbids `admit_change`.
+- **Partial authority:** each active outcome needs commitments, acceptance, dependencies, and one plan scope.
+- **Validator substitution:** challenge, baseline, checkpoint, approval, and deterministic validation are distinct.
+- **Stale compare-and-swap:** read and reconcile current complete bytes instead of overwriting another writer.
+- **Premature admission:** any unresolved gate keeps the package unadmitted and forbids `admit_delivery_change`.
