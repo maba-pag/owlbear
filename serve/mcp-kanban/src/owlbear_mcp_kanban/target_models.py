@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
+from owlbear_kanban.delivery_application_loader import (
+    DeliveryRoleIdentityConfig,
+    DeliveryRolePoliciesConfig,
+    DeliveryStartupConfig,
+)
 from owlbear_kanban.delivery_runtime import (
     DeliveryIntegrationRepair,
     DeliveryTransition,
@@ -41,55 +45,6 @@ class DeliveryStartupDiagnostic(RuntimeError):
             "field": self.field,
             "retry_safe": self.retry_safe,
         }
-
-
-class DeliveryRoleIdentityConfig(_TargetProtocolModel):
-    """Explicit worker and reviewer identities for one Delivery role."""
-
-    worker_agent: str = Field(min_length=1)
-    worker_model: str = Field(min_length=1)
-    reviewer_agent: str = Field(min_length=1)
-    reviewer_model: str = Field(min_length=1)
-
-
-class DeliveryRolePoliciesConfig(_TargetProtocolModel):
-    """Complete role policy required before owner construction."""
-
-    planner: DeliveryRoleIdentityConfig
-    builder: DeliveryRoleIdentityConfig
-    assembly_reviewer: DeliveryRoleIdentityConfig = Field(alias="assembly-reviewer")
-
-
-class DeliveryStartupConfig(_TargetProtocolModel):
-    """Explicit roots, capacities, target, and identities for Delivery startup."""
-
-    package_root: Path
-    target_root: Path
-    repository_root: Path
-    worktree_root: Path
-    execution_capacity: int = Field(gt=0)
-    writer_capacity: int = Field(gt=0)
-    integration_target: str = Field(min_length=1)
-    role_policies: DeliveryRolePoliciesConfig
-
-    @field_validator("package_root", "target_root", "repository_root", "worktree_root")
-    @classmethod
-    def _validate_directory_path(cls, value: Path) -> Path:
-        if not value.is_absolute():
-            message = "path must be absolute"
-            raise ValueError(message)
-        if value.exists() and (value.is_symlink() or not value.is_dir()):
-            message = "path must name a directory"
-            raise ValueError(message)
-        return value
-
-    @field_validator("repository_root")
-    @classmethod
-    def _validate_repository_root(cls, value: Path) -> Path:
-        if not value.is_dir():
-            message = "repository root must exist"
-            raise ValueError(message)
-        return value
 
 
 class TargetDiagnostic(_TargetProtocolModel):

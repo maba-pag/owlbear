@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -12,7 +13,19 @@ import pytest
 from pydantic import BaseModel, ConfigDict
 
 import owlbear_mcp_kanban.server as live_server
-from owlbear_kanban import PortfolioApplication
+from owlbear_kanban import (
+    AdministrativeDeliveryMove,
+    DeliveryCommitment,
+    DeliveryCommitmentClass,
+    DeliveryContract,
+    DeliveryFrontier,
+    DeliveryOutcome,
+    DeliveryPlanScope,
+    DeliverySourceBinding,
+    DeliveryStage,
+    OutcomeAuthorityBinding,
+    PortfolioApplication,
+)
 from owlbear_mcp_kanban.server import (
     app_lifespan,
     load_delivery_application,
@@ -147,6 +160,50 @@ def _config(tmp_path: Path, repository: Path | None = None) -> dict[str, object]
 
 def _write_config(path: Path, content: dict[str, object]) -> None:
     path.write_text(json.dumps(content), encoding="utf-8")
+
+
+def _write_delivery_state(target_root: Path) -> None:
+    digest = hashlib.sha256(b"source").hexdigest()
+    contract = DeliveryContract(
+        change_id="change-a",
+        title="Assembled projection",
+        commitments=(
+            DeliveryCommitment(
+                commitment_id="COM-001",
+                commitment_class=DeliveryCommitmentClass.AGREED_PATH,
+                provenance="assembled MCP test",
+                statement="Project current Delivery state.",
+            ),
+        ),
+        outcomes=(
+            DeliveryOutcome(
+                outcome_id="OUT-001",
+                title="Observe transitions",
+                promise="Registered tools return current stage.",
+                acceptance=("The stage changes without server reload.",),
+                commitment_ids=("COM-001",),
+                dependency_ids=(),
+            ),
+        ),
+        plan_scopes=(DeliveryPlanScope(scope_id="SCOPE-001", outcome_id="OUT-001"),),
+        source_bindings=(
+            DeliverySourceBinding(source_name="intent.md", sha256=digest),
+            DeliverySourceBinding(source_name="design.md", sha256=digest),
+        ),
+    )
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(
+                outcome_id="OUT-001",
+                plan_scope_id="SCOPE-001",
+                stage=DeliveryStage.COMPLETED,
+            ),
+        ),
+    )
+    change_root = target_root / "delivery/changes/change-a"
+    change_root.mkdir(parents=True)
+    change_root.joinpath("contract.json").write_text(contract.model_dump_json(), encoding="utf-8")
+    change_root.joinpath("frontier.json").write_text(frontier.model_dump_json(), encoding="utf-8")
 
 
 @pytest.mark.asyncio
@@ -293,7 +350,7 @@ def test_invalid_integration_target_fails_before_owner_state_mutation(
     path = tmp_path / "delivery.json"
     _write_config(path, content)
     config = load_delivery_config(path)
-    monkeypatch.setattr(live_server, "_authorize_configured_target", lambda _config: None)
+    monkeypatch.setattr(live_server, "_authorize_configured_target", lambda config: config.target_root)
 
     with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
         load_delivery_application(config)
@@ -312,7 +369,7 @@ async def test_complete_config_constructs_application_before_lifespan_yield(
     path = tmp_path / "delivery.json"
     _write_config(path, _config(tmp_path, repository))
     monkeypatch.setenv("OWLBEAR_DELIVERY_CONFIG", str(path))
-    monkeypatch.setattr(live_server, "_authorize_configured_target", lambda _config: None)
+    monkeypatch.setattr(live_server, "_authorize_configured_target", lambda config: config.target_root)
 
     async with app_lifespan(mcp) as context:
         tools = {tool.name: tool for tool in await mcp.list_tools()}
@@ -322,3 +379,63 @@ async def test_complete_config_constructs_application_before_lifespan_yield(
 
     with pytest.raises(RuntimeError, match="outside server lifespan"):
         live_server._live_application()
+
+
+def test_mcp_startup_delegates_owner_construction_to_kanban(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = _repository(tmp_path)
+    path = tmp_path / "delivery.json"
+    _write_config(path, _config(tmp_path, repository))
+    config = load_delivery_config(path)
+    application = object()
+    calls: list[tuple[object, Path]] = []
+
+    def load_core(candidate: object, *, authorized_target_root: Path) -> object:
+        calls.append((candidate, authorized_target_root))
+        return application
+
+    monkeypatch.setattr(live_server, "_authorize_configured_target", lambda candidate: candidate.target_root)
+    monkeypatch.setattr(live_server, "load_core_delivery_application", load_core)
+
+    assert load_delivery_application(config) is application
+    assert calls == [(config, config.target_root)]
+
+
+@pytest.mark.asyncio
+async def test_assembled_work_item_tools_observe_runtime_transition(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = _repository(tmp_path)
+    target_root = tmp_path / "target"
+    _write_delivery_state(target_root)
+    path = tmp_path / "delivery.json"
+    _write_config(path, _config(tmp_path, repository))
+    config = load_delivery_config(path)
+    monkeypatch.setattr(live_server, "_authorize_configured_target", lambda candidate: candidate.target_root)
+    application = load_delivery_application(config)
+    server = assemble_target_server(application)
+    tools = server._tool_manager  # noqa: SLF001
+    list_tool = tools.get_tool("list_work_items")
+    show_tool = tools.get_tool("show_work_item")
+    assert list_tool is not None
+    assert show_tool is not None
+
+    before = await show_tool.fn({"change_id": "change-a", "work_item_id": "OUT-001"})
+    application.administrative_move(
+        "change-a",
+        AdministrativeDeliveryMove(
+            move_id="move-001",
+            outcome_id="OUT-001",
+            target=DeliveryStage.PLANNING,
+            reason="Operator evidence invalidated the result.",
+        ),
+    )
+    listed = await list_tool.fn({})
+    after = await show_tool.fn({"change_id": "change-a", "work_item_id": "OUT-001"})
+
+    assert before["projection"]["stage"] == "completed"
+    assert listed[0]["stage"] == "planning"
+    assert after["projection"]["stage"] == "planning"
