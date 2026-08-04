@@ -1,5 +1,5 @@
-import { Suspense, useMemo } from 'react'
-import { PHeading, PIcon, PLink } from '@porsche-design-system/components-react'
+import { Suspense, useState } from 'react'
+import { PButtonPure, PFlyout, PLinkPure } from '@porsche-design-system/components-react'
 import { useLocation, useNavigate } from 'react-router'
 import { routeConfig } from './routes'
 import ThemeToggle from './components/ThemeToggle'
@@ -10,49 +10,100 @@ const ICONS = {
   ideas: 'user-manual',
 } as const
 
+interface ProductNavigationProps {
+  activePath: string
+  compact?: boolean
+  onNavigate: (path: string) => void
+}
+
+function ProductNavigation({ activePath, compact = false, onNavigate }: ProductNavigationProps) {
+  return (
+    <nav aria-label="Product areas" className={compact ? 'grid justify-items-center gap-static-md' : 'grid gap-static-lg'}>
+      {routeConfig.map((route) => (
+        <PLinkPure
+          key={route.path}
+          href={route.path}
+          icon={ICONS[route.icon as keyof typeof ICONS] ?? 'grid'}
+          active={route.path === activePath}
+          hideLabel={compact}
+          stretch={!compact}
+          size="medium"
+          title={compact ? route.label : undefined}
+          aria={{ 'aria-current': route.path === activePath ? 'page' : undefined, 'aria-label': route.label }}
+          className={compact ? 'flex min-h-11 min-w-11 items-center justify-center' : 'min-h-11'}
+          onClick={(event) => {
+            event.preventDefault()
+            onNavigate(route.path)
+          }}
+        >
+          {route.label}
+        </PLinkPure>
+      ))}
+    </nav>
+  )
+}
+
 export default function CockpitShell() {
   const location = useLocation()
   const navigate = useNavigate()
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
   const activeRoute = routeConfig.find((route) => route.path === location.pathname) ?? routeConfig[0]
   const ActivePage = activeRoute.component
-  const navItems = useMemo(
-    () => routeConfig.map((route) => ({ ...route, active: route.path === activeRoute.path })),
-    [activeRoute.path],
-  )
+
+  const goTo = (path: string) => {
+    setMobileNavigationOpen(false)
+    navigate(path)
+  }
 
   return (
-    <div className="flex min-h-dvh min-w-0 flex-col overflow-x-hidden bg-canvas text-primary" data-testid="cockpit-shell" data-region="workspace">
-      <header className="sticky top-0 z-20 border-b border-contrast-low bg-canvas/95 backdrop-blur-md">
-        <div className="mx-auto flex w-full max-w-[1440px] items-center justify-between gap-static-md px-static-md py-static-sm md:px-static-xl">
-          <div className="min-w-0">
-            <PHeading tag="h1" size="md">OwlBear</PHeading>
-            <span className="block truncate text-xs text-contrast-medium">Cockpit</span>
-          </div>
-          <ThemeToggle compact />
+    <div className="grid min-h-dvh min-w-0 grid-cols-1 overflow-x-hidden bg-canvas text-primary lg:grid-cols-[5.75rem_minmax(0,1fr)]" data-testid="cockpit-shell">
+      <aside className="sticky top-0 hidden h-dvh flex-col items-center border-r border-contrast-low bg-surface px-static-sm py-static-md lg:flex" data-region="nav-rail" data-testid="desktop-product-navigation">
+        <div className="text-center">
+          <strong className="block text-sm">OwlBear</strong>
+          <span className="text-xs text-contrast-medium">Cockpit</span>
         </div>
-        <nav aria-label="Product areas" className="mx-auto flex w-full max-w-[1440px] gap-0.5 overflow-x-auto px-0.5 sm:gap-static-xs sm:px-static-md md:px-static-xl">
-          {navItems.map((route) => (
-            <PLink
-              key={route.path}
-              href={route.path}
-              aria-current={route.active ? 'page' : undefined}
-              className={[
-                'inline-flex min-h-11 min-w-[5.5rem] flex-1 items-center justify-center gap-static-xs border-b-2 px-0.5 py-static-xs text-[0.7rem] font-semibold sm:px-static-sm sm:text-sm',
-                route.active ? 'border-primary text-primary' : 'border-transparent text-contrast-medium',
-              ].join(' ')}
-              onClick={(event) => {
-                event.preventDefault()
-                navigate(route.path)
-              }}
-            >
-              <span className="hidden sm:inline-flex"><PIcon name={ICONS[route.icon as keyof typeof ICONS] ?? 'grid'} size="sm" aria-hidden="true" /></span>
-              <span className="min-w-0 truncate">{route.label}</span>
-            </PLink>
-          ))}
-        </nav>
-      </header>
+        <div className="mt-static-xl flex-1">
+          <ProductNavigation activePath={activeRoute.path} compact onNavigate={goTo} />
+        </div>
+        <ThemeToggle compact />
+      </aside>
 
-      <div className="min-h-0 min-w-0 flex-1">
+      <div className="min-h-0 min-w-0" data-region="workspace">
+        <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between gap-static-md border-b border-contrast-low bg-canvas/95 px-static-md backdrop-blur-md lg:hidden">
+          <div className="min-w-0">
+            <strong className="block text-sm">OwlBear</strong>
+            <span className="block text-xs text-contrast-medium">Cockpit</span>
+          </div>
+          <div className="flex items-center gap-static-md">
+            <ThemeToggle compact />
+            <PButtonPure
+              type="button"
+              icon="menu-lines"
+              hideLabel
+              aria={{ 'aria-label': 'Open navigation', 'aria-expanded': mobileNavigationOpen }}
+              onClick={() => setMobileNavigationOpen(true)}
+            >
+              Open navigation
+            </PButtonPure>
+          </div>
+        </header>
+
+        <PFlyout
+          open={mobileNavigationOpen}
+          position="start"
+          fullscreen
+          aria={{ 'aria-label': 'Product areas' }}
+          onDismiss={() => setMobileNavigationOpen(false)}
+        >
+          <div className="grid gap-static-xl p-static-lg">
+            <div>
+              <strong className="block text-lg">OwlBear</strong>
+              <span className="text-sm text-contrast-medium">Cockpit</span>
+            </div>
+            <ProductNavigation activePath={activeRoute.path} onNavigate={goTo} />
+          </div>
+        </PFlyout>
+
         <Suspense fallback={<p className="p-static-lg" role="status">Preparing workspace...</p>}>
           <ActivePage />
         </Suspense>

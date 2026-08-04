@@ -1,11 +1,13 @@
 import { useDeferredValue, useState } from 'react'
-import { PButton, PHeading, PIcon, PSelect, PSelectOption, PTag } from '@porsche-design-system/components-react'
+import { PButton, PHeading, PIcon, PSelect, PSelectOption, PTabs, PTabsItem, PTag } from '@porsche-design-system/components-react'
 import type { AttentionCounts, WorkItemAttention, WorkItemProjection } from '../api/workItems'
+import CompletedHistoryWorkspace from '../components/CompletedHistoryWorkspace'
 import WorkItemDetail from '../components/WorkItemDetail'
 import WorkPortfolioBoard from '../components/WorkPortfolioBoard'
 import { useWorkItemDetail, useWorkPortfolio, type WorkItemIdentity } from '../hooks/useWorkItems'
 
 type SelectValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }
+type TabsUpdateEvent = { detail?: { activeTabIndex?: unknown } }
 
 function selectedValue(event: SelectValueEvent): string {
   const value = event.detail?.value ?? event.target?.value
@@ -110,9 +112,10 @@ function EmptyDetail({ error, retry }: { error: Error | null; retry: () => void 
 }
 
 export default function WorkPortfolioPage() {
-  const { portfolio, error, isLoading, retry } = useWorkPortfolio()
+  const { portfolio, hasData, error, isLoading, retry } = useWorkPortfolio()
   const [changeFilter, setChangeFilter] = useState('')
   const [attentionFilter, setAttentionFilter] = useState<WorkItemAttention | ''>('')
+  const [workspace, setWorkspace] = useState<'current' | 'history'>('current')
   const deferredChange = useDeferredValue(changeFilter)
   const deferredAttention = useDeferredValue(attentionFilter)
   const items = portfolio.items.map((item) => item.card)
@@ -126,26 +129,39 @@ export default function WorkPortfolioPage() {
     <main className="min-h-dvh min-w-0 bg-canvas text-primary" data-testid="work-portfolio-page">
       <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-static-lg px-static-md py-static-lg md:px-static-xl">
         <PortfolioHeader counts={portfolio.attention_counts} />
-        <PortfolioFilters
-          changes={changes}
-          changeFilter={changeFilter}
-          attentionFilter={attentionFilter}
-          shown={filteredItems.length}
-          total={items.length}
-          onChangeFilter={setChangeFilter}
-          onAttentionFilter={setAttentionFilter}
-        />
+        <PTabs
+          activeTabIndex={workspace === 'current' ? 0 : 1}
+          aria={{ 'aria-label': 'Work views' }}
+          onUpdate={(event) => setWorkspace((event as TabsUpdateEvent).detail?.activeTabIndex === 1 ? 'history' : 'current')}
+        >
+          <PTabsItem label="Current" />
+          <PTabsItem label="History" />
+        </PTabs>
 
-        {isLoading ? <p role="status">Loading work portfolio...</p> : null}
-        {error ? (
-          <section className="flex flex-wrap items-center gap-static-sm border-l-4 border-danger bg-surface p-static-md" role="alert">
-            <PIcon name="error" aria-hidden="true" />
-            <span className="min-w-0 flex-1">Work portfolio is unavailable. {error.message}</span>
-            <PButton type="button" variant="secondary" onClick={retry}>Retry portfolio</PButton>
-          </section>
-        ) : null}
+        {workspace === 'current' ? (
+          <>
+            <PortfolioFilters
+              changes={changes}
+              changeFilter={changeFilter}
+              attentionFilter={attentionFilter}
+              shown={filteredItems.length}
+              total={items.length}
+              onChangeFilter={setChangeFilter}
+              onAttentionFilter={setAttentionFilter}
+            />
 
-        {!isLoading && !error ? <PortfolioWorkspace items={filteredItems} onChanged={retry} /> : null}
+            {isLoading ? <p role="status">Loading work portfolio...</p> : null}
+            {error ? (
+              <section className="flex flex-wrap items-center gap-static-sm border-l-4 border-danger bg-surface p-static-md" role="alert">
+                <PIcon name="error" aria-hidden="true" />
+                <span className="min-w-0 flex-1">Work portfolio is unavailable. {error.message}</span>
+                <PButton type="button" variant="secondary" onClick={retry}>Retry portfolio</PButton>
+              </section>
+            ) : null}
+
+            {hasData && !error ? <PortfolioWorkspace items={filteredItems} onChanged={retry} /> : null}
+          </>
+        ) : <CompletedHistoryWorkspace />}
       </div>
     </main>
   )

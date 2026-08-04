@@ -31,8 +31,8 @@ export default defineConfig({
   ],
   webServer: process.env['WORK_PORTFOLIO_E2E']
     ? {
-        command: 'npm run build && vite preview --host 127.0.0.1 --port 4175',
-        url: 'http://127.0.0.1:4175/work',
+        command: 'npm run build && node e2e/support/start-work-portfolio-stack.mjs',
+        url: 'http://127.0.0.1:4175/health/live',
         reuseExistingServer: false,
         timeout: 120_000,
       }

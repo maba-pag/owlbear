@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
   WorkItemApiError,
+  type CompletedChangeRecord,
   type WorkItemDetailResponse,
   type WorkItemProjection,
   type WorkItemSummaryResponse,
@@ -17,6 +18,9 @@ const api = vi.hoisted(() => ({
   recover: vi.fn(),
   move: vi.fn(),
   retryIntegration: vi.fn(),
+  listCompleted: vi.fn(),
+  searchCompleted: vi.fn(),
+  showCompleted: vi.fn(),
 }))
 
 vi.mock('../api/workItems', async (importOriginal) => {
@@ -30,6 +34,9 @@ vi.mock('../api/workItems', async (importOriginal) => {
     recoverWorkItemClaim: api.recover,
     moveWorkItemBackward: api.move,
     retryWorkItemIntegration: api.retryIntegration,
+    listCompletedChanges: api.listCompleted,
+    searchCompletedChanges: api.searchCompleted,
+    showCompletedChange: api.showCompleted,
   }
 })
 
@@ -117,6 +124,28 @@ function inspectFirstItem() {
 
 const items = portfolioFixture()
 let currentDetail: WorkItemDetailResponse
+const completed: CompletedChangeRecord[] = [
+  {
+    change_id: 'completed-alpha',
+    completion_id: 'a'.repeat(64),
+    completion_path: '.owlbear/completed/completed-alpha',
+    package_id: 'b'.repeat(64),
+    introducing_target_commit: 'c'.repeat(40),
+    source_target_commit: 'd'.repeat(40),
+    title: 'Alpha delivery',
+    semantic_summary: 'Shipped the bounded Alpha workflow.',
+  },
+  {
+    change_id: 'completed-beta',
+    completion_id: 'e'.repeat(64),
+    completion_path: '.owlbear/completed/completed-beta',
+    package_id: 'f'.repeat(64),
+    introducing_target_commit: '1'.repeat(40),
+    source_target_commit: '2'.repeat(40),
+    title: 'Beta search',
+    semantic_summary: 'Added exact semantic history search.',
+  },
+]
 
 beforeEach(() => {
   currentDetail = detailFixture()
@@ -130,6 +159,33 @@ beforeEach(() => {
   api.recover.mockReset().mockResolvedValue({})
   api.move.mockReset().mockResolvedValue({ invalidated_outcome_ids: ['OUT-002'], move: {} })
   api.retryIntegration.mockReset().mockResolvedValue({})
+  api.listCompleted.mockReset().mockResolvedValue({ records: completed, next_cursor: null })
+  api.searchCompleted.mockReset().mockResolvedValue({ records: [completed[1]], next_cursor: null })
+  api.showCompleted.mockReset().mockResolvedValue(completed[1])
+})
+
+it('searches completed history and opens one exact completion', async () => {
+  const { container } = renderPage()
+  await screen.findByTestId('work-shown-count')
+
+  await waitFor(() => {
+    fireEvent(container.querySelector('p-tabs')!, new CustomEvent('update', {
+      detail: { activeTabIndex: 1 },
+      bubbles: true,
+    }))
+    expect(screen.getByText('Completed history')).toBeInTheDocument()
+  })
+  expect(await screen.findByText('Alpha delivery')).toBeInTheDocument()
+
+  await waitFor(() => {
+    inputValue(container.querySelector('p-input-search[name="completed-history-search"]')!, 'beta')
+    expect(api.searchCompleted).toHaveBeenCalledWith('beta')
+  })
+  expect(await screen.findByText('Beta search')).toBeInTheDocument()
+  fireEvent.click(screen.getByText('Inspect', { exact: true }))
+
+  await waitFor(() => expect(api.showCompleted).toHaveBeenCalledWith('completed-beta', 'e'.repeat(64)))
+  expect(await screen.findByTestId('completed-change-detail')).toHaveTextContent('Added exact semantic history search.')
 })
 
 it('filters bounded current cards and opens exact Delivery detail', async () => {

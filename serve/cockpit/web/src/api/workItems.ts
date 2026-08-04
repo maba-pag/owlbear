@@ -120,6 +120,22 @@ export interface BackwardMoveResult {
   invalidated_outcome_ids: string[]
 }
 
+export interface CompletedChangeRecord {
+  change_id: string
+  completion_id: string
+  completion_path: string
+  package_id: string
+  introducing_target_commit: string
+  source_target_commit: string
+  title: string
+  semantic_summary: string
+}
+
+export interface CompletedChangePage {
+  records: CompletedChangeRecord[]
+  next_cursor: string | null
+}
+
 interface WorkItemRequestOptions extends RequestInit {
   fallbackCode: string
 }
@@ -167,6 +183,28 @@ function controlRequest<T>(url: string, fallbackCode: string, body?: object): Pr
 
 export function listWorkItems(): Promise<WorkItemPortfolioResponse> {
   return workItemRequest('/api/work-items', { fallbackCode: 'ERR_WORK_ITEM_PORTFOLIO' })
+}
+
+export function listCompletedChanges(cursor?: string): Promise<CompletedChangePage> {
+  const query = cursor ? `?${new URLSearchParams({ cursor }).toString()}` : ''
+  return workItemRequest(`/api/work-items/completed${query}`, { fallbackCode: 'ERR_COMPLETED_HISTORY' })
+}
+
+export function searchCompletedChanges(query: string, cursor?: string): Promise<CompletedChangePage> {
+  const parameters = new URLSearchParams({ query })
+  if (cursor) parameters.set('cursor', cursor)
+  return workItemRequest(
+    `/api/work-items/completed/search?${parameters.toString()}`,
+    { fallbackCode: 'ERR_COMPLETED_HISTORY_SEARCH' },
+  )
+}
+
+export function showCompletedChange(changeId: string, completionId: string): Promise<CompletedChangeRecord> {
+  const query = new URLSearchParams({ completion_id: completionId })
+  return workItemRequest(
+    `/api/work-items/completed/${encodeURIComponent(changeId)}?${query.toString()}`,
+    { fallbackCode: 'ERR_COMPLETED_HISTORY_DETAIL' },
+  )
 }
 
 export function showWorkItem(changeId: string, outcomeId: string): Promise<WorkItemDetailResponse> {

@@ -23,10 +23,25 @@ it('navigates between the target product areas', async () => {
   )
 
   expect(screen.getByText('Work portfolio')).toBeInTheDocument()
-  expect(screen.getByText('Work').closest('p-link')).toHaveAttribute('aria-current', 'page')
+  const desktopNavigation = screen.getByTestId('desktop-product-navigation')
+  expect(desktopNavigation.querySelector('p-link-pure[title="Work"]')).toHaveProperty('active', true)
 
-  fireEvent.click(screen.getByText('Memory').closest('p-link')!)
+  fireEvent.click(desktopNavigation.querySelector('p-link-pure[title="Memory"]')!)
 
   expect(await screen.findByText('Memory workspace')).toBeInTheDocument()
-  expect(screen.getByText('Memory').closest('p-link')).toHaveAttribute('aria-current', 'page')
+  expect(desktopNavigation.querySelector('p-link-pure[title="Memory"]')).toHaveProperty('active', true)
+})
+
+it('opens labeled product navigation from the compact mobile header', () => {
+  render(
+    <MemoryRouter initialEntries={['/work']}>
+      <CockpitShell />
+    </MemoryRouter>,
+  )
+
+  fireEvent.click(screen.getByText('Open navigation'))
+
+  const flyout = document.querySelector('p-flyout') as HTMLElement & { open: boolean }
+  expect(flyout.open).toBe(true)
+  expect(flyout.querySelector('p-link-pure')).toHaveTextContent('Work')
 })
