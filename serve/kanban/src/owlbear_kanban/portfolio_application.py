@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -13,10 +14,12 @@ from typing import TYPE_CHECKING, Never
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from owlbear_kanban.change_workspace import (
+    AtomicIntegrationPreparation,
     ChangeCoordination,
     ChangeWorkspaceManager,
     ChangeWriter,
     CoordinationConflictError,
+    IntegrationContext,
     PortfolioCoordinator,
     WorkspaceRecoverySnapshot,
 )
@@ -24,6 +27,10 @@ from owlbear_kanban.delivery_runtime import (
     ActivateDeliveryClaim,
     DeliveryActiveClaim,
     DeliveryChangeStage,
+    DeliveryIntegrationAttention,
+    DeliveryIntegrationAttentionCode,
+    DeliveryIntegrationCandidate,
+    DeliveryIntegrationCompletion,
     DeliveryRecoveryAttention,
     DeliveryRequest,
     DeliveryReturnContext,
@@ -34,12 +41,26 @@ from owlbear_kanban.delivery_runtime import (
     DeliveryWorkerRole,
     OutcomeAuthorityBinding,
 )
+from owlbear_kanban.design_package import (
+    CompletionCapture,
+    CompletionPackageSnapshot,
+    DesignPackageConflictError,
+)
 from owlbear_kanban.target_contract import DeliveryCommitment, DeliveryOutcome
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from owlbear_kanban.design_package import DesignPackageStore, VerifiedDesignPackage
+
+_COMPLETED_ROOT = ".owlbear/completed"
+
+
+def _reject_unconfigured_candidate(
+    _candidate: DeliveryIntegrationCandidate,
+    _commit: str,
+) -> tuple[str, ...]:
+    return ("candidate proof dependency is not configured",)
 
 
 class _ApplicationModel(BaseModel):
@@ -170,6 +191,26 @@ class DeliveryClaimRecoveryResult(_ApplicationModel):
         return self
 
 
+class DeliveryIntegrationResult(_ApplicationModel):
+    """One committed atomic publication or retained typed Integration attention."""
+
+    change_id: str = Field(min_length=1)
+    candidate: DeliveryIntegrationCandidate | None = None
+    completion: DeliveryIntegrationCompletion | None = None
+    attention: DeliveryIntegrationAttention | None = None
+    replayed: bool = False
+
+    @model_validator(mode="after")
+    def _validate_disposition(self) -> DeliveryIntegrationResult:
+        if (self.completion is None) == (self.attention is None):
+            message = "Integration result requires completion or attention"
+            raise ValueError(message)
+        if self.attention is not None and self.replayed:
+            message = "Integration attention cannot be a completed replay"
+            raise ValueError(message)
+        return self
+
+
 class PortfolioApplicationError(RuntimeError):
     """Portfolio preparation or scoped context validation failed closed."""
 
@@ -199,6 +240,7 @@ class PortfolioApplicationDependencies:
     package_store: DesignPackageStore
     coordinator: PortfolioCoordinator
     workspace_manager: ChangeWorkspaceManager
+    candidate_proof: Callable[[DeliveryIntegrationCandidate, str], tuple[str, ...]] = _reject_unconfigured_candidate
 
 
 @dataclass(frozen=True)
@@ -226,6 +268,13 @@ class _PreparedSource:
     source_head: str
 
 
+@dataclass(frozen=True)
+class _PreparedIntegration:
+    snapshot: CompletionPackageSnapshot
+    candidate: DeliveryIntegrationCandidate
+    preparation: AtomicIntegrationPreparation
+
+
 class PortfolioApplication:
     """Compose Delivery runtimes, source packages, and warm workspace custody."""
 
@@ -244,6 +293,7 @@ class PortfolioApplication:
         self._package_root = config.package_root.resolve()
         self._coordinator = dependencies.coordinator
         self._workspace_manager = dependencies.workspace_manager
+        self._candidate_proof = dependencies.candidate_proof
         self._execution_capacity = config.execution_capacity
         self._policies = {policy.worker_role: policy for policy in config.role_policies}
         self._identity_factory = hooks.identity_factory if hooks else lambda: str(uuid.uuid4())
@@ -416,6 +466,203 @@ class PortfolioApplication:
                 claim_id,
                 rejected_head,
             )
+
+    def integrate_ready_change(self, change_id: str) -> DeliveryIntegrationResult:
+        """Publish reviewed product and its completed package through one target CAS."""
+        with self._coordinator.integration_lock():
+            runtime = self._runtime(change_id)
+            context = self._workspace_manager.integration_context(change_id)
+            existing = runtime.integration_completion()
+            if existing is not None:
+                self._cleanup_integration(change_id, existing)
+                return DeliveryIntegrationResult(
+                    change_id=change_id,
+                    completion=existing,
+                    replayed=True,
+                )
+            if runtime.change_stage() != DeliveryChangeStage.INTEGRATION:
+                self._fail("change is not ready for Integration")
+            result = self._capture_ready_integration(change_id, runtime, context)
+            if result.completion is not None:
+                self._cleanup_integration(change_id, result.completion)
+            return result
+
+    def _capture_ready_integration(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        context: IntegrationContext,
+    ) -> DeliveryIntegrationResult:
+        try:
+            package = self._package_store.read_verified(change_id)
+            attention_code = self._package_attention_code(runtime, package)
+            if attention_code is not None:
+                return self._integration_attention(
+                    runtime,
+                    context,
+                    attention_code,
+                    ("active package does not match admitted completed Delivery authority",),
+                )
+            runtime_bytes, result_history_bytes = runtime.completion_capture_bytes()
+            capture = CompletionCapture(
+                change_id=change_id,
+                expected_package_id=package.package_id,
+                authority_digest=runtime.authority_digest,
+                runtime_bytes=runtime_bytes,
+                result_history_bytes=result_history_bytes,
+                reviewed_change_head=context.reviewed_change_head,
+                integration_target=context.integration_target,
+                completion_path=f"{_COMPLETED_ROOT}/{change_id}",
+            )
+            return self._package_store.capture_completion(
+                capture,
+                validation_callback=lambda snapshot: self._prepare_integration_snapshot(runtime, context, snapshot),
+                publication_callback=lambda prepared: self._publish_prepared_integration(runtime, context, prepared),
+            )
+        except DesignPackageConflictError as exc:
+            return self._integration_attention(
+                runtime,
+                context,
+                DeliveryIntegrationAttentionCode.PACKAGE_MUTATED,
+                (str(exc),),
+            )
+
+    def _prepare_integration_snapshot(
+        self,
+        runtime: DeliveryRuntime,
+        context: IntegrationContext,
+        snapshot: CompletionPackageSnapshot,
+    ) -> _PreparedIntegration:
+        candidate = self._integration_candidate(runtime, context, snapshot)
+        preparation = self._workspace_manager.prepare_integration_candidate(
+            candidate,
+            self._candidate_proof,
+        )
+        return _PreparedIntegration(snapshot, candidate, preparation)
+
+    def _publish_prepared_integration(
+        self,
+        runtime: DeliveryRuntime,
+        context: IntegrationContext,
+        prepared: _PreparedIntegration,
+    ) -> DeliveryIntegrationResult:
+        candidate = prepared.candidate
+        snapshot = prepared.snapshot
+        publication = self._workspace_manager.publish_prepared_integration(prepared.preparation)
+        if publication.code is not None:
+            return self._integration_attention(
+                runtime,
+                context,
+                publication.code,
+                publication.diagnostics,
+                candidate=candidate,
+            )
+        if publication.target_commit is None:
+            self._fail("Integration publication returned no target commit")
+        completion = DeliveryIntegrationCompletion(
+            completion_id=snapshot.completion_id,
+            candidate_id=candidate.candidate_id,
+            package_id=snapshot.package_id,
+            target_commit=publication.target_commit,
+            completion_path=snapshot.manifest.completion_path,
+        )
+        runtime.publish_integration_completion(completion)
+        return DeliveryIntegrationResult(
+            change_id=runtime.contract.change_id,
+            candidate=candidate,
+            completion=completion,
+            replayed=publication.replayed,
+        )
+
+    def _integration_candidate(
+        self,
+        runtime: DeliveryRuntime,
+        context: IntegrationContext,
+        snapshot: CompletionPackageSnapshot,
+    ) -> DeliveryIntegrationCandidate:
+        payload = {
+            "completion_id": snapshot.completion_id,
+            "package_id": snapshot.package_id,
+            "package_tree": snapshot.package_tree,
+            "reviewed_change_head": context.reviewed_change_head,
+            "integration_target": context.integration_target,
+        }
+        candidate_id = hashlib.sha256(_canonical(payload)).hexdigest()
+        return DeliveryIntegrationCandidate(
+            candidate_id=candidate_id,
+            completion_id=snapshot.completion_id,
+            change_id=runtime.contract.change_id,
+            package_id=snapshot.package_id,
+            authority_digest=runtime.authority_digest,
+            runtime_digest=snapshot.manifest.runtime_sha256,
+            result_history_digest=snapshot.manifest.result_history_sha256,
+            reviewed_change_head=context.reviewed_change_head,
+            integration_target=context.integration_target,
+            target_head=context.target_head,
+            completion_path=snapshot.manifest.completion_path,
+            package_tree=snapshot.package_tree,
+        )
+
+    def _integration_attention(
+        self,
+        runtime: DeliveryRuntime,
+        context: IntegrationContext,
+        code: DeliveryIntegrationAttentionCode,
+        diagnostics: tuple[str, ...],
+        *,
+        candidate: DeliveryIntegrationCandidate | None = None,
+    ) -> DeliveryIntegrationResult:
+        payload = {
+            "code": code.value,
+            "change_id": runtime.contract.change_id,
+            "change_head": context.change_head,
+            "target_head": context.target_head,
+            "integration_target": context.integration_target,
+            "diagnostics": diagnostics,
+        }
+        attention = DeliveryIntegrationAttention(
+            attention_id=hashlib.sha256(_canonical(payload)).hexdigest(),
+            code=code,
+            change_id=runtime.contract.change_id,
+            change_head=context.change_head,
+            target_head=context.target_head,
+            integration_target=context.integration_target,
+            diagnostics=diagnostics,
+            retry_condition="Restore the named identities, then retry this exact change Integration.",
+        )
+        runtime.publish_integration_attention(attention)
+        return DeliveryIntegrationResult(
+            change_id=runtime.contract.change_id,
+            candidate=candidate,
+            attention=attention,
+        )
+
+    def _cleanup_integration(
+        self,
+        change_id: str,
+        completion: DeliveryIntegrationCompletion,
+    ) -> None:
+        self._package_store.cleanup_completed(change_id, completion.package_id)
+        self._workspace_manager.cleanup_integrated_worktree(
+            change_id,
+            completion.completion_path,
+            completion.completion_id,
+        )
+
+    @staticmethod
+    def _package_attention_code(
+        runtime: DeliveryRuntime,
+        package: VerifiedDesignPackage,
+    ) -> DeliveryIntegrationAttentionCode | None:
+        if hashlib.sha256(package.authority_bytes).hexdigest() != runtime.authority_digest:
+            return DeliveryIntegrationAttentionCode.REVISION_PENDING
+        source_digests = {binding.source_name: binding.sha256 for binding in runtime.contract.source_bindings}
+        if source_digests != {
+            "intent.md": package.manifest.intent_sha256,
+            "design.md": package.manifest.design_sha256,
+        }:
+            return DeliveryIntegrationAttentionCode.PACKAGE_MUTATED
+        return None
 
     def _candidates(self) -> tuple[_Candidate, ...]:
         candidates = []
@@ -668,12 +915,17 @@ class PortfolioApplication:
         raise PortfolioApplicationError(message) from cause
 
 
+def _canonical(payload: object) -> bytes:
+    return f"{json.dumps(payload, sort_keys=True, separators=(',', ':'))}\n".encode()
+
+
 __all__ = [
     "DeliveryAcquisitionFailure",
     "DeliveryAcquisitionResult",
     "DeliveryBuildContext",
     "DeliveryClaimRecoveryResult",
     "DeliveryClaimRecoveryStatus",
+    "DeliveryIntegrationResult",
     "DeliveryLaunchPackage",
     "DeliveryPlanContext",
     "DeliveryRolePolicy",

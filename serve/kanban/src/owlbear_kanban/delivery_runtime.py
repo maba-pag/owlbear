@@ -256,6 +256,59 @@ class DeliveryRecoveryAttention(_DeliveryModel):
     retry_condition: str = Field(min_length=1)
 
 
+class DeliveryIntegrationAttentionCode(StrEnum):
+    """Typed reason that atomic Integration retained completed outcomes."""
+
+    REVISION_PENDING = "revision-pending"
+    TARGET_IDENTITY_MISMATCH = "target-identity-mismatch"
+    PACKAGE_MUTATED = "package-mutated"
+    COMPLETED_HISTORY_MUTATED = "completed-history-mutated"
+    REVIEWED_BOUNDARY_MISMATCH = "reviewed-boundary-mismatch"
+    MERGE_CONFLICT = "merge-conflict"
+    CANDIDATE_PROOF_FAILED = "candidate-proof-failed"
+    TARGET_CAS_LOST = "target-cas-lost"
+
+
+class DeliveryIntegrationCandidate(_DeliveryModel):
+    """Immutable candidate for one atomic product and completion publication."""
+
+    candidate_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    completion_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: str = Field(min_length=1)
+    package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    authority_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    runtime_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    result_history_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    reviewed_change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    integration_target: str = Field(min_length=1)
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    completion_path: str = Field(min_length=1)
+    package_tree: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class DeliveryIntegrationCompletion(_DeliveryModel):
+    """Committed identity of one atomic Integration publication."""
+
+    completion_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    candidate_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    target_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    completion_path: str = Field(min_length=1)
+
+
+class DeliveryIntegrationAttention(_DeliveryModel):
+    """Retryable evidence for one failed atomic Integration attempt."""
+
+    attention_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    code: DeliveryIntegrationAttentionCode
+    change_id: str = Field(min_length=1)
+    change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    integration_target: str = Field(min_length=1)
+    diagnostics: tuple[str, ...] = Field(min_length=1)
+    retry_condition: str = Field(min_length=1)
+
+
 class DeliveryActiveClaim(_DeliveryModel):
     """Recoverable execution identity for one active outcome claim."""
 
@@ -365,6 +418,8 @@ class DeliveryFrontier(_DeliveryModel):
     bindings: tuple[OutcomeAuthorityBinding, ...]
     operator_moves: tuple[DeliveryOperatorMove, ...] = ()
     integration_result_id: str | None = None
+    integration_completion: DeliveryIntegrationCompletion | None = None
+    integration_attention: DeliveryIntegrationAttention | None = None
 
     @model_validator(mode="after")
     def _validate_identities(self) -> DeliveryFrontier:
@@ -376,6 +431,18 @@ class DeliveryFrontier(_DeliveryModel):
             raise ValueError(message)
         if len(move_ids) != len(set(move_ids)):
             message = "Delivery operator move identities must be unique"
+            raise ValueError(message)
+        if (self.integration_result_id is None) != (self.integration_completion is None):
+            message = "Integration result identity and completion must be published together"
+            raise ValueError(message)
+        if (
+            self.integration_completion is not None
+            and self.integration_result_id != self.integration_completion.completion_id
+        ):
+            message = "Integration result identity must match its completion"
+            raise ValueError(message)
+        if self.integration_completion is not None and self.integration_attention is not None:
+            message = "completed Integration cannot retain attention"
             raise ValueError(message)
         return self
 
@@ -549,6 +616,29 @@ class DeliveryRuntime:
         """Return current canonical frontier bytes for OCC and failure proof."""
         return self._read()[1]
 
+    def completion_capture_bytes(self) -> tuple[bytes, bytes]:
+        """Return stable completed-outcome runtime and compact result history bytes."""
+        frontier, _content = self._read()
+        if {binding.stage for binding in frontier.bindings} != {DeliveryStage.COMPLETED}:
+            _conflict("Integration capture requires every outcome to be completed")
+        capture = frontier.model_copy(
+            update={
+                "integration_result_id": None,
+                "integration_completion": None,
+                "integration_attention": None,
+            }
+        )
+        results = tuple(result for binding in frontier.bindings for result in binding.results)
+        return _model_content(capture), _canonical_content(results)
+
+    def integration_completion(self) -> DeliveryIntegrationCompletion | None:
+        """Return the committed Integration identity when publication completed."""
+        return self._read()[0].integration_completion
+
+    def integration_attention(self) -> DeliveryIntegrationAttention | None:
+        """Return current retryable Integration evidence, if any."""
+        return self._read()[0].integration_attention
+
     def show_binding(self, outcome_id: str) -> OutcomeAuthorityBinding:
         """Return one current outcome binding."""
         return _find_binding(self._read()[0], outcome_id)
@@ -620,6 +710,44 @@ class DeliveryRuntime:
         updated = binding.model_copy(update={"recovery_attention": attention})
         self._replace(previous, _replace_binding(frontier, binding, updated))
         return updated
+
+    def publish_integration_completion(
+        self,
+        completion: DeliveryIntegrationCompletion,
+    ) -> DeliveryIntegrationCompletion:
+        """Publish one committed Integration identity and clear matching attention."""
+        frontier, previous = self._read()
+        if {binding.stage for binding in frontier.bindings} != {DeliveryStage.COMPLETED}:
+            _conflict("Integration completion requires every outcome to be completed")
+        if frontier.integration_completion == completion:
+            return completion
+        if frontier.integration_completion is not None:
+            _conflict("Delivery runtime already names another Integration completion")
+        completed = frontier.model_copy(
+            update={
+                "integration_result_id": completion.completion_id,
+                "integration_completion": completion,
+                "integration_attention": None,
+            }
+        )
+        self._replace(previous, completed)
+        return completion
+
+    def publish_integration_attention(
+        self,
+        attention: DeliveryIntegrationAttention,
+    ) -> DeliveryIntegrationAttention:
+        """Publish replayable Integration failure evidence without moving stage."""
+        frontier, previous = self._read()
+        if frontier.integration_completion is not None:
+            _conflict("completed Integration cannot publish attention")
+        if {binding.stage for binding in frontier.bindings} != {DeliveryStage.COMPLETED}:
+            _conflict("Integration attention requires every outcome to be completed")
+        if frontier.integration_attention == attention:
+            return attention
+        updated = frontier.model_copy(update={"integration_attention": attention})
+        self._replace(previous, updated)
+        return attention
 
     def claimable_outcome_ids(self) -> tuple[str, ...]:
         """Return stable dependency-ready, unblocked, unclaimed outcome identities."""
@@ -1207,6 +1335,11 @@ def _model_content(model: BaseModel) -> bytes:
     return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
+def _canonical_content(models: tuple[BaseModel, ...]) -> bytes:
+    payload = tuple(model.model_dump(mode="json") for model in models)
+    return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
 def _conflict(message: str) -> None:
     raise DeliveryRuntimeConflictError(message)
 
@@ -1227,6 +1360,10 @@ __all__ = [
     "DeliveryBlock",
     "DeliveryChangeStage",
     "DeliveryFrontier",
+    "DeliveryIntegrationAttention",
+    "DeliveryIntegrationAttentionCode",
+    "DeliveryIntegrationCandidate",
+    "DeliveryIntegrationCompletion",
     "DeliveryOperatorMove",
     "DeliveryOutputKind",
     "DeliveryOutputReference",

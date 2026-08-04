@@ -6,9 +6,10 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -27,8 +28,11 @@ if TYPE_CHECKING:
 _GIT_EXECUTABLE = "/usr/bin/git"
 _MANIFEST_NAME = "manifest.json"
 _PACKAGE_NAMES = ("authority.json", "design.md", "intent.md", _MANIFEST_NAME)
+_COMPLETION_NAMES = (*_PACKAGE_NAMES, "completion.json", "results.json", "runtime.json")
 _SAFE_CHANGE_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _ZERO_OID = "0" * 40
+_CaptureResult = TypeVar("_CaptureResult")
+_PublicationResult = TypeVar("_PublicationResult")
 
 
 class DesignPackageConflictError(RuntimeError):
@@ -92,6 +96,52 @@ class VerifiedDesignPackage(_PackageModel):
     design_bytes: bytes
     authority_bytes: bytes
     manifest: DesignPackageManifest
+
+
+class CompletionPackageManifest(_PackageModel):
+    """Canonical identity binding one completed package to reviewed Delivery state."""
+
+    schema_version: Literal[1] = 1
+    change_id: ChangeId
+    package_id: Digest
+    authority_digest: Digest
+    runtime_sha256: Digest
+    result_history_sha256: Digest
+    reviewed_change_head: str
+    integration_target: str
+    completion_path: str
+
+    def canonical_bytes(self) -> bytes:
+        """Return the canonical persisted representation."""
+        payload = self.model_dump(mode="json")
+        return f"{json.dumps(payload, sort_keys=True, separators=(',', ':'))}\n".encode()
+
+    @property
+    def completion_id(self) -> Digest:
+        """Return the stable identity of this exact completion package."""
+        return _digest(self.canonical_bytes())
+
+
+class CompletionPackageSnapshot(_PackageModel):
+    """Validated immutable package tree supplied to Integration candidate proof."""
+
+    completion_id: Digest
+    package_id: Digest
+    manifest: CompletionPackageManifest
+    package_tree: str
+
+
+class CompletionCapture(_PackageModel):
+    """Exact active package and completed Delivery bytes to capture while locked."""
+
+    change_id: ChangeId
+    expected_package_id: Digest
+    authority_digest: Digest
+    runtime_bytes: bytes
+    result_history_bytes: bytes
+    reviewed_change_head: str
+    integration_target: str
+    completion_path: str
 
 
 class DesignCheckpointResult(_PackageModel):
@@ -272,6 +322,79 @@ class DesignPackageStore:
                 replayed=False,
             )
 
+    def capture_completion(
+        self,
+        capture: CompletionCapture,
+        validation_callback: Callable[[CompletionPackageSnapshot], _CaptureResult],
+        publication_callback: Callable[[_CaptureResult], _PublicationResult],
+    ) -> _PublicationResult:
+        """Capture and validate one immutable completion candidate while locked."""
+        change_id = capture.change_id
+        _validate_change_id(change_id)
+        RuntimeTransaction.recover_all(self._active_root)
+        with locked_roots((self._active_root,)):
+            package_manifest, content = self._verify_package(change_id)
+            package_id = _digest(package_manifest.canonical_bytes())
+            if package_id != capture.expected_package_id:
+                message = f"Design package changed before completion capture: {change_id}"
+                raise DesignPackageConflictError(message)
+            snapshot = self._completion_snapshot(capture, package_id, content)
+            validated = validation_callback(snapshot)
+            verified_manifest, verified_content = self._verify_package(change_id)
+            if verified_manifest != package_manifest or verified_content != content:
+                message = f"Design package changed during completion validation: {change_id}"
+                raise DesignPackageConflictError(message)
+            return publication_callback(validated)
+
+    def _completion_snapshot(
+        self,
+        capture: CompletionCapture,
+        package_id: str,
+        content: dict[str, bytes],
+    ) -> CompletionPackageSnapshot:
+        manifest = CompletionPackageManifest(
+            change_id=capture.change_id,
+            package_id=package_id,
+            authority_digest=capture.authority_digest,
+            runtime_sha256=_digest(capture.runtime_bytes),
+            result_history_sha256=_digest(capture.result_history_bytes),
+            reviewed_change_head=capture.reviewed_change_head,
+            integration_target=capture.integration_target,
+            completion_path=capture.completion_path,
+        )
+        completion_content = {
+            **content,
+            "completion.json": manifest.canonical_bytes(),
+            "results.json": capture.result_history_bytes,
+            "runtime.json": capture.runtime_bytes,
+        }
+        return CompletionPackageSnapshot(
+            completion_id=manifest.completion_id,
+            package_id=package_id,
+            manifest=manifest,
+            package_tree=self._write_tree(completion_content, names=_COMPLETION_NAMES),
+        )
+
+    def cleanup_completed(self, change_id: str, expected_package_id: str) -> None:
+        """Replayably remove matching active-package residue after target publication."""
+        _validate_change_id(change_id)
+        residue_root = self._active_root / ".completion-residue"
+        residue = residue_root / f"{change_id}-{expected_package_id}"
+        with locked_roots((self._active_root,)):
+            active = self._active_root / change_id
+            if active.exists():
+                manifest, _content = self._verify_package(change_id)
+                if _digest(manifest.canonical_bytes()) != expected_package_id:
+                    message = f"Design package changed before completion cleanup: {change_id}"
+                    raise DesignPackageConflictError(message)
+                if residue.exists():
+                    message = f"Completion residue conflicts with active package: {change_id}"
+                    raise DesignPackageConflictError(message)
+                residue_root.mkdir(parents=True, exist_ok=True)
+                active.rename(residue)
+            if residue.exists():
+                shutil.rmtree(residue)
+
     def _existing_content(self, change_id: str) -> dict[str, bytes] | None:
         package_root = self._active_root / change_id
         if package_root.is_symlink():
@@ -312,9 +435,14 @@ class DesignPackageStore:
             raise DesignPackageConflictError(message)
         return manifest, content
 
-    def _write_tree(self, content: dict[str, bytes]) -> str:
+    def _write_tree(
+        self,
+        content: dict[str, bytes],
+        *,
+        names: tuple[str, ...] = _PACKAGE_NAMES,
+    ) -> str:
         entries = []
-        for name in _PACKAGE_NAMES:
+        for name in names:
             object_id = self._git("hash-object", "-w", "--stdin", input_bytes=content[name])
             entries.append(f"100644 blob {object_id}\t{name}\n")
         return self._git("mktree", input_bytes="".join(entries).encode())

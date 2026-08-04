@@ -10,6 +10,10 @@ from typing import TYPE_CHECKING, Literal, Never
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from owlbear_kanban.delivery_runtime import (
+    DeliveryIntegrationAttentionCode,
+    DeliveryIntegrationCandidate,
+)
 from owlbear_kanban.identities import ChangeId
 from owlbear_kanban.runtime_transaction import (
     ReplacementTransactionParticipant,
@@ -20,10 +24,12 @@ from owlbear_kanban.runtime_transaction import (
 from owlbear_kanban.storage_io import locked_roots
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from contextlib import AbstractContextManager
 
 _GIT_EXECUTABLE = "/usr/bin/git"
 _MERGE_RECORD_PARTS = 3
+_TREE_ENTRY_PARTS = 3
 _OCC_RETRY_LIMIT = 8
 
 
@@ -119,6 +125,55 @@ class IntegrationResult(_WorkspaceModel):
             msg = "integration requires either a merge commit or a finding"
             raise ValueError(msg)
         return self
+
+
+class AtomicIntegrationResult(_WorkspaceModel):
+    """One committed candidate or typed previsibility Integration failure."""
+
+    target_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    code: DeliveryIntegrationAttentionCode | None = None
+    diagnostics: tuple[str, ...] = ()
+    replayed: bool = False
+
+    @model_validator(mode="after")
+    def _require_one_result(self) -> AtomicIntegrationResult:
+        if (self.target_commit is None) == (self.code is None):
+            message = "atomic Integration requires a commit or typed failure"
+            raise ValueError(message)
+        if self.code is not None and not self.diagnostics:
+            message = "atomic Integration failure requires diagnostics"
+            raise ValueError(message)
+        return self
+
+
+class AtomicIntegrationPreparation(_WorkspaceModel):
+    """Detached candidate proof result awaiting package-guarded target CAS."""
+
+    change_id: ChangeId
+    candidate_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    change_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    integration_target: str | None = None
+    target_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    result: AtomicIntegrationResult | None = None
+
+    @model_validator(mode="after")
+    def _validate_preparation(self) -> AtomicIntegrationPreparation:
+        candidate_parts = (self.candidate_commit, self.change_head, self.integration_target, self.target_head)
+        prepared = all(part is not None for part in candidate_parts)
+        if prepared == (self.result is not None):
+            message = "Integration preparation requires a candidate or terminal result"
+            raise ValueError(message)
+        return self
+
+
+class IntegrationContext(_WorkspaceModel):
+    """Exact source and target identities used to capture an Integration candidate."""
+
+    change_id: ChangeId
+    change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    reviewed_change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    integration_target: str = Field(min_length=1)
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
 
 
 class CoordinationConflictError(RuntimeError):
@@ -350,6 +405,17 @@ class ChangeWorkspaceManager:
         """Return current workspace coordination for transition validation."""
         return self._coordinator.show(change_id)
 
+    def integration_context(self, change_id: str) -> IntegrationContext:
+        """Return exact source and target heads without mutating either reference."""
+        coordination = self._coordinator.show(change_id)
+        return IntegrationContext(
+            change_id=coordination.change_id,
+            change_head=self._resolve(coordination.branch),
+            reviewed_change_head=coordination.last_reviewed_commit,
+            integration_target=coordination.integration_target,
+            target_head=self._resolve(coordination.integration_target),
+        )
+
     def reviewed_source_head(self, change_id: str) -> str:
         """Return one clean warm source head anchored at its reviewed boundary."""
         coordination = self._coordinator.show(change_id)
@@ -509,6 +575,276 @@ class ChangeWorkspaceManager:
             rejected_head,
         )
 
+    def prepare_integration_candidate(
+        self,
+        candidate: DeliveryIntegrationCandidate,
+        candidate_proof: Callable[[DeliveryIntegrationCandidate, str], tuple[str, ...]],
+    ) -> AtomicIntegrationPreparation:
+        """Build and prove detached Git objects without publishing a reference."""
+        preflight = self._preflight_integration(candidate)
+        if isinstance(preflight, AtomicIntegrationResult):
+            return AtomicIntegrationPreparation(change_id=candidate.change_id, result=preflight)
+        coordination, change_head, target_head = preflight
+        candidate_tree = self._integration_candidate_tree(candidate, change_head, target_head)
+        if isinstance(candidate_tree, AtomicIntegrationResult):
+            return AtomicIntegrationPreparation(change_id=candidate.change_id, result=candidate_tree)
+        candidate_commit = self._write_integration_commit(candidate, candidate_tree, target_head, change_head)
+        proof_diagnostics = candidate_proof(candidate, candidate_commit)
+        if proof_diagnostics:
+            return AtomicIntegrationPreparation(
+                change_id=candidate.change_id,
+                result=AtomicIntegrationResult(
+                    code=DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED,
+                    diagnostics=proof_diagnostics,
+                ),
+            )
+        return AtomicIntegrationPreparation(
+            change_id=candidate.change_id,
+            candidate_commit=candidate_commit,
+            change_head=change_head,
+            integration_target=coordination.integration_target,
+            target_head=target_head,
+        )
+
+    def publish_prepared_integration(
+        self,
+        preparation: AtomicIntegrationPreparation,
+    ) -> AtomicIntegrationResult:
+        """Publish one package-validated preparation through exactly one target CAS."""
+        if preparation.result is not None:
+            return preparation.result
+        if (
+            preparation.candidate_commit is None
+            or preparation.change_head is None
+            or preparation.integration_target is None
+            or preparation.target_head is None
+        ):
+            _workspace_failure("Integration preparation is incomplete")
+        coordination = self._coordinator.show(preparation.change_id)
+        if coordination.integration_target != preparation.integration_target:
+            return AtomicIntegrationResult(
+                code=DeliveryIntegrationAttentionCode.TARGET_IDENTITY_MISMATCH,
+                diagnostics=("registered Integration target changed after candidate validation",),
+            )
+        reviewed_diagnostics = self._reviewed_preparation_diagnostics(coordination, preparation.change_head)
+        if reviewed_diagnostics:
+            return AtomicIntegrationResult(
+                code=DeliveryIntegrationAttentionCode.REVIEWED_BOUNDARY_MISMATCH,
+                diagnostics=reviewed_diagnostics,
+            )
+        return self._cas_integration(coordination, preparation.candidate_commit, preparation.target_head)
+
+    def _reviewed_preparation_diagnostics(
+        self,
+        coordination: ChangeCoordination,
+        expected_head: str,
+    ) -> tuple[str, ...]:
+        if self._resolve(coordination.branch) != expected_head or coordination.last_reviewed_commit != expected_head:
+            return ("change branch moved after candidate validation",)
+        worktree = coordination.worktree_path
+        if not worktree.exists():
+            return ("warm change worktree disappeared after candidate validation",)
+        if self._resolve("HEAD", cwd=worktree) != expected_head:
+            return ("warm change worktree head moved after candidate validation",)
+        if self._git("-C", str(worktree), "branch", "--show-current") != coordination.branch:
+            return ("warm change worktree changed branches after candidate validation",)
+        if self._git("-C", str(worktree), "status", "--porcelain"):
+            return ("warm change worktree became dirty after candidate validation",)
+        return ()
+
+    def _preflight_integration(
+        self,
+        candidate: DeliveryIntegrationCandidate,
+    ) -> AtomicIntegrationResult | tuple[ChangeCoordination, str, str]:
+        coordination = self._coordinator.show(candidate.change_id)
+        change_head = self._resolve(coordination.branch)
+        target_head = self._resolve(coordination.integration_target)
+        identity_diagnostics = self._integration_identity_diagnostics(
+            coordination,
+            candidate,
+        )
+        if identity_diagnostics:
+            return AtomicIntegrationResult(
+                code=DeliveryIntegrationAttentionCode.TARGET_IDENTITY_MISMATCH,
+                diagnostics=identity_diagnostics,
+            )
+        if candidate.target_head != target_head:
+            return AtomicIntegrationResult(
+                code=DeliveryIntegrationAttentionCode.TARGET_CAS_LOST,
+                diagnostics=("integration target changed after candidate capture",),
+            )
+        replayed_commit = self._published_completion_commit(candidate)
+        if replayed_commit is not None:
+            return AtomicIntegrationResult(target_commit=replayed_commit, replayed=True)
+        if change_head != coordination.last_reviewed_commit or change_head != candidate.reviewed_change_head:
+            return AtomicIntegrationResult(
+                code=DeliveryIntegrationAttentionCode.REVIEWED_BOUNDARY_MISMATCH,
+                diagnostics=("change branch head differs from its reviewed boundary",),
+            )
+        self._require_worktree(coordination.worktree_path, coordination.branch, change_head)
+        if self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
+            return AtomicIntegrationResult(
+                code=DeliveryIntegrationAttentionCode.REVIEWED_BOUNDARY_MISMATCH,
+                diagnostics=("change worktree is not clean at its reviewed boundary",),
+            )
+        return coordination, change_head, target_head
+
+    def _integration_candidate_tree(
+        self,
+        candidate: DeliveryIntegrationCandidate,
+        change_head: str,
+        target_head: str,
+    ) -> AtomicIntegrationResult | str:
+        product_tree, merge_diagnostics = self._merge_tree(target_head, change_head)
+        if product_tree is None:
+            return AtomicIntegrationResult(
+                code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
+                diagnostics=merge_diagnostics,
+            )
+        try:
+            publication_tree = self._replace_tree_path(
+                product_tree,
+                tuple(candidate.completion_path.split("/")),
+                candidate.package_tree,
+            )
+        except ValueError as exc:
+            return AtomicIntegrationResult(
+                code=DeliveryIntegrationAttentionCode.COMPLETED_HISTORY_MUTATED,
+                diagnostics=(str(exc),),
+            )
+        return publication_tree
+
+    def _cas_integration(
+        self,
+        coordination: ChangeCoordination,
+        candidate_commit: str,
+        target_head: str,
+    ) -> AtomicIntegrationResult:
+        try:
+            self._git(
+                "update-ref",
+                f"refs/heads/{coordination.integration_target}",
+                candidate_commit,
+                target_head,
+            )
+        except subprocess.CalledProcessError:
+            return AtomicIntegrationResult(
+                code=DeliveryIntegrationAttentionCode.TARGET_CAS_LOST,
+                diagnostics=("integration target changed before compare-and-swap",),
+            )
+        self._refresh_checked_out_target(coordination.integration_target, candidate_commit)
+        return AtomicIntegrationResult(target_commit=candidate_commit)
+
+    def cleanup_integrated_worktree(
+        self,
+        change_id: str,
+        completion_path: str,
+        completion_id: str,
+    ) -> None:
+        """Remove clean warm-worktree residue keyed by committed package identity."""
+        coordination = self._coordinator.show(change_id)
+        target_head = self._resolve(coordination.integration_target)
+        if self._completion_identity(target_head, completion_path) != completion_id:
+            _workspace_failure("target does not contain the committed completion identity")
+        if not coordination.worktree_path.exists():
+            return
+        change_head = self._resolve(coordination.branch)
+        self._require_worktree(coordination.worktree_path, coordination.branch, change_head)
+        if change_head != coordination.last_reviewed_commit:
+            _workspace_failure("warm worktree differs from its reviewed boundary")
+        if self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
+            _workspace_failure("warm worktree cleanup requires a clean source boundary")
+        self._git("worktree", "remove", str(coordination.worktree_path))
+
+    def _integration_identity_diagnostics(
+        self,
+        coordination: ChangeCoordination,
+        candidate: DeliveryIntegrationCandidate,
+    ) -> tuple[str, ...]:
+        diagnostics = []
+        if coordination.integration_target != self._integration_target:
+            diagnostics.append("registered Integration target differs from the workspace manager")
+        if candidate.integration_target != coordination.integration_target:
+            diagnostics.append("candidate names another Integration target")
+        if candidate.change_id != coordination.change_id:
+            diagnostics.append("candidate source identity differs from the registered change")
+        return tuple(diagnostics)
+
+    def _merge_tree(self, target_head: str, change_head: str) -> tuple[str | None, tuple[str, ...]]:
+        if target_head == change_head or self._is_ancestor(target_head, change_head, cwd=self._repository):
+            return self._git("rev-parse", f"{change_head}^{{tree}}"), ()
+        result = self._run_git("merge-tree", "--write-tree", target_head, change_head, check=False)
+        output = result.stdout.decode().strip()
+        if result.returncode == 0:
+            return output.splitlines()[0], ()
+        diagnostics = tuple(line for line in (*output.splitlines()[1:], *result.stderr.decode().splitlines()) if line)
+        return None, diagnostics or ("reviewed product tree conflicts with the Integration target",)
+
+    def _replace_tree_path(self, tree: str, path: tuple[str, ...], replacement_tree: str) -> str:
+        if not path or any(not part or part in {".", ".."} for part in path):
+            message = "completion path must be a contained nonempty Git path"
+            raise ValueError(message)
+        name = path[0].encode()
+        entries = self._tree_entries(tree)
+        existing = entries.get(name)
+        if len(path) == 1:
+            entries[name] = b"040000 tree " + replacement_tree.encode() + b"\t" + name
+        else:
+            if existing is None:
+                child = self._git("mktree", input_bytes=b"")
+            else:
+                metadata = existing.split(b"\t", 1)[0].split()
+                if len(metadata) != _TREE_ENTRY_PARTS or metadata[1] != b"tree":
+                    message = f"completed-history path component is not a tree: {path[0]}"
+                    raise ValueError(message)
+                child = metadata[2].decode()
+            replacement = self._replace_tree_path(child, path[1:], replacement_tree)
+            entries[name] = b"040000 tree " + replacement.encode() + b"\t" + name
+        content = b"\0".join(entries[key] for key in sorted(entries)) + b"\0"
+        return self._git("mktree", "-z", input_bytes=content)
+
+    def _tree_entries(self, tree: str) -> dict[bytes, bytes]:
+        content = self._run_git("ls-tree", "-z", tree).stdout
+        records = tuple(record for record in content.split(b"\0") if record)
+        return {record.split(b"\t", 1)[1]: record for record in records}
+
+    def _write_integration_commit(
+        self,
+        candidate: DeliveryIntegrationCandidate,
+        tree: str,
+        target_head: str,
+        change_head: str,
+    ) -> str:
+        arguments = ["commit-tree", tree, "-p", target_head]
+        if change_head != target_head:
+            arguments.extend(("-p", change_head))
+        arguments.extend(("-m", f"Integrate {candidate.change_id} ({candidate.candidate_id})"))
+        return self._git(*arguments)
+
+    def _published_completion_commit(self, candidate: DeliveryIntegrationCandidate) -> str | None:
+        target_head = self._resolve(candidate.integration_target)
+        if self._completion_identity(target_head, candidate.completion_path) != candidate.completion_id:
+            return None
+        commit = self._git(
+            "log",
+            "-1",
+            "--format=%H",
+            candidate.integration_target,
+            "--",
+            f"{candidate.completion_path}/completion.json",
+        )
+        return commit or target_head
+
+    def _completion_identity(self, commit: str, completion_path: str) -> str | None:
+        result = self._run_git(
+            "show",
+            f"{commit}:{completion_path}/completion.json",
+            check=False,
+        )
+        if result.returncode != 0:
+            return None
+        return hashlib.sha256(result.stdout).hexdigest()
+
     def integrate(self, change_id: str, reviewed_commits: tuple[str, ...]) -> IntegrationResult:
         """Merge one change without rewriting reviewed commits and CAS the configured target."""
         with self._coordinator.integration_lock():
@@ -646,14 +982,29 @@ class ChangeWorkspaceManager:
                 return None
             raise
 
-    def _git(self, *arguments: str, cwd: Path | None = None, check: bool = True) -> str:
-        result = subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
+    def _git(
+        self,
+        *arguments: str,
+        cwd: Path | None = None,
+        check: bool = True,
+        input_bytes: bytes | None = None,
+    ) -> str:
+        result = self._run_git(*arguments, cwd=cwd, check=check, input_bytes=input_bytes)
+        return result.stdout.decode().strip()
+
+    def _run_git(
+        self,
+        *arguments: str,
+        cwd: Path | None = None,
+        check: bool = True,
+        input_bytes: bytes | None = None,
+    ) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
             (_GIT_EXECUTABLE, "-C", str(cwd or self._repository), *arguments),
             check=check,
             capture_output=True,
-            text=True,
+            input=input_bytes,
         )
-        return result.stdout.strip()
 
 
 def _replacement(
