@@ -106,8 +106,13 @@ class TargetCockpitService:
             acceptance=detail.acceptance,
             task_progress=tuple(item for item in evidence.task_progress if item.scope_id in scope_ids),
             correction_history=self._context.work_item_activity(resolved_change_id, work_item_id),
-            semantic_updates=projector.list_semantic_updates(work_item_id),
-            completion_summary=projector.show_completion_summary(work_item_id),
+            semantic_updates=tuple(
+                item for item in binding.authority.semantic_updates if item.work_item_id == work_item_id
+            ),
+            completion_summary=next(
+                (item for item in binding.authority.completion_summaries if item.work_item_id == work_item_id),
+                None,
+            ),
             trace_links=_trace_links(resolved_change_id, work_item_id),
         )
 

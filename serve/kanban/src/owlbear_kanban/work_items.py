@@ -134,21 +134,21 @@ class WorkItemProjector:
             briefing=self._briefings.get(work_item_id),
         )
 
-    def list_semantic_updates(self, work_item_id: str) -> tuple[SemanticUpdate, ...]:
-        """Return non-blocking semantic updates in stable identity order."""
-        return tuple(
-            sorted(
-                (item for item in self._authority.semantic_updates if item.work_item_id == work_item_id),
-                key=lambda item: item.update_id,
-            )
-        )
+    def list_semantic_updates(self, _work_item_id: str) -> tuple[SemanticUpdate, ...]:
+        """Retired: projectors no longer expose semantic update queries.
 
-    def show_completion_summary(self, work_item_id: str) -> CompletionSummary | None:
-        """Return the commitment-level completion summary when present."""
-        return next(
-            (item for item in self._authority.completion_summaries if item.work_item_id == work_item_id),
-            None,
-        )
+        Use the persisted `TargetAuthority.semantic_updates` collection instead.
+        """
+        msg = "list_semantic_updates is retired from WorkItemProjector; use authority.semantic_updates"
+        raise AttributeError(msg)
+
+    def show_completion_summary(self, _work_item_id: str) -> CompletionSummary | None:
+        """Retired: projectors no longer expose completion summary queries.
+
+        Use the persisted `TargetAuthority.completion_summaries` collection instead.
+        """
+        msg = "show_completion_summary is retired from WorkItemProjector; use authority.completion_summaries"
+        raise AttributeError(msg)
 
     def _project_items(self) -> dict[str, WorkItemProjection]:
         if not self._authority.outcomes:

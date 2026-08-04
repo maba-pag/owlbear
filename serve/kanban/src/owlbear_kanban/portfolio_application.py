@@ -29,6 +29,7 @@ from owlbear_kanban.delivery_runtime import (
     AdministrativeDeliveryMoveResult,
     DeliveryActiveClaim,
     DeliveryChangeStage,
+    DeliveryFrontier,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationCandidate,
@@ -445,11 +446,12 @@ class PortfolioApplication:
     def resolve_request(self, request_id: str, resolution: DeliveryRequestResolution) -> DeliveryRequest:
         """Persist one request resolution by delegating to the owning runtime."""
         with self._coordinator.acquisition_lock():
+            # delegate resolution to the owning runtime by locating the request
             for runtime in self._runtimes.values():
                 try:
+                    # runtime.resolve_request will raise DeliveryRuntimeReferenceError if request absent
                     return runtime.resolve_request(request_id, resolution)
                 except DeliveryRuntimeReferenceError:
-                    # request not present in this runtime; try next
                     continue
         self._fail(f"request is absent: {request_id}")
         _msg = "unreachable: request resolution failed"
@@ -465,17 +467,21 @@ class PortfolioApplication:
         """Clear a requestless same-stage block with operator evidence via runtime."""
         with self._coordinator.acquisition_lock():
             runtime = self._runtime(change_id)
-            return runtime.unblock(change_id, block_id, operator_note, locators)
+            # runtime.unblock expects outcome_id first; map by finding binding that contains block_id
+            frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+            for binding in frontier.bindings:
+                if binding.block is not None and binding.block.block_id == block_id:
+                    return runtime.unblock(binding.outcome_id, block_id, operator_note, locators)
+            self._fail(f"block is absent: {block_id}")
+            return runtime.show_binding(block_id)
 
     def administrative_move(self, request: AdministrativeDeliveryMove) -> AdministrativeDeliveryMoveResult:
         """Delegate an authorized operator backward movement to the owning runtime."""
         with self._coordinator.acquisition_lock():
-            # locate the runtime owning the change and delegate
+            # locate the runtime owning the change and delegate directly
             for runtime in self._runtimes.values():
-                try:
+                if any(outcome.outcome_id == request.outcome_id for outcome in runtime.contract.outcomes):
                     return runtime.administrative_move(request)
-                except DeliveryRuntimeReferenceError:
-                    continue
         self._fail("administrative move target is absent or invalid")
         _msg = "unreachable: administrative move target absent"
         raise PortfolioApplicationError(_msg)

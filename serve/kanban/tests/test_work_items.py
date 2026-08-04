@@ -163,9 +163,11 @@ def test_semantic_updates_completion_and_design_briefing_are_read_side_records()
         semantic_updates=(update,),
         completion_summaries=(summary,),
     )
+    # projectors no longer expose semantic update / completion summary queries
     projector = WorkItemProjector(authority, WorkItemEvidence())
 
     assert projector.show("OUT-001").briefing == briefing
     assert projector.show("OUT-001").projection.stage == WorkItemStage.DESIGN
-    assert projector.list_semantic_updates("OUT-002") == (update,)
-    assert projector.show_completion_summary("OUT-002") == summary
+    # persisted authority fields must contain the semantic update and completion summary
+    assert tuple(item for item in authority.semantic_updates if item.work_item_id == "OUT-002") == (update,)
+    assert next((item for item in authority.completion_summaries if item.work_item_id == "OUT-002"), None) == summary
