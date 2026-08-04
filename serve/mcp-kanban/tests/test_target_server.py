@@ -1,424 +1,320 @@
-"""Contract tests for the target FastMCP assembly."""
+"""Contract tests for the live Delivery FastMCP assembly and startup."""
 
 from __future__ import annotations
 
+import copy
 import json
+import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
-from mcp.server.fastmcp.exceptions import ToolError
+from pydantic import BaseModel, ConfigDict
 
-from owlbear_kanban.snapshot import LegacyDisposition, inventory_legacy_source
-from owlbear_kanban.target_admission import (
-    TargetAdmissionCandidate,
-    TargetAdmissionRequest,
-    TargetChallengeEntry,
+import owlbear_mcp_kanban.server as live_server
+from owlbear_kanban import PortfolioApplication
+from owlbear_mcp_kanban.server import (
+    app_lifespan,
+    load_delivery_application,
+    load_delivery_config,
+    mcp,
 )
-from owlbear_kanban.target_authority import Outcome, PlanScopeKind, TargetAuthority, TaskPlanScope
-from owlbear_kanban.target_cutover import (
-    TargetAdapterRef,
-    TargetCutoverClassification,
-    TargetCutoverReadiness,
-    TargetCutoverRequest,
-    TargetCutoverSource,
-    TargetCutoverSubjectKind,
-    cut_over_target_runtime,
-    target_authority_digest,
-)
-from owlbear_kanban.target_runtime import (
-    FinishTargetJobRequest,
-    ReviewDisposition,
-    StartTargetJobRequest,
-    TargetJob,
-    TargetRuntime,
-    TargetTask,
-)
-from owlbear_mcp_kanban.server import load_target_context, mcp
-from owlbear_mcp_kanban.target_server import TargetAppContext, TargetChangeBinding, assemble_target_server
+from owlbear_mcp_kanban.target_models import DeliveryStartupDiagnostic
+from owlbear_mcp_kanban.target_server import assemble_target_server
 
-TARGET_TOOLS = frozenset(
-    {
-        "admit_change",
-        "arbitrate_attempt",
-        "create_request",
-        "finish_assembly",
-        "finish_build",
-        "finish_plan",
-        "list_frontier",
-        "list_changes",
-        "list_semantic_updates",
-        "list_work_item_activity",
-        "list_work_items",
-        "recover_interrupted_task",
-        "resolve_request",
-        "respond_to_review",
-        "show_attempt",
-        "show_change",
-        "show_completion_summary",
-        "show_job",
-        "show_receipt",
-        "show_work_item",
-        "start_job",
-        "validate_change",
-    }
-)
-REMOVED_TOOLS = frozenset(
-    {
-        "cancel_job",
-        "finish_accept",
-        "finish_audit",
-        "prioritize_job",
-        "reject_accept",
-        "reject_audit",
-        "release_job",
-    }
-)
+DELIVERY_TOOLS = {
+    "create_design_session",
+    "publish_design_checkpoint",
+    "derive_delivery_contract",
+    "validate_delivery_contract",
+    "admit_delivery_change",
+    "list_work_items",
+    "show_work_item",
+    "acquire_frontier_work",
+    "show_plan_context",
+    "show_build_context",
+    "publish_delivery_plan",
+    "publish_delivery_result",
+    "transition_delivery",
+    "recover_claim",
+    "list_integration_ready_changes",
+    "show_integration_attention",
+    "integrate_ready_change",
+    "admit_reviewed_integration_repair",
+    "list_completed_changes",
+    "search_completed_changes",
+    "show_completed_change",
+}
+READ_TOOLS = {
+    "derive_delivery_contract",
+    "validate_delivery_contract",
+    "list_work_items",
+    "show_work_item",
+    "show_plan_context",
+    "show_build_context",
+    "list_integration_ready_changes",
+    "show_integration_attention",
+    "list_completed_changes",
+    "search_completed_changes",
+    "show_completed_change",
+}
+EXCLUDED_TOOLS = {
+    "list_changes",
+    "show_change",
+    "validate_change",
+    "admit_change",
+    "resolve_request",
+    "create_request",
+    "unblock_delivery",
+    "list_semantic_updates",
+    "list_work_item_activity",
+    "show_completion_summary",
+    "respond_to_review",
+    "arbitrate_attempt",
+    "recover_interrupted_task",
+    "start_job",
+    "finish_plan",
+    "finish_build",
+    "finish_assembly",
+    "return_delivery",
+    "list_frontier",
+    "show_job",
+    "show_attempt",
+    "show_receipt",
+}
 
 
-def _authority(change_id: str, outcome_id: str, job_id: int) -> TargetAuthority:
-    return TargetAuthority(
-        change_id=change_id,
-        title=f"Change {change_id}",
-        outcomes=(
-            Outcome(
-                outcome_id=outcome_id,
-                title=f"Outcome {outcome_id}",
-                promise=f"Deliver {outcome_id}",
-                acceptance=("The result is observable",),
-            ),
-        ),
-        task_plan_scopes=(
-            TaskPlanScope(
-                scope_id=f"PLAN-{job_id:03d}",
-                kind=PlanScopeKind.OUTCOME,
-                target_id=outcome_id,
-            ),
-        ),
+class _Result(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    operation: str
+
+
+class _RecordingApplication:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def __getattr__(self, name: str) -> Any:
+        def operation(*_args: object, **_kwargs: object) -> object:
+            self.calls.append(name)
+            return () if name == "list_work_items" else _Result(operation=name)
+
+        return operation
+
+
+def _git(repository: Path, *arguments: str) -> None:
+    subprocess.run(
+        ("git", "-C", str(repository), *arguments),
+        check=True,
+        capture_output=True,
     )
 
 
-def _binding(root: Path, change_id: str, outcome_id: str, job_id: int) -> TargetChangeBinding:
-    authority = _authority(change_id, outcome_id, job_id)
-    runtime = TargetRuntime(authority, root / change_id)
-    runtime.materialize(
-        (
-            TargetJob(
-                job_id=job_id,
-                kind="plan",
-                change_id=change_id,
-                authority_digest=runtime.authority_digest,
-                work_item_id=outcome_id,
-                plan_scope_id=f"PLAN-{job_id:03d}",
-                created_at=f"2026-08-03T00:00:0{job_id}Z",
-            ),
-        )
-    )
-    return TargetChangeBinding(authority=authority, runtime=runtime)
+def _repository(tmp_path: Path) -> Path:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    _git(repository, "init", "-b", "main")
+    _git(repository, "config", "user.name", "Delivery Startup Test")
+    _git(repository, "config", "user.email", "delivery-startup@example.invalid")
+    (repository / "product.txt").write_text("baseline\n", encoding="utf-8")
+    _git(repository, "add", "product.txt")
+    _git(repository, "commit", "-m", "baseline")
+    return repository
 
 
-def _context(tmp_path: Path) -> TargetAppContext:
-    return TargetAppContext(
-        changes={
-            "change-a": _binding(tmp_path, "change-a", "OUT-001", 1),
-            "change-b": _binding(tmp_path, "change-b", "OUT-002", 2),
+def _config(tmp_path: Path, repository: Path | None = None) -> dict[str, object]:
+    identities = {
+        "worker_agent": "worker",
+        "worker_model": "worker-model",
+        "reviewer_agent": "reviewer",
+        "reviewer_model": "reviewer-model",
+    }
+    return {
+        "package_root": str(tmp_path / "packages"),
+        "target_root": str(tmp_path / "target"),
+        "repository_root": str(repository or tmp_path),
+        "worktree_root": str(tmp_path / "worktrees"),
+        "execution_capacity": 3,
+        "writer_capacity": 1,
+        "integration_target": "main",
+        "role_policies": {
+            "planner": dict(identities),
+            "builder": dict(identities),
+            "assembly-reviewer": dict(identities),
         },
-        process_is_alive=lambda _process_id: False,
-        work_item_activity=lambda change_id, work_item_id: (
-            {"change_id": change_id, "work_item_id": work_item_id, "kind": "planned"},
-        ),
-    )
+    }
 
 
-def _tools(server) -> dict[str, object]:
-    return dict(server._tool_manager._tools)  # noqa: SLF001
-
-
-def test_live_registry_is_the_target_registry() -> None:
-    assert _tools(mcp).keys() == TARGET_TOOLS
+def _write_config(path: Path, content: dict[str, object]) -> None:
+    path.write_text(json.dumps(content), encoding="utf-8")
 
 
 @pytest.mark.asyncio
-async def test_live_context_requires_receipt_and_hot_binds_admitted_authority(tmp_path: Path) -> None:
-    workspace = tmp_path / "workspace"
-    source = workspace / ".owlbear/kanban"
-    source.mkdir(parents=True)
-    (source / "bootstrap.json").write_text('{"state":"current"}\n', encoding="utf-8")
-    adapter = workspace / ".owlbear/adapters/delivery"
-    adapter.parent.mkdir(parents=True)
-    adapter.write_text("bootstrap\n", encoding="utf-8")
-    authority = _binding(tmp_path / "staging", "change-a", "OUT-001", 1).authority
-    request = TargetCutoverRequest(
-        sources=(
-            TargetCutoverSource(
-                source_path=".owlbear/kanban",
-                snapshot_name="runtime",
-                expected_source_digest=inventory_legacy_source(source, (), {}).source_digest,
-            ),
-        ),
-        snapshot_path=".owlbear/legacy/target-cutover",
-        target_path=".owlbear/target",
-        receipt_path=".owlbear/target-cutover.json",
-        adapter_refs=(TargetAdapterRef(relative_path=".owlbear/adapters/delivery", target="target"),),
-        authorities=(authority,),
-        classifications=(
-            TargetCutoverClassification(
-                change_id="change-a",
-                subject_kind=TargetCutoverSubjectKind.CHANGE,
-                subject_id="change-a",
-                disposition=LegacyDisposition.REINTRODUCE_NATIVE,
-            ),
-            TargetCutoverClassification(
-                change_id="change-a",
-                subject_kind=TargetCutoverSubjectKind.OUTCOME,
-                subject_id="OUT-001",
-                disposition=LegacyDisposition.REINTRODUCE_NATIVE,
-            ),
-        ),
-        expected_authority_digest=target_authority_digest((authority,)),
-        actual_code_revision="a" * 64,
-        expected_code_revision="a" * 64,
-        readiness=TargetCutoverReadiness(),
-        approval="ACTIVATE_TARGET_RUNTIME",
-    )
-    request_path = workspace / ".owlbear/target-cutover-request.json"
-    request_path.write_text(request.model_dump_json(), encoding="utf-8")
+async def test_live_registry_is_exact_and_annotated_from_assembled_tools() -> None:
+    tools = {tool.name: tool for tool in await mcp.list_tools()}
 
-    with pytest.raises(RuntimeError, match="valid cutover request and receipt"):
-        load_target_context(workspace, request_path)
-
-    initial_cutover = cut_over_target_runtime(workspace, request, smoke=lambda _root, _request: None)
-    context = load_target_context(workspace, request_path)
-
-    assert context.changes.keys() == {"change-a"}
-    assert context.changes["change-a"].authority == authority
-    assert context.changes["change-a"].runtime.list_frontier() == ()
-
-    tools = _tools(assemble_target_server(context))
-    new_authority = _authority("change-b", "OUT-002", 2)
-    candidate = TargetAdmissionCandidate(
-        authority=new_authority,
-        challenge=tuple(
-            TargetChallengeEntry(subject_id=identity, disposition="pass", evidence=f"evidence for {identity}")
-            for identity in ("change-b", "OUT-002", "PLAN-002")
-        ),
-        baseline=("uv run pytest -q",),
-        known_limits=(),
-        prepared_at="2026-08-03T00:02:00+00:00",
-    )
-    assessment = await tools["validate_change"].fn(candidate.model_dump(mode="json"))
-    admission = TargetAdmissionRequest(
-        candidate=candidate,
-        approved_digest=assessment["authority_digest"],
-        approved_by="user",
-        approved_at="2026-08-03T00:03:00+00:00",
-    )
-    admitted = await tools["admit_change"].fn(admission.model_dump(mode="json"))
-    replayed = await tools["admit_change"].fn(admission.model_dump(mode="json"))
-
-    cutover_replay = cut_over_target_runtime(workspace, request, smoke=lambda _root, _request: None)
-    restarted_context = load_target_context(workspace, request_path)
-    restarted_tools = _tools(assemble_target_server(restarted_context))
-    restarted_replay = await restarted_tools["admit_change"].fn(admission.model_dump(mode="json"))
-
-    assert admitted["replayed"] is False
-    assert replayed["replayed"] is True
-    assert context.changes["change-b"].runtime.list_frontier()[0].work_item_id == "OUT-002"
-    assert cutover_replay.replayed is True
-    assert cutover_replay.receipt.receipt_id == initial_cutover.receipt.receipt_id
-    assert restarted_context.changes.keys() == {"change-a", "change-b"}
-    assert restarted_replay["replayed"] is True
-
-
-def test_target_registry_has_three_kind_lifecycle_without_removed_controls(tmp_path: Path) -> None:
-    tools = _tools(assemble_target_server(_context(tmp_path)))
-
-    assert tools.keys() == TARGET_TOOLS
-    assert tools.keys().isdisjoint(REMOVED_TOOLS)
+    assert set(tools) == DELIVERY_TOOLS
+    assert set(tools).isdisjoint(EXCLUDED_TOOLS)
     for name, tool in tools.items():
         assert tool.annotations is not None
-        assert tool.annotations.idempotentHint is True
+        assert tool.annotations.readOnlyHint is (name in READ_TOOLS)
+        assert tool.annotations.idempotentHint is (name != "acquire_frontier_work")
         assert tool.annotations.destructiveHint is False
-        assert tool.annotations.readOnlyHint is (name.startswith(("list_", "show_")) or name == "validate_change")
 
 
 @pytest.mark.asyncio
-async def test_acceptable_plan_publishes_build_frontier_and_completion(tmp_path: Path) -> None:
-    tools = _tools(assemble_target_server(_context(tmp_path)))
-    await tools["start_job"].fn(
-        "change-a",
-        StartTargetJobRequest(
-            job_id=1,
-            attempt_id="plan-attempt",
-            claim_id="plan-claim",
-            owner_id="planner",
-            reviewer_id="plan-reviewer",
-            process_id="plan-process",
-            started_at="2026-08-03T00:01:00Z",
-            lease_expires_at="2026-08-03T01:01:00Z",
-        ).model_dump(mode="json"),
-    )
-    planned = await tools["finish_plan"].fn(
-        "change-a",
-        FinishTargetJobRequest(
-            job_id=1,
-            attempt_id="plan-attempt",
-            claim_id="plan-claim",
-            owner_id="planner",
-            reviewer_id="plan-reviewer",
-            review_id="plan-review",
-            receipt_id="plan-receipt",
-            candidate_commit="a" * 40,
-            reviewed_at="2026-08-03T00:02:00Z",
-            disposition=ReviewDisposition.ACCEPTABLE,
-            claim="The reviewed plan defines one sufficient task.",
-            evidence=("plan challenge passed",),
-            planned_tasks=(
-                TargetTask(
-                    task_id="TASK-001",
-                    work_item_id="OUT-001",
-                    plan_scope_id="PLAN-001",
-                    title="Build the observable result",
-                ),
-            ),
-        ).model_dump(mode="json"),
-    )
+async def test_registered_tool_invokes_strict_adapter_once() -> None:
+    application = _RecordingApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+    tools = {tool.name: tool for tool in await server.list_tools()}
 
-    frontier = await tools["list_frontier"].fn("change-a")
-    assert planned["receipt"]["planned_tasks"][0]["task_id"] == "TASK-001"
-    assert [(job["job_id"], job["kind"], job["task_id"]) for job in frontier] == [(2, "build", "TASK-001")]
+    assert set(tools) == DELIVERY_TOOLS
+    registered = server._tool_manager.get_tool("list_work_items")  # noqa: SLF001
+    assert registered is not None
+    result = await registered.fn({})
 
-    await tools["start_job"].fn(
-        "change-a",
-        StartTargetJobRequest(
-            job_id=2,
-            attempt_id="build-attempt",
-            claim_id="build-claim",
-            owner_id="builder",
-            reviewer_id="build-reviewer",
-            process_id="build-process",
-            started_at="2026-08-03T00:03:00Z",
-            lease_expires_at="2026-08-03T01:03:00Z",
-        ).model_dump(mode="json"),
-    )
-    built = await tools["finish_build"].fn(
-        "change-a",
-        FinishTargetJobRequest(
-            job_id=2,
-            attempt_id="build-attempt",
-            claim_id="build-claim",
-            owner_id="builder",
-            reviewer_id="build-reviewer",
-            review_id="build-review",
-            receipt_id="build-receipt",
-            candidate_commit="b" * 40,
-            reviewed_at="2026-08-03T00:04:00Z",
-            disposition=ReviewDisposition.ACCEPTABLE,
-            claim="The task satisfies its accepted plan.",
-            evidence=("focused build proof passed",),
-        ).model_dump(mode="json"),
-    )
-    detail = await tools["show_work_item"].fn("OUT-001", "change-a")
+    assert result == []
+    assert application.calls == ["list_work_items"]
 
-    assert built["receipt"]["task_id"] == "TASK-001"
-    assert detail["projection"]["stage"] == "completed"
-    assert await tools["list_frontier"].fn("change-a") == []
+
+MISSING_FIELDS = [
+    ("execution_capacity",),
+    ("writer_capacity",),
+    ("integration_target",),
+    ("role_policies", "planner"),
+    ("role_policies", "builder"),
+    ("role_policies", "assembly-reviewer"),
+    *(
+        ("role_policies", role, identity)
+        for role in ("planner", "builder", "assembly-reviewer")
+        for identity in ("worker_agent", "worker_model", "reviewer_agent", "reviewer_model")
+    ),
+]
+
+
+@pytest.mark.parametrize("field_path", MISSING_FIELDS)
+def test_missing_required_config_fails_unconfigured_before_state_creation(
+    tmp_path: Path,
+    field_path: tuple[str, ...],
+) -> None:
+    content = copy.deepcopy(_config(tmp_path))
+    parent = content
+    for key in field_path[:-1]:
+        parent = parent[key]  # type: ignore[assignment,index]
+    del parent[field_path[-1]]  # type: ignore[arg-type,index]
+    path = tmp_path / "delivery.json"
+    _write_config(path, content)
+
+    with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
+        load_delivery_config(path)
+
+    diagnostic = exc_info.value
+    assert diagnostic.code == "ERR_DELIVERY_STARTUP_UNCONFIGURED"
+    assert diagnostic.field == ".".join(field_path)
+    assert diagnostic.retry_safe is False
+    assert not (tmp_path / "target").exists()
 
 
 @pytest.mark.asyncio
-async def test_portfolio_query_pages_stably_across_loaded_changes(tmp_path: Path) -> None:
-    tools = _tools(assemble_target_server(_context(tmp_path)))
-    list_work_items = tools["list_work_items"].fn
+@pytest.mark.parametrize("configured_path", [None, "missing.json"])
+async def test_missing_config_path_or_file_fails_before_state_creation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    configured_path: str | None,
+) -> None:
+    monkeypatch.delenv("OWLBEAR_DELIVERY_CONFIG", raising=False)
+    if configured_path is not None:
+        monkeypatch.setenv("OWLBEAR_DELIVERY_CONFIG", str(tmp_path / configured_path))
 
-    first = await list_work_items(limit=1)
-    repeated = await list_work_items(limit=1)
-    second = await list_work_items(cursor=first.next_cursor, limit=1)
+    with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
+        async with app_lifespan(mcp):
+            pass
 
-    assert first == repeated
-    assert [(item.change_id, item.work_item_id) for item in (*first.items, *second.items)] == [
-        ("change-a", "OUT-001"),
-        ("change-b", "OUT-002"),
-    ]
-    assert second.next_cursor is None
-    activity = await tools["list_work_item_activity"].fn("OUT-001", "change-a")
-    assert activity == [{"change_id": "change-a", "work_item_id": "OUT-001", "kind": "planned"}]
+    assert exc_info.value.code == "ERR_DELIVERY_STARTUP_UNCONFIGURED"
+    assert exc_info.value.field == "OWLBEAR_DELIVERY_CONFIG"
+    assert not (tmp_path / "target").exists()
 
-    with pytest.raises(ToolError) as exc_info:
-        await list_work_items(change_id="change-a", cursor=first.next_cursor, limit=1)
-    diagnostic = json.loads(str(exc_info.value))
-    assert diagnostic["code"] == "ERR_TARGET_CURSOR_STALE"
-    assert diagnostic["retry_safe"] is True
+
+@pytest.mark.parametrize(
+    ("mutation", "field"),
+    [
+        (lambda content, _tmp: content.update(execution_capacity=0), "execution_capacity"),
+        (lambda content, _tmp: content.update(writer_capacity="1"), "writer_capacity"),
+        (lambda content, _tmp: content.update(package_root="relative"), "package_root"),
+        (lambda content, tmp: content.update(repository_root=str(tmp / "absent")), "repository_root"),
+        (
+            lambda content, _tmp: content["role_policies"]["planner"].update(worker_agent=1),
+            "role_policies.planner.worker_agent",
+        ),
+    ],
+)
+def test_invalid_config_fails_before_state_creation(
+    tmp_path: Path,
+    mutation: Any,
+    field: str,
+) -> None:
+    content = _config(tmp_path)
+    mutation(content, tmp_path)
+    path = tmp_path / "delivery.json"
+    _write_config(path, content)
+
+    with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
+        load_delivery_config(path)
+
+    assert exc_info.value.code == "ERR_DELIVERY_STARTUP_INVALID"
+    assert exc_info.value.field == field
+    assert exc_info.value.retry_safe is False
+    assert not (tmp_path / "target").exists()
+
+
+def test_malformed_json_fails_invalid_without_exposing_content(tmp_path: Path) -> None:
+    path = tmp_path / "delivery.json"
+    path.write_text('{"secret": "do-not-report"', encoding="utf-8")
+
+    with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
+        load_delivery_config(path)
+
+    assert exc_info.value.code == "ERR_DELIVERY_STARTUP_INVALID"
+    assert exc_info.value.field == "OWLBEAR_DELIVERY_CONFIG"
+    assert "do-not-report" not in str(exc_info.value)
+
+
+def test_invalid_integration_target_fails_before_owner_state_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = _repository(tmp_path)
+    content = _config(tmp_path, repository)
+    content["integration_target"] = "bad target"
+    path = tmp_path / "delivery.json"
+    _write_config(path, content)
+    config = load_delivery_config(path)
+    monkeypatch.setattr(live_server, "_authorize_configured_target", lambda _config: None)
+
+    with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
+        load_delivery_application(config)
+
+    assert exc_info.value.code == "ERR_DELIVERY_STARTUP_INVALID"
+    assert exc_info.value.field == "integration_target"
+    assert not (tmp_path / "target").exists()
 
 
 @pytest.mark.asyncio
-async def test_target_diagnostic_preserves_authority_identity_and_retry_safety(tmp_path: Path) -> None:
-    context = _context(tmp_path)
-    tools = _tools(assemble_target_server(context))
-    binding = context.changes["change-a"]
-    request = StartTargetJobRequest(
-        job_id=1,
-        attempt_id="attempt-one",
-        claim_id="claim-one",
-        owner_id="builder-one",
-        reviewer_id="reviewer-one",
-        process_id="process-one",
-        started_at="2026-08-03T00:01:00+00:00",
-        lease_expires_at="2026-08-03T01:01:00+00:00",
-    ).model_dump(mode="json")
-    await tools["start_job"].fn("change-a", request)
+async def test_complete_config_constructs_application_before_lifespan_yield(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = _repository(tmp_path)
+    path = tmp_path / "delivery.json"
+    _write_config(path, _config(tmp_path, repository))
+    monkeypatch.setenv("OWLBEAR_DELIVERY_CONFIG", str(path))
+    monkeypatch.setattr(live_server, "_authorize_configured_target", lambda _config: None)
 
-    with pytest.raises(ToolError) as exc_info:
-        await tools["start_job"].fn("change-a", request)
+    async with app_lifespan(mcp) as context:
+        tools = {tool.name: tool for tool in await mcp.list_tools()}
+        assert isinstance(context.application, PortfolioApplication)
+        assert set(tools) == DELIVERY_TOOLS
+        assert (tmp_path / "target/target-runtime/capacity.json").is_file()
 
-    diagnostic = json.loads(str(exc_info.value))
-    assert diagnostic == {
-        "code": "ERR_TARGET_RUNTIME_CONFLICT",
-        "detail": "job is not ready",
-        "current_authority_identity": binding.runtime.authority_digest,
-        "retry_safe": True,
-    }
-
-
-@pytest.mark.asyncio
-async def test_request_validation_and_kind_mismatch_use_target_diagnostics(tmp_path: Path) -> None:
-    context = _context(tmp_path)
-    tools = _tools(assemble_target_server(context))
-
-    with pytest.raises(ToolError) as invalid_request:
-        await tools["create_request"].fn(
-            {
-                "request_id": "INVALID_REQUEST",
-                "change_id": "change-a",
-                "authority_digest": context.changes["change-a"].runtime.authority_digest,
-                "work_item_id": "OUT-001",
-                "commitment_id": "COM-001",
-                "created_at": "2026-08-03T00:01:00+00:00",
-                "summary": "Need evidence",
-            }
-        )
-
-    invalid_diagnostic = json.loads(str(invalid_request.value))
-    assert invalid_diagnostic["code"] == "ERR_TARGET_PARAM_VALIDATION"
-    assert invalid_diagnostic["current_authority_identity"] == context.authority_identity
-    assert invalid_diagnostic["retry_safe"] is False
-
-    finish = FinishTargetJobRequest(
-        job_id=1,
-        attempt_id="attempt-one",
-        claim_id="claim-one",
-        owner_id="builder-one",
-        reviewer_id="reviewer-one",
-        review_id="review-one",
-        receipt_id="receipt-one",
-        candidate_commit="a" * 40,
-        reviewed_at="2026-08-03T00:02:00+00:00",
-        disposition=ReviewDisposition.ACCEPTABLE,
-        claim="The build is correct",
-        evidence=("focused proof",),
-    ).model_dump(mode="json")
-    with pytest.raises(ToolError) as wrong_kind:
-        await tools["finish_build"].fn("change-a", finish)
-
-    kind_diagnostic = json.loads(str(wrong_kind.value))
-    assert kind_diagnostic["code"] == "ERR_TARGET_RUNTIME_REFERENCE"
-    assert kind_diagnostic["current_authority_identity"] == context.changes["change-a"].runtime.authority_digest
-    assert kind_diagnostic["retry_safe"] is False
+    with pytest.raises(RuntimeError, match="outside server lifespan"):
+        live_server._live_application()

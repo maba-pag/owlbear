@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Literal
+import json
+from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from owlbear_kanban.delivery_runtime import (
     DeliveryIntegrationRepair,
@@ -14,12 +15,81 @@ from owlbear_kanban.delivery_runtime import (
 )
 from owlbear_kanban.identities import ChangeId
 from owlbear_kanban.target_admission import DeliveryAdmissionRequest
-from owlbear_kanban.target_runtime import RuntimeId
-from owlbear_kanban.work_items import WorkItemProjection
 
 
 class _TargetProtocolModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+
+class DeliveryStartupDiagnostic(RuntimeError):
+    """Structured fail-closed Delivery startup failure."""
+
+    __slots__ = ("code", "detail", "field", "retry_safe")
+
+    def __init__(self, code: str, detail: str, field: str) -> None:
+        self.code = code
+        self.detail = detail
+        self.field = field
+        self.retry_safe = False
+        super().__init__(json.dumps(self.model_dump(), sort_keys=True))
+
+    def model_dump(self) -> dict[str, str | bool]:
+        """Return the stable diagnostic fields without rejected values."""
+        return {
+            "code": self.code,
+            "detail": self.detail,
+            "field": self.field,
+            "retry_safe": self.retry_safe,
+        }
+
+
+class DeliveryRoleIdentityConfig(_TargetProtocolModel):
+    """Explicit worker and reviewer identities for one Delivery role."""
+
+    worker_agent: str = Field(min_length=1)
+    worker_model: str = Field(min_length=1)
+    reviewer_agent: str = Field(min_length=1)
+    reviewer_model: str = Field(min_length=1)
+
+
+class DeliveryRolePoliciesConfig(_TargetProtocolModel):
+    """Complete role policy required before owner construction."""
+
+    planner: DeliveryRoleIdentityConfig
+    builder: DeliveryRoleIdentityConfig
+    assembly_reviewer: DeliveryRoleIdentityConfig = Field(alias="assembly-reviewer")
+
+
+class DeliveryStartupConfig(_TargetProtocolModel):
+    """Explicit roots, capacities, target, and identities for Delivery startup."""
+
+    package_root: Path
+    target_root: Path
+    repository_root: Path
+    worktree_root: Path
+    execution_capacity: int = Field(gt=0)
+    writer_capacity: int = Field(gt=0)
+    integration_target: str = Field(min_length=1)
+    role_policies: DeliveryRolePoliciesConfig
+
+    @field_validator("package_root", "target_root", "repository_root", "worktree_root")
+    @classmethod
+    def _validate_directory_path(cls, value: Path) -> Path:
+        if not value.is_absolute():
+            message = "path must be absolute"
+            raise ValueError(message)
+        if value.exists() and (value.is_symlink() or not value.is_dir()):
+            message = "path must name a directory"
+            raise ValueError(message)
+        return value
+
+    @field_validator("repository_root")
+    @classmethod
+    def _validate_repository_root(cls, value: Path) -> Path:
+        if not value.is_dir():
+            message = "repository root must exist"
+            raise ValueError(message)
+        return value
 
 
 class TargetDiagnostic(_TargetProtocolModel):
@@ -29,35 +99,6 @@ class TargetDiagnostic(_TargetProtocolModel):
     detail: str = Field(min_length=1)
     current_authority_identity: str = Field(min_length=1)
     retry_safe: bool
-
-
-class WorkItemPage(_TargetProtocolModel):
-    """One stable page from the global semantic work portfolio."""
-
-    items: tuple[WorkItemProjection, ...]
-    authority_identity: str = Field(min_length=1)
-    next_cursor: str | None = None
-
-
-class TargetCursor(_TargetProtocolModel):
-    """Opaque cursor payload bound to one exact portfolio projection."""
-
-    schema_version: Literal[1] = 1
-    query_identity: str = Field(min_length=1)
-    offset: int = Field(ge=0)
-
-
-class TargetRequestParams(_TargetProtocolModel):
-    """Validate one scoped target request at the MCP boundary."""
-
-    request_id: RuntimeId
-    change_id: ChangeId
-    authority_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    work_item_id: str = Field(min_length=1)
-    commitment_id: str = Field(min_length=1)
-    task_id: str | None = None
-    created_at: str = Field(min_length=1)
-    summary: str = Field(min_length=1)
 
 
 class EmptyParams(_TargetProtocolModel):
@@ -146,16 +187,17 @@ __all__ = [
     "ClaimContextParams",
     "CompletedPageParams",
     "CreateDesignSessionParams",
+    "DeliveryRoleIdentityConfig",
+    "DeliveryRolePoliciesConfig",
+    "DeliveryStartupConfig",
+    "DeliveryStartupDiagnostic",
     "EmptyParams",
     "IntegrationRepairParams",
     "PublishDeliveryPlanParams",
     "PublishDeliveryResultParams",
     "SearchCompletedParams",
     "ShowCompletedParams",
-    "TargetCursor",
     "TargetDiagnostic",
-    "TargetRequestParams",
     "TransitionDeliveryParams",
-    "WorkItemPage",
     "WorkItemParams",
 ]

@@ -1,8 +1,8 @@
 # owlbear-mcp-kanban — Target Delivery MCP Server
 
-MCP server for querying the global semantic work portfolio and operating reviewed plan, build, and
-assembly transformations. It is registered in VS Code as `ob-kanban` and loads receipt-authorized
-target stores through `owlbear-kanban`.
+MCP server for authored Design, Delivery planning and execution, reviewed Integration, and completed
+change history. It is registered in VS Code as `ob-kanban` and composes the Delivery portfolio from
+explicit startup configuration.
 
 → Parent: [README.md](../../README.md)
 
@@ -18,47 +18,63 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 ### Tools
 
-The server exposes 22 tools:
+The server exposes 21 tools:
 
 | Area | Tools |
 |------|-------|
-| Design authority | `list_changes`, `show_change`, `validate_change`, `admit_change` |
-| Portfolio | `list_work_items`, `show_work_item`, `list_work_item_activity`, `list_semantic_updates`, `show_completion_summary` |
-| Execution trace | `list_frontier`, `show_job`, `show_attempt`, `show_receipt` |
-| Requests | `create_request`, `resolve_request` |
-| Transformations | `start_job`, `finish_plan`, `finish_build`, `finish_assembly` |
-| Review correction | `respond_to_review`, `arbitrate_attempt` |
-| Recovery | `recover_interrupted_task` |
-
-Portfolio queries can span every loaded change and return stable cursor pages bound to the current
-authority identity. Mutation calls require exact change, job, attempt, claim, owner, and reviewer
-identities as appropriate. The server exposes no Priority, Cancel, owner Release, accept-completion,
-or audit-completion operation.
-
-`validate_change` accepts one complete target authority plus per-identity challenge and baseline
-evidence, then derives the exact initial plan frontier. `admit_change` additionally requires explicit
-approval for that authority digest and atomically publishes authority, runtime state, and an immutable
-admission receipt. An inactive admitted change may be revised; the prior revision is retained by
-digest. Active work blocks revision.
-
-An acceptable `finish_plan` carries the independently reviewed `planned_tasks` and atomically
-publishes their build jobs. The plan receipt retains that exact task payload; build receipts then
-advance task progress, and a declared composition claim adds an assembly job after its builds.
-
-At process startup the server validates the configured cutover request and receipt, confirms the
-bootstrap source remains retired, loads every authority and runtime from `.owlbear/target/changes/`,
-and refuses startup if that boundary is absent or stale.
+| Design | `create_design_session`, `publish_design_checkpoint`, `derive_delivery_contract`, `validate_delivery_contract`, `admit_delivery_change` |
+| Portfolio | `list_work_items`, `show_work_item`, `acquire_frontier_work`, `show_plan_context`, `show_build_context` |
+| Delivery | `publish_delivery_plan`, `publish_delivery_result`, `transition_delivery`, `recover_claim` |
+| Integration | `list_integration_ready_changes`, `show_integration_attention`, `integrate_ready_change`, `admit_reviewed_integration_repair` |
+| Completed changes | `list_completed_changes`, `search_completed_changes`, `show_completed_change` |
 
 ## Configuration
 
+`OWLBEAR_DELIVERY_CONFIG` is required and names a strict JSON document:
+
+```json
+{
+ "package_root": "/absolute/path/to/packages",
+ "target_root": "/absolute/path/to/target",
+ "repository_root": "/absolute/path/to/repository",
+ "worktree_root": "/absolute/path/to/worktrees",
+ "execution_capacity": 3,
+ "writer_capacity": 1,
+ "integration_target": "main",
+ "role_policies": {
+  "planner": {
+   "worker_agent": "planner",
+   "worker_model": "planning-model",
+   "reviewer_agent": "planner-challenger",
+   "reviewer_model": "review-model"
+  },
+  "builder": {
+   "worker_agent": "builder",
+   "worker_model": "build-model",
+   "reviewer_agent": "build-reviewer",
+   "reviewer_model": "review-model"
+  },
+  "assembly-reviewer": {
+   "worker_agent": "build-reviewer",
+   "worker_model": "review-model",
+   "reviewer_agent": "integration-reviewer",
+   "reviewer_model": "review-model"
+  }
+ }
+}
+```
+
+All roots must be absolute directory paths. Capacities must be positive integers. Every listed role
+and identity is required; startup does not infer policy from agent files, environment model identity,
+runtime inventory, or target state.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OWLBEAR_WORKSPACE_ROOT` | Current working directory | Workspace containing `.owlbear/target` and the cutover receipt. |
-| `OWLBEAR_TARGET_CUTOVER_REQUEST` | `.owlbear/target-cutover-request.json` | Absolute path or workspace-relative path to the exact request used for cutover. |
+| `OWLBEAR_DELIVERY_CONFIG` | None | Path to the required Delivery startup JSON document. |
+| `OWLBEAR_WORKSPACE_ROOT` | Current working directory | Workspace used to verify the existing target-cutover receipt. |
+| `OWLBEAR_TARGET_CUTOVER_REQUEST` | `.owlbear/target-cutover-request.json` | Absolute or workspace-relative cutover request used only for receipt authorization. |
 
-The cutover request is runtime configuration and must remain byte-valid for the published receipt.
-Use `setup/finalize.py` to perform the activation transaction; do not create target stores or receipts
-manually.
+The configured `target_root` must match the receipt-authorized target path.
 
 ## Dependencies
 
