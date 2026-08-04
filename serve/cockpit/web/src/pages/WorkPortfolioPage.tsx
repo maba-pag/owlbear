@@ -66,24 +66,29 @@ function PortfolioFilters(props: FilterProps) {
   )
 }
 
-function PortfolioWorkspace({ items }: { items: WorkItemProjection[] }) {
+function PortfolioWorkspace({ items, onChanged }: { items: WorkItemProjection[]; onChanged: () => void }) {
   const [selected, setSelected] = useState<WorkItemIdentity | null>(null)
-  const selectedDetail = useWorkItemDetail(selected)
+  const selectedDetail = useWorkItemDetail(selected, onChanged)
+  const selectedProjection = selected
+    ? items.find((item) => item.change_id === selected.changeId && item.work_item_id === selected.workItemId) ?? null
+    : null
   return (
     <div className="grid min-w-0 gap-static-lg lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.42fr)]">
       <WorkPortfolioBoard items={items} selected={selected} onSelect={setSelected} />
-      {selectedDetail.detail.data ? (
+      {selectedDetail.detail.data && selectedProjection ? (
         <WorkItemDetail
-          key={`${selectedDetail.detail.data.card.change_id}:${selectedDetail.detail.data.card.work_item_id}`}
+          key={`${selectedDetail.detail.data.operator.change_id}:${selectedDetail.detail.data.operator.outcome_id}`}
           detail={selectedDetail.detail.data}
-          requests={selectedDetail.requests.data}
-          trace={selectedDetail.trace.data}
-          traceOpen={selectedDetail.traceOpen}
-          traceLoading={selectedDetail.trace.isLoading}
-          onOpenTrace={selectedDetail.openTrace}
-          onCloseTrace={selectedDetail.closeTrace}
+          projection={selectedProjection}
+          pendingAction={selectedDetail.pendingAction}
+          actionError={selectedDetail.actionError}
+          actionResult={selectedDetail.actionResult}
           onClose={() => setSelected(null)}
-          onCreateRequest={selectedDetail.createRequest}
+          onAnswerRequest={selectedDetail.answerRequest}
+          onClearBlock={selectedDetail.clearBlock}
+          onRecoverClaim={selectedDetail.recoverClaim}
+          onMoveBackward={selectedDetail.moveBackward}
+          onRetryIntegration={selectedDetail.retryIntegration}
         />
       ) : selectedDetail.detail.isLoading ? <p role="status">Loading work item...</p> : <EmptyDetail error={selectedDetail.detail.error} retry={selectedDetail.retry} />}
     </div>
@@ -110,8 +115,9 @@ export default function WorkPortfolioPage() {
   const [attentionFilter, setAttentionFilter] = useState<WorkItemAttention | ''>('')
   const deferredChange = useDeferredValue(changeFilter)
   const deferredAttention = useDeferredValue(attentionFilter)
-  const changes = [...new Set(portfolio.items.map((item) => item.change_id))].sort()
-  const filteredItems = portfolio.items.filter(
+  const items = portfolio.items.map((item) => item.card)
+  const changes = [...new Set(items.map((item) => item.change_id))].sort()
+  const filteredItems = items.filter(
     (item) => (!deferredChange || item.change_id === deferredChange)
       && (!deferredAttention || item.attention === deferredAttention),
   )
@@ -125,7 +131,7 @@ export default function WorkPortfolioPage() {
           changeFilter={changeFilter}
           attentionFilter={attentionFilter}
           shown={filteredItems.length}
-          total={portfolio.items.length}
+          total={items.length}
           onChangeFilter={setChangeFilter}
           onAttentionFilter={setAttentionFilter}
         />
@@ -139,7 +145,7 @@ export default function WorkPortfolioPage() {
           </section>
         ) : null}
 
-        {!isLoading && !error ? <PortfolioWorkspace items={filteredItems} /> : null}
+        {!isLoading && !error ? <PortfolioWorkspace items={filteredItems} onChanged={retry} /> : null}
       </div>
     </main>
   )

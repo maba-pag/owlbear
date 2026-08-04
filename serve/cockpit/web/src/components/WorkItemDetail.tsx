@@ -1,6 +1,22 @@
 import { useState } from 'react'
-import { PButton, PHeading, PIcon, PInputText, PTag } from '@porsche-design-system/components-react'
-import type { WorkItemDetailResponse, WorkItemRequestsResponse, WorkItemTraceResponse } from '../api/workItems'
+import {
+  PButton,
+  PHeading,
+  PIcon,
+  PInputText,
+  PModal,
+  PSelect,
+  PSelectOption,
+  PTag,
+} from '@porsche-design-system/components-react'
+import {
+  WorkItemApiError,
+  type DeliveryRequest,
+  type DeliveryRequestResolution,
+  type WorkItemDetailResponse,
+  type WorkItemProjection,
+  type WorkItemStage,
+} from '../api/workItems'
 
 type FieldValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }
 
@@ -9,35 +25,30 @@ function fieldValue(event: FieldValueEvent): string {
   return typeof value === 'string' ? value : ''
 }
 
-function recordLabel(value: Record<string, unknown>, fallback: string): string {
-  for (const key of ['summary', 'title', 'kind', 'request_id', 'identity']) {
-    if (typeof value[key] === 'string') return value[key]
-  }
-  return fallback
-}
-
 interface WorkItemDetailProps {
   detail: WorkItemDetailResponse
-  requests: WorkItemRequestsResponse | null
-  trace: WorkItemTraceResponse | null
-  traceOpen: boolean
-  traceLoading: boolean
-  onOpenTrace: () => void
-  onCloseTrace: () => void
+  projection: WorkItemProjection
+  pendingAction: string | null
+  actionError: Error | null
+  actionResult: string | null
   onClose: () => void
-  onCreateRequest: (summary: string) => Promise<void>
+  onAnswerRequest: (requestId: string, resolution: DeliveryRequestResolution) => Promise<void>
+  onClearBlock: (blockId: string, note: string, locators: string[]) => Promise<void>
+  onRecoverClaim: (attemptId: string, claimId: string) => Promise<void>
+  onMoveBackward: (target: WorkItemStage, reason: string) => Promise<void>
+  onRetryIntegration: () => Promise<void>
 }
 
-function DetailHeader({ detail, onClose }: { detail: WorkItemDetailResponse; onClose: () => void }) {
+function DetailHeader({ detail, projection, onClose }: Pick<WorkItemDetailProps, 'detail' | 'projection' | 'onClose'>) {
   return (
     <div className="flex min-w-0 flex-wrap items-start justify-between gap-static-sm">
       <div className="min-w-0">
-        <span className="text-xs font-semibold text-contrast-medium">{detail.card.change_id}</span>
-        <PHeading id="work-detail-heading" tag="h2" size="lg">{detail.card.title}</PHeading>
+        <span className="text-xs font-semibold text-contrast-medium">{projection.change_id}</span>
+        <PHeading id="work-detail-heading" tag="h2" size="lg">{projection.title}</PHeading>
       </div>
       <div className="flex flex-wrap gap-static-xs">
-        <PTag compact>{detail.card.stage}</PTag>
-        <PTag compact>{detail.card.attention}</PTag>
+        <PTag compact>{detail.operator.stage}</PTag>
+        <PTag compact>{projection.attention}</PTag>
         <span className="lg:hidden">
           <PButton type="button" compact variant="secondary" onClick={onClose}>Close detail</PButton>
         </span>
@@ -46,152 +57,224 @@ function DetailHeader({ detail, onClose }: { detail: WorkItemDetailResponse; onC
   )
 }
 
-function SpecificationSection({ detail }: { detail: WorkItemDetailResponse }) {
-  return (
-    <section className="mt-static-lg border-t border-contrast-low pt-static-md" aria-labelledby="work-specification-heading">
-      <PHeading id="work-specification-heading" tag="h3" size="md">Specification</PHeading>
-      <h4 className="mt-static-md text-sm font-semibold">Commitments</h4>
-      <ul className="mt-static-xs space-y-static-xs text-sm">
-        {detail.commitments.map((commitment) => (
-          <li key={commitment.commitment_id} className="border-l-2 border-contrast-low pl-static-sm">
-            <strong>{commitment.commitment_id}</strong>: {commitment.statement}
-          </li>
-        ))}
-      </ul>
-      <h4 className="mt-static-md text-sm font-semibold">Acceptance</h4>
-      <ul className="mt-static-xs list-disc space-y-static-xs pl-static-lg text-sm">
-        {detail.acceptance.map((criterion) => <li key={criterion}>{criterion}</li>)}
-      </ul>
-    </section>
-  )
-}
-
-function RequestComposer({ onCreateRequest }: Pick<WorkItemDetailProps, 'onCreateRequest'>) {
-  const [requestSummary, setRequestSummary] = useState('')
-  const [requestError, setRequestError] = useState<Error | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const submitRequest = async () => {
-    const summary = requestSummary.trim()
-    if (!summary) return
-    setIsSubmitting(true)
-    setRequestError(null)
-    try {
-      await onCreateRequest(summary)
-      setRequestSummary('')
-    } catch (caught) {
-      setRequestError(caught instanceof Error ? caught : new Error('Request could not be created'))
-    } finally {
-      setIsSubmitting(false)
-    }
+function RequestControl({ request, pending, onAnswer }: {
+  request: DeliveryRequest
+  pending: boolean
+  onAnswer: WorkItemDetailProps['onAnswerRequest']
+}) {
+  const [selectedOptionId, setSelectedOptionId] = useState('')
+  const [responseText, setResponseText] = useState('')
+  const canSubmit = Boolean(selectedOptionId || responseText.trim()) && !pending
+  const answer = () => onAnswer(request.request_id, {
+    selected_option_id: selectedOptionId || null,
+    response_text: responseText.trim() || null,
+  })
+  if (request.resolution) {
+    const answerText = request.resolution.response_text
+      || request.options.find((option) => option.option_id === request.resolution?.selected_option_id)?.label
+      || 'Answered'
+    return <p className="mt-static-xs text-sm text-success">{answerText}</p>
   }
-
   return (
-    <>
-      <div className="mt-static-md grid gap-static-sm">
-        <PInputText
-          name="work-request-summary"
-          label="Request summary"
-          value={requestSummary}
-          compact
-          onChange={(event) => setRequestSummary(fieldValue(event as FieldValueEvent))}
-        />
-        <PButton type="button" compact disabled={!requestSummary.trim() || isSubmitting} onClick={() => void submitRequest()}>
-          Create request
-        </PButton>
-      </div>
-      {requestError ? (
-        <p className="mt-static-sm flex items-center gap-static-xs text-sm" role="alert">
-          <PIcon name="error" size="sm" aria-hidden="true" />{requestError.message}
-        </p>
+    <div className="mt-static-sm grid gap-static-sm">
+      {request.kind === 'decision' ? (
+        <label className="grid gap-static-xs text-sm font-semibold">
+          Decision
+          <PSelect
+            name={`request-${request.request_id}-option`}
+            value={selectedOptionId}
+            disabled={pending}
+            onChange={(event) => setSelectedOptionId(fieldValue(event as FieldValueEvent))}
+          >
+            <PSelectOption value="">Select an option</PSelectOption>
+            {request.options.map((option) => (
+              <PSelectOption key={option.option_id} value={option.option_id}>{option.label}</PSelectOption>
+            ))}
+          </PSelect>
+        </label>
       ) : null}
-    </>
-  )
-}
-
-function RequestsSection({ requests, onCreateRequest }: Pick<WorkItemDetailProps, 'requests' | 'onCreateRequest'>) {
-  return (
-    <section className="mt-static-lg border-t border-contrast-low pt-static-md" aria-labelledby="work-requests-heading">
-      <div className="flex items-center justify-between gap-static-sm">
-        <PHeading id="work-requests-heading" tag="h3" size="md">Requests</PHeading>
-        <span className="text-xs text-contrast-medium">{requests?.requests.length ?? 0}</span>
-      </div>
-      <div className="mt-static-sm space-y-static-xs text-sm">
-        {requests?.requests.map((request, index) => (
-          <p key={String(request.request_id ?? index)} className="border-l-2 border-info pl-static-sm">
-            {recordLabel(request, `Request ${index + 1}`)}
-          </p>
-        ))}
-        {requests?.requests.length === 0 ? <p className="text-contrast-medium">No open requests.</p> : null}
-      </div>
-      <RequestComposer onCreateRequest={onCreateRequest} />
-    </section>
-  )
-}
-
-function ProgressSection({ detail }: { detail: WorkItemDetailResponse }) {
-  return (
-    <section className="mt-static-lg border-t border-contrast-low pt-static-md" aria-labelledby="work-progress-heading">
-      <PHeading id="work-progress-heading" tag="h3" size="md">Progress</PHeading>
-      <dl className="mt-static-sm grid gap-static-xs text-sm">
-        <div className="flex justify-between gap-static-sm"><dt>Tasks</dt><dd>{detail.card.reviewed_task_count} / {detail.card.task_count} reviewed</dd></div>
-        <div className="flex justify-between gap-static-sm"><dt>Next</dt><dd className="text-right">{detail.card.next_action}</dd></div>
-      </dl>
-    </section>
-  )
-}
-
-function TraceSection(props: Pick<WorkItemDetailProps, 'trace' | 'traceOpen' | 'traceLoading' | 'onOpenTrace' | 'onCloseTrace'>) {
-  const { trace, traceOpen, traceLoading, onOpenTrace, onCloseTrace } = props
-  return (
-    <section className="mt-static-lg border-t border-contrast-low pt-static-md" aria-labelledby="technical-trace-heading">
-      <div className="flex flex-wrap items-center justify-between gap-static-sm">
-        <PHeading id="technical-trace-heading" tag="h3" size="md">Technical trace</PHeading>
-        <PButton type="button" compact variant="secondary" onClick={traceOpen ? onCloseTrace : onOpenTrace}>
-          {traceOpen ? 'Hide trace' : 'Show technical trace'}
-        </PButton>
-      </div>
-      {traceLoading ? <p className="mt-static-sm text-sm" role="status">Loading technical trace...</p> : null}
-      {traceOpen && trace ? <TraceColumns trace={trace} /> : null}
-    </section>
-  )
-}
-
-function TraceColumns({ trace }: { trace: WorkItemTraceResponse }) {
-  return (
-    <div className="mt-static-md grid gap-static-md sm:grid-cols-2" data-testid="work-technical-trace">
-      {([['Activity', trace.activity], ['Evidence', trace.evidence]] as const).map(([label, entries]) => (
-        <section key={label} aria-labelledby={`work-${label.toLowerCase()}-heading`}>
-          <h4 id={`work-${label.toLowerCase()}-heading`} className="font-semibold">{label}</h4>
-          <ul className="mt-static-xs space-y-static-xs text-sm">
-            {entries.map((entry, index) => <li key={index}>{recordLabel(entry, `${label} ${index + 1}`)}</li>)}
-          </ul>
-        </section>
-      ))}
+      <PInputText
+        name={`request-${request.request_id}-answer`}
+        label={request.kind === 'decision' ? 'Additional response' : 'Action response'}
+        value={responseText}
+        disabled={pending}
+        onChange={(event) => setResponseText(fieldValue(event as FieldValueEvent))}
+        onInput={(event) => setResponseText(fieldValue(event as FieldValueEvent))}
+      />
+      <PButton type="button" compact disabled={!canSubmit} onClick={() => void answer()}>
+        {pending ? 'Submitting...' : 'Submit answer'}
+      </PButton>
     </div>
   )
 }
 
-export default function WorkItemDetail(props: WorkItemDetailProps) {
-  const { detail, requests, onClose, onCreateRequest } = props
+function RequestsSection({ detail, pendingAction, onAnswerRequest }: WorkItemDetailProps) {
+  const requests = detail.operator.requests
   return (
-    <aside
-      className="fixed inset-x-0 bottom-0 z-30 max-h-[82dvh] min-w-0 overflow-y-auto border-t border-contrast-low bg-canvas p-static-md shadow-lg lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:border-l lg:border-t-0 lg:p-0 lg:pl-static-lg lg:shadow-none"
-      aria-labelledby="work-detail-heading"
-      data-testid="work-item-detail"
-    >
-      <DetailHeader detail={detail} onClose={onClose} />
-      <p className="mt-static-sm text-sm leading-relaxed text-contrast-medium">{detail.card.promise}</p>
-      <SpecificationSection detail={detail} />
-      <RequestsSection requests={requests} onCreateRequest={onCreateRequest} />
-      <ProgressSection detail={detail} />
-      {detail.semantic_updates.length > 0 ? (
-        <section className="mt-static-lg border-t border-contrast-low pt-static-md">
-          <PHeading tag="h3" size="md">Updates</PHeading>
-          {detail.semantic_updates.map((update) => <p key={update.update_id} className="mt-static-sm text-sm">{update.rationale}</p>)}
-        </section>
+    <section className="border-t border-contrast-low pt-static-md" aria-labelledby="work-requests-heading">
+      <PHeading id="work-requests-heading" tag="h3" size="md">Requests</PHeading>
+      <div className="mt-static-sm grid gap-static-md">
+        {requests.map((request) => (
+          <article key={request.request_id} className="border-l-2 border-info pl-static-sm">
+            <div className="flex flex-wrap items-center justify-between gap-static-xs">
+              <strong className="text-sm">{request.summary}</strong>
+              <PTag compact>{request.kind}</PTag>
+            </div>
+            <RequestControl request={request} pending={pendingAction !== null} onAnswer={onAnswerRequest} />
+          </article>
+        ))}
+        {requests.length === 0 ? <p className="text-sm text-contrast-medium">No pending requests.</p> : null}
+      </div>
+    </section>
+  )
+}
+
+function BlockSection({ detail, pendingAction, onClearBlock }: WorkItemDetailProps) {
+  const block = detail.operator.block
+  const [note, setNote] = useState('')
+  const [locator, setLocator] = useState('')
+  if (!block) return null
+  const requestless = block.request_id === null
+  const canClear = requestless && note.trim().length > 0 && locator.trim().length > 0 && pendingAction === null
+  return (
+    <section className="border-l-4 border-warning bg-surface p-static-md" aria-labelledby="work-block-heading">
+      <PHeading id="work-block-heading" tag="h3" size="md">Blocked</PHeading>
+      <p className="mt-static-xs text-sm">{block.reason}</p>
+      <p className="mt-static-xs text-sm text-contrast-medium">Clear when: {block.unblock_condition}</p>
+      {requestless && !block.resolution_note ? (
+        <div className="mt-static-md grid gap-static-sm">
+          <PInputText name="block-note" label="Operator note" value={note} disabled={pendingAction !== null} onChange={(event) => setNote(fieldValue(event as FieldValueEvent))} onInput={(event) => setNote(fieldValue(event as FieldValueEvent))} />
+          <PInputText name="block-locator" label="Evidence locator" value={locator} disabled={pendingAction !== null} onChange={(event) => setLocator(fieldValue(event as FieldValueEvent))} onInput={(event) => setLocator(fieldValue(event as FieldValueEvent))} />
+          <PButton type="button" compact disabled={!canClear} onClick={() => void onClearBlock(block.block_id, note.trim(), [locator.trim()])}>
+            {pendingAction === 'clear' ? 'Clearing...' : 'Clear block'}
+          </PButton>
+        </div>
       ) : null}
-      <TraceSection {...props} />
+    </section>
+  )
+}
+
+function elapsedAge(startedAt: string): string {
+  const elapsed = Math.max(Date.now() - new Date(startedAt).getTime(), 0)
+  const hours = Math.floor(elapsed / 3_600_000)
+  if (hours >= 24) return `${Math.floor(hours / 24)}d ${hours % 24}h`
+  if (hours > 0) return `${hours}h`
+  return `${Math.max(Math.floor(elapsed / 60_000), 0)}m`
+}
+
+function ClaimSection({ detail, pendingAction, onRecoverClaim }: WorkItemDetailProps) {
+  const claim = detail.operator.active_claim
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  if (!claim) return null
+  const recover = async () => {
+    await onRecoverClaim(claim.attempt_id, claim.claim_id)
+    setConfirmOpen(false)
+  }
+  return (
+    <section className="border-t border-contrast-low pt-static-md" aria-labelledby="work-claim-heading">
+      <PHeading id="work-claim-heading" tag="h3" size="md">Active claim</PHeading>
+      <dl className="mt-static-sm grid gap-static-xs text-sm">
+        <div className="flex justify-between gap-static-sm"><dt>Role</dt><dd>{claim.worker_role}</dd></div>
+        <div className="flex justify-between gap-static-sm"><dt>Started</dt><dd>{elapsedAge(claim.started_at)} ago</dd></div>
+        {claim.task_id ? <div className="flex justify-between gap-static-sm"><dt>Task</dt><dd>{claim.task_id}</dd></div> : null}
+      </dl>
+      <PButton className="mt-static-md" type="button" compact variant="secondary" disabled={pendingAction !== null} onClick={() => setConfirmOpen(true)}>
+        Recover confirmed-lost claim
+      </PButton>
+      {confirmOpen ? (
+        <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm lost claim' }}>
+          <div className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary">
+            <PHeading tag="h2" size="lg">Confirm lost claim</PHeading>
+            <p className="text-sm">Confirm the worker has stopped and this exact claim is lost. No process-status inference is used.</p>
+            <dl className="grid gap-static-xs break-all text-sm"><dt>Attempt</dt><dd>{claim.attempt_id}</dd><dt>Claim</dt><dd>{claim.claim_id}</dd></dl>
+            <div className="flex flex-wrap justify-end gap-static-xs">
+              <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton>
+              <PButton type="button" disabled={pendingAction !== null} onClick={() => void recover()}>{pendingAction === 'recover' ? 'Recovering...' : 'Confirm lost and recover'}</PButton>
+            </div>
+          </div>
+        </PModal>
+      ) : null}
+    </section>
+  )
+}
+
+function AttentionSection({ detail, pendingAction, onRetryIntegration }: WorkItemDetailProps) {
+  const { return_context: returned, recovery_attention: recovery, integration_attention: integration } = detail.operator
+  if (!returned && !recovery && !integration) return null
+  return (
+    <section className="border-t border-contrast-low pt-static-md" aria-labelledby="work-attention-heading">
+      <PHeading id="work-attention-heading" tag="h3" size="md">Delivery attention</PHeading>
+      <div className="mt-static-sm grid gap-static-md text-sm">
+        {returned ? <AttentionItem label={`Returned to ${returned.target}`} reason={returned.reason} retry={returned.locators.join(', ')} /> : null}
+        {recovery ? <AttentionItem label="Recovery attention" reason={recovery.reason} retry={recovery.retry_condition} /> : null}
+        {integration ? (
+          <div className="border-l-2 border-warning pl-static-sm">
+            <AttentionItem label={`Integration: ${integration.code}`} reason={integration.diagnostics.join(' ')} retry={integration.retry_condition} />
+            <PButton className="mt-static-sm" type="button" compact disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
+              {pendingAction === 'integration' ? 'Retrying...' : 'Retry Integration'}
+            </PButton>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
+function AttentionItem({ label, reason, retry }: { label: string; reason: string; retry: string }) {
+  return <div><strong>{label}</strong><p>{reason}</p><p className="text-contrast-medium">Next: {retry}</p></div>
+}
+
+const STAGES: WorkItemStage[] = ['design', 'planning', 'implementation', 'assembly', 'completed']
+
+function BackwardMoveSection({ detail, pendingAction, onMoveBackward }: WorkItemDetailProps) {
+  const available = STAGES.slice(0, STAGES.indexOf(detail.operator.stage))
+  const [target, setTarget] = useState<WorkItemStage | ''>('')
+  const [reason, setReason] = useState('')
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const canMove = Boolean(target && reason.trim()) && pendingAction === null
+  if (available.length === 0) return null
+  const move = async () => {
+    if (!target) return
+    await onMoveBackward(target, reason.trim())
+    setConfirmOpen(false)
+  }
+  return (
+    <section className="border-t border-contrast-low pt-static-md" aria-labelledby="work-move-heading">
+      <PHeading id="work-move-heading" tag="h3" size="md">Move backward</PHeading>
+      <div className="mt-static-sm grid gap-static-sm">
+        <label className="grid gap-static-xs text-sm font-semibold">Earlier stage<PSelect name="backward-stage" value={target} disabled={pendingAction !== null} onChange={(event) => setTarget(fieldValue(event as FieldValueEvent) as WorkItemStage | '')}><PSelectOption value="">Select a stage</PSelectOption>{available.map((stage) => <PSelectOption key={stage} value={stage}>{stage}</PSelectOption>)}</PSelect></label>
+        <PInputText name="backward-reason" label="Reason" value={reason} disabled={pendingAction !== null} onChange={(event) => setReason(fieldValue(event as FieldValueEvent))} onInput={(event) => setReason(fieldValue(event as FieldValueEvent))} />
+        <PButton type="button" compact variant="secondary" disabled={!canMove} onClick={() => setConfirmOpen(true)}>Review backward move</PButton>
+      </div>
+      {confirmOpen ? (
+        <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm backward move' }}>
+          <div className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary"><PHeading tag="h2" size="lg">Move to {target}</PHeading><p className="text-sm">This resets dependent completed outcomes. {reason.trim()}</p><div className="flex flex-wrap justify-end gap-static-xs"><PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton><PButton type="button" disabled={pendingAction !== null} onClick={() => void move()}>{pendingAction === 'move' ? 'Moving...' : 'Confirm backward move'}</PButton></div></div>
+        </PModal>
+      ) : null}
+    </section>
+  )
+}
+
+function ActionFeedback({ error, result }: { error: Error | null; result: string | null }) {
+  if (error) {
+    const code = error instanceof WorkItemApiError ? error.code : 'ERR_DELIVERY_CONTROL'
+    return <p className="flex items-center gap-static-xs border-l-4 border-danger bg-surface p-static-sm text-sm" role="alert"><PIcon name="error" size="sm" aria-hidden="true" /><strong>{code}</strong>: {error.message}</p>
+  }
+  return result ? <p className="border-l-4 border-success bg-surface p-static-sm text-sm" role="status">{result}</p> : null
+}
+
+export default function WorkItemDetail(props: WorkItemDetailProps) {
+  return (
+    <aside className="fixed inset-x-0 bottom-0 z-30 max-h-[82dvh] min-w-0 overflow-y-auto border-t border-contrast-low bg-canvas p-static-md shadow-lg lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:border-l lg:border-t-0 lg:p-0 lg:pl-static-lg lg:shadow-none" aria-labelledby="work-detail-heading" data-testid="work-item-detail">
+      <div className="grid gap-static-lg">
+        <div><DetailHeader detail={props.detail} projection={props.projection} onClose={props.onClose} /><p className="mt-static-sm text-sm leading-relaxed text-contrast-medium">{props.projection.promise}</p></div>
+        <ActionFeedback error={props.actionError} result={props.actionResult} />
+        <BlockSection {...props} />
+        <RequestsSection {...props} />
+        <ClaimSection {...props} />
+        <AttentionSection {...props} />
+        <BackwardMoveSection {...props} />
+      </div>
     </aside>
   )
 }

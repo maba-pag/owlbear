@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react'
 import {
-  createWorkItemRequest,
-  listWorkItemRequests,
+  answerWorkItemRequest,
+  clearWorkItemBlock,
   listWorkItems,
+  moveWorkItemBackward,
+  recoverWorkItemClaim,
+  retryWorkItemIntegration,
   showWorkItem,
-  showWorkItemTrace,
+  type DeliveryRequestResolution,
   type WorkItemDetailResponse,
   type WorkItemPortfolioResponse,
   type WorkItemProjection,
-  type WorkItemRequestsResponse,
-  type WorkItemTraceResponse,
+  type WorkItemStage,
 } from '../api/workItems'
 
 export interface WorkItemIdentity {
@@ -62,110 +64,104 @@ export function useWorkPortfolio() {
   }
 }
 
-function useSelectedWorkItem(identity: WorkItemIdentity | null, retryNonce: number) {
+export function useWorkItemDetail(identity: WorkItemIdentity | null, onChanged: () => void) {
   const [detail, setDetail] = useState<AsyncResource<WorkItemDetailResponse>>({
     data: null,
     error: null,
     isLoading: false,
   })
-  const [requests, setRequests] = useState<AsyncResource<WorkItemRequestsResponse>>({
-    data: null,
-    error: null,
-    isLoading: false,
-  })
+  const [retryNonce, setRetryNonce] = useState(0)
+  const [pendingAction, setPendingAction] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<Error | null>(null)
+  const [actionResult, setActionResult] = useState<string | null>(null)
+
   useEffect(() => {
     let active = true
+    setActionError(null)
+    setActionResult(null)
     if (!identity) {
       setDetail({ data: null, error: null, isLoading: false })
-      setRequests({ data: null, error: null, isLoading: false })
       return () => {
         active = false
       }
     }
     setDetail((current) => ({ ...current, isLoading: true, error: null }))
-    setRequests((current) => ({ ...current, isLoading: true, error: null }))
-    void Promise.all([
-      showWorkItem(identity.workItemId, identity.changeId),
-      listWorkItemRequests(identity.workItemId, identity.changeId),
-    ]).then(([nextDetail, nextRequests]) => {
-      if (!active) return
-      setDetail({ data: nextDetail, error: null, isLoading: false })
-      setRequests({ data: nextRequests, error: null, isLoading: false })
-    }).catch((caught: unknown) => {
-      if (!active) return
-      const error = caught instanceof Error ? caught : new Error('Work item detail is unavailable')
-      setDetail({ data: null, error, isLoading: false })
-      setRequests({ data: null, error, isLoading: false })
-    })
-    return () => {
-      active = false
-    }
-  }, [identity?.changeId, identity?.workItemId, retryNonce])
-
-  return { detail, requests, setRequests }
-}
-
-function useWorkItemTrace(identity: WorkItemIdentity | null, traceOpen: boolean) {
-  const [trace, setTrace] = useState<AsyncResource<WorkItemTraceResponse>>({
-    data: null,
-    error: null,
-    isLoading: false,
-  })
-
-  useEffect(() => {
-    let active = true
-    if (!identity || !traceOpen) return () => {
-      active = false
-    }
-    setTrace({ data: null, error: null, isLoading: true })
-    void showWorkItemTrace(identity.workItemId, identity.changeId)
-      .then((data) => active && setTrace({ data, error: null, isLoading: false }))
+    void showWorkItem(identity.changeId, identity.workItemId)
+      .then((data) => active && setDetail({ data, error: null, isLoading: false }))
       .catch((caught: unknown) => {
         if (!active) return
-        setTrace({
+        setDetail({
           data: null,
-          error: caught instanceof Error ? caught : new Error('Technical trace is unavailable'),
+          error: caught instanceof Error ? caught : new Error('Work item detail is unavailable'),
           isLoading: false,
         })
       })
     return () => {
       active = false
     }
-  }, [identity?.changeId, identity?.workItemId, traceOpen])
+  }, [identity?.changeId, identity?.workItemId, retryNonce])
 
-  return trace
-}
-
-export function useWorkItemDetail(identity: WorkItemIdentity | null) {
-  const [traceOpen, setTraceOpen] = useState(false)
-  const [retryNonce, setRetryNonce] = useState(0)
-  const { detail, requests, setRequests } = useSelectedWorkItem(identity, retryNonce)
-  const trace = useWorkItemTrace(identity, traceOpen)
-
-  useEffect(() => setTraceOpen(false), [identity?.changeId, identity?.workItemId])
-
-  const createRequest = async (summary: string) => {
-    if (!identity || !detail.data || detail.data.commitments.length === 0) return
-    await createWorkItemRequest(identity.workItemId, identity.changeId, {
-      request_id: `request-${Date.now()}`,
-      authority_digest: detail.data.authority_identity,
-      commitment_id: detail.data.commitments[0].commitment_id,
-      task_id: null,
-      created_at: new Date().toISOString(),
-      summary,
-    })
-    const nextRequests = await listWorkItemRequests(identity.workItemId, identity.changeId)
-    setRequests({ data: nextRequests, error: null, isLoading: false })
+  const mutate = async (action: string, operation: () => Promise<unknown>, result: string) => {
+    if (!identity) return
+    setPendingAction(action)
+    setActionError(null)
+    setActionResult(null)
+    try {
+      await operation()
+      const nextDetail = await showWorkItem(identity.changeId, identity.workItemId)
+      setDetail({ data: nextDetail, error: null, isLoading: false })
+      setActionResult(result)
+      onChanged()
+    } catch (caught: unknown) {
+      setActionError(caught instanceof Error ? caught : new Error('Delivery control failed'))
+    } finally {
+      setPendingAction(null)
+    }
   }
 
   return {
     detail,
-    requests,
-    trace,
-    traceOpen,
-    openTrace: () => setTraceOpen(true),
-    closeTrace: () => setTraceOpen(false),
-    createRequest,
+    pendingAction,
+    actionError,
+    actionResult,
+    answerRequest: (requestId: string, resolution: DeliveryRequestResolution) => mutate(
+      'answer',
+      () => answerWorkItemRequest(identity!.changeId, requestId, resolution),
+      'Request answered.',
+    ),
+    clearBlock: (blockId: string, note: string, locators: string[]) => mutate(
+      'clear',
+      () => clearWorkItemBlock(identity!.changeId, identity!.workItemId, blockId, note, locators),
+      'Block cleared.',
+    ),
+    recoverClaim: (attemptId: string, claimId: string) => mutate(
+      'recover',
+      () => recoverWorkItemClaim(identity!.changeId, identity!.workItemId, attemptId, claimId),
+      'Claim recovered.',
+    ),
+    moveBackward: async (target: WorkItemStage, reason: string) => {
+      if (!identity) return
+      setPendingAction('move')
+      setActionError(null)
+      setActionResult(null)
+      try {
+        const moved = await moveWorkItemBackward(identity.changeId, identity.workItemId, target, reason)
+        const nextDetail = await showWorkItem(identity.changeId, identity.workItemId)
+        setDetail({ data: nextDetail, error: null, isLoading: false })
+        const invalidated = moved.invalidated_outcome_ids.join(', ')
+        setActionResult(invalidated ? `Moved backward. Reset: ${invalidated}.` : 'Moved backward.')
+        onChanged()
+      } catch (caught: unknown) {
+        setActionError(caught instanceof Error ? caught : new Error('Backward move failed'))
+      } finally {
+        setPendingAction(null)
+      }
+    },
+    retryIntegration: () => mutate(
+      'integration',
+      () => retryWorkItemIntegration(identity!.changeId),
+      'Integration retried.',
+    ),
     retry: () => setRetryNonce((value) => value + 1),
   }
 }
