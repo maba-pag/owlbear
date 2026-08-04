@@ -7,16 +7,27 @@ import hashlib
 import json
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Never
+from typing import TYPE_CHECKING, Any, Never, Self, cast
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
+from owlbear_kanban.change_workspace import CoordinationConflictError
+from owlbear_kanban.completed_history import CompletedHistoryError, CompletedHistoryStaleError
+from owlbear_kanban.delivery_runtime import DeliveryRuntimeConflictError, DeliveryRuntimeReferenceError
+from owlbear_kanban.design_package import DesignPackageConflictError
+from owlbear_kanban.portfolio_application import PortfolioApplication, PortfolioApplicationError
+from owlbear_kanban.runtime_transaction import (
+    TransactionConflictError,
+    TransactionManifestError,
+    TransactionPathError,
+)
 from owlbear_kanban.target_admission import (
     TargetAdmissionCandidate,
     TargetAdmissionConflictError,
+    TargetAdmissionError,
     TargetAdmissionReferenceError,
     TargetAdmissionRequest,
     TargetAdmissionValidationError,
@@ -34,18 +45,308 @@ from owlbear_kanban.target_runtime import (
     TargetRuntimeReferenceError,
 )
 from owlbear_kanban.work_items import WorkItemAttention, WorkItemProjector, WorkItemStage
-from owlbear_mcp_kanban.target_models import TargetCursor, TargetDiagnostic, TargetRequestParams, WorkItemPage
+from owlbear_mcp_kanban.target_models import (
+    AdmitDeliveryChangeParams,
+    ChangeParams,
+    ClaimContextParams,
+    CompletedPageParams,
+    CreateDesignSessionParams,
+    EmptyParams,
+    IntegrationRepairParams,
+    PublishDeliveryPlanParams,
+    PublishDeliveryResultParams,
+    SearchCompletedParams,
+    ShowCompletedParams,
+    TargetCursor,
+    TargetDiagnostic,
+    TargetRequestParams,
+    TransitionDeliveryParams,
+    WorkItemPage,
+    WorkItemParams,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable
-
-    from pydantic import BaseModel
 
     from owlbear_kanban.target_authority import TargetAuthority
     from owlbear_kanban.target_runtime import TargetRuntime
 
 _READ = ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False)
 _WRITE = ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False)
+_ACQUIRE = ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=False)
+
+DELIVERY_OPERATION_NAMES = (
+    "create_design_session",
+    "publish_design_checkpoint",
+    "derive_delivery_contract",
+    "validate_delivery_contract",
+    "admit_delivery_change",
+    "list_work_items",
+    "show_work_item",
+    "acquire_frontier_work",
+    "show_plan_context",
+    "show_build_context",
+    "publish_delivery_plan",
+    "publish_delivery_result",
+    "transition_delivery",
+    "recover_claim",
+    "list_integration_ready_changes",
+    "show_integration_attention",
+    "integrate_ready_change",
+    "admit_reviewed_integration_repair",
+    "list_completed_changes",
+    "search_completed_changes",
+    "show_completed_change",
+)
+_DELIVERY_READS = frozenset(
+    {
+        "derive_delivery_contract",
+        "validate_delivery_contract",
+        "list_work_items",
+        "show_work_item",
+        "show_plan_context",
+        "show_build_context",
+        "list_integration_ready_changes",
+        "show_integration_attention",
+        "list_completed_changes",
+        "search_completed_changes",
+        "show_completed_change",
+    }
+)
+DELIVERY_OPERATION_ANNOTATIONS = {
+    name: _READ if name in _DELIVERY_READS else _ACQUIRE if name == "acquire_frontier_work" else _WRITE
+    for name in DELIVERY_OPERATION_NAMES
+}
+
+type StructuredOutput = dict[str, object] | list[object] | str | int | float | bool | None
+
+
+class TargetMCPAdapter:
+    """Validate and delegate the strict Delivery transport contract."""
+
+    def __new__(cls, application: PortfolioApplication | TargetAppContext) -> Self:
+        """Retain private legacy construction until live cutover owns assembly."""
+        if isinstance(application, TargetAppContext):
+            return cast("Self", _LegacyTargetMCPAdapter(application))
+        return super().__new__(cls)
+
+    def __init__(self, application: PortfolioApplication) -> None:
+        self._application = application
+
+    async def create_design_session(self, request: dict[str, object]) -> dict[str, object]:
+        """Create one authored Design session."""
+        params = self._validate(CreateDesignSessionParams, request)
+        return self._call(
+            params,
+            lambda: self._application.create_design_session(
+                params.change_id,
+                params.intent_bytes,
+                params.design_bytes,
+            ),
+        )
+
+    async def publish_design_checkpoint(self, request: dict[str, object]) -> dict[str, object]:
+        """Publish one verified Design checkpoint."""
+        params = self._validate(ChangeParams, request)
+        return self._call(params, lambda: self._application.publish_design_checkpoint(params.change_id))
+
+    async def derive_delivery_contract(self, request: dict[str, object]) -> dict[str, object]:
+        """Derive one Delivery contract without publication."""
+        params = self._validate(ChangeParams, request)
+        return self._call(params, lambda: self._application.derive_delivery_contract(params.change_id))
+
+    async def validate_delivery_contract(self, request: dict[str, object]) -> dict[str, object]:
+        """Validate one derived Delivery contract."""
+        params = self._validate(ChangeParams, request)
+        return self._call(params, lambda: self._application.validate_delivery_contract(params.change_id))
+
+    async def admit_delivery_change(self, request: dict[str, object]) -> dict[str, object]:
+        """Admit one source-bound Delivery change."""
+        params = self._validate(AdmitDeliveryChangeParams, request)
+        return self._call(params, lambda: self._application.admit_delivery_change(params.request))
+
+    async def list_work_items(self, request: dict[str, object]) -> list[object]:
+        """List bounded work-item projections."""
+        params = self._validate(EmptyParams, request)
+        return self._call(params, self._application.list_work_items)
+
+    async def show_work_item(self, request: dict[str, object]) -> dict[str, object]:
+        """Show one exact bounded work item."""
+        params = self._validate(WorkItemParams, request)
+        return self._call(params, lambda: self._application.show_work_item(params.change_id, params.work_item_id))
+
+    async def acquire_frontier_work(self, request: dict[str, object]) -> dict[str, object]:
+        """Acquire currently available frontier work."""
+        params = self._validate(EmptyParams, request)
+        return self._call(params, self._application.acquire_frontier_work)
+
+    async def show_plan_context(self, request: dict[str, object]) -> dict[str, object]:
+        """Show bounded Planning context for one claim."""
+        params = self._validate(ClaimContextParams, request)
+        return self._call(params, lambda: self._application.show_plan_context(**params.model_dump()))
+
+    async def show_build_context(self, request: dict[str, object]) -> dict[str, object]:
+        """Show bounded Build context for one claim."""
+        params = self._validate(ClaimContextParams, request)
+        return self._call(params, lambda: self._application.show_build_context(**params.model_dump()))
+
+    async def publish_delivery_plan(self, request: dict[str, object]) -> dict[str, object]:
+        """Publish one claim-scoped Delivery plan."""
+        params = self._validate(PublishDeliveryPlanParams, request)
+        return self._call(params, lambda: self._application.publish_delivery_plan(params.change_id, params.request))
+
+    async def publish_delivery_result(self, request: dict[str, object]) -> dict[str, object]:
+        """Publish one claim-scoped Delivery result."""
+        params = self._validate(PublishDeliveryResultParams, request)
+        return self._call(params, lambda: self._application.publish_delivery_result(params.change_id, params.request))
+
+    async def transition_delivery(self, request: dict[str, object]) -> dict[str, object]:
+        """Apply one worker-owned Delivery transition."""
+        params = self._validate(TransitionDeliveryParams, request)
+        return self._call(params, lambda: self._application.transition_delivery(params.change_id, params.request))
+
+    async def recover_claim(self, request: dict[str, object]) -> dict[str, object]:
+        """Recover one exact failed Delivery claim."""
+        params = self._validate(ClaimContextParams, request)
+        return self._call(params, lambda: self._application.recover_claim(**params.model_dump()))
+
+    async def list_integration_ready_changes(self, request: dict[str, object]) -> list[object]:
+        """List changes ready for Integration."""
+        params = self._validate(EmptyParams, request)
+        return self._call(params, self._application.list_integration_ready_changes)
+
+    async def show_integration_attention(self, request: dict[str, object]) -> dict[str, object] | None:
+        """Show current typed Integration attention."""
+        params = self._validate(ChangeParams, request)
+        return self._call(params, lambda: self._application.show_integration_attention(params.change_id))
+
+    async def integrate_ready_change(self, request: dict[str, object]) -> dict[str, object]:
+        """Integrate one ready Delivery change."""
+        params = self._validate(ChangeParams, request)
+        return self._call(params, lambda: self._application.integrate_ready_change(params.change_id))
+
+    async def admit_reviewed_integration_repair(self, request: dict[str, object]) -> dict[str, object]:
+        """Admit one independently reviewed Integration repair."""
+        params = self._validate(IntegrationRepairParams, request)
+        return self._call(params, lambda: self._application.admit_reviewed_integration_repair(params.repair))
+
+    async def list_completed_changes(self, request: dict[str, object]) -> dict[str, object]:
+        """List one bounded completed-history page."""
+        params = self._validate(CompletedPageParams, request)
+        return self._call(params, lambda: self._application.list_completed_changes(params.cursor, params.limit))
+
+    async def search_completed_changes(self, request: dict[str, object]) -> dict[str, object]:
+        """Search bounded completed-history summaries."""
+        params = self._validate(SearchCompletedParams, request)
+        return self._call(
+            params,
+            lambda: self._application.search_completed_changes(params.query, params.cursor, params.limit),
+        )
+
+    async def show_completed_change(self, request: dict[str, object]) -> dict[str, object]:
+        """Show one exact completed Delivery change."""
+        params = self._validate(ShowCompletedParams, request)
+        return self._call(
+            params,
+            lambda: self._application.show_completed_change(params.change_id, params.completion_id),
+        )
+
+    @staticmethod
+    def _validate[ModelT: BaseModel](model: type[ModelT], payload: dict[str, object]) -> ModelT:
+        try:
+            return model.model_validate_json(json.dumps(payload))
+        except (TypeError, ValueError, ValidationError) as exc:
+            TargetMCPAdapter._raise(
+                "ERR_TARGET_PARAM_VALIDATION",
+                str(exc),
+                TargetMCPAdapter._payload_authority(payload),
+                retry_safe=False,
+            )
+
+    def _call(self, params: BaseModel, operation: Callable[[], object]) -> StructuredOutput:
+        try:
+            return self._serialize(operation())
+        except CompletedHistoryError as exc:
+            authority = exc.diagnostic.change_id or exc.diagnostic.completion_id or self._authority(params)
+            self._raise(
+                exc.diagnostic.code.value,
+                exc.diagnostic.detail,
+                authority,
+                retry_safe=isinstance(exc, CompletedHistoryStaleError),
+            )
+        except _NAMED_KANBAN_ERRORS as exc:
+            self._raise(
+                exc.code,
+                str(exc) or exc.code,
+                self._authority(params),
+                retry_safe=isinstance(exc, _RETRY_SAFE_ERRORS),
+            )
+
+    @staticmethod
+    def _serialize(value: object) -> StructuredOutput:
+        if isinstance(value, BaseModel):
+            return value.model_dump(mode="json")
+        if isinstance(value, tuple):
+            return [TargetMCPAdapter._serialize(item) for item in value]
+        if value is None or isinstance(value, str | int | float | bool):
+            return value
+        message = f"unsupported structured output: {type(value).__name__}"
+        raise TypeError(message)
+
+    @classmethod
+    def _authority(cls, params: BaseModel) -> str:
+        return cls._payload_authority(params.model_dump(mode="json"))
+
+    @classmethod
+    def _payload_authority(cls, payload: dict[str, object]) -> str:
+        for key in ("authority_digest", "change_id"):
+            identity = cls._find_field(payload, key)
+            if identity is not None:
+                return identity
+        return "portfolio"
+
+    @staticmethod
+    def _find_field(value: object, field: str) -> str | None:
+        if isinstance(value, dict):
+            candidate = value.get(field)
+            if isinstance(candidate, str):
+                return candidate
+            return next(
+                (found for item in value.values() if (found := TargetMCPAdapter._find_field(item, field))),
+                None,
+            )
+        if isinstance(value, list | tuple):
+            return next((found for item in value if (found := TargetMCPAdapter._find_field(item, field))), None)
+        return None
+
+    @staticmethod
+    def _raise(code: str, detail: str, authority: str, *, retry_safe: bool) -> Never:
+        diagnostic = TargetDiagnostic(
+            code=code,
+            detail=detail,
+            current_authority_identity=authority,
+            retry_safe=retry_safe,
+        )
+        raise ToolError(diagnostic.model_dump_json())
+
+
+_NAMED_KANBAN_ERRORS = (
+    CoordinationConflictError,
+    DeliveryRuntimeConflictError,
+    DeliveryRuntimeReferenceError,
+    DesignPackageConflictError,
+    PortfolioApplicationError,
+    TargetAdmissionError,
+    TransactionConflictError,
+    TransactionManifestError,
+    TransactionPathError,
+)
+_RETRY_SAFE_ERRORS = (
+    CoordinationConflictError,
+    DeliveryRuntimeConflictError,
+    DesignPackageConflictError,
+    TransactionConflictError,
+)
 
 
 @dataclass(frozen=True)
@@ -73,7 +374,7 @@ class TargetAppContext:
         return hashlib.sha256(json.dumps(entries, separators=(",", ":")).encode()).hexdigest()
 
 
-class TargetMCPAdapter:
+class _LegacyTargetMCPAdapter:
     """Translate target MCP calls without duplicating runtime decisions."""
 
     def __init__(self, context: TargetAppContext) -> None:
@@ -404,13 +705,13 @@ def assemble_target_server(context: TargetAppContext) -> FastMCP:
     return server
 
 
-def register_target_tools(server: FastMCP, adapter: TargetMCPAdapter) -> None:
+def register_target_tools(server: FastMCP, adapter: TargetMCPAdapter | _LegacyTargetMCPAdapter) -> None:
     """Register the complete target query and mutation surface."""
     _register_queries(server, adapter)
     _register_mutations(server, adapter)
 
 
-def _register_queries(server: FastMCP, adapter: TargetMCPAdapter) -> None:
+def _register_queries(server: FastMCP, adapter: TargetMCPAdapter | _LegacyTargetMCPAdapter) -> None:
     for name in (
         "list_changes",
         "list_work_items",
@@ -428,7 +729,7 @@ def _register_queries(server: FastMCP, adapter: TargetMCPAdapter) -> None:
         server.tool(name=name, annotations=_READ)(getattr(adapter, name))
 
 
-def _register_mutations(server: FastMCP, adapter: TargetMCPAdapter) -> None:
+def _register_mutations(server: FastMCP, adapter: TargetMCPAdapter | _LegacyTargetMCPAdapter) -> None:
     for name in (
         "admit_change",
         "create_request",
@@ -445,6 +746,8 @@ def _register_mutations(server: FastMCP, adapter: TargetMCPAdapter) -> None:
 
 
 __all__ = [
+    "DELIVERY_OPERATION_ANNOTATIONS",
+    "DELIVERY_OPERATION_NAMES",
     "TargetAppContext",
     "TargetChangeBinding",
     "TargetMCPAdapter",
