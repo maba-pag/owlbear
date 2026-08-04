@@ -1,13 +1,14 @@
-"""Typed HTTP models for the dormant target work-item API."""
+"""Strict HTTP models for current Delivery work and operator controls."""
 
 from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from owlbear_kanban.target_authority import Commitment, CompletionSummary, DesignReentryBriefing, SemanticUpdate
-from owlbear_kanban.work_items import TaskProgress, WorkItemProjection, WorkItemStage
+from owlbear_kanban.delivery_runtime import DeliveryStage
+from owlbear_kanban.portfolio_application import DeliveryOperatorContext
+from owlbear_kanban.work_items import WorkItemProjection
 
 
 class _TargetHTTPModel(BaseModel):
@@ -24,105 +25,88 @@ class AttentionCounts(_TargetHTTPModel):
 
 
 class WorkItemPortfolioResponse(_TargetHTTPModel):
-    """Return mixed-change semantic cards and portfolio attention totals."""
+    """Return mixed-change cards and portfolio attention totals."""
 
-    items: tuple[WorkItemProjection, ...]
+    items: tuple[WorkItemSummaryResponse, ...]
     attention_counts: AttentionCounts
 
 
-class WorkItemTraceLinks(_TargetHTTPModel):
-    """Keep technical resources one explicit drill-down from semantic detail."""
+class WorkItemLinks(_TargetHTTPModel):
+    """Typed control and attention resources for one outcome."""
 
-    activity: str
-    evidence: str
-    requests: str
+    self: str
+    answer_request: str
+    clear_block: str
+    recover_claim: str
+    move_backward: str
+    integration_attention: str
+    integration_retry: str
+
+
+class WorkItemSummaryResponse(_TargetHTTPModel):
+    """One bounded current card with typed Delivery resources."""
+
+    card: WorkItemProjection
+    links: WorkItemLinks
 
 
 class WorkItemDetailResponse(_TargetHTTPModel):
-    """Compose semantic authority, progress, correction history, and trace links."""
+    """Bounded current operator state for one exact outcome."""
 
-    card: WorkItemProjection
-    authority_identity: str = Field(pattern=r"^[0-9a-f]{64}$")
-    commitments: tuple[Commitment, ...]
-    acceptance: tuple[str, ...]
-    task_progress: tuple[TaskProgress, ...]
-    correction_history: tuple[dict[str, object], ...]
-    semantic_updates: tuple[SemanticUpdate, ...]
-    completion_summary: CompletionSummary | None
-    trace_links: WorkItemTraceLinks
+    operator: DeliveryOperatorContext
+    links: WorkItemLinks
 
 
-class WorkItemTraceResponse(_TargetHTTPModel):
-    """Return technical activity and evidence only from the trace resource."""
+class AnswerRequestBody(_TargetHTTPModel):
+    """Selected option, free-text answer, or both for one pending request."""
 
-    activity: tuple[dict[str, object], ...]
-    evidence: tuple[dict[str, object], ...]
+    selected_option_id: str | None = None
+    response_text: str | None = None
 
-
-class SemanticUpdatesResponse(_TargetHTTPModel):
-    """Return non-blocking semantic revisions for one work item."""
-
-    updates: tuple[SemanticUpdate, ...]
-
-
-class CompletionSummaryResponse(_TargetHTTPModel):
-    """Return the commitment-level completion summary when present."""
-
-    completion_summary: CompletionSummary | None
+    @model_validator(mode="after")
+    def _require_answer(self) -> AnswerRequestBody:
+        if self.selected_option_id is None and (self.response_text is None or not self.response_text.strip()):
+            message = "request answer requires a selected option or response text"
+            raise ValueError(message)
+        return self
 
 
-class WorkItemRequestsResponse(_TargetHTTPModel):
-    """Return requests scoped to one semantic work item."""
+class ClearBlockBody(_TargetHTTPModel):
+    """Operator evidence clearing one requestless same-stage block."""
 
-    requests: tuple[dict[str, object], ...]
-
-
-class ResumeDesignResponse(_TargetHTTPModel):
-    """Return persisted design context without mutating admitted authority."""
-
-    work_item_id: str
-    stage: Literal[WorkItemStage.DESIGN] = WorkItemStage.DESIGN
-    briefing: DesignReentryBriefing
+    operator_note: str = Field(min_length=1)
+    locators: list[str] = Field(min_length=1)
 
 
-class CreateWorkItemRequestBody(_TargetHTTPModel):
-    """Create one request beneath current semantic authority."""
+class ConfirmLostClaimBody(_TargetHTTPModel):
+    """Explicit confirmation for removal of one exact failed claim."""
 
-    request_id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-    authority_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    commitment_id: str = Field(min_length=1)
-    task_id: str | None = None
-    created_at: str = Field(min_length=1)
-    summary: str = Field(min_length=1)
+    confirmed_lost: Literal[True]
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
 
 
-class ResolveWorkItemRequestBody(_TargetHTTPModel):
-    """Resolve one request while retaining its immutable semantic target."""
+class BackwardMoveBody(_TargetHTTPModel):
+    """Operator-selected earlier stage and reason."""
 
-    resolved_at: str = Field(min_length=1)
+    target: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
 
-
-class RecoverWorkItemBody(_TargetHTTPModel):
-    """Identify one interrupted task and its recorded owner process."""
-
-    job_id: int = Field(gt=0)
-    attempt_id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-    claim_id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-    process_id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-    recovered_at: str = Field(min_length=1)
+    @field_validator("target")
+    @classmethod
+    def _validate_target(cls, value: str) -> str:
+        DeliveryStage(value)
+        return value
 
 
 __all__ = [
+    "AnswerRequestBody",
     "AttentionCounts",
-    "CompletionSummaryResponse",
-    "CreateWorkItemRequestBody",
-    "RecoverWorkItemBody",
-    "ResolveWorkItemRequestBody",
-    "ResumeDesignResponse",
-    "SemanticUpdatesResponse",
+    "BackwardMoveBody",
+    "ClearBlockBody",
+    "ConfirmLostClaimBody",
     "WorkItemDetailResponse",
+    "WorkItemLinks",
     "WorkItemPortfolioResponse",
-    "WorkItemRequestsResponse",
-    "WorkItemTraceLinks",
-    "WorkItemTraceResponse",
+    "WorkItemSummaryResponse",
 ]

@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import Annotated
 
 import uvicorn
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from owlbear_memory.errors import (
@@ -28,6 +29,10 @@ from owlbear_cockpit.deps import get_ideas_path, get_memory_engine
 from owlbear_cockpit.models import HealthModule, IdeasHealth
 from owlbear_cockpit.routes.ideas import router as ideas_router
 from owlbear_cockpit.routes.memory import router as memory_router
+from owlbear_cockpit.routes.target_work import (
+    handle_target_http_error,
+    handle_target_validation_error,
+)
 from owlbear_cockpit.routes.target_work import router as target_work_router
 from owlbear_cockpit.target_context import load_target_context
 
@@ -35,6 +40,8 @@ _DEFAULT_PORT = 8420
 _MAX_PORT = 65535
 
 app = FastAPI(title="OwlBear Cockpit")
+app.add_exception_handler(HTTPException, handle_target_http_error)
+app.add_exception_handler(RequestValidationError, handle_target_validation_error)
 app.include_router(target_work_router, prefix="/api")
 app.include_router(ideas_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")
