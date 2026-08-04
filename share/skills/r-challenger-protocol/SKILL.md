@@ -65,6 +65,6 @@ outputs, impact closure, and cheapest falsifying proof.
 |----------|--------------|
 | designer-challenger | Designer repairs candidate authority, reruns deterministic validation and challenge, and seeks fresh user approval before admission |
 | planner-challenger | Planner interprets advisory `pass` or `finding`; only pass permits plan publication and Planner alone selects `advance`, `retry`, `return`, or `block` |
-| build-reviewer | Builder repairs only an `implementation-defect` inside the packet; every planning, discovery, or scope finding returns `SpecificationReentry` |
+| build-reviewer | Builder interprets advisory `pass` or `finding`; implementation findings may be repaired, while Planning or Design findings return through Builder-selected transitions without result publication |
 
 Every repaired candidate requires a fresh review against its new immutable identity or commit.

@@ -24,29 +24,29 @@ without behavior change).
 
 ### Rules
 
-- Commit only files owned by the current packet or user-requested change. A dirty worktree or mixed
+- Commit only files owned by the active task or user-requested change. A dirty worktree or mixed
   index is not a reason to skip an owned commit.
 - Use the shared scoped helper:
   `uv --project {owlbear-root} run commit-owned -m "type: description (#task-id, agent)" -- path [path...]`.
 - The helper preserves unrelated staged paths and unstages only its own paths if `git commit` fails.
   It rejects owned paths that were already staged because it cannot distinguish user work from agent
   work in the same path.
-- On a same-job retry after a crash or unstructured return, treat uncommitted changes within the
-  admitted packet envelope as candidate work from the interrupted attempt. Inspect the complete diff,
-  validate it against the packet, and explicitly adopt it before committing. Do not
+- During exact-claim recovery after a crash or unstructured worker return, treat uncommitted changes
+  within the task-maintained surfaces as candidate work from the interrupted claim. Inspect the
+  complete diff, validate it against the task, and explicitly adopt it before committing. Do not
   infer an ownership conflict from a dirty path, file timestamp, or invocation boundary alone. If a
   concrete hunk conflicts with the task or cannot be safely attributed, name that path and hunk in the
   containment reason instead of describing the whole task-owned diff as mixed.
-- Pass explicit file paths to `commit-owned`; never pass `.`, a native authority/work-state root, or
-  another broad directory. The selected packet impact closure bounds eligible implementation paths.
-- A native builder returns `BuilderSuccess` only after the scoped commit exists, its path set equals
-  the packet-owned set, no packet-owned change remains outside it, and a fresh read-only review
-  passes that exact commit.
-- If the scoped commit cannot be created or verified, return `CommitFailed` with the bounded command,
-  error, and changed paths. Do not issue completion fields, broaden the commit, or mutate lifecycle
-  state. The orchestrator releases the unchanged active job identity.
-- A permitted local `implementation-defect` repair uses another explicit scoped commit, reruns
-  affected proof, and requires fresh review of the cumulative packet result.
+- Pass explicit file paths to `commit-owned`; never pass `.`, a Delivery authority/state root, or
+  another broad directory. The task's maintained surfaces bound eligible implementation paths.
+- Builder calls `publish_delivery_result` only after the scoped commit exists, its path set equals
+  the task-owned set, no task-owned change remains outside it, and fresh read-only review passes
+  that exact commit.
+- If the scoped commit cannot be created or verified, publish no result and report fail-closed
+  evidence for Orchestrator recovery. Retry, return, and block are invalid until the writer-owned
+  head is exact and clean.
+- A permitted local `implementation` finding repair uses another explicit scoped commit, reruns
+  affected proof, and requires fresh review of the cumulative task result.
 - Never push. The user pushes manually.
 
 ### VS Code Auto-Staging Trap

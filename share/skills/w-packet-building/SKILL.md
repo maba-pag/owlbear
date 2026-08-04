@@ -1,38 +1,46 @@
 ---
 name: w-packet-building
-description: "Workflow: Implement and independently review one target build or assembly claim"
+description: "Workflow: Implement one acquired Delivery task and publish its reviewed exact-commit result"
 user-invocable: false
 ---
 
-# Target Building
+# Packet Building
 
-Own one started `build` or `assembly` attempt in its assigned per-change worktree. Produce one exact
-candidate commit and independent review. Orchestration persists the decision and owns correction
-routing.
+Own one mechanically acquired Builder launch in its assigned change worktree. Implement the supplied
+task, obtain independent exact-commit evidence, publish only a passing compact result, and return one
+worker-owned transition for orchestration to forward unchanged.
 
-## Step 0 - Validate Dispatch And Workspace
+## Step 0 - Validate Launch, Context, And Custody
 
-Require one active target job with matching attempt, claim, owner, reviewer, process, authority
-digest, candidate commit, and change coordination. Call `show_job`, `show_attempt`, `show_work_item`,
-and relevant receipts. In the supplied `worktree_path`, verify the checked-out branch and HEAD equal
-the coordination `branch` and expected reviewed boundary. Use the recorded `integration_target`;
-never assume a branch name or write in the caller's checkout.
+Require one serialized `DeliveryLaunchPackage` whose policy and claim roles are `builder`, whose
+task IDs match, and whose writer identity matches the claim attempt, claim, owner, and process. Call
+`show_build_context` with the launch change, outcome, attempt, and claim IDs. Require the returned
+`DeliveryBuildContext.launch` to equal the supplied launch and the context task to match its task,
+outcome, and plan-scope identities.
 
-Return `BuildExecutionBlocked` before edits for stale identity, ambiguous custody, dirty owned paths,
-or mismatched coordination.
+Before edits, enter only `launch.worktree_path` and require:
 
-## Step 1 - Fix The Claim Boundary
+- its current branch equals `launch.branch`;
+- `HEAD` equals `launch.source_head` and descends from `launch.last_reviewed_commit`;
+- writer custody still matches the active claim;
+- the task-owned paths are clean and no unrelated staged state is adopted;
+- any predecessor results, resolved requests, return context, and recovery attention come only from
+  this fresh Build context.
 
-For `build`, rehydrate the accepted task under `plan_scope_id`: outcome, admitted paths and
-interfaces, required outputs, exclusions, dependencies, acceptance observations, and proof.
+Do not infer malformed identity or edit under recovery attention. A structurally valid claim that
+cannot safely proceed returns to Orchestrator for fail-closed claim recovery; it does not fabricate
+a result or mutate another checkout.
 
-For `assembly`, rehydrate the declared `composition_claim`, reviewed task receipts, exact task
-commits, merge ancestry, and change-level proof. Assembly may integrate only with merge commits;
-task SHAs remain unchanged ancestors. A conflict or interaction returns `solution-plan` through
-review instead of local history rewriting.
+## Step 1 - Fix The Task Boundary
 
-Do not edit plan authority, solution authority, design authority, jobs, receipts, requests, or
-coordination records.
+Treat `DeliveryBuildContext.task` as executable authority. Its result, commitment IDs, dependency
+IDs, required outputs, maintained surfaces, constraints, exclusions, acceptance observations, and
+proof boundaries bound the implementation. Predecessor results prove only their exact task digests
+and commits. Resolved requests constrain work through structured resolution fields; conversation is
+not authority.
+
+Do not edit Design, task definitions, Delivery runtime, package internals, coordination records, or
+unlisted surfaces. A missing task premise belongs to Planning or Design, not local implementation.
 
 ## Step 2 - Implement And Commit
 
@@ -41,54 +49,57 @@ or observations and relevant results, then load `r-workspace-governance` and cre
 commit from explicit owned paths. Require a clean owned state and exact candidate commit. Never
 rebase, squash, cherry-pick, amend a reviewed commit, or create a per-task worktree.
 
-On a repair redispatch, retain the same worktree, branch, attempt, and reviewer. Preserve the
-rejected commit, create a new bounded repair commit on the change branch, rerun affected proof, and
-include the persisted review and resolution in the next review context.
+For a local review finding, retain the same launch, worktree, and configured reviewer. Preserve the
+rejected commit, create a bounded repair commit, rerun affected proof, and supply prior evidence to
+fresh review. Never amend or erase a reviewed head.
 
-## Step 3 - Review One Distinct Claim
+## Step 3 - Obtain Advisory Exact-Commit Review
 
-Dispatch only the assigned `reviewer_id` to `build-reviewer` with execution identity, admitted
-claim, complete diff, changed paths, exact candidate commit, proof, custody, ancestry, and prior
-review evidence. Require matching reviewer and commit identities, a non-empty claim and evidence,
-and one runtime disposition.
+Dispatch only `launch.policy.reviewer_agent` to `build-reviewer` using the configured reviewer model.
+Supply the unchanged launch identity, full Build context, complete diff, changed paths, exact commit,
+focused proof, custody, ancestry, and prior evidence. Require the reviewer to echo the exact commit
+and return disposition `pass | finding`, matching `finding_boundary`, and non-empty evidence.
 
-Return that decision immediately. `repair` can remain in the same attempt; `restart`, `task-plan`,
-`solution-plan`, and `design` end local work. Do not create replacement jobs or revise authority.
+Repair an `implementation` finding when it remains inside the task and obtain fresh review of the new
+commit. A `planning` or `design` finding is evidence for Builder's return choice, not a reviewer-owned
+transition. Invalid review evidence publishes nothing.
 
-## Step 4 - Return
+## Step 4 - Publish Pass Or Route Finding
 
-On a structurally complete review, return:
+On `pass`, construct one `DeliveryTaskResult` with a stable result ID, launch change and authority
+digest, exact task ID, canonical task digest, and reviewed commit. Obtain the digest through the
+existing `DeliveryTaskDefinition.digest` property applied to the context task; never reimplement its
+canonical hashing. Call `publish_delivery_result` with the unchanged change ID and a
+`PublishDeliveryResult` containing the outcome ID, claim ID, and result.
 
-```yaml
-kind: BuildClaimResult
-job_id: <started job>
-attempt_id: <started attempt>
-claim_id: <started claim>
-owner_id: <assigned owner>
-reviewer_id: <assigned reviewer>
-candidate_commit: <exact reviewed commit>
-review:
-  review_id: <review identity>
-  reviewer_id: <assigned reviewer>
-  candidate_commit: <exact reviewed commit>
-  disposition: acceptable|repair|restart|task-plan|solution-plan|design
-  claim: <specific implementation or composition claim>
-  evidence: [<proof and source-grounded observations>]
-```
-
-For invalid execution, workspace, commit, or review evidence, return:
+Require the returned `DeliveryResultCandidate` to preserve the claim and exact result. Return its
+output directly in `AdvanceDelivery`:
 
 ```yaml
-kind: BuildExecutionBlocked
-target: <execution, authority, workspace, candidate, or review>
-finding: <specific fail-closed condition>
+action: advance
+outcome_id: <context outcome ID>
+claim_id: <launch claim ID>
+output: <published DeliveryResultCandidate.output unchanged>
 ```
 
-Do not call a finish operation, select another job, or privately repeat review.
+On a finding or safe local failure, publish nothing. Builder chooses one transition:
+
+- `retry` with the launch attempt ID and exact clean current head as `abandoned_commit` for an
+  implementation failure that cannot be repaired in this invocation;
+- `return` to `planning` or `design` with reason, locators, launch attempt ID, and exact clean current
+  head as `preserved_commit` for missing or contradictory earlier authority;
+- `block` with reason, unblock evidence, locators, exact clean current head as `resume_commit`, and
+  an embedded bounded `DeliveryRequest` when user-owned input is required.
+
+Return the selected `DeliveryTransition` directly. Do not call `transition_delivery`; orchestration
+validates its outcome, claim, attempt, and commit identity and forwards it byte-for-structure
+unchanged. Do not call job, receipt, request, recovery, or transition lifecycle operations.
 
 ## Known Pitfalls
 
-- **Wrong checkout:** all writes belong in the assigned change worktree.
+- **Context reconstruction:** use `show_build_context`; do not join jobs, activity, semantic updates,
+  receipts, or conversation history.
+- **Wrong checkout:** all writes belong in the launch's assigned change worktree.
 - **History rewrite:** reviewed and rejected commits are immutable evidence.
-- **Reviewer churn:** repair retains the same reviewer; restart receives a fresh one.
-- **Scope repair:** upstream contradictions return to the selected earlier authority level.
+- **Reviewer action:** findings name an owning boundary; Builder selects the transition.
+- **Premature publication:** only exact-commit advisory pass permits `publish_delivery_result`.
