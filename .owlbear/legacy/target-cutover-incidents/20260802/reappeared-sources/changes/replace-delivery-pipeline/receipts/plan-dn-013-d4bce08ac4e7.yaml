@@ -1,0 +1,94 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-013-d4bce08ac4e7
+change_id: replace-delivery-pipeline
+delivery_digest: d4bce08ac4e7fad7c79f56dc056601a7c9648248899ab8dfdb1f463df10f18e6
+issued_at: '2026-07-30T18:12:00Z'
+impact_closure:
+  paths:
+    - .owlbear/changes/replace-delivery-pipeline/
+    - serve/cockpit/src/owlbear_cockpit/
+    - serve/cockpit/web/e2e/native-release-assembled.spec.ts
+    - serve/cockpit/web/e2e/support/seed-native-proof-stack.py
+    - serve/cockpit/web/e2e/support/start-native-release-stack.mjs
+    - serve/cockpit/web/package.json
+    - serve/cockpit/web/playwright.config.ts
+    - serve/cockpit/web/src/
+    - serve/kanban/src/owlbear_kanban/
+    - serve/kanban/tests/fixtures/historical-admission/
+    - serve/kanban/tests/test_generated_graph_admission.py
+    - serve/kanban/tests/test_historical_admission.py
+    - serve/kanban/tests/test_invalidation.py
+    - serve/kanban/tests/test_jobs.py
+    - serve/kanban/tests/test_runtime_query.py
+    - serve/kanban/tests/test_runtime_transaction.py
+    - serve/mcp-kanban/src/owlbear_mcp_kanban/
+    - serve/mcp-kanban/tests/test_complete_native_delivery.py
+    - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
+    - serve/mcp-kanban/tests/test_mcp_surface_contract.py
+    - setup/init.py
+  authority_targets:
+    - DN-002
+    - DN-003
+    - DN-008
+    - DN-009
+    - DN-010
+    - DN-011
+    - DN-012
+    - DN-013
+    - DN-014
+    - IF-002
+    - IF-003
+    - IF-005
+    - IF-009
+    - IF-010
+    - IF-011
+    - IF-012
+    - IF-013
+    - IF-014
+    - KEEP-004
+    - KEEP-005
+    - KEEP-006
+    - KEEP-007
+    - MOD-008
+    - NEG-010
+    - PROOF-013
+    - REQ-018
+    - RISK-003
+    - RISK-005
+    - RISK-006
+    - RISK-009
+    - RISK-010
+    - RISK-011
+    - RISK-012
+target_node_id: DN-013
+node_plan_digest: d2f38dd7bbd66240d092a5c89c1bba713898f3128474c9d94218672df41efbd3
+predecessor_receipt_ids: []
+evidence:
+  methods:
+    - Reject original browser lifecycle, workspace repair/removal, memory purge, and memory lifecycle defects with stable codes, then admit their corrected forms.
+    - Run generic valid/invalid DAG, stale, supersession, and corrective-cycle cases.
+    - Execute a representative cross-module change and one corrective cycle.
+    - Assert exact receipts, no late unowned expansion, final audit, clean setup, and no active legacy surface.
+    - Assert modular authority and isolated plans retain canonical digest semantics and that finish_shape, shape lifecycle discriminators, and dual registrations are absent.
+  source_inspection:
+    disposition: build-required
+    evidence: Five invalidation tests fail because copied current DN-001 authority has a verification-only plan without DN-001-PK-001; the public parser also lacks durable shape-kind rejection coverage.
+  baseline:
+    command: uv run pytest -n0 <PROOF-013 Python targets> -q --tb=short
+    result: 97 passed, 5 failed
+    failures: Five ERR_INVALIDATION_REFERENCE results for stale DN-001-PK-001 fixture authority.
+  assembled_release:
+    command: npm run test:e2e:native-release
+    result: 2 desktop/mobile Playwright tests passed
+  tracked_scope:
+    candidate_matches_head: true
+    clean: true
+    evidence: Proposed edit and proof-consumption paths had empty tracked Git status after Python and browser execution.
+  predecessors: []
+  review:
+    disposition: pass
+    evidence_id: plan-review-dn-013-d4bce08ac4e7-r2
+    evidence: Fresh independent review inspected current authority, source, fixture failure, packet closure, downstream IDs, proof boundaries, and expansion limits; all six typed checks passed.
+code_revision: 0fb1553cd20ba27868b53c07b5c772b57a668e40

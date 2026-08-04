@@ -1,0 +1,97 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-008-d4bce08ac4e7
+change_id: replace-delivery-pipeline
+delivery_digest: d4bce08ac4e7fad7c79f56dc056601a7c9648248899ab8dfdb1f463df10f18e6
+issued_at: '2026-07-30T14:49:00Z'
+impact_closure:
+  paths:
+    - .owlbear/hooks/deny-writes.py
+    - .owlbear/scripts/validate_agents.py
+    - .owlbear/scripts/validate_skills.py
+    - seed/.owlbear/hooks/deny-writes.py
+    - serve/kanban/src/owlbear_kanban/
+    - serve/kanban/tests/test_native_runtime.py
+    - serve/kanban/tests/test_proof_checkout.py
+    - serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
+    - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
+    - serve/mcp-kanban/tests/test_mcp_surface_contract.py
+    - share/agents/acceptor.agent.md
+    - share/skills/w-node-acceptance/SKILL.md
+    - share/skills/w-orchestration/SKILL.md
+    - tests/test_write_guard_hooks.py
+  authority_targets:
+    - DN-008
+    - IF-001
+    - IF-003
+    - IF-004
+    - IF-005
+    - IF-007
+    - IF-008
+    - IF-009
+    - IF-010
+    - KEEP-004
+    - KEEP-005
+    - KEEP-007
+    - KEEP-008
+    - MOD-001
+    - MOD-003
+    - MOD-008
+    - MOD-009
+    - NEG-003
+    - NEG-009
+    - PROOF-007
+    - REQ-006
+    - REQ-008
+    - REQ-014
+    - RISK-008
+    - RISK-009
+target_node_id: DN-008
+node_plan_digest: 21ab5a751d96db367bc57dc462b3a6253b08ed8dd39f434cecf5b77c2e4ff0ad
+predecessor_receipt_ids: []
+evidence:
+  methods:
+    - Pass a complete node at exact SHA.
+    - Reject local defect, missing harness, boundary bypass, stale receipt, and tracked acceptor edit.
+    - Assert corrective jobs and cleanup are exact and minimal.
+    - Pass an eligible verification-only node with zero build receipts only after executing its full admitted proof at the exact candidate; reject candidate mismatch, missing outputs, boundary weakening, legacy-record substitution, and any tracked acceptor edit.
+  source_inspection:
+    disposition: pass
+    evidence: Production acceptance, exact-commit checkout, evidence validation, corrective routing, cleanup, and reconciliation already exist. The bounded delta is confined to serve/mcp-kanban/tests/test_mcp_acceptance_tools.py.
+  baseline:
+    collection: 34 acceptance tests collected.
+    focused_result: 16 failed, 62 passed, 21 deselected.
+    finding: Fourteen DN-008 failures arise from ten fixed reconciliation-ID sites; two separate DN-014 audit setup failures are excluded.
+    tracked_scope_clean: true
+  predecessor_plan_receipts:
+    - plan-dn-004-d4bce08ac4e7
+    - plan-dn-006-d4bce08ac4e7
+    - plan-dn-007-d4bce08ac4e7
+    - plan-dn-009-d4bce08ac4e7
+  job_id_allocation:
+    evidence: Archive-inclusive list_jobs returned next_cursor null with IDs 101 through 131 occupied; 132 and 133 are unused.
+  review:
+    disposition: pass
+    evidence_id: challenge-plan-dn-008-108-final
+    evidence: Fresh independent review inspected the admitted node, current source, ten reconciliation fixture defects, verification-only proof gap, canonical closure, exact test inventory, predecessor receipts, and downstream IDs. All six typed checks passed.
+    checks:
+      plan_completeness:
+        disposition: pass
+        evidence: One build packet covers all nine owned or supported obligations and all four PROOF-007 methods. The ten repair sites and two absent verification-only scenarios were confirmed in source.
+      admitted_references:
+        disposition: pass
+        evidence: Obligations, modules, interfaces, risks, dependencies, proof boundary, methods, replacements, and durable outputs reproduce DN-008 authority without addition or omission.
+      impact_closures:
+        disposition: pass
+        evidence: Each canonical path is consumed by source inspection or declared proof, and each authority target belongs to DN-008.
+      dependency_order:
+        disposition: pass
+        evidence: The single packet is acyclic. The four predecessor plan receipts match DN-008 dependencies, and build 132 plus accept 133 are distinct unused identities.
+      proof_boundary:
+        disposition: pass
+        evidence: Proof crosses the public MCP acceptance boundary over engine-created checkouts and real native stores. Independent graph order, store-observed reconciliation jobs, and predecessor identities prevent self-referential assertions.
+      material_expansion:
+        disposition: pass
+        evidence: The only writable path is the acceptance integration test module. Production, authority, agent, workflow, audit-helper, interface, migration, and lifecycle changes are excluded.
+code_revision: 0fb1553cd20ba27868b53c07b5c772b57a668e40

@@ -1,0 +1,89 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-005-f11b5af05ac3
+change_id: replace-delivery-pipeline
+delivery_digest: f11b5af05ac31cc255668bd953fdb085cf0c533ed797ba422a839a567beaf83c
+issued_at: '2026-08-01T16:58:04Z'
+impact_closure:
+  paths:
+    - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
+    - .owlbear/changes/replace-delivery-pipeline/design.md
+    - .owlbear/changes/replace-delivery-pipeline/intent.md
+    - .owlbear/research/delivery-operating-model-reframe.md
+    - .owlbear/research/planning-workflow-root-cause-and-redesign.md
+    - conftest.py
+    - pyproject.toml
+    - serve/kanban/src/owlbear_kanban/
+    - serve/mcp-kanban/src/owlbear_mcp_kanban/
+    - serve/mcp-kanban/tests/test_designer_interaction.py
+    - serve/tools/pyproject.toml
+    - serve/tools/src/owlbear_tools/lint.py
+    - share/agents/designer-challenger.agent.md
+    - share/agents/designer.agent.md
+    - share/prompts/design.prompt.md
+    - share/prompts/ideate.prompt.md
+    - share/skills/r-challenger-protocol/SKILL.md
+    - share/skills/w-design-session/SKILL.md
+  authority_targets:
+    - DN-002
+    - DN-005
+    - DN-009
+    - IF-001
+    - IF-002
+    - IF-006
+    - IF-010
+    - KEEP-001
+    - KEEP-002
+    - KEEP-003
+    - KEEP-005
+    - KEEP-008
+    - KEEP-009
+    - MOD-003
+    - MOD-008
+    - PROOF-004
+    - REQ-001
+    - REQ-002
+    - REQ-015
+    - RISK-007
+    - RISK-009
+target_node_id: DN-005
+node_plan_digest: 5073910764183aa0bc07ffdc898f0eee4911a35e4aea5deaeedc8cca52c1cd59
+predecessor_receipt_ids:
+  - accept-dn-002-f11b5af05ac3-proof-007
+evidence:
+  methods:
+    - Resume the native fixture through public show operations without losing decisions or mutating authority.
+    - Inspect shipped hosted contracts for one-question options with tradeoffs, recommendation, confidence, and the required resumable workflow wiring.
+    - Reject unresolved or challenged authority through public validation without publication, then admit and exactly replay a complete approved fixture through public tools.
+  source_inspection: Current PROOF-004 tests require a tracked fixture-isolation and hosted-contract assertion delta.
+  proof_baseline: Focused pytest and lint commands pass at candidate revision 38e27ae3ed5d6215ef8a5fe25c2db82470ec6452.
+  predecessor_evidence: DN-002 acceptance is current and explicitly reconciles DN-005; DN-009 has no current-digest acceptance and contributes only its admitted IF-010 contract.
+  downstream_identity_check: Archive-inclusive jobs 285 through 308 were inspected with no pagination remainder; 309 and 310 are unused.
+  review:
+    disposition: pass
+    evidence_id: plan-review-dn-005-f11b5af0-final
+    evidence: Fresh independent review inspected current source, admitted references, impact closure, predecessor order, public proof boundary, and material expansion; all six typed checks passed.
+    checks:
+      plan_completeness:
+        disposition: pass
+        evidence: Build mode is required because fixture isolation and durable complete-graph, Product Promise, evidence-state, memory, architecture, challenge, and hosted-proof assertions need a tracked test delta. One packet covers all nine owned or supported obligations.
+      admitted_references:
+        disposition: pass
+        evidence: Modules, interfaces, risks, obligations, predecessor contracts, and PROOF-004 references remain within DN-005 authority.
+      impact_closures:
+        disposition: pass
+        evidence: All twenty-one canonical paths exist and are consumed by the public-handler, hosted-contract, fixture, pytest, or lint proof.
+      dependency_order:
+        disposition: pass
+        evidence: The one-packet DAG is acyclic; current DN-002 acceptance is declared, while stale DN-009 acceptance is excluded and later reconciliation remains engine-owned.
+      proof_boundary:
+        disposition: pass
+        evidence: The plan preserves PROOF-004's canonical methods, hosted-contract enumeration, and two allowed lower replacements while exercising public MCP handlers.
+      material_expansion:
+        disposition: pass
+        evidence: The packet edits one maintained test file and introduces no product, interface, migration, workflow, transport, or authority expansion.
+code_revision: 38e27ae3ed5d6215ef8a5fe25c2db82470ec6452

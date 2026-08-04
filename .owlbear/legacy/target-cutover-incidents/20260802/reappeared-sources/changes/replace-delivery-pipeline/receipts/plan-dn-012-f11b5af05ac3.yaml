@@ -1,0 +1,104 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-012-f11b5af05ac3
+change_id: replace-delivery-pipeline
+delivery_digest: f11b5af05ac31cc255668bd953fdb085cf0c533ed797ba422a839a567beaf83c
+issued_at: '2026-08-01T21:21:45Z'
+impact_closure:
+  paths:
+    - .github/copilot-instructions.md
+    - .github/workflows/sync-to-main.yml
+    - .gitignore
+    - .owlbear/hooks/
+    - .owlbear/legacy/openspec-final/
+    - .owlbear/scripts/validate_agents.py
+    - .owlbear/scripts/validate_skills.py
+    - README-consumer.md
+    - README.md
+    - SECURITY.md
+    - seed/
+    - seed/.gitignore
+    - serve/cockpit/README.md
+    - serve/cockpit/src/owlbear_cockpit/
+    - serve/cockpit/src/owlbear_cockpit/main.py
+    - serve/cockpit/web/e2e/
+    - serve/cockpit/web/package.json
+    - serve/cockpit/web/playwright.config.ts
+    - serve/kanban/README.md
+    - serve/kanban/src/owlbear_kanban/
+    - serve/kanban/tests/
+    - serve/mcp-kanban/README.md
+    - serve/mcp-kanban/src/owlbear_mcp_kanban/
+    - serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
+    - serve/mcp-kanban/tests/test_mcp_surface_contract.py
+    - setup/
+    - setup/handoff.py
+    - setup/init.py
+    - share/README.md
+    - share/agents/
+    - share/instructions/
+    - share/prompts/
+    - share/skills/
+    - tests/test_agent_ecosystem_validation.py
+    - tests/test_bootstrap_finalizer_command.py
+    - tests/test_bootstrap_handoff_command.py
+    - tests/test_cockpit_launch.py
+    - tests/test_cockpit_native_cutover.py
+    - tests/test_init_scaffold.py
+    - tests/test_native_cutover.py
+    - tests/test_native_distribution.py
+  authority_targets:
+    - DN-012
+    - IF-001
+    - IF-002
+    - IF-003
+    - IF-004
+    - IF-006
+    - IF-007
+    - IF-008
+    - IF-009
+    - IF-010
+    - IF-011
+    - IF-012
+    - IF-013
+    - IF-014
+    - IF-016
+    - IF-017
+    - KEEP-007
+    - MOD-001
+    - MOD-002
+    - MOD-003
+    - MOD-004
+    - MOD-006
+    - MOD-007
+    - MOD-008
+    - MOD-009
+    - NEG-004
+    - NEG-007
+    - PROOF-009
+    - REQ-011
+    - REQ-012
+    - REQ-017
+    - RISK-001
+    - RISK-005
+target_node_id: DN-012
+node_plan_digest: 6b3c36e8a20a7326d865c3e5f3e9b38f82ca71f2fff92df8f80a7774b259734d
+predecessor_receipt_ids: []
+evidence:
+  methods:
+    - Verify no overwrite, complete inventory/dispositions, hash equality, crash recovery, clean native stores, no OpenSpec dependency or old references, and successful consumer launch.
+    - Record the exact command, manifest, hash, and commit evidence required for DEC-036's final post-archive bootstrap-board operation; PROOF-009 itself remains fixture-bounded.
+    - Fixture-prove IF-017 prepare, copy, classification, sole-claim coordination parity, sealed read-only destination probe, activation, restart configuration, replay, source-mutation rejection, split-root rejection, exact relocatable inventory versus retained receipt and legacy activity classification, pre-activation destination-mutation denial, and destination-only post-activation startup recovery.
+  source_inspection:
+    disposition: build-required
+    evidence: Candidate source lacks IF-017, selector resolution, handoff commands, and durable tests. MCP and Cockpit retain independent legacy work-root resolution.
+  baseline:
+    command: uv run pytest -n0 tests/test_agent_ecosystem_validation.py::test_native_role_write_and_lifecycle_guards_are_preserved -q
+    result: Failed at the blanket execute/* denial because the orchestrator requires execute/runInTerminal.
+    tracked_delta_created: false
+  review:
+    disposition: pass
+    evidence_id: plan-review-dn-012-f11b5af05ac3-r6
+    evidence: Independent source review inspected DN-012 authority, current implementation gaps, packet coverage, canonical closures, dependency order, public proof boundaries, and expansion exclusions.
+code_revision: 38e27ae3ed5d6215ef8a5fe25c2db82470ec6452

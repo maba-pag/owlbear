@@ -1,0 +1,247 @@
+---
+mode: build
+candidate_revision: 38e27ae3ed5d6215ef8a5fe25c2db82470ec6452
+generation:
+  job_id: 298
+  receipt_id: admission-f11b5af05ac3
+  predecessor_job_ids: []
+  predecessor_receipt_ids: []
+predecessor_contracts:
+  - target_node_id: DN-004
+    plan_receipt_id: plan-dn-004-f11b5af05ac3
+  - target_node_id: DN-008
+    plan_receipt_id: plan-dn-008-f11b5af05ac3
+  - target_node_id: DN-009
+    plan_receipt_id: plan-dn-009-f11b5af05ac3
+packets:
+  - id: DN-014-PK-001
+    outcome: Make the assembled public audit success proof executable under the
+      normal workspace command with a source-grounded 120-second test bound.
+    obligations:
+      - REQ-007
+      - REQ-008
+      - REQ-014
+      - NEG-003
+      - NEG-009
+      - KEEP-004
+      - KEEP-005
+      - KEEP-007
+      - KEEP-008
+    in_scope:
+      - Add @pytest.mark.timeout(120) to
+        test_public_audit_success_closes_accepted_whole_change_and_replays.
+      - Preserve the test body, public MCP path, checkout, assertions, and
+        collected node ID.
+      - Execute exact PROOF-008 success and rejection scenarios.
+    excluded:
+      - Production, schema, authority, lifecycle, interface, migration, Cockpit,
+        setup, and documentation changes.
+      - Assertion weakening, deselection, boundary replacement, or unrelated
+        timeout changes.
+    modified_paths:
+      - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
+    modules:
+      - MOD-001
+      - MOD-003
+      - MOD-008
+      - MOD-009
+    interfaces:
+      produces:
+        - IF-014
+      consumes:
+        - IF-001
+        - IF-003
+        - IF-004
+        - IF-005
+        - IF-009
+        - IF-010
+    dependencies: []
+    acceptance_scenarios:
+      - 'AC-1 [KEEP-004, PROOF-008]: The source-declared 120-second bound lets the
+        normal public audit success test exit zero without changing its identity or
+        assertions.'
+      - 'AC-2 [REQ-007, REQ-014, IF-014]: Current accept receipts produce a final
+        audit receipt, closed change, cleaned checkout, and idempotent replay.'
+      - 'AC-3 [REQ-008, KEEP-005]: Integration failure, migration absence, or proof
+        omission persists the declared finding and minimum corrective route.'
+      - 'AC-4 [REQ-007, KEEP-005]: Stale acceptance or an unresolved request returns
+        PREDECESSOR_INVALID or REQUEST_PENDING without mutation.'
+      - 'AC-5 [NEG-003, RISK-008]: A tracked auditor edit produces ERR_PROOF_TRACKED_MUTATION
+        and no audit receipt.'
+      - 'AC-6 [NEG-009, RISK-009]: Forged audit evidence produces ERR_RECEIPT_PROOF_UNSATISFIED
+        and leaves the audit active.'
+      - 'AC-7 [KEEP-007]: Cleanup failure, transaction conflict, and replay preserve
+        dispatch and checkout state.'
+      - 'AC-8 [KEEP-008]: Audit authority derives from ChangeRevision and native stores,
+        never memory records.'
+    impact_closure:
+      paths:
+        - pyproject.toml
+        - .owlbear/changes/replace-delivery-pipeline/intent.md
+        - .owlbear/changes/replace-delivery-pipeline/design.md
+        - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
+        - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
+        - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
+        - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
+        - .owlbear/changes/replace-delivery-pipeline/plans/DN-014.yaml
+        - share/agents/auditor.agent.md
+        - share/skills/w-whole-change-audit/SKILL.md
+        - serve/kanban/src/owlbear_kanban/__init__.py
+        - serve/kanban/src/owlbear_kanban/accepted_dependencies.py
+        - serve/kanban/src/owlbear_kanban/change.py
+        - serve/kanban/src/owlbear_kanban/dispatch.py
+        - serve/kanban/src/owlbear_kanban/finding.py
+        - serve/kanban/src/owlbear_kanban/jobs.py
+        - serve/kanban/src/owlbear_kanban/native_runtime.py
+        - serve/kanban/src/owlbear_kanban/node_plan.py
+        - serve/kanban/src/owlbear_kanban/proof_checkout.py
+        - serve/kanban/src/owlbear_kanban/receipt.py
+        - serve/kanban/src/owlbear_kanban/runtime_requests.py
+        - serve/kanban/src/owlbear_kanban/runtime_transaction.py
+        - serve/kanban/tests/test_dispatch_runtime.py
+        - serve/kanban/tests/test_native_runtime.py
+        - serve/kanban/tests/test_proof_checkout.py
+        - serve/mcp-kanban/src/owlbear_mcp_kanban/models.py
+        - serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
+        - serve/mcp-kanban/tests/test_mcp_surface_contract.py
+      authority_targets:
+        - DN-004
+        - DN-008
+        - DN-009
+        - DN-014
+        - REQ-007
+        - REQ-008
+        - REQ-014
+        - NEG-003
+        - NEG-009
+        - KEEP-004
+        - KEEP-005
+        - KEEP-007
+        - KEEP-008
+        - MOD-001
+        - MOD-003
+        - MOD-008
+        - MOD-009
+        - IF-001
+        - IF-003
+        - IF-004
+        - IF-005
+        - IF-009
+        - IF-010
+        - IF-014
+        - RISK-008
+        - RISK-009
+        - PROOF-008
+    proof:
+      authority: PROOF-008
+      boundary: Real auditor over all accepted nodes and admitted workflows in
+        one exact-commit checkout.
+      collection_command: uv run pytest -n0 --collect-only
+        serve/kanban/tests/test_native_runtime.py
+        serve/kanban/tests/test_dispatch_runtime.py
+        serve/mcp-kanban/tests/test_mcp_acceptance_tools.py -q
+      commands:
+        - uv run pytest -n0
+          serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_success_closes_accepted_whole_change_and_replays
+          -q --tb=short
+        - uv run pytest -n0
+          serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejection_routes_canonical_minimum_correction
+          -q --tb=short
+        - uv run pytest -n0
+          serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_start_job_rejects_stale_predecessor_without_mutation
+          serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_start_job_rejects_pending_request_without_mutation
+          -q --tb=short
+        - uv run pytest -n0
+          serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_tracked_edit_publishes_typed_minimum_correction
+          -q --tb=short
+        - uv run pytest -n0
+          serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejects_incomplete_or_forged_evidence
+          -q --tb=short
+        - uv run pytest -n0
+          serve/kanban/tests/test_dispatch_runtime.py::test_reject_audit_releases_reader_cleans_checkout_and_replays
+          serve/kanban/tests/test_dispatch_runtime.py::test_reject_audit_cleanup_failure_preserves_all_runtime_state
+          serve/kanban/tests/test_dispatch_runtime.py::test_reject_audit_transaction_conflict_restores_checkout_and_publishes_nothing
+          -q --tb=short
+        - uv run pytest -n0
+          serve/kanban/tests/test_native_runtime.py::test_reject_audit_atomically_publishes_design_reentry_and_replays
+          serve/kanban/tests/test_native_runtime.py::test_reject_audit_creates_only_declared_affected_node_corrections
+          -q --tb=short
+        - uv run ruff check serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
+        - uv run ruff format --check
+          serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
+      allowed_lower_replacements:
+        - dependencies explicitly below each admitted workflow boundary
+      evidence_outputs:
+        - Stable collection inventory.
+        - Public success result under the source-declared bound.
+        - Exact rejection, stale-receipt, pending-request, tracked-edit,
+          forged-evidence, cleanup, and correction results.
+        - Scoped Ruff and tracked-state results.
+    required_outputs:
+      - Source-declared bounded timeout for the maintained public audit success
+        test.
+      - Unchanged public test identity, body, assertions, and assembled
+        boundary.
+      - Passing collection and PROOF-008 scenario commands.
+      - Passing Ruff and tracked-state evidence.
+    profile:
+      domain: Python integration proof for whole-change audit and closure.
+      risks:
+        - RISK-008
+        - RISK-009
+      tools:
+        - uv
+        - pytest
+        - pytest-timeout
+        - ruff
+        - git-read-only-state-checks
+      skills:
+        - h-python-conventions
+        - h-pytest-and-linting
+    context_budget:
+      expected_changed_files: 1
+      inspected_files: 28
+      interfaces:
+        - IF-001
+        - IF-003
+        - IF-004
+        - IF-005
+        - IF-009
+        - IF-010
+        - IF-014
+      change_envelope: One bounded pytest timeout marker; production, assertion,
+        authority, or test-selection changes require a new planning disposition.
+review:
+  disposition: pass
+  evidence_id: plan-review-dn-014-job298-38e27ae3-r3
+  evidence: Independent review passed completeness, admitted references,
+    canonical closures, dependency ordering, proof boundary, and material
+    expansion.
+  checks:
+    plan_completeness:
+      disposition: pass
+      evidence: The one-packet build plan covers all nine DN-014 obligations and
+        the only observed tracked proof-infrastructure delta.
+    admitted_references:
+      disposition: pass
+      evidence: All referenced obligations, modules, interfaces, dependencies,
+        risks, and proof IDs match DN-014 authority.
+    impact_closures:
+      disposition: pass
+      evidence: Closure paths are canonical and source-grounded; the modified
+        test is included in proof and tracked-state scopes.
+    dependency_order:
+      disposition: pass
+      evidence: The packet is acyclic, and initial planning correctly consumes
+        sealed DN-004, DN-008, and DN-009 contracts while later readiness
+        remains engine-gated.
+    proof_boundary:
+      disposition: pass
+      evidence: Exact public and runtime scenario IDs cover the complete
+        PROOF-008 method through real MCP, runtime, receipt, and checkout
+        boundaries.
+    material_expansion:
+      disposition: pass
+      evidence: The bounded timeout marker changes one maintained test and
+        introduces no production or authority expansion.

@@ -1,0 +1,139 @@
+---
+schema_version: 1
+kind: accept
+receipt_id: accept-dn-001-1ec9888c522d
+change_id: replace-delivery-pipeline
+delivery_digest: 1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+issued_at: '2026-07-31T20:15:00Z'
+impact_closure:
+  paths:
+    - serve/kanban/src/owlbear_kanban/__init__.py
+    - serve/kanban/src/owlbear_kanban/_naming.py
+    - serve/kanban/src/owlbear_kanban/change.py
+    - serve/kanban/src/owlbear_kanban/node_plan.py
+    - serve/kanban/src/owlbear_kanban/receipt.py
+    - serve/kanban/src/owlbear_kanban/runtime_transaction.py
+    - serve/kanban/src/owlbear_kanban/storage_io.py
+    - serve/kanban/src/owlbear_kanban/yaml_rt.py
+    - serve/kanban/tests/test_change_receipts.py
+    - serve/kanban/tests/test_change_revision.py
+  authority_targets:
+    - DN-001
+    - IF-001
+    - KEEP-003
+    - KEEP-007
+    - MOD-001
+    - MOD-008
+    - NEG-004
+    - NEG-007
+    - PROOF-001
+    - REQ-001
+    - REQ-016
+    - REQ-019
+    - RISK-004
+target_node_id: DN-001
+node_plan_digest: 7c8d262b77f476e010dbc432c7ae95166fa0209d411c855e207dcea9cfa1620f
+predecessor_receipt_ids:
+  - plan-dn-001-1ec9888c522d
+evidence:
+  methods:
+    - Parse valid and invalid modular packages and isolated node plans.
+    - Assert canonical digest stability and semantic changes.
+    - Assert equivalent joined delivery authority has the same digest across physical wrapping.
+    - Exercise traversal, symlink, malformed YAML, duplicate ID, and partial-file cases.
+  authority:
+    delivery_digest: 1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+    target_node_id: DN-001
+    proof: PROOF-001
+    node_contract:
+      id: DN-001
+      title: Establish native change authority and semantic identity
+      outcome: Strict modular ChangeRevision loading, isolated node plans, physical-layout-independent stable IDs/digests, immutable receipt storage, path safety, and health diagnostics replace OpenSpec artifact resolution.
+      owns:
+        - REQ-019
+        - NEG-007
+      supports:
+        - REQ-001
+        - REQ-016
+        - NEG-004
+        - KEEP-003
+        - KEEP-007
+      modules:
+        - MOD-001
+        - MOD-008
+      produces:
+        - IF-001
+      consumes: []
+      dependencies: []
+      risks:
+        - RISK-004
+      proof: PROOF-001
+    modules:
+      - MOD-001
+      - MOD-008
+    interfaces:
+      - IF-001
+    migrations:
+      - MIG-004
+    risks:
+      - RISK-004
+  plan:
+    node_plan_digest: 7c8d262b77f476e010dbc432c7ae95166fa0209d411c855e207dcea9cfa1620f
+    packet_ids: []
+    receipt_id: plan-dn-001-1ec9888c522d
+  assembled_proof:
+    boundary: Public owlbear-kanban ChangeRevision loader and receipt store over a temporary workspace.
+    durable_outputs:
+      - unit and contract tests
+    commands:
+      - uv run pytest -n0 serve/kanban/tests/test_change_revision.py serve/kanban/tests/test_change_receipts.py -q --tb=short
+    results:
+      - command: uv run pytest -n0 serve/kanban/tests/test_change_revision.py serve/kanban/tests/test_change_receipts.py -q --tb=short
+        exit_code: 0
+        result: 87 passed in 1.74s
+  checkout:
+    candidate_sha: d17d14f7ee4ad1436abdcda4f4a42e04c10703a7
+  tracked_state:
+    before:
+      head: d17d14f7ee4ad1436abdcda4f4a42e04c10703a7
+      status: ''
+      diff: ''
+    after:
+      head: d17d14f7ee4ad1436abdcda4f4a42e04c10703a7
+      status: ''
+      diff: ''
+  packet_receipts: []
+  replacements:
+    - temporary workspace filesystem
+  changed_surfaces:
+    paths:
+      - serve/kanban/src/owlbear_kanban/__init__.py
+      - serve/kanban/src/owlbear_kanban/_naming.py
+      - serve/kanban/src/owlbear_kanban/change.py
+      - serve/kanban/src/owlbear_kanban/node_plan.py
+      - serve/kanban/src/owlbear_kanban/receipt.py
+      - serve/kanban/src/owlbear_kanban/runtime_transaction.py
+      - serve/kanban/src/owlbear_kanban/storage_io.py
+      - serve/kanban/src/owlbear_kanban/yaml_rt.py
+      - serve/kanban/tests/test_change_receipts.py
+      - serve/kanban/tests/test_change_revision.py
+    authority_targets:
+      - DN-001
+      - IF-001
+      - KEEP-003
+      - KEEP-007
+      - MOD-001
+      - MOD-008
+      - NEG-004
+      - NEG-007
+      - PROOF-001
+      - REQ-001
+      - REQ-016
+      - REQ-019
+      - RISK-004
+  reconciliation:
+    - target_node_id: DN-002
+      plan_job_id: 261
+    - target_node_id: DN-003
+      plan_job_id: 262
+code_revision: d17d14f7ee4ad1436abdcda4f4a42e04c10703a7

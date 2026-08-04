@@ -1,0 +1,281 @@
+---
+mode: build
+candidate_revision: 38e27ae3ed5d6215ef8a5fe25c2db82470ec6452
+generation:
+  job_id: 297
+  receipt_id: admission-f11b5af05ac3
+  predecessor_job_ids:
+    - 304
+reconciliation:
+  predecessor_receipt_ids:
+    - accept-dn-002-f11b5af05ac3-proof-007
+  accepted_predecessors:
+    DN-002: Current acceptance proves public admission and invalidation behavior
+      and routes reconciliation to DN-013.
+  contract_only_predecessors:
+    DN-003: Consume IF-003 contract authority; later acceptance remains
+      engine-owned.
+    DN-008: Consume IF-009 contract authority; later acceptance remains
+      engine-owned.
+    DN-009: Consume IF-010 contract authority; later acceptance remains
+      engine-owned.
+    DN-010: Consume IF-011 contract authority; later acceptance remains
+      engine-owned.
+    DN-011: Consume IF-012 contract authority; later acceptance remains
+      engine-owned.
+    DN-012: Consume IF-013 contract authority; later acceptance remains
+      engine-owned.
+    DN-014: Consume IF-014 contract authority; later acceptance remains
+      engine-owned.
+packets:
+  - id: DN-013-PK-001
+    outcome: Add durable retired-shape job-kind diagnostics and complete
+      PROOF-013 over the current native release stack.
+    obligations:
+      - REQ-018
+      - NEG-010
+      - KEEP-004
+      - KEEP-005
+      - KEEP-006
+      - KEEP-007
+    in_scope:
+      - Modify only serve/kanban/tests/test_jobs.py.
+      - Add `shape` to public parse_job_mapping and read_job_generation stable
+        diagnostic cases, requiring no job or generation and WRONG_KIND.
+      - Preserve plan, build, accept, audit, and supersession round trips plus
+        execute rejection.
+      - Run historical, generic graph, transaction, invalidation, stale-health,
+        fresh-consumer MCP, lifecycle-absence, and assembled Cockpit proof.
+    excluded:
+      - Production, authority, interface, migration, setup, frontend,
+        browser-support, configuration, documentation, fixture, compatibility,
+        carrier, or unrelated-test edits.
+      - DN-015 finalization, DN-016 handoff, live bootstrap-board mutation, and
+        current plan, receipt, or job changes.
+    modules:
+      - MOD-008
+    interfaces:
+      - IF-002
+      - IF-003
+      - IF-005
+      - IF-009
+      - IF-010
+      - IF-011
+      - IF-012
+      - IF-013
+      - IF-014
+    dependencies: []
+    predecessor_acceptance:
+      - accept-dn-002-f11b5af05ac3-proof-007
+    acceptance_scenarios:
+      - id: AC-001
+        authority_target: REQ-018
+        scenario: Given four defective historical fixtures, four corrected
+          fixtures, generated graph cases, and the public fresh-consumer
+          workflow, maintained pytest and Playwright boundaries report stable
+          rejection codes, corrected admission, corrective completion, final
+          audit, and clean Cockpit health. Verify through command output and
+          PROOF-013 JSON/screenshots.
+      - id: AC-002
+        authority_target: NEG-010
+        scenario: Given job mappings whose kind is `shape` or `execute`, public
+          parse_job_mapping and read_job_generation return no job or generation
+          and report WRONG_KIND; mappings using plan, build, accept, audit, or
+          supersession continue to round-trip. Verify through parametrized
+          pytest output.
+      - id: AC-003
+        authority_target: KEEP-004
+        scenario: Given the DN-013 packet, the builder changes only the
+          maintained public job diagnostic test while public runtime, MCP, and
+          Cockpit proof boundaries expose receipt, correction, and audit
+          outcomes. Verify through diff inspection and named proof commands.
+      - id: AC-004
+        authority_target: KEEP-005
+        scenario: Given first-node rejection in the fresh-consumer MCP scenario,
+          a corrective build enables independent replacement acceptance and
+          terminal audit receipts at the corrected commit. Verify through
+          test_complete_native_delivery.py output and persisted receipt
+          assertions.
+      - id: AC-005
+        authority_target: KEEP-006
+        scenario: Given the built SPA over real FastAPI, desktop and mobile
+          journeys traverse Specification, Delivery, Requests, Evidence,
+          Activity, and Legacy; they expose correction and audit evidence with
+          empty legacy inventories and no viewport overlap. Verify through
+          Playwright JSON and screenshots.
+      - id: AC-006
+        authority_target: KEEP-007
+        scenario: Given transaction failure injection at before-publication,
+          after-first-publication, or before-manifest-cleanup, invalidation
+          reports ERR_INVALIDATION_ABORTED without partial receipts, jobs,
+          rewrites, or manifests, while replay preserves bytes. Verify through
+          parametrized pytest output and tracked-state comparison.
+      - id: AC-007
+        authority_target: DN-013
+        scenario: Given maintained incident, generic, stale-health,
+          fresh-consumer, MCP, and browser scenarios, the named Python and
+          Playwright commands emit stable diagnostics, receipt history, final
+          audit, clean consumer health, empty legacy inventory, finish_shape
+          absence, shape rejection, and no dual registration. Verify through
+          command output, audit-proof-013 assertions, JSON, and screenshots.
+    impact_closure:
+      paths:
+        - .owlbear/changes/replace-delivery-pipeline/
+        - seed/
+        - serve/tools/
+        - serve/kanban/src/owlbear_kanban/
+        - serve/mcp-kanban/src/owlbear_mcp_kanban/
+        - serve/cockpit/src/owlbear_cockpit/
+        - serve/cockpit/web/src/
+        - setup/init.py
+        - serve/kanban/tests/fixtures/historical-admission/
+        - serve/kanban/tests/test_historical_admission.py
+        - serve/kanban/tests/test_generated_graph_admission.py
+        - serve/kanban/tests/test_runtime_transaction.py
+        - serve/kanban/tests/test_invalidation.py
+        - serve/kanban/tests/test_jobs.py
+        - serve/kanban/tests/test_runtime_query.py
+        - serve/mcp-kanban/tests/test_complete_native_delivery.py
+        - serve/mcp-kanban/tests/test_mcp_surface_contract.py
+        - serve/cockpit/web/e2e/native-release-assembled.spec.ts
+        - serve/cockpit/web/e2e/support/seed-native-proof-stack.py
+        - serve/cockpit/web/e2e/support/start-native-release-stack.mjs
+        - serve/cockpit/web/playwright.config.ts
+        - serve/cockpit/web/package.json
+      authority_targets:
+        - DN-002
+        - DN-003
+        - DN-008
+        - DN-009
+        - DN-010
+        - DN-011
+        - DN-012
+        - DN-013
+        - DN-014
+        - REQ-018
+        - NEG-010
+        - KEEP-004
+        - KEEP-005
+        - KEEP-006
+        - KEEP-007
+        - MOD-008
+        - IF-002
+        - IF-003
+        - IF-005
+        - IF-009
+        - IF-010
+        - IF-011
+        - IF-012
+        - IF-013
+        - IF-014
+        - RISK-003
+        - RISK-005
+        - RISK-006
+        - RISK-009
+        - RISK-010
+        - RISK-011
+        - RISK-012
+        - PROOF-013
+    proof:
+      boundary: Public native validation over durable incident/generic fixtures
+        plus a fresh consumer workspace running the complete public admission to
+        plan/build/accept/audit flow through real MCP, engine, shared writer
+        policy, proof checkout, FastAPI, and built Cockpit SPA.
+      commands:
+        - uv run pytest -n0
+          serve/kanban/tests/test_jobs.py::test_public_job_parser_returns_stable_diagnostics
+          serve/kanban/tests/test_jobs.py::test_read_job_generation_reports_structured_diagnostics
+          -q --tb=short
+        - uv run pytest -n0 serve/kanban/tests/test_historical_admission.py
+          serve/kanban/tests/test_generated_graph_admission.py
+          serve/kanban/tests/test_runtime_transaction.py
+          serve/kanban/tests/test_invalidation.py
+          serve/kanban/tests/test_jobs.py::test_public_job_parser_round_trips_operational_records
+          serve/kanban/tests/test_jobs.py::test_public_job_parser_returns_stable_diagnostics
+          serve/kanban/tests/test_jobs.py::test_read_job_generation_reports_structured_diagnostics
+          serve/kanban/tests/test_runtime_query.py::test_work_health_reports_stale_digest_and_broken_receipt_chains
+          serve/mcp-kanban/tests/test_complete_native_delivery.py
+          serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestFromAC_ToolRegistryContract
+          serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestFromAC_LegacyRegistrationAbsence
+          -q --tb=short
+        - npm run test:e2e:native-release
+        - uv run lint serve/kanban/tests/test_jobs.py
+      command_context:
+        python_proof: repository root
+        browser_proof: serve/cockpit/web
+        lint: repository root
+      allowed_lower_replacements:
+        - fixture repositories below named proof boundaries
+        - true external services below admitted seams
+      evidence_outputs:
+        - pytest results
+        - shape WRONG_KIND diagnostics
+        - stale-health findings
+        - MCP registry result
+        - audit-proof-013 receipt assertions
+        - Playwright result
+        - PROOF-013 JSON and screenshots
+        - tracked-state comparison
+        - lint result
+    required_outputs:
+      - Public parse_job_mapping regression for `shape` returning WRONG_KIND
+        with no job.
+      - Public read_job_generation regression for `shape` returning WRONG_KIND
+        with no generation.
+      - Passing complete Python and desktop/mobile native-release proof with
+        audit receipt and PROOF-013 artifacts.
+    profile:
+      domain: Python native-runtime diagnostics and cross-stack release proof
+      risk: Retired lifecycle vocabulary and complete-system evidence
+      tools: Python 3.14, uv, pytest, lint, npm, Playwright
+    context_budget:
+      expected_files: 1
+      expected_interfaces:
+        - IF-002
+        - IF-003
+        - IF-005
+        - IF-009
+        - IF-010
+        - IF-011
+        - IF-012
+        - IF-013
+        - IF-014
+      change_envelope: One focused Python test edit plus proof execution; no
+        production or durable generated-output edits.
+review:
+  disposition: pass
+  evidence_id: plan-review-dn-013-f11b5af0-r2
+  evidence: Fresh review inspected candidate source, authority, repaired
+    closure, dependency identity, assembled proof boundaries, and expansion
+    limits.
+  checks:
+    plan_completeness:
+      disposition: pass
+      evidence: The single packet owns the two missing `shape` diagnostic
+        regressions and retains named proof for the incident, graph, stale,
+        corrective, audit, setup, Cockpit, and lifecycle-absence outcomes.
+    admitted_references:
+      disposition: pass
+      evidence: Obligations, module, interfaces, dependencies, risks, proof, and
+        authority targets match admitted DN-013 authority without claiming a
+        migration.
+    impact_closures:
+      disposition: pass
+      evidence: Closure paths are canonical and proof-consumed; repaired paths
+        `seed/` and `serve/tools/` cover fresh-consumer setup inputs and the
+        lint entry point.
+    dependency_order:
+      disposition: pass
+      evidence: The one-packet graph is acyclic; reconciliation partitions
+        DN-002 acceptance from seven contract-only dependencies, and jobs 10010
+        and 10011 are unused and distinct.
+    proof_boundary:
+      disposition: pass
+      evidence: Commands exercise public parser, runtime, MCP, setup, FastAPI,
+        built SPA, and Playwright boundaries with only admitted lower
+        replacements.
+    material_expansion:
+      disposition: pass
+      evidence: Work is restricted to one MOD-008 test file and introduces no
+        production, authority, interface, migration, fixture, setup, frontend,
+        carrier, or compatibility change.

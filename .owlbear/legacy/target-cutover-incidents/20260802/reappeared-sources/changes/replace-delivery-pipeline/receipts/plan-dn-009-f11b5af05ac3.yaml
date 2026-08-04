@@ -1,0 +1,74 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-009-f11b5af05ac3
+change_id: replace-delivery-pipeline
+delivery_digest: f11b5af05ac31cc255668bd953fdb085cf0c533ed797ba422a839a567beaf83c
+issued_at: '2026-08-01T16:17:49Z'
+impact_closure:
+  paths:
+    - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
+    - .owlbear/changes/replace-delivery-pipeline/design.md
+    - .owlbear/changes/replace-delivery-pipeline/intent.md
+    - .owlbear/changes/replace-delivery-pipeline/plans/
+    - serve/kanban/src/owlbear_kanban/
+    - serve/mcp-kanban/src/owlbear_mcp_kanban/
+    - serve/mcp-kanban/tests/
+  authority_targets:
+    - DN-004
+    - DN-009
+    - IF-001
+    - IF-002
+    - IF-003
+    - IF-004
+    - IF-010
+    - IF-015
+    - KEEP-006
+    - KEEP-007
+    - MOD-002
+    - MOD-008
+    - NEG-001
+    - PROOF-011
+    - REQ-009
+    - REQ-015
+    - REQ-016
+    - REQ-017
+    - REQ-020
+    - RISK-005
+target_node_id: DN-009
+node_plan_digest: 2b3892c32977c9f4eea5530d46377b6a83cc24bfc65bbf89954bc9f47590a70e
+predecessor_receipt_ids: []
+evidence:
+  methods:
+    - Exercise change, validation, admission, job, request, evidence, health, history, and completion tool contracts.
+    - Assert the registered tool names exactly equal IF-010's declared catalog, including finding reads and accept/audit rejection operations.
+    - Assert generic task mutation and old lifecycle tools are absent.
+  source_inspection: Current PROOF-011 pre-seeds DispatchRuntime with a _History stub, bypassing production GitRepositoryHistory and ProofCheckoutManager; build mode is required.
+  baseline: Focused MCP proof passed 24 tests; Ruff check and format checks passed at the candidate revision.
+  review:
+    disposition: pass
+    evidence_id: plan-review-dn-009-f11b5af0-final
+    evidence: Fresh independent review inspected exact source, admitted references, impact closure, dependency order, proof boundary, removals, and material expansion.
+    checks:
+      plan_completeness:
+        disposition: pass
+        evidence: One bounded test-infrastructure packet covers the complete DN-009 outcome and explicit Git fixture cost.
+      admitted_references:
+        disposition: pass
+        evidence: Obligations, modules, interfaces, dependency, risk, and canonical PROOF-011 methods match DN-009 authority.
+      impact_closures:
+        disposition: pass
+        evidence: Canonical authority, MCP package, test package, and native runtime directories cover the assembled proof.
+      dependency_order:
+        disposition: pass
+        evidence: The one-packet DAG is acyclic; DN-004 remains the sole predecessor and reconciliation owns same-file overlap.
+      proof_boundary:
+        disposition: pass
+        evidence: Proof crosses public MCP handlers through production GitRepositoryHistory, ProofCheckoutManager, NativeRuntime, and DispatchRuntime with only a temporary engine store replaced.
+      material_expansion:
+        disposition: pass
+        evidence: The packet changes one maintained integration-test file and introduces no production API, lifecycle, migration, module, or authority expansion.
+code_revision: 38e27ae3ed5d6215ef8a5fe25c2db82470ec6452

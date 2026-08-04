@@ -1,0 +1,17 @@
+---
+schema_version: 1
+finding_id: finding-accept-302-proof-007
+source_attempt_id: f299e397-b1da-4005-a4e7-9e78d821d8b5
+source_job_id: 302
+change_id: replace-delivery-pipeline
+delivery_digest: 
+  f11b5af05ac31cc255668bd953fdb085cf0c533ed797ba422a839a567beaf83c
+target_kind: proof
+target_id: PROOF-002
+finding_class: planning-omission
+detail: The persisted DN-002 plan requires `uv run lint` as acceptance proof. 
+  Workspace lint is configured to auto-fix through Ruff, trailing-whitespace, 
+  end-of-file-fixer, and markdownlint, so the command is intrinsically 
+  incompatible with the required read-only proof checkout. The public pytest 
+  proof passed; no implementation failure is asserted.
+created_at: '2026-08-01T12:43:32Z'

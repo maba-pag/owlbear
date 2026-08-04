@@ -1,0 +1,653 @@
+---
+schema_version: 1
+kind: admission
+receipt_id: admission-d241933d6345
+change_id: replace-delivery-pipeline
+delivery_digest: 
+  d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+issued_at: '1970-01-01T00:00:00Z'
+assessment:
+  schema_version: 1
+  revision_digest: 
+    d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+  findings: []
+  limits:
+    - DN-003 must implement and prove accepted dependency-set currentness before
+      dependent delivery proceeds.
+    - DN-004 must implement and prove generic `terminal_plan_prerequisite` 
+      interface declarations.
+    - DN-012 must implement and fixture-prove shared selector resolution, 
+      including fail-closed selector loss.
+    - DN-016 and DN-015 must produce live handoff and finalization evidence 
+      while protected configuration remains byte-unchanged.
+evidence:
+  digest: d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+  challenge:
+    REQ-001:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-001 
+        against its declared authority and delivery coverage.
+    REQ-002:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-002 
+        against its declared authority and delivery coverage.
+    REQ-003:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-003 
+        against its declared authority and delivery coverage.
+    REQ-004:
+      disposition: pass
+      evidence: Fresh exact-commit challenge verified IF-004 discovery from 
+        structured terminal_plan_prerequisite and IF-018 producer/consumer 
+        authority.
+    REQ-005:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-005 
+        against its declared authority and delivery coverage.
+    REQ-006:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-006 
+        against its declared authority and delivery coverage.
+    REQ-007:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-007 
+        against its declared authority and delivery coverage.
+    REQ-008:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-008 
+        against its declared authority and delivery coverage.
+    REQ-009:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-009 
+        against its declared authority and delivery coverage.
+    REQ-010:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-010 
+        against its declared authority and delivery coverage.
+    REQ-011:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-011 
+        against its declared authority and delivery coverage.
+    REQ-012:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-012 
+        against its declared authority and delivery coverage.
+    REQ-013:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-013 
+        against its declared authority and delivery coverage.
+    REQ-014:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-014 
+        against its declared authority and delivery coverage.
+    REQ-015:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-015 
+        against its declared authority and delivery coverage.
+    REQ-016:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-016 
+        against its declared authority and delivery coverage.
+    REQ-017:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-017 
+        against its declared authority and delivery coverage.
+    REQ-018:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-018 
+        against its declared authority and delivery coverage.
+    REQ-019:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-019 
+        against its declared authority and delivery coverage.
+    REQ-020:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-020 
+        against its declared authority and delivery coverage.
+    REQ-021:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-021 
+        against its declared authority and delivery coverage.
+    REQ-022:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-022 
+        against its declared authority and delivery coverage.
+    REQ-023:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-023 
+        against its declared authority and delivery coverage.
+    REQ-024:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-024 
+        against its declared authority and delivery coverage.
+    REQ-025:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-025 
+        against its declared authority and delivery coverage.
+    REQ-026:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-026 
+        against its declared authority and delivery coverage.
+    REQ-027:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-027 
+        against its declared authority and delivery coverage.
+    REQ-028:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed REQ-028 
+        against its declared authority and delivery coverage.
+    WF-001:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed WF-001 and 
+        its normal/failure boundaries.
+    WF-002:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed WF-002 and 
+        its normal/failure boundaries.
+    WF-003:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed WF-003 and 
+        its normal/failure boundaries.
+    WF-004:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed WF-004 and 
+        its normal/failure boundaries.
+    WF-005:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed WF-005 and 
+        its normal/failure boundaries.
+    WF-006:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed WF-006 and 
+        its normal/failure boundaries.
+    WF-007:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed WF-007 and 
+        its normal/failure boundaries.
+    WF-008:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed WF-008 and 
+        its normal/failure boundaries.
+    IF-001:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed IF-001 
+        contract and failure semantics.
+    IF-002:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed IF-002 
+        contract and failure semantics.
+    IF-003:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed IF-003 
+        contract and failure semantics.
+    IF-004:
+      disposition: pass
+      evidence: Fresh challenge verified marked-interface discovery and generic 
+        terminal prerequisite gating are explicit structured authority.
+    IF-005:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed IF-005 
+        contract and failure semantics.
+    IF-006:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed IF-006 
+        contract and failure semantics.
+    IF-007:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed IF-007 
+        contract and failure semantics.
+    IF-008:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed IF-008 
+        contract and failure semantics.
+    IF-009:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed IF-009 
+        contract and failure semantics.
+    IF-010:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed IF-010 
+        contract and failure semantics.
+    IF-011:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed IF-011 
+        contract and failure semantics.
+    IF-012:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed IF-012 
+        contract and failure semantics.
+    IF-013:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed IF-013 
+        contract and failure semantics.
+    IF-014:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed IF-014 
+        contract and failure semantics.
+    IF-015:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed IF-015 
+        contract and failure semantics.
+    IF-016:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed IF-016 
+        contract and failure semantics.
+    IF-017:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed IF-017 
+        contract and failure semantics.
+    IF-018:
+      disposition: pass
+      evidence: Fresh challenge verified IF-018 is the sole 
+        terminal_plan_prerequisite declaration, produced by DN-016 for consumer 
+        DN-015.
+    MIG-001:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed MIG-001 
+        ordering, rollback, and absence proof.
+    MIG-002:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed MIG-002 
+        ordering, rollback, and absence proof.
+    MIG-003:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed MIG-003 
+        ordering, rollback, and absence proof.
+    MIG-004:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed MIG-004 
+        ordering, rollback, and absence proof.
+    MIG-005:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed MIG-005 
+        ordering, rollback, and absence proof.
+    MIG-006:
+      disposition: pass
+      evidence: Fresh challenge verified MIG-006 requires current IF-018 
+        acceptance before DN-015 planning and dispatch.
+    RISK-001:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed RISK-001 
+        mitigation and proof ownership.
+    RISK-002:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed RISK-002 
+        mitigation and proof ownership.
+    RISK-003:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed RISK-003 
+        mitigation and proof ownership.
+    RISK-004:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed RISK-004 
+        mitigation and proof ownership.
+    RISK-005:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed RISK-005 
+        mitigation and proof ownership.
+    RISK-006:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed RISK-006 
+        mitigation and proof ownership.
+    RISK-007:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed RISK-007 
+        mitigation and proof ownership.
+    RISK-008:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed RISK-008 
+        mitigation and proof ownership.
+    RISK-009:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed RISK-009 
+        mitigation and proof ownership.
+    RISK-010:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed RISK-010 
+        mitigation and proof ownership.
+    RISK-011:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed RISK-011 
+        mitigation and proof ownership.
+    RISK-012:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed RISK-012 
+        mitigation and proof ownership.
+    RISK-013:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed RISK-013 
+        mitigation and proof ownership.
+    RISK-014:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed RISK-014 
+        mitigation and proof ownership.
+    RISK-015:
+      disposition: pass
+      evidence: Fresh challenge verified terminal gating protects the native 
+        work-root handoff against forked lifecycle authority.
+    PROOF-001:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed PROOF-001 
+        boundary, method, and durable signal.
+    PROOF-002:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed PROOF-002 
+        boundary, method, and durable signal.
+    PROOF-003:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed PROOF-003 
+        boundary, method, and durable signal.
+    PROOF-004:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed PROOF-004 
+        boundary, method, and durable signal.
+    PROOF-005:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed PROOF-005 
+        boundary, method, and durable signal.
+    PROOF-006:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed PROOF-006 
+        boundary, method, and durable signal.
+    PROOF-007:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed PROOF-007 
+        boundary, method, and durable signal.
+    PROOF-008:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed PROOF-008 
+        boundary, method, and durable signal.
+    PROOF-009:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed PROOF-009 
+        boundary, method, and durable signal.
+    PROOF-011:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed PROOF-011 
+        boundary, method, and durable signal.
+    PROOF-012:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed PROOF-012 
+        boundary, method, and durable signal.
+    PROOF-013:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed PROOF-013 
+        boundary, method, and durable signal.
+    PROOF-014:
+      disposition: pass
+      evidence: Fresh challenge verified PROOF-014 explicitly exercises 
+        omission, stale-evidence mutation freedom, and post-DN-016 eligibility.
+    PROOF-015:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed PROOF-015 
+        boundary, method, and durable signal.
+    PROOF-016:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed PROOF-016 
+        boundary, method, and durable signal.
+    PROOF-017:
+      disposition: pass
+      evidence: Fresh challenge verified PROOF-017 requires real accepted DN-016
+        handoff evidence before IF-018 currentness.
+    DN-001:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed DN-001 
+        cohesion, ownership, dependencies, and proof closure.
+    DN-002:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed DN-002 
+        cohesion, ownership, dependencies, and proof closure.
+    DN-003:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed DN-003 
+        cohesion, ownership, dependencies, and proof closure.
+    DN-004:
+      disposition: pass
+      evidence: Fresh challenge verified DN-004 owns generic interface-declared 
+        terminal prerequisite dispatch and PROOF-014.
+    DN-005:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed DN-005 
+        cohesion, ownership, dependencies, and proof closure.
+    DN-006:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed DN-006 
+        cohesion, ownership, dependencies, and proof closure.
+    DN-007:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed DN-007 
+        cohesion, ownership, dependencies, and proof closure.
+    DN-008:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed DN-008 
+        cohesion, ownership, dependencies, and proof closure.
+    DN-009:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed DN-009 
+        cohesion, ownership, dependencies, and proof closure.
+    DN-010:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed DN-010 
+        cohesion, ownership, dependencies, and proof closure.
+    DN-011:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed DN-011 
+        cohesion, ownership, dependencies, and proof closure.
+    DN-012:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed DN-012 
+        cohesion, ownership, dependencies, and proof closure.
+    DN-013:
+      disposition: pass
+      evidence: Fresh challenge verified DN-013 remains independently owned and 
+        does not depend on DN-015.
+    DN-014:
+      disposition: pass
+      evidence: Fresh exact-commit challenge at b55867fdc5c3 passed DN-014 
+        cohesion, ownership, dependencies, and proof closure.
+    DN-015:
+      disposition: pass
+      evidence: Fresh challenge verified DN-015 consumes IF-018 and remains 
+        terminally gated on accepted DN-016.
+    DN-016:
+      disposition: pass
+      evidence: Fresh challenge verified DN-016 produces IF-018 and precedes 
+        DN-015 without collapsing their ownership.
+  baseline:
+    digest: d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+    commands:
+      - command: uv run --project .owlbear/scratch/admission-b55867fd pytest -n0
+          serve/kanban/tests/test_change_revision.py 
+          serve/kanban/tests/test_admission.py 
+          serve/kanban/tests/test_generated_graph_admission.py -q --tb=short
+        exit_code: 0
+        result: 61 passed in detached exact-commit checkout b55867fdc5c3.
+      - command: uv run ruff check serve/kanban/src/owlbear_kanban/change.py
+        exit_code: 0
+        result: Passed before candidate commit.
+      - command: uv run ruff format --check 
+          serve/kanban/src/owlbear_kanban/change.py
+        exit_code: 0
+        result: Passed before candidate commit.
+  approval:
+    approved: true
+    digest: d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+    authority: User directive to continue implementation to completion, remain 
+      true to or update the plan as evidence requires, and not stop; this 
+      candidate is the challenged semantic repair required to continue DN-004.
+  limits:
+    - DN-003 must implement and prove accepted dependency-set currentness before
+      dependent delivery proceeds.
+    - DN-004 must implement and prove generic `terminal_plan_prerequisite` 
+      interface declarations.
+    - DN-012 must implement and fixture-prove shared selector resolution, 
+      including fail-closed selector loss.
+    - DN-016 and DN-015 must produce live handoff and finalization evidence 
+      while protected configuration remains byte-unchanged.
+generation:
+  schema_version: 1
+  change_id: replace-delivery-pipeline
+  delivery_digest: 
+    d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+  receipt_id: admission-d241933d6345
+  jobs:
+    - job_id: 240
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+      target_node_id: DN-001
+      receipt_id: admission-d241933d6345
+    - job_id: 241
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+      target_node_id: DN-002
+      receipt_id: admission-d241933d6345
+    - job_id: 242
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+      target_node_id: DN-003
+      receipt_id: admission-d241933d6345
+    - job_id: 243
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+      target_node_id: DN-004
+      receipt_id: admission-d241933d6345
+    - job_id: 244
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+      target_node_id: DN-005
+      receipt_id: admission-d241933d6345
+    - job_id: 245
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+      target_node_id: DN-006
+      receipt_id: admission-d241933d6345
+    - job_id: 246
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+      target_node_id: DN-007
+      receipt_id: admission-d241933d6345
+    - job_id: 247
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+      target_node_id: DN-008
+      receipt_id: admission-d241933d6345
+    - job_id: 248
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+      target_node_id: DN-009
+      receipt_id: admission-d241933d6345
+    - job_id: 249
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+      target_node_id: DN-010
+      receipt_id: admission-d241933d6345
+    - job_id: 250
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+      target_node_id: DN-011
+      receipt_id: admission-d241933d6345
+    - job_id: 251
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+      target_node_id: DN-012
+      receipt_id: admission-d241933d6345
+    - job_id: 252
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+      target_node_id: DN-013
+      receipt_id: admission-d241933d6345
+    - job_id: 253
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+      target_node_id: DN-014
+      receipt_id: admission-d241933d6345
+    - job_id: 254
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+      target_node_id: DN-015
+      receipt_id: admission-d241933d6345
+    - job_id: 255
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        d241933d6345a36aaea286172f87fb281a5a77e73990f9aca5dcef1d17091190
+      target_node_id: DN-016
+      receipt_id: admission-d241933d6345

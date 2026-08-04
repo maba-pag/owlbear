@@ -1,0 +1,109 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-003-5b2c7be03be9
+change_id: replace-delivery-pipeline
+delivery_digest: 5b2c7be03be970fd7da4d62385b7a57b6a932f85f10053e21799b34410b796fc
+issued_at: '2026-07-25T02:15:00Z'
+impact_closure:
+  paths:
+    - serve/kanban/src/owlbear_kanban/
+    - serve/kanban/tests/fixtures/historical-admission
+    - serve/kanban/tests/test_admission.py
+    - serve/kanban/tests/test_admission_transaction.py
+    - serve/kanban/tests/test_attempts.py
+    - serve/kanban/tests/test_change_receipts.py
+    - serve/kanban/tests/test_change_revision.py
+    - serve/kanban/tests/test_dispatch_runtime.py
+    - serve/kanban/tests/test_generated_graph_admission.py
+    - serve/kanban/tests/test_historical_admission.py
+    - serve/kanban/tests/test_invalidation.py
+    - serve/kanban/tests/test_jobs.py
+    - serve/kanban/tests/test_native_runtime.py
+    - serve/kanban/tests/test_proof_checkout.py
+    - serve/kanban/tests/test_runtime_query.py
+    - serve/kanban/tests/test_runtime_requests.py
+    - serve/kanban/tests/test_runtime_transaction.py
+  authority_targets:
+    - DN-001
+    - DN-002
+    - DN-003
+    - IF-001
+    - IF-002
+    - IF-003
+    - KEEP-003
+    - KEEP-004
+    - KEEP-005
+    - KEEP-006
+    - KEEP-007
+    - MOD-001
+    - MOD-008
+    - MOD-009
+    - NEG-001
+    - NEG-002
+    - NEG-004
+    - NEG-007
+    - NEG-010
+    - PROOF-001
+    - PROOF-002
+    - PROOF-003
+    - REQ-001
+    - REQ-002
+    - REQ-003
+    - REQ-008
+    - REQ-009
+    - REQ-015
+    - REQ-016
+    - REQ-018
+    - REQ-019
+    - REQ-023
+    - REQ-026
+    - RISK-002
+    - RISK-003
+    - RISK-004
+    - RISK-006
+    - RISK-007
+target_node_id: DN-003
+node_plan_digest: bd43dd33f11df8bc124397060c2511c2bcec8bdffd20e232a9c38e310d106f1d
+predecessor_receipt_ids:
+  - accept-dn-002-5b2c7be03be9
+evidence:
+  methods:
+    - Exercise purpose-specific transitions, dependency release, claims, crashes, OCC races, supersession, request resolution, and recovery.
+    - Exercise exact, non-intersecting descendant, intersecting path, missing, non-descendant, rename, copy, malformed-history, unsafe-path, predecessor-cycle, and explicit-supersession receipt classes.
+    - Assert no partial valid receipt or dangling job after injected write failures.
+    - Accept an eligible exact-candidate verification-only plan with zero packets and zero build jobs, one accept job, and a non-empty node-level closure; reject missing mode evidence, candidate/generation mismatch, empty closure, hidden delta, and zero packets in build mode.
+    - Prove exact replay, transaction rollback, receipt currentness, and dependent reconciliation are identical across build and verification-only plan modes.
+    - Finish a build whose prospective packet closure fully covers its plan and an overlapping predecessor receipt after intended descendant changes; reject partial coverage, uncovered predecessor drift, and changed paths outside the packet closure without mutation.
+  baseline:
+    command: uv run pytest -n0 serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_runtime_transaction.py serve/kanban/tests/test_invalidation.py serve/kanban/tests/test_runtime_requests.py serve/kanban/tests/test_attempts.py serve/kanban/tests/test_jobs.py serve/kanban/tests/test_change_receipts.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_runtime_query.py -q --tb=short
+    result: 10 failed, 267 passed in 162.66s
+    failure_distribution:
+      serve/kanban/tests/test_native_runtime.py: 1
+      serve/kanban/tests/test_invalidation.py: 5
+      serve/kanban/tests/test_dispatch_runtime.py: 3
+      serve/kanban/tests/test_runtime_query.py: 1
+  review:
+    disposition: pass
+    evidence_id: plan-review-dn-003-5b2c7be03be9-r4
+    evidence: Fresh independent review passed plan completeness, admitted references, complete predecessor impact closure, dependency order, exact PROOF-003 boundary, and no material expansion after restoring test_proof_checkout.py as a proof-consumed helper dependency.
+    checks:
+      plan_completeness:
+        disposition: pass
+        evidence: Build mode is required by the exact 10-failure baseline; the packet covers ten tracked-authority sites, one missing rollback-parity parameter case, and all eleven DN-003 obligations.
+      admitted_references:
+        disposition: pass
+        evidence: Modules, interfaces, risks, proof, obligations, and the 38 authority targets equal DN-003 plus recursive accepted DN-002 and DN-001 authority.
+      impact_closures:
+        disposition: pass
+        evidence: All closure paths exist and cover six possible edit files, nine-file proof, transitive test imports, and complete accepted DN-002 closure; test_proof_checkout.py is retained as read-only proof dependency.
+      dependency_order:
+        disposition: pass
+        evidence: One packet with no packet dependencies is acyclic; DN-001 and DN-002 accept receipts are current at the active digest and candidate.
+      proof_boundary:
+        disposition: pass
+        evidence: Boundary, six methods, and four replacements are verbatim PROOF-003; real repository currency assertions use GitRepositoryHistory and temporary Git repositories.
+      material_expansion:
+        disposition: pass
+        evidence: Edits are limited to six existing test files; production, authority, lifecycle, schema, consumer, migration, and compatibility changes are excluded.
+code_revision: cdab35cc9be5c09ffbb52474e8f89b77a2325a7f

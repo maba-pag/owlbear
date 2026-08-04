@@ -1,0 +1,679 @@
+---
+schema_version: 1
+kind: admission
+receipt_id: admission-e17a3e0e37bd
+change_id: replace-delivery-pipeline
+delivery_digest: 
+  e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+issued_at: '1970-01-01T00:00:00Z'
+assessment:
+  schema_version: 1
+  revision_digest: 
+    e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+  findings: []
+  limits:
+    - DN-004 must implement and prove generic interface-declared terminal plan 
+      prerequisites.
+    - DN-012 must implement and fixture-prove shared selector resolution, 
+      including fail-closed selector loss.
+    - DN-016 and DN-015 must produce live handoff and finalization evidence 
+      while protected configuration remains byte-unchanged.
+evidence:
+  digest: e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+  challenge:
+    REQ-001:
+      disposition: pass
+      evidence: Independent challenger verified REQ-001 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-002:
+      disposition: pass
+      evidence: Independent challenger verified REQ-002 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-003:
+      disposition: pass
+      evidence: Independent challenger verified REQ-003 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-004:
+      disposition: pass
+      evidence: Independent challenger verified REQ-004 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-005:
+      disposition: pass
+      evidence: Independent challenger verified REQ-005 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-006:
+      disposition: pass
+      evidence: Independent challenger verified REQ-006 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-007:
+      disposition: pass
+      evidence: Independent challenger verified REQ-007 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-008:
+      disposition: pass
+      evidence: Independent challenger verified REQ-008 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-009:
+      disposition: pass
+      evidence: Independent challenger verified REQ-009 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-010:
+      disposition: pass
+      evidence: Independent challenger verified REQ-010 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-011:
+      disposition: pass
+      evidence: Independent challenger verified REQ-011 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-012:
+      disposition: pass
+      evidence: Independent challenger verified REQ-012 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-013:
+      disposition: pass
+      evidence: Independent challenger verified REQ-013 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-014:
+      disposition: pass
+      evidence: Independent challenger verified REQ-014 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-015:
+      disposition: pass
+      evidence: Independent challenger verified REQ-015 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-016:
+      disposition: pass
+      evidence: Independent challenger verified REQ-016 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-017:
+      disposition: pass
+      evidence: Independent challenger verified REQ-017 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-018:
+      disposition: pass
+      evidence: Independent challenger verified REQ-018 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-019:
+      disposition: pass
+      evidence: Independent challenger verified REQ-019 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-020:
+      disposition: pass
+      evidence: Independent challenger verified REQ-020 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-021:
+      disposition: pass
+      evidence: Independent challenger verified REQ-021 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-022:
+      disposition: pass
+      evidence: Independent challenger verified REQ-022 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-023:
+      disposition: pass
+      evidence: Independent challenger verified REQ-023 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-024:
+      disposition: pass
+      evidence: Independent challenger verified REQ-024 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-025:
+      disposition: pass
+      evidence: Independent challenger verified REQ-025 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-026:
+      disposition: pass
+      evidence: Independent challenger verified REQ-026 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-027:
+      disposition: pass
+      evidence: Independent challenger verified REQ-027 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    REQ-028:
+      disposition: pass
+      evidence: Independent challenger verified REQ-028 ownership, source 
+        grounding, and proof at commit 1e242d24.
+    WF-001:
+      disposition: pass
+      evidence: Independent challenger verified WF-001 entry, result, failure 
+        behavior, owner, and proof at commit 1e242d24.
+    WF-002:
+      disposition: pass
+      evidence: Independent challenger verified WF-002 entry, result, failure 
+        behavior, owner, and proof at commit 1e242d24.
+    WF-003:
+      disposition: pass
+      evidence: Independent challenger verified WF-003 entry, result, failure 
+        behavior, owner, and proof at commit 1e242d24.
+    WF-004:
+      disposition: pass
+      evidence: Independent challenger verified WF-004 entry, result, failure 
+        behavior, owner, and proof at commit 1e242d24.
+    WF-005:
+      disposition: pass
+      evidence: Independent challenger verified WF-005 entry, result, failure 
+        behavior, owner, and proof at commit 1e242d24.
+    WF-006:
+      disposition: pass
+      evidence: Independent challenger verified WF-006 entry, result, failure 
+        behavior, owner, and proof at commit 1e242d24.
+    WF-007:
+      disposition: pass
+      evidence: Independent challenger verified WF-007 entry, result, failure 
+        behavior, owner, and proof at commit 1e242d24.
+    WF-008:
+      disposition: pass
+      evidence: Independent challenger verified WF-008 entry, result, failure 
+        behavior, owner, and proof at commit 1e242d24.
+    IF-001:
+      disposition: pass
+      evidence: Independent challenger verified IF-001 producer, consumers, 
+        contract, authority, failure semantics, migration, and proof at commit 
+        1e242d24.
+    IF-002:
+      disposition: pass
+      evidence: Independent challenger verified IF-002 producer, consumers, 
+        contract, authority, failure semantics, migration, and proof at commit 
+        1e242d24.
+    IF-003:
+      disposition: pass
+      evidence: Independent challenger verified IF-003 producer, consumers, 
+        contract, authority, failure semantics, migration, and proof at commit 
+        1e242d24.
+    IF-004:
+      disposition: pass
+      evidence: Independent challenger verified IF-004 generic graph-resolved 
+        terminal-prerequisite contract and proof at commit 1e242d24.
+    IF-005:
+      disposition: pass
+      evidence: Independent challenger verified IF-005 producer, consumers, 
+        contract, authority, failure semantics, migration, and proof at commit 
+        1e242d24.
+    IF-006:
+      disposition: pass
+      evidence: Independent challenger verified IF-006 producer, consumers, 
+        contract, authority, failure semantics, migration, and proof at commit 
+        1e242d24.
+    IF-007:
+      disposition: pass
+      evidence: Independent challenger verified IF-007 producer, consumers, 
+        contract, authority, failure semantics, migration, and proof at commit 
+        1e242d24.
+    IF-008:
+      disposition: pass
+      evidence: Independent challenger verified IF-008 producer, consumers, 
+        contract, authority, failure semantics, migration, and proof at commit 
+        1e242d24.
+    IF-009:
+      disposition: pass
+      evidence: Independent challenger verified IF-009 producer, consumers, 
+        contract, authority, failure semantics, migration, and proof at commit 
+        1e242d24.
+    IF-010:
+      disposition: pass
+      evidence: Independent challenger verified IF-010 producer, consumers, 
+        contract, authority, failure semantics, migration, and proof at commit 
+        1e242d24.
+    IF-011:
+      disposition: pass
+      evidence: Independent challenger verified IF-011 producer, consumers, 
+        contract, authority, failure semantics, migration, and proof at commit 
+        1e242d24.
+    IF-012:
+      disposition: pass
+      evidence: Independent challenger verified IF-012 producer, consumers, 
+        contract, authority, failure semantics, migration, and proof at commit 
+        1e242d24.
+    IF-013:
+      disposition: pass
+      evidence: Independent challenger verified IF-013 producer, consumers, 
+        contract, authority, failure semantics, migration, and proof at commit 
+        1e242d24.
+    IF-014:
+      disposition: pass
+      evidence: Independent challenger verified IF-014 producer, consumers, 
+        contract, authority, failure semantics, migration, and proof at commit 
+        1e242d24.
+    IF-015:
+      disposition: pass
+      evidence: Independent challenger verified IF-015 producer, consumers, 
+        contract, authority, failure semantics, migration, and proof at commit 
+        1e242d24.
+    IF-016:
+      disposition: pass
+      evidence: Independent challenger verified IF-016 producer, consumers, 
+        contract, authority, failure semantics, migration, and proof at commit 
+        1e242d24.
+    IF-017:
+      disposition: pass
+      evidence: Independent challenger verified IF-017 shared resolver 
+        ownership, selector custody, destination sentinel, failure semantics, 
+        migration, and proof at commit 1e242d24.
+    IF-018:
+      disposition: pass
+      evidence: Independent challenger verified IF-018 producer/consumer 
+        declaration and terminal prerequisite semantics at commit 1e242d24.
+    MIG-001:
+      disposition: pass
+      evidence: Independent challenger verified MIG-001 ordered steps, 
+        inventory, compatibility, deletion owner, and absence proof at commit 
+        1e242d24.
+    MIG-002:
+      disposition: pass
+      evidence: Independent challenger verified MIG-002 ordered steps, 
+        inventory, compatibility, deletion owner, and absence proof at commit 
+        1e242d24.
+    MIG-003:
+      disposition: pass
+      evidence: Independent challenger verified MIG-003 ordered steps, 
+        inventory, compatibility, deletion owner, and absence proof at commit 
+        1e242d24.
+    MIG-004:
+      disposition: pass
+      evidence: Independent challenger verified MIG-004 ordered steps, 
+        inventory, compatibility, deletion owner, and absence proof at commit 
+        1e242d24.
+    MIG-005:
+      disposition: pass
+      evidence: Independent challenger verified MIG-005 ordered steps, 
+        inventory, compatibility, deletion owner, and absence proof at commit 
+        1e242d24.
+    MIG-006:
+      disposition: pass
+      evidence: Independent challenger verified MIG-006 selector-loss rejection,
+        runtime sidecars, ordered steps, inventory, compatibility, deletion 
+        owner, and proof at commit 1e242d24.
+    RISK-001:
+      disposition: pass
+      evidence: Independent challenger verified RISK-001 scenarios, disposition,
+        owner, and proof at commit 1e242d24.
+    RISK-002:
+      disposition: pass
+      evidence: Independent challenger verified RISK-002 scenarios, disposition,
+        owner, and proof at commit 1e242d24.
+    RISK-003:
+      disposition: pass
+      evidence: Independent challenger verified RISK-003 scenarios, disposition,
+        owner, and proof at commit 1e242d24.
+    RISK-004:
+      disposition: pass
+      evidence: Independent challenger verified RISK-004 scenarios, disposition,
+        owner, and proof at commit 1e242d24.
+    RISK-005:
+      disposition: pass
+      evidence: Independent challenger verified RISK-005 scenarios, disposition,
+        owner, and proof at commit 1e242d24.
+    RISK-006:
+      disposition: pass
+      evidence: Independent challenger verified RISK-006 scenarios, disposition,
+        owner, and proof at commit 1e242d24.
+    RISK-007:
+      disposition: pass
+      evidence: Independent challenger verified RISK-007 scenarios, disposition,
+        owner, and proof at commit 1e242d24.
+    RISK-008:
+      disposition: pass
+      evidence: Independent challenger verified RISK-008 scenarios, disposition,
+        owner, and proof at commit 1e242d24.
+    RISK-009:
+      disposition: pass
+      evidence: Independent challenger verified RISK-009 scenarios, disposition,
+        owner, and proof at commit 1e242d24.
+    RISK-010:
+      disposition: pass
+      evidence: Independent challenger verified RISK-010 scenarios, disposition,
+        owner, and proof at commit 1e242d24.
+    RISK-011:
+      disposition: pass
+      evidence: Independent challenger verified RISK-011 scenarios, disposition,
+        owner, and proof at commit 1e242d24.
+    RISK-012:
+      disposition: pass
+      evidence: Independent challenger verified RISK-012 scenarios, disposition,
+        owner, and proof at commit 1e242d24.
+    RISK-013:
+      disposition: pass
+      evidence: Independent challenger verified RISK-013 scenarios, disposition,
+        owner, and proof at commit 1e242d24.
+    RISK-014:
+      disposition: pass
+      evidence: Independent challenger verified RISK-014 scenarios, disposition,
+        owner, and proof at commit 1e242d24.
+    RISK-015:
+      disposition: pass
+      evidence: Independent challenger verified RISK-015 selector-loss sentinel,
+        scenarios, disposition, owner, and PROOF-017 at commit 1e242d24.
+    PROOF-001:
+      disposition: pass
+      evidence: Independent challenger verified PROOF-001 owner, real boundary, 
+        methods, allowed replacements, and durable outputs at commit 1e242d24.
+    PROOF-002:
+      disposition: pass
+      evidence: Independent challenger verified PROOF-002 against every design 
+        section 9.1 rejection class at commit 1e242d24.
+    PROOF-003:
+      disposition: pass
+      evidence: Independent challenger verified PROOF-003 owner, real boundary, 
+        methods, allowed replacements, and durable outputs at commit 1e242d24.
+    PROOF-004:
+      disposition: pass
+      evidence: Independent challenger verified PROOF-004 owner, real boundary, 
+        methods, allowed replacements, and durable outputs at commit 1e242d24.
+    PROOF-005:
+      disposition: pass
+      evidence: Independent challenger verified PROOF-005 owner, real boundary, 
+        methods, allowed replacements, and durable outputs at commit 1e242d24.
+    PROOF-006:
+      disposition: pass
+      evidence: Independent challenger verified PROOF-006 owner, real boundary, 
+        methods, allowed replacements, and durable outputs at commit 1e242d24.
+    PROOF-007:
+      disposition: pass
+      evidence: Independent challenger verified PROOF-007 owner, real boundary, 
+        methods, allowed replacements, and durable outputs at commit 1e242d24.
+    PROOF-008:
+      disposition: pass
+      evidence: Independent challenger verified PROOF-008 owner, real boundary, 
+        methods, allowed replacements, and durable outputs at commit 1e242d24.
+    PROOF-009:
+      disposition: pass
+      evidence: Independent challenger verified PROOF-009 owner, real boundary, 
+        methods, allowed replacements, and durable outputs at commit 1e242d24.
+    PROOF-011:
+      disposition: pass
+      evidence: Independent challenger verified PROOF-011 owner, real boundary, 
+        methods, allowed replacements, and durable outputs at commit 1e242d24.
+    PROOF-012:
+      disposition: pass
+      evidence: Independent challenger verified PROOF-012 owner, real boundary, 
+        methods, allowed replacements, and durable outputs at commit 1e242d24.
+    PROOF-013:
+      disposition: pass
+      evidence: Independent challenger verified PROOF-013 owner, real boundary, 
+        methods, allowed replacements, and durable outputs at commit 1e242d24.
+    PROOF-014:
+      disposition: pass
+      evidence: Independent challenger verified PROOF-014 owner, real boundary, 
+        methods, allowed replacements, and durable outputs at commit 1e242d24.
+    PROOF-015:
+      disposition: pass
+      evidence: Independent challenger verified PROOF-015 owner, real boundary, 
+        methods, allowed replacements, and durable outputs at commit 1e242d24.
+    PROOF-016:
+      disposition: pass
+      evidence: Independent challenger verified PROOF-016 exact-commit 
+        finalization boundary and outputs at commit 1e242d24.
+    PROOF-017:
+      disposition: pass
+      evidence: Independent challenger verified PROOF-017 selector sentinel, 
+        protected-byte observation, destination-only completion, owner, 
+        boundary, and outputs at commit 1e242d24.
+    DN-001:
+      disposition: pass
+      evidence: Independent challenger verified DN-001 outcome, obligations, 
+        modules, interfaces, dependencies, risks, proof, and source feasibility 
+        at commit 1e242d24.
+    DN-002:
+      disposition: pass
+      evidence: Independent challenger verified DN-002 outcome, obligations, 
+        modules, interfaces, dependencies, risks, proof, and source feasibility 
+        at commit 1e242d24.
+    DN-003:
+      disposition: pass
+      evidence: Independent challenger verified DN-003 outcome, obligations, 
+        modules, interfaces, dependencies, risks, proof, and source feasibility 
+        at commit 1e242d24.
+    DN-004:
+      disposition: pass
+      evidence: Independent challenger verified DN-004 outcome, obligations, 
+        modules, interfaces, dependencies, risks, proof, and source feasibility 
+        at commit 1e242d24.
+    DN-005:
+      disposition: pass
+      evidence: Independent challenger verified DN-005 outcome, obligations, 
+        modules, interfaces, dependencies, risks, proof, and source feasibility 
+        at commit 1e242d24.
+    DN-006:
+      disposition: pass
+      evidence: Independent challenger verified DN-006 outcome, obligations, 
+        modules, interfaces, dependencies, risks, proof, and source feasibility 
+        at commit 1e242d24.
+    DN-007:
+      disposition: pass
+      evidence: Independent challenger verified DN-007 outcome, obligations, 
+        modules, interfaces, dependencies, risks, proof, and source feasibility 
+        at commit 1e242d24.
+    DN-008:
+      disposition: pass
+      evidence: Independent challenger verified DN-008 outcome, obligations, 
+        modules, interfaces, dependencies, risks, proof, and source feasibility 
+        at commit 1e242d24.
+    DN-009:
+      disposition: pass
+      evidence: Independent challenger verified DN-009 outcome, obligations, 
+        modules, interfaces, dependencies, risks, proof, and source feasibility 
+        at commit 1e242d24.
+    DN-010:
+      disposition: pass
+      evidence: Independent challenger verified DN-010 outcome, obligations, 
+        modules, interfaces, dependencies, risks, proof, and source feasibility 
+        at commit 1e242d24.
+    DN-011:
+      disposition: pass
+      evidence: Independent challenger verified DN-011 outcome, obligations, 
+        modules, interfaces, dependencies, risks, proof, and source feasibility 
+        at commit 1e242d24.
+    DN-012:
+      disposition: pass
+      evidence: Independent challenger verified DN-012 owns shared selector 
+        implementation and fixture proof under the admitted graph at commit 
+        1e242d24.
+    DN-013:
+      disposition: pass
+      evidence: Independent challenger verified DN-013 outcome, obligations, 
+        modules, interfaces, dependencies, risks, proof, and source feasibility 
+        at commit 1e242d24.
+    DN-014:
+      disposition: pass
+      evidence: Independent challenger verified DN-014 outcome, obligations, 
+        modules, interfaces, dependencies, risks, proof, and source feasibility 
+        at commit 1e242d24.
+    DN-015:
+      disposition: pass
+      evidence: Independent challenger verified DN-015 remains separate and 
+        depends on DN-016/IF-018 before planning or dispatch at commit 1e242d24.
+    DN-016:
+      disposition: pass
+      evidence: Independent challenger verified DN-016 owns live handoff and 
+        produces IF-018 before DN-015 at commit 1e242d24.
+  baseline:
+    digest: e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+    commands:
+      - command: uv run pytest -n0 tests/test_cockpit_launch.py 
+          serve/kanban/tests/test_workspace.py 
+          serve/mcp-kanban/tests/test_designer_interaction.py::test_design_resume_preserves_authority_and_one_pending_choice
+          serve/mcp-kanban/tests/test_designer_interaction.py::test_unresolved_decision_validates_as_draft_without_approval_or_admission
+          -q --tb=short
+        exit_code: 0
+        result: 9 passed in 1.50s
+    candidate_commit: 1e242d24baae699329db1b097f6e8b17a64c00f8
+  approval:
+    approved: true
+    digest: e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+    authority: user
+    method: VS Code final admission question
+    candidate_commit: 1e242d24baae699329db1b097f6e8b17a64c00f8
+  limits:
+    - DN-004 must implement and prove generic interface-declared terminal plan 
+      prerequisites.
+    - DN-012 must implement and fixture-prove shared selector resolution, 
+      including fail-closed selector loss.
+    - DN-016 and DN-015 must produce live handoff and finalization evidence 
+      while protected configuration remains byte-unchanged.
+generation:
+  schema_version: 1
+  change_id: replace-delivery-pipeline
+  delivery_digest: 
+    e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+  receipt_id: admission-e17a3e0e37bd
+  jobs:
+    - job_id: 145
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+      target_node_id: DN-001
+      receipt_id: admission-e17a3e0e37bd
+    - job_id: 146
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+      target_node_id: DN-002
+      receipt_id: admission-e17a3e0e37bd
+    - job_id: 147
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+      target_node_id: DN-003
+      receipt_id: admission-e17a3e0e37bd
+    - job_id: 148
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+      target_node_id: DN-004
+      receipt_id: admission-e17a3e0e37bd
+    - job_id: 149
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+      target_node_id: DN-005
+      receipt_id: admission-e17a3e0e37bd
+    - job_id: 150
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+      target_node_id: DN-006
+      receipt_id: admission-e17a3e0e37bd
+    - job_id: 151
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+      target_node_id: DN-007
+      receipt_id: admission-e17a3e0e37bd
+    - job_id: 152
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+      target_node_id: DN-008
+      receipt_id: admission-e17a3e0e37bd
+    - job_id: 153
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+      target_node_id: DN-009
+      receipt_id: admission-e17a3e0e37bd
+    - job_id: 154
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+      target_node_id: DN-010
+      receipt_id: admission-e17a3e0e37bd
+    - job_id: 155
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+      target_node_id: DN-011
+      receipt_id: admission-e17a3e0e37bd
+    - job_id: 156
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+      target_node_id: DN-012
+      receipt_id: admission-e17a3e0e37bd
+    - job_id: 157
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+      target_node_id: DN-013
+      receipt_id: admission-e17a3e0e37bd
+    - job_id: 158
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+      target_node_id: DN-014
+      receipt_id: admission-e17a3e0e37bd
+    - job_id: 159
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+      target_node_id: DN-015
+      receipt_id: admission-e17a3e0e37bd
+    - job_id: 160
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        e17a3e0e37bdfbf982f38314b6d508443780b586d930452653b5568ac90a30d4
+      target_node_id: DN-016
+      receipt_id: admission-e17a3e0e37bd

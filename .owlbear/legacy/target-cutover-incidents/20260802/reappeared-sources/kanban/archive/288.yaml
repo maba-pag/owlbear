@@ -1,0 +1,23 @@
+---
+schema_version: 1
+job_id: 288
+kind: plan
+priority: 0
+created_at: '1970-01-01T00:00:00Z'
+updated_at: '2026-08-01T14:53:01Z'
+change_id: replace-delivery-pipeline
+delivery_digest: 
+  f11b5af05ac31cc255668bd953fdb085cf0c533ed797ba422a839a567beaf83c
+target_node_id: DN-004
+node_plan_digest:
+packet_id:
+predecessor_job_ids: []
+claim_id:
+block_id:
+pending_request_ids: []
+evidence_ids: []
+attempt_id:
+finding_id:
+receipt_id: plan-dn-004-f11b5af05ac3
+superseded_by_receipt_id:
+disposition: pending

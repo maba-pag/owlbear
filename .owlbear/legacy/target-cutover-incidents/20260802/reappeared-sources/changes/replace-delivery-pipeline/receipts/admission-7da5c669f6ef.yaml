@@ -1,0 +1,648 @@
+---
+schema_version: 1
+kind: admission
+receipt_id: admission-7da5c669f6ef
+change_id: replace-delivery-pipeline
+delivery_digest: 
+  7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+issued_at: '1970-01-01T00:00:00Z'
+assessment:
+  schema_version: 1
+  revision_digest: 
+    7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+  findings: []
+  limits:
+    - DN-003 must implement and prove accepted dependency-set currentness before
+      dependent delivery proceeds.
+    - DN-004 must implement and prove generic interface-declared terminal plan 
+      prerequisites.
+    - DN-012 must implement and fixture-prove shared selector resolution, 
+      including fail-closed selector loss.
+    - DN-016 and DN-015 must produce live handoff and finalization evidence 
+      while protected configuration remains byte-unchanged.
+evidence:
+  digest: 7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+  challenge:
+    REQ-001:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-001 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-002:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-002 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-003:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-003 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-004:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-004 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-005:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-005 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-006:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-006 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-007:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-007 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-008:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-008 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-009:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-009 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-010:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-010 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-011:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-011 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-012:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-012 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-013:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-013 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-014:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-014 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-015:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-015 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-016:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-016 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-017:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-017 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-018:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-018 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-019:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-019 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-020:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-020 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-021:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-021 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-022:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-022 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-023:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-023 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-024:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-024 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-025:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-025 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-026:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-026 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-027:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-027 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    REQ-028:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed REQ-028 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    WF-001:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed WF-001 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    WF-002:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed WF-002 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    WF-003:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed WF-003 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    WF-004:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed WF-004 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    WF-005:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed WF-005 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    WF-006:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed WF-006 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    WF-007:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed WF-007 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    WF-008:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed WF-008 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    IF-001:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed IF-001 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    IF-002:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed IF-002 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    IF-003:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed IF-003 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    IF-004:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed IF-004 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    IF-005:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed IF-005 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    IF-015:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed IF-015 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    IF-006:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed IF-006 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    IF-007:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed IF-007 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    IF-008:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed IF-008 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    IF-009:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed IF-009 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    IF-010:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed IF-010 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    IF-011:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed IF-011 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    IF-012:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed IF-012 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    IF-013:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed IF-013 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    IF-016:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed IF-016 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    IF-017:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed IF-017 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    IF-018:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed IF-018 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    IF-014:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed IF-014 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    MIG-001:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed MIG-001 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    MIG-002:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed MIG-002 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    MIG-003:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed MIG-003 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    MIG-004:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed MIG-004 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    MIG-005:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed MIG-005 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    MIG-006:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed MIG-006 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    RISK-001:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed RISK-001 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    RISK-002:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed RISK-002 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    RISK-003:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed RISK-003 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    RISK-004:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed RISK-004 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    RISK-005:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed RISK-005 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    RISK-006:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed RISK-006 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    RISK-007:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed RISK-007 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    RISK-008:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed RISK-008 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    RISK-009:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed RISK-009 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    RISK-010:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed RISK-010 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    RISK-011:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed RISK-011 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    RISK-012:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed RISK-012 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    RISK-013:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed RISK-013 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    RISK-014:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed RISK-014 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    RISK-015:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed RISK-015 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    PROOF-001:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed PROOF-001 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    PROOF-002:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed PROOF-002 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    PROOF-003:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed PROOF-003 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    PROOF-004:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed PROOF-004 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    PROOF-005:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed PROOF-005 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    PROOF-006:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed PROOF-006 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    PROOF-007:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed PROOF-007 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    PROOF-008:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed PROOF-008 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    PROOF-009:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed PROOF-009 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    PROOF-011:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed PROOF-011 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    PROOF-012:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed PROOF-012 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    PROOF-013:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed PROOF-013 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    PROOF-014:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed PROOF-014 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    PROOF-015:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed PROOF-015 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    PROOF-016:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed PROOF-016 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    PROOF-017:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed PROOF-017 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    DN-001:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed DN-001 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    DN-002:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed DN-002 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    DN-003:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed DN-003 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    DN-004:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed DN-004 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    DN-005:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed DN-005 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    DN-006:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed DN-006 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    DN-007:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed DN-007 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    DN-008:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed DN-008 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    DN-009:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed DN-009 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    DN-010:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed DN-010 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    DN-011:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed DN-011 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    DN-012:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed DN-012 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    DN-013:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed DN-013 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    DN-014:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed DN-014 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    DN-015:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed DN-015 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+    DN-016:
+      disposition: pass
+      evidence: Fresh source-grounded challenger passed DN-016 for semantic 
+        authority 7da5c669f6ef at candidate 8c9fa2c7fba2.
+  baseline:
+    digest: 7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+    commands:
+      - command: admission/change-revision/transaction suites
+        exit_code: 0
+        result: 71 passed
+      - command: dispatch and MCP surface suites
+        exit_code: 0
+        result: 41 passed
+      - command: public exact-checkout audit success regression
+        exit_code: 0
+        result: 1 passed
+  approval:
+    approved: true
+    digest: 7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+    authority: user
+    evidence: Standing explicit instruction to continue the approved delivery 
+      plan through completion, preserving Memory and Ideas, DN-013 separation, 
+      and DN-016 before DN-015.
+  limits:
+    - DN-003 must implement and prove accepted dependency-set currentness before
+      dependent delivery proceeds.
+    - DN-004 must implement and prove generic interface-declared terminal plan 
+      prerequisites.
+    - DN-012 must implement and fixture-prove shared selector resolution, 
+      including fail-closed selector loss.
+    - DN-016 and DN-015 must produce live handoff and finalization evidence 
+      while protected configuration remains byte-unchanged.
+generation:
+  schema_version: 1
+  change_id: replace-delivery-pipeline
+  delivery_digest: 
+    7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+  receipt_id: admission-7da5c669f6ef
+  jobs:
+    - job_id: 220
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+      target_node_id: DN-001
+      receipt_id: admission-7da5c669f6ef
+    - job_id: 221
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+      target_node_id: DN-002
+      receipt_id: admission-7da5c669f6ef
+    - job_id: 222
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+      target_node_id: DN-003
+      receipt_id: admission-7da5c669f6ef
+    - job_id: 223
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+      target_node_id: DN-004
+      receipt_id: admission-7da5c669f6ef
+    - job_id: 224
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+      target_node_id: DN-005
+      receipt_id: admission-7da5c669f6ef
+    - job_id: 225
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+      target_node_id: DN-006
+      receipt_id: admission-7da5c669f6ef
+    - job_id: 226
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+      target_node_id: DN-007
+      receipt_id: admission-7da5c669f6ef
+    - job_id: 227
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+      target_node_id: DN-008
+      receipt_id: admission-7da5c669f6ef
+    - job_id: 228
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+      target_node_id: DN-009
+      receipt_id: admission-7da5c669f6ef
+    - job_id: 229
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+      target_node_id: DN-010
+      receipt_id: admission-7da5c669f6ef
+    - job_id: 230
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+      target_node_id: DN-011
+      receipt_id: admission-7da5c669f6ef
+    - job_id: 231
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+      target_node_id: DN-012
+      receipt_id: admission-7da5c669f6ef
+    - job_id: 232
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+      target_node_id: DN-013
+      receipt_id: admission-7da5c669f6ef
+    - job_id: 233
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+      target_node_id: DN-014
+      receipt_id: admission-7da5c669f6ef
+    - job_id: 234
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+      target_node_id: DN-015
+      receipt_id: admission-7da5c669f6ef
+    - job_id: 235
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+      target_node_id: DN-016
+      receipt_id: admission-7da5c669f6ef

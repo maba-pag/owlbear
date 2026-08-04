@@ -1,0 +1,86 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-004-1ec9888c522d
+change_id: replace-delivery-pipeline
+delivery_digest: 1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+issued_at: '2026-08-01T03:29:21Z'
+impact_closure:
+  paths:
+    - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
+    - .owlbear/changes/replace-delivery-pipeline/design.md
+    - .owlbear/changes/replace-delivery-pipeline/intent.md
+    - .owlbear/hooks/
+    - conftest.py
+    - seed/.owlbear/hooks/
+    - serve/cockpit/src/owlbear_cockpit/deps.py
+    - serve/kanban/src/owlbear_kanban/
+    - serve/kanban/tests/
+    - serve/mcp-kanban/src/owlbear_mcp_kanban/
+    - serve/mcp-kanban/tests/
+    - share/agents/
+    - share/skills/
+    - tests/test_agent_ecosystem_validation.py
+    - tests/test_cockpit_native_changes.py
+    - tests/test_cockpit_native_controls.py
+    - tests/test_cockpit_native_cutover.py
+    - tests/test_cockpit_native_integration.py
+    - tests/test_cockpit_native_work.py
+    - tests/test_deny_code_writes.py
+    - tests/test_write_guard_hooks.py
+  authority_targets:
+    - DN-003
+    - DN-004
+    - IF-003
+    - IF-004
+    - IF-005
+    - IF-015
+    - KEEP-006
+    - KEEP-007
+    - MOD-001
+    - MOD-002
+    - MOD-003
+    - MOD-008
+    - MOD-009
+    - NEG-006
+    - PROOF-014
+    - REQ-013
+    - REQ-014
+    - REQ-020
+    - REQ-022
+    - RISK-002
+    - RISK-004
+    - RISK-013
+target_node_id: DN-004
+node_plan_digest: 61490e98c8a05f1a61afe65113396f625bf74f50635562aa30583b242dcfe30e
+predecessor_receipt_ids: []
+evidence:
+  methods:
+    - Exercise the public IF-015 operation subset over the real DispatchRuntime and assert that subset is exactly pick_jobs, start_job, finish_plan, finish_build, finish_accept, finish_audit, release_job, and recover_expired_claims, with the same registrations used by IF-010, strict schemas, and stable domain-error mapping.
+    - For accept and audit, assert start_job returns canonical contained IF-005 checkout context, setup failure creates no claim, start rejection removes the checkout, and finish, release, and expired recovery clean it without adding another work operation.
+    - Dispatch assigned plan, build, accept, and audit agents from engine-selected waves without interpreting agent prose.
+    - Assert tracked-file writers never overlap and accept or audit never overlaps a writer.
+    - Exercise crash, expired claim, rate-limit, stale lease, proof-checkout setup, containment, exact-commit materialization, and orphan cleanup paths.
+    - Assert every structured attempt is finalized once and replanning reads current graph/job state.
+    - Re-admit the same change identity with a new semantic digest while the dispatch facade remains alive; the next public operation must rebuild runtime state from the new revision, select only new-generation jobs, and reject prior-generation authority without requiring process restart.
+    - Prove IF-015 finish_plan accepts an empty build_job_ids tuple only for the DN-003-validated verification-only plan form, creates one accept job, and adds no tool, alias, or lifecycle semantic.
+    - Assert DN-015's admitted plan job is omitted and cannot start without current IF-018, remains mutation-free on stale prerequisite evidence, and becomes eligible after DN-016 acceptance.
+  source_inspection:
+    candidate_revision: 8b39029295226e910a2d10d723dc810a2e9d5097
+    findings:
+      - terminal_plan_prerequisite is schema-only with no runtime reader.
+      - DispatchRuntime exposes no construction digest.
+      - The MCP facade returns change-ID-cached runtime before loading current authority.
+      - _Proof014NativeMcpScenario is not collected by the canonical selector.
+  collection_discriminator:
+    command: uv run pytest -n0 --collect-only serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestProof014NativeMcpScenario -q
+    exit_code: 4
+    result: no tests collected
+  review:
+    disposition: pass
+    evidence_id: plan-review-dn-004-1ec9888c-final
+    evidence: Fresh independent review inspected completeness, admitted references, impact closure, dependency order, proof boundary, and material expansion; all six typed checks passed.
+code_revision: 8b39029295226e910a2d10d723dc810a2e9d5097

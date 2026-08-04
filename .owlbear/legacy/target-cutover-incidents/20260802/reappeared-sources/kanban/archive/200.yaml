@@ -1,0 +1,25 @@
+---
+schema_version: 1
+job_id: 200
+kind: accept
+priority: 0
+created_at: '2026-07-31T01:43:11Z'
+updated_at: '2026-07-31T01:48:41Z'
+change_id: replace-delivery-pipeline
+delivery_digest: 
+  720eb6f605cc692a077010852b58c5b9c0807bcc139f0c292fe6fa5329eaed06
+target_node_id: DN-002
+node_plan_digest: 
+  ff29ff051d54f3492068ecd2d64c269cfe7cc0f37fb1543604c8cf2b4bce5815
+packet_id:
+predecessor_job_ids:
+  - 184
+claim_id:
+block_id:
+pending_request_ids: []
+evidence_ids: []
+attempt_id:
+finding_id:
+receipt_id: accept-dn-002-720eb6f605cc
+superseded_by_receipt_id:
+disposition: pending

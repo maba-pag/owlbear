@@ -1,0 +1,285 @@
+---
+mode: build
+candidate_revision: 38e27ae3ed5d6215ef8a5fe25c2db82470ec6452
+predecessor_basis:
+  admission_receipt_id: admission-f11b5af05ac3
+  target_node_id: DN-003
+  interface: IF-003
+  current_plan_job_id: 287
+  current_plan_receipt_id:
+  accepted_implementation_receipt_id:
+  planning_basis: Initial planning consumes sealed IF-003; predecessor
+    acceptance is not an initial planning gate.
+  build_readiness: Build 305 remains blocked until current DN-003 acceptance and
+    reconciliation.
+packets:
+  - id: DN-004-PK-001
+    outcome: Make dispatch generation-aware, enforce structured terminal plan
+      prerequisites, and complete collectable public PROOF-014 coverage over
+      IF-015 and IF-005.
+    obligations:
+      - REQ-013
+      - REQ-014
+      - REQ-022
+      - NEG-006
+      - REQ-020
+      - KEEP-006
+      - KEEP-007
+    in_scope:
+      - Load the current ChangeRevision before cache reuse; replace the cached
+        runtime when delivery_digest changes and reuse it only when equal.
+      - Discover marked interfaces from structured authority, resolve producers
+        and graph consumers generically, and reject missing, stale, superseded,
+        invalid, or ambiguous producer acceptance without mutation.
+      - Replace the private proof scenario with a collectable
+        TestProof014NativeMcpScenario whose methods begin from six authority
+        files and no copied lifecycle state.
+      - Use real AppContext, DispatchRuntime, NativeRuntime,
+        GitRepositoryHistory, and ProofCheckoutManager at the public IF-015
+        boundary.
+      - Preserve writer coordination, assigned profiles, structured
+        finalization, current-state replanning, checkout cleanup, registration
+        identity, and verification-only finish_plan semantics.
+      - Re-prove plan-only runtime and dispatch/bootstrap contracts,
+        verification-only transport, and absence of duplicate registrations or
+        shape aliases before downstream MCP consumption.
+    excluded:
+      - Authority, schema, receipt, migration, lifecycle, operation, alias, or
+        public-interface changes.
+      - New hardcoded terminal-prerequisite identities or downstream-node
+        implementation.
+      - Modification or removal of the existing DN-003-owned DN-015
+        mandatory-build guard.
+      - DN-002 correction state.
+      - Native work-root handoff or finalization.
+      - Cockpit feature, agent, workflow, hook, or legacy-compatibility edits.
+    modules:
+      - MOD-001
+      - MOD-002
+      - MOD-003
+      - MOD-008
+      - MOD-009
+    interfaces:
+      - IF-003
+      - IF-004
+      - IF-005
+      - IF-015
+    risks:
+      - RISK-002
+      - RISK-004
+      - RISK-013
+    dependencies: []
+    change_scope:
+      editable_paths:
+        - serve/kanban/src/owlbear_kanban/native_runtime.py
+        - serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
+        - serve/kanban/tests/test_native_runtime.py
+        - serve/mcp-kanban/tests/test_mcp_surface_contract.py
+      conditional_editable_paths:
+        - serve/kanban/src/owlbear_kanban/dispatch.py
+        - serve/kanban/tests/test_dispatch_runtime.py
+      condition: Edit conditional paths only if prerequisite projection cannot
+        remain behind NativeRuntime._dispatch_eligibility and existing
+        predecessor-invalid mapping.
+    acceptance_scenarios:
+      - 'AC-1: Given pending plan/build writers and accept/audit readers, public IF-015
+        pick_jobs emits isolated waves and start_job returns existing conflict diagnostics;
+        public scenario and coordination tests prove non-overlap.'
+      - 'AC-2: Given accept/audit target commit C, public IF-015 start_job materializes
+        a contained read-only checkout exactly at C; setup failure creates no claim
+        and finish/release/expiry clean it.'
+      - 'AC-3: Given engine-selected plan, build, accept, and audit jobs and structured
+        outcomes, orchestration invokes the assigned profile and matching lifecycle
+        operation without interpreting prose, then repicks current state.'
+      - 'AC-4: Given cached digest A and re-admission at digest B, the next public
+        operation replaces runtime state, selects B-only jobs, rejects stale A without
+        mutation, and then reuses B.'
+      - 'AC-5: Given marked terminal prerequisite interfaces, invalid producer acceptance
+        blocks consumers without mutation and valid acceptance makes consumers eligible
+        in topology order.'
+      - 'AC-6: Public inspection reports exactly the admitted IF-015 operation subset
+        with strict schemas, stable diagnostics, and no duplicate operation or shape
+        alias.'
+      - 'AC-7: A validated verification-only plan with empty build_job_ids creates
+        one accept job; build mode or incomplete evidence rejects publication.'
+      - 'AC-8: Public projections retain claims, dependencies, blocks, omissions,
+        attempts, and requests while dispatch selects only eligible jobs.'
+      - 'AC-9: Traversal identifiers and escaped or symlinked proof roots fail containment
+        without creating paths outside the proof root.'
+      - 'AC-10: A stale writer lease rejects start without mutation, while interrupted
+        transaction recovery yields complete prior or replacement state.'
+      - 'AC-11: Strict claim expiry appends one crashed event, reopens the job, releases
+        coordination, and cleans checkout state.'
+      - 'AC-12: Orphan checkout manifests are cleaned inside the proof root; cleanup
+        failure emits bounded health and forbids completion.'
+      - 'AC-13: A structured RateLimited result invokes release_job, clears the claim
+        while preserving a pending retryable job, and repick selects it again.'
+    impact_closure:
+      paths:
+        - serve/kanban/src/owlbear_kanban/
+        - serve/mcp-kanban/src/owlbear_mcp_kanban/
+        - serve/kanban/tests/
+        - serve/mcp-kanban/tests/
+        - share/agents/
+        - share/skills/
+        - conftest.py
+        - .owlbear/changes/replace-delivery-pipeline/intent.md
+        - .owlbear/changes/replace-delivery-pipeline/design.md
+        - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
+        - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
+        - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
+        - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
+        - serve/cockpit/src/owlbear_cockpit/deps.py
+        - .owlbear/hooks/
+        - seed/.owlbear/hooks/
+        - tests/test_agent_ecosystem_validation.py
+        - tests/test_deny_code_writes.py
+        - tests/test_write_guard_hooks.py
+        - tests/test_cockpit_native_changes.py
+        - tests/test_cockpit_native_controls.py
+        - tests/test_cockpit_native_cutover.py
+        - tests/test_cockpit_native_integration.py
+        - tests/test_cockpit_native_work.py
+      authority_targets:
+        - DN-003
+        - DN-004
+        - REQ-013
+        - REQ-014
+        - REQ-022
+        - NEG-006
+        - REQ-020
+        - KEEP-006
+        - KEEP-007
+        - MOD-001
+        - MOD-002
+        - MOD-003
+        - MOD-008
+        - MOD-009
+        - IF-003
+        - IF-004
+        - IF-005
+        - IF-015
+        - RISK-002
+        - RISK-004
+        - RISK-013
+        - PROOF-014
+    proof:
+      authority: PROOF-014
+      boundary: Real public IF-015 operations over real AppContext,
+        DispatchRuntime, NativeRuntime, GitRepositoryHistory, and
+        ProofCheckoutManager in an engine-created disposable exact-commit
+        checkout.
+      collection_check: uv run pytest -n0 --collect-only
+        serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestProof014NativeMcpScenario
+        -q
+      primary_command: uv run pytest -n0
+        serve/mcp-kanban/tests/test_mcp_surface_contract.py::TestProof014NativeMcpScenario
+        serve/kanban/tests/test_dispatch_runtime.py
+        serve/kanban/tests/test_proof_checkout.py -q --tb=short
+      kanban_regression_command: uv run pytest -n0 serve/kanban/tests/ -q
+        --tb=short
+      mcp_regression_command: uv run pytest -n0 serve/mcp-kanban/tests/ -q
+        --tb=short
+      orchestration_contract_command: uv run pytest -n0
+        serve/mcp-kanban/tests/test_planner_interaction.py
+        serve/mcp-kanban/tests/test_builder_interaction.py -q --tb=short
+      cockpit_compatibility_command: uv run pytest -n0
+        tests/test_cockpit_native_changes.py
+        tests/test_cockpit_native_controls.py
+        tests/test_cockpit_native_cutover.py
+        tests/test_cockpit_native_integration.py
+        tests/test_cockpit_native_work.py -q --tb=short
+      shipped_contract_command: uv run pytest -n0
+        tests/test_agent_ecosystem_validation.py::test_declared_owlbear_mcp_tools_exist_in_live_registries
+        tests/test_deny_code_writes.py tests/test_write_guard_hooks.py -q
+        --tb=short
+      lint_command: uv run ruff check
+        serve/kanban/src/owlbear_kanban/dispatch.py
+        serve/kanban/src/owlbear_kanban/native_runtime.py
+        serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
+        serve/kanban/tests/test_dispatch_runtime.py
+        serve/kanban/tests/test_native_runtime.py
+        serve/mcp-kanban/tests/test_mcp_surface_contract.py
+      format_command: uv run ruff format --check
+        serve/kanban/src/owlbear_kanban/dispatch.py
+        serve/kanban/src/owlbear_kanban/native_runtime.py
+        serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
+        serve/kanban/tests/test_dispatch_runtime.py
+        serve/kanban/tests/test_native_runtime.py
+        serve/mcp-kanban/tests/test_mcp_surface_contract.py
+      tracked_state_observation: git diff --check && git diff --exit-code && git
+        diff --cached --exit-code && git status --porcelain=v1
+        --untracked-files=no
+      committed_scope_observation: git show --check --format= HEAD && git
+        diff-tree --no-commit-id --name-only -r HEAD
+      allowed_lower_replacements:
+        - clock
+        - subagent runner
+        - temporary repository
+      evidence_outputs:
+        - Complete scenario collection and pass counts.
+        - Operation, schema, lifecycle, projection, checkout, and cleanup
+          observations.
+        - Ruff lint and format-check output.
+        - Clean tracked state and exact committed file inventory.
+    required_outputs:
+      - Digest-aware DispatchRuntime cache replacement and reuse.
+      - Generic terminal prerequisite enforcement with mutation-free stale-state
+        handling.
+      - Lifecycle-clean, collectable, real-boundary
+        TestProof014NativeMcpScenario.
+      - Preserved writer, checkout, attempt, replanning, registry,
+        verification-only, and DN-015 mandatory-build semantics.
+      - Passing read-only proof, regression, compatibility, lint, format,
+        tracked-state, and committed-scope checks.
+    profile:
+      domain: Python native dispatch, MCP runtime lifetime, receipt currentness,
+        and disposable proof checkout
+      risks:
+        - RISK-002
+        - RISK-004
+        - RISK-013
+      tools:
+        - uv
+        - pytest
+        - ruff
+        - read-only Git inspection
+    context_budget:
+      expected_changed_files: 4-6
+      change_envelope: One runtime currentness and prerequisite slice plus
+        maintained public proof coverage.
+review:
+  disposition: pass
+  evidence_id: plan-review-dn-004-f11b5af0-final
+  evidence: Fresh independent review passed all six typed checks against exact
+    tracked source and read-only proof boundaries.
+  checks:
+    plan_completeness:
+      disposition: pass
+      evidence: The packet covers every admitted DN-004 obligation and all nine
+        PROOF-014 methods; build mode is required by missing runtime and durable
+        proof outputs.
+    admitted_references:
+      disposition: pass
+      evidence: References remain inside DN-004 authority and its DN-003
+        predecessor, with attached-interface migration effects recorded without
+        claiming migration authority.
+    impact_closures:
+      disposition: pass
+      evidence: Canonical package, test, authority, agent, skill, hook, Cockpit
+        dependency, and pytest-policy selectors cover every proof input.
+    dependency_order:
+      disposition: pass
+      evidence: The one-packet DAG is acyclic; planning consumes sealed IF-003
+        while build remains gated by current DN-003 acceptance and
+        reconciliation.
+    proof_boundary:
+      disposition: pass
+      evidence: Public IF-015 executes over real runtime, repository history,
+        and checkout components with only admitted lower replacements and
+        read-only exact-commit observations.
+    material_expansion:
+      disposition: pass
+      evidence: The packet adds no unadmitted authority, interface, lifecycle
+        semantic, operation, diagnostic, migration, or downstream
+        implementation.

@@ -1,0 +1,656 @@
+---
+schema_version: 1
+kind: admission
+receipt_id: admission-1ec9888c522d
+change_id: replace-delivery-pipeline
+delivery_digest: 
+  1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+issued_at: '1970-01-01T00:00:00Z'
+assessment:
+  schema_version: 1
+  revision_digest: 
+    1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+  findings: []
+  limits:
+    - DN-003 must implement and prove accepted dependency-set currentness before
+      dependent delivery proceeds.
+    - DN-004 must implement and prove generic `terminal_plan_prerequisite` 
+      interface declarations.
+    - DN-012 must implement and fixture-prove shared selector resolution, 
+      including fail-closed selector loss.
+    - DN-016 and DN-015 must produce live handoff and finalization evidence 
+      while protected configuration remains byte-unchanged.
+evidence:
+  digest: 1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+  challenge:
+    REQ-001:
+      disposition: pass
+      evidence: Fresh read-only challenge verified resumable durable design 
+        authority in intent.md, design.md, and DN-005/IF-006.
+    REQ-002:
+      disposition: pass
+      evidence: Fresh challenge verified layered deterministic admission 
+        ownership in DN-002 and IF-002.
+    REQ-003:
+      disposition: pass
+      evidence: Fresh challenge verified all active obligations have accountable
+        ownership across the 16 declared nodes.
+    REQ-004:
+      disposition: pass
+      evidence: Fresh challenge verified atomic frontier planning and generic 
+        terminal_plan_prerequisite authority in IF-004, IF-007, and IF-018.
+    REQ-005:
+      disposition: pass
+      evidence: Fresh challenge verified outcome-cohesive packet and 
+        inline-review ownership in DN-007/IF-008.
+    REQ-006:
+      disposition: pass
+      evidence: Fresh challenge verified independent read-only node acceptance 
+        through DN-008, IF-005, and IF-009.
+    REQ-007:
+      disposition: pass
+      evidence: Fresh challenge verified independent read-only whole-change 
+        audit ownership in DN-014/IF-014.
+    REQ-008:
+      disposition: pass
+      evidence: Fresh challenge verified typed correction and precise 
+        invalidation semantics in design.md and IF-003.
+    REQ-009:
+      disposition: pass
+      evidence: Fresh challenge verified honest plan, build, accept, and audit 
+        job kinds in design.md and runtime contracts.
+    REQ-010:
+      disposition: pass
+      evidence: Fresh challenge verified peer Specification and Delivery Cockpit
+        ownership in DN-010/DN-011 and IF-011/IF-012.
+    REQ-011:
+      disposition: pass
+      evidence: Fresh challenge verified atomic old-pipeline removal ownership 
+        in DN-012, IF-013, and MIG-001 through MIG-003.
+    REQ-012:
+      disposition: pass
+      evidence: Fresh challenge verified immutable legacy snapshot and 
+        disposition inventory contract in IF-013.
+    REQ-013:
+      disposition: pass
+      evidence: Fresh challenge verified serialized shared-worktree writes in 
+        design.md, IF-004, and DN-004.
+    REQ-014:
+      disposition: pass
+      evidence: Fresh challenge verified exact-commit proof isolation and 
+        containment in IF-005.
+    REQ-015:
+      disposition: pass
+      evidence: Fresh challenge verified change-scoped decision and action 
+        request authority in design.md and IF-010.
+    REQ-016:
+      disposition: pass
+      evidence: Fresh challenge verified atomic runtime transactions and 
+        recovery semantics in design.md and IF-003.
+    REQ-017:
+      disposition: pass
+      evidence: Fresh challenge verified native consumer installation and legacy
+        absence ownership in DN-012/IF-013.
+    REQ-018:
+      disposition: pass
+      evidence: Fresh challenge verified durable historical-defect replay 
+        ownership in DN-013/PROOF-013.
+    REQ-019:
+      disposition: pass
+      evidence: Fresh challenge verified native authority, canonical semantic 
+        identity, and path safety in DN-001/IF-001.
+    REQ-020:
+      disposition: pass
+      evidence: Fresh challenge verified native intent-level MCP control-plane 
+        ownership in DN-009/IF-010.
+    REQ-021:
+      disposition: pass
+      evidence: Fresh challenge verified graph-aware Cockpit backend ownership 
+        in DN-010/IF-011.
+    REQ-022:
+      disposition: pass
+      evidence: Fresh challenge verified graph-aware engine-selected 
+        orchestration ownership in DN-004/IF-004.
+    REQ-023:
+      disposition: pass
+      evidence: Fresh challenge verified bounded scalable runtime contracts in 
+        design.md and IF-003.
+    REQ-024:
+      disposition: pass
+      evidence: Fresh challenge verified bounded agent projection ownership in 
+        DN-006 and design.md.
+    REQ-025:
+      disposition: pass
+      evidence: Fresh challenge verified acceptance-triggered plan 
+        reconciliation ownership in IF-003 and DN-006.
+    REQ-026:
+      disposition: pass
+      evidence: Fresh challenge verified intent-specific OCC-bound job 
+        administration in design.md and IF-003.
+    REQ-027:
+      disposition: pass
+      evidence: Fresh challenge verified terminal bootstrap-carrier retirement 
+        ownership in DN-015, IF-016, and MIG-005.
+    REQ-028:
+      disposition: pass
+      evidence: Fresh challenge verified retained native lifecycle handoff 
+        ownership in DN-016, IF-017, IF-018, and MIG-006.
+    WF-001:
+      disposition: pass
+      evidence: Fresh challenge verified idea-to-admission workflow ownership 
+        and PROOF-004 boundary.
+    WF-002:
+      disposition: pass
+      evidence: Fresh challenge verified frontier-planning workflow ownership 
+        and PROOF-005 boundary.
+    WF-003:
+      disposition: pass
+      evidence: Fresh challenge verified packet-build workflow ownership and 
+        PROOF-006 boundary.
+    WF-004:
+      disposition: pass
+      evidence: Fresh challenge verified node-acceptance and correction workflow
+        ownership and PROOF-007 boundary.
+    WF-005:
+      disposition: pass
+      evidence: Fresh challenge verified whole-change audit workflow ownership 
+        and PROOF-008 boundary.
+    WF-006:
+      disposition: pass
+      evidence: Fresh challenge verified atomic cutover workflow ownership and 
+        PROOF-009 boundary.
+    WF-007:
+      disposition: pass
+      evidence: Fresh challenge verified historical and generic delivery proof 
+        workflow ownership in DN-013/PROOF-013.
+    WF-008:
+      disposition: pass
+      evidence: Fresh challenge verified self-hosting handoff then finalization 
+        workflow, with DN-016 preceding DN-015.
+    IF-001:
+      disposition: pass
+      evidence: Fresh challenge verified strict joined ChangeRevision loading 
+        and canonical semantic digest contract.
+    IF-002:
+      disposition: pass
+      evidence: Fresh challenge verified versioned admission findings and 
+        immutable receipt binding contract.
+    IF-003:
+      disposition: pass
+      evidence: Fresh challenge verified purpose-specific job, receipt, 
+        invalidation, verification-only, and successor-closure runtime contract.
+    IF-004:
+      disposition: pass
+      evidence: Fresh challenge verified engine-selected dispatch, writer 
+        coordination, and generic terminal_plan_prerequisite contract.
+    IF-005:
+      disposition: pass
+      evidence: Fresh challenge verified contained disposable exact-commit proof
+        checkout contract.
+    IF-015:
+      disposition: pass
+      evidence: Fresh challenge verified IF-015 remains one closed bootstrap 
+        subset of IF-010 without duplicate registration.
+    IF-006:
+      disposition: pass
+      evidence: Fresh challenge verified one resumable design and admission 
+        session contract.
+    IF-007:
+      disposition: pass
+      evidence: Fresh challenge verified atomic per-node planning, 
+        reconciliation, and verification-only publication contract.
+    IF-008:
+      disposition: pass
+      evidence: Fresh challenge verified scoped build commit, proof, reviewer 
+        context, and immutable receipt contract.
+    IF-009:
+      disposition: pass
+      evidence: Fresh challenge verified read-only exact-commit node acceptance 
+        including the verification-only exception.
+    IF-010:
+      disposition: pass
+      evidence: Fresh challenge verified complete strict native MCP 
+        control-plane registry contract.
+    IF-011:
+      disposition: pass
+      evidence: Fresh challenge verified typed graph-aware Cockpit HTTP/SSE 
+        backend contract.
+    IF-012:
+      disposition: pass
+      evidence: Fresh challenge verified peer Specification/Delivery UI and 
+        explicit Memory/Ideas preservation.
+    IF-013:
+      disposition: pass
+      evidence: Fresh challenge verified legacy snapshot, native installation, 
+        and no-active-legacy contract.
+    IF-016:
+      disposition: pass
+      evidence: Fresh challenge verified fail-closed bootstrap finalizer and 
+        receipt contract.
+    IF-017:
+      disposition: pass
+      evidence: Fresh challenge verified classified, staged, hash-parity native 
+        work-root handoff contract.
+    IF-018:
+      disposition: pass
+      evidence: Fresh challenge verified activated retained work root produced 
+        by DN-016 and marked terminal_plan_prerequisite for DN-015.
+    IF-014:
+      disposition: pass
+      evidence: Fresh challenge verified read-only exact-commit whole-change 
+        audit and closure contract.
+    MIG-001:
+      disposition: pass
+      evidence: Fresh challenge verified ordered legacy snapshot migration, 
+        consumers, and PROOF-009 absence proof.
+    MIG-002:
+      disposition: pass
+      evidence: Fresh challenge verified ordered task-runtime replacement and 
+        old mutation absence ownership.
+    MIG-003:
+      disposition: pass
+      evidence: Fresh challenge verified ordered user/agent surface replacement 
+        and old entry-point absence ownership.
+    MIG-004:
+      disposition: pass
+      evidence: Fresh challenge verified modular authority and plan-vocabulary 
+        migration; migration effects need not be duplicated in node authority.
+    MIG-005:
+      disposition: pass
+      evidence: Fresh challenge verified terminal bootstrap-carrier retirement 
+        ordering and DN-015 ownership.
+    MIG-006:
+      disposition: pass
+      evidence: Fresh challenge verified native lifecycle-store relocation 
+        ordering and DN-016 ownership before DN-015.
+    RISK-001:
+      disposition: pass
+      evidence: Fresh challenge verified complete inventory, no-overwrite, 
+        atomic manifest, and hash mitigation for snapshot loss.
+    RISK-002:
+      disposition: pass
+      evidence: Fresh challenge verified lease, OCC, transaction, and recovery 
+        mitigation for concurrent writers.
+    RISK-003:
+      disposition: pass
+      evidence: Fresh challenge verified digest, frozen closure, supersession, 
+        and invalidation mitigation for stale authority.
+    RISK-004:
+      disposition: pass
+      evidence: Fresh challenge verified ID syntax, resolved containment, and 
+        no-follow mitigation for proof path escape.
+    RISK-005:
+      disposition: pass
+      evidence: Fresh challenge verified manifest, absence scan, full proof, and
+        fixture mitigation for mixed cutover.
+    RISK-006:
+      disposition: pass
+      evidence: Fresh challenge verified indexed validity, cached closure, and 
+        bounded scan mitigation for graph scale.
+    RISK-007:
+      disposition: pass
+      evidence: Fresh challenge verified namespace limits, reference validation,
+        and independent review mitigation for hidden expansion.
+    RISK-008:
+      disposition: pass
+      evidence: Fresh challenge verified tool denial, role checks, receipt 
+        separation, and diff checks for reviewer independence.
+    RISK-009:
+      disposition: pass
+      evidence: Fresh challenge verified named proof boundaries and replacement 
+        disclosure against ephemeral bypass.
+    RISK-010:
+      disposition: pass
+      evidence: Fresh challenge verified peer surfaces, accessible alternatives,
+        responsiveness, and proof ownership for control-plane usability.
+    RISK-011:
+      disposition: pass
+      evidence: Fresh challenge verified targeted projections and resumable 
+        planner mitigation for startup context cost.
+    RISK-012:
+      disposition: pass
+      evidence: Fresh challenge verified incremental/list alternatives and scale
+        fixtures for Cockpit rendering.
+    RISK-013:
+      disposition: pass
+      evidence: Fresh challenge verified exact IF-015 subset semantics and one 
+        registration per operation.
+    RISK-014:
+      disposition: pass
+      evidence: Fresh challenge verified terminal-only DN-015, explicit 
+        approval, lease, and fail-closed retirement mitigation.
+    RISK-015:
+      disposition: pass
+      evidence: Fresh challenge verified sole-claim handoff, sealed probe, 
+        immutable activation, and retained selector mitigation.
+    PROOF-001:
+      disposition: pass
+      evidence: Fresh challenge verified loader, digest stability, equivalence, 
+        path-safety, and malformed-authority proof boundary.
+    PROOF-002:
+      disposition: pass
+      evidence: Fresh challenge verified public admission rejection classes and 
+        mutation-free failure proof boundary.
+    PROOF-003:
+      disposition: pass
+      evidence: Fresh challenge verified public runtime transitions, 
+        transactions, invalidation, scale, and verification-only proof boundary.
+    PROOF-004:
+      disposition: pass
+      evidence: Fresh challenge verified real resumable /ideate and /design 
+        proof boundary.
+    PROOF-005:
+      disposition: pass
+      evidence: Fresh challenge verified real planner/finish_plan, 
+        reconciliation, and terminal-prerequisite proof boundary.
+    PROOF-006:
+      disposition: pass
+      evidence: Fresh challenge verified real builder, scoped commit, reviewer 
+        context, and repair proof boundary.
+    PROOF-007:
+      disposition: pass
+      evidence: Fresh challenge verified real independent acceptor including 
+        verification-only complete-proof boundary.
+    PROOF-008:
+      disposition: pass
+      evidence: Fresh challenge verified real whole-change auditor over Product 
+        Promise, decisions, migrations, and accepted nodes.
+    PROOF-009:
+      disposition: pass
+      evidence: Fresh challenge verified public setup/cutover including handoff 
+        staging, parity, activation, and selector proof.
+    PROOF-011:
+      disposition: pass
+      evidence: Fresh challenge verified public MCP registry, workflow, and 
+        old-lifecycle absence proof boundary.
+    PROOF-012:
+      disposition: pass
+      evidence: Fresh challenge verified built Cockpit and real backend 
+        desktop/mobile workflow proof boundary including Memory/Ideas.
+    PROOF-013:
+      disposition: pass
+      evidence: Fresh challenge verified historical incidents, generic 
+        properties, representative change, and fresh-consumer proof boundary.
+    PROOF-014:
+      disposition: pass
+      evidence: Fresh challenge verified real orchestrator, IF-015 subset, 
+        writer, checkout, and generic terminal-prerequisite proof boundary.
+    PROOF-015:
+      disposition: pass
+      evidence: Fresh challenge verified public graph-aware Cockpit HTTP/SSE 
+        route proof boundary.
+    PROOF-016:
+      disposition: pass
+      evidence: Fresh challenge verified exact-commit DN-015 
+        carrier-finalization acceptance proof boundary and protected-file 
+        requirement.
+    PROOF-017:
+      disposition: pass
+      evidence: Fresh challenge verified exact-commit DN-016 work-root handoff 
+        acceptance proof boundary and protected-file requirement.
+    DN-001:
+      disposition: pass
+      evidence: Fresh challenge verified cohesive native change authority 
+        ownership, IF-001 production, and PROOF-001 closure.
+    DN-002:
+      disposition: pass
+      evidence: Fresh challenge verified cohesive deterministic admission 
+        ownership, IF-002 production, and PROOF-002 closure.
+    DN-003:
+      disposition: pass
+      evidence: Fresh challenge verified cohesive native runtime ownership, 
+        IF-003 production, and PROOF-003 closure.
+    DN-004:
+      disposition: pass
+      evidence: Fresh challenge verified cohesive dispatch/writer/proof-checkout
+        ownership, IF-004/IF-005/IF-015 production, and generic prerequisite 
+        closure.
+    DN-005:
+      disposition: pass
+      evidence: Fresh challenge verified cohesive design-session ownership, 
+        IF-006 production, and PROOF-004 closure.
+    DN-006:
+      disposition: pass
+      evidence: Fresh challenge verified cohesive 
+        frontier-planning/reconciliation ownership, IF-007 production, and 
+        PROOF-005 closure.
+    DN-007:
+      disposition: pass
+      evidence: Fresh challenge verified cohesive packet-build ownership, IF-008
+        production, and PROOF-006 closure.
+    DN-008:
+      disposition: pass
+      evidence: Fresh challenge verified cohesive independent node-acceptance 
+        ownership, IF-009 production, and PROOF-007 closure.
+    DN-009:
+      disposition: pass
+      evidence: Fresh challenge verified cohesive native MCP control-plane 
+        ownership, IF-010 production, and PROOF-011 closure.
+    DN-010:
+      disposition: pass
+      evidence: Fresh challenge verified cohesive Cockpit backend ownership, 
+        IF-011 production, and PROOF-015 closure.
+    DN-011:
+      disposition: pass
+      evidence: Fresh challenge verified cohesive peer Cockpit ownership, IF-012
+        production, Memory/Ideas preservation, and PROOF-012 closure.
+    DN-012:
+      disposition: pass
+      evidence: Fresh challenge verified cohesive atomic cutover ownership, 
+        IF-013/IF-016/IF-017 production, and PROOF-009 closure.
+    DN-013:
+      disposition: pass
+      evidence: Fresh challenge verified DN-013 remains independently owned with
+        no dependency on DN-015 and complete PROOF-013 closure.
+    DN-014:
+      disposition: pass
+      evidence: Fresh challenge verified cohesive independent whole-change audit
+        ownership, IF-014 production, and PROOF-008 closure.
+    DN-015:
+      disposition: pass
+      evidence: Fresh challenge verified terminal carrier retirement consumes 
+        IF-018 and remains dependency-gated after DN-016.
+    DN-016:
+      disposition: pass
+      evidence: Fresh challenge verified work-root handoff produces IF-018 and 
+        precedes DN-015 without collapsing ownership.
+  baseline:
+    digest: 1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+    commands:
+      - command: uv run pytest -n0 serve/kanban/tests/test_change_revision.py 
+          serve/kanban/tests/test_admission.py 
+          serve/kanban/tests/test_admission_transaction.py 
+          serve/kanban/tests/test_historical_admission.py 
+          serve/kanban/tests/test_generated_graph_admission.py -q --tb=short
+        exit_code: 0
+        result: 89 passed in 12.42s at code revision 
+          ac69871f90f229544fc402561ba6bd6a710acb4b.
+      - command: uv run lint <12 canonical-digest repair paths>
+        exit_code: 0
+        result: All scoped pre-commit, Ruff, formatting, YAML, EditorConfig, and
+          workspace policy checks passed at ac69871f90f2.
+  approval:
+    approved: true
+    digest: 1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+    authority: Standing explicit user directive to continue the complete 
+      admitted operating-model implementation without stopping, remain true to 
+      or update the plan as evidence requires, and preserve protected 
+      configuration and Memory/Ideas; semantic authority is unchanged from the 
+      previously approved revision and only canonical default normalization 
+      changed its identity.
+  limits:
+    - DN-003 must implement and prove accepted dependency-set currentness before
+      dependent delivery proceeds.
+    - DN-004 must implement and prove generic `terminal_plan_prerequisite` 
+      interface declarations.
+    - DN-012 must implement and fixture-prove shared selector resolution, 
+      including fail-closed selector loss.
+    - DN-016 and DN-015 must produce live handoff and finalization evidence 
+      while protected configuration remains byte-unchanged.
+generation:
+  schema_version: 1
+  change_id: replace-delivery-pipeline
+  delivery_digest: 
+    1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+  receipt_id: admission-1ec9888c522d
+  jobs:
+    - job_id: 260
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+      target_node_id: DN-001
+      receipt_id: admission-1ec9888c522d
+    - job_id: 261
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+      target_node_id: DN-002
+      receipt_id: admission-1ec9888c522d
+    - job_id: 262
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+      target_node_id: DN-003
+      receipt_id: admission-1ec9888c522d
+    - job_id: 263
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+      target_node_id: DN-004
+      receipt_id: admission-1ec9888c522d
+    - job_id: 264
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+      target_node_id: DN-005
+      receipt_id: admission-1ec9888c522d
+    - job_id: 265
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+      target_node_id: DN-006
+      receipt_id: admission-1ec9888c522d
+    - job_id: 266
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+      target_node_id: DN-007
+      receipt_id: admission-1ec9888c522d
+    - job_id: 267
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+      target_node_id: DN-008
+      receipt_id: admission-1ec9888c522d
+    - job_id: 268
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+      target_node_id: DN-009
+      receipt_id: admission-1ec9888c522d
+    - job_id: 269
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+      target_node_id: DN-010
+      receipt_id: admission-1ec9888c522d
+    - job_id: 270
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+      target_node_id: DN-011
+      receipt_id: admission-1ec9888c522d
+    - job_id: 271
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+      target_node_id: DN-012
+      receipt_id: admission-1ec9888c522d
+    - job_id: 272
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+      target_node_id: DN-013
+      receipt_id: admission-1ec9888c522d
+    - job_id: 273
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+      target_node_id: DN-014
+      receipt_id: admission-1ec9888c522d
+    - job_id: 274
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+      target_node_id: DN-015
+      receipt_id: admission-1ec9888c522d
+    - job_id: 275
+      kind: plan
+      priority: 0
+      created_at: '1970-01-01T00:00:00Z'
+      updated_at: '1970-01-01T00:00:00Z'
+      change_id: replace-delivery-pipeline
+      delivery_digest: 
+        1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+      target_node_id: DN-016
+      receipt_id: admission-1ec9888c522d

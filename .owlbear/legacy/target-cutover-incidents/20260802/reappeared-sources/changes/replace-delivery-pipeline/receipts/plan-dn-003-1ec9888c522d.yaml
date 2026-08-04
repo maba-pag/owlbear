@@ -1,0 +1,94 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-003-1ec9888c522d
+change_id: replace-delivery-pipeline
+delivery_digest: 1ec9888c522d760333cdb21f2014eb3b7a51bf841f49f55298398bd3a3ad5b15
+issued_at: '2026-08-01T00:30:00Z'
+impact_closure:
+  paths:
+    - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
+    - .owlbear/changes/replace-delivery-pipeline/design.md
+    - .owlbear/changes/replace-delivery-pipeline/intent.md
+    - conftest.py
+    - pyproject.toml
+    - serve/kanban/src/owlbear_kanban/
+    - serve/kanban/tests/conftest.py
+    - serve/kanban/tests/test_attempts.py
+    - serve/kanban/tests/test_change_receipts.py
+    - serve/kanban/tests/test_change_revision.py
+    - serve/kanban/tests/test_dispatch_runtime.py
+    - serve/kanban/tests/test_invalidation.py
+    - serve/kanban/tests/test_jobs.py
+    - serve/kanban/tests/test_native_runtime.py
+    - serve/kanban/tests/test_proof_checkout.py
+    - serve/kanban/tests/test_runtime_query.py
+    - serve/kanban/tests/test_runtime_requests.py
+    - serve/kanban/tests/test_runtime_transaction.py
+    - serve/mcp-kanban/pyproject.toml
+    - serve/mcp-kanban/src/owlbear_mcp_kanban/
+    - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
+    - serve/mcp-kanban/tests/test_mcp_surface_contract.py
+    - share/agents/auditor.agent.md
+    - share/skills/w-whole-change-audit/SKILL.md
+  authority_targets:
+    - DN-001
+    - DN-002
+    - DN-003
+    - IF-001
+    - IF-002
+    - IF-003
+    - KEEP-006
+    - KEEP-007
+    - MOD-001
+    - MOD-008
+    - MOD-009
+    - NEG-001
+    - NEG-002
+    - NEG-010
+    - PROOF-003
+    - REQ-008
+    - REQ-009
+    - REQ-015
+    - REQ-016
+    - REQ-023
+    - REQ-026
+    - RISK-002
+    - RISK-003
+    - RISK-006
+target_node_id: DN-003
+node_plan_digest: e1bc6ebd233bff73ff55d8b0bd88b7bc0e3f50ffa5c7b43e8ce393e0b75330ba
+predecessor_receipt_ids:
+  - accept-dn-001-1ec9888c522d
+evidence:
+  methods:
+    - Exercise purpose-specific transitions, dependency release, claims, crashes, OCC races, supersession, request resolution, and recovery.
+    - Exercise exact, non-intersecting descendant, intersecting path, missing, non-descendant, rename, copy, malformed-history, unsafe-path, predecessor-cycle, and explicit-supersession receipt classes.
+    - Assert no partial valid receipt or dangling job after injected write failures.
+    - Accept an eligible exact-candidate verification-only plan with zero packets and zero build jobs, one accept job, and a non-empty node-level closure; reject missing mode evidence, candidate/generation mismatch, empty closure, hidden delta, and zero packets in build mode.
+    - Prove exact replay, transaction rollback, receipt currentness, and dependent reconciliation are identical across build and verification-only plan modes.
+    - Finish a build whose prospective packet closure fully covers its plan and an overlapping predecessor receipt after intended descendant changes; reject partial coverage, uncovered predecessor drift, and changed paths outside the packet closure without mutation.
+    - Resolve a complete accepted dependency set after a causally downstream acceptance changes and re-proves an earlier direct dependency's shared paths; retain every direct acceptance job ID in the dependent plan's `predecessor_job_ids` in authored `dependencies` order, permit dependent build readiness, retain terminal acceptance job IDs in `DeliveryGraph.nodes` order, and reject partial, sibling-only, missing, or multiple-current-acceptance coverage without mutation.
+    - When an enforced runner limit prevents the unchanged case set from completing in one process, execute bounded partitions at the same exact revision and require zero exit for every partition; record the limit name and configured bound, exact revision, each partition's selector, collected case identities, and exit status, plus expected and observed aggregate case identities proving complete coverage without deselection or replacement of the public engine boundary.
+  source_inspection:
+    candidate_revision: 8b39029295226e910a2d10d723dc810a2e9d5097
+    tracked_scope_clean: true
+    predecessor_receipt: accept-dn-001-1ec9888c522d
+    findings:
+      - Two verification-only tests forge admission receipt reads.
+      - Reconciliation eligibility is asserted through a private predicate.
+      - Receipt creation and currentness use private runtime store reach-through.
+      - Causal, reconciliation, and terminal fixtures use numerically monotonic identities.
+  proof_readiness:
+    primary_collection: 267 tests collected in 0.61s
+    dispatch_collection: 16 tests collected in 0.42s
+    mcp_collection: 1 representative identity
+    mcp_observation: The default 30-second limit timed out during receipt traversal; the exact `--timeout=120` command exited zero.
+  review:
+    disposition: pass
+    evidence_id: plan-review-dn-003-1ec9888c-r6
+    evidence: Fresh independent review inspected source defects, admitted references, predecessor coverage, canonical closure, packet ordering, public proof boundaries, representative importer compatibility, and material expansion.
+code_revision: 8b39029295226e910a2d10d723dc810a2e9d5097

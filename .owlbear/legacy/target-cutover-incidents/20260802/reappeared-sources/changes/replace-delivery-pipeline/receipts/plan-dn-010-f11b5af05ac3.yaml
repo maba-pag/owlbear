@@ -1,0 +1,98 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-010-f11b5af05ac3
+change_id: replace-delivery-pipeline
+delivery_digest: f11b5af05ac31cc255668bd953fdb085cf0c533ed797ba422a839a567beaf83c
+issued_at: '2026-08-01T19:27:09Z'
+impact_closure:
+  paths:
+    - .gitignore
+    - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
+    - .owlbear/changes/replace-delivery-pipeline/design.md
+    - .owlbear/changes/replace-delivery-pipeline/intent.md
+    - conftest.py
+    - pyproject.toml
+    - serve/cockpit/src/owlbear_cockpit/
+    - serve/kanban/src/owlbear_kanban/
+    - tests/__init__.py
+    - tests/native_cockpit_fixtures.py
+    - tests/test_cockpit_native_changes.py
+    - tests/test_cockpit_native_controls.py
+    - tests/test_cockpit_native_cutover.py
+    - tests/test_cockpit_native_integration.py
+    - tests/test_cockpit_native_work.py
+  authority_targets:
+    - DN-003
+    - DN-004
+    - DN-008
+    - DN-010
+    - DN-014
+    - IF-001
+    - IF-002
+    - IF-003
+    - IF-007
+    - IF-008
+    - IF-009
+    - IF-010
+    - IF-011
+    - IF-014
+    - KEEP-006
+    - KEEP-007
+    - MOD-004
+    - MOD-008
+    - PROOF-015
+    - REQ-010
+    - REQ-015
+    - REQ-016
+    - REQ-021
+    - REQ-026
+    - RISK-005
+target_node_id: DN-010
+node_plan_digest: caa70744c71d5c161bcfe6c78f03adb42692d333a6018e06616bf2c8e84b65cc
+predecessor_receipt_ids: []
+evidence:
+  methods:
+    - Exercise change, graph, job, request, attempt, finding, receipt, health, legacy, conflict, and event contracts.
+    - Assert arbitrary task mutation and old lifecycle routes are absent.
+  source_inspection:
+    result: tests/native_cockpit_fixtures.py is absent; four tests copy mutable authority sidecars; production IF-011 routes are present.
+    candidate_delta: Authority and Kanban accepted-dependency logic changed since the prior plan; Cockpit source and the affected tests did not.
+    change_health: no findings
+  baseline:
+    command: uv run pytest -n0 tests/test_cockpit_native_changes.py tests/test_cockpit_native_work.py tests/test_cockpit_native_controls.py tests/test_cockpit_native_cutover.py tests/test_cockpit_native_integration.py -q --tb=short
+    result: 1 failed, 11 passed, 24 errors in 93.94s
+    classification: Mutable plans, receipts, generated jobs, locks, and stale candidate-bound fixture identities contaminate temporary stores; no production IF-011 defect was observed.
+  job_allocation:
+    archive_complete: true
+    occupied_job_ids: 285-314 and 10001-10006
+    next_cursor:
+    build_job_id: 315
+    accept_job_id: 316
+  review:
+    disposition: pass
+    evidence: Fresh independent review inspected current authority, source, baseline failures, the repaired five-file packet, IF-014 audit projection, proof boundary, closure, dependencies, and job allocation; all six typed checks passed.
+    evidence_id: plan-review-dn-010-f11b5af05ac3-r2
+    checks:
+      plan_completeness:
+        disposition: pass
+        evidence: The six semantic files equal the loader authority set, so omitting mutable sidecars preserves loading. The packet addresses stale plan, packet, and candidate identities; AC1-AC9 cover the complete obligation set, retired-route negative, isolation, and explicit IF-014 observation.
+      admitted_references:
+        disposition: pass
+        evidence: References remain within DN-010 obligations, MOD-004/MOD-008, produced IF-011, consumed IF-001/002/003/007/008/009/010/014, declared dependencies, RISK-005, and PROOF-015. Audit is a source-declared JobKind and ReceiptKind.
+      impact_closures:
+        disposition: pass
+        evidence: Closure includes the six authority files, proof-consumed backend and engine roots, and the five-file write envelope. The temporary engine cache is already ignored and must be removed after proof.
+      dependency_order:
+        disposition: pass
+        evidence: The single packet is acyclic. Empty predecessor job IDs are consistent with initial planning against admission-f11b5af05ac3.
+      proof_boundary:
+        disposition: pass
+        evidence: The boundary and allowed temporary-engine-store replacement reproduce PROOF-015. Existing generic job and receipt routes project audit records without starting an audit checkout or introducing a new route.
+      material_expansion:
+        disposition: pass
+        evidence: The repair adds only fixture records and assertions within the same five files. Production, frontend, configuration, compatibility, authority, and live-store changes remain excluded.
+code_revision: 38e27ae3ed5d6215ef8a5fe25c2db82470ec6452

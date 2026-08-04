@@ -1,0 +1,347 @@
+---
+schema_version: 1
+kind: accept
+receipt_id: accept-dn-003-7da5c669f6ef
+change_id: replace-delivery-pipeline
+delivery_digest: 7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+issued_at: '2026-07-31T09:12:00Z'
+impact_closure:
+  paths:
+    - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
+    - .owlbear/changes/replace-delivery-pipeline/design.md
+    - .owlbear/changes/replace-delivery-pipeline/intent.md
+    - .owlbear/changes/replace-delivery-pipeline/plans
+    - serve/kanban/src/owlbear_kanban/
+    - serve/kanban/tests/conftest.py
+    - serve/kanban/tests/fixtures/historical-admission
+    - serve/kanban/tests/test_admission.py
+    - serve/kanban/tests/test_admission_transaction.py
+    - serve/kanban/tests/test_attempts.py
+    - serve/kanban/tests/test_change_receipts.py
+    - serve/kanban/tests/test_change_revision.py
+    - serve/kanban/tests/test_dispatch_runtime.py
+    - serve/kanban/tests/test_generated_graph_admission.py
+    - serve/kanban/tests/test_historical_admission.py
+    - serve/kanban/tests/test_invalidation.py
+    - serve/kanban/tests/test_jobs.py
+    - serve/kanban/tests/test_native_runtime.py
+    - serve/kanban/tests/test_proof_checkout.py
+    - serve/kanban/tests/test_runtime_query.py
+    - serve/kanban/tests/test_runtime_requests.py
+    - serve/kanban/tests/test_runtime_transaction.py
+    - serve/mcp-kanban/tests/test_complete_native_delivery.py
+    - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
+  authority_targets:
+    - DN-001
+    - DN-002
+    - DN-003
+    - IF-001
+    - IF-002
+    - IF-003
+    - KEEP-003
+    - KEEP-004
+    - KEEP-005
+    - KEEP-006
+    - KEEP-007
+    - MOD-001
+    - MOD-008
+    - MOD-009
+    - NEG-001
+    - NEG-002
+    - NEG-004
+    - NEG-007
+    - NEG-010
+    - PROOF-001
+    - PROOF-002
+    - PROOF-003
+    - REQ-001
+    - REQ-002
+    - REQ-003
+    - REQ-008
+    - REQ-009
+    - REQ-015
+    - REQ-016
+    - REQ-018
+    - REQ-019
+    - REQ-023
+    - REQ-026
+    - RISK-002
+    - RISK-003
+    - RISK-004
+    - RISK-006
+    - RISK-007
+target_node_id: DN-003
+node_plan_digest: 4c7dd5b335711ad5c745496a674d36ddb91f6d0d02ff72483291249b9c9ad1f9
+predecessor_receipt_ids:
+  - build-dn-003-pk-001-7da5c669f6ef
+evidence:
+  methods:
+    - Exercise purpose-specific transitions, dependency release, claims, crashes, OCC races, supersession, request resolution, and recovery.
+    - Exercise exact, non-intersecting descendant, intersecting path, missing, non-descendant, rename, copy, malformed-history, unsafe-path, predecessor-cycle, and explicit-supersession receipt classes.
+    - Assert no partial valid receipt or dangling job after injected write failures.
+    - Accept an eligible exact-candidate verification-only plan with zero packets and zero build jobs, one accept job, and a non-empty node-level closure; reject missing mode evidence, candidate/generation mismatch, empty closure, hidden delta, and zero packets in build mode.
+    - Prove exact replay, transaction rollback, receipt currentness, and dependent reconciliation are identical across build and verification-only plan modes.
+    - Finish a build whose prospective packet closure fully covers its plan and an overlapping predecessor receipt after intended descendant changes; reject partial coverage, uncovered predecessor drift, and changed paths outside the packet closure without mutation.
+    - Resolve a complete accepted dependency set after a causally downstream acceptance changes and re-proves an earlier direct dependency's shared paths; retain every direct acceptance job ID in the dependent plan's `predecessor_job_ids` in authored `dependencies` order, permit dependent build readiness, retain terminal acceptance job IDs in `DeliveryGraph.nodes` order, and reject partial, sibling-only, missing, or multiple-current-acceptance coverage without mutation.
+    - When an enforced runner limit prevents the unchanged case set from completing in one process, execute bounded partitions at the same exact revision and require zero exit for every partition; record the limit name and configured bound, exact revision, each partition's selector, collected case identities, and exit status, plus expected and observed aggregate case identities proving complete coverage without deselection or replacement of the public engine boundary.
+  authority:
+    delivery_digest: 7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+    target_node_id: DN-003
+    proof: PROOF-003
+    node_contract:
+      id: DN-003
+      title: Replace task runtime with graph-linked jobs and receipts
+      outcome: Purpose-specific job, attempt, finding, receipt, request, supersession, invalidation, transaction, recovery, and health models provide one graph-aware runtime with plan-only lifecycle vocabulary and no copied specification truth, including fail-closed discriminated build and exact-candidate verification-only plan transactions plus prospective successor-closure validation for tracked build completion and causal full-closure currentness across accepted dependency sets used by reconciliation, build readiness, and terminal-audit assembly.
+      owns:
+        - REQ-008
+        - REQ-009
+        - REQ-015
+        - REQ-016
+        - REQ-023
+        - REQ-026
+        - NEG-001
+        - NEG-002
+        - NEG-010
+        - KEEP-006
+        - KEEP-007
+      supports: []
+      modules:
+        - MOD-001
+        - MOD-008
+        - MOD-009
+      produces:
+        - IF-003
+      consumes:
+        - IF-001
+        - IF-002
+      dependencies:
+        - DN-001
+        - DN-002
+      risks:
+        - RISK-002
+        - RISK-003
+        - RISK-006
+      proof: PROOF-003
+    modules:
+      - MOD-001
+      - MOD-008
+      - MOD-009
+    interfaces:
+      - IF-001
+      - IF-002
+      - IF-003
+    migrations:
+      - MIG-004
+    risks:
+      - RISK-002
+      - RISK-003
+      - RISK-006
+  plan:
+    node_plan_digest: 4c7dd5b335711ad5c745496a674d36ddb91f6d0d02ff72483291249b9c9ad1f9
+    packet_ids:
+      - DN-003-PK-001
+  assembled_proof:
+    boundary: Public engine job, claim, completion, invalidation, and health operations.
+    durable_outputs:
+      - engine state-machine
+      - concurrency
+      - and crash tests
+    commands:
+      - uv run pytest -n0 serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_runtime_transaction.py serve/kanban/tests/test_invalidation.py serve/kanban/tests/test_runtime_requests.py serve/kanban/tests/test_attempts.py serve/kanban/tests/test_jobs.py serve/kanban/tests/test_change_receipts.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_runtime_query.py -q --tb=short
+      - uv run pytest -n0 serve/mcp-kanban/tests/test_complete_native_delivery.py -q --tb=short
+      - uv run pytest -n0 serve/mcp-kanban/tests/test_mcp_acceptance_tools.py -k 'not audit' -q --tb=short
+      - uv run pytest -n0 serve/mcp-kanban/tests/test_mcp_acceptance_tools.py -k audit -q --tb=short
+      - uv run pytest -n0 serve/mcp-kanban/tests/test_complete_native_delivery.py --collect-only -q
+      - uv run pytest -n0 serve/mcp-kanban/tests/test_mcp_acceptance_tools.py -k 'not audit' --collect-only -q
+      - uv run pytest -n0 serve/mcp-kanban/tests/test_mcp_acceptance_tools.py -k audit --collect-only -q
+    results:
+      - command: uv run pytest -n0 serve/kanban/tests/test_native_runtime.py serve/kanban/tests/test_runtime_transaction.py serve/kanban/tests/test_invalidation.py serve/kanban/tests/test_runtime_requests.py serve/kanban/tests/test_attempts.py serve/kanban/tests/test_jobs.py serve/kanban/tests/test_change_receipts.py serve/kanban/tests/test_dispatch_runtime.py serve/kanban/tests/test_runtime_query.py -q --tb=short
+        exit_code: 0
+        result: 283 passed in 55.06s at exact checkout 7249cbd2225f026d64a0228cf0289bdfb65491a8; tracked HEAD, status, and binary diff unchanged
+      - command: uv run pytest -n0 serve/mcp-kanban/tests/test_complete_native_delivery.py -q --tb=short
+        exit_code: 0
+        result: 1 passed in 36.65s; tracked HEAD, status, and binary diff unchanged
+      - command: uv run pytest -n0 serve/mcp-kanban/tests/test_mcp_acceptance_tools.py -k 'not audit' -q --tb=short
+        exit_code: 0
+        result: 34 passed, 21 deselected in 97.86s; tracked HEAD, status, and binary diff unchanged
+      - command: uv run pytest -n0 serve/mcp-kanban/tests/test_mcp_acceptance_tools.py -k audit -q --tb=short
+        exit_code: 0
+        result: 21 passed, 34 deselected in 241.47s; tracked HEAD, status, and binary diff unchanged
+      - command: uv run pytest -n0 serve/mcp-kanban/tests/test_complete_native_delivery.py --collect-only -q
+        exit_code: 0
+        result: '1 exact identity collected: serve/mcp-kanban/tests/test_complete_native_delivery.py::test_fresh_consumer_completes_native_delivery'
+      - command: uv run pytest -n0 serve/mcp-kanban/tests/test_mcp_acceptance_tools.py -k 'not audit' --collect-only -q
+        exit_code: 0
+        result: 34 exact identities collected, 21 deselected; full ordered identities recorded in identity_accounting.non_audit
+      - command: uv run pytest -n0 serve/mcp-kanban/tests/test_mcp_acceptance_tools.py -k audit --collect-only -q
+        exit_code: 0
+        result: 21 exact identities collected, 34 deselected; full ordered identities recorded in identity_accounting.audit
+    identity_accounting:
+      exact_revision: 7249cbd2225f026d64a0228cf0289bdfb65491a8
+      runner_limit: pytest session timeout
+      configured_bound_seconds: 300
+      expected_aggregate_count: 56
+      observed_aggregate_count: 56
+      selectors_disjoint: true
+      complete:
+        - serve/mcp-kanban/tests/test_complete_native_delivery.py::test_fresh_consumer_completes_native_delivery
+      non_audit:
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_acceptor_requires_every_direct_dependent_reconciliation_identity
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_shipped_acceptor_routes_canonical_minimum_correction[local defect]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_shipped_acceptor_routes_canonical_minimum_correction[missing harness]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_shipped_acceptor_routes_canonical_minimum_correction[boundary bypass]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_shipped_acceptor_routes_canonical_minimum_correction[stale receipt]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_replacement_accept_waits_for_every_corrective_build
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_success_is_independent_exact_and_replay_safe
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejects_methods_only_evidence_without_cleanup
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejects_forged_evidence_authority[proof]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejects_forged_evidence_authority[node-contract]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejects_forged_evidence_authority[modules]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejects_forged_evidence_authority[interfaces]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejects_forged_evidence_authority[migrations]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejects_forged_evidence_authority[risks]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejects_forged_evidence_authority[boundary]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejects_forged_evidence_authority[durable-outputs]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejects_forged_evidence_authority[replacements]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejects_forged_evidence_authority[packets]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejects_forged_evidence_authority[receipts]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejects_forged_evidence_authority[surfaces]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejects_symbolic_revision_authority
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejects_manifest_revision_tamper
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_cleanup_failure_replays_cleanup_after_publication
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejects_tracked_checkout_mutation
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_start_rejects_stale_checkout_at_different_revision
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_start_returns_plain_diagnostic_when_proof_authority_is_unavailable
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_conflict_restores_exact_checkout_for_retry
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejection_publishes_findings_and_replays
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_tracked_acceptor_edit_blocks_and_releases_without_corrective_publication
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejection_failure_preserves_all_stores
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejection_runtime_failure_is_atomic[cleanup]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_accept_rejection_runtime_failure_is_atomic[transaction]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_start_job_rejects_stale_predecessor_without_mutation
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_start_job_rejects_pending_request_without_mutation
+      audit:
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejection_forwards_and_exposes_persisted_correction_chain
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_success_closes_accepted_whole_change_and_replays
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejects_incomplete_or_forged_evidence[methods-only]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejects_incomplete_or_forged_evidence[promise]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejects_incomplete_or_forged_evidence[decisions]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejects_incomplete_or_forged_evidence[migrations]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejects_incomplete_or_forged_evidence[workflows]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejects_incomplete_or_forged_evidence[receipts]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejects_incomplete_or_forged_evidence[requests]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejects_incomplete_or_forged_evidence[proof]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejects_incomplete_or_forged_evidence[replacements]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejects_incomplete_or_forged_evidence[boundary]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejects_incomplete_or_forged_evidence[null-command]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejects_incomplete_or_forged_evidence[irrelevant-output]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejects_incomplete_or_forged_evidence[tracked-state]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_finish_rejects_request_created_after_start
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejection_routes_canonical_minimum_correction[Cross-node integration failure]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejection_routes_canonical_minimum_correction[Implemented migration/removal absence or failure]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejection_routes_canonical_minimum_correction[Admitted Product Promise, decision, workflow, or proof omission]
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_rejection_with_git_history_exposes_full_chain
+        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_tracked_edit_publishes_typed_minimum_correction
+  checkout:
+    root: /Users/markus/Projects/owlbear-dev/.owlbear/scratch/proof/239/checkout
+    authority_root: /Users/markus/Projects/owlbear-dev/.owlbear/scratch/proof/239/authority
+    authority_digest: 2072e9434036b9a8e92ea2e01c2cc26ec74a768f5b163bc3d7a650690c53f633
+    candidate_sha: 7249cbd2225f026d64a0228cf0289bdfb65491a8
+  tracked_state:
+    before:
+      head: 7249cbd2225f026d64a0228cf0289bdfb65491a8
+      status: ''
+      diff: ''
+    after:
+      head: 7249cbd2225f026d64a0228cf0289bdfb65491a8
+      status: ''
+      diff: ''
+  packet_receipts:
+    - receipt_id: build-dn-003-pk-001-7da5c669f6ef
+      code_revision: 7249cbd2225f026d64a0228cf0289bdfb65491a8
+  replacements:
+    - clock
+    - process identity
+    - temporary filesystem
+    - temporary Git repository
+  changed_surfaces:
+    paths:
+      - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
+      - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
+      - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
+      - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
+      - .owlbear/changes/replace-delivery-pipeline/design.md
+      - .owlbear/changes/replace-delivery-pipeline/intent.md
+      - .owlbear/changes/replace-delivery-pipeline/plans
+      - serve/kanban/src/owlbear_kanban/
+      - serve/kanban/tests/conftest.py
+      - serve/kanban/tests/fixtures/historical-admission
+      - serve/kanban/tests/test_admission.py
+      - serve/kanban/tests/test_admission_transaction.py
+      - serve/kanban/tests/test_attempts.py
+      - serve/kanban/tests/test_change_receipts.py
+      - serve/kanban/tests/test_change_revision.py
+      - serve/kanban/tests/test_dispatch_runtime.py
+      - serve/kanban/tests/test_generated_graph_admission.py
+      - serve/kanban/tests/test_historical_admission.py
+      - serve/kanban/tests/test_invalidation.py
+      - serve/kanban/tests/test_jobs.py
+      - serve/kanban/tests/test_native_runtime.py
+      - serve/kanban/tests/test_proof_checkout.py
+      - serve/kanban/tests/test_runtime_query.py
+      - serve/kanban/tests/test_runtime_requests.py
+      - serve/kanban/tests/test_runtime_transaction.py
+      - serve/mcp-kanban/tests/test_complete_native_delivery.py
+      - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
+    authority_targets:
+      - DN-001
+      - DN-002
+      - DN-003
+      - IF-001
+      - IF-002
+      - IF-003
+      - KEEP-003
+      - KEEP-004
+      - KEEP-005
+      - KEEP-006
+      - KEEP-007
+      - MOD-001
+      - MOD-008
+      - MOD-009
+      - NEG-001
+      - NEG-002
+      - NEG-004
+      - NEG-007
+      - NEG-010
+      - PROOF-001
+      - PROOF-002
+      - PROOF-003
+      - REQ-001
+      - REQ-002
+      - REQ-003
+      - REQ-008
+      - REQ-009
+      - REQ-015
+      - REQ-016
+      - REQ-018
+      - REQ-019
+      - REQ-023
+      - REQ-026
+      - RISK-002
+      - RISK-003
+      - RISK-004
+      - RISK-006
+      - RISK-007
+  reconciliation:
+    - target_node_id: DN-004
+      plan_job_id: 223
+    - target_node_id: DN-006
+      plan_job_id: 225
+    - target_node_id: DN-010
+      plan_job_id: 229
+    - target_node_id: DN-013
+      plan_job_id: 232
+code_revision: 7249cbd2225f026d64a0228cf0289bdfb65491a8

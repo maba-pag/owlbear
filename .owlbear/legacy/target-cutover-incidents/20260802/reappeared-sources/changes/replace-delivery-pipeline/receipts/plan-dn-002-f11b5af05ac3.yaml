@@ -1,0 +1,98 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-002-f11b5af05ac3
+change_id: replace-delivery-pipeline
+delivery_digest: f11b5af05ac31cc255668bd953fdb085cf0c533ed797ba422a839a567beaf83c
+issued_at: '2026-08-01T12:39:41Z'
+impact_closure:
+  paths:
+    - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
+    - .owlbear/changes/replace-delivery-pipeline/design.md
+    - .owlbear/changes/replace-delivery-pipeline/intent.md
+    - conftest.py
+    - pyproject.toml
+    - serve/kanban/pyproject.toml
+    - serve/kanban/src/owlbear_kanban/
+    - serve/kanban/tests/conftest.py
+    - serve/kanban/tests/fixtures/historical-admission/
+    - serve/kanban/tests/test_admission.py
+    - serve/kanban/tests/test_admission_transaction.py
+    - serve/kanban/tests/test_change_receipts.py
+    - serve/kanban/tests/test_change_revision.py
+    - serve/kanban/tests/test_generated_graph_admission.py
+    - serve/kanban/tests/test_historical_admission.py
+  authority_targets:
+    - DN-001
+    - DN-002
+    - IF-001
+    - IF-002
+    - KEEP-003
+    - KEEP-004
+    - KEEP-005
+    - KEEP-007
+    - MOD-001
+    - MOD-008
+    - NEG-004
+    - NEG-007
+    - NEG-010
+    - PROOF-001
+    - PROOF-002
+    - REQ-001
+    - REQ-002
+    - REQ-003
+    - REQ-016
+    - REQ-018
+    - REQ-019
+    - RISK-003
+    - RISK-004
+    - RISK-007
+target_node_id: DN-002
+node_plan_digest: 030489aa0bb341e662ccffd64a61753f4ba73a9ad6b6468d524c6a38485f394f
+predecessor_receipt_ids:
+  - accept-dn-001-f11b5af05ac3
+evidence:
+  methods:
+    - Execute table-driven and property cases for every rejection class listed in design section 9.1.
+    - Assert stable finding codes and zero job mutation on failure.
+    - Assert receipt and initial plan jobs are atomic on success.
+  review:
+    disposition: pass
+    evidence_id: plan-review-dn-002-f11b5af0-r2
+    evidence: Fresh independent review passed all six checks after inspecting the exact candidate, complete predecessor closure, retained DN-002 inspection scope, dependency order, public PROOF-002 boundary, and material-expansion boundary.
+    checks:
+      plan_completeness:
+        disposition: pass
+        evidence: Exact-candidate source and durable tests cover all PROOF-002 outcomes; no tracked delta remains.
+      admitted_references:
+        disposition: pass
+        evidence: The closure targets are exactly DN-002 authority plus mandatory accepted DN-001 predecessor authority.
+      impact_closures:
+        disposition: pass
+        evidence: The package selector covers all eight predecessor source paths, both predecessor tests are explicit, and all 13 predecessor authority targets are present.
+      dependency_order:
+        disposition: pass
+        evidence: Accepted DN-001 receipt is current at the same digest and candidate revision.
+      proof_boundary:
+        disposition: pass
+        evidence: Public evaluate_admission and validate_and_admit are exercised with only lower-level allowed replacements.
+      material_expansion:
+        disposition: pass
+        evidence: Verification-only proposes no product mutation or new authority.
+  source_inspection:
+    disposition: pass
+    evidence: Exact-candidate inspection consumed every retained DN-002 selector and accepted DN-001 implementation evidence; no durable-output delta remains.
+  proof_readiness:
+    disposition: pass
+    evidence: 66 tests and focused lint passed at the exact candidate.
+  tracked_scope:
+    clean: true
+    evidence: Scoped Git status was empty before and after proof.
+  reconciliation:
+    predecessor_job_id: 301
+    predecessor_receipt_id: accept-dn-001-f11b5af05ac3
+    evidence: Accepted DN-001 closure is fully covered and consumed.
+code_revision: a1f02f378d4281e15a5aa4e61d3d98c0381fa190

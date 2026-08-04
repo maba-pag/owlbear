@@ -1,0 +1,73 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-011-d4bce08ac4e7
+change_id: replace-delivery-pipeline
+delivery_digest: d4bce08ac4e7fad7c79f56dc056601a7c9648248899ab8dfdb1f463df10f18e6
+issued_at: '2026-07-30T17:50:00Z'
+impact_closure:
+  paths:
+    - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
+    - .owlbear/changes/replace-delivery-pipeline/design.md
+    - .owlbear/changes/replace-delivery-pipeline/intent.md
+    - serve/cockpit/src/owlbear_cockpit/
+    - serve/cockpit/web/e2e/native-proof-assembled.spec.ts
+    - serve/cockpit/web/e2e/support/seed-native-proof-stack.py
+    - serve/cockpit/web/e2e/support/start-native-proof-stack.mjs
+    - serve/cockpit/web/src/
+  authority_targets:
+    - DN-010
+    - DN-011
+    - IF-011
+    - IF-012
+    - KEEP-006
+    - KEEP-010
+    - MOD-005
+    - MOD-008
+    - PROOF-012
+    - REQ-010
+    - REQ-016
+    - REQ-026
+    - RISK-010
+    - RISK-012
+target_node_id: DN-011
+node_plan_digest: 2b5099f06470f7c7f1ba47dbd9186860065997b1251f7e436d7e64bf278c8f24
+predecessor_receipt_ids: []
+evidence:
+  methods:
+    - Navigate Changes, graph/list, Kanban, requests, attempts/findings/receipts, and legacy inventory.
+    - Resolve a decision, inspect stale/corrective chain, and verify keyboard/mobile behavior.
+    - Confirm Memory and Ideas routes still complete their existing core workflows after the shell rebuild.
+    - Capture desktop/mobile screenshots and assert nonblank, nonoverlapping, bounded layout.
+  source_inspection: Existing MOD-005 behavior is implemented; PROOF-012 fails before Playwright because its fixture targets DN-001-PK-001 while DN-001 has a verification-only plan.
+  candidate_proof: npm run test:e2e:native-proof exited 1 with ERR_INVALIDATION_REFERENCE for stale DN-001-PK-001.
+  baseline: Build, 264 Vitest tests, CSS/HTML lint, and Ruff passed; scoped tracked state remained clean.
+  predecessor_basis: Current plan-dn-010-d4bce08ac4e7 supplies the admitted IF-011 contract.
+  job_allocation: Jobs 138 and 139 are unused after current job 137.
+  review:
+    disposition: pass
+    evidence_id: plan-review-dn-011-d4bce08ac4e7-final
+    evidence: Fresh independent review inspected authority, source, fixture failure, decision resolution, closure, proof boundary, dependencies, and job allocation; all six checks passed.
+    checks:
+      plan_completeness:
+        disposition: pass
+        evidence: "Single packet DN-011-PK-001 covers every DN-011 obligation (REQ-010, KEEP-010, REQ-016, REQ-026, KEEP-006) and both admitted modules; mode build is justified because the delta lands in MOD-008 fixture paths (serve/cockpit/web/e2e/support/seed-native-proof-stack.py, serve/cockpit/web/e2e/native-proof-assembled.spec.ts) rather than being verification-only. The repaired gap is now source-grounded: serve/kanban/src/owlbear_kanban/runtime_requests.py lines 94-103 require decision kind to carry >=2 options and no evidence/resume_condition, and lines 341-344 validate selected_option_id membership, so in_scope \"decision requests with two declared options and complete tradeoffs\" plus AC2's label/recommendation/confidence/pros/cons/risks inspection and recommended-option selection now exercise PROOF-012 method 2's \"Resolve a decision\" through the canonical method the current seed lines 500-517 bypasses with kind=\"action\". AC1-AC6 also cover the seed currentness repair, peer-route journey, Memory/Ideas continuity, 300-node scale, OCC conflict intents, and command/tracked-state proof; keyboard behavior from method 2 is not restated in an AC but is bound by in_scope \"Preserve ... peer route journeys\" plus the excluded clause forbidding weakening accessibility assertions, which holds the existing Tab-to-change-selector and ArrowDown assertions in native-proof-assembled.spec.ts lines 76-93."
+      admitted_references:
+        disposition: pass
+        evidence: Every referenced entity belongs to DN-011 authority in .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml lines 197-212 — owns REQ-010/KEEP-010, supports REQ-016/REQ-026/KEEP-006, modules MOD-005/MOD-008, produces IF-012, consumes IF-011, risks RISK-010/RISK-012, proof PROOF-012 — and the packet's modules/interfaces/risks/proof mirror that set with no escaped id. IF-011 (contracts.yaml lines 371-382, producer DN-010, consumers include DN-011) is referenced as consumed, not produced, matching the packet's exclusion of production backend change. Preserved-journey scope traces to IF-012's contract text (contracts.yaml lines 384-397) including the "Existing Memory and Ideas routes retain their core workflows" clause behind AC3, and AC4/AC5 trace to RISK-012 scale scenarios and RISK-010 responsive/mobile disposition (contracts.yaml lines 822-864).
+      impact_closures:
+        disposition: pass
+        evidence: The six authority paths listed are exactly the semantic files the fixture copies (intent.md, design.md, decisions.yaml, delivery/obligations.yaml, delivery/contracts.yaml, delivery/nodes.yaml), matching in_scope's "six semantic authority files" and correctly omitting plans/, receipts/, jobs/, and .storage.lock that seed-native-proof-stack.py lines 576-578 currently copy wholesale. serve/cockpit/src/owlbear_cockpit/ is proof-consumed rather than change scope — start-native-proof-stack.mjs lines 19-28 launches the real `cockpit` uvicorn process against the temp workspace — and the excluded clause forbids backend IF-011 edits, so its presence is closure, not permission. authority_targets carry DN-011's admitted set plus DN-010 as the consumed IF-011 producer and PROOF-012, all resolvable in the change authority.
+      dependency_order:
+        disposition: pass
+        evidence: One packet with dependencies [] is trivially acyclic and needs no intra-node ordering. Node-level order matches nodes.yaml line 210 (DN-011 dependencies [DN-010]); predecessor_job_ids [] with generation receipt admission-d4bce08ac4e7 is consistent with the supplied immutable identity, and lifecycle_context "Initial planning consumes DN-010/IF-011 admitted contract" matches REQ-025 (obligations.yaml), which permits initial plans to consume admitted predecessor contracts while DN-010 has only plan receipt plan-dn-010-d4bce08ac4e7 and no acceptance receipt. Proposed build 138 / accept 139 respects the stated store state (137 exists, 138 free).
+      proof_boundary:
+        disposition: pass
+        evidence: "The declared boundary \"Built Cockpit SPA and real FastAPI backend over a seeded native change/job store\" and allowed_lower_replacements \"fixture change/job store; no mocked HTTP API\" reproduce PROOF-012 verbatim (contracts.yaml lines 1103-1118) with no widened replacement. primary_command `npm run test:e2e:native-proof` exists at serve/cockpit/web/package.json line 20 and maps to playwright.config.ts project native-proof-assembled (lines 27-28) whose webServer runs `npm run build && node e2e/support/start-native-proof-stack.mjs`, which spawns the real uvicorn cockpit — no HTTP mocking anywhere in the chain. additional_commands (build, vitest, stylelint, htmlhint, ruff check/format) all exist as declared scripts, and the packet excludes package-script and Playwright config edits, so the boundary cannot be relaxed by the build. Component-level AC5 stays inside PROOF-012's declared durable_outputs (\"Vitest component tests, Playwright E2E, screenshots\"), so it is not a lower replacement of the assembled boundary. AC1's canonical-method requirement is enforced by source: receipt.py lines 593-605 fail PROOF_UNSATISFIED unless receipt evidence.methods is a superset of the target proof's method tuple."
+      material_expansion:
+        disposition: pass
+        evidence: No unadmitted delivery change is proposed. New public interfaces, compatibility aliases, arbitrary status/kind mutation, backend/engine/package-script/Playwright/authority edits, and Memory/Ideas expansion are all explicitly excluded; the change envelope is 2-4 files consistent with the two MOD-008 fixture files plus an optional bounded MOD-005 repair with focused component coverage, gated on assembled proof exposing a node-owned defect. The seeding work uses existing public engine surfaces already imported by the fixture (NativeRequest/NativeRequestRuntime, ReceiptStore, FindingStore, plan_corrective_route, InvalidationRequest, compute_node_plan_digest at receipt.py line 495), so publishing a fixture-local DN-011 plan containing DN-011-PK-001 resolves the ERR_INVALIDATION_REFERENCE path at invalidation.py line 410 without adding production API.
+code_revision: 0fb1553cd20ba27868b53c07b5c772b57a668e40

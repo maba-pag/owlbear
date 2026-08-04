@@ -1,0 +1,97 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-010-d4bce08ac4e7
+change_id: replace-delivery-pipeline
+delivery_digest: d4bce08ac4e7fad7c79f56dc056601a7c9648248899ab8dfdb1f463df10f18e6
+issued_at: '2026-07-30T16:08:00Z'
+impact_closure:
+  paths:
+    - .gitignore
+    - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
+    - .owlbear/changes/replace-delivery-pipeline/design.md
+    - .owlbear/changes/replace-delivery-pipeline/intent.md
+    - conftest.py
+    - pyproject.toml
+    - serve/cockpit/src/owlbear_cockpit/
+    - serve/kanban/src/owlbear_kanban/
+    - tests/__init__.py
+    - tests/native_cockpit_fixtures.py
+    - tests/test_cockpit_native_changes.py
+    - tests/test_cockpit_native_controls.py
+    - tests/test_cockpit_native_cutover.py
+    - tests/test_cockpit_native_integration.py
+    - tests/test_cockpit_native_work.py
+  authority_targets:
+    - DN-003
+    - DN-004
+    - DN-008
+    - DN-010
+    - DN-014
+    - IF-001
+    - IF-002
+    - IF-003
+    - IF-007
+    - IF-008
+    - IF-009
+    - IF-010
+    - IF-011
+    - IF-014
+    - KEEP-006
+    - KEEP-007
+    - MOD-004
+    - MOD-008
+    - PROOF-015
+    - REQ-010
+    - REQ-015
+    - REQ-016
+    - REQ-021
+    - REQ-026
+    - RISK-005
+target_node_id: DN-010
+node_plan_digest: f04c8fabb9d1a4fa8e194d1b7d42e1c7bcaf20d3f859de48f612dcf491efaa82
+predecessor_receipt_ids: []
+evidence:
+  methods:
+    - Exercise change, graph, job, request, attempt, finding, receipt, health, legacy, conflict, and event contracts.
+    - Assert arbitrary task mutation and old lifecycle routes are absent.
+  baseline:
+    command: uv run pytest -n0 tests/test_cockpit_native_changes.py tests/test_cockpit_native_work.py tests/test_cockpit_native_controls.py tests/test_cockpit_native_cutover.py tests/test_cockpit_native_integration.py -q --tb=short
+    result: 1 failed, 11 passed, 24 errors in 24.23s
+    classification: Copied mutable plans, receipts, generated jobs, and candidate-bound plan identities contaminate temporary Cockpit stores; no production IF-011 defect was observed.
+  tracked_scope:
+    candidate_matches: true
+    clean_before_proof: true
+    clean_after_proof: true
+  job_allocation:
+    archive_complete: true
+    occupied_through: 135
+    build_job_id: 136
+    accept_job_id: 137
+  review:
+    disposition: pass
+    evidence_id: plan-review-dn-010-d4bce08ac4e7-final
+    evidence: Fresh independent review inspected DN-010 authority, copied-sidecar failures, current FastAPI and engine source, the fixture-only packet, public HTTP/SSE proof boundary, impact closure, dependency order, cleanup design, and downstream IDs; each typed check passed.
+    checks:
+      plan_completeness:
+        disposition: pass
+        evidence: Single build packet DN-010-PK-001 carries owned REQ-021 plus supports REQ-010/015/016/026/KEEP-006/007 exactly as nodes.yaml lines 183-198 declare, and its scope matches the real gap at 0fb1553 — tests/test_cockpit_native_changes.py:26, tests/test_cockpit_native_controls.py:130, tests/test_cockpit_native_work.py:130 and tests/test_cockpit_native_integration.py:154 all `shutil.copytree` the whole authority directory, importing `jobs/admission-*.yaml` receipts and `.storage.lock` sidecars (baseline 24 errors), and no tests/native_cockpit_fixtures.py exists. Build mode (not verification-only) is correct because the packet adds a new file; production routes native_changes.py/native_work.py/native_controls.py already exist, so no production obligation is left unplanned. AC1-AC6 are boundary-valid (isolation, typed records plus maintained errors, conflict/SSE replay without partial mutation, absence of override and old routes, exact changed-file and cleanup state, defect-blocking).
+      admitted_references:
+        disposition: pass
+        evidence: Every referenced entity is node-bounded — modules MOD-004/MOD-008, produced IF-011 and consumed IF-001/002/003/007/008/009/010/014, dependencies DN-003/004/008/014, RISK-005 and PROOF-015 reproduce nodes.yaml:183-198 with no additions. IF-005 is correctly excluded — it is absent from DN-010's consumes list, and contracts.yaml PROOF-014 explicitly owns finish, release, and expired recovery cleanup for accept/audit checkouts, so retargeting checkout-specific release assertions to claim/event/coordination semantics moves coverage to its admitted owner rather than deleting an IF-011 obligation; IF-011's contract names no checkout semantics.
+      impact_closures:
+        disposition: pass
+        evidence: All listed paths exist and are either edited or proof-consumed authority/inspection. The six semantic authority files are exactly the copy set that excludes jobs, receipts, plans, and storage-lock sidecars; conftest.py supplies project_root; pyproject.toml and .gitignore are inspected constraints; the existing `.*cache` rule matches `.dn010-engine-cache`; and the backend and engine trees are consumed without edits. Authority targets resolve in nodes.yaml and contracts.yaml.
+      dependency_order:
+        disposition: pass
+        evidence: One packet with dependencies [] is acyclic. Job 110 is the current initial DN-010 plan job under admission-d4bce08ac4e7, build 136 and accept 137 are unused, and lifecycle scheduling remains engine-owned pending DN-003/004/008/014 acceptance and reconciliation.
+      proof_boundary:
+        disposition: pass
+        evidence: The boundary and methods reproduce PROOF-015 verbatim and the only lower replacement is the admitted temporary engine store. The plan removes the temporary Git repository, derives the real project root through NativeWorkspace, uses concrete production history/runtime/dispatch components, prevents proof-checkout materialization by using build jobs, and reserves assembled TestClient/live-uvicorn cases as the HTTP/SSE proof.
+      material_expansion:
+        disposition: pass
+        evidence: The packet adds one MOD-008 helper and edits four MOD-008 consumers. It adds no production interface, route, alias, compatibility path, or source edit; any production defect blocks rather than widening the packet.
+code_revision: 0fb1553cd20ba27868b53c07b5c772b57a668e40

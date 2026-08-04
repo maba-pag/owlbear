@@ -1,0 +1,170 @@
+---
+schema_version: 1
+kind: accept
+receipt_id: accept-dn-001-7da5c669f6ef
+change_id: replace-delivery-pipeline
+delivery_digest: 7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+issued_at: '2026-07-31T07:18:00Z'
+impact_closure:
+  paths:
+    - serve/kanban/src/owlbear_kanban/__init__.py
+    - serve/kanban/src/owlbear_kanban/_naming.py
+    - serve/kanban/src/owlbear_kanban/admission.py
+    - serve/kanban/src/owlbear_kanban/admission_transaction.py
+    - serve/kanban/src/owlbear_kanban/attempts.py
+    - serve/kanban/src/owlbear_kanban/change.py
+    - serve/kanban/src/owlbear_kanban/dispatch.py
+    - serve/kanban/src/owlbear_kanban/finalization.py
+    - serve/kanban/src/owlbear_kanban/finding.py
+    - serve/kanban/src/owlbear_kanban/invalidation.py
+    - serve/kanban/src/owlbear_kanban/jobs.py
+    - serve/kanban/src/owlbear_kanban/native_runtime.py
+    - serve/kanban/src/owlbear_kanban/node_plan.py
+    - serve/kanban/src/owlbear_kanban/proof_checkout.py
+    - serve/kanban/src/owlbear_kanban/receipt.py
+    - serve/kanban/src/owlbear_kanban/runtime_query.py
+    - serve/kanban/src/owlbear_kanban/runtime_requests.py
+    - serve/kanban/src/owlbear_kanban/runtime_transaction.py
+    - serve/kanban/src/owlbear_kanban/snapshot.py
+    - serve/kanban/src/owlbear_kanban/storage_io.py
+    - serve/kanban/src/owlbear_kanban/workspace.py
+    - serve/kanban/src/owlbear_kanban/yaml_rt.py
+    - serve/kanban/tests/test_change_receipts.py
+    - serve/kanban/tests/test_change_revision.py
+  authority_targets:
+    - DN-001
+    - IF-001
+    - KEEP-003
+    - KEEP-007
+    - MOD-001
+    - MOD-008
+    - NEG-004
+    - NEG-007
+    - PROOF-001
+    - REQ-001
+    - REQ-016
+    - REQ-019
+    - RISK-004
+target_node_id: DN-001
+node_plan_digest: c1f79d25390c3610a5eb91687dc07e4f686d5ded3127142c7a772842488d96ce
+predecessor_receipt_ids:
+  - plan-dn-001-7da5c669f6ef
+evidence:
+  methods:
+    - Parse valid and invalid modular packages and isolated node plans.
+    - Assert canonical digest stability and semantic changes.
+    - Assert equivalent joined delivery authority has the same digest across physical wrapping.
+    - Exercise traversal, symlink, malformed YAML, duplicate ID, and partial-file cases.
+  assembled_proof:
+    boundary: Public owlbear-kanban ChangeRevision loader and receipt store over a temporary workspace.
+    durable_outputs:
+      - unit and contract tests
+    commands:
+      - uv run pytest -n0 serve/kanban/tests/test_change_revision.py serve/kanban/tests/test_change_receipts.py -q --tb=short
+    results:
+      - command: uv run pytest -n0 serve/kanban/tests/test_change_revision.py serve/kanban/tests/test_change_receipts.py -q --tb=short
+        exit_code: 0
+        result: 86 passed in 1.64s
+  authority:
+    delivery_digest: 7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+    target_node_id: DN-001
+    acceptance:
+      - The engine strictly joins intent, design, decisions, modular delivery authority, and isolated node plans, resolves stable identities, computes canonical semantic digests, stores immutable receipts, and rejects malformed, unsafe, partial, or path-escaping packages.
+    proof: PROOF-001
+    node_contract:
+      id: DN-001
+      title: Establish native change authority and semantic identity
+      outcome: Strict modular ChangeRevision loading, isolated node plans, physical-layout-independent stable IDs/digests, immutable receipt storage, path safety, and health diagnostics replace OpenSpec artifact resolution.
+      owns:
+        - REQ-019
+        - NEG-007
+      supports:
+        - REQ-001
+        - REQ-016
+        - NEG-004
+        - KEEP-003
+        - KEEP-007
+      modules:
+        - MOD-001
+        - MOD-008
+      produces:
+        - IF-001
+      consumes: []
+      dependencies: []
+      risks:
+        - RISK-004
+      proof: PROOF-001
+    modules:
+      - MOD-001
+      - MOD-008
+    interfaces:
+      - IF-001
+    migrations:
+      - MIG-004
+    risks:
+      - RISK-004
+  plan:
+    node_plan_digest: c1f79d25390c3610a5eb91687dc07e4f686d5ded3127142c7a772842488d96ce
+    receipt_id: plan-dn-001-7da5c669f6ef
+    packet_ids: []
+  packet_receipts: []
+  changed_surfaces:
+    paths:
+      - serve/kanban/src/owlbear_kanban/__init__.py
+      - serve/kanban/src/owlbear_kanban/_naming.py
+      - serve/kanban/src/owlbear_kanban/admission.py
+      - serve/kanban/src/owlbear_kanban/admission_transaction.py
+      - serve/kanban/src/owlbear_kanban/attempts.py
+      - serve/kanban/src/owlbear_kanban/change.py
+      - serve/kanban/src/owlbear_kanban/dispatch.py
+      - serve/kanban/src/owlbear_kanban/finalization.py
+      - serve/kanban/src/owlbear_kanban/finding.py
+      - serve/kanban/src/owlbear_kanban/invalidation.py
+      - serve/kanban/src/owlbear_kanban/jobs.py
+      - serve/kanban/src/owlbear_kanban/native_runtime.py
+      - serve/kanban/src/owlbear_kanban/node_plan.py
+      - serve/kanban/src/owlbear_kanban/proof_checkout.py
+      - serve/kanban/src/owlbear_kanban/receipt.py
+      - serve/kanban/src/owlbear_kanban/runtime_query.py
+      - serve/kanban/src/owlbear_kanban/runtime_requests.py
+      - serve/kanban/src/owlbear_kanban/runtime_transaction.py
+      - serve/kanban/src/owlbear_kanban/snapshot.py
+      - serve/kanban/src/owlbear_kanban/storage_io.py
+      - serve/kanban/src/owlbear_kanban/workspace.py
+      - serve/kanban/src/owlbear_kanban/yaml_rt.py
+      - serve/kanban/tests/test_change_receipts.py
+      - serve/kanban/tests/test_change_revision.py
+    authority_targets:
+      - DN-001
+      - IF-001
+      - KEEP-003
+      - KEEP-007
+      - MOD-001
+      - MOD-008
+      - NEG-004
+      - NEG-007
+      - PROOF-001
+      - REQ-001
+      - REQ-016
+      - REQ-019
+      - RISK-004
+  checkout:
+    root: /Users/markus/Projects/owlbear-dev/.owlbear/scratch/proof/236/checkout
+    candidate_sha: 8c9fa2c7fba2b12014df5027ed3bd8d0361d5261
+  replacements:
+    - temporary workspace filesystem
+  tracked_state:
+    before:
+      head: 8c9fa2c7fba2b12014df5027ed3bd8d0361d5261
+      status: ''
+      diff: ''
+    after:
+      head: 8c9fa2c7fba2b12014df5027ed3bd8d0361d5261
+      status: ''
+      diff: ''
+  reconciliation:
+    - target_node_id: DN-002
+      plan_job_id: 221
+    - target_node_id: DN-003
+      plan_job_id: 222
+code_revision: 8c9fa2c7fba2b12014df5027ed3bd8d0361d5261

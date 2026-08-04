@@ -1,0 +1,92 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-005-d4bce08ac4e7
+change_id: replace-delivery-pipeline
+delivery_digest: d4bce08ac4e7fad7c79f56dc056601a7c9648248899ab8dfdb1f463df10f18e6
+issued_at: '2026-07-30T07:49:00Z'
+impact_closure:
+  paths:
+    - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
+    - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
+    - .owlbear/changes/replace-delivery-pipeline/design.md
+    - .owlbear/changes/replace-delivery-pipeline/intent.md
+    - .owlbear/research/delivery-operating-model-reframe.md
+    - .owlbear/research/planning-workflow-root-cause-and-redesign.md
+    - conftest.py
+    - pyproject.toml
+    - serve/kanban/src/owlbear_kanban/
+    - serve/mcp-kanban/src/owlbear_mcp_kanban/
+    - serve/mcp-kanban/tests/test_designer_interaction.py
+    - share/agents/designer-challenger.agent.md
+    - share/agents/designer.agent.md
+    - share/prompts/design.prompt.md
+    - share/prompts/ideate.prompt.md
+    - share/skills/r-challenger-protocol/SKILL.md
+    - share/skills/w-design-session/SKILL.md
+  authority_targets:
+    - DN-002
+    - DN-005
+    - DN-009
+    - IF-001
+    - IF-002
+    - IF-006
+    - IF-010
+    - KEEP-001
+    - KEEP-002
+    - KEEP-003
+    - KEEP-005
+    - KEEP-008
+    - KEEP-009
+    - MOD-003
+    - MOD-008
+    - PROOF-004
+    - REQ-001
+    - REQ-002
+    - REQ-015
+    - RISK-007
+target_node_id: DN-005
+node_plan_digest: c89ab0d70364168e9f63e3f8ed40ca545eb85130184027c1022d30cb41aa8bcb
+predecessor_receipt_ids: []
+evidence:
+  methods:
+    - Resume after interruption without losing decisions.
+    - Verify one-question options include tradeoffs, recommendation, and confidence.
+    - Reject unresolved authority and admit a complete fixture.
+  source_inspection:
+    evidence_id: source-inspection-dn-005-87abe8b
+    disposition: pass
+    evidence: Current PROOF-004 scenarios exercise the native resume, refusal, admission, generation, and replay paths, but lack durable assertions for the Product Promise ledger, evidence states, qualified memory, adaptive architecture, and complete delegated challenge contract. One MOD-008 test-only packet closes those admitted proof gaps.
+  baseline:
+    evidence_id: baseline-dn-005-87abe8b-4
+    candidate_revision: 87abe8b385277301883c77115be2e5763c151dff
+    command: uv run pytest -n0 serve/mcp-kanban/tests/test_designer_interaction.py -q
+    exit_code: 0
+    result: 4 passed in 2.99s
+    tracked_state: The nineteen-path package-level proof closure was clean after execution.
+  review:
+    disposition: pass
+    evidence_id: plan-review-dn-005-d4bce08ac4e7-final
+    evidence: Fresh independent review inspected job identity, admitted DN-005 authority, the one-packet proof delta, package-level impact closure, dependency and reconciliation order, PROOF-004 boundary, and material expansion. All six typed checks passed.
+    checks:
+      plan_completeness:
+        disposition: pass
+        evidence: Build mode is required because the four current scenarios omit durable Product Promise, evidence-state, qualified-memory, adaptive-architecture, and challenger-protocol assertions. One packet covers the nine node obligations and node outcome, with unused build ID 125 and accept ID 126.
+      admitted_references:
+        disposition: pass
+        evidence: Obligations, modules, interfaces, dependency contracts, risk, and proof match DN-005 authority. The writable test lies in MOD-008, and challenger contracts consumed by proof lie in MOD-003.
+      impact_closures:
+        disposition: pass
+        evidence: The nineteen canonical paths cover the writable scenario test, shipped contracts, complete imported native packages, semantic fixture authority, referenced research, and pytest configuration. Package directories close the workspace import graph without incomplete per-module enumeration.
+      dependency_order:
+        disposition: pass
+        evidence: The single packet is acyclic. Initial planning consumes admitted DN-002 and DN-009 contracts without reusing revision-mismatched accept receipts; current predecessor acceptance triggers engine-owned reconciliation.
+      proof_boundary:
+        disposition: pass
+        evidence: The plan preserves PROOF-004's boundary, methods, lower replacement, and durable output. Scenarios use shipped prompt and agent contracts plus real registered handlers, NativeWorkspace, loader, evaluator, transactions, receipt store, and job store.
+      material_expansion:
+        disposition: pass
+        evidence: Only the existing designer scenario test may change. The packet adds proof for shipped behavior and introduces no interface, migration, risk, compatibility path, transport contract, or product behavior.
+code_revision: 87abe8b385277301883c77115be2e5763c151dff

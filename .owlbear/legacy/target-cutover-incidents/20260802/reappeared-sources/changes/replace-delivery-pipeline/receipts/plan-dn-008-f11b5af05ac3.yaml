@@ -1,0 +1,62 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-008-f11b5af05ac3
+change_id: replace-delivery-pipeline
+delivery_digest: f11b5af05ac31cc255668bd953fdb085cf0c533ed797ba422a839a567beaf83c
+issued_at: '2026-08-01T18:04:29Z'
+impact_closure:
+  paths:
+    - .owlbear/hooks/deny-writes.py
+    - seed/.owlbear/hooks/deny-writes.py
+    - serve/kanban/src/owlbear_kanban/
+    - serve/kanban/tests/test_native_runtime.py
+    - serve/kanban/tests/test_proof_checkout.py
+    - serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
+    - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
+    - share/agents/acceptor.agent.md
+    - share/skills/w-node-acceptance/SKILL.md
+    - share/skills/w-orchestration/SKILL.md
+    - tests/test_write_guard_hooks.py
+  authority_targets:
+    - DN-008
+    - IF-001
+    - IF-003
+    - IF-004
+    - IF-005
+    - IF-007
+    - IF-008
+    - IF-009
+    - IF-010
+    - KEEP-004
+    - KEEP-005
+    - KEEP-007
+    - KEEP-008
+    - MOD-001
+    - MOD-003
+    - MOD-008
+    - MOD-009
+    - NEG-003
+    - NEG-009
+    - PROOF-007
+    - REQ-006
+    - REQ-008
+    - REQ-014
+    - RISK-008
+    - RISK-009
+target_node_id: DN-008
+node_plan_digest: 1b2a45172066eef68e52e53d3a4e743dcbc1f760c0e09445dc0fdb84888785e4
+predecessor_receipt_ids: []
+evidence:
+  methods:
+    - Pass a complete node at exact SHA.
+    - Reject local defect, missing harness, boundary bypass, stale receipt, and tracked acceptor edit.
+    - Assert corrective jobs and cleanup are exact and minimal.
+    - Pass an eligible verification-only node with zero build receipts only after executing its full admitted proof at the exact candidate; reject candidate mismatch, missing outputs, boundary weakening, legacy-record substitution, and any tracked acceptor edit.
+  source_inspection: Exact-candidate inspection found the verification-only runtime contract implemented, but the public MCP acceptance suite lacks the two required verification-only acceptance scenarios.
+  baseline: The mixed acceptance/audit module collected 55 cases and reached 21 passing cases before its 300-second session timeout; the packet uses bounded acceptance-only proof commands.
+  review:
+    disposition: pass
+    evidence_id: plan-review-dn-008-job292-final-38e27ae3
+    evidence: Independent source review passed completeness, admitted references, impact closure, dependency order, proof boundary, and material-expansion checks.
+code_revision: 38e27ae3ed5d6215ef8a5fe25c2db82470ec6452

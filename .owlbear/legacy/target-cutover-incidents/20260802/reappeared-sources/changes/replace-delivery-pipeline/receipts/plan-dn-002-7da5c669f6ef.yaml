@@ -1,0 +1,98 @@
+---
+schema_version: 1
+kind: plan
+receipt_id: plan-dn-002-7da5c669f6ef
+change_id: replace-delivery-pipeline
+delivery_digest: 7da5c669f6efb157c5ad7a145fbfce9007c8addf63830123a63cdece2d8685e0
+issued_at: '2026-07-31T07:30:00Z'
+impact_closure:
+  paths:
+    - serve/kanban/src/owlbear_kanban/__init__.py
+    - serve/kanban/src/owlbear_kanban/_naming.py
+    - serve/kanban/src/owlbear_kanban/admission.py
+    - serve/kanban/src/owlbear_kanban/admission_transaction.py
+    - serve/kanban/src/owlbear_kanban/attempts.py
+    - serve/kanban/src/owlbear_kanban/change.py
+    - serve/kanban/src/owlbear_kanban/dispatch.py
+    - serve/kanban/src/owlbear_kanban/finalization.py
+    - serve/kanban/src/owlbear_kanban/finding.py
+    - serve/kanban/src/owlbear_kanban/invalidation.py
+    - serve/kanban/src/owlbear_kanban/jobs.py
+    - serve/kanban/src/owlbear_kanban/native_runtime.py
+    - serve/kanban/src/owlbear_kanban/node_plan.py
+    - serve/kanban/src/owlbear_kanban/proof_checkout.py
+    - serve/kanban/src/owlbear_kanban/receipt.py
+    - serve/kanban/src/owlbear_kanban/runtime_query.py
+    - serve/kanban/src/owlbear_kanban/runtime_requests.py
+    - serve/kanban/src/owlbear_kanban/runtime_transaction.py
+    - serve/kanban/src/owlbear_kanban/snapshot.py
+    - serve/kanban/src/owlbear_kanban/storage_io.py
+    - serve/kanban/src/owlbear_kanban/workspace.py
+    - serve/kanban/src/owlbear_kanban/yaml_rt.py
+    - serve/kanban/tests/fixtures/historical-admission
+    - serve/kanban/tests/test_admission.py
+    - serve/kanban/tests/test_admission_transaction.py
+    - serve/kanban/tests/test_change_receipts.py
+    - serve/kanban/tests/test_change_revision.py
+    - serve/kanban/tests/test_generated_graph_admission.py
+    - serve/kanban/tests/test_historical_admission.py
+  authority_targets:
+    - DN-001
+    - DN-002
+    - IF-001
+    - IF-002
+    - KEEP-003
+    - KEEP-004
+    - KEEP-005
+    - KEEP-007
+    - MOD-001
+    - MOD-008
+    - NEG-004
+    - NEG-007
+    - NEG-010
+    - PROOF-001
+    - PROOF-002
+    - REQ-001
+    - REQ-002
+    - REQ-003
+    - REQ-016
+    - REQ-018
+    - REQ-019
+    - RISK-003
+    - RISK-004
+    - RISK-007
+target_node_id: DN-002
+node_plan_digest: 2b28c6f8c78f388d93d414ba9dc02e4d312d4bf714bc3fdf3fed3dce82802e68
+predecessor_receipt_ids:
+  - accept-dn-001-7da5c669f6ef
+evidence:
+  methods:
+    - Execute table-driven and property cases for every rejection class listed in design section 9.1.
+    - Assert stable finding codes and zero job mutation on failure.
+    - Assert receipt and initial plan jobs are atomic on success.
+  review:
+    disposition: pass
+    evidence_id: plan-review-dn-002-7da5c669-r2
+    evidence: Fresh independent review passed current tracked outputs, admitted reference union, 29-path closure, archived predecessor ordering, public PROOF-002 boundary, and no material expansion.
+    checks:
+      plan_completeness:
+        disposition: pass
+        evidence: DN-002 source, four durable regression suites, historical fixtures, required outputs, and nine scenarios are complete at the candidate.
+      admitted_references:
+        disposition: pass
+        evidence: The 24 targets are the exact union of DN-002 authority and accepted DN-001 closure.
+      impact_closures:
+        disposition: pass
+        evidence: The 29 canonical paths are the accepted DN-001 closure plus the four PROOF-002 suites and historical fixtures.
+      dependency_order:
+        disposition: pass
+        evidence: Archived accept job 236 is the sole current DN-001 predecessor; 237 is unused and next across active and archive stores.
+      proof_boundary:
+        disposition: pass
+        evidence: The four-file command crosses public validate/admit boundaries with only temporary repository and command runner replacements below admission.
+      material_expansion:
+        disposition: pass
+        evidence: Empty packets and existing outputs introduce no module, interface, schema, migration, fixture, harness, client, or proof mechanism.
+  proof_result: 60 passed in 11.10s at candidate 8c9fa2c7fba2b12014df5027ed3bd8d0361d5261
+  tracked_scope_clean: true
+code_revision: 8c9fa2c7fba2b12014df5027ed3bd8d0361d5261
