@@ -8,6 +8,8 @@ import owlbear_kanban
 def test_package_root_exports_target_runtime_without_retired_execution() -> None:
     required = {
         "ChangeWorkspaceManager",
+        "CompletedChangeRecord",
+        "CompletedHistoryCatalog",
         "DeliveryPlanCandidate",
         "DeliveryTransition",
         "PortfolioApplication",

@@ -17,6 +17,7 @@ from owlbear_kanban import (
     Commitment,
     CommitmentClass,
     CompletionSummary,
+    CompletedHistoryCatalog,
     ChangeWorkspaceManager,
     ChangeWriter,
     CoordinationConflictError,
@@ -231,6 +232,7 @@ def _portfolio(
             manager,
             candidate_proof or (lambda _candidate, _commit: ("candidate proof dependency is not configured",)),
             work_item_projectors or {},
+            CompletedHistoryCatalog(repository, "main"),
         ),
         PortfolioApplicationConfig(
             package_root=package_root,
@@ -1018,6 +1020,30 @@ def test_semantic_only_integration_preserves_product_and_sibling_completed_tree(
     assert _git(repository, "rev-parse", f"{second_commit}:product.txt") == product_blob
     assert _git(repository, "rev-parse", f"{second_commit}:.owlbear/completed/change-a") == sibling_tree
     assert _git(repository, "rev-parse", f"{second_commit}:.owlbear/completed/change-b")
+
+
+def test_completed_history_queries_are_bounded_and_separate_from_active_projections(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED, "change-b": DeliveryStage.COMPLETED},
+        candidate_proof=lambda _candidate, _commit: (),
+    )
+    repository = tmp_path / "repository"
+    application.integrate_ready_change("change-a")
+    application.integrate_ready_change("change-b")
+    target_before = _git(repository, "rev-parse", "main")
+
+    first = application.search_completed_changes("delivery", limit=1)
+    second = application.search_completed_changes("delivery", first.next_cursor, 1)
+    shown = application.show_completed_change("change-b", second.records[0].completion_id)
+
+    assert tuple(item.change_id for item in (*first.records, *second.records)) == ("change-a", "change-b")
+    assert shown == second.records[0]
+    assert application.list_completed_changes(limit=100).records == (*first.records, *second.records)
+    assert application.list_work_items() == ()
+    assert application.list_integration_ready_changes() == ()
+    assert "intent prose sentinel" not in shown.model_dump_json()
+    assert _git(repository, "rev-parse", "main") == target_before
 
 
 def test_integration_rejects_reviewed_sibling_completed_history_mutation(tmp_path: Path) -> None:

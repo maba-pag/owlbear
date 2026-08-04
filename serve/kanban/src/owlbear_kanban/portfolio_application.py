@@ -64,6 +64,11 @@ from owlbear_kanban.target_contract import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
+    from owlbear_kanban.completed_history import (
+        CompletedChangePage,
+        CompletedChangeRecord,
+        CompletedHistoryCatalog,
+    )
     from owlbear_kanban.design_package import DesignPackageStore, VerifiedDesignPackage
     from owlbear_kanban.target_admission import (
         DeliveryAdmissionRequest,
@@ -262,6 +267,7 @@ class PortfolioApplicationDependencies:
     workspace_manager: ChangeWorkspaceManager
     candidate_proof: Callable[[DeliveryIntegrationCandidate, str], tuple[str, ...]] = _reject_unconfigured_candidate
     work_item_projectors: Mapping[str, WorkItemProjector] = field(default_factory=dict)
+    completed_history_catalog: CompletedHistoryCatalog | None = None
 
 
 @dataclass(frozen=True)
@@ -317,6 +323,7 @@ class PortfolioApplication:
         self._workspace_manager = dependencies.workspace_manager
         self._candidate_proof = dependencies.candidate_proof
         self._work_item_projectors = dict(dependencies.work_item_projectors)
+        self._completed_history_catalog = dependencies.completed_history_catalog
         self._execution_capacity = config.execution_capacity
         self._policies = {policy.worker_role: policy for policy in config.role_policies}
         self._identity_factory = hooks.identity_factory if hooks else lambda: str(uuid.uuid4())
@@ -409,6 +416,32 @@ class PortfolioApplication:
         except KeyError as exc:
             self._fail(f"work-item projector is absent: {change_id}", exc)
         return projector.show(work_item_id)
+
+    def list_completed_changes(self, cursor: str | None = None, limit: int = 100) -> CompletedChangePage:
+        """List one bounded page rebuilt from configured target history."""
+        return self._completed_history().list(cursor, limit)
+
+    def search_completed_changes(
+        self,
+        query: str,
+        cursor: str | None = None,
+        limit: int = 100,
+    ) -> CompletedChangePage:
+        """Search completed semantic summaries in configured target history."""
+        return self._completed_history().search(query, cursor, limit)
+
+    def show_completed_change(
+        self,
+        change_id: str,
+        completion_id: str | None = None,
+    ) -> CompletedChangeRecord:
+        """Show one verified completed-history record by exact identity."""
+        return self._completed_history().show(change_id, completion_id)
+
+    def _completed_history(self) -> CompletedHistoryCatalog:
+        if self._completed_history_catalog is None:
+            self._fail("completed-history catalog dependency is not configured")
+        return self._completed_history_catalog
 
     def acquire_frontier_work(self) -> DeliveryAcquisitionResult:
         """Start stable ready claims and reserve writer custody only for Build."""
