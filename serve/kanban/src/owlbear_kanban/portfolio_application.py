@@ -25,6 +25,8 @@ from owlbear_kanban.change_workspace import (
 )
 from owlbear_kanban.delivery_runtime import (
     ActivateDeliveryClaim,
+    AdministrativeDeliveryMove,
+    AdministrativeDeliveryMoveResult,
     DeliveryActiveClaim,
     DeliveryChangeStage,
     DeliveryIntegrationAttention,
@@ -35,9 +37,11 @@ from owlbear_kanban.delivery_runtime import (
     DeliveryPlanCandidate,
     DeliveryRecoveryAttention,
     DeliveryRequest,
+    DeliveryRequestResolution,
     DeliveryResultCandidate,
     DeliveryReturnContext,
     DeliveryRuntime,
+    DeliveryRuntimeReferenceError,
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
@@ -54,12 +58,21 @@ from owlbear_kanban.design_package import (
     DesignPackageConflictError,
     DesignPackageResult,
 )
+from owlbear_kanban.target_authority import (
+    Commitment,
+    CommitmentClass,
+    Outcome,
+    PlanScopeKind,
+    TargetAuthority,
+    TaskPlanScope,
+)
 from owlbear_kanban.target_contract import (
     DeliveryCommitment,
     DeliveryCompilationResult,
     DeliveryOutcome,
     compile_delivery_contract,
 )
+from owlbear_kanban.work_items import TaskProgress, WorkItemEvidence, WorkItemProjector
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -75,7 +88,7 @@ if TYPE_CHECKING:
         DeliveryAdmissionResult,
         DeliveryAuthorityRegistry,
     )
-    from owlbear_kanban.work_items import WorkItemDetail, WorkItemProjection, WorkItemProjector
+    from owlbear_kanban.work_items import WorkItemDetail, WorkItemProjection
 
 _COMPLETED_ROOT = ".owlbear/completed"
 
@@ -322,7 +335,10 @@ class PortfolioApplication:
         self._coordinator = dependencies.coordinator
         self._workspace_manager = dependencies.workspace_manager
         self._candidate_proof = dependencies.candidate_proof
-        self._work_item_projectors = dict(dependencies.work_item_projectors)
+        # projectors are no longer injected as immutable snapshots; projections are
+        # derived from runtimes on every list/show query. Keep the mapping for
+        # compatibility but ignore prebuilt projectors.
+        self._work_item_projectors = {}
         self._completed_history_catalog = dependencies.completed_history_catalog
         self._execution_capacity = config.execution_capacity
         self._policies = {policy.worker_role: policy for policy in config.role_policies}
@@ -397,7 +413,14 @@ class PortfolioApplication:
 
     def list_work_items(self) -> tuple[WorkItemProjection, ...]:
         """List bounded work-item projections in stable portfolio order."""
-        projections = (item for projector in self._work_item_projectors.values() for item in projector.list_items())
+        projections = []
+        for runtime in self._runtimes.values():
+            # exclude completed Integration runtimes from the active portfolio projection
+            if runtime.change_stage() == DeliveryChangeStage.COMPLETED:
+                continue
+            authority, evidence = self._authority_and_evidence(runtime)
+            projector = WorkItemProjector(authority, evidence)
+            projections.extend(projector.list_items())
         return tuple(
             sorted(
                 projections,
@@ -411,11 +434,116 @@ class PortfolioApplication:
 
     def show_work_item(self, change_id: str, work_item_id: str) -> WorkItemDetail:
         """Show bounded semantic detail from one exact change projector."""
+        runtime = self._runtime(change_id)
+        authority, evidence = self._authority_and_evidence(runtime)
+        projector = WorkItemProjector(authority, evidence)
         try:
-            projector = self._work_item_projectors[change_id]
+            return projector.show(work_item_id)
         except KeyError as exc:
-            self._fail(f"work-item projector is absent: {change_id}", exc)
-        return projector.show(work_item_id)
+            self._fail(f"work item is absent: {work_item_id}", exc)
+
+    def resolve_request(self, request_id: str, resolution: DeliveryRequestResolution) -> DeliveryRequest:
+        """Persist one request resolution by delegating to the owning runtime."""
+        with self._coordinator.acquisition_lock():
+            for runtime in self._runtimes.values():
+                try:
+                    return runtime.resolve_request(request_id, resolution)
+                except DeliveryRuntimeReferenceError:
+                    # request not present in this runtime; try next
+                    continue
+        self._fail(f"request is absent: {request_id}")
+        _msg = "unreachable: request resolution failed"
+        raise PortfolioApplicationError(_msg)
+
+    def clear_block(
+        self,
+        change_id: str,
+        block_id: str,
+        operator_note: str,
+        locators: tuple[str, ...],
+    ) -> OutcomeAuthorityBinding:
+        """Clear a requestless same-stage block with operator evidence via runtime."""
+        with self._coordinator.acquisition_lock():
+            runtime = self._runtime(change_id)
+            return runtime.unblock(change_id, block_id, operator_note, locators)
+
+    def administrative_move(self, request: AdministrativeDeliveryMove) -> AdministrativeDeliveryMoveResult:
+        """Delegate an authorized operator backward movement to the owning runtime."""
+        with self._coordinator.acquisition_lock():
+            # locate the runtime owning the change and delegate
+            for runtime in self._runtimes.values():
+                try:
+                    return runtime.administrative_move(request)
+                except DeliveryRuntimeReferenceError:
+                    continue
+        self._fail("administrative move target is absent or invalid")
+        _msg = "unreachable: administrative move target absent"
+        raise PortfolioApplicationError(_msg)
+
+    def _authority_and_evidence(self, runtime: DeliveryRuntime) -> tuple[TargetAuthority, WorkItemEvidence]:
+        """Build a read-only TargetAuthority and work-item evidence from a Delivery runtime."""
+        # map contract commitments/outcomes/scopes to TargetAuthority shapes
+        contract = runtime.contract
+        commitments = tuple(
+            Commitment(
+                commitment_id=item.commitment_id,
+                commitment_class=CommitmentClass[item.commitment_class.name],
+                provenance=item.provenance,
+                statement=item.statement,
+            )
+            for item in contract.commitments
+        )
+        outcomes = tuple(
+            Outcome(
+                outcome_id=item.outcome_id,
+                title=item.title,
+                promise=item.promise,
+                acceptance=item.acceptance,
+                commitment_ids=item.commitment_ids,
+                dependency_ids=item.dependency_ids,
+            )
+            for item in contract.outcomes
+        )
+        scopes = tuple(
+            TaskPlanScope(scope_id=scope.scope_id, kind=PlanScopeKind.OUTCOME, target_id=scope.outcome_id)
+            for scope in contract.plan_scopes
+        )
+        authority = TargetAuthority(
+            change_id=contract.change_id,
+            title=contract.title,
+            commitments=commitments,
+            outcomes=outcomes,
+            task_plan_scopes=scopes,
+        )
+
+        # derive evidence from current runtime frontier
+        planned: list[str] = []
+        progress: list[TaskProgress] = []
+        assembly: list[str] = []
+        pending: list[str] = []
+        for scope in contract.plan_scopes:
+            try:
+                binding = runtime.show_binding(scope.outcome_id)
+            except DeliveryRuntimeReferenceError:
+                # outcome absent in this runtime
+                continue
+            if binding.stage != DeliveryStage.DESIGN:
+                planned.append(scope.scope_id)
+            task_count = len(binding.tasks)
+            reviewed = len(binding.results)
+            progress.append(TaskProgress(scope_id=scope.scope_id, task_count=task_count, reviewed_task_count=reviewed))
+            if binding.stage == DeliveryStage.COMPLETED and binding.assembly_required:
+                assembly.append(scope.scope_id)
+            pending.extend([binding.outcome_id for request in binding.requests if request.resolution is None])
+
+        evidence = WorkItemEvidence(
+            planned_scope_ids=tuple(planned),
+            task_progress=tuple(progress),
+            completed_assembly_scope_ids=tuple(assembly),
+            pending_request_work_item_ids=tuple(pending),
+            design_reentry_briefings=(),
+        )
+        return authority, evidence
 
     def list_completed_changes(self, cursor: str | None = None, limit: int = 100) -> CompletedChangePage:
         """List one bounded page rebuilt from configured target history."""

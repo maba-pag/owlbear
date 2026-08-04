@@ -14,9 +14,6 @@ from owlbear_kanban import (
     CapacityLedger,
     AdvanceDelivery,
     BlockDelivery,
-    Commitment,
-    CommitmentClass,
-    CompletionSummary,
     CompletedHistoryCatalog,
     ChangeWorkspaceManager,
     ChangeWriter,
@@ -49,8 +46,6 @@ from owlbear_kanban import (
     DesignPackageConflictError,
     DesignPackageStore,
     OutcomeAuthorityBinding,
-    Outcome,
-    PlanScopeKind,
     PortfolioApplication,
     PortfolioApplicationConfig,
     PortfolioApplicationDependencies,
@@ -59,11 +54,6 @@ from owlbear_kanban import (
     PublishDeliveryPlan,
     PublishDeliveryResult,
     RetryDelivery,
-    SemanticUpdate,
-    TargetAuthority,
-    TaskPlanScope,
-    TaskProgress,
-    WorkItemEvidence,
     WorkItemProjector,
 )
 from owlbear_kanban.runtime_transaction import RuntimeTransaction
@@ -418,63 +408,9 @@ def test_integration_queries_are_stable_bounded_and_read_only(tmp_path: Path) ->
 
 
 def test_work_item_queries_use_bounded_projector_models_only(tmp_path: Path) -> None:
-    def projector(change_id: str, *, completed: bool) -> WorkItemProjector:
-        authority = TargetAuthority(
-            change_id=change_id,
-            title=f"Delivery {change_id}",
-            commitments=(
-                Commitment(
-                    commitment_id="COM-001",
-                    commitment_class=CommitmentClass.AGREED_PATH,
-                    provenance="composed projection test",
-                    statement="Keep projection ownership bounded.",
-                ),
-            ),
-            outcomes=(
-                Outcome(
-                    outcome_id="OUT-001",
-                    title="Project work",
-                    promise="Return bounded work-item state.",
-                    acceptance=("The projection is observable.",),
-                    commitment_ids=("COM-001",),
-                ),
-            ),
-            task_plan_scopes=(
-                TaskPlanScope(
-                    scope_id="SCOPE-001",
-                    kind=PlanScopeKind.OUTCOME,
-                    target_id="OUT-001",
-                ),
-            ),
-            semantic_updates=(
-                SemanticUpdate(
-                    update_id="UPDATE-001",
-                    work_item_id="OUT-001",
-                    rationale="internal semantic body sentinel",
-                ),
-            ),
-            completion_summaries=(
-                CompletionSummary(
-                    work_item_id="OUT-001",
-                    known_limits=("internal completion body sentinel",),
-                ),
-            ),
-        )
-        evidence = WorkItemEvidence(
-            planned_scope_ids=("SCOPE-001",) if completed else (),
-            task_progress=(TaskProgress(scope_id="SCOPE-001", task_count=1, reviewed_task_count=1),)
-            if completed
-            else (),
-        )
-        return WorkItemProjector(authority, evidence)
-
     application, _runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
-        {},
-        work_item_projectors={
-            "change-b": projector("change-b", completed=True),
-            "change-a": projector("change-a", completed=False),
-        },
+        {"change-b": DeliveryStage.COMPLETED, "change-a": DeliveryStage.PLANNING},
     )
 
     listed = application.list_work_items()
@@ -490,7 +426,7 @@ def test_work_item_queries_use_bounded_projector_models_only(tmp_path: Path) -> 
         ("change-a", "OUT-001"),
         ("change-b", "OUT-001"),
     )
-    assert shown.acceptance == ("The projection is observable.",)
+    assert shown.acceptance == ("The launch is observable.",)
     assert "internal semantic body sentinel" not in serialized
     assert "internal completion body sentinel" not in serialized
 
