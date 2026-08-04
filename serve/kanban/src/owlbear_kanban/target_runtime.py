@@ -954,6 +954,10 @@ class TargetRuntime:
             plan_scope_id=scope_id,
             created_at=timestamp,
         )
+        jobs = tuple(
+            _rebind_predecessor(item, job.job_id, replanned.job_id) if item.state == TargetJobState.PENDING else item
+            for item in jobs
+        )
         updated = state.model_copy(update={"jobs": (*jobs, replanned), "tasks": tasks, "attempts": attempts})
         detail = f"plan job {replanned.job_id} replaces scope {scope_id}"
         if superseded:
@@ -1131,6 +1135,13 @@ def _replace[ItemT: BaseModel](items: tuple[ItemT, ...], current: ItemT, replace
             return (*items[:index], replacement, *items[index + 1 :])
     msg = "replacement target is missing"
     raise TargetRuntimeReferenceError(msg)
+
+
+def _rebind_predecessor(job: TargetJob, previous_job_id: int, replacement_job_id: int) -> TargetJob:
+    if previous_job_id not in job.predecessor_job_ids:
+        return job
+    predecessors = tuple(replacement_job_id if item == previous_job_id else item for item in job.predecessor_job_ids)
+    return job.model_copy(update={"predecessor_job_ids": predecessors})
 
 
 def _model_identity(model: BaseModel) -> tuple[str, object]:

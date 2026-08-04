@@ -436,6 +436,28 @@ def test_plan_return_republishes_the_scope_and_drops_superseded_tasks(tmp_path) 
     )
 
 
+def test_plan_return_rebinds_pending_successors_to_replacement(tmp_path) -> None:
+    runtime = _runtime(tmp_path)
+    returned = _target_job(runtime, 1, "OUT-001", kind="plan")
+    successor = _target_job(runtime, 2, "OUT-002", kind="plan").model_copy(
+        update={"predecessor_job_ids": (returned.job_id,)}
+    )
+    runtime.materialize((returned, successor))
+    _start(runtime, 1, "attempt-001", "reviewer-one")
+
+    _finish(
+        runtime,
+        1,
+        "attempt-001",
+        "reviewer-one",
+        disposition=ReviewDisposition.TASK_PLAN,
+        review_id="review-001",
+    )
+
+    assert runtime.show_job(2).predecessor_job_ids == (3,)
+    assert tuple((job.job_id, job.kind) for job in runtime.list_frontier()) == ((3, "plan"),)
+
+
 def test_design_return_blocks_the_semantic_slice_and_surfaces_the_briefing(tmp_path) -> None:
     runtime = _runtime(tmp_path)
     runtime.materialize(tuple(_target_job(runtime, index, f"OUT-00{index}", kind="plan") for index in range(1, 4)))
