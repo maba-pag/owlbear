@@ -32,7 +32,7 @@ file schemas, required sections, naming grammar, extraction criteria, and anti-p
 
 ### Precedent
 
-`build-reviewer` qualifies through its independent committed-packet review, distinct model, and hard
+`build-reviewer` qualifies through its independent exact-commit task-result review, distinct model, and hard
 read-only boundary.
 
 ## Principles
@@ -161,8 +161,8 @@ Compact transition table showing what triggers this agent and what it produces:
 ```markdown
 | Trigger | From → To | Condition |
 |---------|-----------|-----------|
-| Success | build job → build receipt | committed packet and exact-commit review pass |
-| Re-entry | build job → Specification | admitted packet cannot own the finding |
+| Success | Build launch → published result transition | exact-commit advisory review passes |
+| Re-entry | Build launch → Planning or Design | task authority cannot own the finding |
 ```
 
 **`<agents>`** — Only agents that delegate to sub-agents.
@@ -170,7 +170,7 @@ Compact transition table showing what triggers this agent and what it produces:
 ```markdown
 | Agent | When | Example |
 |-------|------|---------|
-| planner-challenger | Packet DAG review before plan success | `Challenge Plan: change_id=cache, job_id=42, target=DN-004, packets=[...]` |
+| planner-challenger | Task-chain review before publication | `Challenge Plan: change=cache, outcome=OUT-004, claim=claim-7` |
 ```
 
 The `<agents>` table must list every agent in the frontmatter `agents:` array and vice versa. This is the **only** source of subagent knowledge at nesting depth ≥2 (VS Code does not inject the agents catalog at that depth). The `validate-agents` pre-commit hook enforces alignment through `.owlbear/scripts/validate_agents.py`.
@@ -230,7 +230,7 @@ user-invocable: {true|false}
 
 ### Naming Grammar
 
-- **Agent names** are **role nouns** or role compounds (builder, claim-arbiter, build-reviewer).
+- **Agent names** are **role nouns** or role compounds (builder, memory-curator, build-reviewer).
 - **Skill names** are **domain-action compounds** — use verbs/actions, not plural nouns. E.g., `test-curation` not `test-curations`, `decision-routing` not `decision-requests`, `task-decomposition` not `task-workflow`.
 - The `w-` prefix replaces the word "workflow" — don't use both (e.g., `w-test-curation` not `w-test-curation-workflow`).
 

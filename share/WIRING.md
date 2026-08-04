@@ -48,10 +48,9 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | designer-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
 | planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch and terminal mutation; publishes advisory-reviewed task chains and returns worker-owned transitions |
 | planner-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
-| orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, claim-arbiter, memory-curator, Explore | Target portfolio and plan/build/assembly mutation tools; no repository write tools |
+| orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, memory-curator, Explore | Five Delivery portfolio operations: report, acquire, transition, recover exact failed claims, and integrate ready changes; no repository write tools |
 | builder | GPT-5.6 Terra | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; `SessionStart`: repository context; `PostToolUse`: lint changed files |
 | build-reviewer | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | `PreToolUse`: deny writes except scratch |
-| claim-arbiter | Claude Opus 5 | `r-challenger-protocol` | None | `PreToolUse`: deny writes except scratch; final isolated disagreement decision |
 | test-curator | GPT-5.6 Terra | `w-test-curation` | None | `PreToolUse`: deny source writes |
 | memory-curator | GPT-5.6 Terra | `w-mem-curation` | None | None |
 | knowledge-ingestor | GPT-5.6 Luna | `h-knowledge-ops` | None | None |
@@ -121,9 +120,8 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | designer-challenger | designer | Native admission lacks required repository-grounded entity challenge evidence |
 | planner | orchestrator | An acquired Planning launch cannot produce a published task chain and worker-owned transition |
 | planner-challenger | planner | A proposed Delivery task chain cannot receive independent advisory evidence |
-| builder | orchestrator | Target build and assembly jobs cannot produce reviewed exact-commit claims |
-| build-reviewer | builder | A target build or assembly claim cannot satisfy independent review |
-| claim-arbiter | orchestrator | A persisted owner-reviewer disagreement cannot receive its one final decision |
+| builder | orchestrator | An acquired Build launch cannot produce a published exact-commit result and worker-owned transition |
+| build-reviewer | builder | An exact-commit implementation candidate cannot receive advisory pass or finding evidence |
 | memory-curator | orchestrator | Periodic memory housekeeping is skipped |
 | Explore | designer, planner, orchestrator | Broad read-only orientation must be performed by the caller or omitted |
 
@@ -135,7 +133,7 @@ The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignmen
 | Control | Attached roles | Enforcement job |
 |---------|----------------|-----------------|
 | Agent `tools:` allowlist | Every agent | Limits runtime capabilities exposed to the role |
-| `deny-writes.py` | planner, conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer, claim-arbiter | Rejects durable edit-tool writes outside scratch; planner also enables terminal read-only mode |
+| `deny-writes.py` | planner, conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer | Rejects durable edit-tool writes outside scratch; planner also enables terminal read-only mode |
 | `deny-src-writes.py` | test-curator | Restricts writes to tests and scratch |
 | `session-context.py` | builder | Adds repository context at session start |
 | `lint-changed.py` | builder | Runs changed-file checks after tool use |

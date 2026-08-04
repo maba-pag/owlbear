@@ -52,7 +52,7 @@ _MAINTAINED_DOC_CONTRACTS = {
     Path("setup/setup-guide.md"): ("## Target Delivery Workflow", "setup/finalize.py"),
     Path("setup/sharing-guide.md"): (".owlbear/target/changes/", "Immutable legacy inventory"),
     Path("share/README.md"): ("## Product Boundary", "WIRING.md"),
-    Path("share/WIRING.md"): ("planner", "builder", "claim-arbiter", "orchestrator"),
+    Path("share/WIRING.md"): ("planner", "builder", "build-reviewer", "orchestrator"),
 }
 
 _MARKDOWN_LINK = re.compile(r"\[[^]]*]\(([^)]+)\)")

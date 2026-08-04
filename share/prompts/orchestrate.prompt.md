@@ -1,7 +1,8 @@
 ---
-description: "Start native graph-aware orchestration for an admitted change"
+description: "Run deterministic Delivery acquisition, worker dispatch, and Integration"
 agent: orchestrator
 ---
 
-Ask for the admitted `change_id` when it is not supplied, then follow `w-orchestration` to dispatch
-engine-selected native jobs until no eligible work remains or the user intervenes.
+Follow `w-orchestration` to acquire current Delivery work across the portfolio, dispatch bounded
+Planner and Builder launches, forward their transitions unchanged, recover exact failed launches,
+and invoke only acquisition-provided Integration IDs until the portfolio is quiescent.

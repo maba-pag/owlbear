@@ -1,104 +1,83 @@
 ---
 name: w-orchestration
-description: "Workflow: Dispatch and finalize reviewed target transformations across the portfolio"
+description: "Workflow: Acquire Delivery work, dispatch bounded workers, and forward their transitions"
 user-invocable: false
 ---
 
-# Target Orchestration
+# Delivery Orchestration
 
-Run the portfolio until no ready target transformations remain. The runtime owns readiness,
-attempt state, receipts, typed correction, and recovery. Orchestration owns reviewer assignment,
-cross-change capacity, exact dispatch context, and identity-preserving lifecycle calls.
+Run the portfolio until acquisition is quiescent or bounded attention requires a user/operator.
+Kanban owns readiness, capacity, claims, identities, reviewer policy, writer custody, transitions,
+and Integration. Orchestrator performs only the mechanical dispatch loop around that authority.
 
-## Step 1 - Discover Current Frontiers
+## Step 1 - Acquire One Current Batch
 
 If target tools are deferred, load them once with `tool_search` using:
 
-`OwlBear Kanban target portfolio list_work_items list_frontier start_job finish_plan finish_build finish_assembly respond_to_review arbitrate_attempt recover_interrupted_task`
+`OwlBear Kanban target portfolio list_work_items acquire_frontier_work transition_delivery recover_claim integrate_ready_change`
 
-Call `list_work_items` to discover current changes, then `list_frontier(change_id)` for each change.
-From the returned frontiers, dispatch stable topology/creation order while admitting at most one
-writer per change and respecting the configured global limit. Do not infer readiness from agent
-output or cached portfolio state.
+Call `list_work_items` only for bounded portfolio reporting. Call `acquire_frontier_work` once for the
+current cycle. Its `DeliveryAcquisitionResult` is the sole source of launch order,
+`integration_ready_change_ids`, and acquisition failures. Do not filter for capacity, infer
+readiness, create identities, or reserve writer custody.
 
-## Step 2 - Start One Distinct Claim
+## Step 2 - Dispatch Or Recover Each Launch
 
-For each selected job, create fresh `attempt_id`, `claim_id`, `owner_id`, `reviewer_id`, and
-`process_id` values plus orchestrator-owned RFC 3339 `started_at` and `lease_expires_at`. The owner
-and reviewer must differ, and a restarted job's `excluded_reviewer_ids` cannot be reused.
+Process `launch_packages` in returned order. For worker role `planner` or `builder`, dispatch exactly
+`launch.policy.worker_agent` using `launch.policy.worker_model` and pass only the serialized
+`DeliveryLaunchPackage`. Do not substitute a role, model, reviewer, worktree, branch, or source head.
 
-Call `start_job(change_id, request)` with all fields above and the selected `job_id`. Combine its
-complete successful result with the change coordination supplied by the dispatch boundary:
-`branch`, `worktree_path`, `integration_target`, `target_head`, and `last_reviewed_commit`. This is
-the immutable dispatch context. Never substitute a familiar branch or workspace.
+The current public surface has no Assembly context or publication operation. For worker role
+`assembly-reviewer`, call `recover_claim` immediately with the launch's exact `change_id`,
+`outcome_id`, `claim.attempt_id`, and `claim.claim_id`. Report the returned recovery status or
+attention and stop processing that affected change. Do not dispatch Build Reviewer, inspect
+composition, construct a transition, or leave the unsupported claim silently active.
 
-Dispatch `planner` for `plan`; dispatch `builder` for `build` or `assembly`. Each agent receives only
-that serialized context. A build or assembly owner writes only in `worktree_path`; a planner is
-hard read-only. Keep the assigned reviewer available for the attempt's review and repair rounds.
+If Planner or Builder dispatch fails before returning a structurally valid worker result, use that
+same exact `recover_claim` request. Recovery attention remains runtime-owned evidence; report it
+without interpreting Git, liveness, or custody. An acquisition failure carrying attempt and claim
+IDs uses the same route. A failure without claim IDs is reported as bounded acquisition attention
+and is not recoverable by Orchestrator.
 
-## Step 3 - Persist One Review Decision
+## Step 3 - Forward One Worker Transition
 
-Require the agent result to preserve the started job, attempt, claim, owner, reviewer, candidate
-commit, claim text, and non-empty evidence. Call the finish operation matching the job kind:
+Require the worker result to be one `DeliveryTransition` mapping. Validate only identity binding:
 
-- `finish_plan(change_id, request)` for `plan`;
-- `finish_build(change_id, request)` for `build`;
-- `finish_assembly(change_id, request)` for `assembly`.
+- `outcome_id` and `claim_id` equal the launch values;
+- any transition `attempt_id` equals `launch.claim.attempt_id`;
+- any nested output uses the launch claim ID.
 
-The request contains `job_id`, `attempt_id`, `claim_id`, `owner_id`, `reviewer_id`, `review_id`,
-`candidate_commit`, `reviewed_at`, `disposition`, `claim`, `evidence`, and a fresh `receipt_id` only
-for `acceptable`. For `finish_plan`, also forward the planner's exact `planned_tasks`; the runtime
-binds them into review evidence and publishes build jobs only when the plan is acceptable. Build and
-assembly finishes never carry plan tasks. Forward owner/reviewer evidence unchanged; never
-reconstruct it.
+Do not select, rewrite, enrich, or reconstruct action, output, result, request, reason, evidence, or
+commit fields. Call `transition_delivery` with outer `change_id=launch.change_id` and the returned
+transition as `request` byte-for-structure unchanged. A worker-owned `block`, `retry`, or `return`
+is forwarded normally and must not be recovered.
 
-Disposition handling is finite:
+An identity mismatch or malformed result is a failed dispatch result: publish no substitute and use
+the exact Step 2 recovery route for the still-active claim.
 
-| Disposition | Runtime result | Next action |
-|-------------|----------------|-------------|
-| `acceptable` | Receipt closes the job | Query fresh frontiers |
-| `repair` | Same attempt awaits correction | Redispatch same owner, reviewer, claim, and worktree with persisted review evidence |
-| `restart` | Attempt closes; job becomes pending | Preserve rejected head; restart from last reviewed commit with a fresh reviewer |
-| `task-plan` | Job returns to task planning | Query fresh authority/frontiers |
-| `solution-plan` | Job returns to solution planning | Query fresh authority/frontiers |
-| `design` | Protected meaning needs collaboration | Stop affected work and report its design re-entry briefing |
+## Step 4 - Integrate Only Acquisition-Provided IDs
 
-Every materially changed candidate is a distinct claim and receives exactly one review decision.
-Repair is not permission for an informal review loop.
+For each `integration_ready_change_id` in returned order, call `integrate_ready_change(change_id)`.
+Report its completion or typed Integration attention unchanged. Never discover Integration
+candidates from work-item stages, worker prose, branch state, or cached results.
 
-## Step 4 - Resolve One Disagreement
+## Step 5 - Refresh
 
-When an owner disputes a persisted `repair`, allow exactly one evidence response. Call
-`respond_to_review(change_id, request)` with the unchanged `job_id`, `attempt_id`, `claim_id`, and
-`owner_id`, plus a fresh `response_id`, `responded_at`, and non-empty `evidence`.
-
-Then dispatch `claim-arbiter` with the immutable claim, review, and response. The arbiter must differ
-from owner and reviewer. Call `arbitrate_attempt(change_id, request)` with fresh `arbiter_id` and
-`decision_id`, `decided_at`, one terminal disposition (`acceptable`, `restart`, `task-plan`,
-`solution-plan`, or `design`), rationale, and a fresh `receipt_id` only for `acceptable`. Arbitration
-is final for the attempt. A second response, review negotiation, or arbitration is forbidden.
-
-## Step 5 - Recover A Dead Owner
-
-Use `recover_interrupted_task` only when the recorded process is known dead. Pass unchanged
-`job_id`, `attempt_id`, `claim_id`, and `process_id` plus `recovered_at`. Never use recovery to
-preempt a live owner, rebalance capacity, or abandon an inconvenient review.
-
-## Step 6 - Continue
-
-After every transition, discard cached frontier state and query again. Continue independent changes
-when another change returns earlier. Stop only when current frontiers are empty, a collaboration
-boundary requires the user, or a fail-closed diagnostic prevents safe progress.
+Finish the current acquired batch, discard it, and call `acquire_frontier_work` again. Continue
+independent changes when one outcome returns or blocks. Stop when both launch packages and
+Integration-ready IDs are empty, or when a fail-closed diagnostic requires user/operator action.
 
 ## Output
 
-Report completed receipt identities, returned work items and levels, active blockers, and cycle
-count. Do not report a claim as complete without its runtime receipt.
+Report forwarded transition identities, Integration completion or attention, exact recovery results,
+unclaimed acquisition failures, and cycle count. Do not translate those typed results into invented
+completion or scheduling state.
 
 ## Known Pitfalls
 
-- **Stale dispatch:** every transition requires fresh frontiers.
-- **Reviewer substitution:** repair retains the assigned reviewer; restart excludes it.
-- **Workspace assumption:** dispatch uses recorded coordination, never a hard-coded target.
-- **Owner impersonation:** there is no owner-style claim release.
-- **Open review:** one review, one optional evidence response, and one final arbitration is the limit.
+- **Local scheduling:** acquisition already owns stable readiness and capacity.
+- **Identity generation:** launch claims and role policies are runtime output, not Orchestrator input.
+- **Transition interpretation:** worker action and payload remain unchanged.
+- **Fake Assembly support:** unsupported Assembly claims are recovered exactly, never sent to Builder
+  or Build Reviewer.
+- **Integration discovery:** only acquisition-provided IDs authorize the Integration call.
