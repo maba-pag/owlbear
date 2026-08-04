@@ -14,6 +14,8 @@ from owlbear_kanban import (
     DeliveryOutputKind,
     DeliveryOutputReference,
     DeliveryStage,
+    DeliveryTaskDefinition,
+    DeliveryTaskResult,
     DesignPackageManifest,
     DesignPackageStore,
     OutcomeAuthorityBinding,
@@ -186,15 +188,39 @@ def test_revision_preserves_unchanged_binding_and_invalidates_changed_dependents
     package_store.create("source-bound-change", *_sources())
     registry = DeliveryAuthorityRegistry(target_root, package_store, integration_target="product")
     first = registry.admit(_request())
-    populated = DeliveryFrontier(
-        bindings=tuple(
+    populated_bindings = []
+    for index, binding in enumerate(first.frontier.bindings, start=1):
+        task = DeliveryTaskDefinition(
+            task_id=f"TASK-{index:03}",
+            outcome_id=binding.outcome_id,
+            plan_scope_id=binding.plan_scope_id,
+            title=f"Produce result {index}",
+            result=f"Result {index}",
+            commitment_ids=(),
+            dependency_ids=(),
+            required_outputs=("Reviewed commit",),
+            maintained_surfaces=("serve/kanban",),
+            constraints=(),
+            exclusions=(),
+            acceptance_observations=("Result is bound",),
+            proof_boundaries=("Delivery runtime",),
+        )
+        result = DeliveryTaskResult(
+            result_id=f"RESULT-{index:03}",
+            change_id="source-bound-change",
+            authority_digest=first.contract_digest,
+            task_id=task.task_id,
+            task_digest=task.digest,
+            completed_commit=f"{index}" * 40,
+        )
+        populated_bindings.append(
             OutcomeAuthorityBinding(
                 outcome_id=binding.outcome_id,
                 plan_scope_id=binding.plan_scope_id,
                 stage=DeliveryStage.IMPLEMENTATION,
                 assembly_required=True,
-                task_ids=(f"TASK-{index:03}",),
-                result_ids=(f"RESULT-{index:03}",),
+                tasks=(task,),
+                results=(result,),
                 output=DeliveryOutputReference(
                     output_id=f"OUTPUT-{index:03}",
                     claim_id=f"CLAIM-{index:03}",
@@ -203,9 +229,8 @@ def test_revision_preserves_unchanged_binding_and_invalidates_changed_dependents
                     digest=f"{index}" * 64,
                 ),
             )
-            for index, binding in enumerate(first.frontier.bindings, start=1)
         )
-    )
+    populated = DeliveryFrontier(bindings=tuple(populated_bindings))
     delivery_root = target_root / "delivery/changes/source-bound-change"
     (delivery_root / "frontier.json").write_bytes(_canonical(populated))
 
@@ -230,6 +255,8 @@ def test_revision_preserves_unchanged_binding_and_invalidates_changed_dependents
     assert bindings["OUT-002"].task_ids == bindings["OUT-002"].result_ids == ()
     assert bindings["OUT-001"].stage == bindings["OUT-002"].stage == DeliveryStage.PLANNING
     assert bindings["OUT-001"].output is bindings["OUT-002"].output is None
+    assert bindings["OUT-001"].tasks == bindings["OUT-002"].tasks == ()
+    assert bindings["OUT-001"].results == bindings["OUT-002"].results == ()
     assert bindings["OUT-003"] == populated.bindings[2]
     revision_root = delivery_root / "revisions" / first.contract_digest
     assert {path.name for path in revision_root.iterdir()} == {

@@ -14,6 +14,7 @@ from owlbear_kanban.runtime_transaction import ReplacementTransactionParticipant
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from owlbear_kanban.change_workspace import ChangeWorkspaceManager
     from owlbear_kanban.target_contract import DeliveryContract
 
 
@@ -65,6 +66,88 @@ class DeliveryOutputReference(_DeliveryModel):
     stage: DeliveryStage
     kind: DeliveryOutputKind
     digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class DeliveryTaskDefinition(_DeliveryModel):
+    """Immutable executable authority for one bounded implementation result."""
+
+    task_id: str = Field(min_length=1)
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    plan_scope_id: str = Field(pattern=r"^SCOPE-[0-9]{3}$")
+    title: str = Field(min_length=1)
+    result: str = Field(min_length=1)
+    commitment_ids: tuple[str, ...]
+    dependency_ids: tuple[str, ...]
+    required_outputs: tuple[str, ...] = Field(min_length=1)
+    maintained_surfaces: tuple[str, ...] = Field(min_length=1)
+    constraints: tuple[str, ...]
+    exclusions: tuple[str, ...]
+    acceptance_observations: tuple[str, ...] = Field(min_length=1)
+    proof_boundaries: tuple[str, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_references(self) -> DeliveryTaskDefinition:
+        for references in (self.commitment_ids, self.dependency_ids):
+            if len(references) != len(set(references)):
+                message = "Delivery task references must be unique"
+                raise ValueError(message)
+        return self
+
+    @property
+    def digest(self) -> str:
+        """Return the canonical immutable task-definition digest."""
+        return hashlib.sha256(_model_content(self)).hexdigest()
+
+
+class DeliveryPlanCandidate(_DeliveryModel):
+    """One unpromoted claim-scoped canonical task chain."""
+
+    candidate_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    tasks: tuple[DeliveryTaskDefinition, ...] = Field(min_length=1)
+
+    @property
+    def output(self) -> DeliveryOutputReference:
+        """Return the phase-output reference required for promotion."""
+        return DeliveryOutputReference(
+            output_id=self.candidate_id,
+            claim_id=self.claim_id,
+            stage=DeliveryStage.PLANNING,
+            kind=DeliveryOutputKind.PLANNING,
+            digest=self.digest,
+        )
+
+
+class DeliveryTaskResult(_DeliveryModel):
+    """Compact immutable binding from promoted task authority to one exact commit."""
+
+    result_id: str = Field(min_length=1)
+    change_id: str = Field(min_length=1)
+    authority_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    task_id: str = Field(min_length=1)
+    task_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    completed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class DeliveryResultCandidate(_DeliveryModel):
+    """One unpromoted claim-scoped compact implementation result."""
+
+    candidate_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    result: DeliveryTaskResult
+
+    @property
+    def output(self) -> DeliveryOutputReference:
+        """Return the phase-output reference required for result promotion."""
+        return DeliveryOutputReference(
+            output_id=self.candidate_id,
+            claim_id=self.claim_id,
+            stage=DeliveryStage.IMPLEMENTATION,
+            kind=DeliveryOutputKind.IMPLEMENTATION,
+            digest=self.digest,
+        )
 
 
 class DeliveryRequestOption(_DeliveryModel):
@@ -121,6 +204,7 @@ class DeliveryBlock(_DeliveryModel):
     request_id: str | None = None
     resolution_note: str | None = None
     resolution_locators: tuple[str, ...] = ()
+    resume_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
 
     @property
     def resolved(self) -> bool:
@@ -138,6 +222,17 @@ class DeliveryOperatorMove(_DeliveryModel):
     invalidated_outcome_ids: tuple[str, ...] = Field(min_length=1)
 
 
+class DeliveryReturnContext(_DeliveryModel):
+    """Exact earlier-stage context consumed by the next owning cycle."""
+
+    target: DeliveryStage
+    reason: str = Field(min_length=1)
+    locators: tuple[str, ...] = Field(min_length=1)
+    preserved_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    completed_boundary: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    source_boundary: str | None = None
+
+
 class OutcomeAuthorityBinding(_DeliveryModel):
     """Canonical state and identity bindings for one admitted outcome."""
 
@@ -145,10 +240,14 @@ class OutcomeAuthorityBinding(_DeliveryModel):
     plan_scope_id: str = Field(pattern=r"^SCOPE-[0-9]{3}$")
     stage: DeliveryStage = DeliveryStage.PLANNING
     assembly_required: bool = False
-    task_ids: tuple[str, ...] = ()
-    result_ids: tuple[str, ...] = ()
+    tasks: tuple[DeliveryTaskDefinition, ...] = ()
+    results: tuple[DeliveryTaskResult, ...] = ()
     active_claim_id: str | None = None
+    active_task_id: str | None = None
     output: DeliveryOutputReference | None = None
+    candidate: DeliveryPlanCandidate | None = None
+    result_candidate: DeliveryResultCandidate | None = None
+    return_context: DeliveryReturnContext | None = None
     block: DeliveryBlock | None = None
     requests: tuple[DeliveryRequest, ...] = ()
 
@@ -161,7 +260,25 @@ class OutcomeAuthorityBinding(_DeliveryModel):
         if len(request_ids) != len(set(request_ids)):
             message = "Delivery request identities must be unique per outcome"
             raise ValueError(message)
+        task_ids = self.task_ids
+        result_ids = self.result_ids
+        if len(task_ids) != len(set(task_ids)) or len(result_ids) != len(set(result_ids)):
+            message = "Delivery task and result identities must be unique per outcome"
+            raise ValueError(message)
+        if not {result.task_id for result in self.results} <= set(task_ids):
+            message = "Delivery results must bind promoted task authority"
+            raise ValueError(message)
         return self
+
+    @property
+    def task_ids(self) -> tuple[str, ...]:
+        """Project promoted task identities from their single typed authority."""
+        return tuple(task.task_id for task in self.tasks)
+
+    @property
+    def result_ids(self) -> tuple[str, ...]:
+        """Project compact result identities from their single typed authority."""
+        return tuple(result.result_id for result in self.results)
 
 
 class DeliveryFrontier(_DeliveryModel):
@@ -191,6 +308,7 @@ class ActivateDeliveryClaim(_DeliveryModel):
 
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     claim_id: str = Field(min_length=1)
+    task_id: str | None = None
 
 
 class PublishDeliveryOutput(_DeliveryModel):
@@ -199,6 +317,22 @@ class PublishDeliveryOutput(_DeliveryModel):
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     claim_id: str = Field(min_length=1)
     output: DeliveryOutputReference
+
+
+class PublishDeliveryPlan(_DeliveryModel):
+    """Publish one complete claim-scoped task-chain candidate."""
+
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    claim_id: str = Field(min_length=1)
+    tasks: tuple[DeliveryTaskDefinition, ...] = Field(min_length=1)
+
+
+class PublishDeliveryResult(_DeliveryModel):
+    """Publish one compact claim-scoped implementation result."""
+
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    claim_id: str = Field(min_length=1)
+    result: DeliveryTaskResult
 
 
 class AdvanceDelivery(_DeliveryModel):
@@ -216,6 +350,8 @@ class RetryDelivery(_DeliveryModel):
     action: Literal["retry"] = "retry"
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     claim_id: str = Field(min_length=1)
+    abandoned_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    attempt_id: str | None = None
 
 
 class ReturnDelivery(_DeliveryModel):
@@ -227,6 +363,9 @@ class ReturnDelivery(_DeliveryModel):
     target: DeliveryStage
     reason: str = Field(min_length=1)
     locators: tuple[str, ...] = Field(min_length=1)
+    preserved_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    attempt_id: str | None = None
+    source_boundary: str | None = None
 
 
 class BlockDelivery(_DeliveryModel):
@@ -241,6 +380,7 @@ class BlockDelivery(_DeliveryModel):
     expected_evidence: tuple[str, ...] = Field(min_length=1)
     locators: tuple[str, ...] = Field(min_length=1)
     request: DeliveryRequest | None = None
+    resume_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
 
 
 type DeliveryTransition = Annotated[
@@ -295,11 +435,24 @@ _RETURN_TARGETS = {
 class DeliveryRuntime:
     """Apply worker instructions and operator correction to one Delivery frontier."""
 
-    def __init__(self, target_root: Path, contract: DeliveryContract) -> None:
+    def __init__(
+        self,
+        target_root: Path,
+        contract: DeliveryContract,
+        *,
+        workspace_manager: ChangeWorkspaceManager | None = None,
+    ) -> None:
         self._target_root = target_root.resolve()
         self._contract = contract
+        self._workspace_manager = workspace_manager
+        self._authority_digest = hashlib.sha256(_model_content(contract)).hexdigest()
         self._frontier_path = self._target_root / "delivery" / "changes" / contract.change_id / "frontier.json"
         self._validate_frontier(self._read()[0])
+
+    @property
+    def authority_digest(self) -> str:
+        """Return the canonical admitted contract digest bound into task results."""
+        return self._authority_digest
 
     def frontier_bytes(self) -> bytes:
         """Return current canonical frontier bytes for OCC and failure proof."""
@@ -323,6 +476,18 @@ class DeliveryRuntime:
             and dependencies[binding.outcome_id] <= completed
         )
 
+    def claimable_task_ids(self, outcome_id: str) -> tuple[str, ...]:
+        """Return promoted tasks whose task dependencies have compact results."""
+        binding = self.show_binding(outcome_id)
+        if binding.stage != DeliveryStage.IMPLEMENTATION or binding.active_claim_id is not None:
+            return ()
+        completed = {result.task_id for result in binding.results}
+        return tuple(
+            task.task_id
+            for task in binding.tasks
+            if task.task_id not in completed and set(task.dependency_ids) <= completed
+        )
+
     def change_stage(self) -> DeliveryChangeStage:
         """Derive change lifecycle from canonical outcome state."""
         frontier, _content = self._read()
@@ -343,7 +508,19 @@ class DeliveryRuntime:
             _conflict("outcome is not claimable")
         if any(item.active_claim_id == request.claim_id for item in frontier.bindings):
             _conflict("active claim identity already exists")
-        claimed = binding.model_copy(update={"active_claim_id": request.claim_id, "output": None})
+        if binding.stage == DeliveryStage.IMPLEMENTATION:
+            if request.task_id not in self.claimable_task_ids(request.outcome_id):
+                _conflict("implementation task is not claimable")
+        elif request.task_id is not None:
+            _conflict("only Implementation claims name a task")
+        claimed = binding.model_copy(
+            update={
+                "active_claim_id": request.claim_id,
+                "active_task_id": request.task_id,
+                "output": None,
+                "result_candidate": None,
+            }
+        )
         self._replace(previous, _replace_binding(frontier, binding, claimed))
         return claimed
 
@@ -362,6 +539,66 @@ class DeliveryRuntime:
         self._replace(previous, _replace_binding(frontier, binding, updated))
         return request.output
 
+    def publish_plan(self, request: PublishDeliveryPlan) -> DeliveryPlanCandidate:
+        """Validate and persist one idempotent Planning candidate without movement."""
+        frontier, previous = self._read()
+        binding = _find_binding(frontier, request.outcome_id)
+        _require_claim(binding, request.claim_id)
+        if binding.stage != DeliveryStage.PLANNING:
+            _conflict("task-chain publication requires Planning stage")
+        self._validate_plan(binding, request.tasks)
+        digest = hashlib.sha256(b"".join(_model_content(task) for task in request.tasks)).hexdigest()
+        candidate = DeliveryPlanCandidate(
+            candidate_id=f"plan-{digest}",
+            claim_id=request.claim_id,
+            digest=digest,
+            tasks=request.tasks,
+        )
+        if binding.candidate == candidate:
+            return candidate
+        if binding.candidate is not None:
+            _conflict("active claim already published another task-chain candidate")
+        updated = binding.model_copy(update={"candidate": candidate, "output": candidate.output})
+        self._replace(previous, _replace_binding(frontier, binding, updated))
+        return candidate
+
+    def publish_result(self, request: PublishDeliveryResult) -> DeliveryResultCandidate:
+        """Validate and persist one idempotent compact result without movement."""
+        frontier, previous = self._read()
+        binding = _find_binding(frontier, request.outcome_id)
+        _require_claim(binding, request.claim_id)
+        if binding.stage != DeliveryStage.IMPLEMENTATION or binding.active_task_id is None:
+            _conflict("result publication requires an active Implementation task")
+        task = next((item for item in binding.tasks if item.task_id == binding.active_task_id), None)
+        if task is None:
+            _reference("active Implementation task authority is absent")
+        if (
+            request.result.change_id != self._contract.change_id
+            or request.result.authority_digest != self._authority_digest
+            or request.result.task_id != task.task_id
+            or request.result.task_digest != task.digest
+        ):
+            _conflict("compact result does not match promoted task authority")
+        self._require_workspace().validate_writer_head(
+            self._contract.change_id,
+            request.claim_id,
+            request.result.completed_commit,
+        )
+        digest = hashlib.sha256(_model_content(request.result)).hexdigest()
+        candidate = DeliveryResultCandidate(
+            candidate_id=f"result-{digest}",
+            claim_id=request.claim_id,
+            digest=digest,
+            result=request.result,
+        )
+        if binding.result_candidate == candidate:
+            return candidate
+        if binding.result_candidate is not None:
+            _conflict("active claim already published another result candidate")
+        updated = binding.model_copy(update={"result_candidate": candidate, "output": candidate.output})
+        self._replace(previous, _replace_binding(frontier, binding, updated))
+        return candidate
+
     def transition(self, request: DeliveryTransition) -> OutcomeAuthorityBinding:
         """Apply one worker-owned mechanical transition instruction."""
         frontier, previous = self._read()
@@ -370,7 +607,7 @@ class DeliveryRuntime:
         if isinstance(request, AdvanceDelivery):
             updated = self._advance(binding, request)
         elif isinstance(request, RetryDelivery):
-            updated = binding.model_copy(update={"active_claim_id": None, "output": None})
+            updated = self._retry(binding, request)
         elif isinstance(request, ReturnDelivery):
             updated = self._return(binding, request)
         else:
@@ -469,13 +706,125 @@ class DeliveryRuntime:
             _conflict("advance output does not match the published claim output")
         if binding.stage == DeliveryStage.PLANNING:
             destination = DeliveryStage.IMPLEMENTATION
-        elif binding.stage == DeliveryStage.IMPLEMENTATION:
-            destination = DeliveryStage.ASSEMBLY if binding.assembly_required else DeliveryStage.COMPLETED
-        elif binding.stage == DeliveryStage.ASSEMBLY:
+            if binding.candidate is None or binding.candidate.output != request.output:
+                _conflict("Planning advance requires the published task-chain candidate")
+            return binding.model_copy(
+                update={
+                    "stage": destination,
+                    "tasks": binding.candidate.tasks,
+                    "active_claim_id": None,
+                    "output": None,
+                    "candidate": None,
+                    "return_context": None,
+                    "block": None,
+                    "requests": (),
+                }
+            )
+        if binding.stage == DeliveryStage.IMPLEMENTATION:
+            candidate = binding.result_candidate
+            if candidate is None or candidate.output != request.output:
+                _conflict("Implementation advance requires the published compact result")
+            if any(result.task_id == candidate.result.task_id for result in binding.results):
+                _conflict("promoted task already has a compact result")
+            self._require_workspace().complete_reviewed(
+                self._contract.change_id,
+                request.claim_id,
+                candidate.result.completed_commit,
+            )
+            results = (*binding.results, candidate.result)
+            completed_tasks = {result.task_id for result in results}
+            complete = completed_tasks == {task.task_id for task in binding.tasks}
+            destination = (
+                (DeliveryStage.ASSEMBLY if binding.assembly_required else DeliveryStage.COMPLETED)
+                if complete
+                else DeliveryStage.IMPLEMENTATION
+            )
+            return binding.model_copy(
+                update={
+                    "stage": destination,
+                    "results": results,
+                    "active_claim_id": None,
+                    "active_task_id": None,
+                    "output": None,
+                    "result_candidate": None,
+                    "return_context": None,
+                    "block": None,
+                    "requests": (),
+                }
+            )
+        if binding.stage == DeliveryStage.ASSEMBLY:
             destination = DeliveryStage.COMPLETED
         else:
             _conflict("current stage cannot advance")
         return binding.model_copy(update={"stage": destination, "active_claim_id": None})
+
+    def _retry(
+        self,
+        binding: OutcomeAuthorityBinding,
+        request: RetryDelivery,
+    ) -> OutcomeAuthorityBinding:
+        if binding.stage == DeliveryStage.IMPLEMENTATION:
+            if request.abandoned_commit is None or request.attempt_id is None:
+                _conflict("Implementation retry requires attempt and abandoned-commit identity")
+            manager = self._require_workspace()
+            coordination = manager.show(self._contract.change_id)
+            if coordination.writer is not None:
+                manager.validate_writer_head(
+                    self._contract.change_id,
+                    request.claim_id,
+                    request.abandoned_commit,
+                )
+                if coordination.writer.attempt_id != request.attempt_id:
+                    _conflict("Implementation retry attempt does not own writer custody")
+            manager.restart(
+                self._contract.change_id,
+                request.attempt_id,
+                request.abandoned_commit,
+            )
+        elif request.abandoned_commit is not None or request.attempt_id is not None:
+            _conflict("only Implementation retry accepts attempt commit identity")
+        return binding.model_copy(
+            update={
+                "active_claim_id": None,
+                "active_task_id": None,
+                "output": None,
+                "candidate": None,
+                "result_candidate": None,
+                "return_context": None,
+            }
+        )
+
+    def _require_workspace(self) -> ChangeWorkspaceManager:
+        if self._workspace_manager is None:
+            _conflict("Implementation result transitions require workspace coordination")
+        return self._workspace_manager
+
+    def _validate_plan(
+        self,
+        binding: OutcomeAuthorityBinding,
+        tasks: tuple[DeliveryTaskDefinition, ...],
+    ) -> None:
+        task_ids = tuple(task.task_id for task in tasks)
+        if len(task_ids) != len(set(task_ids)):
+            _conflict("Delivery task identities must be unique")
+        outcome = next(item for item in self._contract.outcomes if item.outcome_id == binding.outcome_id)
+        contract_commitments = set(outcome.commitment_ids)
+        for task in tasks:
+            if task.outcome_id != binding.outcome_id or task.plan_scope_id != binding.plan_scope_id:
+                _reference("Delivery task belongs to another outcome or plan scope")
+            if not set(task.commitment_ids) <= contract_commitments:
+                _reference("Delivery task references an absent commitment")
+            if not set(task.dependency_ids) <= set(task_ids) or task.task_id in task.dependency_ids:
+                _reference("Delivery task dependency is absent or self-referential")
+        ready = {task.task_id for task in tasks if not task.dependency_ids}
+        visited = set(ready)
+        while True:
+            expanded = visited | {task.task_id for task in tasks if set(task.dependency_ids) <= visited}
+            if expanded == visited:
+                break
+            visited = expanded
+        if not ready or visited != set(task_ids):
+            _conflict("Delivery task graph must be acyclic with at least one ready task")
 
     def _return(
         self,
@@ -484,7 +833,62 @@ class DeliveryRuntime:
     ) -> OutcomeAuthorityBinding:
         if request.target not in _RETURN_TARGETS.get(binding.stage, set()):
             _conflict("return target is not allowed from the current stage")
-        return _reset_binding(binding, request.target)
+        if binding.stage == DeliveryStage.IMPLEMENTATION:
+            if request.preserved_commit is None or request.attempt_id is None:
+                _conflict("Implementation return requires attempt and preserved-commit identity")
+            manager = self._require_workspace()
+            coordination = manager.show(self._contract.change_id)
+            if coordination.writer is not None:
+                manager.validate_writer_head(
+                    self._contract.change_id,
+                    request.claim_id,
+                    request.preserved_commit,
+                )
+                if coordination.writer.attempt_id != request.attempt_id:
+                    _conflict("Implementation return attempt does not own writer custody")
+            context = DeliveryReturnContext(
+                target=request.target,
+                reason=request.reason,
+                locators=request.locators,
+                preserved_commit=request.preserved_commit,
+                completed_boundary=coordination.last_reviewed_commit,
+            )
+            manager.restart(
+                self._contract.change_id,
+                request.attempt_id,
+                request.preserved_commit,
+            )
+            if request.target == DeliveryStage.DESIGN:
+                tasks: tuple[DeliveryTaskDefinition, ...] = ()
+                results: tuple[DeliveryTaskResult, ...] = ()
+            else:
+                completed = {result.task_id for result in binding.results}
+                tasks = tuple(task for task in binding.tasks if task.task_id in completed)
+                results = binding.results
+            return binding.model_copy(
+                update={
+                    "stage": request.target,
+                    "tasks": tasks,
+                    "results": results,
+                    "active_claim_id": None,
+                    "active_task_id": None,
+                    "output": None,
+                    "candidate": None,
+                    "result_candidate": None,
+                    "return_context": context,
+                    "block": None,
+                }
+            )
+        if binding.stage == DeliveryStage.PLANNING and request.source_boundary is None:
+            _conflict("Planning return requires its admitted source boundary")
+        context = DeliveryReturnContext(
+            target=request.target,
+            reason=request.reason,
+            locators=request.locators,
+            source_boundary=request.source_boundary,
+        )
+        returned = _reset_binding(binding, request.target)
+        return returned.model_copy(update={"return_context": context})
 
     def _block(
         self,
@@ -493,6 +897,16 @@ class DeliveryRuntime:
     ) -> OutcomeAuthorityBinding:
         if request.request is not None and request.request.outcome_id != binding.outcome_id:
             _reference("block request belongs to another outcome")
+        if binding.stage == DeliveryStage.IMPLEMENTATION:
+            if request.resume_commit is None:
+                _conflict("Implementation block requires a clean resume commit")
+            self._require_workspace().release_writer_at_head(
+                self._contract.change_id,
+                request.claim_id,
+                request.resume_commit,
+            )
+        elif request.resume_commit is not None:
+            _conflict("only Implementation block accepts a resume commit")
         block = DeliveryBlock(
             block_id=request.block_id,
             reason=request.reason,
@@ -500,9 +914,21 @@ class DeliveryRuntime:
             expected_evidence=request.expected_evidence,
             locators=request.locators,
             request_id=request.request.request_id if request.request is not None else None,
+            resume_commit=request.resume_commit,
         )
         requests = (*binding.requests, request.request) if request.request is not None else binding.requests
-        return binding.model_copy(update={"active_claim_id": None, "block": block, "requests": requests})
+        return binding.model_copy(
+            update={
+                "active_claim_id": None,
+                "active_task_id": None,
+                "output": None,
+                "candidate": None,
+                "result_candidate": None,
+                "return_context": None,
+                "block": block,
+                "requests": requests,
+            }
+        )
 
     def _read(self) -> tuple[DeliveryFrontier, bytes]:
         RuntimeTransaction.recover_all(self._target_root)
@@ -570,11 +996,16 @@ def _reset_binding(binding: OutcomeAuthorityBinding, stage: DeliveryStage) -> Ou
         update={
             "stage": stage,
             "assembly_required": False,
-            "task_ids": (),
-            "result_ids": (),
+            "tasks": (),
+            "results": (),
             "active_claim_id": None,
+            "active_task_id": None,
             "output": None,
+            "candidate": None,
+            "result_candidate": None,
+            "return_context": None,
             "block": None,
+            "requests": (),
         }
     )
 
@@ -630,12 +1061,18 @@ __all__ = [
     "DeliveryRequestKind",
     "DeliveryRequestOption",
     "DeliveryRequestResolution",
+    "DeliveryResultCandidate",
+    "DeliveryReturnContext",
     "DeliveryRuntime",
     "DeliveryRuntimeConflictError",
     "DeliveryRuntimeReferenceError",
     "DeliveryStage",
+    "DeliveryTaskDefinition",
+    "DeliveryTaskResult",
     "OutcomeAuthorityBinding",
     "PublishDeliveryOutput",
+    "PublishDeliveryPlan",
+    "PublishDeliveryResult",
     "RetryDelivery",
     "ReturnDelivery",
 ]

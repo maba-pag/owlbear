@@ -361,11 +361,48 @@ class ChangeWorkspaceManager:
         updated = coordination.model_copy(update={"last_reviewed_commit": commit})
         return self._coordinator.update(updated)
 
+    def show(self, change_id: str) -> ChangeCoordination:
+        """Return current workspace coordination for transition validation."""
+        return self._coordinator.show(change_id)
+
+    def validate_writer_head(self, change_id: str, claim_id: str, commit: str) -> ChangeCoordination:
+        """Validate one writer-owned clean branch-head commit without mutation."""
+        coordination = self._coordinator.show(change_id)
+        if coordination.writer is None or coordination.writer.claim_id != claim_id:
+            _coordination_conflict("writer claim does not own the change workspace")
+        branch_head = self._resolve(coordination.branch)
+        if branch_head != commit:
+            _workspace_failure("candidate commit is not the current change branch head")
+        self._require_ancestor(coordination.last_reviewed_commit, commit)
+        self._require_worktree(coordination.worktree_path, coordination.branch, commit)
+        if self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
+            _workspace_failure("candidate commit requires a clean change worktree")
+        return coordination
+
+    def complete_reviewed(self, change_id: str, claim_id: str, commit: str) -> ChangeCoordination:
+        """Replayably advance one completed boundary and release exact writer custody."""
+        coordination = self._coordinator.show(change_id)
+        if coordination.writer is None:
+            if coordination.last_reviewed_commit == commit and self._resolve(coordination.branch) == commit:
+                return coordination
+            _coordination_conflict("completed writer state does not match the candidate commit")
+        self.validate_writer_head(change_id, claim_id, commit)
+        self.record_reviewed(change_id, commit)
+        return self._coordinator.release(change_id, claim_id)
+
+    def release_writer_at_head(self, change_id: str, claim_id: str, commit: str) -> ChangeCoordination:
+        """Replayably release one writer while retaining its clean branch head."""
+        coordination = self._coordinator.show(change_id)
+        if coordination.writer is None:
+            if self._resolve(coordination.branch) == commit:
+                return coordination
+            _coordination_conflict("released writer state does not match the resume commit")
+        self.validate_writer_head(change_id, claim_id, commit)
+        return self._coordinator.release(change_id, claim_id)
+
     def restart(self, change_id: str, attempt_id: str, rejected_head: str) -> ChangeCoordination:
         """Preserve a rejected head and recreate the change at its reviewed boundary."""
         coordination = self._coordinator.show(change_id)
-        if coordination.writer is None or coordination.writer.attempt_id != attempt_id:
-            _coordination_conflict("restart attempt does not own the change writer")
         branch_head = self._resolve(coordination.branch)
         worktree = coordination.worktree_path
         attempt_ref = f"refs/owlbear/attempts/{change_id}/{attempt_id}"
@@ -373,27 +410,63 @@ class ChangeWorkspaceManager:
         preserved = self._resolve(attempt_ref, missing_ok=True)
         if preserved is not None and preserved != rejected_head:
             _workspace_failure("attempt history ref names another rejected head")
+        if coordination.writer is None:
+            return self._validate_released_restart(coordination, rejected_head, branch_head, preserved)
+        self._prepare_active_restart(
+            coordination,
+            attempt_id,
+            rejected_head,
+        )
+        if not worktree.exists():
+            self._git("worktree", "add", str(worktree), coordination.branch)
+        self._require_worktree(worktree, coordination.branch, coordination.last_reviewed_commit)
+        return self._coordinator.release(change_id, coordination.writer.claim_id)
+
+    def _validate_released_restart(
+        self,
+        coordination: ChangeCoordination,
+        rejected_head: str,
+        branch_head: str,
+        preserved: str | None,
+    ) -> ChangeCoordination:
+        if preserved != rejected_head or branch_head != coordination.last_reviewed_commit:
+            _coordination_conflict("released restart state does not match the rejected head")
+        self._require_worktree(
+            coordination.worktree_path,
+            coordination.branch,
+            coordination.last_reviewed_commit,
+        )
+        return coordination
+
+    def _prepare_active_restart(
+        self,
+        coordination: ChangeCoordination,
+        attempt_id: str,
+        rejected_head: str,
+    ) -> None:
+        branch_head = self._resolve(coordination.branch)
+        attempt_ref = f"refs/owlbear/attempts/{coordination.change_id}/{attempt_id}"
+        preserved = self._resolve(attempt_ref, missing_ok=True)
+        if coordination.writer is None or coordination.writer.attempt_id != attempt_id:
+            _coordination_conflict("restart attempt does not own the change writer")
         if branch_head not in {rejected_head, coordination.last_reviewed_commit}:
             _workspace_failure("change branch is outside the recoverable restart states")
         if preserved is None:
             if branch_head != rejected_head:
                 _workspace_failure("rejected head is not the current change branch")
             self._git("update-ref", attempt_ref, rejected_head, "0" * 40)
-        if branch_head == rejected_head:
-            if worktree.exists():
-                if self._git("-C", str(worktree), "status", "--porcelain"):
-                    _workspace_failure("restart requires a clean committed change worktree")
-                self._git("worktree", "remove", str(worktree))
-            self._git(
-                "update-ref",
-                f"refs/heads/{coordination.branch}",
-                coordination.last_reviewed_commit,
-                rejected_head,
-            )
-        if not worktree.exists():
-            self._git("worktree", "add", str(worktree), coordination.branch)
-        self._require_worktree(worktree, coordination.branch, coordination.last_reviewed_commit)
-        return self._coordinator.release(change_id, coordination.writer.claim_id)
+        if branch_head != rejected_head:
+            return
+        if coordination.worktree_path.exists():
+            if self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
+                _workspace_failure("restart requires a clean committed change worktree")
+            self._git("worktree", "remove", str(coordination.worktree_path))
+        self._git(
+            "update-ref",
+            f"refs/heads/{coordination.branch}",
+            coordination.last_reviewed_commit,
+            rejected_head,
+        )
 
     def integrate(self, change_id: str, reviewed_commits: tuple[str, ...]) -> IntegrationResult:
         """Merge one change without rewriting reviewed commits and CAS the configured target."""
