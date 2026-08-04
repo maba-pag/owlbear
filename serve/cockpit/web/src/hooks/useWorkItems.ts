@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   answerWorkItemRequest,
   clearWorkItemBlock,
@@ -79,15 +79,20 @@ export function useCompletedHistory(query: string) {
     isLoading: true,
   })
   const [retryNonce, setRetryNonce] = useState(0)
+  const requestGeneration = useRef(0)
+  const latestQuery = useRef(query)
+  latestQuery.current = query
 
   useEffect(() => {
     let active = true
+    const generation = ++requestGeneration.current
     setResource((current) => ({ ...current, isLoading: true, error: null }))
     const request = query ? searchCompletedChanges(query) : listCompletedChanges()
     void request
-      .then((data) => active && setResource({ data, error: null, isLoading: false }))
+      .then((data) => active && generation === requestGeneration.current
+        && setResource({ data, error: null, isLoading: false }))
       .catch((caught: unknown) => {
-        if (!active) return
+        if (!active || generation !== requestGeneration.current) return
         setResource({
           data: null,
           error: caught instanceof Error ? caught : new Error('Completed history is unavailable'),
@@ -102,17 +107,21 @@ export function useCompletedHistory(query: string) {
   const loadMore = async () => {
     const current = resource.data
     if (!current?.next_cursor || resource.isLoading) return
+    const generation = requestGeneration.current
+    const requestedQuery = query
     setResource({ data: current, error: null, isLoading: true })
     try {
       const next = query
         ? await searchCompletedChanges(query, current.next_cursor)
         : await listCompletedChanges(current.next_cursor)
+      if (generation !== requestGeneration.current || requestedQuery !== latestQuery.current) return
       setResource({
         data: { records: [...current.records, ...next.records], next_cursor: next.next_cursor },
         error: null,
         isLoading: false,
       })
     } catch (caught: unknown) {
+      if (generation !== requestGeneration.current || requestedQuery !== latestQuery.current) return
       setResource({
         data: current,
         error: caught instanceof Error ? caught : new Error('Completed history is unavailable'),
@@ -126,7 +135,10 @@ export function useCompletedHistory(query: string) {
     error: resource.error,
     isLoading: resource.isLoading,
     loadMore,
-    retry: () => setRetryNonce((value) => value + 1),
+    retry: () => {
+      requestGeneration.current += 1
+      setRetryNonce((value) => value + 1)
+    },
   }
 }
 

@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
   WorkItemApiError,
+  type CompletedChangePage,
   type CompletedChangeRecord,
   type WorkItemDetailResponse,
   type WorkItemProjection,
@@ -188,10 +189,47 @@ it('searches completed history and opens one exact completion', async () => {
   expect(await screen.findByTestId('completed-change-detail')).toHaveTextContent('Added exact semantic history search.')
 })
 
+it('ignores an older completed page after the search query changes', async () => {
+  const staleRecord = { ...completed[0], completion_id: '9'.repeat(64), title: 'Stale page' }
+  let resolveOlderPage!: (page: CompletedChangePage) => void
+  const olderPage = new Promise<CompletedChangePage>((resolve) => {
+    resolveOlderPage = resolve
+  })
+  api.listCompleted.mockImplementation((cursor?: string) => cursor
+    ? olderPage
+    : Promise.resolve({ records: [completed[0]], next_cursor: 'older-page' }))
+
+  const { container } = renderPage()
+  await screen.findByTestId('work-shown-count')
+  await waitFor(() => {
+    fireEvent(container.querySelector('p-tabs')!, new CustomEvent('update', {
+      detail: { activeTabIndex: 1 },
+      bubbles: true,
+    }))
+    expect(screen.getByText('Completed history')).toBeInTheDocument()
+  })
+  expect(await screen.findByText('Alpha delivery')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByText('Load more'))
+  await waitFor(() => expect(api.listCompleted).toHaveBeenCalledWith('older-page'))
+  await waitFor(() => {
+    inputValue(container.querySelector('p-input-search[name="completed-history-search"]')!, 'beta')
+    expect(api.searchCompleted).toHaveBeenCalledWith('beta')
+  })
+  expect(await screen.findByText('Beta search')).toBeInTheDocument()
+
+  await act(async () => {
+    resolveOlderPage({ records: [staleRecord], next_cursor: null })
+    await olderPage
+  })
+  expect(screen.queryByText('Stale page')).not.toBeInTheDocument()
+  expect(screen.getByText('Beta search')).toBeInTheDocument()
+})
+
 it('filters bounded current cards and opens exact Delivery detail', async () => {
   const { container } = renderPage()
 
-  expect(await screen.findByTestId('work-shown-count')).toHaveTextContent('Showing 120 of 120')
+  await waitFor(() => expect(screen.getByTestId('work-shown-count')).toHaveTextContent('Showing 120 of 120'))
   const filters = container.querySelectorAll('p-select')
   selectValue(filters[0], 'change-2')
   expect(screen.getByTestId('work-shown-count')).toHaveTextContent('Showing 40 of 120')
