@@ -381,6 +381,62 @@ def test_clean_build_recovery_replays_after_workspace_reset(tmp_path: Path) -> N
         runtimes["change-a"].transition(RetryDelivery(outcome_id="OUT-001", claim_id=package.claim.claim_id))
 
 
+@pytest.mark.parametrize("interruption", ["attempt-ref", "worktree-remove", "branch-reset", "worktree-add"])
+def test_clean_build_recovery_replays_each_workspace_interruption(tmp_path: Path, interruption: str) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    package = application.acquire_frontier_work().launch_packages[0]
+    product = package.worktree_path / "product.txt"
+    product.write_text("attempt\n", encoding="utf-8")
+    _git(package.worktree_path, "add", "product.txt")
+    _git(package.worktree_path, "commit", "-m", "attempt commit")
+    rejected = _git(package.worktree_path, "rev-parse", "HEAD")
+    manager = application._workspace_manager
+    original_git = manager._git
+
+    def interrupt_after_git(*arguments: str, **kwargs) -> str:
+        result = original_git(*arguments, **kwargs)
+        checks = {
+            "attempt-ref": arguments[:2]
+            == ("update-ref", f"refs/owlbear/attempts/change-a/{package.claim.attempt_id}"),
+            "worktree-remove": arguments[:2] == ("worktree", "remove"),
+            "branch-reset": arguments[:2] == ("update-ref", f"refs/heads/{package.branch}"),
+            "worktree-add": arguments[:2] == ("worktree", "add"),
+        }
+        if checks[interruption]:
+            message = "injected workspace interruption"
+            raise RuntimeError(message)
+        return result
+
+    with (
+        patch.object(manager, "_git", side_effect=interrupt_after_git),
+        pytest.raises(RuntimeError, match="injected workspace interruption"),
+    ):
+        application.recover_claim(
+            package.change_id,
+            package.outcome_id,
+            package.claim.attempt_id,
+            package.claim.claim_id,
+        )
+
+    recovered = application.recover_claim(
+        package.change_id,
+        package.outcome_id,
+        package.claim.attempt_id,
+        package.claim.claim_id,
+    )
+
+    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
+    assert recovered.preserved_commit == rejected
+    assert _git(package.worktree_path, "rev-parse", "HEAD") == package.last_reviewed_commit
+    assert runtimes["change-a"].active_claims() == ()
+    assert coordinator.show("change-a").writer is None
+    ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
+    assert ledger.change_ids == ()
+
+
 def test_dirty_build_recovery_retains_bytes_claim_custody_and_attention(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,

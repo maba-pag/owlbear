@@ -74,6 +74,7 @@ class WorkspaceRecoverySnapshot(_WorkspaceModel):
     preserved_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     clean: bool
     reviewed_ancestor: bool
+    preserved_reviewed_ancestor: bool
     writer: ChangeWriter | None = None
 
 
@@ -393,6 +394,14 @@ class ChangeWorkspaceManager:
                 coordination.last_reviewed_commit,
                 branch_head,
                 cwd=self._repository,
+            ),
+            preserved_reviewed_ancestor=(
+                preserved is None
+                or self._is_ancestor(
+                    coordination.last_reviewed_commit,
+                    preserved,
+                    cwd=self._repository,
+                )
             ),
             writer=coordination.writer,
         )

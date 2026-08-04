@@ -406,7 +406,7 @@ class PortfolioApplication:
                 return self._retain_recovery_attention(runtime, outcome_id, claim, snapshot)
             if not self._active_recovery_matches(snapshot, attempt_id, claim_id):
                 return self._retain_recovery_attention(runtime, outcome_id, claim, snapshot)
-            rejected_head = snapshot.branch_head
+            rejected_head = snapshot.preserved_commit or snapshot.branch_head
             self._workspace_manager.restart(change_id, attempt_id, rejected_head)
             runtime.remove_active_claim(outcome_id, attempt_id, claim_id)
             return self._recovered(
@@ -549,15 +549,23 @@ class PortfolioApplication:
         claim_id: str,
     ) -> bool:
         writer = snapshot.writer
+        if (
+            writer is None
+            or writer.attempt_id != attempt_id
+            or writer.claim_id != claim_id
+            or not snapshot.reviewed_ancestor
+            or not snapshot.preserved_reviewed_ancestor
+        ):
+            return False
+        rejected_head = snapshot.preserved_commit or snapshot.branch_head
+        if snapshot.branch_head not in {rejected_head, snapshot.last_reviewed_commit}:
+            return False
+        if snapshot.worktree_head is None:
+            return snapshot.preserved_commit is not None and snapshot.worktree_branch is None
         return (
-            writer is not None
-            and writer.attempt_id == attempt_id
-            and writer.claim_id == claim_id
-            and snapshot.clean
+            snapshot.clean
             and snapshot.worktree_head == snapshot.branch_head
             and snapshot.worktree_branch == snapshot.branch
-            and snapshot.reviewed_ancestor
-            and snapshot.preserved_commit in {None, snapshot.branch_head}
         )
 
     def _retain_recovery_attention(
