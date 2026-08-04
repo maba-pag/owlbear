@@ -74,7 +74,7 @@ Use Tier 2 for requirements that change agent behavior, lifecycle transitions, o
 Each AC line explicitly names the responsible agent, skill, engine operation, or delivery phase.
 
 - Reject: "The work should be advanced with evidence."
-- Pass: "Given a reviewed packet commit, `finish_build` publishes one digest-bound build receipt."
+- Pass: "Given an advisory-reviewed Planning claim, `publish_delivery_plan` returns one claim-bound task-chain candidate."
 
 ### P2 - Observable Artifact or State Change
 
@@ -121,8 +121,8 @@ scope, input, output, or verification method and give bad -> good rewrite guidan
 
 | Rule | Bad | Good |
 |------|-----|------|
-| B1 | "System handles completion." | "Given a current claimed build job, `finish_build` publishes a receipt bound to its job and delivery digest." |
-| B2 | "When work is stale, the API responds with an error." | "Given a stale delivery digest, `start_job` returns `ERR_DIGEST_MISMATCH` and creates no attempt." |
+| B1 | "System handles planning." | "Given a current Planning claim and complete tasks, `publish_delivery_plan` returns a candidate bound to that claim and task chain." |
+| B2 | "When work is stale, the API responds with an error." | "Given a stale claim ID, `publish_delivery_plan` returns `ERR_DELIVERY_RUNTIME_CONFLICT` and creates no candidate." |
 | B3 | "Reviewer checks every scenario correctly." | "Plan review returns one evidenced row for packet completeness, admitted references, impact closure, dependency order, proof boundary, and material expansion." |
 | B4 | "Given an injected workflow runner, the CLI command returns JSON." | "Given the real CLI application with remote HTTP transport replaced, invoking `alerts prepare` resolves normal configuration, crosses the assembled workflow boundary, and writes one JSON document to stdout." |
 | P1 | "Add validation before Delivery." | "Designer runs deterministic validation and complete source-grounded challenge before requesting admission approval." |
@@ -156,8 +156,8 @@ Use this when AC lines cite concrete literals that must match source-of-truth to
 4. OwlBear native lifecycle transition
 
 - Bad: "Orchestrator moves work to the next valid phase."
-- Good: "After `BuilderSuccess`, orchestrator forwards the unchanged claim identity and returned
-  completion fields to `finish_build`, then queries current target frontiers."
+- Good: "After Planner returns `AdvanceDelivery`, Orchestrator forwards the unchanged transition to
+  `transition_delivery`, then refreshes acquisition."
 
 ### Authority Discovery
 

@@ -1,101 +1,99 @@
 ---
 name: w-frontier-planning
-description: "Workflow: Produce one independently reviewed target task-plan claim"
+description: "Workflow: Publish one advisory-reviewed Delivery task chain and return its transition"
 user-invocable: false
 ---
 
 # Frontier Planning
 
-Own one started `plan` attempt. Refine its admitted scope into tasks and proof without changing
-protected authority. The planner returns exact reviewer evidence; orchestration persists it.
+Own one Planner launch selected by Delivery acquisition. Consume its bounded context, construct an
+executable task chain, publish only after independent advisory pass, and return one schema-valid
+transition for orchestration to forward unchanged.
 
-## Step 0 - Validate Dispatch
+## Step 0 - Validate Launch And Context
 
-Require the serialized context to contain one active `plan` job and matching attempt, claim, owner,
-reviewer, process, authority digest, and candidate commit. Call `show_job` and `show_attempt`; use
-`show_work_item`, activity, semantic updates, and receipts to rehydrate the semantic scope. Any
-stale, missing, or contradictory identity returns `PlanExecutionBlocked` before further work.
+Require one serialized `DeliveryLaunchPackage` whose policy role is `planner`, whose task ID is
+absent, and whose claim role and identities match the launch. Call `show_plan_context` with its
+change ID, outcome ID, attempt ID, and claim ID. Require the returned `DeliveryPlanContext.launch`
+to equal the supplied launch and its outcome ID, plan-scope ID, authority digest, package ID, branch,
+source head, integration target, and reviewed boundary to remain unchanged.
 
-## Step 1 - Ground The Claim
+Do not infer or repair malformed launch identity. Once the supplied identity is structurally valid,
+any context conflict or local planning failure publishes nothing and returns `RetryDelivery` using
+the unchanged outcome and claim identities.
+
+## Step 1 - Ground The Task Chain
 
 Load `h-codebase-orientation`, `h-module-design`, and `h-ac-quality` when choosing current source
-owners, task boundaries, dependencies, or proof. Create the smallest complete task set under the
-admitted `plan_scope_id`. Each task names its outcome, admitted boundary, dependencies, required
-outputs, maintained or public proof, and concrete acceptance observations.
+owners, task boundaries, dependencies, or proof. Use only the context's outcome, commitments,
+resolved requests, and return context plus current source. Create the smallest complete ordered task
+chain under the context's outcome and plan-scope IDs.
 
-Do not alter commitments, outcomes, task-plan scope, composition claim, solution architecture, or
-design meaning. One unresolved material question may use `create_request` with exact `change_id`,
-authority digest, work item, commitment, optional task, timestamp, and summary; then return blocked
-until it is resolved.
+Each `DeliveryTaskDefinition` supplies `task_id`, `outcome_id`, `plan_scope_id`, `title`, `result`,
+`commitment_ids`, `dependency_ids`, `required_outputs`, `maintained_surfaces`, `constraints`,
+`exclusions`, `acceptance_observations`, and `proof_boundaries`. Dependencies form an acyclic chain
+inside the outcome, references stay within supplied authority, and proof names observable maintained
+or public boundaries.
 
-### Replanning A Returned Scope
+Do not alter outcome, commitment, plan-scope, architecture, or Design meaning. A local task-chain
+defect is Planner-owned. A missing or contradictory Design premise is not.
 
-A `plan` job whose scope already carries completed work is a replan: an earlier claim returned at
-`task-plan` or `solution-plan` level, so the engine superseded that scope's unfinished jobs and
-published this job in their place. Reviewed tasks and their receipts survive and are immutable — plan
-around them, never re-plan them.
+### Requests And Resumed Context
 
-Recover what already landed before writing tasks: `list_work_item_activity` yields the scope's
-attempt events, whose `evidence_ids` name issued receipts; `show_receipt` then yields each receipt's
-`task_id`, claim, and `planned_tasks`. Every task you publish needs a fresh `task_id`; reusing a
-retired identity is rejected as a conflict.
+Consume a resolved `DeliveryRequest` only from `DeliveryPlanContext.requests`. Use its structured
+`resolution.selected_option_id` or `resolution.response_text`; never reconstruct a response from
+conversation or request summary.
 
-## Step 2 - Build Immutable Review Context
+When one bounded user-owned decision or action blocks planning, create no side record. Return a
+`BlockDelivery` containing reason, unblock condition, expected evidence, locators, and one embedded
+`DeliveryRequest` with `request_id`, `kind`, matching outcome ID, summary, bounded options for a
+decision, and no resolution. Orchestration forwards that block to `transition_delivery`; Cockpit or
+the user resolves it, and a later acquisition supplies fresh context.
 
-Construct one candidate claim containing execution identity, admitted semantic scope, proposed task
-set, dependency order, required outputs, proof, repository evidence, and exact candidate commit.
-Dispatch only the assigned `reviewer_id` to `planner-challenger`. One invocation returns one review
-mapping with matching reviewer and commit identities, a non-empty claim and evidence, and one
-runtime disposition.
+## Step 2 - Obtain Advisory Review
 
-Do not repair before returning the decision. When orchestration later redispatches a persisted
-`repair`, keep the same attempt and reviewer, correct only the reviewed plan claim, and submit the
-new candidate as one distinct claim. `restart`, `task-plan`, `solution-plan`, or `design` ends local
-planning immediately.
+Construct one candidate claim containing the unchanged launch identity, supplied plan context,
+complete task definitions, dependency order, required outputs, proof, repository evidence, and exact
+source head. Dispatch only `launch.policy.reviewer_agent` to `planner-challenger` using the configured
+reviewer model.
 
-## Step 3 - Return
+Require exactly one advisory mapping with disposition `pass | finding` and non-empty evidence. The
+review is scoped to the supplied immutable candidate; it never chooses a transition or calls a
+Kanban tool.
 
-On a structurally complete review, return:
+Repair a bounded local task-chain finding and obtain fresh review for that distinct candidate. A
+Design-authority finding, user-owned blocker, invalid review mapping, or local defect that cannot be
+repaired in this invocation ends review and routes through one worker-owned transition.
 
-```yaml
-kind: PlanClaimResult
-job_id: <started job>
-attempt_id: <started attempt>
-claim_id: <started claim>
-owner_id: <assigned owner>
-reviewer_id: <assigned reviewer>
-candidate_commit: <exact candidate commit>
-plan_claim: <complete task set and proof claim>
-planned_tasks:
-  - task_id: <stable task identity>
-    work_item_id: <started job work item>
-    plan_scope_id: <started job plan scope>
-    title: <bounded implementation result>
-review:
-  review_id: <review identity>
-  reviewer_id: <assigned reviewer>
-  candidate_commit: <exact candidate commit>
-  disposition: acceptable|repair|restart|task-plan|solution-plan|design
-  claim: <specific reviewed claim>
-  evidence: [<source-grounded observations>]
-```
+## Step 3 - Publish Pass Or Route Finding
 
-`planned_tasks` is the exact reviewed task set. Return it on every plan disposition so an
-`acceptable` finish can atomically publish the build frontier and repair or arbitration evidence
-retains the reviewed candidate unchanged.
-
-For invalid execution or malformed review evidence, return:
+On `pass`, call `publish_delivery_plan` with the unchanged change ID and a `PublishDeliveryPlan`
+containing the context outcome ID, claim ID, and reviewed task definitions. Require the returned
+`DeliveryPlanCandidate.claim_id` and task chain to match. Return its output directly in
+`AdvanceDelivery`:
 
 ```yaml
-kind: PlanExecutionBlocked
-target: <execution, authority, candidate, or review>
-finding: <specific fail-closed condition>
+action: advance
+outcome_id: <context outcome ID>
+claim_id: <launch claim ID>
+output: <published DeliveryPlanCandidate.output unchanged>
 ```
 
-Do not call a finish operation, select another job, or privately repeat review.
+On `finding`, publish nothing. Planner chooses one transition:
+
+- `retry` for a local task-chain or transient planning failure;
+- `return` with target `design`, reason, source locators, and `source_boundary` equal to the supplied
+  launch package ID for missing or contradictory Design authority;
+- `block` with an embedded bounded request for one user-owned decision or action.
+
+Return the selected `DeliveryTransition` directly. Do not call `transition_delivery`; orchestration
+validates the returned outcome and claim identity and forwards the mapping byte-for-structure
+unchanged. Do not call a job, request, or transition lifecycle operation.
 
 ## Known Pitfalls
 
-- **Authority repair:** a planning return level is evidence, not permission to edit upstream meaning.
-- **Self-review:** only the assigned independent reviewer closes the claim.
-- **Hidden loop:** every distinct candidate returns to orchestration for immutable recording.
+- **Context reconstruction:** use `show_plan_context`; do not join jobs, receipts, semantic updates,
+  or conversation history.
+- **Reviewer action:** a finding is evidence, not a selected transition.
+- **Premature publication:** only advisory pass permits `publish_delivery_plan`.
+- **Detached request:** embed the request in `block`; do not create or resolve it separately.

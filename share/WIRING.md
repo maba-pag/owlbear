@@ -46,7 +46,7 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | designer | GPT-5.6 Sol | `w-design-session` | conceptual-design-reviewer, designer-challenger, Explore | None; draft writes are role-bounded and target publication uses the admission tool surface |
 | conceptual-design-reviewer | Claude Opus 5 | `r-challenger-protocol`, `h-module-design`, `h-frontend-design` | None | `PreToolUse`: deny writes except scratch |
 | designer-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
-| planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch and terminal mutation; owns one target plan claim |
+| planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch and terminal mutation; publishes advisory-reviewed task chains and returns worker-owned transitions |
 | planner-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
 | orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, claim-arbiter, memory-curator, Explore | Target portfolio and plan/build/assembly mutation tools; no repository write tools |
 | builder | GPT-5.6 Terra | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; `SessionStart`: repository context; `PostToolUse`: lint changed files |
@@ -84,7 +84,7 @@ The named caller owns each on-demand condition and timing.
 
 | Caller or trigger | Conditional skill | Load condition |
 |-------------------|-------------------|----------------|
-| planner workflow | `h-decision-requests` | One bounded material choice inside admitted node authority requires a Decision Request |
+| Planner or Builder context | `h-decision-requests` | One bounded user choice or action requires an embedded `DeliveryRequest` in `BlockDelivery` |
 | native design/planning | `w-research` | Local evidence cannot resolve a material claim and the owning workflow permits research |
 | native design/planning | `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | Source ownership, architecture, packet boundaries, or acceptance drafting requires the specialist boundary |
 | universal memory governance | `h-memory-structure`, `h-mcp-memory` | A save-capable role has a qualifying reusable insight |
@@ -119,8 +119,8 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 |----------|--------|------------------------------------|
 | conceptual-design-reviewer | designer | A consequential product, workflow, or interaction concept proceeds without independent conceptual challenge |
 | designer-challenger | designer | Native admission lacks required repository-grounded entity challenge evidence |
-| planner | orchestrator | Engine-selected native plan jobs cannot be refined or completed |
-| planner-challenger | planner | A target task-plan claim cannot satisfy independent review |
+| planner | orchestrator | An acquired Planning launch cannot produce a published task chain and worker-owned transition |
+| planner-challenger | planner | A proposed Delivery task chain cannot receive independent advisory evidence |
 | builder | orchestrator | Target build and assembly jobs cannot produce reviewed exact-commit claims |
 | build-reviewer | builder | A target build or assembly claim cannot satisfy independent review |
 | claim-arbiter | orchestrator | A persisted owner-reviewer disagreement cannot receive its one final decision |

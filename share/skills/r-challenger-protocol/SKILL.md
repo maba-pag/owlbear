@@ -64,7 +64,7 @@ outputs, impact closure, and cheapest falsifying proof.
 | Reviewer | Caller route |
 |----------|--------------|
 | designer-challenger | Designer repairs candidate authority, reruns deterministic validation and challenge, and seeks fresh user approval before admission |
-| planner-challenger | Planner repairs a bounded packet plan or returns `SpecificationReentry` / `PlanBlocked` without publishing it |
+| planner-challenger | Planner interprets advisory `pass` or `finding`; only pass permits plan publication and Planner alone selects `advance`, `retry`, `return`, or `block` |
 | build-reviewer | Builder repairs only an `implementation-defect` inside the packet; every planning, discovery, or scope finding returns `SpecificationReentry` |
 
 Every repaired candidate requires a fresh review against its new immutable identity or commit.
