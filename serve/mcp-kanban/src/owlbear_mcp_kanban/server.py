@@ -60,6 +60,16 @@ _DEFAULT_WORKSPACE_ROOT = Path.cwd()
 _DEFAULT_CUTOVER_REQUEST = Path(".owlbear/target-cutover-request.json")
 _UNCONFIGURED = "ERR_DELIVERY_STARTUP_UNCONFIGURED"
 _INVALID = "ERR_DELIVERY_STARTUP_INVALID"
+_REQUIRED_TOP_LEVEL_FIELDS = {
+    "package_root",
+    "target_root",
+    "repository_root",
+    "worktree_root",
+    "execution_capacity",
+    "writer_capacity",
+    "integration_target",
+    "role_policies",
+}
 _live_context: DeliveryAppContext | None = None
 
 
@@ -127,8 +137,7 @@ def _validation_field(error: dict[str, object]) -> str:
 def _is_missing_required(error: dict[str, object], field: str) -> bool:
     if error.get("type") != "missing":
         return False
-    top_level = {"execution_capacity", "writer_capacity", "integration_target", "role_policies"}
-    return field.split(".", maxsplit=1)[0] in top_level
+    return field.split(".", maxsplit=1)[0] in _REQUIRED_TOP_LEVEL_FIELDS
 
 
 def _authorize_configured_target(config: DeliveryStartupConfig) -> None:

@@ -178,6 +178,10 @@ async def test_registered_tool_invokes_strict_adapter_once() -> None:
 
 
 MISSING_FIELDS = [
+    ("package_root",),
+    ("target_root",),
+    ("repository_root",),
+    ("worktree_root",),
     ("execution_capacity",),
     ("writer_capacity",),
     ("integration_target",),
