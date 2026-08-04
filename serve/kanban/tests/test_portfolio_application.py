@@ -277,3 +277,24 @@ def test_writer_failure_leaves_started_exact_claim_without_false_launch(tmp_path
     assert coordinator.show("change-a").writer is None
     ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
     assert ledger.change_ids == ()
+
+
+def test_writer_capacity_skips_blocked_build_but_launches_read_only_work(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.IMPLEMENTATION,
+            "change-b": DeliveryStage.IMPLEMENTATION,
+            "change-c": DeliveryStage.PLANNING,
+        },
+        writer_capacity=1,
+    )
+
+    acquired = application.acquire_frontier_work()
+
+    assert tuple(package.change_id for package in acquired.launch_packages) == ("change-a", "change-c")
+    assert acquired.failures == ()
+    assert runtimes["change-b"].active_claims() == ()
+    assert coordinator.show("change-b").writer is None
+    ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
+    assert ledger.change_ids == ("change-a",)
