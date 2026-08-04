@@ -702,6 +702,7 @@ class ChangeWorkspaceManager:
                 diagnostics=merge_diagnostics,
             )
         try:
+            self._require_unchanged_completed_siblings(product_tree, target_head, candidate.change_id)
             publication_tree = self._replace_tree_path(
                 product_tree,
                 tuple(candidate.completion_path.split("/")),
@@ -713,6 +714,23 @@ class ChangeWorkspaceManager:
                 diagnostics=(str(exc),),
             )
         return publication_tree
+
+    def _require_unchanged_completed_siblings(
+        self,
+        candidate_tree: str,
+        target_head: str,
+        change_id: str,
+    ) -> None:
+        completed_path = (b".owlbear", b"completed")
+        target_tree = self._git("rev-parse", f"{target_head}^{{tree}}")
+        target_entries = self._tree_entries_at_path(target_tree, completed_path)
+        candidate_entries = self._tree_entries_at_path(candidate_tree, completed_path)
+        current_leaf = change_id.encode()
+        target_entries.pop(current_leaf, None)
+        candidate_entries.pop(current_leaf, None)
+        if candidate_entries != target_entries:
+            message = "reviewed change mutates sibling completed history"
+            raise ValueError(message)
 
     def _cas_integration(
         self,
@@ -807,6 +825,18 @@ class ChangeWorkspaceManager:
         content = self._run_git("ls-tree", "-z", tree).stdout
         records = tuple(record for record in content.split(b"\0") if record)
         return {record.split(b"\t", 1)[1]: record for record in records}
+
+    def _tree_entries_at_path(self, tree: str, path: tuple[bytes, ...]) -> dict[bytes, bytes]:
+        for part in path:
+            existing = self._tree_entries(tree).get(part)
+            if existing is None:
+                return {}
+            metadata = existing.split(b"\t", 1)[0].split()
+            if len(metadata) != _TREE_ENTRY_PARTS or metadata[1] != b"tree":
+                message = f"completed-history path component is not a tree: {part.decode()}"
+                raise ValueError(message)
+            tree = metadata[2].decode()
+        return self._tree_entries(tree)
 
     def _write_integration_commit(
         self,

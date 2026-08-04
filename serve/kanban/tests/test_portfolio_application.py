@@ -645,6 +645,36 @@ def test_semantic_only_integration_preserves_product_and_sibling_completed_tree(
     assert _git(repository, "rev-parse", f"{second_commit}:.owlbear/completed/change-b")
 
 
+def test_integration_rejects_reviewed_sibling_completed_history_mutation(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED, "change-b": DeliveryStage.COMPLETED},
+        candidate_proof=lambda _candidate, _commit: (),
+    )
+    repository = tmp_path / "repository"
+    sibling = application.integrate_ready_change("change-b")
+    assert sibling.completion is not None
+    target_head = sibling.completion.target_commit
+    coordination = coordinator.show("change-a")
+    _git(coordination.worktree_path, "reset", "--hard", target_head)
+    sibling_completion = coordination.worktree_path / ".owlbear/completed/change-b/completion.json"
+    sibling_completion.write_text('{"mutated":true}\n', encoding="utf-8")
+    _git(coordination.worktree_path, "add", str(sibling_completion))
+    _git(coordination.worktree_path, "commit", "-m", "mutate sibling completion")
+    reviewed = _git(coordination.worktree_path, "rev-parse", "HEAD")
+    coordinator.update(coordination.model_copy(update={"last_reviewed_commit": reviewed}))
+    completed_binding = runtimes["change-a"].show_binding("OUT-001")
+
+    failed = application.integrate_ready_change("change-a")
+
+    assert failed.attention is not None
+    assert failed.attention.code == DeliveryIntegrationAttentionCode.COMPLETED_HISTORY_MUTATED
+    assert _git(repository, "rev-parse", "main") == target_head
+    assert runtimes["change-a"].show_binding("OUT-001") == completed_binding
+    assert runtimes["change-a"].change_stage().value == "integration"
+    assert (tmp_path / "packages/change-a").is_dir()
+
+
 def test_integration_merge_conflict_retains_clean_heads_and_typed_attention(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
