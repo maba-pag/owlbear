@@ -8,7 +8,7 @@ import owlbear_kanban
 def test_package_root_exports_target_runtime_without_retired_execution() -> None:
     required = {
         "ChangeWorkspaceManager",
-        "PortfolioDispatcher",
+        "PortfolioApplication",
         "TargetAuthorityRegistry",
         "TargetAuthority",
         "TargetRuntime",
@@ -26,6 +26,8 @@ def test_package_root_exports_target_runtime_without_retired_execution() -> None
         "RejectAuditRequest",
         "ReleaseJobRequest",
         "SetJobPriorityRequest",
+        "PortfolioDispatcher",
+        "WriterGrant",
     }
 
     assert set(owlbear_kanban.__all__) >= required

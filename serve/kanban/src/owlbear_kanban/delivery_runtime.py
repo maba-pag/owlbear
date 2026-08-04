@@ -54,6 +54,14 @@ class DeliveryRequestKind(StrEnum):
     ACTION = "action"
 
 
+class DeliveryWorkerRole(StrEnum):
+    """Worker role selected mechanically from one canonical Delivery stage."""
+
+    PLANNER = "planner"
+    BUILDER = "builder"
+    ASSEMBLY_REVIEWER = "assembly-reviewer"
+
+
 class _DeliveryModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
@@ -233,6 +241,18 @@ class DeliveryReturnContext(_DeliveryModel):
     source_boundary: str | None = None
 
 
+class DeliveryActiveClaim(_DeliveryModel):
+    """Recoverable execution identity for one active outcome claim."""
+
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    owner_id: str = Field(min_length=1)
+    process_id: str = Field(min_length=1)
+    started_at: str = Field(min_length=1)
+    worker_role: DeliveryWorkerRole
+    task_id: str | None = None
+
+
 class OutcomeAuthorityBinding(_DeliveryModel):
     """Canonical state and identity bindings for one admitted outcome."""
 
@@ -242,8 +262,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
     assembly_required: bool = False
     tasks: tuple[DeliveryTaskDefinition, ...] = ()
     results: tuple[DeliveryTaskResult, ...] = ()
-    active_claim_id: str | None = None
-    active_task_id: str | None = None
+    active_claim: DeliveryActiveClaim | None = None
     output: DeliveryOutputReference | None = None
     candidate: DeliveryPlanCandidate | None = None
     result_candidate: DeliveryResultCandidate | None = None
@@ -253,9 +272,25 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 
     @model_validator(mode="after")
     def _validate_state(self) -> OutcomeAuthorityBinding:
-        if self.stage == DeliveryStage.COMPLETED and self.active_claim_id is not None:
+        if self.stage == DeliveryStage.COMPLETED and self.active_claim is not None:
             message = "completed outcomes cannot carry an active claim"
             raise ValueError(message)
+        if self.active_claim is not None:
+            expected_role = {
+                DeliveryStage.PLANNING: DeliveryWorkerRole.PLANNER,
+                DeliveryStage.IMPLEMENTATION: DeliveryWorkerRole.BUILDER,
+                DeliveryStage.ASSEMBLY: DeliveryWorkerRole.ASSEMBLY_REVIEWER,
+            }.get(self.stage)
+            if self.active_claim.worker_role != expected_role:
+                message = "active claim worker role does not match its Delivery stage"
+                raise ValueError(message)
+            if self.stage == DeliveryStage.IMPLEMENTATION:
+                if self.active_claim.task_id not in self.task_ids:
+                    message = "active Build claim must name promoted task authority"
+                    raise ValueError(message)
+            elif self.active_claim.task_id is not None:
+                message = "only active Build claims name task authority"
+                raise ValueError(message)
         request_ids = tuple(request.request_id for request in self.requests)
         if len(request_ids) != len(set(request_ids)):
             message = "Delivery request identities must be unique per outcome"
@@ -279,6 +314,16 @@ class OutcomeAuthorityBinding(_DeliveryModel):
     def result_ids(self) -> tuple[str, ...]:
         """Project compact result identities from their single typed authority."""
         return tuple(result.result_id for result in self.results)
+
+    @property
+    def active_claim_id(self) -> str | None:
+        """Project the current claim identity without persisting a duplicate scalar."""
+        return self.active_claim.claim_id if self.active_claim is not None else None
+
+    @property
+    def active_task_id(self) -> str | None:
+        """Project the current task identity from its active claim."""
+        return self.active_claim.task_id if self.active_claim is not None else None
 
 
 class DeliveryFrontier(_DeliveryModel):
@@ -307,8 +352,17 @@ class ActivateDeliveryClaim(_DeliveryModel):
     """Claim one dependency-ready outcome in its current stage."""
 
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
-    claim_id: str = Field(min_length=1)
-    task_id: str | None = None
+    claim: DeliveryActiveClaim
+
+    @property
+    def claim_id(self) -> str:
+        """Return the nested claim identity used by transition requests."""
+        return self.claim.claim_id
+
+    @property
+    def task_id(self) -> str | None:
+        """Return the nested task identity used by Build selection."""
+        return self.claim.task_id
 
 
 class PublishDeliveryOutput(_DeliveryModel):
@@ -454,6 +508,11 @@ class DeliveryRuntime:
         """Return the canonical admitted contract digest bound into task results."""
         return self._authority_digest
 
+    @property
+    def contract(self) -> DeliveryContract:
+        """Return immutable admitted authority for scoped context projection."""
+        return self._contract
+
     def frontier_bytes(self) -> bytes:
         """Return current canonical frontier bytes for OCC and failure proof."""
         return self._read()[1]
@@ -461,6 +520,28 @@ class DeliveryRuntime:
     def show_binding(self, outcome_id: str) -> OutcomeAuthorityBinding:
         """Return one current outcome binding."""
         return _find_binding(self._read()[0], outcome_id)
+
+    def active_claims(self) -> tuple[tuple[str, DeliveryActiveClaim], ...]:
+        """Return active claim identity keyed by outcome in authority order."""
+        frontier, _content = self._read()
+        return tuple(
+            (binding.outcome_id, binding.active_claim)
+            for binding in frontier.bindings
+            if binding.active_claim is not None
+        )
+
+    def require_active_claim(
+        self,
+        outcome_id: str,
+        attempt_id: str,
+        claim_id: str,
+    ) -> OutcomeAuthorityBinding:
+        """Return one binding only when its exact execution claim remains active."""
+        binding = self.show_binding(outcome_id)
+        claim = binding.active_claim
+        if claim is None or claim.attempt_id != attempt_id or claim.claim_id != claim_id:
+            _conflict("execution identity does not match the active claim")
+        return binding
 
     def claimable_outcome_ids(self) -> tuple[str, ...]:
         """Return stable dependency-ready, unblocked, unclaimed outcome identities."""
@@ -508,6 +589,13 @@ class DeliveryRuntime:
             _conflict("outcome is not claimable")
         if any(item.active_claim_id == request.claim_id for item in frontier.bindings):
             _conflict("active claim identity already exists")
+        expected_role = {
+            DeliveryStage.PLANNING: DeliveryWorkerRole.PLANNER,
+            DeliveryStage.IMPLEMENTATION: DeliveryWorkerRole.BUILDER,
+            DeliveryStage.ASSEMBLY: DeliveryWorkerRole.ASSEMBLY_REVIEWER,
+        }.get(binding.stage)
+        if request.claim.worker_role != expected_role:
+            _conflict("claim worker role does not match the current Delivery stage")
         if binding.stage == DeliveryStage.IMPLEMENTATION:
             if request.task_id not in self.claimable_task_ids(request.outcome_id):
                 _conflict("implementation task is not claimable")
@@ -515,8 +603,7 @@ class DeliveryRuntime:
             _conflict("only Implementation claims name a task")
         claimed = binding.model_copy(
             update={
-                "active_claim_id": request.claim_id,
-                "active_task_id": request.task_id,
+                "active_claim": request.claim,
                 "output": None,
                 "result_candidate": None,
             }
@@ -712,7 +799,7 @@ class DeliveryRuntime:
                 update={
                     "stage": destination,
                     "tasks": binding.candidate.tasks,
-                    "active_claim_id": None,
+                    "active_claim": None,
                     "output": None,
                     "candidate": None,
                     "return_context": None,
@@ -743,8 +830,7 @@ class DeliveryRuntime:
                 update={
                     "stage": destination,
                     "results": results,
-                    "active_claim_id": None,
-                    "active_task_id": None,
+                    "active_claim": None,
                     "output": None,
                     "result_candidate": None,
                     "return_context": None,
@@ -756,7 +842,7 @@ class DeliveryRuntime:
             destination = DeliveryStage.COMPLETED
         else:
             _conflict("current stage cannot advance")
-        return binding.model_copy(update={"stage": destination, "active_claim_id": None})
+        return binding.model_copy(update={"stage": destination, "active_claim": None})
 
     def _retry(
         self,
@@ -785,8 +871,7 @@ class DeliveryRuntime:
             _conflict("only Implementation retry accepts attempt commit identity")
         return binding.model_copy(
             update={
-                "active_claim_id": None,
-                "active_task_id": None,
+                "active_claim": None,
                 "output": None,
                 "candidate": None,
                 "result_candidate": None,
@@ -870,8 +955,7 @@ class DeliveryRuntime:
                     "stage": request.target,
                     "tasks": tasks,
                     "results": results,
-                    "active_claim_id": None,
-                    "active_task_id": None,
+                    "active_claim": None,
                     "output": None,
                     "candidate": None,
                     "result_candidate": None,
@@ -919,8 +1003,7 @@ class DeliveryRuntime:
         requests = (*binding.requests, request.request) if request.request is not None else binding.requests
         return binding.model_copy(
             update={
-                "active_claim_id": None,
-                "active_task_id": None,
+                "active_claim": None,
                 "output": None,
                 "candidate": None,
                 "result_candidate": None,
@@ -998,8 +1081,7 @@ def _reset_binding(binding: OutcomeAuthorityBinding, stage: DeliveryStage) -> Ou
             "assembly_required": False,
             "tasks": (),
             "results": (),
-            "active_claim_id": None,
-            "active_task_id": None,
+            "active_claim": None,
             "output": None,
             "candidate": None,
             "result_candidate": None,

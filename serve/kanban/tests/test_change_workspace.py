@@ -14,7 +14,6 @@ from owlbear_kanban.change_workspace import (
     ChangeWriter,
     CoordinationConflictError,
     PortfolioCoordinator,
-    PortfolioDispatcher,
     WriterIdentity,
 )
 from owlbear_kanban.runtime_transaction import RuntimeTransaction, TransactionParticipant
@@ -74,22 +73,21 @@ def _identity(change_id: str) -> WriterIdentity:
     )
 
 
-def test_portfolio_grants_independent_changes_but_rejects_second_writer(tmp_path: Path) -> None:
+def test_portfolio_coordinates_independent_changes_but_rejects_second_writer(tmp_path: Path) -> None:
     coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
     coordinator.register(_coordination(tmp_path, "change-a"))
     coordinator.register(_coordination(tmp_path, "change-b"))
-    dispatcher = PortfolioDispatcher(coordinator)
-
-    grants = dispatcher.dispatch(
-        {
-            "change-a": _runtime(tmp_path / "runtime", "change-a", 1),
-            "change-b": _runtime(tmp_path / "runtime", "change-b", 2),
-        },
-        {"change-a": _identity("change-a"), "change-b": _identity("change-b")},
+    first = coordinator.acquire(
+        "change-a",
+        ChangeWriter(**_identity("change-a").model_dump(), job_id=1, kind="build"),
+    )
+    second = coordinator.acquire(
+        "change-b",
+        ChangeWriter(**_identity("change-b").model_dump(), job_id=2, kind="build"),
     )
 
-    assert tuple(grant.coordination.change_id for grant in grants) == ("change-a", "change-b")
-    assert all(grant.coordination.writer is not None for grant in grants)
+    assert first.writer is not None
+    assert second.writer is not None
     with pytest.raises(CoordinationConflictError, match="active writer"):
         coordinator.acquire(
             "change-a",
@@ -359,7 +357,7 @@ def test_integration_reports_typed_target_cas_loss_and_retries(tmp_path: Path) -
 
 def test_integration_conflict_emits_finding_without_advancing_target(tmp_path: Path) -> None:
     repository, _initial = _repository(tmp_path)
-    coordinator, manager = _manager(tmp_path, repository)
+    _coordinator, manager = _manager(tmp_path, repository)
     coordination = manager.create("conflict-change")
     reviewed = _commit_file(coordination.worktree_path, "change\n", "change side")
     manager.record_reviewed("conflict-change", reviewed)
@@ -404,10 +402,4 @@ def test_integration_conflict_emits_finding_without_advancing_target(tmp_path: P
         )
     )
 
-    grants = PortfolioDispatcher(coordinator).dispatch(
-        {"conflict-change": runtime},
-        {"conflict-change": _identity("conflict-change")},
-    )
-
-    assert len(grants) == 1
-    assert grants[0].job.kind == "assembly"
+    assert runtime.list_frontier()[0].kind == "assembly"

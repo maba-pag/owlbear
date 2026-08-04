@@ -17,6 +17,7 @@ from owlbear_kanban import (
     BlockDelivery,
     ChangeWorkspaceManager,
     ChangeWriter,
+    DeliveryActiveClaim,
     DeliveryChangeStage,
     DeliveryContract,
     DeliveryFrontier,
@@ -34,6 +35,7 @@ from owlbear_kanban import (
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
+    DeliveryWorkerRole,
     OutcomeAuthorityBinding,
     PortfolioCoordinator,
     PublishDeliveryPlan,
@@ -149,10 +151,39 @@ def _output(claim_id: str, stage: DeliveryStage) -> DeliveryOutputReference:
     )
 
 
+def _activate(
+    runtime: DeliveryRuntime,
+    outcome_id: str,
+    claim_id: str,
+    *,
+    task_id: str | None = None,
+):
+    stage = runtime.show_binding(outcome_id).stage
+    role = {
+        DeliveryStage.PLANNING: DeliveryWorkerRole.PLANNER,
+        DeliveryStage.IMPLEMENTATION: DeliveryWorkerRole.BUILDER,
+        DeliveryStage.ASSEMBLY: DeliveryWorkerRole.ASSEMBLY_REVIEWER,
+    }[stage]
+    return runtime.activate_claim(
+        ActivateDeliveryClaim(
+            outcome_id=outcome_id,
+            claim=DeliveryActiveClaim(
+                attempt_id=f"attempt-{claim_id}",
+                claim_id=claim_id,
+                owner_id=f"owner-{claim_id}",
+                process_id=f"process-{claim_id}",
+                started_at="2026-08-04T00:00:00Z",
+                worker_role=role,
+                task_id=task_id,
+            ),
+        )
+    )
+
+
 def _claim_with_output(runtime: DeliveryRuntime, outcome_id: str, claim_id: str) -> DeliveryOutputReference:
     binding = runtime.show_binding(outcome_id)
     task_id = runtime.claimable_task_ids(outcome_id)[0] if binding.stage == DeliveryStage.IMPLEMENTATION else None
-    claimed = runtime.activate_claim(ActivateDeliveryClaim(outcome_id=outcome_id, claim_id=claim_id, task_id=task_id))
+    claimed = _activate(runtime, outcome_id, claim_id, task_id=task_id)
     output = _output(claim_id, claimed.stage)
     runtime.publish_output(PublishDeliveryOutput(outcome_id=outcome_id, claim_id=claim_id, output=output))
     return output
@@ -184,7 +215,7 @@ def _task(
 
 def test_plan_publication_is_idempotent_and_promotes_dependency_order(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path)
-    runtime.activate_claim(ActivateDeliveryClaim(outcome_id="OUT-001", claim_id="claim-001"))
+    _activate(runtime, "OUT-001", "claim-001")
     request = PublishDeliveryPlan(
         outcome_id="OUT-001",
         claim_id="claim-001",
@@ -208,7 +239,7 @@ def test_plan_publication_is_idempotent_and_promotes_dependency_order(tmp_path: 
 
 def test_plan_publication_rejects_unresolved_or_cyclic_graph_without_mutation(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path)
-    runtime.activate_claim(ActivateDeliveryClaim(outcome_id="OUT-001", claim_id="claim-001"))
+    _activate(runtime, "OUT-001", "claim-001")
     before = runtime.frontier_bytes()
 
     with pytest.raises(DeliveryRuntimeReferenceError, match="dependency"):
@@ -282,7 +313,7 @@ def _publish_task_result(
             kind="build",
         ),
     )
-    runtime.activate_claim(ActivateDeliveryClaim(outcome_id="OUT-001", claim_id=claim_id, task_id=task_id))
+    _activate(runtime, "OUT-001", claim_id, task_id=task_id)
     (coordination.worktree_path / "product.txt").write_text(f"{task_id}\n", encoding="utf-8")
     _git(coordination.worktree_path, "add", "product.txt")
     _git(coordination.worktree_path, "commit", "-m", f"complete {task_id}")
@@ -315,7 +346,7 @@ def test_build_advance_binds_compact_result_and_releases_writer(tmp_path: Path) 
     frontier_path.parent.mkdir(parents=True)
     frontier_path.write_bytes(_canonical(frontier))
     runtime = DeliveryRuntime(state_root, _contract(), workspace_manager=manager)
-    runtime.activate_claim(ActivateDeliveryClaim(outcome_id="OUT-001", claim_id="plan-claim"))
+    _activate(runtime, "OUT-001", "plan-claim")
     plan = runtime.publish_plan(
         PublishDeliveryPlan(
             outcome_id="OUT-001",
@@ -424,7 +455,7 @@ def _active_second_task(tmp_path: Path):
             kind="build",
         ),
     )
-    runtime.activate_claim(ActivateDeliveryClaim(outcome_id="OUT-001", claim_id="claim-002", task_id="TASK-002"))
+    _activate(runtime, "OUT-001", "claim-002", task_id="TASK-002")
     (coordination.worktree_path / "product.txt").write_text("unreviewed task two\n", encoding="utf-8")
     _git(coordination.worktree_path, "add", "product.txt")
     _git(coordination.worktree_path, "commit", "-m", "unreviewed task two")
@@ -576,7 +607,7 @@ def test_worker_transition_routes_canonical_stage_and_rejects_stale_or_review_in
 
 def test_request_resolution_and_requestless_unblock_preserve_stage_and_answer(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path)
-    runtime.activate_claim(ActivateDeliveryClaim(outcome_id="OUT-001", claim_id="claim-001"))
+    _activate(runtime, "OUT-001", "claim-001")
     request = DeliveryRequest(
         request_id="request-001",
         kind=DeliveryRequestKind.DECISION,
@@ -611,7 +642,7 @@ def test_request_resolution_and_requestless_unblock_preserve_stage_and_answer(tm
     assert runtime.show_binding("OUT-001").stage == DeliveryStage.PLANNING
     assert runtime.claimable_outcome_ids() == ("OUT-001", "OUT-003")
 
-    runtime.activate_claim(ActivateDeliveryClaim(outcome_id="OUT-003", claim_id="claim-003"))
+    _activate(runtime, "OUT-003", "claim-003")
     runtime.transition(
         BlockDelivery(
             outcome_id="OUT-003",
@@ -657,7 +688,7 @@ def test_administrative_move_preserves_active_dependent_claim(tmp_path: Path) ->
         tmp_path,
         stages=(DeliveryStage.COMPLETED, DeliveryStage.IMPLEMENTATION, DeliveryStage.COMPLETED),
     )
-    runtime.activate_claim(ActivateDeliveryClaim(outcome_id="OUT-002", claim_id="claim-002", task_id="TASK-002"))
+    _activate(runtime, "OUT-002", "claim-002", task_id="TASK-002")
     active_dependent = runtime.show_binding("OUT-002")
 
     result = runtime.administrative_move(

@@ -18,13 +18,9 @@ from owlbear_kanban.runtime_transaction import (
     TransactionParticipant,
 )
 from owlbear_kanban.storage_io import locked_roots
-from owlbear_kanban.target_runtime import TargetJob
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
     from contextlib import AbstractContextManager
-
-    from owlbear_kanban.target_runtime import TargetRuntime
 
 _GIT_EXECUTABLE = "/usr/bin/git"
 _MERGE_RECORD_PARTS = 3
@@ -83,13 +79,6 @@ class CapacityLedger(_WorkspaceModel):
         return self
 
 
-class WriterGrant(_WorkspaceModel):
-    """One portfolio dispatch grant."""
-
-    coordination: ChangeCoordination
-    job: TargetJob
-
-
 class IntegrationFinding(_WorkspaceModel):
     """Immutable evidence that integration requires solution planning."""
 
@@ -137,6 +126,16 @@ class PortfolioCoordinator:
         """Serialize shared integration-target mutations across portfolio writers."""
         lock_root = self._state_root / "target-runtime" / "integration-lock"
         return locked_roots((lock_root,))
+
+    def acquisition_lock(self) -> AbstractContextManager[None]:
+        """Serialize portfolio selection and staged claim preparation."""
+        lock_root = self._state_root / "target-runtime" / "acquisition-lock"
+        return locked_roots((lock_root,))
+
+    def writer_capacity_available(self) -> bool:
+        """Return whether another Build writer can be reserved."""
+        ledger = CapacityLedger.model_validate_json(self._ledger_path.read_bytes())
+        return len(ledger.change_ids) < ledger.capacity
 
     def register(self, coordination: ChangeCoordination) -> ChangeCoordination:
         """Create one replayable per-change coordination record."""
@@ -269,37 +268,6 @@ class PortfolioCoordinator:
         RuntimeTransaction(self._state_root, f"portfolio-{transaction_id}", participants).commit()
 
 
-class PortfolioDispatcher:
-    """Grant at most one ready writer from each change under global capacity."""
-
-    def __init__(self, coordinator: PortfolioCoordinator) -> None:
-        self._coordinator = coordinator
-
-    def dispatch(
-        self,
-        runtimes: Mapping[str, TargetRuntime],
-        identities: Mapping[str, WriterIdentity],
-    ) -> tuple[WriterGrant, ...]:
-        """Grant ready jobs in stable cross-change order until capacity is full."""
-        candidates = []
-        for change_id, runtime in runtimes.items():
-            frontier = runtime.list_frontier()
-            if frontier:
-                candidates.append((frontier[0].created_at, frontier[0].job_id, change_id, frontier[0]))
-        grants: list[WriterGrant] = []
-        for _created_at, _job_id, change_id, job in sorted(candidates):
-            identity = identities[change_id]
-            writer = ChangeWriter(**identity.model_dump(), job_id=job.job_id, kind=job.kind)
-            try:
-                coordination = self._coordinator.acquire(change_id, writer)
-            except CoordinationConflictError as exc:
-                if "capacity" in str(exc):
-                    break
-                continue
-            grants.append(WriterGrant(coordination=coordination, job=job))
-        return tuple(grants)
-
-
 class ChangeWorkspaceManager:
     """Own one warm writable Git worktree and non-rewriting integration per change."""
 
@@ -364,6 +332,17 @@ class ChangeWorkspaceManager:
     def show(self, change_id: str) -> ChangeCoordination:
         """Return current workspace coordination for transition validation."""
         return self._coordinator.show(change_id)
+
+    def reviewed_source_head(self, change_id: str) -> str:
+        """Return one clean warm source head anchored at its reviewed boundary."""
+        coordination = self._coordinator.show(change_id)
+        branch_head = self._resolve(coordination.branch)
+        if branch_head != coordination.last_reviewed_commit:
+            _workspace_failure("change branch differs from its reviewed source boundary")
+        self._require_worktree(coordination.worktree_path, coordination.branch, branch_head)
+        if self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
+            _workspace_failure("change source worktree is not clean")
+        return branch_head
 
     def validate_writer_head(self, change_id: str, claim_id: str, commit: str) -> ChangeCoordination:
         """Validate one writer-owned clean branch-head commit without mutation."""
