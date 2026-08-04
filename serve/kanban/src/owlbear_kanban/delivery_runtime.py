@@ -241,6 +241,21 @@ class DeliveryReturnContext(_DeliveryModel):
     source_boundary: str | None = None
 
 
+class DeliveryRecoveryAttention(_DeliveryModel):
+    """Operator-consumed evidence for one Build claim that cannot be removed safely."""
+
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+    worktree_path: str = Field(min_length=1)
+    branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    worktree_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    writer_claim_id: str | None = None
+    custody_retained: bool
+    retry_condition: str = Field(min_length=1)
+
+
 class DeliveryActiveClaim(_DeliveryModel):
     """Recoverable execution identity for one active outcome claim."""
 
@@ -267,6 +282,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
     candidate: DeliveryPlanCandidate | None = None
     result_candidate: DeliveryResultCandidate | None = None
     return_context: DeliveryReturnContext | None = None
+    recovery_attention: DeliveryRecoveryAttention | None = None
     block: DeliveryBlock | None = None
     requests: tuple[DeliveryRequest, ...] = ()
 
@@ -275,22 +291,8 @@ class OutcomeAuthorityBinding(_DeliveryModel):
         if self.stage == DeliveryStage.COMPLETED and self.active_claim is not None:
             message = "completed outcomes cannot carry an active claim"
             raise ValueError(message)
-        if self.active_claim is not None:
-            expected_role = {
-                DeliveryStage.PLANNING: DeliveryWorkerRole.PLANNER,
-                DeliveryStage.IMPLEMENTATION: DeliveryWorkerRole.BUILDER,
-                DeliveryStage.ASSEMBLY: DeliveryWorkerRole.ASSEMBLY_REVIEWER,
-            }.get(self.stage)
-            if self.active_claim.worker_role != expected_role:
-                message = "active claim worker role does not match its Delivery stage"
-                raise ValueError(message)
-            if self.stage == DeliveryStage.IMPLEMENTATION:
-                if self.active_claim.task_id not in self.task_ids:
-                    message = "active Build claim must name promoted task authority"
-                    raise ValueError(message)
-            elif self.active_claim.task_id is not None:
-                message = "only active Build claims name task authority"
-                raise ValueError(message)
+        self._validate_active_claim()
+        self._validate_recovery_attention()
         request_ids = tuple(request.request_id for request in self.requests)
         if len(request_ids) != len(set(request_ids)):
             message = "Delivery request identities must be unique per outcome"
@@ -304,6 +306,36 @@ class OutcomeAuthorityBinding(_DeliveryModel):
             message = "Delivery results must bind promoted task authority"
             raise ValueError(message)
         return self
+
+    def _validate_active_claim(self) -> None:
+        if self.active_claim is None:
+            return
+        expected_role = {
+            DeliveryStage.PLANNING: DeliveryWorkerRole.PLANNER,
+            DeliveryStage.IMPLEMENTATION: DeliveryWorkerRole.BUILDER,
+            DeliveryStage.ASSEMBLY: DeliveryWorkerRole.ASSEMBLY_REVIEWER,
+        }.get(self.stage)
+        if self.active_claim.worker_role != expected_role:
+            message = "active claim worker role does not match its Delivery stage"
+            raise ValueError(message)
+        if self.stage == DeliveryStage.IMPLEMENTATION:
+            if self.active_claim.task_id not in self.task_ids:
+                message = "active Build claim must name promoted task authority"
+                raise ValueError(message)
+        elif self.active_claim.task_id is not None:
+            message = "only active Build claims name task authority"
+            raise ValueError(message)
+
+    def _validate_recovery_attention(self) -> None:
+        if self.recovery_attention is None:
+            return
+        if (
+            self.active_claim is None
+            or self.recovery_attention.attempt_id != self.active_claim.attempt_id
+            or self.recovery_attention.claim_id != self.active_claim.claim_id
+        ):
+            message = "recovery attention must bind the current active claim"
+            raise ValueError(message)
 
     @property
     def task_ids(self) -> tuple[str, ...]:
@@ -543,6 +575,52 @@ class DeliveryRuntime:
             _conflict("execution identity does not match the active claim")
         return binding
 
+    def remove_active_claim(
+        self,
+        outcome_id: str,
+        attempt_id: str,
+        claim_id: str,
+    ) -> OutcomeAuthorityBinding:
+        """Remove one exact failed claim without changing its canonical stage authority."""
+        frontier, previous = self._read()
+        binding = _find_binding(frontier, outcome_id)
+        claim = binding.active_claim
+        if claim is None or claim.attempt_id != attempt_id or claim.claim_id != claim_id:
+            _conflict("claim removal does not match the active execution identity")
+        recovered = binding.model_copy(
+            update={
+                "active_claim": None,
+                "output": None,
+                "candidate": None,
+                "result_candidate": None,
+                "recovery_attention": None,
+            }
+        )
+        self._replace(previous, _replace_binding(frontier, binding, recovered))
+        return recovered
+
+    def publish_recovery_attention(
+        self,
+        outcome_id: str,
+        attention: DeliveryRecoveryAttention,
+    ) -> OutcomeAuthorityBinding:
+        """Retain one exact active claim with deterministic operator repair evidence."""
+        frontier, previous = self._read()
+        binding = _find_binding(frontier, outcome_id)
+        claim = binding.active_claim
+        if (
+            binding.stage != DeliveryStage.IMPLEMENTATION
+            or claim is None
+            or claim.attempt_id != attention.attempt_id
+            or claim.claim_id != attention.claim_id
+        ):
+            _conflict("recovery attention does not match an active Build claim")
+        if binding.recovery_attention == attention:
+            return binding
+        updated = binding.model_copy(update={"recovery_attention": attention})
+        self._replace(previous, _replace_binding(frontier, binding, updated))
+        return updated
+
     def claimable_outcome_ids(self) -> tuple[str, ...]:
         """Return stable dependency-ready, unblocked, unclaimed outcome identities."""
         frontier, _content = self._read()
@@ -606,6 +684,7 @@ class DeliveryRuntime:
                 "active_claim": request.claim,
                 "output": None,
                 "result_candidate": None,
+                "recovery_attention": None,
             }
         )
         self._replace(previous, _replace_binding(frontier, binding, claimed))
@@ -803,6 +882,7 @@ class DeliveryRuntime:
                     "output": None,
                     "candidate": None,
                     "return_context": None,
+                    "recovery_attention": None,
                     "block": None,
                     "requests": (),
                 }
@@ -834,6 +914,7 @@ class DeliveryRuntime:
                     "output": None,
                     "result_candidate": None,
                     "return_context": None,
+                    "recovery_attention": None,
                     "block": None,
                     "requests": (),
                 }
@@ -842,7 +923,13 @@ class DeliveryRuntime:
             destination = DeliveryStage.COMPLETED
         else:
             _conflict("current stage cannot advance")
-        return binding.model_copy(update={"stage": destination, "active_claim": None})
+        return binding.model_copy(
+            update={
+                "stage": destination,
+                "active_claim": None,
+                "recovery_attention": None,
+            }
+        )
 
     def _retry(
         self,
@@ -876,6 +963,7 @@ class DeliveryRuntime:
                 "candidate": None,
                 "result_candidate": None,
                 "return_context": None,
+                "recovery_attention": None,
             }
         )
 
@@ -960,6 +1048,7 @@ class DeliveryRuntime:
                     "candidate": None,
                     "result_candidate": None,
                     "return_context": context,
+                    "recovery_attention": None,
                     "block": None,
                 }
             )
@@ -1008,6 +1097,7 @@ class DeliveryRuntime:
                 "candidate": None,
                 "result_candidate": None,
                 "return_context": None,
+                "recovery_attention": None,
                 "block": block,
                 "requests": requests,
             }
@@ -1086,6 +1176,7 @@ def _reset_binding(binding: OutcomeAuthorityBinding, stage: DeliveryStage) -> Ou
             "candidate": None,
             "result_candidate": None,
             "return_context": None,
+            "recovery_attention": None,
             "block": None,
             "requests": (),
         }

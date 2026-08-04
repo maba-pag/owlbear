@@ -61,6 +61,22 @@ class ChangeCoordination(_WorkspaceModel):
     writer: ChangeWriter | None = None
 
 
+class WorkspaceRecoverySnapshot(_WorkspaceModel):
+    """Read-only Git and custody state used to decide exact-claim recovery."""
+
+    change_id: ChangeId
+    worktree_path: Path
+    branch: str = Field(min_length=1)
+    branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    worktree_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    worktree_branch: str | None = None
+    last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    preserved_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    clean: bool
+    reviewed_ancestor: bool
+    writer: ChangeWriter | None = None
+
+
 class CapacityLedger(_WorkspaceModel):
     """Global writer capacity without serializing independent changes."""
 
@@ -343,6 +359,43 @@ class ChangeWorkspaceManager:
         if self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
             _workspace_failure("change source worktree is not clean")
         return branch_head
+
+    def recovery_snapshot(self, change_id: str, attempt_id: str) -> WorkspaceRecoverySnapshot:
+        """Inspect exact recovery state without changing the branch, worktree, or custody."""
+        coordination = self._coordinator.show(change_id)
+        branch_head = self._resolve(coordination.branch)
+        attempt_ref = f"refs/owlbear/attempts/{change_id}/{attempt_id}"
+        self._git("check-ref-format", attempt_ref)
+        preserved = self._resolve(attempt_ref, missing_ok=True)
+        worktree_head = None
+        worktree_branch = None
+        clean = False
+        if coordination.worktree_path.exists():
+            worktree_head = self._resolve("HEAD", cwd=coordination.worktree_path)
+            worktree_branch = self._git(
+                "-C",
+                str(coordination.worktree_path),
+                "branch",
+                "--show-current",
+            )
+            clean = not self._git("-C", str(coordination.worktree_path), "status", "--porcelain")
+        return WorkspaceRecoverySnapshot(
+            change_id=change_id,
+            worktree_path=coordination.worktree_path,
+            branch=coordination.branch,
+            branch_head=branch_head,
+            worktree_head=worktree_head,
+            worktree_branch=worktree_branch,
+            last_reviewed_commit=coordination.last_reviewed_commit,
+            preserved_commit=preserved,
+            clean=clean,
+            reviewed_ancestor=self._is_ancestor(
+                coordination.last_reviewed_commit,
+                branch_head,
+                cwd=self._repository,
+            ),
+            writer=coordination.writer,
+        )
 
     def validate_writer_head(self, change_id: str, claim_id: str, commit: str) -> ChangeCoordination:
         """Validate one writer-owned clean branch-head commit without mutation."""

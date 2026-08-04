@@ -12,9 +12,11 @@ import pytest
 from owlbear_kanban import (
     CapacityLedger,
     ChangeWorkspaceManager,
+    ChangeWriter,
     CoordinationConflictError,
     DeliveryCommitment,
     DeliveryCommitmentClass,
+    DeliveryClaimRecoveryStatus,
     DeliveryContract,
     DeliveryFrontier,
     DeliveryOutcome,
@@ -33,6 +35,7 @@ from owlbear_kanban import (
     PortfolioApplicationDependencies,
     PortfolioApplicationHooks,
     PortfolioCoordinator,
+    RetryDelivery,
 )
 
 
@@ -275,6 +278,14 @@ def test_writer_failure_leaves_started_exact_claim_without_false_launch(tmp_path
     assert active[0][1].claim_id == failure.claim_id
     assert runtimes["change-b"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
+    recovered = application.recover_claim(
+        "change-a",
+        "OUT-001",
+        failure.attempt_id,
+        failure.claim_id,
+    )
+    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
+    assert runtimes["change-a"].active_claims() == ()
     ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
     assert ledger.change_ids == ()
 
@@ -296,5 +307,138 @@ def test_writer_capacity_skips_blocked_build_but_launches_read_only_work(tmp_pat
     assert acquired.failures == ()
     assert runtimes["change-b"].active_claims() == ()
     assert coordinator.show("change-b").writer is None
+    ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
+    assert ledger.change_ids == ("change-a",)
+
+
+@pytest.mark.parametrize("stage", [DeliveryStage.PLANNING, DeliveryStage.ASSEMBLY])
+def test_read_only_claim_recovery_removes_only_exact_runtime_claim(tmp_path: Path, stage: DeliveryStage) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": stage})
+    package = application.acquire_frontier_work().launch_packages[0]
+
+    recovered = application.recover_claim(
+        package.change_id,
+        package.outcome_id,
+        package.claim.attempt_id,
+        package.claim.claim_id,
+    )
+
+    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
+    assert recovered.preserved_commit is None
+    assert runtimes["change-a"].active_claims() == ()
+    assert coordinator.show("change-a").writer is None
+    ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
+    assert ledger.change_ids == ()
+
+
+def test_clean_build_recovery_replays_after_workspace_reset(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    package = application.acquire_frontier_work().launch_packages[0]
+    worktree = package.worktree_path
+    (worktree / "product.txt").write_text("attempt\n", encoding="utf-8")
+    _git(worktree, "add", "product.txt")
+    _git(worktree, "commit", "-m", "attempt commit")
+    attempt_commit = _git(worktree, "rev-parse", "HEAD")
+
+    with (
+        patch.object(runtimes["change-a"], "remove_active_claim", side_effect=RuntimeError("injected after reset")),
+        pytest.raises(RuntimeError, match="injected"),
+    ):
+        application.recover_claim(
+            package.change_id,
+            package.outcome_id,
+            package.claim.attempt_id,
+            package.claim.claim_id,
+        )
+
+    assert _git(worktree, "rev-parse", "HEAD") == package.last_reviewed_commit
+    assert coordinator.show("change-a").writer is None
+    assert (
+        _git(
+            worktree,
+            "rev-parse",
+            f"refs/owlbear/attempts/change-a/{package.claim.attempt_id}",
+        )
+        == attempt_commit
+    )
+
+    recovered = application.recover_claim(
+        package.change_id,
+        package.outcome_id,
+        package.claim.attempt_id,
+        package.claim.claim_id,
+    )
+
+    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
+    assert recovered.preserved_commit == attempt_commit
+    assert runtimes["change-a"].active_claims() == ()
+    ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
+    assert ledger.change_ids == ()
+    with pytest.raises(DeliveryRuntimeConflictError, match="active claim"):
+        runtimes["change-a"].transition(RetryDelivery(outcome_id="OUT-001", claim_id=package.claim.claim_id))
+
+
+def test_dirty_build_recovery_retains_bytes_claim_custody_and_attention(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    package = application.acquire_frontier_work().launch_packages[0]
+    product = package.worktree_path / "product.txt"
+    product.write_text("uncommitted attempt\n", encoding="utf-8")
+    branch_head = _git(package.worktree_path, "rev-parse", "HEAD")
+
+    retained = application.recover_claim(
+        package.change_id,
+        package.outcome_id,
+        package.claim.attempt_id,
+        package.claim.claim_id,
+    )
+
+    assert retained.status == DeliveryClaimRecoveryStatus.ATTENTION
+    assert retained.attention is not None
+    assert retained.attention.custody_retained
+    assert retained.attention.branch_head == branch_head
+    assert product.read_text(encoding="utf-8") == "uncommitted attempt\n"
+    assert runtimes["change-a"].active_claims()[0][1] == package.claim
+    assert runtimes["change-a"].show_binding("OUT-001").recovery_attention == retained.attention
+    assert coordinator.show("change-a").writer == package.writer
+    ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
+    assert ledger.change_ids == ("change-a",)
+
+
+def test_mismatched_build_custody_retains_current_writer_and_attention(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    package = application.acquire_frontier_work().launch_packages[0]
+    coordinator.release("change-a", package.claim.claim_id)
+    mismatched = ChangeWriter(
+        attempt_id="other-attempt",
+        claim_id="other-claim",
+        actor_id="other-owner",
+        process_id="other-process",
+        claimed_at="2026-08-04T00:01:00Z",
+        job_id=2,
+        kind="build",
+    )
+    coordinator.acquire("change-a", mismatched)
+
+    retained = application.recover_claim(
+        package.change_id,
+        package.outcome_id,
+        package.claim.attempt_id,
+        package.claim.claim_id,
+    )
+
+    assert retained.status == DeliveryClaimRecoveryStatus.ATTENTION
+    assert retained.attention is not None
+    assert retained.attention.writer_claim_id == mismatched.claim_id
+    assert runtimes["change-a"].active_claims()[0][1] == package.claim
+    assert coordinator.show("change-a").writer == mismatched
     ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
     assert ledger.change_ids == ("change-a",)

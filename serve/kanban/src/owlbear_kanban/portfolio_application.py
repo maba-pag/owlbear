@@ -6,6 +6,7 @@ import hashlib
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Never
 
@@ -17,11 +18,13 @@ from owlbear_kanban.change_workspace import (
     ChangeWriter,
     CoordinationConflictError,
     PortfolioCoordinator,
+    WorkspaceRecoverySnapshot,
 )
 from owlbear_kanban.delivery_runtime import (
     ActivateDeliveryClaim,
     DeliveryActiveClaim,
     DeliveryChangeStage,
+    DeliveryRecoveryAttention,
     DeliveryRequest,
     DeliveryReturnContext,
     DeliveryRuntime,
@@ -137,6 +140,34 @@ class DeliveryBuildContext(_ApplicationModel):
     predecessor_results: tuple[DeliveryTaskResult, ...]
     requests: tuple[DeliveryRequest, ...]
     return_context: DeliveryReturnContext | None = None
+    recovery_attention: DeliveryRecoveryAttention | None = None
+
+
+class DeliveryClaimRecoveryStatus(StrEnum):
+    """Observable disposition of one exact-claim recovery request."""
+
+    RECOVERED = "recovered"
+    ATTENTION = "attention"
+
+
+class DeliveryClaimRecoveryResult(_ApplicationModel):
+    """Recovered claim state or retained typed repair attention."""
+
+    status: DeliveryClaimRecoveryStatus
+    change_id: str = Field(min_length=1)
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    preserved_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    preserved_ref: str | None = None
+    attention: DeliveryRecoveryAttention | None = None
+
+    @model_validator(mode="after")
+    def _validate_disposition(self) -> DeliveryClaimRecoveryResult:
+        if (self.status == DeliveryClaimRecoveryStatus.ATTENTION) != (self.attention is not None):
+            message = "only retained recovery requires repair attention"
+            raise ValueError(message)
+        return self
 
 
 class PortfolioApplicationError(RuntimeError):
@@ -341,7 +372,50 @@ class PortfolioApplication:
             predecessor_results=predecessor_results,
             requests=binding.requests,
             return_context=binding.return_context,
+            recovery_attention=binding.recovery_attention,
         )
+
+    def recover_claim(
+        self,
+        change_id: str,
+        outcome_id: str,
+        attempt_id: str,
+        claim_id: str,
+    ) -> DeliveryClaimRecoveryResult:
+        """Remove one exact failed claim or retain deterministic Build repair attention."""
+        with self._coordinator.acquisition_lock():
+            runtime = self._runtime(change_id)
+            binding = runtime.require_active_claim(outcome_id, attempt_id, claim_id)
+            claim = binding.active_claim
+            if claim is None:
+                self._fail("outcome has no active claim")
+            if claim.worker_role != DeliveryWorkerRole.BUILDER:
+                runtime.remove_active_claim(outcome_id, attempt_id, claim_id)
+                return self._recovered(change_id, outcome_id, attempt_id, claim_id)
+            snapshot = self._workspace_manager.recovery_snapshot(change_id, attempt_id)
+            if snapshot.writer is None:
+                if self._released_recovery_matches(snapshot):
+                    runtime.remove_active_claim(outcome_id, attempt_id, claim_id)
+                    return self._recovered(
+                        change_id,
+                        outcome_id,
+                        attempt_id,
+                        claim_id,
+                        snapshot.preserved_commit,
+                    )
+                return self._retain_recovery_attention(runtime, outcome_id, claim, snapshot)
+            if not self._active_recovery_matches(snapshot, attempt_id, claim_id):
+                return self._retain_recovery_attention(runtime, outcome_id, claim, snapshot)
+            rejected_head = snapshot.branch_head
+            self._workspace_manager.restart(change_id, attempt_id, rejected_head)
+            runtime.remove_active_claim(outcome_id, attempt_id, claim_id)
+            return self._recovered(
+                change_id,
+                outcome_id,
+                attempt_id,
+                claim_id,
+                rejected_head,
+            )
 
     def _candidates(self) -> tuple[_Candidate, ...]:
         candidates = []
@@ -459,6 +533,95 @@ class PortfolioApplication:
             task_id=task_id,
         )
 
+    @staticmethod
+    def _released_recovery_matches(snapshot: WorkspaceRecoverySnapshot) -> bool:
+        return (
+            snapshot.clean
+            and snapshot.branch_head == snapshot.last_reviewed_commit
+            and snapshot.worktree_head == snapshot.last_reviewed_commit
+            and snapshot.worktree_branch == snapshot.branch
+        )
+
+    @staticmethod
+    def _active_recovery_matches(
+        snapshot: WorkspaceRecoverySnapshot,
+        attempt_id: str,
+        claim_id: str,
+    ) -> bool:
+        writer = snapshot.writer
+        return (
+            writer is not None
+            and writer.attempt_id == attempt_id
+            and writer.claim_id == claim_id
+            and snapshot.clean
+            and snapshot.worktree_head == snapshot.branch_head
+            and snapshot.worktree_branch == snapshot.branch
+            and snapshot.reviewed_ancestor
+            and snapshot.preserved_commit in {None, snapshot.branch_head}
+        )
+
+    def _retain_recovery_attention(
+        self,
+        runtime: DeliveryRuntime,
+        outcome_id: str,
+        claim: DeliveryActiveClaim,
+        snapshot: WorkspaceRecoverySnapshot,
+    ) -> DeliveryClaimRecoveryResult:
+        attention = DeliveryRecoveryAttention(
+            attempt_id=claim.attempt_id,
+            claim_id=claim.claim_id,
+            reason=self._recovery_reason(snapshot, claim),
+            worktree_path=str(snapshot.worktree_path),
+            branch_head=snapshot.branch_head,
+            worktree_head=snapshot.worktree_head,
+            last_reviewed_commit=snapshot.last_reviewed_commit,
+            writer_claim_id=snapshot.writer.claim_id if snapshot.writer is not None else None,
+            custody_retained=snapshot.writer is not None,
+            retry_condition="Restore a clean recorded worktree and reconcile exact writer custody.",
+        )
+        runtime.publish_recovery_attention(outcome_id, attention)
+        return DeliveryClaimRecoveryResult(
+            status=DeliveryClaimRecoveryStatus.ATTENTION,
+            change_id=runtime.contract.change_id,
+            outcome_id=outcome_id,
+            attempt_id=claim.attempt_id,
+            claim_id=claim.claim_id,
+            attention=attention,
+        )
+
+    @staticmethod
+    def _recovery_reason(snapshot: WorkspaceRecoverySnapshot, claim: DeliveryActiveClaim) -> str:
+        writer = snapshot.writer
+        if writer is None:
+            return "Build source is outside the reviewed boundary without writer custody."
+        if writer.attempt_id != claim.attempt_id or writer.claim_id != claim.claim_id:
+            return "Build claim does not match recorded writer custody."
+        if not snapshot.clean:
+            return "Build worktree contains uncommitted changes."
+        if snapshot.worktree_branch != snapshot.branch or snapshot.worktree_head != snapshot.branch_head:
+            return "Build worktree does not match its recorded branch head."
+        if not snapshot.reviewed_ancestor:
+            return "Build branch does not descend from its reviewed boundary."
+        return "Build attempt history ref conflicts with the current branch head."
+
+    @staticmethod
+    def _recovered(
+        change_id: str,
+        outcome_id: str,
+        attempt_id: str,
+        claim_id: str,
+        preserved_commit: str | None = None,
+    ) -> DeliveryClaimRecoveryResult:
+        return DeliveryClaimRecoveryResult(
+            status=DeliveryClaimRecoveryStatus.RECOVERED,
+            change_id=change_id,
+            outcome_id=outcome_id,
+            attempt_id=attempt_id,
+            claim_id=claim_id,
+            preserved_commit=preserved_commit,
+            preserved_ref=(f"refs/owlbear/attempts/{change_id}/{attempt_id}" if preserved_commit is not None else None),
+        )
+
     def _validate_package_authority(self, runtime: DeliveryRuntime, package: VerifiedDesignPackage) -> None:
         if hashlib.sha256(package.authority_bytes).hexdigest() != runtime.authority_digest:
             self._fail("active package authority does not match the Delivery runtime")
@@ -501,6 +664,8 @@ __all__ = [
     "DeliveryAcquisitionFailure",
     "DeliveryAcquisitionResult",
     "DeliveryBuildContext",
+    "DeliveryClaimRecoveryResult",
+    "DeliveryClaimRecoveryStatus",
     "DeliveryLaunchPackage",
     "DeliveryPlanContext",
     "DeliveryRolePolicy",
