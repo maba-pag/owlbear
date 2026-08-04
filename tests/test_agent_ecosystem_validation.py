@@ -71,7 +71,12 @@ _TARGET_ROLE_TOOLS = {
         "admit_delivery_change",
     },
     "planner": {"show_plan_context", "publish_delivery_plan"},
-    "builder": {"show_build_context", "publish_delivery_result"},
+    "builder": {
+        "show_build_context",
+        "publish_delivery_result",
+        "show_integration_attention",
+        "admit_reviewed_integration_repair",
+    },
     "orchestrator": {
         "list_work_items",
         "acquire_frontier_work",
@@ -321,6 +326,7 @@ def test_installed_delivery_ecosystem_is_native_only() -> None:
     assert prompts["ideate"]["agent"] == "designer"
     assert prompts["design"]["agent"] == "designer"
     assert prompts["orchestrate"]["agent"] == "orchestrator"
+    assert prompts["integration-repair"]["agent"] == "builder"
     assert {prompt.get("agent") for prompt in prompts.values()}.isdisjoint(_RETIRED_AGENTS)
 
     skills = {path.parent.name for path in _SKILLS_ROOT.glob("*/SKILL.md")}
@@ -330,6 +336,7 @@ def test_installed_delivery_ecosystem_is_native_only() -> None:
         "w-frontier-planning",
         "w-packet-building",
         "w-orchestration",
+        "w-integration-repair",
     } <= skills
 
     instructions = {path.stem.removesuffix(".instructions") for path in _INSTRUCTIONS_ROOT.glob("*.instructions.md")}
