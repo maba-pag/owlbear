@@ -1,15 +1,15 @@
 ---
 mode: build
-candidate_revision: 38e27ae3ed5d6215ef8a5fe25c2db82470ec6452
+candidate_revision: b5b2d217a14ed8b73a794a67a1c452a98acf45e8
 generation:
-  job_id: 295
-  receipt_id: admission-f11b5af05ac3
+  job_id: 72
+  receipt_id: admission-3212969f2164
   predecessor_job_ids: []
 packets:
   - id: DN-011-PK-001
-    outcome: Complete scalable job delivery and restore current DN-011 assembled
-      fixture consumers with paged virtualized jobs, current packet, receipt,
-      attempt, and corrective history.
+    outcome: Make PROOF-012 independent of mutable self-hosting plan sidecars by
+      seeding one current native build-mode scenario and then prove the existing
+      peer Cockpit experience at the built SPA and real FastAPI boundary.
     obligations:
       - REQ-010
       - KEEP-010
@@ -17,37 +17,36 @@ packets:
       - REQ-026
       - KEEP-006
     in_scope:
-      - Pass native job pagination from DeliveryPage to DeliveryJobBoard and
-        expose Load more jobs.
-      - Virtualize loaded cards per plan, build, accept, and audit group using
-        TanStack Virtual.
-      - Preserve job commands, deep links, and OCC conflict behavior with
-        focused component tests.
-      - Copy only six semantic authority files into proof workspaces and omit
-        mutable sidecars.
-      - Publish a current fixture-local DN-011-PK-001 plan with computed digest
-        and matching jobs and receipts.
-      - Add a proof-012-cockpit flag that seeds a verified Legacy snapshot from
-        a temporary source outside the Kanban work root and removes that source
-        before server launch.
-      - Preserve the unflagged setup, finalization, and PROOF-009 contract while
-        repairing stale DN-001 fixture identities.
-      - Seed decision, attempt, finding, corrective, supersession, invalidation,
-        revision, and 300-job scale records.
-      - Extend assembled desktop/mobile proof for current history, keyboard
-        behavior, node and job scale, Legacy, Memory, and Ideas.
+      - Copy current semantic authority into the temporary native-proof
+        workspace and discard copied mutable plans, receipts, and generated
+        jobs.
+      - Seed a build-mode DN-011 plan containing DN-011-PK-001 and compute the
+        node-plan digest used by scenario jobs and receipts.
+      - Seed build and accept jobs, requests, a DN-011 build receipt carrying
+        the four canonical PROOF-012 methods, a packet finding, corrective
+        route, and supersession/invalidation chain with current packet, closure,
+        and digest references.
+      - Assert that the assembled Specification view renders DN-011-PK-001
+        instead of the no-plan fallback.
+      - Assert that the assembled Evidence view renders build-proof with its
+        seeded code_revision.
+      - Preserve the real FastAPI HTTP/SSE boundary, desktop/mobile journey,
+        300-node scale fixture, request resolution, evidence history, legacy
+        inventory, Memory, and Ideas workflows.
+      - Repair the smallest MOD-005 defect with focused regression coverage only
+        if fixture-isolated PROOF-012 exposes one.
     excluded:
-      - Setup implementation changes
-      - PROOF-009 semantic changes
-      - Kanban runtime changes
-      - Production IF-011 backend changes
-      - Unrelated MOD-005 UI changes
-      - Package script or Playwright configuration changes
-      - Semantic authority or live-store changes
-      - New interfaces or compatibility aliases
-      - Arbitrary status or kind mutation
-      - Active legacy runtime files
-      - Memory or Ideas behavior expansion
+      - Production changes to serve/kanban or the Cockpit backend IF-011
+        contract.
+      - Changes to package scripts, Playwright project configuration, semantic
+        authority, or live native work records.
+      - New public interfaces, compatibility aliases, arbitrary status or kind
+        mutation, or legacy task-authoritative behavior.
+      - Memory or Ideas behavior expansion or use as Delivery authority.
+      - Weakening packet-plan, exact-method, exact-code-revision,
+        desktop/mobile, scale, accessibility, screenshot, error,
+        corrective-chain, or no-mocked-HTTP assertions.
+      - Unrelated frontend refactoring or design-system replacement.
     modules:
       - MOD-005
       - MOD-008
@@ -56,69 +55,53 @@ packets:
       - IF-012
     dependencies: []
     acceptance_scenarios:
-      - 'AC1: Given a flagged or unflagged seed at the current digest, the temporary
-        workspace copies the six semantic authority files, omits plans, receipts,
-        generated jobs, and locks, and loads a computed DN-011-PK-001 plan with matching
-        plan and build receipts; the unflagged native-cutover regression retains its
-        setup, finalization, and PROOF-009 assertions.'
-      - 'AC2: Given Specification deep-linked to DN-011, Tab reaches the change selector,
-        focusing Delivery nodes and pressing ArrowDown changes the URL to DN-012,
-        and the route remains horizontally bounded at 1440x900 and 390x844.'
-      - 'AC3: Given decision requests linked to pending DN-011 jobs, Requests shows
-        two option labels, recommendation, confidence, rationale, pros, cons, and
-        risks; selecting the recommendation through real FastAPI resumes the linked
-        job and remains resolved after reload.'
-      - 'AC4: Given the built SPA and seeded real FastAPI backend, peer views show
-        DN-011-PK-001, four job groups, request context, attempt actor and process,
-        corrective history, the fixture commit as Code revision, and no page or HTTP
-        failures at desktop and mobile sizes.'
-      - 'AC5: Given Evidence before Full history is selected, build-proof is visible
-        and supersession-proof is absent; after Full history is selected, the supersession
-        chain names invalidation-proof and finding-proof.'
-      - 'AC6: Given the flagged seed before FastAPI launch, the verified Legacy snapshot
-        contains task, request, and activity inventory while its temporary source
-        and active Kanban legacy surfaces are absent; Legacy, Memory, and Ideas complete
-        their maintained read workflows.'
-      - 'AC7: Given a 300-node fixture deep-linked to DN-300, Specification reports
-        300 of 300 nodes, shows DN-300-PK-001, mounts fewer than 100 node rows, and
-        remains nonblank, bounded, and nonoverlapping at desktop and mobile sizes.'
-      - 'AC8: Given 300 jobs exposed through native pages, Load more reaches 300 loaded
-        jobs, the four group counts sum to 300, fewer than 100 job cards are mounted,
-        and a last-page job opens its detail without layout overflow.'
-      - 'AC9: Given pending unclaimed jobs with current digest and OCC tokens, priority
-        and cancellation succeed; stale or claimed authority preserves current job
-        data and exposes token, digest, submitted intent, and retry.'
-      - 'AC10: Given the packet commit, assembled E2E, project-faithful E2E typecheck,
-        build, Vitest, CSS and HTML lint, Ruff checks, and unflagged native-cutover
-        regression exit zero; Playwright emits desktop/mobile screenshots and scoped
-        tracked-state inspection reports no proof-created delta.'
+      - 'AC1: Given a temporary copy of current semantic authority plus mutable sidecars,
+        the native-proof seed removes mutable plans, receipts, and generated jobs,
+        publishes one scenario build plan containing DN-011-PK-001, and native currentness
+        accepts the computed plan digest, DN-011/PROOF-012 closure, and four canonical
+        PROOF-012 method strings across its build job, build receipt, packet finding,
+        corrective route, and invalidation chain.'
+      - 'AC2: Given the built SPA and real seeded FastAPI backend, desktop 1440x900
+        and mobile 390x844 journeys render DN-011-PK-001 in the Specification packet
+        plan, navigate graph/list, Delivery jobs, Requests, Activity, Evidence, and
+        Legacy, resolve one request, expose attempt/finding/receipt/corrective history,
+        render build-proof with its seeded code_revision, and report no page or HTTP
+        failures.'
+      - 'AC3: Given seeded Memory and Ideas data after the native shell rebuild, each
+        route completes its maintained read workflow and the Ideas preview displays
+        persisted content without either route becoming Delivery authority.'
+      - 'AC4: Given a 300-node scale fixture deep-linked to DN-300, the graph displays
+        300 of 300 nodes and DN-300-PK-001, mounts fewer than 100 node rows, and remains
+        nonblank, horizontally bounded, and vertically nonoverlapping at desktop and
+        mobile viewports.'
+      - 'AC5: Given pending unclaimed Delivery jobs with current digest and OCC tokens,
+        component proof exercises priority and cancellation intents; stale or claimed
+        authority preserves current job data and exposes the current token, digest,
+        submitted intent, and retry action.'
+      - 'AC6: Given the packet proof commands at the builder commit, build, Vitest,
+        lint, Ruff, and PROOF-012 exit zero, emit the named desktop/mobile screenshots,
+        and scoped tracked-state inspection reports no proof-created delta.'
     impact_closure:
       paths:
         - .owlbear/changes/replace-delivery-pipeline/intent.md
         - .owlbear/changes/replace-delivery-pipeline/design.md
         - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
-        - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
         - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
         - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
-        - serve/kanban/src/owlbear_kanban/
-        - serve/cockpit/src/owlbear_cockpit/
+        - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
         - serve/cockpit/web/src/
         - serve/cockpit/web/e2e/native-proof-assembled.spec.ts
         - serve/cockpit/web/e2e/support/seed-native-proof-stack.py
         - serve/cockpit/web/e2e/support/start-native-proof-stack.mjs
-        - serve/cockpit/web/package.json
-        - serve/cockpit/web/playwright.config.ts
-        - tests/test_native_cutover.py
-        - setup/init.py
-        - setup/finalize.py
+        - serve/cockpit/src/owlbear_cockpit/
       authority_targets:
         - DN-010
         - DN-011
         - REQ-010
-        - KEEP-010
         - REQ-016
         - REQ-026
         - KEEP-006
+        - KEEP-010
         - MOD-005
         - MOD-008
         - IF-011
@@ -132,13 +115,6 @@ packets:
         change/job store.
       primary_command: cd serve/cockpit/web && npm run test:e2e:native-proof
       additional_commands:
-        - cd serve/cockpit/web && npx tsc --ignoreConfig --noEmit --target
-          ES2020 --useDefineForClassFields true --lib ES2020,DOM,DOM.Iterable
-          --module ESNext --skipLibCheck true --moduleResolution bundler
-          --allowImportingTsExtensions true --resolveJsonModule true
-          --isolatedModules true --moduleDetection force --jsx react-jsx
-          --strict true --types node,@playwright/test
-          e2e/native-proof-assembled.spec.ts
         - cd serve/cockpit/web && npm run build
         - cd serve/cockpit/web && npm test
         - cd serve/cockpit/web && npm run lint:css
@@ -147,81 +123,49 @@ packets:
           serve/cockpit/web/e2e/support/seed-native-proof-stack.py
         - uv run ruff format --check
           serve/cockpit/web/e2e/support/seed-native-proof-stack.py
-        - uv run pytest -n0 tests/test_native_cutover.py -q --tb=short
       allowed_lower_replacements:
         - fixture change/job store; no mocked HTTP API
       evidence_outputs:
-        - Current plan and receipt evidence
-        - Pagination, virtualization, and OCC component results
-        - Attempt, decision, corrective, packet, and revision assertions
-        - Clean verified Legacy snapshot evidence
-        - Node and job mounted-count assertions
-        - Keyboard, screenshot, page, and HTTP observations
-        - Unflagged regression, static, lint, and scoped-state results
+        - Build and Vitest command results.
+        - Currentness evidence for the seeded plan digest, closure, and
+          canonical proof methods.
+        - Assembled DN-011-PK-001 packet-plan assertion.
+        - Assembled build-proof exact code_revision assertion.
+        - Desktop/mobile PROOF-012 screenshots.
+        - Browser page-error and HTTP-failure assertions.
+        - Priority and cancellation conflict assertions.
+        - Ruff, Stylelint, HTMLHint, and scoped tracked-state results.
     required_outputs:
-      - Paged virtualized job board and focused tests
-      - Common current DN-011 fixture records
-      - Isolated clean PROOF-012 Legacy flag
-      - Attempt, decision, and corrective assertions
-      - Passing unflagged cutover regression preserving setup and PROOF-009
-      - Desktop/mobile node and job scale proof
-      - Preserved OCC, Memory, and Ideas behavior
+      - Current isolated native-proof plan, packet, job, receipt, finding,
+        corrective route, invalidation, closure, method, and digest fixtures.
+      - Assembled assertions for DN-011-PK-001 and build-proof code_revision.
+      - Preserved PROOF-012 desktop/mobile, scale, Requests, Activity, Evidence,
+        Legacy, Memory, and Ideas journey.
+      - Focused MOD-005 repair and regression test only if assembled proof
+        exposes a frontend defect.
+      - Passing build, Vitest, CSS/HTML lint, Ruff, Playwright, screenshot, and
+        tracked-state proof.
     profile:
-      domain: React/PDS Cockpit plus Python native-store Playwright fixture
+      domain: React/PDS Cockpit UI plus Python native-store Playwright fixture
+        over a real FastAPI backend.
       risks:
         - RISK-010
         - RISK-012
       tools:
         - npm
         - TypeScript
-        - React
-        - TanStack Virtual
+        - Vite
         - Vitest
         - Playwright
         - uv
         - ruff
-        - pytest
         - git-read-only-state-checks
-      lifecycle_context: Initial planning consumes DN-010 and IF-011; readiness
-        and reconciliation remain engine-owned.
     context_budget:
-      expected_changed_files: 6
-      inspected_files: 40
+      expected_changed_files: 2-4
+      inspected_files: 26
       interfaces:
         - IF-011
         - IF-012
-      change_envelope: DeliveryJobBoard.tsx, DeliveryPage.tsx,
-        DeliveryJobBoard.test.tsx, seed-native-proof-stack.py,
-        start-native-proof-stack.mjs, and native-proof-assembled.spec.ts; tests
-        and setup paths remain read-only.
-review:
-  disposition: pass
-  evidence_id: plan-review-dn-011-f11b5af05ac3-final
-  evidence: Independent source-grounded review passed plan completeness,
-    admitted references, impact closure, dependency order, proof boundary, and
-    material expansion.
-  checks:
-    plan_completeness:
-      disposition: pass
-      evidence: The packet covers the complete obligation and PROOF-012 method
-        set, including both node and job scale.
-    admitted_references:
-      disposition: pass
-      evidence: References remain within DN-011 authority and the admitted
-        DN-010 IF-011 predecessor basis.
-    impact_closures:
-      disposition: pass
-      evidence: Canonical closure paths cover changed files and proof-consumed
-        runtime, setup, and regression inputs.
-    dependency_order:
-      disposition: pass
-      evidence: The single packet is acyclic and introduces no missing
-        predecessor.
-    proof_boundary:
-      disposition: pass
-      evidence: The assembled command uses the built SPA and real FastAPI
-        backend with only fixture stores replaced.
-    material_expansion:
-      disposition: pass
-      evidence: The flag isolates PROOF-012 Legacy preparation while preserving
-        the unflagged PROOF-009 consumer and avoiding unadmitted interfaces.
+      change_envelope: One focused proof-fixture currentness repair, one
+        assembled packet-plan and exact-code-revision assertion, plus a bounded
+        MOD-005 repair only when assembled proof exposes it.

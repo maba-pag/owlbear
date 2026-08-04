@@ -1,15 +1,15 @@
 ---
 mode: build
-candidate_revision: 38e27ae3ed5d6215ef8a5fe25c2db82470ec6452
+candidate_revision: 12a2db0e4a812a5f3536bea182000ffc82a4a8d5
 generation:
-  job_id: 294
-  receipt_id: admission-f11b5af05ac3
+  job_id: 71
+  receipt_id: admission-3212969f2164
   predecessor_job_ids: []
 packets:
   - id: DN-010-PK-001
-    outcome: Isolate PROOF-015 fixtures from mutable native sidecars and prove
-      DN-010 build and verification-only graph representations through the
-      assembled public Cockpit backend.
+    outcome: Isolate PROOF-015 Cockpit fixtures from mutable self-hosting
+      sidecars, seed one current build-mode packet, and repair any genuine
+      MOD-004 contract defect exposed after fixture isolation.
     obligations:
       - REQ-021
       - REQ-010
@@ -19,25 +19,31 @@ packets:
       - KEEP-006
       - KEEP-007
     in_scope:
-      - Add tests/native_cockpit_fixtures.py and import it package-relatively.
-      - Copy only the six semantic authority files into temporary stores.
-      - Publish separate DN-010 build and verification-only plan examples with
-        store-local identities.
-      - Seed a terminal audit job and final audit receipt and assert their
-        public projections.
-      - Use contained temporary stores and project_root/.dn010-engine-cache for
-        assembled proof.
-      - Use concrete repository history, checkout manager, runtime, dispatch,
-        FastAPI, OpenAPI, and live SSE assembly.
-      - Update the four whole-copy consumers and preserve
-        tests/test_cockpit_native_cutover.py unchanged.
+      - Create a root-test helper that copies admitted authority, removes
+        mutable plans, receipts, and generated authority jobs, recreates empty
+        sidecars, and loads unchanged semantic authority.
+      - Seed one minimal build-mode node plan through NodePlanStore and
+        RuntimeTransaction with a named packet and canonical closure.
+      - Compute seeded job and build-receipt node-plan digests after plan
+        publication.
+      - Use the temporary Git repository only as storage backing while retaining
+        real GitRepositoryHistory, ProofCheckoutManager, NativeRuntime,
+        DispatchRuntime, and FastAPI assembly.
+      - Update native changes, work, controls, and integration fixtures to use
+        the seeded plan, packet, digest, and temporary-store candidate.
+      - Preserve public route, model, pagination, cursor, conflict, replay,
+        transaction, health, legacy, OpenAPI, SSE, and non-mutation assertions.
+      - Repair the smallest MOD-004 defect with a discriminating PROOF-015
+        assertion only if fixture-isolated proof exposes one.
     excluded:
-      - Production source edits.
-      - Repository substitution or proof-checkout materialization.
-      - Root configuration, frontend, aliases, compatibility paths, task
-        mutation, or old-route changes.
-      - Live authority, plan, receipt, or job mutation.
-      - Public-boundary mocks, weakened assertions, or unrelated cleanup.
+      - Production changes under serve/kanban/src/owlbear_kanban.
+      - Frontend behavior, API aliases, arbitrary task mutation, old lifecycle
+        routes, or compatibility paths.
+      - Mutation of current change plans, receipts, jobs, or admitted authority.
+      - Weakening route-absence, conflict, transaction, SSE, schema, or
+        non-mutation assertions.
+      - Unrelated fixture refactoring or MOD-004 cleanup outside IF-011 and
+        PROOF-015.
     modules:
       - MOD-004
       - MOD-008
@@ -53,44 +59,54 @@ packets:
       - IF-014
     dependencies: []
     acceptance_scenarios:
-      - 'AC1 [REQ-021]: Given a store seeded from the six semantic files, public native
-        resources return typed responses; malformed pagination and missing identities
-        return their maintained errors.'
-      - 'AC2 [REQ-010]: Given separate build and verification-only DN-010 plans, the
-        public graph route returns their respective modes and packet representations.'
-      - 'AC3 [REQ-015]: Given current request identity, resolution persists and replays;
-        changed identity returns current authority without mutation.'
-      - 'AC4 [REQ-016]: Given malformed, non-owner, stale-cursor, and transaction-conflict
-        inputs, public responses remain typed and store snapshots show no partial
-        mutation.'
-      - 'AC5 [REQ-026]: Given current digest and OCC tokens, priority and cancellation
-        persist and replay; stale or incompatible inputs return current job authority
-        without mutation.'
-      - 'AC6 [KEEP-006]: Given seeded operational records, public graph, job, request,
-        evidence, activity, and SSE resources expose their state without a context
-        override.'
-      - 'AC7 [KEEP-007]: Given live mutable sidecars, the helper copies only semantic
-        authority, uses contained roots, preserves project stores, and removes temporary
-        engine and proof roots.'
-      - 'AC8 [negative]: Given assembled OpenAPI and live HTTP, retired generic task
-        and lifecycle routes are absent while native routes remain registered.'
-      - 'AC9 [IF-014]: Given a terminal audit job and final audit receipt, public
-        job and receipt routes return typed kind=audit records with their admitted
-        identities.'
+      - 'AC1: Given copied self-hosting authority containing published plans, receipts,
+        and generated jobs, the Cockpit fixture removes those sidecars, seeds one
+        build-mode plan with a named packet and computed digest, and the graph endpoint
+        exposes only that scenario plan.'
+      - 'AC2: Given seeded change and work stores, GET change, graph, job, request,
+        attempt, finding, receipt, invalidation, health, and legacy boundaries return
+        typed resources, while missing identities, stale cursors, and malformed inputs
+        return maintained stable envelopes.'
+      - 'AC3: Given current digest and OCC tokens, request resolution, release, priority,
+        and cancellation preserve replay and transaction behavior; stale identity
+        or active or terminal state returns current authority with no partial mutation.'
+      - 'AC4: Given the assembled FastAPI app over the temporary native store with
+        real history, checkout, runtime, dispatch, and routes, HTTP, OpenAPI, and
+        SSE expose IF-011 contracts while generic task mutation and old lifecycle
+        paths remain absent.'
+      - 'AC5: Given the packet primary command at the builder commit, the five PROOF-015
+        suites exit zero and scoped tracked-state inspection reports no proof-created
+        delta.'
     impact_closure:
       paths:
-        - .owlbear/changes/replace-delivery-pipeline/intent.md
-        - .owlbear/changes/replace-delivery-pipeline/design.md
-        - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
-        - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
-        - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
-        - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
-        - .gitignore
-        - conftest.py
-        - pyproject.toml
-        - serve/cockpit/src/owlbear_cockpit/
-        - serve/kanban/src/owlbear_kanban/
-        - tests/__init__.py
+        - serve/cockpit/src/owlbear_cockpit/deps.py
+        - serve/cockpit/src/owlbear_cockpit/main.py
+        - serve/cockpit/src/owlbear_cockpit/models.py
+        - serve/cockpit/src/owlbear_cockpit/native_http.py
+        - serve/cockpit/src/owlbear_cockpit/native_models.py
+        - serve/cockpit/src/owlbear_cockpit/routes/events.py
+        - serve/cockpit/src/owlbear_cockpit/routes/ideas.py
+        - serve/cockpit/src/owlbear_cockpit/routes/legacy.py
+        - serve/cockpit/src/owlbear_cockpit/routes/memory.py
+        - serve/cockpit/src/owlbear_cockpit/routes/native_changes.py
+        - serve/cockpit/src/owlbear_cockpit/routes/native_controls.py
+        - serve/cockpit/src/owlbear_cockpit/routes/native_work.py
+        - serve/kanban/src/owlbear_kanban/__init__.py
+        - serve/kanban/src/owlbear_kanban/attempts.py
+        - serve/kanban/src/owlbear_kanban/change.py
+        - serve/kanban/src/owlbear_kanban/dispatch.py
+        - serve/kanban/src/owlbear_kanban/finding.py
+        - serve/kanban/src/owlbear_kanban/invalidation.py
+        - serve/kanban/src/owlbear_kanban/jobs.py
+        - serve/kanban/src/owlbear_kanban/native_runtime.py
+        - serve/kanban/src/owlbear_kanban/node_plan.py
+        - serve/kanban/src/owlbear_kanban/proof_checkout.py
+        - serve/kanban/src/owlbear_kanban/receipt.py
+        - serve/kanban/src/owlbear_kanban/runtime_query.py
+        - serve/kanban/src/owlbear_kanban/runtime_requests.py
+        - serve/kanban/src/owlbear_kanban/runtime_transaction.py
+        - serve/kanban/src/owlbear_kanban/snapshot.py
+        - serve/kanban/src/owlbear_kanban/workspace.py
         - tests/native_cockpit_fixtures.py
         - tests/test_cockpit_native_changes.py
         - tests/test_cockpit_native_work.py
@@ -127,51 +143,39 @@ packets:
       authority: PROOF-015
       boundary: Public FastAPI HTTP and SSE routes over the real graph-aware
         engine.
-      primary_command: uv run pytest -n0
-        tests/test_cockpit_native_integration.py::test_assembled_native_resource_journey_is_bounded_strict_and_non_mutating
-        tests/test_cockpit_native_integration.py::test_http_controls_emit_native_sse_and_preserve_replay_conflicts
-        -q --tb=short
+      primary_command: uv run pytest -n0 tests/test_cockpit_native_changes.py
+        tests/test_cockpit_native_work.py tests/test_cockpit_native_controls.py
+        tests/test_cockpit_native_cutover.py
+        tests/test_cockpit_native_integration.py -q --tb=short
       additional_commands:
-        - uv run pytest -n0 tests/test_cockpit_native_changes.py
-          tests/test_cockpit_native_work.py
+        - uv run ruff check tests/native_cockpit_fixtures.py
+          tests/test_cockpit_native_changes.py tests/test_cockpit_native_work.py
           tests/test_cockpit_native_controls.py
-          tests/test_cockpit_native_cutover.py
-          tests/test_cockpit_native_integration.py -q --tb=short
-        - uv run pytest -n0 tests/test_cockpit_*.py -q --tb=short
-        - uv run pytest tests/ serve/ -m "not api" -q --tb=short
-        - uv run ruff check serve/cockpit/src/owlbear_cockpit
-          tests/native_cockpit_fixtures.py tests/test_cockpit_native_changes.py
-          tests/test_cockpit_native_work.py
-          tests/test_cockpit_native_controls.py
-          tests/test_cockpit_native_cutover.py
           tests/test_cockpit_native_integration.py
-        - uv run ruff format --check serve/cockpit/src/owlbear_cockpit
-          tests/native_cockpit_fixtures.py tests/test_cockpit_native_changes.py
-          tests/test_cockpit_native_work.py
+        - uv run ruff format --check tests/native_cockpit_fixtures.py
+          tests/test_cockpit_native_changes.py tests/test_cockpit_native_work.py
           tests/test_cockpit_native_controls.py
-          tests/test_cockpit_native_cutover.py
           tests/test_cockpit_native_integration.py
       allowed_lower_replacements:
         - temporary engine store
       evidence_outputs:
-        - Assembled HTTP and live-SSE results.
-        - Build and verification-only graph assertions.
-        - Typed error, health, conflict, replay, audit, and retired-route
-          assertions.
-        - Concrete-component, cleanup, regression, Ruff, revision, changed-path,
-          and scoped-state evidence.
+        - Primary-command exit code and results.
+        - Route, schema, SSE, and absence assertions.
+        - Ruff check and format-check results.
+        - Candidate/build Git and scoped tracked-state evidence.
     required_outputs:
-      - Package-relative fixture helper with granular and assembled temporary
-        stores.
-      - Separate DN-010 build and verification-only plan examples.
-      - Terminal audit job and final audit receipt projection assertions.
-      - Four updated fixture consumers using current computed identities.
-      - Passing assembled, regression, lint, cleanup, and scoped-state proof.
-      - Structured blocking evidence if isolated proof exposes a production
-        defect.
+      - Maintained Cockpit fixture helper creating clean temporary authority
+        sidecars and one current build plan and packet.
+      - Updated native changes, work, controls, and integration fixtures using
+        seeded plan identity and computed digest.
+      - Existing native cutover route-absence proof retained without weakening.
+      - Minimal MOD-004 repair and discriminating assertion only if isolated
+        proof exposes a backend defect.
+      - Passing PROOF-015 pytest, Ruff, formatting, and scoped tracked-state
+        evidence.
     profile:
-      domain: Python FastAPI integration fixtures over native authority,
-        runtime, controls, legacy inventory, audit projection, and SSE.
+      domain: Python FastAPI integration fixtures over native kanban authority,
+        runtime, controls, legacy snapshot, and SSE.
       risks:
         - RISK-005
       tools:
@@ -180,8 +184,8 @@ packets:
         - ruff
         - git-read-only-state-checks
     context_budget:
-      expected_changed_files: 5
-      inspected_files: 40
+      expected_changed_files: 5-6
+      inspected_files: 34
       interfaces:
         - IF-001
         - IF-002
@@ -192,45 +196,5 @@ packets:
         - IF-010
         - IF-011
         - IF-014
-      change_envelope: One helper plus four fixture consumers; production
-        defects return blocking evidence.
-review:
-  disposition: pass
-  evidence: Fresh independent review inspected current authority, source,
-    baseline failures, the repaired five-file packet, IF-014 audit projection,
-    proof boundary, closure, dependencies, and job allocation.
-  evidence_id: plan-review-dn-010-f11b5af05ac3-r2
-  checks:
-    plan_completeness:
-      disposition: pass
-      evidence: The six semantic files equal the loader authority set, so
-        omitting mutable sidecars preserves loading. The packet addresses stale
-        plan, packet, and candidate identities; AC1-AC9 cover the complete
-        obligation set, retired-route negative, isolation, and explicit IF-014
-        observation.
-    admitted_references:
-      disposition: pass
-      evidence: References remain within DN-010 obligations, MOD-004/MOD-008,
-        produced IF-011, consumed IF-001/002/003/007/008/009/010/014, declared
-        dependencies, RISK-005, and PROOF-015. Audit is a source-declared
-        JobKind and ReceiptKind.
-    impact_closures:
-      disposition: pass
-      evidence: Closure includes the six authority files, proof-consumed backend
-        and engine roots, and the five-file write envelope. The temporary engine
-        cache is already ignored and must be removed after proof.
-    dependency_order:
-      disposition: pass
-      evidence: The single packet is acyclic. Empty predecessor job IDs are
-        consistent with initial planning against admission-f11b5af05ac3.
-    proof_boundary:
-      disposition: pass
-      evidence: The boundary and allowed temporary-engine-store replacement
-        reproduce PROOF-015. Existing generic job and receipt routes project
-        audit records without starting an audit checkout or introducing a new
-        route.
-    material_expansion:
-      disposition: pass
-      evidence: The repair adds only fixture records and assertions within the
-        same five files. Production, frontend, configuration, compatibility,
-        authority, and live-store changes remain excluded.
+      change_envelope: One focused fixture and proof session; production edits
+        only for a fixture-isolated IF-011 defect.

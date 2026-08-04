@@ -2,9 +2,10 @@
 mode: build
 packets:
   - id: DN-003-PK-001
-    outcome: Make PROOF-003 discriminate persisted-record verification-only
-      eligibility and canonical accepted-dependency ordering while preserving
-      shipped behavior and test identities.
+    outcome: Complete the graph-aware runtime so build and exact-candidate
+      verification-only plan transactions validate, publish, replay, roll back,
+      remain current, and reconcile dependents through the public engine
+      boundary without partial receipts or dangling jobs.
     obligations:
       - REQ-008
       - REQ-009
@@ -18,26 +19,20 @@ packets:
       - KEEP-006
       - KEEP-007
     in_scope:
-      - Replace forged admission reads and private runtime receipt-store
-        reach-through with schema-valid records persisted and evaluated through
-        `ReceiptStore(revision)`.
-      - Replace the private verification-generation predicate assertion with
-        public `start_job` and `finish_plan` behavior.
-      - Add an optional terminal job-order input whose default preserves
-        identity assignment and whose supplied value must be a complete
-        permutation of `1..len(nodes)`.
-      - Use non-monotonic IDs in causal and reconciliation fixtures and opt-in
-        non-monotonic terminal ordering.
-      - Preserve default importer behavior, collected identities, rollback,
-        replay, and mutation-free failure.
-      - Change production only if repaired public tests expose an admitted
-        IF-003 defect.
+      - Modify only serve/kanban/src/owlbear_kanban/native_runtime.py to
+        complete plan-mode discrimination, authority-contained closure
+        validation, downstream job cardinality and dependencies, atomic
+        finish/replay behavior, receipt currentness, and dependent
+        reconciliation.
+      - Use the existing attempt, finding, invalidation, job, node-plan,
+        receipt, request, query, transaction, and dispatch abstractions through
+        their current interfaces.
     excluded:
-      - Authority, schema, lifecycle, migration, documentation, generated, MCP,
-        Cockpit, agent, setup, configuration, conftest, importing-consumer-test,
-        unrelated-helper, unrelated-test, and live control-plane edits.
-      - Private-only eligibility proof, fake receipt reads, numeric-sort
-        proxies, assertion weakening, node-ID changes, and deselection.
+      - No edits to admitted authority, node-plan or receipt records, MCP or
+        Cockpit surfaces, agent workflows, setup, documentation, fixtures,
+        generated artifacts, test files, or runtime-store schemas.
+      - No new public interface, lifecycle kind, compatibility path, migration,
+        or proof boundary.
     modules:
       - MOD-001
       - MOD-008
@@ -47,107 +42,52 @@ packets:
       - IF-002
       - IF-003
     dependencies: []
-    predecessor_acceptance:
-      - accept-dn-001-1ec9888c522d
     acceptance_scenarios:
-      - id: AC-01
-        obligation: REQ-008
-        scenario: Given public rejection and a corrective route, NativeRuntime
-          persists a finding, minimum invalidation, corrective jobs, and prior
-          attempts; injected failure leaves no fragment.
-      - id: AC-02
-        obligation: REQ-009
-        scenario: Given lifecycle events, public runtime persists plan, build,
-          accept, and audit kinds while RuntimeQuery separately projects
-          readiness, claims, blocks, staleness, and disposition.
-      - id: AC-03
-        obligation: REQ-015
-        scenario: Given a scoped request, current resolution persists options,
-          tradeoffs, confidence, and dependent invalidation; stale identity
-          leaves unrelated state unchanged.
-      - id: AC-04
-        obligation: REQ-016
-        scenario: Given participant failure, race, expiry, or recovery input,
-          public operations abort partial publication or converge state with
-          health diagnostics.
-      - id: AC-05
-        obligation: REQ-023
-        scenario: Given 500 runtime records, RuntimeQuery returns bounded
-          deterministic pages and cached projections while health remains
-          bounded and non-mutating.
-      - id: AC-06
-        obligation: REQ-026
-        scenario: Given matching pending-unclaimed administration input,
-          priority or cancellation succeeds and replays; stale, claimed, or
-          terminal input conflicts without partial mutation.
-      - id: AC-07
-        obligation: NEG-001
-        scenario: Given persisted jobs and receipts, artifact inspection shows
-          identity references rather than copied normative prose.
-      - id: AC-08
-        obligation: NEG-002
-        scenario: Given waiting, claim, block, stale, cancellation,
-          supersession, or failure state, public projection keeps those facts
-          outside status and limits disposition to pending, cancelled, or
-          superseded.
-      - id: AC-09
-        obligation: NEG-010
-        scenario: Given stale, superseded, bootstrap, legacy, missing, invalid,
-          or ambiguous records, public currentness and start operations refuse
-          dependency satisfaction without mutation.
-      - id: AC-10
-        obligation: KEEP-006
-        scenario: Given RuntimeQuery calls, projections retain claims,
-          dependencies, blocking, history, and resolved request state.
-      - id: AC-11
-        obligation: KEEP-007
-        scenario: Given traversal, race, interruption, malformed recovery, or
-          expired claim input, public stores reject escapes, preserve bytes,
-          report health, and recover retryable state.
-      - id: AC-12
-        obligation: REQ-016
-        scenario: Given admission or acceptance generation records persisted
-          through ReceiptStore, public NativeRuntime `start_job` plus
-          `finish_plan` publishes one verification-only accept job for an
-          eligible exact candidate and replays it; ineligible or stale input
-          publishes nothing.
-      - id: AC-13
-        obligation: REQ-009
-        scenario: Given non-monotonic accepted job IDs in native causal and
-          reconciliation fixtures and an opt-in non-identity terminal
-          permutation, public reconciliation preserves authored dependency order
-          and terminal completion preserves `DeliveryGraph.nodes` order; numeric
-          sorting fails native assertions while default imported-helper identity
-          behavior remains unchanged.
+      - 'AC-1: Given purpose-specific plan, build, accept, or audit work at the public
+        engine boundary, transition, dependency-release, claim, crash, OCC-race, supersession,
+        request-resolution, recovery, priority, and cancellation inputs produce their
+        admitted job, immutable attempt, diagnostic, and replay outcomes without copied
+        specification truth.'
+      - 'AC-2: Given exact, non-intersecting-descendant, intersecting-path, missing,
+        non-descendant, rename, copy, malformed-history, unsafe-path, predecessor-cycle,
+        or explicit-supersession history, public receipt currentness returns the admitted
+        current or fail-closed diagnostic classification and releases no dependency
+        from non-current evidence.'
+      - 'AC-3: Given an injected participant write failure during public completion
+        or invalidation, the transaction leaves no current partial receipt or dangling
+        downstream job; replay or recovery returns the same observable authority after
+        rollback.'
+      - 'AC-4: Given complete mode evidence and matching candidate/generation, public
+        finish_plan accepts an eligible verification-only plan with zero packets,
+        zero build jobs, one accept job, and a non-empty node closure; missing mode
+        evidence, candidate/generation mismatch, empty closure, hidden delta, or zero
+        packets in build mode returns a fail-closed diagnostic with no partial mutation.'
+      - 'AC-5: Given equivalent build and verification-only completion requests, public
+        replay, transaction rollback, receipt-currentness, and dependent-reconciliation
+        queries return mode-consistent receipts, jobs, and diagnostics.'
     impact_closure:
       paths:
-        - pyproject.toml
-        - conftest.py
-        - serve/kanban/src/owlbear_kanban/
-        - serve/kanban/tests/conftest.py
-        - serve/kanban/tests/test_native_runtime.py
-        - serve/kanban/tests/test_runtime_transaction.py
-        - serve/kanban/tests/test_invalidation.py
-        - serve/kanban/tests/test_runtime_requests.py
+        - serve/kanban/src/owlbear_kanban/__init__.py
+        - serve/kanban/src/owlbear_kanban/attempts.py
+        - serve/kanban/src/owlbear_kanban/change.py
+        - serve/kanban/src/owlbear_kanban/dispatch.py
+        - serve/kanban/src/owlbear_kanban/finding.py
+        - serve/kanban/src/owlbear_kanban/invalidation.py
+        - serve/kanban/src/owlbear_kanban/jobs.py
+        - serve/kanban/src/owlbear_kanban/native_runtime.py
+        - serve/kanban/src/owlbear_kanban/node_plan.py
+        - serve/kanban/src/owlbear_kanban/receipt.py
+        - serve/kanban/src/owlbear_kanban/runtime_query.py
+        - serve/kanban/src/owlbear_kanban/runtime_requests.py
+        - serve/kanban/src/owlbear_kanban/runtime_transaction.py
         - serve/kanban/tests/test_attempts.py
-        - serve/kanban/tests/test_jobs.py
         - serve/kanban/tests/test_change_receipts.py
-        - serve/kanban/tests/test_runtime_query.py
         - serve/kanban/tests/test_dispatch_runtime.py
-        - serve/kanban/tests/test_change_revision.py
-        - serve/kanban/tests/test_proof_checkout.py
-        - serve/mcp-kanban/pyproject.toml
-        - serve/mcp-kanban/src/owlbear_mcp_kanban/
-        - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
-        - serve/mcp-kanban/tests/test_mcp_surface_contract.py
-        - share/agents/auditor.agent.md
-        - share/skills/w-whole-change-audit/SKILL.md
-        - .owlbear/changes/replace-delivery-pipeline/intent.md
-        - .owlbear/changes/replace-delivery-pipeline/design.md
-        - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
-        - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
-        - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
-        - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
+        - serve/kanban/tests/test_invalidation.py
+        - serve/kanban/tests/test_jobs.py
+        - serve/kanban/tests/test_native_runtime.py
+        - serve/kanban/tests/test_runtime_requests.py
+        - serve/kanban/tests/test_runtime_transaction.py
       authority_targets:
         - DN-001
         - DN-002
@@ -155,24 +95,24 @@ packets:
         - IF-001
         - IF-002
         - IF-003
+        - KEEP-006
+        - KEEP-007
         - MOD-001
         - MOD-008
         - MOD-009
+        - NEG-001
+        - NEG-002
+        - NEG-010
+        - PROOF-003
         - REQ-008
         - REQ-009
         - REQ-015
         - REQ-016
         - REQ-023
         - REQ-026
-        - NEG-001
-        - NEG-002
-        - NEG-010
-        - KEEP-006
-        - KEEP-007
         - RISK-002
         - RISK-003
         - RISK-006
-        - PROOF-003
     proof:
       boundary: Public engine job, claim, completion, invalidation, and health
         operations.
@@ -183,164 +123,53 @@ packets:
           serve/kanban/tests/test_runtime_requests.py
           serve/kanban/tests/test_attempts.py serve/kanban/tests/test_jobs.py
           serve/kanban/tests/test_change_receipts.py
-          serve/kanban/tests/test_runtime_query.py -q --tb=short
-        - uv run lint serve/kanban/tests/test_native_runtime.py
-      collection_command: uv run pytest -n0
-        serve/kanban/tests/test_native_runtime.py
-        serve/kanban/tests/test_runtime_transaction.py
-        serve/kanban/tests/test_invalidation.py
-        serve/kanban/tests/test_runtime_requests.py
-        serve/kanban/tests/test_attempts.py serve/kanban/tests/test_jobs.py
-        serve/kanban/tests/test_change_receipts.py
-        serve/kanban/tests/test_runtime_query.py --collect-only -q
-      bounded_partition_commands:
-        - uv run pytest -n0 serve/kanban/tests/test_native_runtime.py
+          serve/kanban/tests/test_dispatch_runtime.py -q
+        - uv run ruff check serve/kanban/src/owlbear_kanban/native_runtime.py
+        - uv run ruff format --check
+          serve/kanban/src/owlbear_kanban/native_runtime.py
+      baseline:
+        command: uv run pytest -n0 serve/kanban/tests/test_native_runtime.py
           serve/kanban/tests/test_runtime_transaction.py
-          serve/kanban/tests/test_invalidation.py -q --tb=short
-        - uv run pytest -n0 serve/kanban/tests/test_runtime_requests.py
-          serve/kanban/tests/test_attempts.py serve/kanban/tests/test_jobs.py -q
-          --tb=short
-        - uv run pytest -n0 serve/kanban/tests/test_change_receipts.py
-          serve/kanban/tests/test_runtime_query.py -q --tb=short
-      supplemental_command: uv run pytest -n0
-        serve/kanban/tests/test_dispatch_runtime.py -q --tb=short
-      consumer_compatibility_command: uv run pytest -n0
-        serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_success_closes_accepted_whole_change_and_replays
-        --timeout=120 -q --tb=short
-      consumer_collection_command: uv run pytest -n0
-        serve/mcp-kanban/tests/test_mcp_acceptance_tools.py::test_public_audit_success_closes_accepted_whole_change_and_replays
-        --collect-only -q
-      allowed_lower_replacements:
+          serve/kanban/tests/test_invalidation.py
+          serve/kanban/tests/test_runtime_requests.py
+          serve/kanban/tests/test_attempts.py serve/kanban/tests/test_jobs.py
+          serve/kanban/tests/test_change_receipts.py
+          serve/kanban/tests/test_dispatch_runtime.py -q
+        result: 25 failed, 244 passed in 53.11s
+      allowed_replacements:
         - clock
         - process identity
         - temporary filesystem
         - temporary Git repository
       evidence_outputs:
-        - Persisted-receipt public eligibility evidence.
-        - Non-monotonic authored and graph ordering evidence.
-        - Primary collection of 267 identities with SHA-256
-          `2e338f872d8c897b5112f49629ed53883534882f9789a092ade061166d85a651`.
-        - Supplemental dispatch collection of 16 identities with SHA-256
-          `46e24981184063c02859c7c2128240f967f2f593f5cfe57a82c97cc763dcb2ed`.
-        - Representative MCP default-path compatibility identity.
-        - Typed partition ledger when the tracked 300-second runner limit
-          applies.
-        - Focused lint, scoped diff, and byte-unchanged frozen inputs.
+        - Complete eight-file pytest result at the packet commit.
+        - Ruff check and format-check results for the edited source file.
+        - Builder tracked-scope diff proving only
+          serve/kanban/src/owlbear_kanban/native_runtime.py changed.
     required_outputs:
-      - Both fake-admission receipt sites and private runtime receipt-store
-        reach-throughs repaired with persisted schema-valid ReceiptStore
-        records.
-      - Public verification-only reconciliation eligibility and failure
-        regressions.
-      - Non-monotonic causal and reconciliation fixtures plus opt-in
-        terminal-order fixture with unchanged default importer behavior.
-      - Preserved default importer compatibility through one representative
-        public MCP accept/audit identity, plus 284 combined test identities
-        across 267 primary, 16 dispatch-supplemental, and 1 representative MCP
-        case.
-      - Passing primary proof, supplemental consumer suites, lint, scoped diff,
-        and partition ledger when required.
+      - Updated serve/kanban/src/owlbear_kanban/native_runtime.py implementing
+        the complete packet outcome.
+      - Passing complete eight-file PROOF-003 command with no durable test or
+        fixture edits.
+      - Scoped commit and build evidence showing no tracked delta outside
+        serve/kanban/src/owlbear_kanban/native_runtime.py.
     profile:
-      domain: Python graph-aware runtime proof
-      risk: Verification-only eligibility, accepted-dependency ordering,
-        atomicity, and proof completeness
+      domain: Python graph-aware lifecycle runtime
+      risks:
+        - RISK-002
+        - RISK-003
+        - RISK-006
       tools:
         - uv
         - pytest
-        - pytest-timeout
-        - workspace lint
-        - temporary Git repositories
-        - scoped Git inspection
+        - ruff
+        - Git read-only inspection before scoped commit
     context_budget:
-      expected_modified_files: 1
-      editable_file: serve/kanban/tests/test_native_runtime.py
-      change_envelope: One durable test file; production source only if public
-        tests expose an admitted IF-003 defect.
-impact_closure:
-  paths:
-    - pyproject.toml
-    - conftest.py
-    - serve/kanban/src/owlbear_kanban/
-    - serve/kanban/tests/conftest.py
-    - serve/kanban/tests/test_native_runtime.py
-    - serve/kanban/tests/test_runtime_transaction.py
-    - serve/kanban/tests/test_invalidation.py
-    - serve/kanban/tests/test_runtime_requests.py
-    - serve/kanban/tests/test_attempts.py
-    - serve/kanban/tests/test_jobs.py
-    - serve/kanban/tests/test_change_receipts.py
-    - serve/kanban/tests/test_runtime_query.py
-    - serve/kanban/tests/test_dispatch_runtime.py
-    - serve/kanban/tests/test_change_revision.py
-    - serve/kanban/tests/test_proof_checkout.py
-    - serve/mcp-kanban/pyproject.toml
-    - serve/mcp-kanban/src/owlbear_mcp_kanban/
-    - serve/mcp-kanban/tests/test_mcp_acceptance_tools.py
-    - serve/mcp-kanban/tests/test_mcp_surface_contract.py
-    - share/agents/auditor.agent.md
-    - share/skills/w-whole-change-audit/SKILL.md
-    - .owlbear/changes/replace-delivery-pipeline/intent.md
-    - .owlbear/changes/replace-delivery-pipeline/design.md
-    - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
-    - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
-    - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
-    - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
-  authority_targets:
-    - DN-001
-    - DN-002
-    - DN-003
-    - IF-001
-    - IF-002
-    - IF-003
-    - MOD-001
-    - MOD-008
-    - MOD-009
-    - REQ-008
-    - REQ-009
-    - REQ-015
-    - REQ-016
-    - REQ-023
-    - REQ-026
-    - NEG-001
-    - NEG-002
-    - NEG-010
-    - KEEP-006
-    - KEEP-007
-    - RISK-002
-    - RISK-003
-    - RISK-006
-    - PROOF-003
-review:
-  disposition: pass
-  evidence_id: plan-review-dn-003-1ec9888c-r6
-  evidence: Fresh independent review passed completeness, admitted references,
-    closure, dependency order, public proof boundary, representative importer
-    compatibility, and material expansion.
-  checks:
-    plan_completeness:
-      disposition: pass
-      evidence: Build mode covers the live fake-receipt, private-predicate,
-        private-store, and monotonic-order defects in the sole editable test
-        file and maps all eleven DN-003 obligations.
-    admitted_references:
-      disposition: pass
-      evidence: Modules, interfaces, risks, obligations, predecessor contracts,
-        and PROOF-003 references remain inside DN-003 authority.
-    impact_closures:
-      disposition: pass
-      evidence: Primary, dispatch, MCP, auditor-agent, skill, runtime,
-        pytest-input, and authority paths are proof-consumed and canonical.
-    dependency_order:
-      disposition: pass
-      evidence: The one-packet DAG is acyclic, predecessor acceptance matches
-        job 276, and downstream IDs 279 and 280 are unused.
-    proof_boundary:
-      disposition: pass
-      evidence: Public runtime proof replaces private eligibility proxies;
-        opt-in ordering preserves default importer behavior, and the
-        representative MCP command proves its load-bearing compatibility facts.
-    material_expansion:
-      disposition: pass
-      evidence: The plan changes one test file, adds no product authority or
-        interface, and treats MCP and auditor artifacts as read-only proof
-        inputs.
+      expected_files: 21
+      primary_edit_files: 1
+      interfaces:
+        - IF-001
+        - IF-002
+        - IF-003
+      change_envelope: One focused source-file repair plus execution of existing
+        durable proof; no test, schema, authority, or consumer edits.

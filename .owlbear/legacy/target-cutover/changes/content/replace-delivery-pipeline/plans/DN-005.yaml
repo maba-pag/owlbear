@@ -1,25 +1,11 @@
 ---
 mode: build
-candidate_revision: 38e27ae3ed5d6215ef8a5fe25c2db82470ec6452
-generation:
-  job_id: 289
-  receipt_id: admission-f11b5af05ac3
-  predecessor_job_ids:
-    - 304
-reconciliation:
-  predecessor_receipt_ids:
-    - accept-dn-002-f11b5af05ac3-proof-007
-  accepted_predecessors:
-    DN-002: Current acceptance proves public validation and admission behavior
-      and explicitly routes reconciliation to DN-005.
-  contract_only_predecessors:
-    DN-009: No current-digest acceptance exists; consume only admitted IF-010
-      contract authority and leave later reconciliation to the engine.
+candidate_revision: 7805c43199f1797c61912c4ef54083802724c8ef
 packets:
   - id: DN-005-PK-001
-    outcome: Complete durable PROOF-004 coverage for hosted design-session
-      contracts, delegated challenge support, complete graph presentation, and
-      public resume, refusal, admission, and replay behavior.
+    outcome: Align the durable PROOF-004 prompt-contract assertions with the
+      shipped generic retired-workflow wording while preserving the no-handoff
+      invariant and complete native design and admission interaction scenarios.
     obligations:
       - REQ-001
       - KEEP-001
@@ -31,26 +17,25 @@ packets:
       - REQ-015
       - KEEP-005
     in_scope:
-      - Modify only serve/mcp-kanban/tests/test_designer_interaction.py.
-      - Narrow the fixture to six semantic authority files plus
-        authority-referenced research, excluding plans, receipts, jobs, locks,
-        and unrelated records.
-      - Inspect the admitted ideate, design, designer-agent, and design-session
-        contracts plus supporting challenger contracts.
-      - Add durable complete-graph, Product Promise, evidence-state, memory,
-        architecture, decision, challenge, refusal, retained-entry, and
-        hosted-proof assertions.
-      - Preserve public resume, refusal, admission, generation, replay, and
-        publication non-mutation scenarios.
+      - In serve/mcp-kanban/tests/test_designer_interaction.py, replace the
+        obsolete ideate and design assertions requiring the OpenSpec brand
+        literal with assertions for the shipped `retired specification workflow`
+        wording.
+      - Preserve the behavioral assertion that /ideate and /design never hand
+        the native designer session to a retired specification workflow.
+      - Run the complete PROOF-004 command after the assertion update and retain
+        command and tracked-state evidence.
     excluded:
-      - Production, prompt, agent, skill, instruction, authority, research,
-        configuration, documentation, migration, generated-artifact, registry,
-        or unrelated-test edits.
-      - Hosted-model or external-service execution.
-      - New interfaces, compatibility paths, transport behavior, or product
-        semantics.
-      - Assertion weakening or private-function substitution for public MCP
-        handlers.
+      - Changes to share/prompts/ideate.prompt.md,
+        share/prompts/design.prompt.md, share/agents/designer.agent.md,
+        share/skills/w-design-session/SKILL.md, or production MCP and kanban
+        source.
+      - Reintroducing OpenSpec naming or changing shipped prompts to satisfy
+        stale test wording.
+      - Weakening or removing resume, one-question option, unresolved-authority
+        refusal, failed-challenge refusal, admission, or replay assertions.
+      - Broader prompt, workflow, fixture, test-helper, or assertion cleanup.
+      - Repairing unrelated change-health or work-health findings.
     modules:
       - MOD-003
       - MOD-008
@@ -60,102 +45,29 @@ packets:
       - IF-006
       - IF-010
     dependencies: []
-    predecessor_acceptance:
-      - accept-dn-002-f11b5af05ac3-proof-007
     acceptance_scenarios:
-      - id: AC-001
-        authority_target: REQ-001
-        scenario: Given persisted decisions and one pending choice, repeated
-          public show_change calls return the same digest, authority, and
-          complete graph sections while intent and decision bytes remain
-          unchanged.
-      - id: AC-002
-        authority_target: KEEP-001
-        scenario: Given one pending material choice, shipped workflow assertions
-          expose one decision with status quo, options, tradeoffs, risks,
-          recommendation, and confidence while repository facts route to
-          read-only investigation.
-      - id: AC-003
-        authority_target: KEEP-002
-        scenario: Given discovery or direct-design entry, shipped workflow
-          assertions retain promised effects, exclusions with lost value,
-          preserved behavior, normal-workflow evidence, and
-          technically-done-but-wrong outcomes.
-      - id: AC-004
-        authority_target: KEEP-003
-        scenario: Given a load-bearing claim, shipped workflow and challenger
-          assertions require a named authority, an observed, documented,
-          assumed, or confirmed evidence state, and typed challenge evidence.
-      - id: AC-005
-        authority_target: KEEP-008
-        scenario: Given recalled institutional memory, shipped contracts require
-          supporting provenance and current-source corroboration and forbid
-          memory from creating execution authority.
-      - id: AC-006
-        authority_target: KEEP-009
-        scenario: Given architecture novelty or risk, shipped workflow
-          assertions require current owners, interfaces, migration,
-          alternatives, tradeoffs, weaknesses, proof boundary, and completion
-          conditions.
-      - id: AC-007
-        authority_target: REQ-002
-        scenario: Given a pending decision or non-pass challenge, public
-          validation reports blocking findings without publication; passing
-          evidence and approval publish one receipt and initial plan jobs.
-      - id: AC-008
-        authority_target: REQ-015
-        scenario: Given a pending native decision, public show_change returns
-          options with pros, cons, risks, recommendation, confidence, pending
-          status, and no selected value.
-      - id: AC-009
-        authority_target: KEEP-005
-        scenario: Given missing or non-pass challenge evidence, public
-          validation keeps the revision draft and creates no publication; fresh
-          typed challenge evidence permits the approval gate.
-      - id: AC-010
-        authority_target: RISK-007
-        scenario: Given missing durable assertions, build mode adds one bounded
-          test delta without introducing interface, migration, dependency,
-          workflow, or product-authority expansion.
-      - id: AC-011
-        authority_target: RISK-009
-        scenario: Given PROOF-004 execution, assertions label hosted-contract
-          inspection as structural conformance and exercise resume, refusal,
-          admission, and replay through public handlers.
-      - id: AC-012
-        authority_target: IF-006
-        scenario: Given shipped ideate and design prompts, assertions require
-          both entries to use w-design-session, forbid retired specification
-          handoff, and present the complete graph.
-      - id: AC-013
-        authority_target: DN-005
-        scenario: Given the packet commit, focused pytest crosses semantic
-          fixture loading, hosted contracts, public handlers, native stores,
-          receipt generation, and replay, exits zero, and leaves the closure
-          unchanged.
+      - 'AC1: Given the shipped /ideate and /design prompts use the generic retired-workflow
+        contract, the maintained PROOF-004 test asserts `retired specification workflow`
+        in both prompts and retains the observable prohibition on handing the native
+        session to that workflow; verify by source inspection and the primary command.'
+      - 'AC2: Given a native fixture with a pending material decision, the PROOF-004
+        scenario resumes through public show_change calls without changing persisted
+        intent or decisions and exposes one-question options with tradeoffs, recommendation,
+        and confidence; verify with the primary command.'
+      - 'AC3: Given unresolved authority, failed challenge evidence, and a complete
+        approved fixture, the PROOF-004 scenarios leave unresolved or challenged revisions
+        unpublished, then admit and replay the complete revision through public tools;
+        verify with the primary command.'
+      - 'AC4: Given the one-file assertion repair, the primary command exits 0 with
+        four passing scenarios and tracked changes remain confined to serve/mcp-kanban/tests/test_designer_interaction.py;
+        verify command output and tracked-state evidence.'
     impact_closure:
       paths:
         - serve/mcp-kanban/tests/test_designer_interaction.py
         - share/prompts/ideate.prompt.md
         - share/prompts/design.prompt.md
         - share/agents/designer.agent.md
-        - share/agents/designer-challenger.agent.md
         - share/skills/w-design-session/SKILL.md
-        - share/skills/r-challenger-protocol/SKILL.md
-        - serve/mcp-kanban/src/owlbear_mcp_kanban/
-        - serve/kanban/src/owlbear_kanban/
-        - serve/tools/pyproject.toml
-        - serve/tools/src/owlbear_tools/lint.py
-        - .owlbear/changes/replace-delivery-pipeline/intent.md
-        - .owlbear/changes/replace-delivery-pipeline/design.md
-        - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
-        - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
-        - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
-        - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
-        - .owlbear/research/planning-workflow-root-cause-and-redesign.md
-        - .owlbear/research/delivery-operating-model-reframe.md
-        - pyproject.toml
-        - conftest.py
       authority_targets:
         - DN-002
         - DN-005
@@ -176,137 +88,42 @@ packets:
         - IF-006
         - IF-010
         - RISK-007
-        - RISK-009
         - PROOF-004
     proof:
       authority: PROOF-004
-      boundary: Real native resume, validation, refusal, admission, and replay
-        behavior over a fixture change through public MCP tools, plus static
-        structural conformance of the hosted /ideate, /design, designer-agent,
-        and design-session contracts. The deterministic proof does not execute
-        hosted designer reasoning.
-      commands:
-        - uv run pytest -n0 serve/mcp-kanban/tests/test_designer_interaction.py
-          -q --tb=short
-        - uv run lint serve/mcp-kanban/tests/test_designer_interaction.py
+      boundary: Real /ideate and /design prompt/agent contracts operating on a
+        native fixture change through public tools.
+      primary_command: uv run pytest -n0
+        serve/mcp-kanban/tests/test_designer_interaction.py -q
       allowed_lower_replacements:
         - external research response below designer workflow
-        - MCP request context transport below public handler functions
-      methods:
-        - Resume the native fixture through public show operations without
-          losing decisions or mutating authority.
-        - Inspect shipped hosted contracts for one-question options with
-          tradeoffs, recommendation, confidence, and the required resumable
-          workflow wiring.
-        - Reject unresolved or challenged authority through public validation
-          without publication, then admit and exactly replay a complete approved
-          fixture through public tools.
       evidence_outputs:
-        - Focused pytest and lint results.
-        - Diff confined to serve/mcp-kanban/tests/test_designer_interaction.py.
-        - Scoped tracked-state comparison over the twenty-one-path closure.
-        - Contract assertions for obligations, complete graph presentation,
-          public behavior, delegated challenge, retained entry behavior, and
-          hosted-proof labeling.
+        - Primary-command exit code and four-scenario result.
+        - Scoped diff showing only the two obsolete literal assertions changed.
+        - Candidate and post-build HEAD plus tracked-state evidence.
     required_outputs:
-      - Semantic-only fixture excluding plans, receipts, jobs, locks, and
-        unrelated records.
-      - Durable complete-graph, Product Promise, evidence-state, memory,
-        architecture, challenge, decision, retained-entry, and hosted-proof
-        assertions.
-      - Preserved public resume, refusal, admission, generation, replay, and
-        publication-snapshot scenarios.
-      - Passing focused pytest and lint commands with closure-clean evidence.
+      - Two maintained prompt-contract assertions using the generic `retired
+        specification workflow` wording.
+      - The no-handoff invariant and remaining PROOF-004 scenario assertions
+        preserved.
+      - Passing PROOF-004 command and one-file tracked-state evidence at the
+        scoped build commit.
     profile:
-      domain: Python pytest contract coverage for native designer prompts,
-        challenger contracts, and public MCP admission handlers.
+      domain: Python pytest contract coverage for native designer prompts and
+        public MCP admission tools.
       risks:
         - RISK-007
-        - RISK-009
       tools:
         - uv
         - pytest
-        - workspace-lint
-        - scoped-git-inspection
+        - git-read-only-state-checks
     context_budget:
-      expected_modified_files: 1
-      editable_file: serve/mcp-kanban/tests/test_designer_interaction.py
-      inspected_paths: 21
-      change_envelope: One focused test-fixture and assertion enhancement with
-        no production or authority edits.
-impact_closure:
-  paths:
-    - serve/mcp-kanban/tests/test_designer_interaction.py
-    - share/prompts/ideate.prompt.md
-    - share/prompts/design.prompt.md
-    - share/agents/designer.agent.md
-    - share/agents/designer-challenger.agent.md
-    - share/skills/w-design-session/SKILL.md
-    - share/skills/r-challenger-protocol/SKILL.md
-    - serve/mcp-kanban/src/owlbear_mcp_kanban/
-    - serve/kanban/src/owlbear_kanban/
-    - serve/tools/pyproject.toml
-    - serve/tools/src/owlbear_tools/lint.py
-    - .owlbear/changes/replace-delivery-pipeline/intent.md
-    - .owlbear/changes/replace-delivery-pipeline/design.md
-    - .owlbear/changes/replace-delivery-pipeline/decisions.yaml
-    - .owlbear/changes/replace-delivery-pipeline/delivery/obligations.yaml
-    - .owlbear/changes/replace-delivery-pipeline/delivery/contracts.yaml
-    - .owlbear/changes/replace-delivery-pipeline/delivery/nodes.yaml
-    - .owlbear/research/planning-workflow-root-cause-and-redesign.md
-    - .owlbear/research/delivery-operating-model-reframe.md
-    - pyproject.toml
-    - conftest.py
-  authority_targets:
-    - DN-002
-    - DN-005
-    - DN-009
-    - REQ-001
-    - KEEP-001
-    - KEEP-002
-    - KEEP-003
-    - KEEP-008
-    - KEEP-009
-    - REQ-002
-    - REQ-015
-    - KEEP-005
-    - MOD-003
-    - MOD-008
-    - IF-001
-    - IF-002
-    - IF-006
-    - IF-010
-    - RISK-007
-    - RISK-009
-    - PROOF-004
-review:
-  disposition: pass
-  evidence_id: plan-review-dn-005-f11b5af0-final
-  evidence: Fresh independent review inspected current source, admitted
-    references, impact closure, predecessor order, public proof boundary, and
-    material expansion.
-  checks:
-    plan_completeness:
-      disposition: pass
-      evidence: Build mode and one packet cover the required tracked proof delta
-        and all DN-005 obligations.
-    admitted_references:
-      disposition: pass
-      evidence: Packet references remain inside DN-005 authority and resolve in
-        current delivery contracts.
-    impact_closures:
-      disposition: pass
-      evidence: All twenty-one paths exist and are consumed by the declared
-        proof.
-    dependency_order:
-      disposition: pass
-      evidence: The packet DAG is acyclic; current DN-002 acceptance is declared
-        and stale DN-009 acceptance is excluded.
-    proof_boundary:
-      disposition: pass
-      evidence: PROOF-004 methods, hosted-contract enumeration, public handlers,
-        and allowed replacements are preserved.
-    material_expansion:
-      disposition: pass
-      evidence: One test-file delta adds no product, interface, migration,
-        workflow, transport, or authority expansion.
+      expected_changed_files: 1
+      inspected_files: 5
+      interfaces:
+        - IF-001
+        - IF-002
+        - IF-006
+        - IF-010
+      change_envelope: One focused assertion-only test repair with no shipped
+        prompt, workflow, agent, fixture, or production source edits.
