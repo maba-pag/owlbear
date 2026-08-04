@@ -309,6 +309,37 @@ class DeliveryIntegrationAttention(_DeliveryModel):
     retry_condition: str = Field(min_length=1)
 
 
+class DeliveryIntegrationRepairReview(_DeliveryModel):
+    """Independent review identity bound to one exact repair commit."""
+
+    review_id: str = Field(min_length=1)
+    reviewer_id: str = Field(min_length=1)
+    candidate_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class DeliveryIntegrationRepair(_DeliveryModel):
+    """Exact typed binding for one independently reviewed Integration repair."""
+
+    attention_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: str = Field(min_length=1)
+    integration_target: str = Field(min_length=1)
+    prior_change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    prior_target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    reviewed_repair_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    owner_id: str = Field(min_length=1)
+    review: DeliveryIntegrationRepairReview
+
+    @model_validator(mode="after")
+    def _validate_review_binding(self) -> DeliveryIntegrationRepair:
+        if self.review.candidate_commit != self.reviewed_repair_commit:
+            message = "repair review must bind the reviewed repair commit"
+            raise ValueError(message)
+        if self.review.reviewer_id == self.owner_id:
+            message = "Integration repair review must be independent"
+            raise ValueError(message)
+        return self
+
+
 class DeliveryActiveClaim(_DeliveryModel):
     """Recoverable execution identity for one active outcome claim."""
 
@@ -748,6 +779,32 @@ class DeliveryRuntime:
         updated = frontier.model_copy(update={"integration_attention": attention})
         self._replace(previous, updated)
         return attention
+
+    def integration_repair_replacement(
+        self,
+        repair: DeliveryIntegrationRepair,
+    ) -> ReplacementTransactionParticipant:
+        """Prepare an OCC replacement that clears one exact Integration attention."""
+        frontier, previous = self._read()
+        attention = frontier.integration_attention
+        if (
+            attention is None
+            or attention.attention_id != repair.attention_id
+            or attention.change_id != repair.change_id
+            or attention.integration_target != repair.integration_target
+            or attention.change_head != repair.prior_change_head
+            or attention.target_head != repair.prior_target_head
+        ):
+            _conflict("Integration repair does not match the current attention")
+        if self.change_stage() != DeliveryChangeStage.INTEGRATION:
+            _conflict("Integration repair requires an Integration-ready runtime")
+        replacement = frontier.model_copy(update={"integration_attention": None})
+        return ReplacementTransactionParticipant(
+            self._target_root,
+            self._frontier_path.relative_to(self._target_root),
+            previous,
+            _model_content(replacement),
+        )
 
     def claimable_outcome_ids(self) -> tuple[str, ...]:
         """Return stable dependency-ready, unblocked, unclaimed outcome identities."""

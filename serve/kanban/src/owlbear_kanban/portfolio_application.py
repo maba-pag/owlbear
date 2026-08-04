@@ -31,6 +31,7 @@ from owlbear_kanban.delivery_runtime import (
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationCandidate,
     DeliveryIntegrationCompletion,
+    DeliveryIntegrationRepair,
     DeliveryRecoveryAttention,
     DeliveryRequest,
     DeliveryReturnContext,
@@ -486,6 +487,21 @@ class PortfolioApplication:
             if result.completion is not None:
                 self._cleanup_integration(change_id, result.completion)
             return result
+
+    def admit_reviewed_integration_repair(
+        self,
+        repair: DeliveryIntegrationRepair,
+    ) -> DeliveryIntegrationRepair:
+        """Admit one independently reviewed additive repair for current Integration attention."""
+        with self._coordinator.integration_lock():
+            runtime = self._runtime(repair.change_id)
+            runtime_replacement = runtime.integration_repair_replacement(repair)
+            workspace_replacement = self._workspace_manager.integration_repair_replacement(repair)
+            self._coordinator.admit_integration_repair(
+                repair,
+                (workspace_replacement, runtime_replacement),
+            )
+            return repair
 
     def _capture_ready_integration(
         self,

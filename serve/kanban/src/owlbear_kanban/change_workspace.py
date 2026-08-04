@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from owlbear_kanban.delivery_runtime import (
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationCandidate,
+    DeliveryIntegrationRepair,
 )
 from owlbear_kanban.identities import ChangeId
 from owlbear_kanban.runtime_transaction import (
@@ -308,6 +309,27 @@ class PortfolioCoordinator:
         )
         return finding
 
+    def admit_integration_repair(
+        self,
+        repair: DeliveryIntegrationRepair,
+        participants: tuple[ReplacementTransactionParticipant, ReplacementTransactionParticipant],
+    ) -> None:
+        """Atomically advance reviewed workspace and runtime attention boundaries."""
+        transaction_id = hashlib.sha256(_model_content(repair)).hexdigest()
+        self._commit(f"integration-repair-{transaction_id}", participants)
+
+    def integration_repair_replacement(
+        self,
+        previous: ChangeCoordination,
+        replacement: ChangeCoordination,
+    ) -> ReplacementTransactionParticipant:
+        """Prepare an OCC replacement for one validated reviewed-boundary advance."""
+        path = self._coordination_path(previous.change_id)
+        previous_bytes = path.read_bytes()
+        if ChangeCoordination.model_validate_json(previous_bytes) != previous:
+            _coordination_conflict("workspace changed during Integration repair validation")
+        return _replacement(self._state_root, path, previous_bytes, replacement)
+
     def _initialize_ledger(self) -> None:
         initial = CapacityLedger(capacity=self._capacity)
         if self._ledger_path.exists():
@@ -415,6 +437,89 @@ class ChangeWorkspaceManager:
             integration_target=coordination.integration_target,
             target_head=self._resolve(coordination.integration_target),
         )
+
+    def integration_repair_replacement(
+        self,
+        repair: DeliveryIntegrationRepair,
+    ) -> ReplacementTransactionParticipant:
+        """Validate one additive conflict repair and prepare its reviewed-boundary update."""
+        coordination = self._coordinator.show(repair.change_id)
+        self._require_integration_repair_identities(coordination, repair)
+        self._require_integration_repair_worktree(coordination, repair)
+        repaired_tree = self._require_additive_conflict_repair(repair)
+        self._require_unchanged_completed_history(repair.prior_target_head, repaired_tree)
+        updated = coordination.model_copy(update={"last_reviewed_commit": repair.reviewed_repair_commit})
+        return self._coordinator.integration_repair_replacement(coordination, updated)
+
+    def _require_integration_repair_identities(
+        self,
+        coordination: ChangeCoordination,
+        repair: DeliveryIntegrationRepair,
+    ) -> None:
+        if coordination.writer is not None:
+            _coordination_conflict("Integration repair cannot overlap active writer custody")
+        if (
+            coordination.change_id != repair.change_id
+            or coordination.integration_target != repair.integration_target
+            or coordination.integration_target != self._integration_target
+            or coordination.last_reviewed_commit != repair.prior_change_head
+        ):
+            _workspace_failure("Integration repair does not match workspace identities")
+        if self._resolve(coordination.integration_target) != repair.prior_target_head:
+            _workspace_failure("Integration repair target head is stale")
+        if self._resolve(coordination.branch) != repair.reviewed_repair_commit:
+            _workspace_failure("reviewed repair commit is not the current change branch head")
+
+    def _require_integration_repair_worktree(
+        self,
+        coordination: ChangeCoordination,
+        repair: DeliveryIntegrationRepair,
+    ) -> None:
+        self._require_worktree(
+            coordination.worktree_path,
+            coordination.branch,
+            repair.reviewed_repair_commit,
+        )
+        if self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
+            _workspace_failure("Integration repair requires a clean change worktree")
+        parents = self._git(
+            "rev-list",
+            "--parents",
+            "-n",
+            "1",
+            repair.reviewed_repair_commit,
+        ).split()
+        if parents != [repair.reviewed_repair_commit, repair.prior_change_head]:
+            _workspace_failure("Integration repair must be the exact single child of the attention change head")
+
+    def _require_additive_conflict_repair(self, repair: DeliveryIntegrationRepair) -> str:
+        conflict_paths = self._integration_conflict_paths(
+            repair.prior_target_head,
+            repair.prior_change_head,
+        )
+        changed_paths = self._changed_paths(repair.prior_change_head, repair.reviewed_repair_commit)
+        completed_root = b".owlbear/completed"
+        if any(path == completed_root or path.startswith(completed_root + b"/") for path in changed_paths):
+            _workspace_failure("Integration repair cannot mutate completed history")
+        if not changed_paths or not changed_paths <= conflict_paths:
+            _workspace_failure("Integration repair may change only paths from the original conflict")
+        repaired_tree, diagnostics = self._merge_tree(
+            repair.prior_target_head,
+            repair.reviewed_repair_commit,
+        )
+        if repaired_tree is None:
+            detail = diagnostics[0] if diagnostics else "repair retains an Integration conflict"
+            _workspace_failure(detail)
+        return repaired_tree
+
+    def _require_unchanged_completed_history(self, target_head: str, repaired_tree: str) -> None:
+        target_tree = self._git("rev-parse", f"{target_head}^{{tree}}")
+        completed_path = (b".owlbear", b"completed")
+        if self._tree_entries_at_path(repaired_tree, completed_path) != self._tree_entries_at_path(
+            target_tree,
+            completed_path,
+        ):
+            _workspace_failure("Integration repair merge mutates completed history")
 
     def reviewed_source_head(self, change_id: str) -> str:
         """Return one clean warm source head anchored at its reviewed boundary."""
@@ -797,6 +902,33 @@ class ChangeWorkspaceManager:
             return output.splitlines()[0], ()
         diagnostics = tuple(line for line in (*output.splitlines()[1:], *result.stderr.decode().splitlines()) if line)
         return None, diagnostics or ("reviewed product tree conflicts with the Integration target",)
+
+    def _integration_conflict_paths(self, target_head: str, change_head: str) -> set[bytes]:
+        result = self._run_git("merge-tree", "--write-tree", "-z", target_head, change_head, check=False)
+        if result.returncode == 0:
+            _workspace_failure("Integration repair requires an existing merge conflict")
+        records = tuple(record for record in result.stdout.split(b"\0") if record)
+        paths = set()
+        for record in records:
+            metadata, separator, path = record.partition(b"\t")
+            parts = metadata.split()
+            if separator and len(parts) == _TREE_ENTRY_PARTS and parts[2] in {b"1", b"2", b"3"}:
+                paths.add(path)
+        if not paths:
+            _workspace_failure("Integration conflict paths could not be identified")
+        return paths
+
+    def _changed_paths(self, parent: str, child: str) -> set[bytes]:
+        result = self._run_git(
+            "diff-tree",
+            "--no-commit-id",
+            "--name-only",
+            "-r",
+            "-z",
+            parent,
+            child,
+        )
+        return {path for path in result.stdout.split(b"\0") if path}
 
     def _replace_tree_path(self, tree: str, path: tuple[str, ...], replacement_tree: str) -> str:
         if not path or any(not part or part in {".", ".."} for part in path):
