@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from owlbear_kanban.delivery_runtime import DeliveryFrontier, OutcomeAuthorityBinding
 from owlbear_kanban.runtime_transaction import (
     ReplacementTransactionParticipant,
     RuntimeTransaction,
@@ -158,31 +159,6 @@ class DeliveryAdmissionRequest(_AdmissionModel):
             not claim_id for claim_id in self.active_claim_ids
         ):
             msg = "active claim identities must be nonempty and unique"
-            raise ValueError(msg)
-        return self
-
-
-class OutcomeAuthorityBinding(_AdmissionModel):
-    """Identity-only task and result bindings for one admitted outcome."""
-
-    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
-    plan_scope_id: str = Field(pattern=r"^SCOPE-[0-9]{3}$")
-    task_ids: tuple[str, ...] = ()
-    result_ids: tuple[str, ...] = ()
-
-
-class DeliveryFrontier(_AdmissionModel):
-    """Current identity bindings for source-bound Delivery outcomes."""
-
-    schema_version: Literal[1] = 1
-    bindings: tuple[OutcomeAuthorityBinding, ...]
-
-    @model_validator(mode="after")
-    def _validate_bindings(self) -> DeliveryFrontier:
-        outcome_ids = tuple(binding.outcome_id for binding in self.bindings)
-        scope_ids = tuple(binding.plan_scope_id for binding in self.bindings)
-        if len(outcome_ids) != len(set(outcome_ids)) or len(scope_ids) != len(set(scope_ids)):
-            msg = "Delivery frontier identities must be unique"
             raise ValueError(msg)
         return self
 

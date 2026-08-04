@@ -11,6 +11,9 @@ from owlbear_kanban import (
     DeliveryAdmissionRequest,
     DeliveryAuthorityRegistry,
     DeliveryFrontier,
+    DeliveryOutputKind,
+    DeliveryOutputReference,
+    DeliveryStage,
     DesignPackageManifest,
     DesignPackageStore,
     OutcomeAuthorityBinding,
@@ -188,8 +191,17 @@ def test_revision_preserves_unchanged_binding_and_invalidates_changed_dependents
             OutcomeAuthorityBinding(
                 outcome_id=binding.outcome_id,
                 plan_scope_id=binding.plan_scope_id,
+                stage=DeliveryStage.IMPLEMENTATION,
+                assembly_required=True,
                 task_ids=(f"TASK-{index:03}",),
                 result_ids=(f"RESULT-{index:03}",),
+                output=DeliveryOutputReference(
+                    output_id=f"OUTPUT-{index:03}",
+                    claim_id=f"CLAIM-{index:03}",
+                    stage=DeliveryStage.PLANNING,
+                    kind=DeliveryOutputKind.PLANNING,
+                    digest=f"{index}" * 64,
+                ),
             )
             for index, binding in enumerate(first.frontier.bindings, start=1)
         )
@@ -216,6 +228,8 @@ def test_revision_preserves_unchanged_binding_and_invalidates_changed_dependents
     bindings = {binding.outcome_id: binding for binding in revised.frontier.bindings}
     assert bindings["OUT-001"].task_ids == bindings["OUT-001"].result_ids == ()
     assert bindings["OUT-002"].task_ids == bindings["OUT-002"].result_ids == ()
+    assert bindings["OUT-001"].stage == bindings["OUT-002"].stage == DeliveryStage.PLANNING
+    assert bindings["OUT-001"].output is bindings["OUT-002"].output is None
     assert bindings["OUT-003"] == populated.bindings[2]
     revision_root = delivery_root / "revisions" / first.contract_digest
     assert {path.name for path in revision_root.iterdir()} == {
