@@ -1,4 +1,5 @@
 import type { WorkItemProjection, WorkItemStage } from '../api/workItems'
+import { ATTENTION_LABELS } from '../attentionVocabulary'
 import { workItemIdentity, type WorkItemIdentity } from '../hooks/useWorkItems'
 
 interface WorkPortfolioBoardProps {
@@ -7,12 +8,13 @@ interface WorkPortfolioBoardProps {
   onSelect: (identity: WorkItemIdentity) => void
 }
 
-const GROUPS: Array<{ stage: WorkItemStage; label: string; optional?: boolean }> = [
-  { stage: 'design', label: 'Design' },
-  { stage: 'planning', label: 'Planning' },
-  { stage: 'implementation', label: 'Implementation' },
-  { stage: 'assembly', label: 'Assembly', optional: true },
-  { stage: 'completed', label: 'Completed', optional: true },
+/** `emptyLabel` defines what the stage holds, matching the projector's stage rules. */
+const GROUPS: Array<{ stage: WorkItemStage; label: string; emptyLabel: string }> = [
+  { stage: 'design', label: 'Design', emptyLabel: 'Work waiting on a design decision from you.' },
+  { stage: 'planning', label: 'Planning', emptyLabel: 'Accepted design without a published task plan.' },
+  { stage: 'implementation', label: 'Implementation', emptyLabel: 'Planned tasks under build and review.' },
+  { stage: 'assembly', label: 'Assembly', emptyLabel: 'Reviewed tasks awaiting a composed result.' },
+  { stage: 'completed', label: 'Done', emptyLabel: 'Fully reviewed work, ready for Integration.' },
 ]
 
 function WorkItemCard({
@@ -32,57 +34,56 @@ function WorkItemCard({
       ].join(' ')}
       data-work-item={workItemIdentity(item)}
     >
-      <div className="flex min-w-0 items-start justify-between gap-static-sm">
-        <div className="min-w-0">
-          <span className="block truncate text-xs font-semibold text-contrast-medium">{item.change_id}</span>
-          <h3 className="mt-1 line-clamp-2 font-semibold">{item.title}</h3>
-        </div>
-        <span className="border border-contrast-low px-static-xs py-1 text-xs">{item.scope}</span>
+      <div className="min-w-0">
+        <span className="block truncate text-xs text-contrast-medium">{item.change_id}</span>
+        <h3 className="mt-1 line-clamp-2 font-medium">{item.title}</h3>
       </div>
-      <p className="mt-static-xs line-clamp-3 text-sm leading-relaxed text-contrast-medium">{item.promise}</p>
-      <dl className="mt-static-sm grid gap-1 text-xs">
-        <div className="flex justify-between gap-static-sm">
-          <dt>Attention</dt>
-          <dd className="font-semibold">{item.attention}</dd>
+      {item.next_action !== 'Inspect progress' ? (
+        <p className={[
+          'mt-static-sm line-clamp-2 text-sm leading-snug',
+          item.attention === 'user' ? 'font-semibold' : 'font-normal',
+        ].join(' ')}>{item.next_action}</p>
+      ) : null}
+      <p className="mt-static-xs line-clamp-2 text-xs leading-relaxed text-contrast-medium">{item.promise}</p>
+      <div className="mt-auto grid gap-1 pt-static-md text-xs">
+        <span className={item.attention === 'user' ? 'font-medium text-error' : 'font-medium text-primary'}>{ATTENTION_LABELS[item.attention]}</span>
+        <div className="flex items-end justify-between gap-static-sm">
+          <span className="whitespace-nowrap text-contrast-medium">
+            {item.task_count === 0 ? 'No tasks yet' : `${item.reviewed_task_count}/${item.task_count} reviewed`}
+          </span>
+          <button
+            type="button"
+            className="shrink-0 text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+            aria-pressed={selected}
+            aria-controls="work-item-flyout"
+            onClick={onSelect}
+          >
+            View details
+          </button>
         </div>
-        <div className="flex justify-between gap-static-sm">
-          <dt>Progress</dt>
-          <dd>{item.reviewed_task_count} / {item.task_count}</dd>
-        </div>
-      </dl>
-      <p className="mt-static-sm line-clamp-2 text-xs text-contrast-medium">{item.next_action}</p>
-      <div className="mt-auto pt-static-md">
-        <button
-          type="button"
-          className="min-h-10 border border-primary px-static-sm py-static-xs text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-          aria-pressed={selected}
-          onClick={onSelect}
-        >
-          {selected ? 'Selected' : 'Inspect'}
-        </button>
       </div>
     </article>
   )
 }
 
 export default function WorkPortfolioBoard({ items, selected, onSelect }: WorkPortfolioBoardProps) {
-  const visibleGroups = GROUPS.filter(
-    (group) => !group.optional || items.some((item) => item.stage === group.stage),
-  )
-
   return (
     <section aria-labelledby="work-board-heading" data-testid="work-portfolio-board">
-      <h2 id="work-board-heading" className="sr-only">Work stages</h2>
-      <div className="grid min-w-0 gap-static-md lg:grid-cols-4">
-        {visibleGroups.map((group) => {
+      <div className="grid min-w-0 gap-x-static-md gap-y-static-md md:grid-cols-5 lg:gap-x-static-lg">
+        {GROUPS.map((group) => {
           const grouped = items.filter((item) => item.stage === group.stage)
           return (
             <section key={group.stage} aria-labelledby={`work-stage-${group.stage}`} className="min-w-0">
-              <div className="mb-static-sm flex items-center justify-between border-b border-contrast-low pb-static-xs">
-                <h3 id={`work-stage-${group.stage}`} className="font-semibold">{group.label}</h3>
-                <span className="text-xs text-contrast-medium">{grouped.length}</span>
+              {/* Scrolls with its column: a pinned label would slice the content passing beneath it.
+                  No rule here — the view-header rule above already separates the board. */}
+              <div data-stage-heading={group.stage} className="mb-static-sm flex items-baseline gap-static-xs pb-static-xs">
+                <h3 id={`work-stage-${group.stage}`} className="min-w-0 truncate text-2xs font-semibold uppercase tracking-[0.08em] text-contrast-high">{group.label}</h3>
+                <span className="inline-flex min-w-5 shrink-0 justify-center bg-surface px-1 text-2xs font-semibold text-contrast-high">
+                  {grouped.length}
+                  <span className="sr-only"> work items</span>
+                </span>
               </div>
-              <div className="grid gap-static-sm sm:grid-cols-2 lg:grid-cols-1">
+              <div className="grid gap-static-sm sm:grid-cols-2 md:grid-cols-1">
                 {grouped.map((item) => {
                   const isSelected = selected?.changeId === item.change_id && selected.workItemId === item.work_item_id
                   return (
@@ -95,7 +96,7 @@ export default function WorkPortfolioBoard({ items, selected, onSelect }: WorkPo
                   )
                 })}
                 {grouped.length === 0 ? (
-                  <p className="py-static-sm text-sm text-contrast-medium">No work in {group.label.toLowerCase()}.</p>
+                  <p data-stage-empty={group.stage} className="py-static-sm text-sm text-contrast-medium">{group.emptyLabel}</p>
                 ) : null}
               </div>
             </section>

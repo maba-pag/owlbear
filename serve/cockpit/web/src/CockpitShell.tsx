@@ -1,8 +1,9 @@
 import { Suspense, useState } from 'react'
-import { PButtonPure, PFlyout, PLinkPure } from '@porsche-design-system/components-react'
+import { PButtonPure, PFlyout, PIcon, PLinkPure } from '@porsche-design-system/components-react'
 import { useLocation, useNavigate } from 'react-router'
 import { routeConfig } from './routes'
 import ThemeToggle from './components/ThemeToggle'
+import WorkspaceStatus from './components/WorkspaceStatus'
 
 const ICONS = {
   work: 'grid',
@@ -18,19 +19,37 @@ interface ProductNavigationProps {
 
 function ProductNavigation({ activePath, compact = false, onNavigate }: ProductNavigationProps) {
   return (
-    <nav aria-label="Product areas" className={compact ? 'grid justify-items-center gap-static-md' : 'grid gap-static-lg'}>
-      {routeConfig.map((route) => (
+    <nav aria-label="Product areas" className={compact ? 'grid w-full justify-items-center gap-static-sm' : 'grid gap-static-lg'}>
+      {routeConfig.map((route) => compact ? (
+        <a
+          key={route.path}
+          href={route.path}
+          title={route.label}
+          aria-label={route.label}
+          aria-current={route.path === activePath ? 'page' : undefined}
+          className={[
+            "relative grid h-10 w-10 place-items-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus before:absolute before:-left-2 before:top-2 before:h-6 before:w-0.5 before:content-['']",
+            route.path === activePath
+              ? 'bg-frosted-soft text-primary before:bg-primary'
+              : 'text-contrast-medium before:bg-transparent hover:bg-canvas hover:text-primary',
+          ].join(' ')}
+          onClick={(event) => {
+            event.preventDefault()
+            onNavigate(route.path)
+          }}
+        >
+          <PIcon name={ICONS[route.icon as keyof typeof ICONS] ?? 'grid'} aria-hidden="true" />
+        </a>
+      ) : (
         <PLinkPure
           key={route.path}
           href={route.path}
           icon={ICONS[route.icon as keyof typeof ICONS] ?? 'grid'}
           active={route.path === activePath}
-          hideLabel={compact}
-          stretch={!compact}
+          stretch
           size="medium"
-          title={compact ? route.label : undefined}
           aria={{ 'aria-current': route.path === activePath ? 'page' : undefined, 'aria-label': route.label }}
-          className={compact ? 'flex min-h-11 min-w-11 items-center justify-center' : 'min-h-11'}
+          className="min-h-11"
           onClick={(event) => {
             event.preventDefault()
             onNavigate(route.path)
@@ -56,25 +75,36 @@ export default function CockpitShell() {
   }
 
   return (
-    <div className="grid min-h-dvh min-w-0 grid-cols-1 overflow-x-hidden bg-canvas text-primary lg:grid-cols-[5.75rem_minmax(0,1fr)]" data-testid="cockpit-shell">
-      <aside className="sticky top-0 hidden h-dvh flex-col items-center border-r border-contrast-low bg-surface px-static-sm py-static-md lg:flex" data-region="nav-rail" data-testid="desktop-product-navigation">
-        <div className="text-center">
-          <strong className="block text-sm">OwlBear</strong>
-          <span className="text-xs text-contrast-medium">Cockpit</span>
+    <div className="grid h-dvh min-w-0 grid-cols-1 overflow-hidden bg-canvas text-primary md:grid-cols-[4rem_minmax(0,1fr)]" data-testid="cockpit-shell">
+      <aside className="hidden h-dvh flex-col items-center border-r border-contrast-low bg-surface px-static-xs py-static-md md:flex" data-region="nav-rail" data-testid="desktop-product-navigation">
+        {/* The rail is 64px wide, so identity is a stacked wordmark rather than a boxed monogram. */}
+        <div
+          className="grid w-full justify-items-center gap-px py-1 leading-none"
+          data-testid="rail-identity"
+          role="img"
+          aria-label="OwlBear Cockpit"
+          title="OwlBear Cockpit"
+        >
+          <span aria-hidden="true" className="text-[0.5625rem] font-semibold uppercase tracking-[0.14em] text-primary">OwlBear</span>
+          <span aria-hidden="true" className="text-[0.5625rem] uppercase tracking-[0.14em] text-contrast-medium">Cockpit</span>
         </div>
-        <div className="mt-static-xl flex-1">
+        <div className="mt-static-lg flex w-full flex-1 items-start justify-center">
           <ProductNavigation activePath={activeRoute.path} compact onNavigate={goTo} />
         </div>
-        <ThemeToggle compact />
+        <div className="grid justify-items-center gap-1.5">
+          <WorkspaceStatus />
+          <ThemeToggle compact />
+        </div>
       </aside>
 
-      <div className="min-h-0 min-w-0" data-region="workspace">
-        <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between gap-static-md border-b border-contrast-low bg-canvas/95 px-static-md backdrop-blur-md lg:hidden">
+      <div className="flex min-h-0 min-w-0 flex-col overflow-y-auto overflow-x-hidden" data-region="workspace">
+        <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between gap-static-md border-b border-contrast-low bg-canvas/95 px-static-md backdrop-blur-md md:hidden">
           <div className="min-w-0">
             <strong className="block text-sm">OwlBear</strong>
             <span className="block text-xs text-contrast-medium">Cockpit</span>
           </div>
           <div className="flex items-center gap-static-md">
+            <WorkspaceStatus />
             <ThemeToggle compact />
             <PButtonPure
               type="button"
@@ -104,9 +134,12 @@ export default function CockpitShell() {
           </div>
         </PFlyout>
 
-        <Suspense fallback={<p className="p-static-lg" role="status">Preparing workspace...</p>}>
-          <ActivePage />
-        </Suspense>
+        {/* Auto row stretches a short page to full height and grows a long one so the workspace column scrolls. */}
+        <div className="grid min-h-0 flex-1 grid-cols-1">
+          <Suspense fallback={<p className="p-static-lg" role="status">Preparing workspace...</p>}>
+            <ActivePage />
+          </Suspense>
+        </div>
       </div>
     </div>
   )

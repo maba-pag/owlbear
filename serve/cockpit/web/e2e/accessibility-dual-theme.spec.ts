@@ -13,13 +13,14 @@ const memories = [
 ]
 
 async function seed(page: Page) {
+  // Playwright matches routes in reverse registration order, so the catch-all must be registered first.
+  await page.route('**/api/**', (route) => route.fulfill({ status: 200, json: {} }))
   await page.route('**/api/changes', (route) => route.fulfill({ json: {
     changes: [{ change_id: 'change', state: 'loaded', delivery_digest: digest, diagnostics: [] }],
   } }))
   await page.route('**/api/events', (route) => route.fulfill({ status: 200, contentType: 'text/event-stream', body: ': connected\n\n' }))
   await page.route('**/api/ideas', (route) => route.fulfill({ json: { content: '# Morning shape\n\n- [ ] Refine cockpit surfaces' } }))
   await page.route('**/api/memories', (route) => route.fulfill({ json: { entries: memories, parse_errors: 0 } }))
-  await page.route('**/api/**', (route) => route.fulfill({ status: 200, json: {} }))
 }
 
 function formatViolations(violations: Array<{ id: string; impact?: string | null; help: string }>) {
@@ -34,7 +35,7 @@ for (const theme of ['light', 'dark'] as const) {
     })
 
     test(`Memory remains accessible under ${theme}`, async ({ page }) => {
-      await page.goto('/memories?change=change')
+      await page.goto('/memory?change=change')
       await expect(page.locator('html')).toHaveClass(new RegExp(`scheme-${theme}`))
       await expect(page.getByTestId('memory-entry').first()).toBeVisible()
       const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze()

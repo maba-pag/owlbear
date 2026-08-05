@@ -116,7 +116,7 @@ test.describe('TestFromAC_NoCDNCSPViolations', () => {
   })
 })
 
-// ─── AC3: p-link shadowRoot is populated (component fully initialized) ─────────
+// ─── AC3: p-link-pure shadowRoot is populated (component fully initialized) ────
 // A non-empty shadowRoot proves the custom element's internal rendering
 // activated — not just the tag being present as an undefined/empty element.
 
@@ -127,19 +127,20 @@ test.describe('TestFromAC_PDSShadowRootActivation', () => {
     await page.locator('[data-region="workspace"]').waitFor({ state: 'visible' })
   })
 
-  // Happy path: p-link (rendered in product navigation) has shadowRoot with child elements
-  test('p-link element has non-empty shadowRoot after page stabilizes', async ({ page }) => {
-    await page.locator('p-link').first().waitFor({ state: 'attached' })
+  // Happy path: p-link-pure (the PDS element ProductNavigation renders) has shadowRoot with child elements
+  test('p-link-pure element has non-empty shadowRoot after page stabilizes', async ({ page }) => {
+    await page.locator('p-link-pure').first().waitFor({ state: 'attached' })
 
-    const shadowRootChildCount = await page.evaluate(() => {
-      const el = document.querySelector('p-link')
+    const shadowRootChildCount = await page.evaluate(async () => {
+      const el = document.querySelector('p-link-pure')
       // Returns -1 if element not found, 0 if shadowRoot is null/empty
       if (!el) return -1
+      await customElements.whenDefined('p-link-pure')
       if (!el.shadowRoot) return 0
       return el.shadowRoot.childElementCount
     })
 
     // shadowRoot must exist and contain at least one element
-    expect(shadowRootChildCount, 'p-link.shadowRoot must be non-null and non-empty').toBeGreaterThan(0)
+    expect(shadowRootChildCount, 'p-link-pure.shadowRoot must be non-null and non-empty').toBeGreaterThan(0)
   })
 })

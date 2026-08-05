@@ -56,12 +56,23 @@ await runFile('uv', [
   '--workspace',
   fixture,
 ], { cwd: root })
+// The cockpit backend refuses to boot without a Delivery config, even for Memory-only runs.
+await runFile('uv', [
+  'run',
+  '--project',
+  root,
+  'python',
+  resolve(import.meta.dirname, 'seed-work-portfolio-delivery.py'),
+  '--workspace',
+  fixture,
+], { cwd: root })
 
 const server = spawn('uv', ['run', '--project', root, '--package', 'owlbear-cockpit', 'cockpit'], {
   cwd: root,
   env: {
     ...process.env,
     OWLBEAR_WORKSPACE_ROOT: fixture,
+    OWLBEAR_DELIVERY_CONFIG: join(fixture, 'delivery-config.json'),
     MEMORY_DIR: memoryDir,
     COCKPIT_PORT: '8421',
     COCKPIT_NO_OPEN: '1',

@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate, RouterProvider } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import CockpitShell from './CockpitShell'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { legacyRouteRedirects } from './routes'
 
 function CockpitRuntime() {
   return (
@@ -15,7 +16,10 @@ function CockpitRuntime() {
 function App() {
   const router = useMemo(
     () => createBrowserRouter([
-      { path: '/', element: <Navigate to="/work" replace /> },
+      ...legacyRouteRedirects.map(({ from, to }) => ({
+        path: from,
+        element: <Navigate to={to} replace />,
+      })),
       { path: '*', element: <CockpitRuntime /> },
     ]),
     [],

@@ -116,11 +116,15 @@ function inputValue(element: Element, value: string) {
 }
 
 function renderPage() {
-  return render(<MemoryRouter initialEntries={['/work']}><WorkPortfolioPage /></MemoryRouter>)
+  return render(<MemoryRouter initialEntries={['/delivery']}><WorkPortfolioPage /></MemoryRouter>)
+}
+
+function openFilters() {
+  fireEvent.click(screen.getByTestId('work-filters-toggle'))
 }
 
 function inspectFirstItem() {
-  fireEvent.click(screen.getAllByText('Inspect', { exact: true })[0])
+  fireEvent.click(screen.getAllByText('View details', { exact: true })[0])
 }
 
 const items = portfolioFixture()
@@ -167,16 +171,17 @@ beforeEach(() => {
 
 it('searches completed history and opens one exact completion', async () => {
   const { container } = renderPage()
-  await screen.findByTestId('work-shown-count')
+  await screen.findByTestId('work-portfolio-board')
 
-  await waitFor(() => {
-    fireEvent(container.querySelector('p-tabs')!, new CustomEvent('update', {
-      detail: { activeTabIndex: 1 },
-      bubbles: true,
-    }))
-    expect(screen.getByText('Completed history')).toBeInTheDocument()
-  })
+  fireEvent.click(screen.getByRole('button', { name: 'Completed history' }))
+  expect(screen.getByTestId('completed-history-workspace')).toHaveTextContent('Completed changes')
   expect(await screen.findByText('Alpha delivery')).toBeInTheDocument()
+
+  const search = container.querySelector('p-input-search[name="completed-history-search"]')! as unknown as Record<string, unknown>
+  expect(search.label).toBe('Search completed work')
+  expect(search.hideLabel).toBe(true)
+  expect(search.placeholder ?? '').toBe('')
+  expect(search.indicator).toBe(true)
 
   await waitFor(() => {
     inputValue(container.querySelector('p-input-search[name="completed-history-search"]')!, 'beta')
@@ -200,14 +205,9 @@ it('ignores an older completed page after the search query changes', async () =>
     : Promise.resolve({ records: [completed[0]], next_cursor: 'older-page' }))
 
   const { container } = renderPage()
-  await screen.findByTestId('work-shown-count')
-  await waitFor(() => {
-    fireEvent(container.querySelector('p-tabs')!, new CustomEvent('update', {
-      detail: { activeTabIndex: 1 },
-      bubbles: true,
-    }))
-    expect(screen.getByText('Completed history')).toBeInTheDocument()
-  })
+  await screen.findByTestId('work-portfolio-board')
+  fireEvent.click(screen.getByRole('button', { name: 'Completed history' }))
+  expect(screen.getByTestId('completed-history-workspace')).toHaveTextContent('Completed changes')
   expect(await screen.findByText('Alpha delivery')).toBeInTheDocument()
 
   fireEvent.click(screen.getByText('Load more'))
@@ -226,20 +226,89 @@ it('ignores an older completed page after the search query changes', async () =>
   expect(screen.getByText('Beta search')).toBeInTheDocument()
 })
 
-it('filters bounded current cards and opens exact Delivery detail', async () => {
+it('reveals the shown-of-total relationship only while a filter narrows the board', async () => {
   const { container } = renderPage()
 
-  await waitFor(() => expect(screen.getByTestId('work-shown-count')).toHaveTextContent('Showing 120 of 120'))
+  await screen.findByTestId('work-portfolio-board')
+  expect(screen.getByTestId('work-shown-count')).toBeEmptyDOMElement()
+  expect(container.querySelectorAll('p-select')).toHaveLength(0)
+
+  openFilters()
   const filters = container.querySelectorAll('p-select')
   selectValue(filters[0], 'change-2')
-  expect(screen.getByTestId('work-shown-count')).toHaveTextContent('Showing 40 of 120')
+  expect(screen.getByTestId('work-shown-count')).toHaveTextContent('40 of 120')
   selectValue(filters[1], 'user')
-  expect(screen.getByTestId('work-shown-count')).toHaveTextContent('Showing 10 of 120')
+  expect(screen.getByTestId('work-shown-count')).toHaveTextContent('10 of 120')
+  expect(screen.getByTestId('work-filters-toggle')).toHaveTextContent('Filter (2)')
 
   inspectFirstItem()
   expect(await screen.findByText('Requests', { exact: true })).toBeInTheDocument()
   expect(screen.getByText('planning', { exact: true })).toBeInTheDocument()
   expect(api.show).toHaveBeenCalledWith('change-2', 'OUT-005')
+})
+
+it('clears one active filter from its summary chip', async () => {
+  const { container } = renderPage()
+
+  await screen.findByTestId('work-portfolio-board')
+  openFilters()
+  selectValue(container.querySelectorAll('p-select')[0], 'change-2')
+  expect(screen.getByTestId('work-shown-count')).toHaveTextContent('40 of 120')
+
+  fireEvent.click(screen.getByTestId('work-filter-chip-change'))
+
+  expect(screen.getByTestId('work-shown-count')).toBeEmptyDOMElement()
+  expect(screen.queryByTestId('work-filter-chip-change')).toBeNull()
+})
+
+it('summarises the portfolio as one total plus every counted attention state', async () => {
+  api.list.mockResolvedValue({ items, attention_counts: { user: 1, agent: 1, waiting: 0, none: 4 } })
+  renderPage()
+
+  const summary = await screen.findByTestId('workspace-header-summary')
+  expect(summary).toHaveTextContent('6work items')
+  expect(summary).toHaveTextContent('1need you')
+  expect(summary).toHaveTextContent('1with agents')
+  expect(summary).toHaveTextContent('0waiting')
+  expect(summary).toHaveTextContent('4no action needed')
+  expect(summary).not.toHaveTextContent('settled')
+  expect(summary).toHaveTextContent('work items have no action needed')
+  expect(summary).toHaveTextContent('work items are waiting on dependencies')
+  expect(summary).not.toHaveTextContent('outcome')
+})
+
+it('keeps the total consistent with the counted states and singular grammar', async () => {
+  api.list.mockResolvedValue({ items, attention_counts: { user: 1, agent: 0, waiting: 0, none: 0 } })
+  renderPage()
+
+  const summary = await screen.findByTestId('workspace-header-summary')
+  expect(summary).toHaveTextContent('1work item')
+  expect(summary).not.toHaveTextContent('1work items')
+})
+
+it('uses one attention vocabulary across cards, filters, and detail', async () => {
+  const { container } = renderPage()
+  await screen.findByTestId('work-portfolio-board')
+
+  const board = screen.getByTestId('work-portfolio-board')
+  expect(board).toHaveTextContent('Waiting on dependencies')
+  expect(board).toHaveTextContent('No action needed')
+  expect(board).not.toHaveTextContent('No attention')
+  expect(board).not.toHaveTextContent('Nobody yet')
+
+  openFilters()
+  const attentionSelect = container.querySelectorAll('p-select')[1] as HTMLElement & { label: string }
+  expect(attentionSelect.label).toBe('Attention')
+  const attentionOptions = [...attentionSelect.querySelectorAll('p-select-option')]
+    .map((option) => option.textContent)
+  expect(attentionOptions).toEqual(['Any attention', 'Needs you', 'Agent working', 'Waiting on dependencies', 'No action needed'])
+
+  selectValue(container.querySelectorAll('p-select')[1], 'waiting')
+  const chip = screen.getByTestId('work-filter-chip-attention') as HTMLElement & { label: string }
+  expect(chip.label).toBe('Attention: Waiting on dependencies')
+
+  inspectFirstItem()
+  expect(await screen.findByTestId('work-item-detail')).toHaveTextContent('Waiting on dependencies')
 })
 
 it('answers decision and action requests then refetches current resolution', async () => {
@@ -272,7 +341,7 @@ it('answers decision and action requests then refetches current resolution', asy
     return Promise.resolve({})
   })
   const { container } = renderPage()
-  await screen.findByTestId('work-shown-count')
+  await screen.findByTestId('work-portfolio-board')
   inspectFirstItem()
   await screen.findByText('Choose deployment mode')
 
@@ -319,7 +388,7 @@ it('requires note and locator before clearing a requestless block', async () => 
     },
   })
   const { container } = renderPage()
-  await screen.findByTestId('work-shown-count')
+  await screen.findByTestId('work-portfolio-board')
   inspectFirstItem()
   expect((await screen.findByText('Clear block') as HTMLElement & { disabled: boolean }).disabled).toBe(true)
 
@@ -351,7 +420,7 @@ it('cancels or explicitly confirms recovery using exact claim identity', async (
     },
   })
   renderPage()
-  await screen.findByTestId('work-shown-count')
+  await screen.findByTestId('work-portfolio-board')
   inspectFirstItem()
   expect(await screen.findByText(/ago$/)).toBeInTheDocument()
 
@@ -395,7 +464,7 @@ it('shows typed Integration failure and confirms an earlier-stage move', async (
     true,
   ))
   const { container } = renderPage()
-  await screen.findByTestId('work-shown-count')
+  await screen.findByTestId('work-portfolio-board')
   inspectFirstItem()
   expect(await screen.findByText('Returned to planning')).toBeInTheDocument()
   expect(screen.getByText('Recovery attention')).toBeInTheDocument()

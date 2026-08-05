@@ -90,7 +90,7 @@ test.describe('Memory state filter', () => {
 
   test('state multi-select change event controls visible rows and shown count', async ({ page }) => {
     await stubApis(page)
-    await page.goto('/memories')
+    await page.goto('/memory')
 
     const titles = page.getByTestId('memory-entry-title')
     await expect(titles).toHaveText(['Pending Memory', 'Curated Memory', 'Approved Memory'])

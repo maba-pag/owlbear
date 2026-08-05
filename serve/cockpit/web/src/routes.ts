@@ -18,13 +18,13 @@ export interface RouteConfigEntry {
 
 export const routeConfig: RouteConfigEntry[] = [
   {
-    path: '/work',
-    label: 'Work',
+    path: '/delivery',
+    label: 'Delivery',
     icon: 'work',
     component: WorkPortfolioPage,
   },
   {
-    path: '/memories',
+    path: '/memory',
     label: 'Memory',
     icon: 'memory',
     component: MemoryTab,
@@ -35,4 +35,11 @@ export const routeConfig: RouteConfigEntry[] = [
     icon: 'ideas',
     component: IdeasPage,
   },
+]
+
+/** Superseded paths kept reachable so existing links and bookmarks still resolve. */
+export const legacyRouteRedirects: Array<{ from: string; to: string }> = [
+  { from: '/', to: '/delivery' },
+  { from: '/work', to: '/delivery' },
+  { from: '/memories', to: '/memory' },
 ]

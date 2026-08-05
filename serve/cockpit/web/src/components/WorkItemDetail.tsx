@@ -17,6 +17,7 @@ import {
   type WorkItemProjection,
   type WorkItemStage,
 } from '../api/workItems'
+import { ATTENTION_LABELS } from '../attentionVocabulary'
 
 type FieldValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }
 
@@ -31,7 +32,6 @@ interface WorkItemDetailProps {
   pendingAction: string | null
   actionError: Error | null
   actionResult: string | null
-  onClose: () => void
   onAnswerRequest: (requestId: string, resolution: DeliveryRequestResolution) => Promise<void>
   onClearBlock: (blockId: string, note: string, locators: string[]) => Promise<void>
   onRecoverClaim: (attemptId: string, claimId: string) => Promise<void>
@@ -39,7 +39,7 @@ interface WorkItemDetailProps {
   onRetryIntegration: () => Promise<void>
 }
 
-function DetailHeader({ detail, projection, onClose }: Pick<WorkItemDetailProps, 'detail' | 'projection' | 'onClose'>) {
+function DetailHeader({ detail, projection }: Pick<WorkItemDetailProps, 'detail' | 'projection'>) {
   return (
     <div className="flex min-w-0 flex-wrap items-start justify-between gap-static-sm">
       <div className="min-w-0">
@@ -48,10 +48,7 @@ function DetailHeader({ detail, projection, onClose }: Pick<WorkItemDetailProps,
       </div>
       <div className="flex flex-wrap gap-static-xs">
         <PTag compact>{detail.operator.stage}</PTag>
-        <PTag compact>{projection.attention}</PTag>
-        <span className="lg:hidden">
-          <PButton type="button" compact variant="secondary" onClick={onClose}>Close detail</PButton>
-        </span>
+        <PTag compact>{ATTENTION_LABELS[projection.attention]}</PTag>
       </div>
     </div>
   )
@@ -265,9 +262,9 @@ function ActionFeedback({ error, result }: { error: Error | null; result: string
 
 export default function WorkItemDetail(props: WorkItemDetailProps) {
   return (
-    <aside className="fixed inset-x-0 bottom-0 z-30 max-h-[82dvh] min-w-0 overflow-y-auto border-t border-contrast-low bg-canvas p-static-md shadow-lg lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:border-l lg:border-t-0 lg:p-0 lg:pl-static-lg lg:shadow-none" aria-labelledby="work-detail-heading" data-testid="work-item-detail">
+    <aside className="min-w-0 p-static-lg" aria-labelledby="work-detail-heading" data-testid="work-item-detail">
       <div className="grid gap-static-lg">
-        <div><DetailHeader detail={props.detail} projection={props.projection} onClose={props.onClose} /><p className="mt-static-sm text-sm leading-relaxed text-contrast-medium">{props.projection.promise}</p></div>
+        <div><DetailHeader detail={props.detail} projection={props.projection} /><p className="mt-static-sm text-sm leading-relaxed text-contrast-medium">{props.projection.promise}</p></div>
         <ActionFeedback error={props.actionError} result={props.actionResult} />
         <BlockSection {...props} />
         <RequestsSection {...props} />

@@ -9,32 +9,32 @@ vi.mock('./components/ThemeToggle', () => ({
 
 vi.mock('./routes', () => ({
   routeConfig: [
-    { path: '/work', label: 'Work', icon: 'work', component: () => <main>Work portfolio</main> },
-    { path: '/memories', label: 'Memory', icon: 'memory', component: () => <main>Memory workspace</main> },
+    { path: '/delivery', label: 'Delivery', icon: 'work', component: () => <main>Work portfolio</main> },
+    { path: '/memory', label: 'Memory', icon: 'memory', component: () => <main>Memory workspace</main> },
     { path: '/ideas', label: 'Ideas', icon: 'ideas', component: () => <main>Ideas workspace</main> },
   ],
 }))
 
 it('navigates between the target product areas', async () => {
   render(
-    <MemoryRouter initialEntries={['/work']}>
+    <MemoryRouter initialEntries={['/delivery']}>
       <CockpitShell />
     </MemoryRouter>,
   )
 
   expect(screen.getByText('Work portfolio')).toBeInTheDocument()
   const desktopNavigation = screen.getByTestId('desktop-product-navigation')
-  expect(desktopNavigation.querySelector('p-link-pure[title="Work"]')).toHaveProperty('active', true)
+  expect(desktopNavigation.querySelector('a[title="Delivery"]')).toHaveAttribute('aria-current', 'page')
 
-  fireEvent.click(desktopNavigation.querySelector('p-link-pure[title="Memory"]')!)
+  fireEvent.click(desktopNavigation.querySelector('a[title="Memory"]')!)
 
   expect(await screen.findByText('Memory workspace')).toBeInTheDocument()
-  expect(desktopNavigation.querySelector('p-link-pure[title="Memory"]')).toHaveProperty('active', true)
+  expect(desktopNavigation.querySelector('a[title="Memory"]')).toHaveAttribute('aria-current', 'page')
 })
 
 it('opens labeled product navigation from the compact mobile header', () => {
   render(
-    <MemoryRouter initialEntries={['/work']}>
+    <MemoryRouter initialEntries={['/delivery']}>
       <CockpitShell />
     </MemoryRouter>,
   )
@@ -43,5 +43,5 @@ it('opens labeled product navigation from the compact mobile header', () => {
 
   const flyout = document.querySelector('p-flyout') as HTMLElement & { open: boolean }
   expect(flyout.open).toBe(true)
-  expect(flyout.querySelector('p-link-pure')).toHaveTextContent('Work')
+  expect(flyout.querySelector('p-link-pure')).toHaveTextContent('Delivery')
 })

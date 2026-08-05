@@ -295,7 +295,7 @@ function IdeasPage() {
 
   if (loading) {
     return (
-      <section className="flex h-full min-h-0 flex-col p-static-md text-primary" data-region="ideas-workspace">
+      <section className="flex h-full min-h-0 flex-col p-static-lg text-primary" data-region="ideas-workspace">
         <div
           data-testid="ideas-loading"
           role="status"
@@ -309,7 +309,7 @@ function IdeasPage() {
 
   if (errorMessage && !saving && content.length === 0 && lastSavedContent.length === 0) {
     return (
-      <section className="flex h-full min-h-0 flex-col p-static-md text-primary" data-region="ideas-workspace">
+      <section className="flex h-full min-h-0 flex-col p-static-lg text-primary" data-region="ideas-workspace">
         <div
           data-testid="ideas-error"
           role="alert"
@@ -326,7 +326,7 @@ function IdeasPage() {
   }
 
   return (
-    <section className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-canvas text-primary shadow-sm" data-region="ideas-workspace" aria-labelledby="ideas-title">
+    <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-canvas text-primary" data-region="ideas-workspace" aria-labelledby="ideas-title">
       {showUnsavedDialog ? (
         <PModal
           data-testid="ideas-unsaved-dialog"
@@ -365,7 +365,7 @@ function IdeasPage() {
         titleId="ideas-title"
       />
 
-      <div className="flex min-h-0 flex-1 flex-col gap-static-md p-static-md">
+      <div className="flex min-h-0 flex-1 flex-col gap-static-lg px-static-lg py-static-lg">
         {hasConflict ? (
           <div
             data-testid="ideas-conflict-notice"
@@ -418,9 +418,9 @@ function IdeasPage() {
           </div>
         ) : null}
 
-        <div className="grid min-h-0 flex-1 gap-static-md lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
+        <div className="grid min-h-0 flex-1 gap-static-lg md:grid-cols-[minmax(0,1fr)_minmax(260px,320px)] lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
         <div data-testid="ideas-editor-shell" className="relative flex min-h-0 flex-col overflow-hidden rounded-lg border border-contrast-low bg-canvas">
-          <div data-testid="ideas-editor-toolbar" className="flex flex-wrap items-start justify-start gap-static-sm border-b border-contrast-low bg-canvas px-static-sm py-static-sm sm:items-center sm:justify-between sm:px-static-md">
+          <div data-testid="ideas-editor-toolbar" className="flex flex-wrap items-start justify-start gap-static-sm border-b border-contrast-low bg-surface px-static-md py-static-sm sm:items-center sm:justify-between">
             <div className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs font-semibold uppercase text-primary">
               <span>{previewMode ? 'Markdown preview' : 'Editor'}</span>
               <span aria-hidden="true">/</span>
@@ -492,7 +492,7 @@ function IdeasPage() {
         </div>
 
         <aside data-testid="ideas-state-panel" className="grid min-w-0 content-start gap-static-md overflow-hidden rounded-lg border border-contrast-low bg-canvas p-static-md text-primary">
-          <div className="grid gap-static-xs">
+          <div className="grid gap-static-sm">
             <span className="text-xs font-semibold uppercase text-primary">Notebook</span>
             <div className="grid gap-static-xs text-sm text-primary">
               <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-static-sm">

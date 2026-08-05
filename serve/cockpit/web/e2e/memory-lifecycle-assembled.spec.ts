@@ -43,7 +43,7 @@ test.describe('assembled Memory lifecycle', () => {
   for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 'mobile', width: 390, height: 844 }]) {
     test(`${viewport.name} proves lifecycle visibility and human controls`, async ({ page }) => {
       await page.setViewportSize(viewport)
-      await page.goto('/memories')
+      await page.goto('/memory')
       await expect(page.getByTestId('memory-tab')).toBeVisible()
       await selectAllStates(page)
       await expect(page.getByTestId('memory-entry')).toHaveCount(7)
@@ -98,7 +98,7 @@ test.describe('assembled Memory lifecycle', () => {
       expect(response.message).toContain(response.state)
     }
 
-    await page.goto('/memories')
+    await page.goto('/memory')
     await selectAllStates(page)
 
     for (const exceptional of EXCEPTIONAL_ENTRIES) {

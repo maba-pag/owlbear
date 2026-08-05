@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { PButtonPure, PIcon } from '@porsche-design-system/components-react'
 import { useTheme } from '../hooks/useTheme'
 import type { Theme } from '../hooks/useTheme'
+import { getRailPanelPosition } from './railPanelPosition'
 
 const THEME_LABELS = {
   light: {
@@ -24,15 +25,11 @@ const THEME_LABELS = {
 
 const THEME_OPTIONS: Theme[] = ['light', 'dark', 'auto']
 
-function getMenuPosition(trigger: HTMLElement): { top: string; left: string } {
-  const rect = trigger.getBoundingClientRect()
-  const menuWidth = 196
-  const viewportPadding = 12
-  const maxLeft = Math.max(viewportPadding, window.innerWidth - menuWidth - viewportPadding)
-  const left = Math.round(Math.min(Math.max(viewportPadding, rect.right - menuWidth), maxLeft))
-  const top = Math.round(rect.bottom + 8)
+const MENU_WIDTH = 196
+const ESTIMATED_MENU_HEIGHT = 128
 
-  return { top: `${top}px`, left: `${left}px` }
+function getMenuPosition(trigger: HTMLElement, menuHeight: number): { top: string; left: string } {
+  return getRailPanelPosition(trigger, MENU_WIDTH, menuHeight)
 }
 
 interface ThemeToggleProps {
@@ -69,9 +66,11 @@ export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
 
     const updatePosition = () => {
       if (triggerRef.current) {
-        setMenuPosition(getMenuPosition(triggerRef.current))
+        setMenuPosition(getMenuPosition(triggerRef.current, menuRef.current?.offsetHeight || ESTIMATED_MENU_HEIGHT))
       }
     }
+
+    updatePosition()
 
     document.addEventListener('pointerdown', closeOnPointerDown)
     window.addEventListener('resize', updatePosition)
@@ -86,7 +85,7 @@ export default function ThemeToggle({ compact = false }: ThemeToggleProps) {
 
   function openMenu() {
     if (triggerRef.current) {
-      setMenuPosition(getMenuPosition(triggerRef.current))
+      setMenuPosition(getMenuPosition(triggerRef.current, ESTIMATED_MENU_HEIGHT))
     }
     setIsMenuOpen(true)
   }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   PButton,
+  PButtonPure,
   PHeading,
   PInputNumber,
   PInputSearch,
@@ -674,7 +675,7 @@ function MemoryTab() {
   }
 
   return (
-    <section data-testid="memory-tab" className="relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg bg-canvas shadow-sm" aria-labelledby="memory-title">
+    <section data-testid="memory-tab" className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-canvas" aria-labelledby="memory-title">
       <WorkspaceHeader
         title="Memory"
         titleId="memory-title"
@@ -685,22 +686,10 @@ function MemoryTab() {
             {parseErrors > 0 ? <WorkspaceHeaderPill tone="error">{parseErrors} unreadable</WorkspaceHeaderPill> : null}
           </>
         )}
-        actions={(
-          <PButton
-            type="button"
-            compact
-            variant="secondary"
-            data-testid="memory-purge-open-button"
-            disabled={deletedCount === 0}
-            onClick={() => void purgeFlow.requestPreview()}
-          >
-            Purge deleted ({deletedCount})
-          </PButton>
-        )}
       />
 
       {purgeFlow.receipt ? (
-        <div className="mx-static-sm mt-static-md flex flex-wrap items-center justify-between gap-static-sm rounded-lg border border-success bg-success-low p-static-sm text-sm text-primary sm:mx-static-md" data-testid="memory-purge-receipt">
+        <div className="mx-static-lg mt-static-md flex flex-wrap items-center justify-between gap-static-sm rounded-lg border border-success bg-success-low p-static-sm text-sm text-primary" data-testid="memory-purge-receipt">
           <span>
             Purged {purgeFlow.receipt.purged}; skipped {purgeFlow.receipt.skipped}; failed {purgeFlow.receipt.failed}
           </span>
@@ -710,9 +699,9 @@ function MemoryTab() {
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 flex-col gap-static-md px-static-sm py-static-md sm:p-static-md">
+      <div className="flex min-h-0 flex-1 flex-col gap-static-lg px-static-lg py-static-lg">
       <div
-        className="grid gap-static-xs rounded-md border border-contrast-low bg-canvas px-static-xs py-static-xs sm:grid-cols-2 sm:p-static-xs lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)]"
+        className="grid gap-static-md rounded-md border border-contrast-low bg-surface p-static-md sm:grid-cols-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)]"
         data-testid="memory-filter-panel"
       >
         <PMultiSelect
@@ -781,6 +770,8 @@ function MemoryTab() {
         />
       </div>
 
+      {/* Tombstone cleanup belongs with the entries it removes, so it rides the top edge of the
+          entries region — not the page identity, and not the filter panel it deliberately ignores. */}
       {!hasFetched && isFetching ? <div data-testid="memory-loading" role="status">Collecting memory entries...</div> : null}
 
       {parseErrors > 0 ? (
@@ -789,22 +780,43 @@ function MemoryTab() {
 
       {globalMutationMessage ? <p className="rounded-lg border border-success bg-success-low p-static-sm text-primary">{globalMutationMessage}</p> : null}
 
-      {!hasEntries && hasFetched && !isFetching ? <p className="rounded-lg border border-contrast-low bg-canvas p-static-lg text-center">No memory entries yet</p> : null}
-
-      {hasEntries && !hasVisibleEntries ? (
-        <div className="rounded-lg border border-contrast-low bg-canvas p-static-md text-center">
-          <p>No entries match your filters</p>
-          <PButton data-testid="clear-filters" variant="secondary" compact onClick={resetFilters}>
-            Clear filters
-          </PButton>
+      <section
+        data-testid="memory-entries-region"
+        aria-label="Memory entries"
+        className="flex min-h-0 flex-1 flex-col gap-static-md"
+      >
+        <div
+          data-testid="memory-entries-toolbar"
+          className="flex min-w-0 flex-wrap items-center justify-end gap-static-sm border-b border-contrast-low pb-static-xs pr-static-sm"
+        >
+          <PButtonPure
+            type="button"
+            size="small"
+            icon="delete"
+            data-testid="memory-purge-open-button"
+            disabled={deletedCount === 0}
+            onClick={() => void purgeFlow.requestPreview()}
+          >
+            Purge deleted ({deletedCount})
+          </PButtonPure>
         </div>
-      ) : null}
 
-      {hasVisibleEntries ? (
+        {!hasEntries && hasFetched && !isFetching ? <p className="rounded-lg border border-contrast-low bg-canvas p-static-lg text-center">No memory entries yet</p> : null}
+
+        {hasEntries && !hasVisibleEntries ? (
+          <div className="rounded-lg border border-contrast-low bg-canvas p-static-md text-center">
+            <p>No entries match your filters</p>
+            <PButton data-testid="clear-filters" variant="secondary" compact onClick={resetFilters}>
+              Clear filters
+            </PButton>
+          </div>
+        ) : null}
+
+        {hasVisibleEntries ? (
         <div data-testid="memory-list-scroll-shell" className="relative min-h-0 flex-1 overflow-hidden">
-          <ul ref={memoryListRef} onScroll={updateMemoryListScrollCue} className="m-0 flex h-full min-h-0 list-none flex-col gap-static-sm overflow-x-hidden overflow-y-auto p-0 pb-static-lg pr-static-xs">
+          <ul ref={memoryListRef} onScroll={updateMemoryListScrollCue} className="m-0 flex h-full min-h-0 list-none flex-col gap-static-md overflow-x-hidden overflow-y-auto p-0 pb-static-lg pr-static-sm">
             {visibleEntries.map((entry) => (
-              <li key={entry.id} data-testid="memory-entry" className={`rounded-lg border border-l-4 border-contrast-low bg-canvas px-static-sm shadow-sm ${STATE_BORDERS[entry.state]}`}>
+              <li key={entry.id} data-testid="memory-entry" className={`rounded-lg border border-l-4 border-contrast-low bg-canvas px-static-md shadow-sm ${STATE_BORDERS[entry.state]}`}>
                 <p-accordion
                   className="block"
                   open={openEntryId === entry.id ? true : undefined}
@@ -816,7 +828,7 @@ function MemoryTab() {
                     delete accordionRefs.current[entry.id]
                   }}
                 >
-                  <div slot="summary" className="grid min-w-0 gap-static-sm py-static-sm lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                  <div slot="summary" className="grid min-w-0 gap-static-sm py-static-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
                   <div className="min-w-0">
                     <strong data-testid="memory-entry-title" className="block truncate text-base text-primary">{entry.title}</strong>
                     <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-static-sm gap-y-static-xs">
@@ -832,7 +844,7 @@ function MemoryTab() {
                       </span>
                     </div>
                   </div>
-                  <div data-testid="memory-entry-signal-group" className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs lg:justify-end lg:border-l lg:border-contrast-low lg:pl-static-sm">
+                  <div data-testid="memory-entry-signal-group" className="flex min-w-0 flex-wrap items-center gap-static-xs text-xs md:justify-end md:border-l md:border-contrast-low md:pl-static-sm">
                     <PTag compact data-testid="memory-entry-score" variant="secondary" aria-label={`Score: ${formatConfidence(entry.score)}`}>
                       {formatConfidence(entry.score)}
                     </PTag>
@@ -1127,7 +1139,8 @@ function MemoryTab() {
           />
         ) : null}
         </div>
-      ) : null}
+        ) : null}
+      </section>
 
       {deleteConfirmEntry ? (
         <PModal

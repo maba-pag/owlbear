@@ -44,11 +44,28 @@ const cutoverSeed = spawn('uv', [
   '--workspace',
   fixture,
 ], { cwd: root, stdio: 'inherit' })
-const [cutoverSeedExit] = await once(cutoverSeed, 'exit')
+const cutoverSeedExit = (await once(cutoverSeed, 'exit'))[0]
 if (cutoverSeedExit !== 0) {
   await rm(fixtureManifest, { force: true })
   await rm(fixture, { recursive: true, force: true })
   process.exit(cutoverSeedExit ?? 1)
+}
+
+// The cockpit backend refuses to boot without a Delivery config, even for Memory-only runs.
+const deliverySeed = spawn('uv', [
+  'run',
+  '--project',
+  root,
+  'python',
+  resolve(import.meta.dirname, 'seed-work-portfolio-delivery.py'),
+  '--workspace',
+  fixture,
+], { cwd: root, stdio: 'inherit' })
+const [deliverySeedExit] = await once(deliverySeed, 'exit')
+if (deliverySeedExit !== 0) {
+  await rm(fixtureManifest, { force: true })
+  await rm(fixture, { recursive: true, force: true })
+  process.exit(deliverySeedExit ?? 1)
 }
 
 const mcpProbe = spawn('uv', [
@@ -76,6 +93,7 @@ const server = spawn('uv', ['run', '--project', root, '--package', 'owlbear-cock
   env: {
     ...process.env,
     OWLBEAR_WORKSPACE_ROOT: fixture,
+    OWLBEAR_DELIVERY_CONFIG: join(fixture, 'delivery-config.json'),
     MEMORY_DIR: memoryDir,
     COCKPIT_PORT: '8422',
     COCKPIT_NO_OPEN: '1',
