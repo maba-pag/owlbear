@@ -212,10 +212,11 @@ Run these gates against one unchanged package ID:
 5. Call `validate_delivery_contract(change_id)` and require its contract bytes and digest to equal
   the derivation from step 1 with no diagnostics.
 
-A non-pass challenge, failing baseline, package-ID mismatch, derivation mismatch, compiler diagnostic,
-or unresolved material authority keeps the package unadmitted. Record and report the exact finding,
-repair its owning authority through Step 3, and restart from the earliest affected step. Do not
-invoke `admit_delivery_change`, publish target files manually, or weaken evidence to force a pass.
+An `error` or malformed challenge, failing baseline, package-ID mismatch, derivation mismatch,
+compiler diagnostic, or unresolved material authority keeps the package unadmitted. Record and
+report the exact finding, repair its owning authority through Step 3, and restart from the earliest
+affected step. Do not invoke `admit_delivery_change`, publish target files manually, or weaken
+evidence to force a pass.
 
 Warnings must be visible in the complete review and represented in known limits. They do not become
 silent assumptions.

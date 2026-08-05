@@ -43,7 +43,7 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 
 | Agent | Model | Required reading | Delegates | Hooks |
 |-------|-------|------------------|-----------|-------|
-| designer | GPT-5.6 Sol | `w-design-session` | conceptual-design-reviewer, designer-challenger, Explore | None; draft writes are role-bounded and target publication uses the admission tool surface |
+| designer | GPT-5.6 Sol | `w-design-session` | conceptual-design-reviewer, designer-challenger, Explore | `PreToolUse`: allow only scratch/research edits and read-only terminal commands; target publication uses the admission tool surface |
 | conceptual-design-reviewer | Claude Opus 5 | `r-challenger-protocol`, `h-module-design`, `h-frontend-design` | None | `PreToolUse`: deny writes except scratch |
 | designer-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
 | planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch and terminal mutation; publishes advisory-reviewed task chains and returns worker-owned transitions |
@@ -135,7 +135,7 @@ The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignmen
 | Control | Attached roles | Enforcement job |
 |---------|----------------|-----------------|
 | Agent `tools:` allowlist | Every agent | Limits runtime capabilities exposed to the role |
-| `deny-writes.py` | planner, conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer | Rejects durable edit-tool writes outside scratch; planner also enables terminal read-only mode |
+| `deny-writes.py` | designer, planner, conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer | Rejects writes outside the configured scratch/research boundary; designer and planner also enable terminal read-only mode |
 | `deny-src-writes.py` | test-curator | Restricts writes to tests and scratch |
 | `session-context.py` | builder | Adds repository context at session start |
 | `lint-changed.py` | builder | Runs changed-file checks after tool use |

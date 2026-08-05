@@ -1,8 +1,8 @@
-"""deny-writes.py — PreToolUse hook for read-only agents with scratch access.
+"""deny-writes.py — PreToolUse hook for path-bounded agents.
 
-Reads VS Code hook stdin JSON, allows writes only under `.owlbear/scratch/`,
-and denies all other write targets. Usage: invoked automatically by VS Code as
-a PreToolUse hook.
+Reads VS Code hook stdin JSON, allows scratch writes and optional durable
+research writes, and denies all other write targets. Usage: invoked
+automatically by VS Code as a PreToolUse hook.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ _WRITE_TOOLS = {
 }
 
 _SCRATCH_RE = re.compile(r"(^|/)\.owlbear/scratch(/|$)")
+_RESEARCH_RE = re.compile(r"(^|/)\.owlbear/research(/|$)")
 _TERMINAL_TOOLS = {"execute/runInTerminal", "runInTerminal", "run_in_terminal"}
 _GIT_COMMAND_RE = re.compile(r"\bgit\b(?P<arguments>[^\n;&|]*)")
 _READ_ONLY_GIT_COMMANDS = {
@@ -108,6 +109,10 @@ def _is_scratch_path(normalized: str) -> bool:
     return _SCRATCH_RE.search(normalized) is not None
 
 
+def _is_allowed_write_path(normalized: str, *, allow_research: bool) -> bool:
+    return _is_scratch_path(normalized) or (allow_research and _RESEARCH_RE.search(normalized) is not None)
+
+
 def _git_command(arguments: str) -> str | None:
     try:
         tokens = shlex.split(arguments)
@@ -169,7 +174,7 @@ def _deny(reason: str) -> None:
 
 
 def main() -> None:
-    """Deny hook-request writes that target paths outside the scratch directory."""
+    """Deny hook-request writes that target paths outside configured roots."""
     raw = sys.stdin.buffer.read()
     try:
         payload = json.loads(raw.decode("utf-8", errors="replace"))
@@ -195,12 +200,14 @@ def main() -> None:
         print("{}")
         return
 
+    allow_research = "--allow-research" in sys.argv
+    allowed_description = ".owlbear/scratch/ or .owlbear/research/" if allow_research else ".owlbear/scratch/"
     for path in paths:
         normalized = _normalize(path)
-        if not _is_scratch_path(normalized):
+        if not _is_allowed_write_path(normalized, allow_research=allow_research):
             _deny(
                 f"read-only path guard: write to '{normalized}' is denied. "
-                "Only .owlbear/scratch/ is writable for this agent."
+                f"Only {allowed_description} is writable for this agent."
             )
             return
 

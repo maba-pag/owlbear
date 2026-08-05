@@ -105,13 +105,23 @@ class TestDenyWrites:
         }
         assert _is_denied(_invoke(deny_writes_module, payload))
 
+    def test_denies_research_without_explicit_mode(self, deny_writes_module: types.ModuleType) -> None:
+        payload = {
+            "tool_name": "create_file",
+            "tool_input": {"filePath": ".owlbear/research/target-design.md"},
+        }
+        assert _is_denied(_invoke(deny_writes_module, payload))
+
+    def test_allows_research_in_explicit_mode(self, deny_writes_module: types.ModuleType) -> None:
+        payload = {
+            "tool_name": "create_file",
+            "tool_input": {"filePath": ".owlbear/research/target-design.md"},
+        }
+        argv = [str(deny_writes_module.__file__), "--allow-research"]
+        assert _is_allowed(_invoke(deny_writes_module, payload, argv=argv))
+
 
 class TestReadOnlyTerminalGuard:
-    @pytest.fixture
-    def module(self) -> types.ModuleType:
-        path = _REPO_ROOT / ".owlbear" / "hooks" / "deny-writes.py"
-        return _load_hook(path, "deny_writes_read_only")
-
     @pytest.mark.parametrize(
         "command",
         [
@@ -127,30 +137,38 @@ class TestReadOnlyTerminalGuard:
             "python -c \"from pathlib import Path; Path('tracked.py').write_text('changed')\"",
         ],
     )
-    def test_denies_terminal_mutation(self, module: types.ModuleType, command: str) -> None:
+    def test_denies_terminal_mutation(self, deny_writes_module: types.ModuleType, command: str) -> None:
         payload = {"tool_name": "execute/runInTerminal", "tool_input": {"command": command}}
 
-        result = _invoke(module, payload, argv=[str(module.__file__), "--terminal-read-only"])
+        result = _invoke(
+            deny_writes_module,
+            payload,
+            argv=[str(deny_writes_module.__file__), "--terminal-read-only"],
+        )
 
         assert _is_denied(result)
 
-    def test_allows_read_only_proof_command(self, module: types.ModuleType) -> None:
+    def test_allows_read_only_proof_command(self, deny_writes_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "execute/runInTerminal",
             "tool_input": {"command": "git rev-parse --verify HEAD && uv run pytest tests/test_contract.py -q"},
         }
 
-        result = _invoke(module, payload, argv=[str(module.__file__), "--terminal-read-only"])
+        result = _invoke(
+            deny_writes_module,
+            payload,
+            argv=[str(deny_writes_module.__file__), "--terminal-read-only"],
+        )
 
         assert _is_allowed(result)
 
-    def test_terminal_guard_is_opt_in(self, module: types.ModuleType) -> None:
+    def test_terminal_guard_is_opt_in(self, deny_writes_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "execute/runInTerminal",
             "tool_input": {"command": "git commit --allow-empty -m accepted"},
         }
 
-        assert _is_allowed(_invoke(module, payload))
+        assert _is_allowed(_invoke(deny_writes_module, payload))
 
 
 class TestDenySrcWrites:

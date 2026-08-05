@@ -225,6 +225,16 @@ def test_agent_validator_enforces_filename_and_nd3_invocation(tmp_path: Path) ->
     assert any("must match filename 'planner-challenger'" in error for error in errors)
     assert any("ND3 agent must have disable-model-invocation: false" in error for error in errors)
 
+    conceptual = _write_agent(
+        tmp_path,
+        "conceptual-design-reviewer",
+        _agent_text("conceptual-design-reviewer"),
+    )
+    assert any(
+        "ND3 agent must have disable-model-invocation: false" in error
+        for error in _AGENT_VALIDATOR.validate_agent(conceptual)
+    )
+
 
 def test_agent_validator_rejects_unresolved_required_skills(tmp_path: Path) -> None:
     path = _write_agent(
@@ -368,6 +378,14 @@ def test_target_role_write_and_lifecycle_guards_are_preserved() -> None:
             }
         ]
     }
+    assert metadata["designer"]["hooks"] == {
+        "PreToolUse": [
+            {
+                "type": "command",
+                "command": "uv run python .owlbear/hooks/deny-writes.py --allow-research --terminal-read-only",
+            }
+        ]
+    }
 
     orchestrator_tools = set(metadata["orchestrator"]["tools"])
     assert not any(tool.startswith("edit/") for tool in orchestrator_tools)
@@ -376,6 +394,30 @@ def test_target_role_write_and_lifecycle_guards_are_preserved() -> None:
         "PreToolUse": [{"type": "command", "command": "uv run python .owlbear/hooks/deny-writes.py"}]
     }
     assert metadata["planner-challenger"]["hooks"] == metadata["build-reviewer"]["hooks"]
+
+
+def test_design_entries_preserve_gate_order_and_warning_policy() -> None:
+    ideate = (_PROMPTS_ROOT / "ideate.prompt.md").read_text(encoding="utf-8")
+    design = (_PROMPTS_ROOT / "design.prompt.md").read_text(encoding="utf-8")
+    designer = (_AGENTS_ROOT / "designer.agent.md").read_text(encoding="utf-8")
+    workflow = (_SKILLS_ROOT / "w-design-session" / "SKILL.md").read_text(encoding="utf-8")
+
+    assert "design, derivation, challenge, baseline, checkpoint,\nvalidation" in ideate
+    assert "derivation, challenge,\nbaseline, checkpoint, validation, approval, and admission" in design
+    assert "Derive, challenge, baseline, checkpoint,\n  and validate one unchanged package" in designer
+    assert "An `error` or malformed challenge" in workflow
+    assert "A non-pass challenge" not in workflow
+    assert "Warnings must be visible in the complete review" in workflow
+
+
+def test_planning_quality_reaches_author_and_independent_reviewer() -> None:
+    workflow = (_SKILLS_ROOT / "w-frontier-planning" / "SKILL.md").read_text(encoding="utf-8")
+    challenger = (_AGENTS_ROOT / "planner-challenger.agent.md").read_text(encoding="utf-8")
+
+    assert "Load `h-codebase-orientation`, `h-module-design`, and `h-ac-quality`" in workflow
+    assert "acceptance_observations" in workflow
+    assert "proof_boundaries" in workflow
+    assert "`h-ac-quality` - boundary-valid proof quality" in challenger
 
 
 def test_target_delivery_workflows_enforce_review_and_remove_obsolete_controls() -> None:
