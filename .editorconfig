@@ -38,6 +38,10 @@ max_line_length = unset
 [.owlbear/kanban/**]
 max_line_length = unset
 
+# Design packages are Kanban-managed canonical records; do not reformat them
+[.owlbear/delivery/packages/**]
+max_line_length = unset
+
 # Excalidraw diagrams — JSON with embedded base64; line length not enforceable
 [*.excalidraw]
 end_of_line = unset

@@ -26,6 +26,10 @@ max_line_length = unset
 [.owlbear/target/**]
 max_line_length = unset
 
+# Design packages are Kanban-managed canonical records; do not reformat them
+[.owlbear/delivery/packages/**]
+max_line_length = unset
+
 # Keep data files minified — do not reformat
 [store/**]
 indent_size = unset
