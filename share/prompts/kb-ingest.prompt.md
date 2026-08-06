@@ -1,9 +1,9 @@
 ---
-description: "Ingest or refresh knowledge sources with validation safeguards"
+description: "Register, ingest, refresh, or intentionally delete knowledge sources with validation safeguards"
 agent: knowledge-ingestor
 ---
 
-Ingest: ${input:source_or_intent:Source path, URL, or short ingest goal (for example: refresh stale docs)}
+Manage source: ${input:source_or_intent:Source path, URL, source ID, or lifecycle goal (for example: register docs or delete stale docs)}
 
 ## Interaction Protocol
 
@@ -15,7 +15,7 @@ Each decision item must include: status quo, problem, options with pro/con/risk/
 
 ## What this does
 
-- Ingests new content or refreshes an existing source.
+- Registers sources, ingests new content, refreshes an existing source, or intentionally deletes a decommissioned source.
 - Treats inline direct text as searchable and enrichable but non-refreshable; refresh only registered sources marked `refreshable=true`.
 - Applies HTTP-first validation flow and asks for confirmation when fetched content looks suspicious.
-- Reports knowledge-base status so you can decide whether to start enrichment.
+- Reports the completed operation and its operation-specific result.
