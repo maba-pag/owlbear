@@ -1,4 +1,4 @@
-"""Strict FastMCP adapter for the Delivery portfolio application."""
+"""Strict MCPServer adapter for the Delivery portfolio application."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Never, cast
 
-from mcp.server.fastmcp import FastMCP
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, ValidationError
 
@@ -42,9 +42,9 @@ from owlbear_mcp_kanban.target_models import (
     WorkItemParams,
 )
 
-_READ = ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False)
-_WRITE = ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False)
-_ACQUIRE = ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=False)
+_READ = ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False)
+_WRITE = ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=False)
+_ACQUIRE = ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False)
 
 DELIVERY_OPERATION_NAMES = (
     "create_design_session",
@@ -363,19 +363,19 @@ _RETRY_SAFE_ERRORS = (
 )
 
 
-def assemble_target_server(application: PortfolioApplication) -> FastMCP:
+def assemble_target_server(application: PortfolioApplication) -> MCPServer:
     """Assemble the exact Delivery registry around one explicit application."""
 
     @asynccontextmanager
-    async def lifespan(_server: FastMCP) -> AsyncIterator[DeliveryAppContext]:
+    async def lifespan(_server: MCPServer) -> AsyncIterator[DeliveryAppContext]:
         yield DeliveryAppContext(application=application)
 
-    server = FastMCP("owlbear-kanban-target", lifespan=lifespan)
+    server = MCPServer("owlbear-kanban-target", lifespan=lifespan)
     register_target_tools(server, TargetMCPAdapter(application))
     return server
 
 
-def register_target_tools(server: FastMCP, adapter: TargetMCPAdapter) -> None:
+def register_target_tools(server: MCPServer, adapter: TargetMCPAdapter) -> None:
     """Register the exact Delivery operation contract."""
     for name, tool_annotations in DELIVERY_OPERATION_ANNOTATIONS.items():
         server.tool(name=name, annotations=tool_annotations)(cast("Callable[..., object]", getattr(adapter, name)))

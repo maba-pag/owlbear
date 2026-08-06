@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 import pytest
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict
 
 from owlbear_kanban.change_workspace import CoordinationConflictError
@@ -219,9 +219,9 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
 
     assert tuple(DELIVERY_OPERATION_ANNOTATIONS) == DELIVERY_OPERATION_NAMES
     for name, tool_annotations in DELIVERY_OPERATION_ANNOTATIONS.items():
-        assert tool_annotations.destructiveHint is False
-        assert tool_annotations.readOnlyHint is (name in reads)
-        assert tool_annotations.idempotentHint is (name != "acquire_frontier_work")
+        assert tool_annotations.destructive_hint is False
+        assert tool_annotations.read_only_hint is (name in reads)
+        assert tool_annotations.idempotent_hint is (name != "acquire_frontier_work")
     assert all(not hasattr(TargetMCPAdapter, name) for name in prohibited)
 
 

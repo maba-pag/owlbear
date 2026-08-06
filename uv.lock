@@ -1625,7 +1625,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mcp", extras = ["cli"], specifier = ">=1.27.1" },
+    { name = "mcp", extras = ["cli"], specifier = ">=2,<2.1" },
     { name = "owlbear-browser", editable = "serve/browser" },
 ]
 
@@ -1657,7 +1657,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mcp", extras = ["cli"], specifier = ">=1.27.1" },
+    { name = "mcp", extras = ["cli"], specifier = ">=2,<2.1" },
     { name = "owlbear-knowledge", extras = ["full"], editable = "serve/knowledge" },
 ]
 
@@ -1674,7 +1674,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mcp", extras = ["cli"], specifier = ">=1.27.1" },
+    { name = "mcp", extras = ["cli"], specifier = ">=2,<2.1" },
     { name = "owlbear-memory", editable = "serve/memory" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pyyaml", specifier = ">=6.0.3" },

@@ -22,7 +22,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError
 
 from owlbear_knowledge.protocols.common import EntityType, RelationType
 from owlbear_mcp_knowledge.server import store_enrichment as knowledge_enrichment_store

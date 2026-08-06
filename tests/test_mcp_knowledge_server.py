@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_knowledge.protocols.ingest import RefreshError, RefreshRequest, RefreshResult
 from owlbear_knowledge.protocols.sources import SourceState
 from owlbear_mcp_knowledge import server

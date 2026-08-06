@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_mcp_knowledge.server import knowledge_stats, store_enrichment
 
 

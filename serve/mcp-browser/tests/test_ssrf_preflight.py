@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError
 
 from owlbear_mcp_browser.allowlist import DomainAllowlist
 from owlbear_mcp_browser.server import navigate

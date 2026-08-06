@@ -292,7 +292,7 @@ class TestFromAC_WildcardAgentBlock:
     @pytest.mark.asyncio
     async def test_wildcard_agent_raises_tool_error(self, tmp_path: Path) -> None:
         """recall_memory(agent="*") is rejected with ToolError."""
-        from mcp.server.fastmcp.exceptions import ToolError
+        from mcp.server.mcpserver.exceptions import ToolError
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine)

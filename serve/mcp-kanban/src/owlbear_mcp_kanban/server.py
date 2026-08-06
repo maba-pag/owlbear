@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 from pydantic import ValidationError
 
 from owlbear_kanban import (
@@ -136,7 +136,7 @@ def _live_application() -> PortfolioApplication:
 
 
 @asynccontextmanager
-async def app_lifespan(_server: FastMCP) -> AsyncGenerator[DeliveryAppContext]:
+async def app_lifespan(_server: MCPServer) -> AsyncGenerator[DeliveryAppContext]:
     """Construct one explicitly configured Delivery application for this process."""
     global _live_context  # noqa: PLW0603 - process lifespan owns this binding.
     workspace_root = _resolve_workspace_root()
@@ -149,7 +149,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[DeliveryAppContext]:
         _live_context = None
 
 
-mcp = FastMCP("owlbear-kanban", lifespan=app_lifespan)
+mcp = MCPServer("owlbear-kanban", lifespan=app_lifespan)
 register_target_tools(mcp, TargetMCPAdapter.from_provider(_live_application))
 
 __all__ = [

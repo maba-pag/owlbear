@@ -2,7 +2,7 @@
 
 MCP server for agent institutional memory. Pipeline and ideation agents record learnings after tasks; a dedicated curator agent reviews, scopes, and promotes entries; the human operator approves. Approved entries surface during agent pre-flight via `recall_memory`.
 
-Storage is file-based: each entry is a markdown file with YAML frontmatter in `.owlbear/memory/`. The FastMCP app name is `owlbear-memory`; VS Code registers it in `.vscode/mcp.json` as `ob-memory`.
+Storage is file-based: each entry is a markdown file with YAML frontmatter in `.owlbear/memory/`. The MCPServer app name is `owlbear-memory`; VS Code registers it in `.vscode/mcp.json` as `ob-memory`.
 
 → Parent: [README.md](../../README.md)
 
@@ -22,7 +22,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 | Module | Purpose |
 |--------|---------|
-| `server.py` | FastMCP app definition, tool registration, lifespan wiring |
+| `server.py` | MCPServer app definition, tool registration, lifespan wiring |
 | `tools.py` | Tool implementation — validation, state transitions, response formatting |
 | `git.py` | Batch commit helper — stages non-pending entries by session type |
 | `__main__.py` | Entry point for `python -m owlbear_mcp_memory` |
@@ -117,7 +117,7 @@ The helper stages only non-pending `.owlbear/memory/*.md` files and returns the 
 
 | Package | Purpose |
 |---------|---------|
-| `mcp[cli]` | FastMCP server framework |
+| `mcp[cli]` | MCPServer framework and CLI |
 | `owlbear-memory` | Shared memory engine, models, and error types (workspace package) |
 | `pydantic` | Model validation at the MCP tool layer |
 | `pyyaml` | YAML frontmatter serialisation for memory files |

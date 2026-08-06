@@ -59,5 +59,5 @@ The canonical `.owlbear/target` path must match the receipt-authorized target pa
 
 | Package | Purpose |
 |---------|---------|
-| `mcp[cli]` | FastMCP server framework |
+| `mcp[cli]` | MCPServer framework and CLI |
 | `owlbear-kanban` | Target authority, execution, evidence, and cutover engine |

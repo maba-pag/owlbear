@@ -17,7 +17,7 @@ serve/mcp-memory/            (MCP server: persistent agent memory)
 serve/knowledge/             (core library: graph, vector, ingest, query)
 ```
 
-Each MCP server is a standalone FastMCP application. Core libraries live in separate packages. Cross-package imports are enforced by `tests/test_package_boundary.py`.
+Each MCP server is a standalone MCPServer application. Core libraries live in separate packages. Cross-package imports are enforced by `tests/test_package_boundary.py`.
 
 ## Dependency Rules
 

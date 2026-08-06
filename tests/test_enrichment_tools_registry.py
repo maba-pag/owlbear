@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from owlbear_mcp_knowledge.server import mcp
 
 _NEW_ENRICHMENT_NAMES: frozenset[str] = frozenset(
@@ -20,14 +22,9 @@ _REPLACED_ENRICHMENT_NAMES: frozenset[str] = frozenset(
 )
 
 
-def _registered_tool_names() -> set[str]:
+async def _registered_tool_names() -> set[str]:
     """Return the set of tool names registered in the live MCP server."""
-    if hasattr(mcp, "_tool_manager"):
-        return {
-            getattr(t, "name", None)
-            for t in mcp._tool_manager.list_tools()  # noqa: SLF001
-        }
-    return set()
+    return {tool.name for tool in await mcp.list_tools()}
 
 
 class TestEnrichmentToolRename:
@@ -53,7 +50,8 @@ class TestEnrichmentToolRename:
         assert "retry_enrichment" in server.__all__
         assert "knowledge_enrichment_retry" not in server.__all__
 
-    def test_ac2_new_enrichment_names_in_live_mcp_registry(self) -> None:
+    @pytest.mark.asyncio
+    async def test_ac2_new_enrichment_names_in_live_mcp_registry(self) -> None:
         """AC2 (retry): all 3 new enrichment names appear in the live MCP registry.
 
         Callability and __all__ membership do not prove registry wiring; a broken
@@ -61,18 +59,19 @@ class TestEnrichmentToolRename:
         old names.  This test exercises the same registry introspection pattern as
         test_knowledge_tool_rename_1895.py.
         """
-        registry = _registered_tool_names()
+        registry = await _registered_tool_names()
         missing = _NEW_ENRICHMENT_NAMES - registry
         assert not missing, (
             f"New enrichment tool names missing from live MCP registry: {sorted(missing)}. "
             f"Registry snapshot: {sorted(n for n in registry if n)}"
         )
 
-    def test_ac2_old_enrichment_names_absent_from_live_mcp_registry(self) -> None:
+    @pytest.mark.asyncio
+    async def test_ac2_old_enrichment_names_absent_from_live_mcp_registry(self) -> None:
         """AC2 (retry): all 3 old enrichment names are absent from the live MCP registry.
 
         Ensures the registry was updated and no stale old-name registration remains.
         """
-        registry = _registered_tool_names()
+        registry = await _registered_tool_names()
         still_present = _REPLACED_ENRICHMENT_NAMES & registry
         assert not still_present, f"Replaced enrichment tool names still in live MCP registry: {sorted(still_present)}"

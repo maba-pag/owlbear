@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_memory import (
     ConcurrencyError,
     MemoryCategory,
@@ -17,7 +17,7 @@ from owlbear_memory import (
 from pydantic import ValidationError
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import Context
+    from mcp.server.mcpserver import Context
 
 __all__ = [
     "SLOT_CHALLENGE",

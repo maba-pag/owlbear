@@ -44,7 +44,7 @@ converted into a generic transport error.
 
 | Package | Purpose |
 |---------|---------|
-| `mcp[cli]` | FastMCP server framework |
+| `mcp[cli]` | MCPServer framework and CLI |
 | `owlbear-browser` | Playwright-based content fetcher (workspace package) |
 
 > **First-time setup:** Install Playwright browsers once with `playwright install chromium` before starting the server.

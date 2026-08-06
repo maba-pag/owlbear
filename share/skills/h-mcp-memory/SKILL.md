@@ -8,7 +8,7 @@ user-invocable: false
 
 > **Audience:** Any agent with `save_memory` or `recall_memory` in its tools list, plus the memory-curator agent. **When:** Pre-flight knowledge loading, post-task reflection, and curation sessions. **Why:** Authoritative reference for all 8 MCP memory tools — parameters, behavior, error cases, and usage patterns.
 
-The `ob-memory` MCP server exposes memory operations over stdio. The FastMCP app name is `owlbear-memory`; VS Code registers it in `.vscode/mcp.json` as `ob-memory`.
+The `ob-memory` MCP server exposes memory operations over stdio. The MCPServer app name is `owlbear-memory`; VS Code registers it in `.vscode/mcp.json` as `ob-memory`.
 
 For curation workflow, see `w-mem-curation`.
 

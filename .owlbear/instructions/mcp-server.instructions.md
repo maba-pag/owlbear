@@ -22,7 +22,7 @@ applyTo: "serve/mcp-*/**"
 ## Lifespan and Configuration
 
 - Server startup uses an `AppContext` dataclass and an `asynccontextmanager` lifespan passed to
-  `FastMCP`.
+  `MCPServer`.
 - Read environment configuration at server startup and place resolved dependencies in `AppContext`.
   Core libraries receive explicit settings or dependencies rather than reading `os.environ`.
 - Feature flags are opt-in boolean settings with `default=False` unless product requirements state

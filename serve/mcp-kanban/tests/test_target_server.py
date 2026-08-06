@@ -1,4 +1,4 @@
-"""Contract tests for the live Delivery FastMCP assembly and startup."""
+"""Contract tests for the live Delivery MCPServer assembly and startup."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from mcp import Client
 from pydantic import BaseModel, ConfigDict
 
 import owlbear_mcp_kanban.server as live_server
@@ -200,23 +201,21 @@ async def test_live_registry_is_exact_and_annotated_from_assembled_tools() -> No
     assert set(tools).isdisjoint(EXCLUDED_TOOLS)
     for name, tool in tools.items():
         assert tool.annotations is not None
-        assert tool.annotations.readOnlyHint is (name in READ_TOOLS)
-        assert tool.annotations.idempotentHint is (name != "acquire_frontier_work")
-        assert tool.annotations.destructiveHint is False
+        assert tool.annotations.read_only_hint is (name in READ_TOOLS)
+        assert tool.annotations.idempotent_hint is (name != "acquire_frontier_work")
+        assert tool.annotations.destructive_hint is False
 
 
 @pytest.mark.asyncio
 async def test_registered_tool_invokes_strict_adapter_once() -> None:
     application = _RecordingApplication()
     server = assemble_target_server(application)  # type: ignore[arg-type]
-    tools = {tool.name: tool for tool in await server.list_tools()}
+    async with Client(server) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+        result = await client.call_tool("list_work_items", {"request": {}})
 
     assert set(tools) == DELIVERY_TOOLS
-    registered = server._tool_manager.get_tool("list_work_items")  # noqa: SLF001
-    assert registered is not None
-    result = await registered.fn({})
-
-    assert result == []
+    assert result.structured_content == {"result": []}
     assert application.calls == ["list_work_items"]
 
 
@@ -388,25 +387,29 @@ async def test_assembled_work_item_tools_observe_runtime_transition(
     monkeypatch.setattr(live_server, "_authorize_configured_target", lambda _workspace_root: target_root)
     application = load_delivery_application(config, repository)
     server = assemble_target_server(application)
-    tools = server._tool_manager  # noqa: SLF001
-    list_tool = tools.get_tool("list_work_items")
-    show_tool = tools.get_tool("show_work_item")
-    assert list_tool is not None
-    assert show_tool is not None
+    async with Client(server) as client:
+        before = await client.call_tool(
+            "show_work_item",
+            {"request": {"change_id": "change-a", "work_item_id": "OUT-001"}},
+        )
+        application.administrative_move(
+            "change-a",
+            AdministrativeDeliveryMove(
+                move_id="move-001",
+                outcome_id="OUT-001",
+                target=DeliveryStage.PLANNING,
+                reason="Operator evidence invalidated the result.",
+            ),
+        )
+        listed = await client.call_tool("list_work_items", {"request": {}})
+        after = await client.call_tool(
+            "show_work_item",
+            {"request": {"change_id": "change-a", "work_item_id": "OUT-001"}},
+        )
 
-    before = await show_tool.fn({"change_id": "change-a", "work_item_id": "OUT-001"})
-    application.administrative_move(
-        "change-a",
-        AdministrativeDeliveryMove(
-            move_id="move-001",
-            outcome_id="OUT-001",
-            target=DeliveryStage.PLANNING,
-            reason="Operator evidence invalidated the result.",
-        ),
-    )
-    listed = await list_tool.fn({})
-    after = await show_tool.fn({"change_id": "change-a", "work_item_id": "OUT-001"})
-
-    assert before["projection"]["stage"] == "completed"
-    assert listed[0]["stage"] == "planning"
-    assert after["projection"]["stage"] == "planning"
+    assert before.structured_content is not None
+    assert listed.structured_content is not None
+    assert after.structured_content is not None
+    assert before.structured_content["projection"]["stage"] == "completed"
+    assert listed.structured_content["result"][0]["stage"] == "planning"
+    assert after.structured_content["projection"]["stage"] == "planning"

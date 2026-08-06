@@ -15,8 +15,9 @@ from urllib.parse import urlparse
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server import MCPServer
+from mcp.server.mcpserver import Context  # noqa: TC002 - MCPServer evaluates tool annotations at registration.
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from owlbear_browser import AcquisitionFailure, AcquisitionRequest, AcquisitionSuccess
@@ -25,7 +26,7 @@ from owlbear_browser.extractor import extract_content
 from owlbear_browser.playwright_launcher import PlaywrightLauncher
 from owlbear_mcp_browser.allowlist import DomainAllowlist
 
-__all__ = ["AppContext", "acquire", "app_lifespan", "mcp_app"]
+__all__ = ["AppContext", "acquire", "app_lifespan", "mcp"]
 
 
 def _is_blocked_ip(ip_str: str) -> bool:
@@ -49,7 +50,7 @@ def _is_blocked_ip(ip_str: str) -> bool:
 async def _check_ssrf(url: str) -> None:
     """Pre-flight SSRF check for *url* (CWE-918).
 
-    Raises :class:`~mcp.server.fastmcp.exceptions.ToolError` if:
+    Raises :class:`~mcp.server.mcpserver.exceptions.ToolError` if:
 
     - The scheme is not ``http`` or ``https``.
     - DNS resolution raises ``OSError`` (unresolvable hostname).
@@ -97,7 +98,7 @@ class AppContext:
     last_content: str = ""
 
 
-def _apply_tool_exclusions(server: FastMCP) -> set[str]:
+def _apply_tool_exclusions(server: MCPServer) -> set[str]:
     """Read BROWSER_TOOLS_EXCLUDE and remove each listed tool from the server.
 
     Returns the set of tool names successfully removed.
@@ -119,7 +120,7 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
 
 
 @asynccontextmanager
-async def app_lifespan(server: FastMCP) -> AsyncGenerator[AppContext]:
+async def app_lifespan(server: MCPServer) -> AsyncGenerator[AppContext]:
     """Configure DomainAllowlist, attempt Playwright launch, and yield AppContext."""
     _apply_tool_exclusions(server)
     domains_env = os.environ.get("BROWSER_ALLOWED_DOMAINS", "")
@@ -152,7 +153,7 @@ async def app_lifespan(server: FastMCP) -> AsyncGenerator[AppContext]:
 _MSG_NO_PAGE = "No browser session"
 _MSG_BROWSER_UNAVAILABLE = "Browser unavailable"
 
-_mcp = FastMCP("owlbear-mcp-browser", lifespan=app_lifespan)
+mcp = MCPServer("owlbear-mcp-browser", lifespan=app_lifespan)
 
 
 def _serialize_acquisition(result: AcquisitionSuccess | AcquisitionFailure) -> dict[str, Any]:
@@ -177,7 +178,7 @@ def _serialize_acquisition(result: AcquisitionSuccess | AcquisitionFailure) -> d
     }
 
 
-@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
 async def acquire(  # noqa: PLR0913, PLR0917
     ctx: Context,
     url: str,
@@ -208,7 +209,7 @@ async def acquire(  # noqa: PLR0913, PLR0917
     return _serialize_acquisition(result)
 
 
-@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=False))
 async def navigate(ctx: Context, url: str) -> str:
     """Navigate the browser to *url*."""
     app_ctx = ctx.request_context.lifespan_context
@@ -242,7 +243,7 @@ async def navigate(ctx: Context, url: str) -> str:
     return url  # Raw MagicMock or context without explicit page — allowlist passed
 
 
-@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=False))
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
 async def click(ctx: Context, selector: str) -> str:
     """Click the element identified by *selector*."""
     app_ctx = ctx.request_context.lifespan_context
@@ -254,9 +255,9 @@ async def click(ctx: Context, selector: str) -> str:
     return selector
 
 
-@_mcp.tool(
+@mcp.tool(
     name="type",
-    annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=False),
+    annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False),
 )
 async def type_input(ctx: Context, selector: str, text: str) -> str:
     """Type *text* into the element identified by *selector*."""
@@ -269,7 +270,7 @@ async def type_input(ctx: Context, selector: str, text: str) -> str:
     return f"{selector}:{text}"
 
 
-@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=False))
 async def select(ctx: Context, selector: str, value: str) -> str:
     """Select *value* in the element identified by *selector*."""
     app_ctx = ctx.request_context.lifespan_context
@@ -281,7 +282,7 @@ async def select(ctx: Context, selector: str, value: str) -> str:
     return f"{selector}:{value}"
 
 
-@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
 async def read_text(ctx: Context) -> str:
     """Read the visible text content of the current page.
 
@@ -295,7 +296,7 @@ async def read_text(ctx: Context) -> str:
     return getattr(app_ctx, "last_content", "")
 
 
-@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
 async def snapshot(ctx: Context) -> str:
     """Take an accessibility snapshot of the current page as Markdown.
 
@@ -306,7 +307,3 @@ async def snapshot(ctx: Context) -> str:
     if page is not None:
         return await page.locator("body").aria_snapshot()
     return getattr(app_ctx, "last_content", "")
-
-
-# Synchronous tool registry for inspection and testing (ToolManager.list_tools is sync)
-mcp_app = _mcp._tool_manager  # noqa: SLF001

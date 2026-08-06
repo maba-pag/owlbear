@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import types
 
+import pytest
 import yaml
 
 _REPO_ROOT = Path(__file__).parent.parent
@@ -272,8 +273,9 @@ user-invocable: false
     assert _SKILL_VALIDATOR.validate_skill(invalid_dir)
 
 
-def test_declared_owlbear_mcp_tools_exist_in_live_registries() -> None:
-    from owlbear_mcp_browser.server import mcp_app as browser_mcp
+@pytest.mark.asyncio
+async def test_declared_owlbear_mcp_tools_exist_in_live_registries() -> None:
+    from owlbear_mcp_browser.server import mcp as browser_mcp
     from owlbear_mcp_kanban.server import mcp as kanban_mcp
     from owlbear_mcp_kanban.target_server import DELIVERY_OPERATION_NAMES, assemble_target_server
     from owlbear_mcp_knowledge.server import mcp as knowledge_mcp
@@ -281,12 +283,12 @@ def test_declared_owlbear_mcp_tools_exist_in_live_registries() -> None:
 
     target_mcp = assemble_target_server(_TargetApplicationDouble())  # type: ignore[arg-type]
     registries = {
-        "ob-browser": {tool.name for tool in browser_mcp.list_tools()},
-        "ob-kanban": {tool.name for tool in kanban_mcp._tool_manager.list_tools()},  # noqa: SLF001
-        "ob-knowledge": {tool.name for tool in knowledge_mcp._tool_manager.list_tools()},  # noqa: SLF001
-        "ob-memory": {tool.name for tool in memory_mcp._tool_manager.list_tools()},  # noqa: SLF001
+        "ob-browser": {tool.name for tool in await browser_mcp.list_tools()},
+        "ob-kanban": {tool.name for tool in await kanban_mcp.list_tools()},
+        "ob-knowledge": {tool.name for tool in await knowledge_mcp.list_tools()},
+        "ob-memory": {tool.name for tool in await memory_mcp.list_tools()},
     }
-    target_registry = {tool.name for tool in target_mcp._tool_manager.list_tools()}  # noqa: SLF001
+    target_registry = {tool.name for tool in await target_mcp.list_tools()}
     assert target_registry == set(DELIVERY_OPERATION_NAMES)
     assert target_registry.isdisjoint(_RETIRED_DELIVERY_TOOLS)
 

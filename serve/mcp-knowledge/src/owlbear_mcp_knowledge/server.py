@@ -1,4 +1,4 @@
-"""FastMCP server for owlbear-mcp-knowledge: knowledge ingestion and search tools."""
+"""MCPServer application for knowledge ingestion and search tools."""
 
 from __future__ import annotations
 
@@ -13,8 +13,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, TypedDict
 
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server import MCPServer
+from mcp.server.mcpserver import Context  # noqa: TC002 - MCPServer evaluates tool annotations at registration.
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 
@@ -336,7 +337,7 @@ async def retry_enrichment(
 
 @dataclass(slots=True)
 class AppContext:
-    """Runtime context passed to MCP tools via FastMCP lifespan."""
+    """Runtime context passed to MCP tools via MCPServer lifespan."""
 
     conn: sqlite3.Connection
     query_facade: QueryFacade | None = None
@@ -358,7 +359,7 @@ class RegisteredSourceResult(TypedDict):
     scope: str
 
 
-def _apply_tool_exclusions(server: FastMCP) -> set[str]:
+def _apply_tool_exclusions(server: MCPServer) -> set[str]:
     """Read KNOWLEDGE_TOOLS_EXCLUDE and remove each listed tool from the server.
 
     Returns the set of tool names successfully removed.
@@ -388,7 +389,7 @@ async def _web_read(url: str) -> str | None:
 
 
 @asynccontextmanager
-async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext]:
+async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
     """Initialise knowledge-base services; close the DB connection on exit."""
     path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get("OWLBEAR_KB_PATH", _DEFAULT_KB_PATH)
     qdrant_path = os.environ.get("OWLBEAR_QDRANT_PATH", _DEFAULT_QDRANT_PATH)
@@ -439,14 +440,14 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext]:
         conn.close()
 
 
-mcp = FastMCP("owlbear-knowledge", lifespan=app_lifespan)
+mcp = MCPServer("owlbear-knowledge", lifespan=app_lifespan)
 
-claim_enrichment_batch = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(
+claim_enrichment_batch = mcp.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False))(
     claim_enrichment_batch
 )
-store_enrichment = mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))(store_enrichment)
+store_enrichment = mcp.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False))(store_enrichment)
 retry_enrichment = mcp.tool(
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True)
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True)
 )(retry_enrichment)
 
 
@@ -537,7 +538,7 @@ def _serialize_query_facade_results(app_ctx: AppContext, result: QueryResult) ->
     return serialized
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True))
 async def knowledge_search(
     ctx: Context,
     query: str,
@@ -566,7 +567,7 @@ async def knowledge_search(
     return _serialize_query_facade_results(app_ctx, result)
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True))
 async def list_knowledge_sources(ctx: Context, scope: str | None = None) -> list[SourceInfo]:
     """List all registered knowledge sources."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -594,7 +595,7 @@ async def list_knowledge_sources(ctx: Context, scope: str | None = None) -> list
     ]
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True))
 async def lookup_knowledge_entity(
     ctx: Context,
     entity_id: str | None = None,
@@ -666,7 +667,7 @@ async def lookup_knowledge_entity(
     }
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False))
 async def register_knowledge_source(  # noqa: PLR0913
     ctx: Context,
     name: str,
@@ -718,7 +719,7 @@ async def register_knowledge_source(  # noqa: PLR0913
     }
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False))
 async def knowledge_ingest(
     ctx: Context,
     text: str,
@@ -787,7 +788,7 @@ async def knowledge_ingest(
     )
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True))
 async def knowledge_stats(ctx: Context) -> StatsResult:
     """Get knowledge base summary statistics."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -844,7 +845,7 @@ async def knowledge_stats(ctx: Context) -> StatsResult:
     }
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False))
 async def refresh_knowledge_source(ctx: Context, source_id: str) -> dict[str, Any]:
     """Trigger re-ingestion of a registered knowledge source by its ID.
 
@@ -888,7 +889,7 @@ async def refresh_knowledge_source(ctx: Context, source_id: str) -> dict[str, An
     }
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True))
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True))
 async def delete_knowledge_source(ctx: Context, source_id: str) -> dict[str, Any]:
     """Delete a source through ingest-coordinator purge orchestration."""
     app_ctx: AppContext = ctx.request_context.lifespan_context

@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError
 
 from owlbear_knowledge.fetcher import ContentFetcher, HttpxContentFetcher
 

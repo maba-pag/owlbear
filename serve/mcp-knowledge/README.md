@@ -43,5 +43,5 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 | Package | Purpose |
 |---------|---------|
-| `mcp[cli]` | FastMCP server framework |
+| `mcp[cli]` | MCPServer framework and CLI |
 | `owlbear-knowledge[full]` | Knowledge engine with all optional extras (workspace package) |

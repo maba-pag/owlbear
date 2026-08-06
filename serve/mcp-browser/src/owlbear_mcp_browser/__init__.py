@@ -1,6 +1,6 @@
 """OwlBear MCP browser server — exposes browser content fetching via MCP."""
 
 from owlbear_mcp_browser import server
-from owlbear_mcp_browser.server import mcp_app
+from owlbear_mcp_browser.server import mcp
 
-__all__ = ["mcp_app", "server"]
+__all__ = ["mcp", "server"]
