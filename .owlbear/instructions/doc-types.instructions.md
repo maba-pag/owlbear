@@ -66,7 +66,7 @@ Project-local rule IDs for documentation shape, placement mapping, and audience 
 | Share README | `share/README.md` |
 | Setup guide | `setup/{name}.md` |
 
-`PLC-4` Docs that do not fit an existing doc type go in `.owlbear/research/` (findings) or `.owlbear/kanban/decisions/` (decision records). They are not placed in `share/`, `serve/`, or `setup/` unless they match a canonical doc type.
+`PLC-4` Docs that do not fit an existing doc type go in `.owlbear/research/` for durable findings. Change-specific decisions belong in native Delivery authority rather than standalone documentation. They are not placed in `share/`, `serve/`, or `setup/` unless they match a canonical doc type.
 
 ## 3. Audience Targets
 

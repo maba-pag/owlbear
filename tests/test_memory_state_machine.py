@@ -138,8 +138,8 @@ class TestStateEnum:
         assert MemoryState.STALE == "stale"
 
     def test_new_states_accessible_via_mcp_memory_package(self) -> None:
-        """owlbear_mcp_memory exposes the same MemoryState enum with all three new values."""
-        from owlbear_mcp_memory.tools import MemoryState as McpState  # noqa: PLC0415
+        """owlbear_memory_mcp exposes the same MemoryState enum with all three new values."""
+        from owlbear_memory_mcp.tools import MemoryState as McpState  # noqa: PLC0415
 
         assert McpState.CONTESTED == "contested"
         assert McpState.DISPUTED == "disputed"
@@ -147,32 +147,32 @@ class TestStateEnum:
 
     def test_state_rank_contested_is_1(self) -> None:
         """_state_rank_for_list returns 1 for contested (same tier as curated)."""
-        from owlbear_mcp_memory.tools import _state_rank_for_list  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import _state_rank_for_list  # noqa: PLC0415
 
         assert _state_rank_for_list(MemoryState.CONTESTED) == 1
 
     def test_state_rank_disputed_is_3(self) -> None:
         """_state_rank_for_list returns 3 for disputed (same tier as deleted)."""
-        from owlbear_mcp_memory.tools import _state_rank_for_list  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import _state_rank_for_list  # noqa: PLC0415
 
         assert _state_rank_for_list(MemoryState.DISPUTED) == 3
 
     def test_state_rank_stale_is_3(self) -> None:
         """_state_rank_for_list returns 3 for stale (same tier as deleted)."""
-        from owlbear_mcp_memory.tools import _state_rank_for_list  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import _state_rank_for_list  # noqa: PLC0415
 
         assert _state_rank_for_list(MemoryState.STALE) == 3
 
     def test_state_rank_contested_same_tier_as_curated(self) -> None:
         """contested and curated share rank 1 in _state_rank_for_list."""
-        from owlbear_mcp_memory.tools import _state_rank_for_list  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import _state_rank_for_list  # noqa: PLC0415
 
         assert _state_rank_for_list(MemoryState.CONTESTED) == _state_rank_for_list(MemoryState.CURATED)
 
     @pytest.mark.asyncio
     async def test_list_memories_default_includes_contested_entries(self, tmp_path: Path) -> None:
         """list_memories with no state filter returns entries in contested state."""
-        from owlbear_mcp_memory.tools import list_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import list_memories  # noqa: PLC0415
 
         _write_raw_md(tmp_path, _ID_CONTESTED, "contested")
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -186,7 +186,7 @@ class TestStateEnum:
     @pytest.mark.asyncio
     async def test_list_memories_default_includes_disputed_entries(self, tmp_path: Path) -> None:
         """list_memories with no state filter returns entries in disputed state."""
-        from owlbear_mcp_memory.tools import list_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import list_memories  # noqa: PLC0415
 
         _write_raw_md(tmp_path, _ID_DISPUTED, "disputed")
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -200,7 +200,7 @@ class TestStateEnum:
     @pytest.mark.asyncio
     async def test_list_memories_default_includes_stale_entries(self, tmp_path: Path) -> None:
         """list_memories with no state filter returns entries in stale state."""
-        from owlbear_mcp_memory.tools import list_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import list_memories  # noqa: PLC0415
 
         _write_raw_md(tmp_path, _ID_STALE, "stale")
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -214,7 +214,7 @@ class TestStateEnum:
     @pytest.mark.asyncio
     async def test_list_memories_contested_ordered_before_disputed_by_rank(self, tmp_path: Path) -> None:
         """contested (rank 1) appears before disputed (rank 3) in list_memories output."""
-        from owlbear_mcp_memory.tools import list_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import list_memories  # noqa: PLC0415
 
         _write_raw_md(tmp_path, _ID_CONTESTED, "contested")
         _write_raw_md(tmp_path, _ID_DISPUTED, "disputed")
@@ -356,7 +356,7 @@ class TestRecallFiltering:
     @pytest.mark.asyncio
     async def test_recall_includes_contested_entries(self, tmp_path: Path) -> None:
         """recall_memory returns contested entries scoped to the requesting agent."""
-        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
         _write_raw_md(tmp_path, _ID_CONTESTED, "contested", scope_agents=["test-agent"])
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -373,7 +373,7 @@ class TestRecallFiltering:
         Asserts engine can load the entry (state is valid after implementation)
         and that recall still excludes it.
         """
-        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
         _write_raw_md(tmp_path, _ID_DISPUTED, "disputed", scope_agents=["test-agent"])
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -395,7 +395,7 @@ class TestRecallFiltering:
         Asserts engine can load the entry (state is valid after implementation)
         and that recall still excludes it.
         """
-        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
         _write_raw_md(tmp_path, _ID_STALE, "stale", scope_agents=["test-agent"])
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -413,7 +413,7 @@ class TestRecallFiltering:
     @pytest.mark.asyncio
     async def test_recall_contested_appears_alongside_curated_entries(self, tmp_path: Path) -> None:
         """recall_memory returns both contested and curated entries for the same agent."""
-        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
         _write_raw_md(tmp_path, _ID_CONTESTED, "contested", scope_agents=["test-agent"])
         curated = _make_existing_entry(_ID_CURATED, "curated")

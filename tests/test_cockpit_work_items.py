@@ -13,10 +13,10 @@ import pytest
 
 from owlbear_cockpit.routes.target_work import assemble_target_app
 from owlbear_cockpit.target_context import load_target_context
-from owlbear_kanban.delivery_application_loader import DeliveryStartupConfig
-from owlbear_kanban.delivery_runtime import DeliveryStage, DeliveryWorkerRole
-from owlbear_kanban.portfolio_application import DeliveryOperatorClaim, DeliveryOperatorContext
-from owlbear_kanban.work_items import WorkItemAttention, WorkItemProjection, WorkItemStage
+from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
+from owlbear_delivery.delivery_runtime import DeliveryStage, DeliveryWorkerRole
+from owlbear_delivery.portfolio_application import DeliveryOperatorClaim, DeliveryOperatorContext
+from owlbear_delivery.work_items import WorkItemAttention, WorkItemProjection, WorkItemStage
 
 
 def _projection(change_id: str, outcome_id: str, attention: WorkItemAttention) -> WorkItemProjection:

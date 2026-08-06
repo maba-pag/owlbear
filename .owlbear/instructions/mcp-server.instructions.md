@@ -1,6 +1,6 @@
 ---
 description: "OwlBear MCP server conventions — errors, tool contracts, lifespan, exports, and configuration"
-applyTo: "serve/mcp-*/**"
+applyTo: "serve/*-mcp/**"
 ---
 
 ## Error Handling

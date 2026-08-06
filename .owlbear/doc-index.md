@@ -7,6 +7,7 @@
 - ## `Quick Start`
 - ## `Directory Layout`
 - ## `Cockpit (Consumer Launch)`
+- ## `Target Workflow`
 - ## `Verification`
 - ## `Updates`
 - ## `Sharing with Teammates`
@@ -17,29 +18,20 @@
 - [code.visualstudio.com](https://code.visualstudio.com/)
 - [git-scm.com](https://git-scm.com/)
 - [setup/setup-guide.md](setup/setup-guide.md)
+- [Target Delivery Workflow](setup/setup-guide.md#target-delivery-workflow)
 - [setup/sharing-guide.md](setup/sharing-guide.md)
 
 ## README.md
 - # `OwlBear`
 - ## `Overview`
-- ## `Prerequisites`
-- ## `Quick Start`
-- ## `Directory Layout`
-- ## `How It Works`
-- ## `Cockpit`
-- ## `Knowledge Base`
-- ## `Project Indexes`
-- ## `Development`
-- ## `Pre-commit Hooks`
-- ### `VS Code auto-staging trap`
+- ## `Directory Structure`
+- ## `Getting Started`
 - ## `License`
 
 ### Outbound links
 - [uv](https://docs.astral.sh/uv/)
-- [VS Code](https://code.visualstudio.com/)
 - [README-consumer.md](README-consumer.md)
-- [README-consumer.md](README-consumer.md#cockpit-consumer-launch)
-- [serve/mcp-knowledge/README.md](serve/mcp-knowledge/README.md)
+- [setup/setup-guide.md](setup/setup-guide.md)
 
 ## SECURITY.md
 - # `Security Policy`
@@ -59,11 +51,25 @@
 - ## `4. Cockpit Backend`
 - ## `5. Test Domain Mapping`
 
+## .github/skills/session-review/SKILL.md
+- # `Session Review`
+- ## `Step 1 - Locate One Session`
+- ## `Step 2 - Extract Full Evidence When Needed`
+- ## `Step 3 - Reconstruct The Reviewed Claim`
+- ## `Step 4 - Return A Decision`
+- ## `Known Pitfalls`
+
+### Outbound links
+- [transcript extractor](./scripts/extract_transcript.py)
+
 ## .owlbear/ideas.md
-- ## `Kanban`
+- ## `Retired Kanban decomposition`
 - ### `Status quo`
 - ### `Proposal`
 - ## `Memory`
+- ## `Code index — push detail into file headers, keep the index thin`
+- ### `Status quo`
+- ### `Proposal`
 
 ## .owlbear/instructions/architecture.instructions.md
 - ## `Architecture Overview`
@@ -118,19 +124,19 @@
 - ## `Boundary`
 - ## `Setup, Authority, And Evidence`
 - ## `Effective Instruction Surface`
-- ## `Finding Admission And Steering Value`
+- ## `Finding Admission`
+- ### `Temporal Narration Test`
+- ### `Rewrite Conservation`
 - ## `Shared Audit Dimensions`
 - ## `Broad Audit`
 - ### `Coverage`
 - ### `Ranked Findings`
-- ### `Implementation Packages`
 - ### `Deep-Audit Priorities`
 - ## `Deep Audit`
 - ### `Build The Minimum Sufficient Cluster`
 - ### `Analyze Behavioral Blocks`
-- ### `Return One Coherent Proposal Set`
-- ## `Implementation Handoff`
-- ## `Guardrails`
+- ### `Return One Coherent Finding Set`
+- ## `Implementation Handoff - Second Pass Only`
 
 ## serve/browser/README.md
 - # `owlbear-browser — Browser Content Fetcher`
@@ -143,11 +149,21 @@
 ### Outbound links
 - [README.md](../../README.md)
 
+## serve/browser-mcp/README.md
+- # `owlbear-browser-mcp — Browser MCP Server`
+- ## `Launch / Usage`
+- ### `Tools`
+- ## `Configuration`
+- ## `Dependencies`
+
+### Outbound links
+- [README.md](../../README.md)
+
 ## serve/cockpit/README.md
 - # `owlbear-cockpit — Steering Cockpit Package`
 - ## `Launch / Usage`
 - ## `Frontend Surface`
-- ## `Audit Trail`
+- ## `Delivery Evidence`
 - ## `Configuration`
 - ## `Delivery Packaging`
 - ## `Dependencies`
@@ -155,14 +171,692 @@
 ### Outbound links
 - [README.md](../../README.md)
 
-## serve/kanban/README.md
-- # `owlbear-kanban — Kanban Engine`
+## serve/delivery/README.md
+- # `owlbear-delivery`
 - ## `Launch / Usage`
-- ### `KanbanEngine methods`
-- ### `Utilities`
-- ### `Product topology (fixed)`
-- ### `AgentView dispatch pipeline`
-- ## `Migration`
+- ## `Configuration`
+- ## `Dependencies`
+
+### Outbound links
+- [README.md](../../README.md)
+- [serve/delivery-mcp/README.md](../delivery-mcp/README.md)
+
+## serve/delivery/tests/fixtures/historical-admission/r1-browser-corrected/design.md
+- # `Implementation Contract: Graph-Authoritative Delivery`
+- ## `1. Design Goals`
+- ## `2. System Model`
+- ### `2.1 Authority plane`
+- ### `2.2 Work plane`
+- ### `2.3 Evidence plane`
+- ### `2.4 Git plane`
+- ## `3. Native Change Package`
+- ### `3.1 `intent.md``
+- ### `3.2 `design.md``
+- ### `3.3 `decisions.yaml``
+- ### `3.4 `graph.yaml``
+- ### `3.5 Receipts`
+- ## `4. Semantic Identity and Digests`
+- ### `4.1 Delivery digest`
+- ### `4.2 Node plan digest`
+- ### `4.3 Receipt validity`
+- ## `5. Delivery Graph`
+- ### `5.1 Required entities`
+- ### `5.2 Delivery node boundary`
+- ### `5.3 Completeness rule`
+- ## `6. Node Shaping and Packet Plans`
+- ### `6.1 Legal refinement`
+- ### `6.2 Illegal expansion`
+- ### `6.3 Packet contract`
+- ## `7. Kanban Job Model`
+- ### `7.1 Job record`
+- ### `7.2 Attempts and activity`
+- ## `8. Agent Architecture`
+- ### `8.1 Designer`
+- ### `8.2 Delivery-node shaper`
+- ### `8.3 Builder`
+- ### `8.4 Acceptor`
+- ### `8.5 Auditor`
+- ### `8.6 Orchestrator`
+- ### `8.7 Retired roles`
+- ## `9. Admission`
+- ### `9.1 Deterministic validation`
+- ### `9.2 Repository-grounded challenge`
+- ### `9.3 Baselines`
+- ### `9.4 User approval`
+- ### `9.5 One-time bootstrap admission and carrier`
+- ## `10. Invalidation, Findings, and Corrective Jobs`
+- ## `11. Decision and Action Requests`
+- ## `12. Shared Worktree and Commit Contract`
+- ## `13. `owlbear-kanban` Internal Design`
+- ## `14. MCP Contract`
+- ### `Change/design tools`
+- ### `Work tools`
+- ### `Request tools`
+- ### `Health/history tools`
+- ## `15. Cockpit Product Experience`
+- ### `15.1 Board`
+- ### `15.2 Changes`
+- ### `15.3 Requests and history`
+- ### `15.4 Frontend constraints`
+- ## `16. Atomic Cutover`
+- ## `17. Test and Proof Strategy`
+- ### `17.1 Durable unit/contract coverage`
+- ### `17.2 Historical regression fixtures`
+- ### `17.3 Generic anti-overfitting coverage`
+- ### `17.4 End-to-end scenarios`
+- ## `18. Risks and Mitigations`
+- ## `19. Rejected Technical Directions`
+
+## serve/delivery/tests/fixtures/historical-admission/r1-browser-corrected/intent.md
+- # `Replace the OwlBear Delivery Pipeline`
+- ## `Problem`
+- ## `Product Promise`
+- ## `Primary Workflows`
+- ### `WF-1: Rough idea to admitted change`
+- ### `WF-2: Delivery node to shaped packets`
+- ### `WF-3: Packet implementation with warm review`
+- ### `WF-4: Node acceptance and corrective work`
+- ### `WF-5: Whole-change audit and closure`
+- ## `Success Conditions`
+- ## `Boundaries`
+- ### `In Scope`
+- ### `Out of Scope`
+- ## `Preserved Strengths`
+- ## `Technically Done but Wrong`
+- ## `Non-goals`
+
+## serve/delivery/tests/fixtures/historical-admission/r1-browser-defective/design.md
+- # `Implementation Contract: Graph-Authoritative Delivery`
+- ## `1. Design Goals`
+- ## `2. System Model`
+- ### `2.1 Authority plane`
+- ### `2.2 Work plane`
+- ### `2.3 Evidence plane`
+- ### `2.4 Git plane`
+- ## `3. Native Change Package`
+- ### `3.1 `intent.md``
+- ### `3.2 `design.md``
+- ### `3.3 `decisions.yaml``
+- ### `3.4 `graph.yaml``
+- ### `3.5 Receipts`
+- ## `4. Semantic Identity and Digests`
+- ### `4.1 Delivery digest`
+- ### `4.2 Node plan digest`
+- ### `4.3 Receipt validity`
+- ## `5. Delivery Graph`
+- ### `5.1 Required entities`
+- ### `5.2 Delivery node boundary`
+- ### `5.3 Completeness rule`
+- ## `6. Node Shaping and Packet Plans`
+- ### `6.1 Legal refinement`
+- ### `6.2 Illegal expansion`
+- ### `6.3 Packet contract`
+- ## `7. Kanban Job Model`
+- ### `7.1 Job record`
+- ### `7.2 Attempts and activity`
+- ## `8. Agent Architecture`
+- ### `8.1 Designer`
+- ### `8.2 Delivery-node shaper`
+- ### `8.3 Builder`
+- ### `8.4 Acceptor`
+- ### `8.5 Auditor`
+- ### `8.6 Orchestrator`
+- ### `8.7 Retired roles`
+- ## `9. Admission`
+- ### `9.1 Deterministic validation`
+- ### `9.2 Repository-grounded challenge`
+- ### `9.3 Baselines`
+- ### `9.4 User approval`
+- ### `9.5 One-time bootstrap admission and carrier`
+- ## `10. Invalidation, Findings, and Corrective Jobs`
+- ## `11. Decision and Action Requests`
+- ## `12. Shared Worktree and Commit Contract`
+- ## `13. `owlbear-kanban` Internal Design`
+- ## `14. MCP Contract`
+- ### `Change/design tools`
+- ### `Work tools`
+- ### `Request tools`
+- ### `Health/history tools`
+- ## `15. Cockpit Product Experience`
+- ### `15.1 Board`
+- ### `15.2 Changes`
+- ### `15.3 Requests and history`
+- ### `15.4 Frontend constraints`
+- ## `16. Atomic Cutover`
+- ## `17. Test and Proof Strategy`
+- ### `17.1 Durable unit/contract coverage`
+- ### `17.2 Historical regression fixtures`
+- ### `17.3 Generic anti-overfitting coverage`
+- ### `17.4 End-to-end scenarios`
+- ## `18. Risks and Mitigations`
+- ## `19. Rejected Technical Directions`
+
+## serve/delivery/tests/fixtures/historical-admission/r1-browser-defective/intent.md
+- # `Replace the OwlBear Delivery Pipeline`
+- ## `Problem`
+- ## `Product Promise`
+- ## `Primary Workflows`
+- ### `WF-1: Rough idea to admitted change`
+- ### `WF-2: Delivery node to shaped packets`
+- ### `WF-3: Packet implementation with warm review`
+- ### `WF-4: Node acceptance and corrective work`
+- ### `WF-5: Whole-change audit and closure`
+- ## `Success Conditions`
+- ## `Boundaries`
+- ### `In Scope`
+- ### `Out of Scope`
+- ## `Preserved Strengths`
+- ## `Technically Done but Wrong`
+- ## `Non-goals`
+
+## serve/delivery/tests/fixtures/historical-admission/r2-workspace-corrected/design.md
+- # `Implementation Contract: Graph-Authoritative Delivery`
+- ## `1. Design Goals`
+- ## `2. System Model`
+- ### `2.1 Authority plane`
+- ### `2.2 Work plane`
+- ### `2.3 Evidence plane`
+- ### `2.4 Git plane`
+- ## `3. Native Change Package`
+- ### `3.1 `intent.md``
+- ### `3.2 `design.md``
+- ### `3.3 `decisions.yaml``
+- ### `3.4 `graph.yaml``
+- ### `3.5 Receipts`
+- ## `4. Semantic Identity and Digests`
+- ### `4.1 Delivery digest`
+- ### `4.2 Node plan digest`
+- ### `4.3 Receipt validity`
+- ## `5. Delivery Graph`
+- ### `5.1 Required entities`
+- ### `5.2 Delivery node boundary`
+- ### `5.3 Completeness rule`
+- ## `6. Node Shaping and Packet Plans`
+- ### `6.1 Legal refinement`
+- ### `6.2 Illegal expansion`
+- ### `6.3 Packet contract`
+- ## `7. Kanban Job Model`
+- ### `7.1 Job record`
+- ### `7.2 Attempts and activity`
+- ## `8. Agent Architecture`
+- ### `8.1 Designer`
+- ### `8.2 Delivery-node shaper`
+- ### `8.3 Builder`
+- ### `8.4 Acceptor`
+- ### `8.5 Auditor`
+- ### `8.6 Orchestrator`
+- ### `8.7 Retired roles`
+- ## `9. Admission`
+- ### `9.1 Deterministic validation`
+- ### `9.2 Repository-grounded challenge`
+- ### `9.3 Baselines`
+- ### `9.4 User approval`
+- ### `9.5 One-time bootstrap admission and carrier`
+- ## `10. Invalidation, Findings, and Corrective Jobs`
+- ## `11. Decision and Action Requests`
+- ## `12. Shared Worktree and Commit Contract`
+- ## `13. `owlbear-kanban` Internal Design`
+- ## `14. MCP Contract`
+- ### `Change/design tools`
+- ### `Work tools`
+- ### `Request tools`
+- ### `Health/history tools`
+- ## `15. Cockpit Product Experience`
+- ### `15.1 Board`
+- ### `15.2 Changes`
+- ### `15.3 Requests and history`
+- ### `15.4 Frontend constraints`
+- ## `16. Atomic Cutover`
+- ## `17. Test and Proof Strategy`
+- ### `17.1 Durable unit/contract coverage`
+- ### `17.2 Historical regression fixtures`
+- ### `17.3 Generic anti-overfitting coverage`
+- ### `17.4 End-to-end scenarios`
+- ## `18. Risks and Mitigations`
+- ## `19. Rejected Technical Directions`
+
+## serve/delivery/tests/fixtures/historical-admission/r2-workspace-corrected/intent.md
+- # `Replace the OwlBear Delivery Pipeline`
+- ## `Problem`
+- ## `Product Promise`
+- ## `Primary Workflows`
+- ### `WF-1: Rough idea to admitted change`
+- ### `WF-2: Delivery node to shaped packets`
+- ### `WF-3: Packet implementation with warm review`
+- ### `WF-4: Node acceptance and corrective work`
+- ### `WF-5: Whole-change audit and closure`
+- ## `Success Conditions`
+- ## `Boundaries`
+- ### `In Scope`
+- ### `Out of Scope`
+- ## `Preserved Strengths`
+- ## `Technically Done but Wrong`
+- ## `Non-goals`
+
+## serve/delivery/tests/fixtures/historical-admission/r2-workspace-defective/design.md
+- # `Implementation Contract: Graph-Authoritative Delivery`
+- ## `1. Design Goals`
+- ## `2. System Model`
+- ### `2.1 Authority plane`
+- ### `2.2 Work plane`
+- ### `2.3 Evidence plane`
+- ### `2.4 Git plane`
+- ## `3. Native Change Package`
+- ### `3.1 `intent.md``
+- ### `3.2 `design.md``
+- ### `3.3 `decisions.yaml``
+- ### `3.4 `graph.yaml``
+- ### `3.5 Receipts`
+- ## `4. Semantic Identity and Digests`
+- ### `4.1 Delivery digest`
+- ### `4.2 Node plan digest`
+- ### `4.3 Receipt validity`
+- ## `5. Delivery Graph`
+- ### `5.1 Required entities`
+- ### `5.2 Delivery node boundary`
+- ### `5.3 Completeness rule`
+- ## `6. Node Shaping and Packet Plans`
+- ### `6.1 Legal refinement`
+- ### `6.2 Illegal expansion`
+- ### `6.3 Packet contract`
+- ## `7. Kanban Job Model`
+- ### `7.1 Job record`
+- ### `7.2 Attempts and activity`
+- ## `8. Agent Architecture`
+- ### `8.1 Designer`
+- ### `8.2 Delivery-node shaper`
+- ### `8.3 Builder`
+- ### `8.4 Acceptor`
+- ### `8.5 Auditor`
+- ### `8.6 Orchestrator`
+- ### `8.7 Retired roles`
+- ## `9. Admission`
+- ### `9.1 Deterministic validation`
+- ### `9.2 Repository-grounded challenge`
+- ### `9.3 Baselines`
+- ### `9.4 User approval`
+- ### `9.5 One-time bootstrap admission and carrier`
+- ## `10. Invalidation, Findings, and Corrective Jobs`
+- ## `11. Decision and Action Requests`
+- ## `12. Shared Worktree and Commit Contract`
+- ## `13. `owlbear-kanban` Internal Design`
+- ## `14. MCP Contract`
+- ### `Change/design tools`
+- ### `Work tools`
+- ### `Request tools`
+- ### `Health/history tools`
+- ## `15. Cockpit Product Experience`
+- ### `15.1 Board`
+- ### `15.2 Changes`
+- ### `15.3 Requests and history`
+- ### `15.4 Frontend constraints`
+- ## `16. Atomic Cutover`
+- ## `17. Test and Proof Strategy`
+- ### `17.1 Durable unit/contract coverage`
+- ### `17.2 Historical regression fixtures`
+- ### `17.3 Generic anti-overfitting coverage`
+- ### `17.4 End-to-end scenarios`
+- ## `18. Risks and Mitigations`
+- ## `19. Rejected Technical Directions`
+
+## serve/delivery/tests/fixtures/historical-admission/r2-workspace-defective/intent.md
+- # `Replace the OwlBear Delivery Pipeline`
+- ## `Problem`
+- ## `Product Promise`
+- ## `Primary Workflows`
+- ### `WF-1: Rough idea to admitted change`
+- ### `WF-2: Delivery node to shaped packets`
+- ### `WF-3: Packet implementation with warm review`
+- ### `WF-4: Node acceptance and corrective work`
+- ### `WF-5: Whole-change audit and closure`
+- ## `Success Conditions`
+- ## `Boundaries`
+- ### `In Scope`
+- ### `Out of Scope`
+- ## `Preserved Strengths`
+- ## `Technically Done but Wrong`
+- ## `Non-goals`
+
+## serve/delivery/tests/fixtures/historical-admission/r3-memory-purge-corrected/design.md
+- # `Implementation Contract: Graph-Authoritative Delivery`
+- ## `1. Design Goals`
+- ## `2. System Model`
+- ### `2.1 Authority plane`
+- ### `2.2 Work plane`
+- ### `2.3 Evidence plane`
+- ### `2.4 Git plane`
+- ## `3. Native Change Package`
+- ### `3.1 `intent.md``
+- ### `3.2 `design.md``
+- ### `3.3 `decisions.yaml``
+- ### `3.4 `graph.yaml``
+- ### `3.5 Receipts`
+- ## `4. Semantic Identity and Digests`
+- ### `4.1 Delivery digest`
+- ### `4.2 Node plan digest`
+- ### `4.3 Receipt validity`
+- ## `5. Delivery Graph`
+- ### `5.1 Required entities`
+- ### `5.2 Delivery node boundary`
+- ### `5.3 Completeness rule`
+- ## `6. Node Shaping and Packet Plans`
+- ### `6.1 Legal refinement`
+- ### `6.2 Illegal expansion`
+- ### `6.3 Packet contract`
+- ## `7. Kanban Job Model`
+- ### `7.1 Job record`
+- ### `7.2 Attempts and activity`
+- ## `8. Agent Architecture`
+- ### `8.1 Designer`
+- ### `8.2 Delivery-node shaper`
+- ### `8.3 Builder`
+- ### `8.4 Acceptor`
+- ### `8.5 Auditor`
+- ### `8.6 Orchestrator`
+- ### `8.7 Retired roles`
+- ## `9. Admission`
+- ### `9.1 Deterministic validation`
+- ### `9.2 Repository-grounded challenge`
+- ### `9.3 Baselines`
+- ### `9.4 User approval`
+- ### `9.5 One-time bootstrap admission and carrier`
+- ## `10. Invalidation, Findings, and Corrective Jobs`
+- ## `11. Decision and Action Requests`
+- ## `12. Shared Worktree and Commit Contract`
+- ## `13. `owlbear-kanban` Internal Design`
+- ## `14. MCP Contract`
+- ### `Change/design tools`
+- ### `Work tools`
+- ### `Request tools`
+- ### `Health/history tools`
+- ## `15. Cockpit Product Experience`
+- ### `15.1 Board`
+- ### `15.2 Changes`
+- ### `15.3 Requests and history`
+- ### `15.4 Frontend constraints`
+- ## `16. Atomic Cutover`
+- ## `17. Test and Proof Strategy`
+- ### `17.1 Durable unit/contract coverage`
+- ### `17.2 Historical regression fixtures`
+- ### `17.3 Generic anti-overfitting coverage`
+- ### `17.4 End-to-end scenarios`
+- ## `18. Risks and Mitigations`
+- ## `19. Rejected Technical Directions`
+
+## serve/delivery/tests/fixtures/historical-admission/r3-memory-purge-corrected/intent.md
+- # `Replace the OwlBear Delivery Pipeline`
+- ## `Problem`
+- ## `Product Promise`
+- ## `Primary Workflows`
+- ### `WF-1: Rough idea to admitted change`
+- ### `WF-2: Delivery node to shaped packets`
+- ### `WF-3: Packet implementation with warm review`
+- ### `WF-4: Node acceptance and corrective work`
+- ### `WF-5: Whole-change audit and closure`
+- ## `Success Conditions`
+- ## `Boundaries`
+- ### `In Scope`
+- ### `Out of Scope`
+- ## `Preserved Strengths`
+- ## `Technically Done but Wrong`
+- ## `Non-goals`
+
+## serve/delivery/tests/fixtures/historical-admission/r3-memory-purge-defective/design.md
+- # `Implementation Contract: Graph-Authoritative Delivery`
+- ## `1. Design Goals`
+- ## `2. System Model`
+- ### `2.1 Authority plane`
+- ### `2.2 Work plane`
+- ### `2.3 Evidence plane`
+- ### `2.4 Git plane`
+- ## `3. Native Change Package`
+- ### `3.1 `intent.md``
+- ### `3.2 `design.md``
+- ### `3.3 `decisions.yaml``
+- ### `3.4 `graph.yaml``
+- ### `3.5 Receipts`
+- ## `4. Semantic Identity and Digests`
+- ### `4.1 Delivery digest`
+- ### `4.2 Node plan digest`
+- ### `4.3 Receipt validity`
+- ## `5. Delivery Graph`
+- ### `5.1 Required entities`
+- ### `5.2 Delivery node boundary`
+- ### `5.3 Completeness rule`
+- ## `6. Node Shaping and Packet Plans`
+- ### `6.1 Legal refinement`
+- ### `6.2 Illegal expansion`
+- ### `6.3 Packet contract`
+- ## `7. Kanban Job Model`
+- ### `7.1 Job record`
+- ### `7.2 Attempts and activity`
+- ## `8. Agent Architecture`
+- ### `8.1 Designer`
+- ### `8.2 Delivery-node shaper`
+- ### `8.3 Builder`
+- ### `8.4 Acceptor`
+- ### `8.5 Auditor`
+- ### `8.6 Orchestrator`
+- ### `8.7 Retired roles`
+- ## `9. Admission`
+- ### `9.1 Deterministic validation`
+- ### `9.2 Repository-grounded challenge`
+- ### `9.3 Baselines`
+- ### `9.4 User approval`
+- ### `9.5 One-time bootstrap admission and carrier`
+- ## `10. Invalidation, Findings, and Corrective Jobs`
+- ## `11. Decision and Action Requests`
+- ## `12. Shared Worktree and Commit Contract`
+- ## `13. `owlbear-kanban` Internal Design`
+- ## `14. MCP Contract`
+- ### `Change/design tools`
+- ### `Work tools`
+- ### `Request tools`
+- ### `Health/history tools`
+- ## `15. Cockpit Product Experience`
+- ### `15.1 Board`
+- ### `15.2 Changes`
+- ### `15.3 Requests and history`
+- ### `15.4 Frontend constraints`
+- ## `16. Atomic Cutover`
+- ## `17. Test and Proof Strategy`
+- ### `17.1 Durable unit/contract coverage`
+- ### `17.2 Historical regression fixtures`
+- ### `17.3 Generic anti-overfitting coverage`
+- ### `17.4 End-to-end scenarios`
+- ## `18. Risks and Mitigations`
+- ## `19. Rejected Technical Directions`
+
+## serve/delivery/tests/fixtures/historical-admission/r3-memory-purge-defective/intent.md
+- # `Replace the OwlBear Delivery Pipeline`
+- ## `Problem`
+- ## `Product Promise`
+- ## `Primary Workflows`
+- ### `WF-1: Rough idea to admitted change`
+- ### `WF-2: Delivery node to shaped packets`
+- ### `WF-3: Packet implementation with warm review`
+- ### `WF-4: Node acceptance and corrective work`
+- ### `WF-5: Whole-change audit and closure`
+- ## `Success Conditions`
+- ## `Boundaries`
+- ### `In Scope`
+- ### `Out of Scope`
+- ## `Preserved Strengths`
+- ## `Technically Done but Wrong`
+- ## `Non-goals`
+
+## serve/delivery/tests/fixtures/historical-admission/r4-memory-lifecycle-corrected/design.md
+- # `Implementation Contract: Graph-Authoritative Delivery`
+- ## `1. Design Goals`
+- ## `2. System Model`
+- ### `2.1 Authority plane`
+- ### `2.2 Work plane`
+- ### `2.3 Evidence plane`
+- ### `2.4 Git plane`
+- ## `3. Native Change Package`
+- ### `3.1 `intent.md``
+- ### `3.2 `design.md``
+- ### `3.3 `decisions.yaml``
+- ### `3.4 `graph.yaml``
+- ### `3.5 Receipts`
+- ## `4. Semantic Identity and Digests`
+- ### `4.1 Delivery digest`
+- ### `4.2 Node plan digest`
+- ### `4.3 Receipt validity`
+- ## `5. Delivery Graph`
+- ### `5.1 Required entities`
+- ### `5.2 Delivery node boundary`
+- ### `5.3 Completeness rule`
+- ## `6. Node Shaping and Packet Plans`
+- ### `6.1 Legal refinement`
+- ### `6.2 Illegal expansion`
+- ### `6.3 Packet contract`
+- ## `7. Kanban Job Model`
+- ### `7.1 Job record`
+- ### `7.2 Attempts and activity`
+- ## `8. Agent Architecture`
+- ### `8.1 Designer`
+- ### `8.2 Delivery-node shaper`
+- ### `8.3 Builder`
+- ### `8.4 Acceptor`
+- ### `8.5 Auditor`
+- ### `8.6 Orchestrator`
+- ### `8.7 Retired roles`
+- ## `9. Admission`
+- ### `9.1 Deterministic validation`
+- ### `9.2 Repository-grounded challenge`
+- ### `9.3 Baselines`
+- ### `9.4 User approval`
+- ### `9.5 One-time bootstrap admission and carrier`
+- ## `10. Invalidation, Findings, and Corrective Jobs`
+- ## `11. Decision and Action Requests`
+- ## `12. Shared Worktree and Commit Contract`
+- ## `13. `owlbear-kanban` Internal Design`
+- ## `14. MCP Contract`
+- ### `Change/design tools`
+- ### `Work tools`
+- ### `Request tools`
+- ### `Health/history tools`
+- ## `15. Cockpit Product Experience`
+- ### `15.1 Board`
+- ### `15.2 Changes`
+- ### `15.3 Requests and history`
+- ### `15.4 Frontend constraints`
+- ## `16. Atomic Cutover`
+- ## `17. Test and Proof Strategy`
+- ### `17.1 Durable unit/contract coverage`
+- ### `17.2 Historical regression fixtures`
+- ### `17.3 Generic anti-overfitting coverage`
+- ### `17.4 End-to-end scenarios`
+- ## `18. Risks and Mitigations`
+- ## `19. Rejected Technical Directions`
+
+## serve/delivery/tests/fixtures/historical-admission/r4-memory-lifecycle-corrected/intent.md
+- # `Replace the OwlBear Delivery Pipeline`
+- ## `Problem`
+- ## `Product Promise`
+- ## `Primary Workflows`
+- ### `WF-1: Rough idea to admitted change`
+- ### `WF-2: Delivery node to shaped packets`
+- ### `WF-3: Packet implementation with warm review`
+- ### `WF-4: Node acceptance and corrective work`
+- ### `WF-5: Whole-change audit and closure`
+- ## `Success Conditions`
+- ## `Boundaries`
+- ### `In Scope`
+- ### `Out of Scope`
+- ## `Preserved Strengths`
+- ## `Technically Done but Wrong`
+- ## `Non-goals`
+
+## serve/delivery/tests/fixtures/historical-admission/r4-memory-lifecycle-defective/design.md
+- # `Implementation Contract: Graph-Authoritative Delivery`
+- ## `1. Design Goals`
+- ## `2. System Model`
+- ### `2.1 Authority plane`
+- ### `2.2 Work plane`
+- ### `2.3 Evidence plane`
+- ### `2.4 Git plane`
+- ## `3. Native Change Package`
+- ### `3.1 `intent.md``
+- ### `3.2 `design.md``
+- ### `3.3 `decisions.yaml``
+- ### `3.4 `graph.yaml``
+- ### `3.5 Receipts`
+- ## `4. Semantic Identity and Digests`
+- ### `4.1 Delivery digest`
+- ### `4.2 Node plan digest`
+- ### `4.3 Receipt validity`
+- ## `5. Delivery Graph`
+- ### `5.1 Required entities`
+- ### `5.2 Delivery node boundary`
+- ### `5.3 Completeness rule`
+- ## `6. Node Shaping and Packet Plans`
+- ### `6.1 Legal refinement`
+- ### `6.2 Illegal expansion`
+- ### `6.3 Packet contract`
+- ## `7. Kanban Job Model`
+- ### `7.1 Job record`
+- ### `7.2 Attempts and activity`
+- ## `8. Agent Architecture`
+- ### `8.1 Designer`
+- ### `8.2 Delivery-node shaper`
+- ### `8.3 Builder`
+- ### `8.4 Acceptor`
+- ### `8.5 Auditor`
+- ### `8.6 Orchestrator`
+- ### `8.7 Retired roles`
+- ## `9. Admission`
+- ### `9.1 Deterministic validation`
+- ### `9.2 Repository-grounded challenge`
+- ### `9.3 Baselines`
+- ### `9.4 User approval`
+- ### `9.5 One-time bootstrap admission and carrier`
+- ## `10. Invalidation, Findings, and Corrective Jobs`
+- ## `11. Decision and Action Requests`
+- ## `12. Shared Worktree and Commit Contract`
+- ## `13. `owlbear-kanban` Internal Design`
+- ## `14. MCP Contract`
+- ### `Change/design tools`
+- ### `Work tools`
+- ### `Request tools`
+- ### `Health/history tools`
+- ## `15. Cockpit Product Experience`
+- ### `15.1 Board`
+- ### `15.2 Changes`
+- ### `15.3 Requests and history`
+- ### `15.4 Frontend constraints`
+- ## `16. Atomic Cutover`
+- ## `17. Test and Proof Strategy`
+- ### `17.1 Durable unit/contract coverage`
+- ### `17.2 Historical regression fixtures`
+- ### `17.3 Generic anti-overfitting coverage`
+- ### `17.4 End-to-end scenarios`
+- ## `18. Risks and Mitigations`
+- ## `19. Rejected Technical Directions`
+
+## serve/delivery/tests/fixtures/historical-admission/r4-memory-lifecycle-defective/intent.md
+- # `Replace the OwlBear Delivery Pipeline`
+- ## `Problem`
+- ## `Product Promise`
+- ## `Primary Workflows`
+- ### `WF-1: Rough idea to admitted change`
+- ### `WF-2: Delivery node to shaped packets`
+- ### `WF-3: Packet implementation with warm review`
+- ### `WF-4: Node acceptance and corrective work`
+- ### `WF-5: Whole-change audit and closure`
+- ## `Success Conditions`
+- ## `Boundaries`
+- ### `In Scope`
+- ### `Out of Scope`
+- ## `Preserved Strengths`
+- ## `Technically Done but Wrong`
+- ## `Non-goals`
+
+## serve/delivery-mcp/README.md
+- # `owlbear-delivery-mcp — Target Delivery MCP Server`
+- ## `Launch / Usage`
+- ### `Tools`
 - ## `Configuration`
 - ## `Dependencies`
 
@@ -181,7 +875,7 @@
 
 ### Outbound links
 - [README.md](../../README.md)
-- [mcp-knowledge README](../mcp-knowledge/README.md)
+- [knowledge-mcp README](../knowledge-mcp/README.md)
 
 ## serve/knowledge/src/owlbear_knowledge/protocols/ARCHITECTURE.md
 - # `Knowledge Module — Protocol Architecture`
@@ -235,58 +929,11 @@
 - ## `CP25 — Metadata Merge Semantics`
 - ## `Demand Scenario Vocabulary Mapping (D55)`
 
-## serve/mcp-browser/README.md
-- # `owlbear-mcp-browser — Browser MCP Server`
+## serve/knowledge-mcp/README.md
+- # `owlbear-knowledge-mcp — Knowledge MCP Server`
 - ## `Launch / Usage`
 - ### `Tools`
 - ## `Configuration`
-- ## `Dependencies`
-
-### Outbound links
-- [README.md](../../README.md)
-
-## serve/mcp-kanban/README.md
-- # `owlbear-mcp-kanban — Kanban MCP Server`
-- ## `Launch / Usage`
-- ### `Tools`
-- ### `Lifecycle and dispatch semantics`
-- ## `Data Projections and Envelopes`
-- ### `TaskSummary`
-- ### `TaskFull`
-- ### `DispatchEntry and Wave`
-- ### `guidance Field`
-- ### `Error Envelopes`
-- ## `list_tasks Filter Semantics`
-- ## `Archival Fields`
-- ## `end_work Outcomes`
-- ## `Usage Examples`
-- ### `Body text normalization`
-- ## `Configuration`
-- ## `Dependencies`
-
-### Outbound links
-- [README.md](../../README.md)
-
-## serve/mcp-knowledge/README.md
-- # `owlbear-mcp-knowledge — Knowledge MCP Server`
-- ## `Launch / Usage`
-- ### `Tools`
-- ## `Configuration`
-- ## `Dependencies`
-
-### Outbound links
-- [README.md](../../README.md)
-
-## serve/mcp-memory/README.md
-- # `owlbear-mcp-memory — Memory MCP Server`
-- ## `Launch / Usage`
-- ## `Architecture`
-- ### `Modules`
-- ### `State Model`
-- ## `Tools`
-- ## `Entry Schema`
-- ## `Configuration`
-- ## `Batch Commits`
 - ## `Dependencies`
 
 ### Outbound links
@@ -320,6 +967,21 @@
 ### Outbound links
 - [README.md](../../README.md)
 
+## serve/memory-mcp/README.md
+- # `owlbear-memory-mcp — Memory MCP Server`
+- ## `Launch / Usage`
+- ## `Architecture`
+- ### `Modules`
+- ### `State Model`
+- ## `Tools`
+- ## `Entry Schema`
+- ## `Configuration`
+- ## `Batch Commits`
+- ## `Dependencies`
+
+### Outbound links
+- [README.md](../../README.md)
+
 ## serve/tools/README.md
 - # `owlbear-tools — Workspace Utilities`
 - ## `Launch / Usage`
@@ -336,8 +998,14 @@
 - ## `Prerequisites`
 - ## `Quick Start`
 - ## `What Setup Creates`
+- ### `Existing Pre-Cutover Workspaces`
 - ## `Shared vs Copied`
-- ## `Optional Specification Workflow`
+- ## `Target Delivery Workflow`
+- ### `Specification`
+- ### `Delivery`
+- ### `Correction And Recovery`
+- ### `Integration And Completed History`
+- ### `Current Manual Boundaries`
 - ## `Verify It Works`
 - ## `Launch Cockpit`
 - ## `Project-Specific Customization`
@@ -352,6 +1020,9 @@
 - [uv](https://docs.astral.sh/uv/)
 - [code.visualstudio.com](https://code.visualstudio.com/)
 - [git-scm.com](https://git-scm.com/)
+- [Delivery MCP reference](../serve/delivery-mcp/README.md)
+- [WIRING.md](../share/WIRING.md)
+- [Cockpit package guide](../serve/cockpit/README.md)
 
 ## setup/sharing-guide.md
 - # `Sharing OwlBear with Teammates`
@@ -374,50 +1045,50 @@
 - [uv docs](https://docs.astral.sh/uv/)
 
 ## share/README.md
-- # `share/ — Agent Ecosystem`
+- # `share/ - Agent Ecosystem`
 - ## `Directory Layout`
-- ## `Loading Model`
-- ### `Two-Tier Skill Loading`
-- ### `Belts and Suspenders`
-- ### `Transitive Dependencies`
-- ## `Always-Loaded Context`
-- ## `Agents`
-- ### `Nesting Depth`
-- ## `Skills`
-- ## `Instructions`
-- ## `Prompts`
-- ## `File Interconnections`
-- ## `Structural Standards`
+- ## `Product Boundary`
+- ## `Effective Instruction Stack`
+- ### `Skill Loading Tiers`
+- ## `Soft Guidance And Hard Controls`
+- ## `Choosing The Owning Artifact`
+- ## `Runtime And Source Of Truth`
+- ### `Delegation And Nesting`
+- ## `Change Workflow For Agents And Skills`
+- ## `Validation`
+- ## `Maintenance Boundaries`
 
 ### Outbound links
 - [WIRING.md](WIRING.md)
+- [WIRING.md](WIRING.md)
+- [WIRING.md](WIRING.md)
+- [WIRING.md](WIRING.md)
+- [WIRING.md](WIRING.md)
 
 ## share/WIRING.md
-- # `Agent <-> File Mapping Tables`
-- ## `Nesting Depth (ND3 Agents)`
-- ## `Universal Files`
-- ## `Agent -> Files`
-- ### `Orchestration`
-- ### `Shape Entry`
-- ### `User Planning And Design`
-- ### `Execution Board`
-- ### `Pipeline Challengers`
-- ### `Support`
-- ### `Knowledge`
-- ## `File -> Agents`
-- ## `Subagent Dependencies`
+- # `Agent Ecosystem Wiring`
+- ## `Connection Vocabulary`
+- ## `Universal And Contextual Instructions`
+- ## `Agent Runtime Map`
+- ## `Prompt Entry Map`
+- ## `Conditional Skill Loading`
+- ## `Required Skill Consumers`
+- ## `Delegation And Nesting`
+- ## `Hard-Control Map`
+- ## `Maintenance Protocol`
 
-## share/agents/builder-challenger.agent.md
-- ### `Channel A`
-- ### `Channel B`
+### Outbound links
+- [README.md](README.md)
+
+## share/agents/build-reviewer.agent.md
 
 ## share/agents/builder.agent.md
-- ### `Channel A`
-- ### `Channel B`
 
-## share/agents/collector.agent.md
-- ### `Channel A`
-- ### `Channel B`
+## share/agents/conceptual-design-reviewer.agent.md
+
+## share/agents/designer-challenger.agent.md
+
+## share/agents/designer.agent.md
 
 ## share/agents/knowledge-enricher.agent.md
 - ### `Channel A`
@@ -430,39 +1101,22 @@
 ## share/agents/memory-curator.agent.md
 - ### `Channel A`
 - ### `Channel B`
-- ### `Kanban protocol`
 
 ## share/agents/orchestrator.agent.md
 - ### `Channel A`
 - ### `Session Output`
 
-## share/agents/shaper-challenger.agent.md
+## share/agents/planner-challenger.agent.md
 
-## share/agents/shaper.agent.md
-- ### `User Output`
-- ### `Channel B`
+## share/agents/planner.agent.md
 
 ## share/agents/test-curator.agent.md
 - ### `Channel A`
 - ### `Channel B`
 
-## share/agents/verifier-challenger.agent.md
-
-## share/agents/verifier.agent.md
-- ### `Channel A`
-- ### `Channel B`
-
-## share/diagrams/cockpit.excalidraw
-
-## share/diagrams/kanban.excalidraw
-
 ## share/diagrams/mcp-topology.excalidraw
 
 ## share/diagrams/memory-layers.excalidraw
-
-## share/diagrams/pipeline.excalidraw
-
-## share/diagrams/project-overview.excalidraw
 
 ## share/instructions/agent-ecosystem.instructions.md
 
@@ -473,8 +1127,6 @@
 ## share/instructions/owlbear-system.instructions.md
 - ## `1. Decision Heuristics`
 - ## `2. System Awareness`
-- ### `Tech Stack`
-- ### `Pipeline`
 - ## `3. Memory Governance`
 - ## `4. Operational Fundamentals`
 
@@ -497,6 +1149,8 @@
 - ## `Step 3 - Present Candidates`
 - ## `Step 4 - Explore the Selected Design`
 
+## share/prompts/design.prompt.md
+
 ## share/prompts/frontend-audit.prompt.md
 - # `Frontend Audit`
 - ## `Interaction Protocol`
@@ -507,6 +1161,8 @@
 - ## `Guardrails`
 
 ## share/prompts/ideate.prompt.md
+
+## share/prompts/integration-repair.prompt.md
 
 ## share/prompts/kb-enrich.prompt.md
 - ## `Execution Contract`
@@ -538,25 +1194,17 @@
 - ### `3.4 Context Escalation`
 - ### `3.5 Mandatory Adversarial Lane`
 - ### `3.6 Forced Batch Ranking And Scarcity`
-- ## `4. Ratings`
-- ### `4.1 Keep Value`
-- ### `4.2 Verdict Strength`
-- ## `5. Review Card`
-- ## `6. Actions`
+- ### `3.7 Exceptional-State Handoff`
+- ## `4. Review Card`
+- ## `5. Actions`
 - ### `Approve`
 - ### `Edit Before Approval`
 - ### `Reject Or Retire`
 - ### `Skip`
-- ## `7. Continuation And Batch Review Helper`
-- ## `8. Tool Failure Rules`
+- ## `6. Continuation And Batch Review Helper`
+- ## `7. Tool Failure Rules`
 
 ## share/prompts/orchestrate.prompt.md
-- ## `Interaction Protocol`
-
-## share/prompts/shape.prompt.md
-- ## `Entry And Mode Selection`
-- ## `Interaction Protocol`
-- ## `Routing Rules`
 
 ## share/prompts/test-curation.prompt.md
 - ## `Execution Contract`
@@ -573,35 +1221,23 @@
 - ### `P1 - Agent/Stage-Scoped`
 - ### `P2 - Observable Artifact or State Change`
 - ### `P3 - Verification Method Stated`
-- ## `Two-Pass Validation`
+- ## `Ordered Validation`
 - ## `Bad -> Good Transformations`
-- ### `B1 Example (Boundary-Scoped)`
-- ### `B2 Example (Input -> Output)`
-- ### `B3 Example (No Naked Quantifiers)`
-- ### `B4 Example (Boundary-Valid Proof)`
-- ### `P1 Example (Agent/Stage-Scoped)`
-- ### `P2 Example (Observable Artifact/State)`
-- ### `P3 Example (Verification Method)`
 - ## `Canonical Literal Verification`
 - ### `Bad -> Good Examples`
 - ### `Authority Discovery`
-- ### `Verifier Procedure`
-- ## `Validation Checklist`
-- ### `Shaper Draft Checklist`
-- ### `Shaper/Challenger Validation Checklist`
+- ### `Review Procedure`
 
 ## share/skills/h-agent-structure/SKILL.md
 - # `Agent Ecosystem Structure`
 - ## `Foundation`
-- ## `File Type Selection`
-- ## `Boundary Fitness`
 - ## `Agent Extraction Markers`
 - ### `Extract when (≥ 2 apply)`
 - ### `Defer extraction when (< 2 extract conditions apply)`
 - ### `Precedent`
 - ## `Principles`
 - ### `Rule of Two`
-- ### `Project Instructions Boundary`
+- ### `Runtime Relevance`
 - ### `Implicit Encoding`
 - ## `Agent File Structure (.agent.md)`
 - ### `Frontmatter (YAML)`
@@ -638,8 +1274,7 @@
 ## share/skills/h-decision-requests/SKILL.md
 - # `Decision And Action Requests`
 - ## `Choose The Request Kind`
-- ## `Create A Request`
-- ## `Close The Active Work Session`
+- ## `Embed A Request In A Block`
 - ## `Resolution And Resume`
 
 ## share/skills/h-excalidraw-diagram/SKILL.md
@@ -758,36 +1393,13 @@
 - ## `Configuration`
 - ## `Known Gotchas`
 
-## share/skills/h-mcp-kanban/SKILL.md
-- # `MCP Kanban Tool Reference`
-- ## `Tool Summary`
-- ### `Filter and Retrieval Additions`
-- ### `Creation Semantics`
-- ### `edit_task Semantics`
-- ## `Projection Schemas`
-- ### `TaskSummary`
-- ### `TaskFull`
-- ### `DispatchEntry`
-- ### `Wave`
-- ## `Archival Semantics`
-- ## `Response: Guidance Field`
-- ### ``block:user` Tag Exemption`
-- ## `Compound Tools`
-- ### `start_work`
-- ### `end_work`
-- ## `Agent Lifecycle Pattern`
-- ### `Task-context boundary`
-- ### `edit_task (advanced)`
-- ## `Compound vs Single Tool Guidance`
-- ## `Error Handling`
-- ## `Body Content Gotchas`
-
 ## share/skills/h-mcp-memory/SKILL.md
 - # `MCP Memory Tool Reference`
 - ## `Agent Access Matrix`
 - ## `Usage Patterns`
 - ### `Curator lifecycle (list -> read -> curate -> delete)`
 - ### `User approval flow`
+- ### `Exceptional-state resolution`
 - ### `Batch commits`
 - ## `Tool Summary`
 - ## `save_memory`
@@ -878,6 +1490,14 @@
 - ## `Cockpit/PDS Profile`
 - ## `Known Gotchas`
 
+## share/skills/r-challenger-protocol/SKILL.md
+- # `Challenger Protocol`
+- ## `Role Boundary`
+- ## `Decision Contract`
+- ## `Evidence Rules`
+- ### `Minimum Change Review`
+- ## `Caller Routing`
+
 ## share/skills/r-doc-standards/SKILL.md
 - # `Documentation Quality Standards`
 - ## `Citation Format`
@@ -885,35 +1505,6 @@
 - ## `2. Cross-Reference Integrity`
 - ## `3. Audience Fitness`
 - ## `4. Audit Dimensions`
-
-## share/skills/r-pipeline-protocol/SKILL.md
-- # `Pipeline Protocol`
-- ## `Companion Skills`
-- ## `1. Lifecycle`
-- ### `Role Boundaries`
-- ## `2. Task Setup`
-- ### `Invocation Scope`
-- ### `Claiming`
-- ### `Resolved Requests`
-- ### `Memory`
-- ### `Task Metadata`
-- ## `3. Working Standards`
-- ### `Minimum Change Contract`
-- ### `Evidence`
-- ### `Rent Test For Durable Tests`
-- ### `Continuous Change Module Map`
-- ### `Proof Checks And Challengers`
-- ## `4. Communication`
-- ### `Channel A`
-- ### `Channel B`
-- ### `Required Follow-up`
-- ## `5. Closing`
-- ### `Before `end_work``
-- ### `After `end_work``
-- ### `Who Commits What`
-- ## `6. Interruptions And Requests`
-- ### `Request Admission`
-- ### `Tool Outage And Containment`
 
 ## share/skills/r-workspace-governance/SKILL.md
 - # `Workspace Governance`
@@ -923,6 +1514,32 @@
 - ### `VS Code Auto-Staging Trap`
 - ## `OwlBear-Managed Artifact Placement`
 - ## `Attribution`
+
+## share/skills/w-design-session/SKILL.md
+- # `Target Design Session`
+- ## `Companion Skills`
+- ## `Authority Boundary`
+- ## `Step 1 - Select Or Create One Session`
+- ## `Step 2 - Rehydrate Before Revision`
+- ## `Step 3 - Persist Authored Revisions By Compare-And-Swap`
+- ## `Step 4 - Discover Intent And Preserve The Product Promise`
+- ## `Step 5 - Ground Claims And Use Qualified Memory`
+- ## `Step 6 - Resolve One Material Decision`
+- ## `Step 7 - Review Adaptive Architecture`
+- ## `Step 8 - Build Complete Delivery Contract`
+- ## `Step 9 - Challenge, Baseline, Checkpoint, And Validate`
+- ## `Step 10 - Obtain Explicit Approval And Admit`
+- ## `Session Output`
+- ## `Known Pitfalls`
+
+## share/skills/w-frontier-planning/SKILL.md
+- # `Frontier Planning`
+- ## `Step 0 - Validate Launch And Context`
+- ## `Step 1 - Ground The Task Chain`
+- ### `Requests And Resumed Context`
+- ## `Step 2 - Obtain Advisory Review`
+- ## `Step 3 - Publish Pass Or Route Finding`
+- ## `Known Pitfalls`
 
 ## share/skills/w-idea-refinement/SKILL.md
 - # `Idea Refinement`
@@ -935,6 +1552,15 @@
 - ## `Proposal-Readiness Gate`
 - ## `Refined Idea Summary`
 - ## `Examples`
+- ## `Known Pitfalls`
+
+## share/skills/w-integration-repair/SKILL.md
+- # `Integration Repair`
+- ## `Step 0 - Bind Current Attention And Coordination`
+- ## `Step 1 - Make One Additive Conflict Repair`
+- ## `Step 2 - Obtain Independent Exact-Commit Review`
+- ## `Step 3 - Admit Only The Reviewed Repair`
+- ## `Output`
 - ## `Known Pitfalls`
 
 ## share/skills/w-knowledge-enrichment/SKILL.md
@@ -967,18 +1593,22 @@
 - ## `Known Pitfalls`
 
 ## share/skills/w-orchestration/SKILL.md
-- # `Orchestration`
-- ## `Context Budget`
-- ## `Signal Contracts`
-- ## `Step 1 — Housekeeping`
-- ## `Step 2 — Plan`
-- ## `Configuration`
-- ## `Step 3 — Dispatch`
-- ### `Wave Assembly`
-- ### `Dispatch Mechanics`
-- ## `Step 4 — Loop`
-- ## `Output Format`
-- ## `Verification Checklist`
+- # `Delivery Orchestration`
+- ## `Step 1 - Acquire One Current Batch`
+- ## `Step 2 - Dispatch Or Recover Each Launch`
+- ## `Step 3 - Forward One Worker Transition`
+- ## `Step 4 - Integrate Only Acquisition-Provided IDs`
+- ## `Step 5 - Refresh`
+- ## `Output`
+- ## `Known Pitfalls`
+
+## share/skills/w-packet-building/SKILL.md
+- # `Packet Building`
+- ## `Step 0 - Validate Launch, Context, And Custody`
+- ## `Step 1 - Fix The Task Boundary`
+- ## `Step 2 - Implement And Commit`
+- ## `Step 3 - Obtain Advisory Exact-Commit Review`
+- ## `Step 4 - Publish Pass Or Route Finding`
 - ## `Known Pitfalls`
 
 ## share/skills/w-research/SKILL.md
@@ -990,77 +1620,12 @@
 - ## `Step 5 — Analyze And Compare`
 - ## `Step 6 — Preserve Durable Findings When Useful`
 - ## `Step 7 — Return Evidence To The Caller`
-- ## `Known Pitfalls`
-
-## share/skills/w-spec-shaping/SKILL.md
-- # `Spec Shaping`
-- ## `Companion Skills`
-- ## `Step 1 - Resolve The Planning Package`
-- ## `Step 2 - Ground The Draft`
-- ## `Step 3 - Conduct The Staged Implementation Review`
-- ### `Stage A - Product And Scope`
-- ### `Stage B - Architecture And Interfaces`
-- ### `Stage C - Trade-offs And Completion`
-- ### `Material Repair Re-entry`
-- ## `Step 4 - Reconcile The OpenSpec Artifacts`
-- ## `Step 5 - Draft And Challenge The Graph`
-- ## `Step 6 - Obtain Graph Approval`
-- ## `Step 7 - Commit And Audit The Graph`
-- ## `Step 8 - Return A Human Summary`
-- ## `Commit Gate`
-- ## `Known Pitfalls`
-
-## share/skills/w-task-decomposition/SKILL.md
-- # `Task Decomposition`
-- ## `Scope`
-- ### `In Scope`
-- ### `Out of Scope`
-- ## `Step 0 — Setup`
-- ## `Step 1 — Read and Classify the Planning Source`
-- ### `Product Promise Coverage Map`
-- ### `Planning Readiness Gate`
-- ## `Step 1a — Single-Task Shortcut`
-- ## `Step 1b — Source And Contract Authority Guard`
-- ### `Change Module Map`
-- ### `good_example — symbol guard applied`
-- ### `bad_example — source-read skipped`
-- ### `good_example — generated and external contract grounded`
-- ## `Step 2 — Check Board State`
-- ## `Step 3 — Decompose into Atomic Tasks`
-- ### `Deep Module Check`
-- ### `Product Invariant Map`
-- ### `Task Complexity Budget`
-- ### `Mandatory Split Triggers`
-- ## `Durability Principles`
-- ## `Step 4 — Build Dependency Graph`
-- ## `Step 5 — Assign Priority and Tags`
-- ## `Step 5c — Assign Proof Guidance`
-- ## `Step 5a — Validate Planned Tasks`
-- ### `Step 5b — Return The Provisional Graph`
-- ## `Step 6 — Commit An Approved Graph`
-- ## `Step 6a — Audit Created Board State`
-- ## `Step 7 — Visualize Dependencies`
-- ## `Step 8 — Return The Board Audit`
-- ## `Output Template`
-- ## `Verification Checklist`
-- ## `Known Pitfalls`
-
-## share/skills/w-task-repair/SKILL.md
-- # `Task Repair`
-- ## `Companion Skills`
-- ## `Step 1 - Resolve Ownership And Read The Rejection Chain`
-- ## `Step 2 - Classify The Repair`
-- ## `Step 3 - Apply Explicit Non-Material Repairs`
-- ## `Step 4 - Escalate Material Expansion`
-- ## `Step 5 - Record Task History`
-- ## `Step 6 - Return A Human Summary`
-- ## `Known Pitfalls`
 
 ## share/skills/w-test-curation/SKILL.md
 - # `Test Curation`
 - ## `Goal`
 - ## `Discovery`
-- ### `Finding task-scoped tests`
+- ### `Finding transient tests`
 - ### `Filtering`
 - ## `Triage`
 - ### `Zero-value patterns (delete without mining)`

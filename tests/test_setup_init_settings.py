@@ -10,7 +10,7 @@ import types
 from unittest.mock import patch
 
 import pytest
-from owlbear_kanban import DeliveryStartupConfig, TargetCutoverRequest, authorize_target_mutation
+from owlbear_delivery import DeliveryStartupConfig, TargetCutoverRequest, authorize_target_mutation
 
 _REPO_ROOT = Path(__file__).parent.parent
 _INIT_PATH = _REPO_ROOT / "setup" / "init.py"
@@ -102,9 +102,15 @@ def test_init_creates_only_empty_target_control_plane_stores(
     seed_hooks = {path.name for path in (_REPO_ROOT / "seed/.owlbear/hooks").glob("*.py")}
     assert installed_hooks == seed_hooks
     mcp = json.loads((target_dir / ".vscode/mcp.json").read_text(encoding="utf-8"))
-    assert set(mcp["servers"]) == {"ob-kanban", "ob-knowledge", "ob-memory", "ob-browser", "markitdown"}
+    assert set(mcp["servers"]) == {
+        "owlbear-delivery",
+        "owlbear-knowledge",
+        "owlbear-memory",
+        "owlbear-browser",
+        "markitdown",
+    }
     delivery_config_path = target_dir / ".owlbear/delivery/config.json"
-    assert "env" not in mcp["servers"]["ob-kanban"]
+    assert "env" not in mcp["servers"]["owlbear-delivery"]
     delivery_config = DeliveryStartupConfig.model_validate_json(delivery_config_path.read_bytes())
     assert delivery_config.schema_version == 1
     assert delivery_config.integration_target == "main"

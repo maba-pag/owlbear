@@ -7,14 +7,14 @@ user-invocable: false
 # Delivery Orchestration
 
 Run the portfolio until acquisition is quiescent or bounded attention requires a user/operator.
-Kanban owns readiness, capacity, claims, identities, reviewer policy, writer custody, transitions,
+Delivery owns readiness, capacity, claims, identities, reviewer policy, writer custody, transitions,
 and Integration. Orchestrator performs only the mechanical dispatch loop around that authority.
 
 ## Step 1 - Acquire One Current Batch
 
 If target tools are deferred, load them once with `tool_search` using:
 
-`OwlBear Kanban target portfolio list_work_items acquire_frontier_work transition_delivery recover_claim integrate_ready_change`
+`OwlBear Delivery target portfolio list_work_items acquire_frontier_work transition_delivery recover_claim integrate_ready_change`
 
 Call `list_work_items` only for bounded portfolio reporting. Call `acquire_frontier_work` once for the
 current cycle. Its `DeliveryAcquisitionResult` is the sole source of launch order,

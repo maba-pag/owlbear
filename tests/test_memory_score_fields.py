@@ -2,7 +2,7 @@
 
 Behavioral coverage:
 - AC1: MemoryEntry has outstanding_count, unremarkable_count, didnt_use_count (int = 0),
-       score (float = 0.0) in both owlbear_memory and owlbear_mcp_memory;
+       score (float = 0.0) in both owlbear_memory and owlbear_memory_mcp;
        defaults enable backward-compatible deserialization of pre-existing entries;
        OUTSTANDING_BOOST=0.1, UNREMARKABLE_PENALTY=0.01, STALE_THRESHOLD=50 in engine module.
 - AC2: compute_score(confidence, outstanding_count, unremarkable_count) -> float returns
@@ -83,32 +83,32 @@ class TestModelFields:
         entry = MemoryEntry(**_min_entry_data())
         assert entry.score == 0.0
 
-    # --- owlbear_mcp_memory: new field defaults ---
+    # --- owlbear_memory_mcp: new field defaults ---
 
-    def test_outstanding_count_default_owlbear_mcp_memory(self) -> None:
-        """MemoryEntry.outstanding_count defaults to 0 in owlbear_mcp_memory."""
-        from owlbear_mcp_memory.models import MemoryEntry
+    def test_outstanding_count_default_owlbear_memory_mcp(self) -> None:
+        """MemoryEntry.outstanding_count defaults to 0 in owlbear_memory_mcp."""
+        from owlbear_memory_mcp.models import MemoryEntry
 
         entry = MemoryEntry(**_min_entry_data())
         assert entry.outstanding_count == 0
 
-    def test_unremarkable_count_default_owlbear_mcp_memory(self) -> None:
-        """MemoryEntry.unremarkable_count defaults to 0 in owlbear_mcp_memory."""
-        from owlbear_mcp_memory.models import MemoryEntry
+    def test_unremarkable_count_default_owlbear_memory_mcp(self) -> None:
+        """MemoryEntry.unremarkable_count defaults to 0 in owlbear_memory_mcp."""
+        from owlbear_memory_mcp.models import MemoryEntry
 
         entry = MemoryEntry(**_min_entry_data())
         assert entry.unremarkable_count == 0
 
-    def test_didnt_use_count_default_owlbear_mcp_memory(self) -> None:
-        """MemoryEntry.didnt_use_count defaults to 0 in owlbear_mcp_memory."""
-        from owlbear_mcp_memory.models import MemoryEntry
+    def test_didnt_use_count_default_owlbear_memory_mcp(self) -> None:
+        """MemoryEntry.didnt_use_count defaults to 0 in owlbear_memory_mcp."""
+        from owlbear_memory_mcp.models import MemoryEntry
 
         entry = MemoryEntry(**_min_entry_data())
         assert entry.didnt_use_count == 0
 
-    def test_score_default_owlbear_mcp_memory(self) -> None:
-        """MemoryEntry.score defaults to 0.0 in owlbear_mcp_memory."""
-        from owlbear_mcp_memory.models import MemoryEntry
+    def test_score_default_owlbear_memory_mcp(self) -> None:
+        """MemoryEntry.score defaults to 0.0 in owlbear_memory_mcp."""
+        from owlbear_memory_mcp.models import MemoryEntry
 
         entry = MemoryEntry(**_min_entry_data())
         assert entry.score == 0.0
@@ -126,9 +126,9 @@ class TestModelFields:
         assert entry.didnt_use_count == 0
         assert entry.score == 0.0
 
-    def test_backward_compat_no_new_fields_owlbear_mcp_memory(self) -> None:
-        """Pre-existing entry dict (missing new fields) deserializes with defaults in owlbear_mcp_memory."""
-        from owlbear_mcp_memory.models import MemoryEntry
+    def test_backward_compat_no_new_fields_owlbear_memory_mcp(self) -> None:
+        """Pre-existing entry dict (missing new fields) deserializes with defaults in owlbear_memory_mcp."""
+        from owlbear_memory_mcp.models import MemoryEntry
 
         data = _min_entry_data()  # no outstanding_count, unremarkable_count, didnt_use_count, score
         entry = MemoryEntry(**data)
@@ -391,12 +391,12 @@ class TestSaveAndRoundTrip:
         assert loaded is not None
         assert loaded.didnt_use_count == 3
 
-    # --- owlbear_mcp_memory round-trips ---
+    # --- owlbear_memory_mcp round-trips ---
 
-    def test_round_trip_preserves_score_owlbear_mcp_memory(self, tmp_path: Path) -> None:
-        """write+load preserves non-default score in owlbear_mcp_memory."""
-        from owlbear_mcp_memory.engine import MemoryEngine
-        from owlbear_mcp_memory.models import MemoryEntry
+    def test_round_trip_preserves_score_owlbear_memory_mcp(self, tmp_path: Path) -> None:
+        """write+load preserves non-default score in owlbear_memory_mcp."""
+        from owlbear_memory_mcp.engine import MemoryEngine
+        from owlbear_memory_mcp.models import MemoryEntry
 
         eng = MemoryEngine(memory_dir=tmp_path)
         entry = MemoryEntry(**_min_entry_data(id=_ID_A, score=0.91))
@@ -406,10 +406,10 @@ class TestSaveAndRoundTrip:
         assert match is not None
         assert match.score == pytest.approx(0.91)
 
-    def test_round_trip_preserves_outstanding_count_owlbear_mcp_memory(self, tmp_path: Path) -> None:
-        """write+load preserves outstanding_count in owlbear_mcp_memory."""
-        from owlbear_mcp_memory.engine import MemoryEngine
-        from owlbear_mcp_memory.models import MemoryEntry
+    def test_round_trip_preserves_outstanding_count_owlbear_memory_mcp(self, tmp_path: Path) -> None:
+        """write+load preserves outstanding_count in owlbear_memory_mcp."""
+        from owlbear_memory_mcp.engine import MemoryEngine
+        from owlbear_memory_mcp.models import MemoryEntry
 
         eng = MemoryEngine(memory_dir=tmp_path)
         entry = MemoryEntry(**_min_entry_data(id=_ID_B, outstanding_count=5))
@@ -419,10 +419,10 @@ class TestSaveAndRoundTrip:
         assert match is not None
         assert match.outstanding_count == 5
 
-    def test_round_trip_preserves_unremarkable_count_owlbear_mcp_memory(self, tmp_path: Path) -> None:
-        """write+load preserves unremarkable_count in owlbear_mcp_memory."""
-        from owlbear_mcp_memory.engine import MemoryEngine
-        from owlbear_mcp_memory.models import MemoryEntry
+    def test_round_trip_preserves_unremarkable_count_owlbear_memory_mcp(self, tmp_path: Path) -> None:
+        """write+load preserves unremarkable_count in owlbear_memory_mcp."""
+        from owlbear_memory_mcp.engine import MemoryEngine
+        from owlbear_memory_mcp.models import MemoryEntry
 
         eng = MemoryEngine(memory_dir=tmp_path)
         entry = MemoryEntry(**_min_entry_data(id=_ID_C, unremarkable_count=8))
@@ -432,10 +432,10 @@ class TestSaveAndRoundTrip:
         assert match is not None
         assert match.unremarkable_count == 8
 
-    def test_round_trip_preserves_didnt_use_count_owlbear_mcp_memory(self, tmp_path: Path) -> None:
-        """write+load preserves didnt_use_count in owlbear_mcp_memory."""
-        from owlbear_mcp_memory.engine import MemoryEngine
-        from owlbear_mcp_memory.models import MemoryEntry
+    def test_round_trip_preserves_didnt_use_count_owlbear_memory_mcp(self, tmp_path: Path) -> None:
+        """write+load preserves didnt_use_count in owlbear_memory_mcp."""
+        from owlbear_memory_mcp.engine import MemoryEngine
+        from owlbear_memory_mcp.models import MemoryEntry
 
         eng = MemoryEngine(memory_dir=tmp_path)
         entry = MemoryEntry(**_min_entry_data(id=_ID_A, didnt_use_count=4))

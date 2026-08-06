@@ -5,7 +5,7 @@ argument-hint: "Build Delivery Launch: {serialized DeliveryLaunchPackage}"
 user-invocable: false
 disable-model-invocation: true
 model: GPT-5.6 Terra (copilot)
-tools: [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, ob-kanban/show_build_context, ob-kanban/publish_delivery_result, ob-kanban/show_integration_attention, ob-kanban/admit_reviewed_integration_repair, ob-memory/assess_memories, ob-memory/recall_memory, ob-memory/save_memory]
+tools: [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, owlbear-delivery/show_build_context, owlbear-delivery/publish_delivery_result, owlbear-delivery/show_integration_attention, owlbear-delivery/admit_reviewed_integration_repair, owlbear-memory/assess_memories, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 agents: [build-reviewer]
 hooks:
   SessionStart:

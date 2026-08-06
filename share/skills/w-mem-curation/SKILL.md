@@ -101,10 +101,10 @@ Do not inspect, create, migrate, or defer notes in `/memories/` paths. If old fi
 Before returning, commit reviewed MCP memory mutations with the state-aware helper:
 
 ```bash
-uv --project ../owlbear run python -m owlbear_mcp_memory.git curation
+uv --project ../owlbear run python -m owlbear_memory_mcp.git curation
 ```
 
-The `--project` path must point to the OwlBear installation root. Find the correct value from the `ob-memory` server entry in `.vscode/mcp.json` (look for the `--project` argument in the `args` array). The helper stages only non-pending `.owlbear/memory/*.md` entries; do not broad-add `.owlbear/memory`.
+The `--project` path must point to the OwlBear installation root. Find the correct value from the `owlbear-memory` server entry in `.vscode/mcp.json` (look for the `--project` argument in the `args` array). The helper stages only non-pending `.owlbear/memory/*.md` entries; do not broad-add `.owlbear/memory`.
 
 ## Step 7 — Return Channel A Signal
 

@@ -3,7 +3,7 @@
 AC5 coverage (td:1):
 - `_DR_REQUIRED_MSG` in guidance.py equals the new canonical text
 - `AgentView._BLOCK_AR_HINT` in engine.py equals the new canonical text
-- h-mcp-kanban/SKILL.md agent-obligation prose references create_dr tool, not scribe agent
+- h-delivery-mcp/SKILL.md agent-obligation prose references create_dr tool, not scribe agent
 
 All tests must FAIL (RED phase) — current code still has old text.
 """

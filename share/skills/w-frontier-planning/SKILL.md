@@ -59,7 +59,7 @@ agent's frontmatter owns its model.
 
 Require exactly one advisory mapping with disposition `pass | finding` and non-empty evidence. The
 review is scoped to the supplied immutable candidate; it never chooses a transition or calls a
-Kanban tool.
+Delivery tool.
 
 Repair a bounded local task-chain finding and obtain fresh review for that distinct candidate. A
 Design-authority finding, user-owned blocker, invalid review mapping, or local defect that cannot be

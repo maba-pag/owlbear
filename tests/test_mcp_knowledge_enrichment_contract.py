@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from mcp.server.mcpserver.exceptions import ToolError
-from owlbear_mcp_knowledge.server import knowledge_stats, store_enrichment
+from owlbear_knowledge_mcp.server import knowledge_stats, store_enrichment
 
 
 def _context(enrichment_store: MagicMock) -> MagicMock:

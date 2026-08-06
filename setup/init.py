@@ -20,7 +20,7 @@ import warnings
 from contextlib import suppress
 from pathlib import Path
 
-from owlbear_kanban import (
+from owlbear_delivery import (
     TargetAdapterRef,
     TargetAuthorityRegistry,
     TargetCutoverReadiness,
@@ -377,10 +377,10 @@ def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None:
     """Write .vscode/mcp.json, merging owlbear servers with existing entries.
 
     Writes five MCP server entries from the seed template:
-      - ob-kanban (owlbear_mcp_kanban)
-      - ob-knowledge (owlbear_mcp_knowledge)
-      - ob-memory (owlbear_mcp_memory)
-    - ob-browser (owlbear_mcp_browser)
+            - owlbear-delivery (owlbear_delivery_mcp)
+            - owlbear-knowledge (owlbear_knowledge_mcp)
+            - owlbear-memory (owlbear_memory_mcp)
+        - owlbear-browser (owlbear_browser_mcp)
       - microsoft/markitdown
 
     Standalone entry point for callers that only need the MCP config written.

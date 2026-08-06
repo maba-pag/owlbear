@@ -10,14 +10,14 @@ resolution-markers = [
 [manifest]
 members = [
     "owlbear-browser",
+    "owlbear-browser-mcp",
     "owlbear-cockpit",
-    "owlbear-kanban",
+    "owlbear-delivery",
+    "owlbear-delivery-mcp",
     "owlbear-knowledge",
-    "owlbear-mcp-browser",
-    "owlbear-mcp-kanban",
-    "owlbear-mcp-knowledge",
-    "owlbear-mcp-memory",
+    "owlbear-knowledge-mcp",
     "owlbear-memory",
+    "owlbear-memory-mcp",
     "owlbear-tools",
 ]
 
@@ -1531,12 +1531,27 @@ requires-dist = [
 ]
 
 [[package]]
+name = "owlbear-browser-mcp"
+version = "0.1.0"
+source = { editable = "serve/browser-mcp" }
+dependencies = [
+    { name = "mcp", extra = ["cli"] },
+    { name = "owlbear-browser" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mcp", extras = ["cli"], specifier = ">=2,<2.1" },
+    { name = "owlbear-browser", editable = "serve/browser" },
+]
+
+[[package]]
 name = "owlbear-cockpit"
 version = "0.1.0"
 source = { editable = "serve/cockpit" }
 dependencies = [
     { name = "fastapi" },
-    { name = "owlbear-kanban" },
+    { name = "owlbear-delivery" },
     { name = "owlbear-memory" },
     { name = "pydantic" },
     { name = "uvicorn" },
@@ -1545,16 +1560,16 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi" },
-    { name = "owlbear-kanban", editable = "serve/kanban" },
+    { name = "owlbear-delivery", editable = "serve/delivery" },
     { name = "owlbear-memory", editable = "serve/memory" },
     { name = "pydantic" },
     { name = "uvicorn" },
 ]
 
 [[package]]
-name = "owlbear-kanban"
+name = "owlbear-delivery"
 version = "0.1.0"
-source = { editable = "serve/kanban" }
+source = { editable = "serve/delivery" }
 dependencies = [
     { name = "markdown-it-py" },
     { name = "pydantic" },
@@ -1568,6 +1583,23 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "ruamel-yaml", specifier = ">=0.19.1" },
+]
+
+[[package]]
+name = "owlbear-delivery-mcp"
+version = "0.1.0"
+source = { editable = "serve/delivery-mcp" }
+dependencies = [
+    { name = "mcp", extra = ["cli"] },
+    { name = "owlbear-delivery" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mcp", extras = ["cli"], specifier = ">=2,<2.1" },
+    { name = "owlbear-delivery", editable = "serve/delivery" },
+    { name = "pydantic", specifier = ">=2.13.4" },
 ]
 
 [[package]]
@@ -1615,41 +1647,9 @@ requires-dist = [
 provides-extras = ["qdrant", "embedding", "intake", "llm", "full"]
 
 [[package]]
-name = "owlbear-mcp-browser"
+name = "owlbear-knowledge-mcp"
 version = "0.1.0"
-source = { editable = "serve/mcp-browser" }
-dependencies = [
-    { name = "mcp", extra = ["cli"] },
-    { name = "owlbear-browser" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "mcp", extras = ["cli"], specifier = ">=2,<2.1" },
-    { name = "owlbear-browser", editable = "serve/browser" },
-]
-
-[[package]]
-name = "owlbear-mcp-kanban"
-version = "0.1.0"
-source = { editable = "serve/mcp-kanban" }
-dependencies = [
-    { name = "mcp", extra = ["cli"] },
-    { name = "owlbear-kanban" },
-    { name = "pydantic" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "mcp", extras = ["cli"], specifier = ">=2,<2.1" },
-    { name = "owlbear-kanban", editable = "serve/kanban" },
-    { name = "pydantic", specifier = ">=2.13.4" },
-]
-
-[[package]]
-name = "owlbear-mcp-knowledge"
-version = "0.1.0"
-source = { editable = "serve/mcp-knowledge" }
+source = { editable = "serve/knowledge-mcp" }
 dependencies = [
     { name = "mcp", extra = ["cli"] },
     { name = "owlbear-knowledge", extra = ["full"] },
@@ -1659,25 +1659,6 @@ dependencies = [
 requires-dist = [
     { name = "mcp", extras = ["cli"], specifier = ">=2,<2.1" },
     { name = "owlbear-knowledge", extras = ["full"], editable = "serve/knowledge" },
-]
-
-[[package]]
-name = "owlbear-mcp-memory"
-version = "0.1.0"
-source = { editable = "serve/mcp-memory" }
-dependencies = [
-    { name = "mcp", extra = ["cli"] },
-    { name = "owlbear-memory" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "mcp", extras = ["cli"], specifier = ">=2,<2.1" },
-    { name = "owlbear-memory", editable = "serve/memory" },
-    { name = "pydantic", specifier = ">=2.13.4" },
-    { name = "pyyaml", specifier = ">=6.0.3" },
 ]
 
 [[package]]
@@ -1693,6 +1674,25 @@ dependencies = [
 requires-dist = [
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "ruamel-yaml", specifier = ">=0.19.1" },
+]
+
+[[package]]
+name = "owlbear-memory-mcp"
+version = "0.1.0"
+source = { editable = "serve/memory-mcp" }
+dependencies = [
+    { name = "mcp", extra = ["cli"] },
+    { name = "owlbear-memory" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mcp", extras = ["cli"], specifier = ">=2,<2.1" },
+    { name = "owlbear-memory", editable = "serve/memory" },
+    { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
 ]
 
 [[package]]

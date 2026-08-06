@@ -19,7 +19,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "serve"]
-pythonpath = ["serve/kanban/src", "serve/tools/src"]
+pythonpath = ["serve/delivery/src", "serve/tools/src"]
 addopts = "--import-mode=importlib -m 'not e2e' -n auto --dist loadfile -p no:logfire -p no:pytest_logfire"
 timeout = 30
 session_timeout = 300
@@ -36,12 +36,12 @@ target-version = "py314"
 line-length = 120
 extend-exclude = ["*.md"]
 src = [
-  "serve/kanban/src",
+  "serve/delivery/src",
   "serve/knowledge/src",
-  "serve/mcp-kanban/src",
-  "serve/mcp-knowledge/src",
-  "serve/mcp-memory/src",
-  "serve/mcp-browser/src",
+  "serve/delivery-mcp/src",
+  "serve/knowledge-mcp/src",
+  "serve/memory-mcp/src",
+  "serve/browser-mcp/src",
   "serve/browser/src",
   "serve/cockpit/src",
   "serve/tools/src",
@@ -172,12 +172,12 @@ quote-style = "double"
 
 [tool.coverage.run]
 source_pkgs = [
-  "owlbear_kanban",
+  "owlbear_delivery",
   "owlbear_knowledge",
-  "owlbear_mcp_browser",
-  "owlbear_mcp_kanban",
-  "owlbear_mcp_knowledge",
-  "owlbear_mcp_memory",
+  "owlbear_browser_mcp",
+  "owlbear_delivery_mcp",
+  "owlbear_knowledge_mcp",
+  "owlbear_memory_mcp",
   "owlbear_browser",
   "owlbear_cockpit",
   "owlbear_tools",

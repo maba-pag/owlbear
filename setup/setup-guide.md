@@ -118,7 +118,7 @@ This split is why `git pull` updates shared agents and skills immediately, while
 runtime files may need a later `init.py` run to refresh.
 
 MCP memory entries are stored as markdown files under `.owlbear/memory/`. The
-`ob-memory` server creates that directory when it starts or writes the first
+`owlbear-memory` server creates that directory when it starts or writes the first
 entry, so setup does not seed a separate memory store.
 
 ---
@@ -126,7 +126,7 @@ entry, so setup does not seed a separate memory store.
 ## Target Delivery Workflow
 
 This section is the canonical operator procedure. The
-[Kanban MCP reference](../serve/mcp-kanban/README.md) lists the exact public tools and startup
+[Delivery MCP reference](../serve/delivery-mcp/README.md) lists the exact public tools and startup
 configuration, [WIRING.md](../share/WIRING.md) maps agent authority and loading, and the
 [Cockpit package guide](../serve/cockpit/README.md) covers launch and configuration for the human
 control surface.
@@ -228,7 +228,7 @@ After opening the project in VS Code, use the **Diagnostics view** to confirm ev
 | OwlBear agents loaded | Chat Customizations shows agents from `../owlbear/share/agents/` |
 | OwlBear skills loaded | Chat Customizations shows skills from `../owlbear/share/skills/` |
 | Instructions loaded | Chat Customizations shows `*.instructions.md` files from `../owlbear/share/instructions/` |
-| MCP servers running | Run `MCP: List Servers` from the Command Palette — `ob-kanban`, `ob-memory`, and `ob-knowledge` should show `running` |
+| MCP servers running | Run `MCP: List Servers` from the Command Palette — `owlbear-delivery`, `owlbear-memory`, and `owlbear-knowledge` should show `running` |
 
 For runtime debugging, use **"Show Agent Debug Logs"** (Chat view ellipsis `…` menu) —
 this shows chronological tool calls, LLM requests, and prompt discovery events.
@@ -309,7 +309,7 @@ Edit `.vscode/mcp.json` to add additional servers alongside the owlbear defaults
 ```json
 {
   "servers": {
-    "ob-kanban": { ... },
+    "owlbear-delivery": { ... },
     "myProjectServer": {
       "type": "stdio",
       "command": "uv",
@@ -325,16 +325,16 @@ Edit `.vscode/mcp.json` to add additional servers alongside the owlbear defaults
 
 ### Configuring the knowledge MCP server
 
-The `ob-knowledge` server supports environment variables to customise its behaviour.
+The `owlbear-knowledge` server supports environment variables to customise its behaviour.
 Set these in `.vscode/mcp.json` under the server's `env` key:
 
 ```json
 {
   "servers": {
-    "ob-knowledge": {
+    "owlbear-knowledge": {
       "type": "stdio",
       "command": "uv",
-      "args": ["run", "--project", "../owlbear", "-m", "owlbear_mcp_knowledge"],
+      "args": ["run", "--project", "../owlbear", "-m", "owlbear_knowledge_mcp"],
       "env": {
         "OWLBEAR_KB_PATH": "/path/to/knowledge.db",
         "KNOWLEDGE_TOOLS_EXCLUDE": "knowledge_ingest"
@@ -359,7 +359,7 @@ Set these in `.vscode/mcp.json` under the server's `env` key:
 | Skills not auto-loading | `chat.agentSkillsLocations` missing or path wrong | Check `.vscode/settings.json`; re-run `init.py` if the key is absent |
 | Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
-| `ob-kanban` reports `ERR_DELIVERY_STARTUP_UNCONFIGURED` | `.owlbear/delivery/config.json` is absent from the project root | Re-run `init.py`; setup recreates the file only when it is missing |
+| `owlbear-delivery` reports `ERR_DELIVERY_STARTUP_UNCONFIGURED` | `.owlbear/delivery/config.json` is absent from the project root | Re-run `init.py`; setup recreates the file only when it is missing |
 | `uv run cockpit` says the command is missing | Command was run from the consumer project without `--project` | Use `uv run --project ../owlbear cockpit` from the project root |
 | Target MCP or Cockpit refuses to start after an update | A pre-cutover store has no valid target request and receipt | Prepare the reviewed request and invoke `setup/finalize.py` directly as described above |
 | Cockpit shows the wrong workspace or cannot find `.owlbear/target` | Cockpit was launched from the wrong working directory | Run from the project root, add `--directory /path/to/project`, or set `OWLBEAR_WORKSPACE_ROOT` explicitly |

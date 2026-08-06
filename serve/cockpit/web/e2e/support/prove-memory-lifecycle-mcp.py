@@ -45,7 +45,7 @@ async def _capture(root: Path, memory_dir: Path) -> list[dict[str, object]]:
     environment["OWLBEAR_MEMORY_DIR"] = str(memory_dir)
     server = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "owlbear_mcp_memory"],
+        args=["-m", "owlbear_memory_mcp"],
         env=environment,
         cwd=root,
     )

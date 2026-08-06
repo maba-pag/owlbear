@@ -8,7 +8,7 @@ user-invocable: false
 
 > **Audience:** Any agent with `save_memory` or `recall_memory` in its tools list, plus the memory-curator agent. **When:** Pre-flight knowledge loading, post-task reflection, and curation sessions. **Why:** Authoritative reference for all 8 MCP memory tools — parameters, behavior, error cases, and usage patterns.
 
-The `ob-memory` MCP server exposes memory operations over stdio. The MCPServer app name is `owlbear-memory`; VS Code registers it in `.vscode/mcp.json` as `ob-memory`.
+The `owlbear-memory` MCP server exposes memory operations over stdio. The MCPServer app name is `owlbear-memory`; VS Code registers it in `.vscode/mcp.json` as `owlbear-memory`.
 
 For curation workflow, see `w-mem-curation`.
 
@@ -57,11 +57,11 @@ Pending entries are not committed. After curation or review, use the state-aware
 helper instead of broad-adding `.owlbear/memory`:
 
 ```text
-uv --project ../owlbear run python -m owlbear_mcp_memory.git curation
-uv --project ../owlbear run python -m owlbear_mcp_memory.git review
+uv --project ../owlbear run python -m owlbear_memory_mcp.git curation
+uv --project ../owlbear run python -m owlbear_memory_mcp.git review
 ```
 
-The `--project` path must point to the OwlBear installation root. Find the correct value from the `ob-memory` server entry in `.vscode/mcp.json` (look for the `--project` argument in the `args` array).
+The `--project` path must point to the OwlBear installation root. Find the correct value from the `owlbear-memory` server entry in `.vscode/mcp.json` (look for the `--project` argument in the `args` array).
 
 ## Tool Summary
 

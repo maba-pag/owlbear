@@ -6,7 +6,7 @@ import importlib.util
 import json
 from pathlib import Path
 
-from owlbear_kanban import (
+from owlbear_delivery import (
     LegacyDisposition,
     TargetAdapterRef,
     TargetAuthority,

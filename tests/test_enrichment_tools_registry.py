@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from owlbear_mcp_knowledge.server import mcp
+from owlbear_knowledge_mcp.server import mcp
 
 _NEW_ENRICHMENT_NAMES: frozenset[str] = frozenset(
     {
@@ -40,7 +40,7 @@ class TestEnrichmentToolRename:
 
     def test_ac2_new_function_names_callable_and_in_all(self) -> None:
         """AC2: 3 enrichment functions renamed in server.py; new names callable and in __all__."""
-        from owlbear_mcp_knowledge import server
+        from owlbear_knowledge_mcp import server
 
         assert callable(server.claim_enrichment_batch)
         assert callable(server.store_enrichment)

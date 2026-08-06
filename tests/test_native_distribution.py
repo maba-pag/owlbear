@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import re
 
-from owlbear_kanban import LegacyDisposition, verify_legacy_snapshot
+from owlbear_delivery import LegacyDisposition, verify_legacy_snapshot
 
 
 _ROOT = Path(__file__).parent.parent
@@ -90,7 +90,13 @@ def test_consumer_sync_scopes_have_current_target_owners() -> None:
     assert not any((_ROOT / ".github/skills").glob("openspec-*"))
 
     mcp = json.loads((_ROOT / "seed/.vscode/mcp.json").read_text(encoding="utf-8"))
-    assert set(mcp["servers"]) == {"ob-kanban", "ob-knowledge", "ob-memory", "ob-browser", "markitdown"}
+    assert set(mcp["servers"]) == {
+        "owlbear-delivery",
+        "owlbear-knowledge",
+        "owlbear-memory",
+        "owlbear-browser",
+        "markitdown",
+    }
     assert {path.name for path in (_ROOT / "share/diagrams").iterdir()} == _SHIPPED_DIAGRAMS
 
 

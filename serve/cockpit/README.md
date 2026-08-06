@@ -109,5 +109,5 @@ its own.
 | `fastapi` | HTTP framework |
 | `uvicorn` | ASGI server |
 | `pydantic` | Request/response model validation |
-| `owlbear-kanban` | Target authority, runtime, admission, and receipt verification |
+| `owlbear-delivery` | Target authority, runtime, admission, and receipt verification |
 | `owlbear-memory` | Memory engine (workspace package) |

@@ -8,7 +8,7 @@ Graph-augmented vector retrieval engine for the OwlBear pipeline. Provides docum
 
 ## Launch / Usage
 
-No standalone launch. Used as a library by `owlbear-mcp-knowledge` and consumer code.
+No standalone launch. Used as a library by `owlbear-knowledge-mcp` and consumer code.
 
 ```python
 import sqlite3
@@ -52,7 +52,7 @@ consolidation surfaces have been retired and removed from this package.
 
 ## Configuration
 
-No environment variables at the library level. Configuration is passed via constructor arguments. See [mcp-knowledge README](../mcp-knowledge/README.md) for the MCP server's environment variables.
+No environment variables at the library level. Configuration is passed via constructor arguments. See [knowledge-mcp README](../knowledge-mcp/README.md) for the MCP server's environment variables.
 
 ### Qdrant storage modes
 

@@ -11,9 +11,9 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from owlbear_kanban.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator
-from owlbear_kanban.delivery_application_loader import DeliveryStartupConfig
-from owlbear_kanban.delivery_runtime import (
+from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator
+from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
+from owlbear_delivery.delivery_runtime import (
     DeliveryActiveClaim,
     DeliveryBlock,
     DeliveryFrontier,
@@ -28,8 +28,8 @@ from owlbear_kanban.delivery_runtime import (
     DeliveryWorkerRole,
     OutcomeAuthorityBinding,
 )
-from owlbear_kanban.design_package import CompletionPackageManifest, DesignPackageManifest
-from owlbear_kanban.target_contract import (
+from owlbear_delivery.design_package import CompletionPackageManifest, DesignPackageManifest
+from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryContract,

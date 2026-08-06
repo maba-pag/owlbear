@@ -18,8 +18,8 @@ import dataclasses
 import inspect
 import sqlite3
 
-from owlbear_mcp_knowledge import _helpers, server
-from owlbear_mcp_knowledge.server import AppContext
+from owlbear_knowledge_mcp import _helpers, server
+from owlbear_knowledge_mcp.server import AppContext
 
 
 # ---------------------------------------------------------------------------

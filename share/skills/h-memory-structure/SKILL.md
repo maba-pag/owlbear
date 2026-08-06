@@ -8,7 +8,7 @@ user-invocable: false
 
 > **Audience:** Agents writing post-task reflections and the memory-curator agent. **When:** Before calling `save_memory` (entry shape and quality checks) and during curation sessions. **Why:** Ensures entries meet the structural and quality bar for long-lived agent knowledge.
 
-Structural standards for project memory entries in MCP (`ob-memory`) storage. Covers entry shape, tier selection, deduplication, and quality enforcement.
+Structural standards for project memory entries in MCP (`owlbear-memory`) storage. Covers entry shape, tier selection, deduplication, and quality enforcement.
 
 For tool syntax, see `h-mcp-memory`. For curation workflow, see `w-mem-curation`.
 
@@ -36,7 +36,7 @@ Enumerations and ranges used by the schema:
 - `state` values: `pending`, `curated`, `approved`, `contested`, `disputed`, `stale`, `deleted`
 - `confidence` range: inclusive `[0.7, 1.0]`
 
-This schema is validated by `MemoryEntry` in the `mcp-memory` package.
+This schema is validated by `MemoryEntry` in the `memory-mcp` package.
 
 ## Tier-Content Fit
 
@@ -44,7 +44,7 @@ Per `owlbear-system.instructions.md` § Memory Governance (single source of trut
 
 | Content type | Tier | Store |
 |-------------|------|-------|
-| Agent institutional knowledge (queryable) | MCP canonical | `ob-memory` |
+| Agent institutional knowledge (queryable) | MCP canonical | `owlbear-memory` |
 | Job-specific context and working state | Native artifacts | Change/job records or `.owlbear/scratch/` |
 | Architecture decisions | Not memory | Native change decisions and requests |
 | Research findings | Not memory | `.owlbear/research/` |
@@ -125,7 +125,7 @@ An entry **fails** if any of the following are true:
 ## Anti-Patterns
 
 1. **Storing research findings as memory entries.** Research belongs in `.owlbear/research/`; memory is for agent behavioral learnings.
-2. **Writing to `/memories/` for agent learnings.** The built-in store is retired. Agent learnings go to `ob-memory` only.
+2. **Writing to `/memories/` for agent learnings.** The built-in store is retired. Agent learnings go to `owlbear-memory` only.
 3. **Recording with `scope_agents=null`.** Global entries flood every agent's pre-flight. Always pass `scope_agents`.
 4. **One entry per task regardless of insight count.** Record 0 entries if nothing notable happened. Record N entries for N distinct insights.
 5. **Confidence below 0.7.** The server rejects it. Do not round up to bypass the floor — raise confidence only when evidence justifies it.

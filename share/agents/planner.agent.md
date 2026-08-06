@@ -5,7 +5,7 @@ argument-hint: "Plan Delivery Launch: {serialized DeliveryLaunchPackage}"
 user-invocable: false
 disable-model-invocation: true
 model: GPT-5.6 Sol (copilot)
-tools: [vscode/toolSearch, execute/getTerminalOutput, execute/killTerminal, execute/runInTerminal, read/problems, read/readFile, read/terminalLastCommand, read/viewImage, agent, search, web, ob-kanban/show_plan_context, ob-kanban/publish_delivery_plan]
+tools: [vscode/toolSearch, execute/getTerminalOutput, execute/killTerminal, execute/runInTerminal, read/problems, read/readFile, read/terminalLastCommand, read/viewImage, agent, search, web, owlbear-delivery/show_plan_context, owlbear-delivery/publish_delivery_plan]
 agents: [planner-challenger, Explore]
 hooks:
   PreToolUse:

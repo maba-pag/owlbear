@@ -27,14 +27,14 @@ Load these with `read_file` immediately before the named work:
 
 ## Authority Boundary
 
-One active Design session is a manifest-bound package owned by Kanban:
+One active Design session is a manifest-bound package owned by Delivery:
 
 | Package part | Owns |
 |--------------|------|
 | `intent.md` | Problem, actors, Product Promise, normal workflows, scope, accepted exclusions, preserved behavior, material user decisions, success, assumptions, and technically-done-but-wrong outcomes |
 | `design.md` | Current ownership, proposed architecture and interfaces, tradeoffs, weaknesses, migration, proof approach, and decision consequences |
 | `authority.json` | Generated Delivery contract bytes; authored revision clears this authority |
-| `manifest.json` | Kanban-owned hashes binding the exact package identity |
+| `manifest.json` | Delivery-owned hashes binding the exact package identity |
 
 The Designer never writes these files directly. `create_design_session` creates one new package;
 `read_design_session` returns its verified complete bytes and package ID; and

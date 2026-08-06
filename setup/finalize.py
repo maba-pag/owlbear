@@ -8,7 +8,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from owlbear_kanban import (
+from owlbear_delivery import (
     TargetAuthorityRegistry,
     TargetCutoverError,
     TargetCutoverRequest,

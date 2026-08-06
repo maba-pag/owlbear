@@ -43,7 +43,7 @@ _RETIRED_AGENTS = {
     "verifier-challenger",
 }
 _RETIRED_SKILLS = {
-    "h-mcp-kanban",
+    "h-mcp-delivery",
     "r-pipeline-protocol",
     "w-spec-shaping",
     "w-task-decomposition",
@@ -52,14 +52,14 @@ _RETIRED_SKILLS = {
     "w-whole-change-audit",
 }
 _GENERIC_TASK_TOOLS = {
-    "ob-kanban/create_task",
-    "ob-kanban/edit_task",
-    "ob-kanban/end_work",
-    "ob-kanban/list_tasks",
-    "ob-kanban/move_task",
-    "ob-kanban/pick_tasks",
-    "ob-kanban/show_task",
-    "ob-kanban/start_work",
+    "owlbear-delivery/create_task",
+    "owlbear-delivery/edit_task",
+    "owlbear-delivery/end_work",
+    "owlbear-delivery/list_tasks",
+    "owlbear-delivery/move_task",
+    "owlbear-delivery/pick_tasks",
+    "owlbear-delivery/show_task",
+    "owlbear-delivery/start_work",
 }
 _TARGET_ROLE_TOOLS = {
     "designer": {
@@ -175,7 +175,7 @@ class _TargetApplicationDouble:
 
 
 def test_agent_validator_accepts_valid_structure_and_known_mcp_server(tmp_path: Path) -> None:
-    path = _write_agent(tmp_path, "reader", _agent_text("reader", tools="[ob-browser/acquire]"))
+    path = _write_agent(tmp_path, "reader", _agent_text("reader", tools="[owlbear-browser/acquire]"))
 
     assert _AGENT_VALIDATOR.validate_agent(path) == []
 
@@ -274,19 +274,19 @@ user-invocable: false
 
 
 @pytest.mark.asyncio
-async def test_declared_owlbear_mcp_tools_exist_in_live_registries() -> None:
-    from owlbear_mcp_browser.server import mcp as browser_mcp
-    from owlbear_mcp_kanban.server import mcp as kanban_mcp
-    from owlbear_mcp_kanban.target_server import DELIVERY_OPERATION_NAMES, assemble_target_server
-    from owlbear_mcp_knowledge.server import mcp as knowledge_mcp
-    from owlbear_mcp_memory.server import mcp as memory_mcp
+async def test_declared_mcp_tools_exist_in_live_registries() -> None:
+    from owlbear_browser_mcp.server import mcp as browser_mcp
+    from owlbear_delivery_mcp.server import mcp as delivery_mcp
+    from owlbear_delivery_mcp.target_server import DELIVERY_OPERATION_NAMES, assemble_target_server
+    from owlbear_knowledge_mcp.server import mcp as knowledge_mcp
+    from owlbear_memory_mcp.server import mcp as memory_mcp
 
     target_mcp = assemble_target_server(_TargetApplicationDouble())  # type: ignore[arg-type]
     registries = {
-        "ob-browser": {tool.name for tool in await browser_mcp.list_tools()},
-        "ob-kanban": {tool.name for tool in await kanban_mcp.list_tools()},
-        "ob-knowledge": {tool.name for tool in await knowledge_mcp.list_tools()},
-        "ob-memory": {tool.name for tool in await memory_mcp.list_tools()},
+        "owlbear-browser": {tool.name for tool in await browser_mcp.list_tools()},
+        "owlbear-delivery": {tool.name for tool in await delivery_mcp.list_tools()},
+        "owlbear-knowledge": {tool.name for tool in await knowledge_mcp.list_tools()},
+        "owlbear-memory": {tool.name for tool in await memory_mcp.list_tools()},
     }
     target_registry = {tool.name for tool in await target_mcp.list_tools()}
     assert target_registry == set(DELIVERY_OPERATION_NAMES)
@@ -303,7 +303,9 @@ async def test_declared_owlbear_mcp_tools_exist_in_live_registries() -> None:
                 if isinstance(tool, str) and tool.startswith(f"{server}/") and not tool.endswith("/*")
             }
             available = (
-                target_registry if server == "ob-kanban" and metadata["name"] in _TARGET_ROLE_TOOLS else registered
+                target_registry
+                if server == "owlbear-delivery" and metadata["name"] in _TARGET_ROLE_TOOLS
+                else registered
             )
             missing = declared - available
             assert not missing, f"{agent_path.name} has unavailable {server} tools: {sorted(missing)}"
@@ -311,7 +313,9 @@ async def test_declared_owlbear_mcp_tools_exist_in_live_registries() -> None:
     metadata = {path.stem.removesuffix(".agent"): _frontmatter(path) for path in _AGENTS_ROOT.glob("*.agent.md")}
     for role, expected in _TARGET_ROLE_TOOLS.items():
         declared = {
-            tool.removeprefix("ob-kanban/") for tool in metadata[role]["tools"] if tool.startswith("ob-kanban/")
+            tool.removeprefix("owlbear-delivery/")
+            for tool in metadata[role]["tools"]
+            if tool.startswith("owlbear-delivery/")
         }
         assert declared == expected
 
@@ -324,9 +328,9 @@ def test_installed_delivery_ecosystem_is_native_only() -> None:
     metadata = {path.stem.removesuffix(".agent"): _frontmatter(path) for path in _AGENTS_ROOT.glob("*.agent.md")}
     orchestrator = metadata["orchestrator"]
     assert orchestrator["agents"] == ["planner", "builder", "memory-curator", "Explore"]
-    assert {tool.removeprefix("ob-kanban/") for tool in orchestrator["tools"] if tool.startswith("ob-kanban/")} == (
-        _TARGET_ROLE_TOOLS["orchestrator"]
-    )
+    assert {
+        tool.removeprefix("owlbear-delivery/") for tool in orchestrator["tools"] if tool.startswith("owlbear-delivery/")
+    } == (_TARGET_ROLE_TOOLS["orchestrator"])
     assert metadata["builder"]["agents"] == ["build-reviewer"]
     assert metadata["designer"]["agents"] == ["conceptual-design-reviewer", "designer-challenger", "Explore"]
 
@@ -370,7 +374,7 @@ def test_target_role_write_and_lifecycle_guards_are_preserved() -> None:
         "SessionStart": [{"type": "command", "command": "uv run python .owlbear/hooks/session-context.py"}],
         "PostToolUse": [{"type": "command", "command": "uv run python .owlbear/hooks/lint-changed.py"}],
     }
-    assert not any(tool.startswith("ob-kanban/finish_") for tool in builder["tools"])
+    assert not any(tool.startswith("owlbear-delivery/finish_") for tool in builder["tools"])
 
     assert metadata["planner"]["hooks"] == {
         "PreToolUse": [

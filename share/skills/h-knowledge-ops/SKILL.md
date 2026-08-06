@@ -6,7 +6,7 @@ user-invocable: false
 
 # Knowledge Base Operations
 
-Tool reference and recipes for the `ob-knowledge` MCP server, registered in `.vscode/mcp.json` as `ob-knowledge`.
+Tool reference and recipes for the `owlbear-knowledge` MCP server, registered in `.vscode/mcp.json` as `owlbear-knowledge`.
 
 ## Tool Reference
 

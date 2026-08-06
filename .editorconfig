@@ -34,7 +34,7 @@ max_line_length = unset
 [.owlbear/changes/**/*.yaml]
 max_line_length = unset
 
-# Kanban files are machine-managed operational state; do not reformat them
+# Retired Kanban files are preserved machine-managed state; do not reformat them
 [.owlbear/kanban/**]
 max_line_length = unset
 

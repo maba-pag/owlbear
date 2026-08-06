@@ -16,6 +16,58 @@ Root conftest.py — shared fixtures and marker registrations for v2 tests.
 - `def pytest_configure(config: pytest.Config) -> None`
 - `def pytest_xdist_auto_num_workers(config: pytest.Config) -> int`
 
+## .github/skills/session-review/scripts/__init__.py
+
+Session-review executable helpers.
+
+## .github/skills/session-review/scripts/extract_transcript.py
+
+Extract bounded review evidence from a persisted Copilot JSONL transcript.
+
+### Imports
+
+- `__future__`
+- `argparse`
+- `collections`
+- `collections.abc`
+- `dataclasses`
+- `json`
+- `os`
+- `pathlib`
+- `re`
+- `sys`
+- `typing`
+
+### Interfaces
+
+- `class ToolEvent`
+- `class Turn`
+- `class ExtractConfig`
+- `class TurnSelection`
+- `def _redact_text(value: str) -> str`
+- `def _redact(value: object) -> object`
+- `def _bounded_text(value: object, limit: int) -> str`
+- `def _decode_arguments(value: object, limit: int) -> object`
+- `def _event_lines(path: Path) -> Iterator[dict[str, Any]]`
+- `def extract_turns(path: Path, config: ExtractConfig, *, retain_last: int | None = None) -> tuple[dict[str, object], list[Turn]]`
+- `def _update_metadata(metadata: dict[str, object], data: Mapping[str, object]) -> None`
+- `def _new_turn(index: int, timestamp: str, data: Mapping[str, object], config: ExtractConfig) -> Turn`
+- `def _apply_turn_event(event: Mapping[str, object], timestamp: str, turn: Turn, tools: dict[str, ToolEvent], config: ExtractConfig) -> None`
+- `def _append_assistant_message(turn: Turn, tools: dict[str, ToolEvent], data: Mapping[str, object], timestamp: str, config: ExtractConfig) -> None`
+- `def _complete_tool(tools: Mapping[str, ToolEvent], data: Mapping[str, object]) -> None`
+- `def _append_tool(turn: Turn, tools: dict[str, ToolEvent], data: Mapping[str, object], timestamp: str, config: ExtractConfig) -> None`
+- `def select_turns(turns: Sequence[Turn], selection: TurnSelection) -> list[Turn]`
+- `def _searchable_turn(turn: Turn) -> str`
+- `def render_json(metadata: Mapping[str, object], turns: Iterable[Turn]) -> str`
+- `def render_markdown(metadata: Mapping[str, object], turns: Iterable[Turn]) -> str`
+- `def transcript_roots() -> tuple[Path, ...]`
+- `def locate_transcript(session_id: str, roots: Sequence[Path] | None = None) -> Path`
+- `def _positive(value: str) -> int`
+- `def _nonnegative(value: str) -> int`
+- `def parser() -> argparse.ArgumentParser`
+- `def main(argv: Sequence[str] | None = None) -> int`
+- `def _require_file(path: Path) -> None`
+
 ## .owlbear/hooks/allow-stances-only.py
 
 allow-stances-only.py — PreToolUse hook for ideation domain panelists.
@@ -33,25 +85,6 @@ allow-stances-only.py — PreToolUse hook for ideation domain panelists.
 - `def _normalize(path: str) -> str`
 - `def main() -> None`
 
-## .owlbear/hooks/deny-non-doc-writes.py
-
-deny-non-doc-writes.py — PreToolUse hook for bounded-output non-code roles.
-
-### Imports
-
-- `__future__`
-- `json`
-- `pathlib`
-- `re`
-- `sys`
-
-### Interfaces
-
-- `def _extract_paths(tool_input: object) -> list[str]`
-- `def _normalize(path: str) -> str`
-- `def _is_denied(normalized: str) -> bool`
-- `def main() -> None`
-
 ## .owlbear/hooks/deny-src-writes.py
 
 deny-src-writes.py — PreToolUse hook for test-only roles.
@@ -66,17 +99,19 @@ deny-src-writes.py — PreToolUse hook for test-only roles.
 ### Interfaces
 
 - `def _extract_paths(tool_input: object) -> list[str]`
+- `def _is_allowed_path(path: str) -> bool`
 - `def main() -> None`
 
 ## .owlbear/hooks/deny-writes.py
 
-deny-writes.py — PreToolUse hook for read-only agents with scratch access.
+deny-writes.py — PreToolUse hook for path-bounded agents.
 
 ### Imports
 
 - `__future__`
 - `json`
 - `re`
+- `shlex`
 - `sys`
 
 ### Interfaces
@@ -84,11 +119,16 @@ deny-writes.py — PreToolUse hook for read-only agents with scratch access.
 - `def _extract_paths(tool_input: object) -> list[str]`
 - `def _normalize(path: str) -> str`
 - `def _is_scratch_path(normalized: str) -> bool`
+- `def _is_allowed_write_path(normalized: str, *, allow_research: bool) -> bool`
+- `def _git_command(arguments: str) -> str | None`
+- `def _git_mutation(command: str) -> str | None`
+- `def _terminal_mutation(command: object) -> str | None`
+- `def _deny(reason: str) -> None`
 - `def main() -> None`
 
 ## .owlbear/hooks/lint-changed.py
 
-PostToolUse lint and non-blocking minimum-change feedback for pipeline agents.
+PostToolUse lint and non-blocking minimum-change feedback for implementation agents.
 
 ### Imports
 
@@ -112,7 +152,7 @@ PostToolUse lint and non-blocking minimum-change feedback for pipeline agents.
 
 ## .owlbear/hooks/session-context.py
 
-session-context.py — SessionStart hook for pipeline agents.
+session-context.py — SessionStart hook for implementation agents.
 
 ### Imports
 
@@ -189,6 +229,7 @@ Validate OwlBear agent files against conventions.
 - `pathlib`
 - `re`
 - `sys`
+- `yaml`
 
 ### Interfaces
 
@@ -199,6 +240,10 @@ Validate OwlBear agent files against conventions.
 - `def _fm_agents(fm_lines: list[str]) -> list[str]`
 - `def _body_agents_table(content: str) -> list[str]`
 - `def _check_unknown_tools(fm_lines: list[str], agent_file: Path) -> list[str]`
+- `def _check_structure(content: str, fm_lines: list[str], agent_file: Path) -> list[str]`
+- `def _check_tool_policy(content: str, fm_lines: list[str], agent_file: Path) -> list[str]`
+- `def _check_delegation(content: str, fm_lines: list[str], agent_file: Path) -> list[str]`
+- `def _check_required_reading(content: str, agent_file: Path) -> list[str]`
 - `def validate_agent(agent_file: Path) -> list[str]`
 - `def main(argv: list[str] | None = None) -> int`
 
@@ -288,25 +333,6 @@ allow-stances-only.py — PreToolUse hook for ideation domain panelists.
 - `def _normalize(path: str) -> str`
 - `def main() -> None`
 
-## seed/.owlbear/hooks/deny-non-doc-writes.py
-
-deny-non-doc-writes.py — PreToolUse hook for bounded-output non-code roles.
-
-### Imports
-
-- `__future__`
-- `json`
-- `pathlib`
-- `re`
-- `sys`
-
-### Interfaces
-
-- `def _extract_paths(tool_input: object) -> list[str]`
-- `def _normalize(path: str) -> str`
-- `def _is_denied(normalized: str) -> bool`
-- `def main() -> None`
-
 ## seed/.owlbear/hooks/deny-src-writes.py
 
 deny-src-writes.py — PreToolUse hook for test-only roles.
@@ -321,17 +347,19 @@ deny-src-writes.py — PreToolUse hook for test-only roles.
 ### Interfaces
 
 - `def _extract_paths(tool_input: object) -> list[str]`
+- `def _is_allowed_path(path: str) -> bool`
 - `def main() -> None`
 
 ## seed/.owlbear/hooks/deny-writes.py
 
-deny-writes.py — PreToolUse hook for read-only agents with scratch access.
+deny-writes.py — PreToolUse hook for path-bounded agents.
 
 ### Imports
 
 - `__future__`
 - `json`
 - `re`
+- `shlex`
 - `sys`
 
 ### Interfaces
@@ -339,11 +367,16 @@ deny-writes.py — PreToolUse hook for read-only agents with scratch access.
 - `def _extract_paths(tool_input: object) -> list[str]`
 - `def _normalize(path: str) -> str`
 - `def _is_scratch_path(normalized: str) -> bool`
+- `def _is_allowed_write_path(normalized: str, *, allow_research: bool) -> bool`
+- `def _git_command(arguments: str) -> str | None`
+- `def _git_mutation(command: str) -> str | None`
+- `def _terminal_mutation(command: object) -> str | None`
+- `def _deny(reason: str) -> None`
 - `def main() -> None`
 
 ## seed/.owlbear/hooks/lint-changed.py
 
-PostToolUse lint and non-blocking minimum-change feedback for pipeline agents.
+PostToolUse lint and non-blocking minimum-change feedback for implementation agents.
 
 ### Imports
 
@@ -367,7 +400,7 @@ PostToolUse lint and non-blocking minimum-change feedback for pipeline agents.
 
 ## seed/.owlbear/hooks/session-context.py
 
-session-context.py — SessionStart hook for pipeline agents.
+session-context.py — SessionStart hook for implementation agents.
 
 ### Imports
 
@@ -480,6 +513,7 @@ Typed, side-effect-free browser acquisition contract and content helpers.
 - `def content_hash(markdown: str) -> str`
 - `def normalize_links(links: list[str] | tuple[str, ...], base_url: str) -> tuple[str, ...]`
 - `def redact_diagnostics(value: Any) -> Any`
+- `def _redact_url_query(value: str) -> str`
 - `def _sanitize_diagnostic_html(value: str) -> str`
 
 ## serve/browser/src/owlbear_browser/extractor.py
@@ -517,6 +551,7 @@ BrowserContentFetcher — rendered content acquisition via Playwright.
 
 - `class BrowserContentFetcher`
   - `def __init__(self, context: BrowserContext) -> None`
+  - `async def close(self) -> None`
   - `async def fetch(self, request: AcquisitionRequest | str) -> AcquisitionResult | str`
   - `async def acquire(self, request: AcquisitionRequest) -> AcquisitionResult`
 
@@ -530,6 +565,7 @@ Playwright-based browser launcher with Microsoft SSO extension support.
 - `dataclasses`
 - `os`
 - `owlbear_browser._errors`
+- `owlbear_browser.fetcher`
 - `pathlib`
 - `playwright.async_api`
 - `typing`
@@ -542,46 +578,95 @@ Playwright-based browser launcher with Microsoft SSO extension support.
 - `class PlaywrightLauncher`
   - `def __init__(self, sso_ext_path: Path | None = None, user_data_dir: str = '', max_pending_pages: int = 1) -> None`
   - `def capabilities(self) -> AuthenticationCapabilities`
-  - `def context(self) -> BrowserContext`
   - `async def launch(self) -> None`
-  - `async def pending_page(self, url: str) -> Page`
+  - `async def acquire(self, request: AcquisitionRequest) -> AcquisitionResult`
+  - `async def page(self) -> Page`
   - `async def close(self) -> None`
   - `async def __aenter__(self) -> Self`
   - `async def __aexit__(self, *_: object) -> None`
-  - `async def page(self) -> Page`
 
-## serve/cockpit/src/owlbear_cockpit/__init__.py
+## serve/browser-mcp/src/owlbear_browser_mcp/__init__.py
 
-owlbear_cockpit — Cockpit package for the OwlBear kanban UI.
+OwlBear MCP browser server — exposes browser content fetching via MCP.
+
+### Imports
+
+- `owlbear_browser_mcp`
+- `owlbear_browser_mcp.server`
+
+## serve/browser-mcp/src/owlbear_browser_mcp/__main__.py
+
+Entry point for ``python -m owlbear_browser_mcp``.
 
 ### Imports
 
 - `__future__`
+- `owlbear_browser_mcp.server`
 
-## serve/cockpit/src/owlbear_cockpit/cache.py
+## serve/browser-mcp/src/owlbear_browser_mcp/allowlist.py
 
-Mtime-scan cache for the cockpit tasks directory.
+Domain allowlist for browser MCP navigation.
 
 ### Imports
 
 - `__future__`
-- `hashlib`
-- `os`
-- `typing`
+- `urllib.parse`
 
 ### Interfaces
 
-- `class MtimeScanCache`
-  - `def __init__(self, tasks_dir: Path) -> None`
-  - `def scan(self) -> int`
-  - `def has_changed(self) -> bool`
-  - `def has_changed_at(self, signature: int) -> bool`
-  - `def changed_since(self, signature: int) -> bool`
-  - `def commit_signature(self, signature: int) -> None`
-  - `def last_mtime(self) -> int`
-  - `def tasks(self) -> list[Any]`
-  - `def tasks(self, value: list[Any]) -> None`
-  - `def has_cached_tasks(self) -> bool`
+- `class DomainAllowlist`
+  - `def __init__(self, domains: list[str]) -> None`
+  - `def check(self, url: str) -> None`
+
+## serve/browser-mcp/src/owlbear_browser_mcp/server.py
+
+OwlBear MCP browser server — browser-control tools with domain allowlist.
+
+### Imports
+
+- `__future__`
+- `asyncio`
+- `contextlib`
+- `dataclasses`
+- `ipaddress`
+- `mcp.server`
+- `mcp.server.mcpserver`
+- `mcp.server.mcpserver.exceptions`
+- `mcp.types`
+- `os`
+- `owlbear_browser`
+- `owlbear_browser._errors`
+- `owlbear_browser.extractor`
+- `owlbear_browser.playwright_launcher`
+- `owlbear_browser_mcp.allowlist`
+- `pathlib`
+- `socket`
+- `typing`
+- `urllib.parse`
+
+### Interfaces
+
+- `def _is_blocked_ip(ip_str: str) -> bool`
+- `async def _check_ssrf(url: str) -> None`
+- `class AppContext`
+- `def _apply_tool_exclusions(server: MCPServer) -> set[str]`
+- `async def app_lifespan(server: MCPServer) -> AsyncGenerator[AppContext]`
+- `def _serialize_acquisition(result: AcquisitionSuccess | AcquisitionFailure) -> dict[str, Any]`
+- `async def acquire(ctx: Context, url: str, readiness_selector: str | None = None, content_selector: str | None = None, navigation_timeout_ms: int = 30000, readiness_timeout_ms: int = 10000, include_diagnostic_html: bool = False) -> dict[str, Any]`
+- `async def navigate(ctx: Context, url: str) -> str`
+- `async def click(ctx: Context, selector: str) -> str`
+- `async def type_input(ctx: Context, selector: str, text: str) -> str`
+- `async def select(ctx: Context, selector: str, value: str) -> str`
+- `async def read_text(ctx: Context) -> str`
+- `async def snapshot(ctx: Context) -> str`
+
+## serve/cockpit/src/owlbear_cockpit/__init__.py
+
+owlbear_cockpit — Cockpit package for the OwlBear Delivery UI.
+
+### Imports
+
+- `__future__`
 
 ## serve/cockpit/src/owlbear_cockpit/deps.py
 
@@ -591,20 +676,14 @@ Cockpit FastAPI dependency callables.
 
 - `__future__`
 - `fastapi`
-- `owlbear_cockpit.cache`
-- `owlbear_cockpit.view`
-- `pathlib`
 - `typing`
-- `weakref`
 
 ### Interfaces
 
-- `def get_engine() -> KanbanEngine`
+- `def get_workspace_root() -> Path`
 - `def get_memory_engine() -> MemoryEngine`
-- `def get_cache(engine = Depends(get_engine)) -> MtimeScanCache`
-- `def get_view(engine = Depends(get_engine)) -> CockpitView`
-- `def get_decisions_dir(engine = Depends(get_engine)) -> Path`
-- `def get_ideas_path(engine = Depends(get_engine)) -> Path`
+- `def get_target_context() -> object`
+- `def get_ideas_path(workspace_root = Depends(get_workspace_root)) -> Path`
 
 ## serve/cockpit/src/owlbear_cockpit/main.py
 
@@ -615,34 +694,41 @@ Cockpit FastAPI application.
 - `__future__`
 - `contextlib`
 - `fastapi`
+- `fastapi.exceptions`
 - `fastapi.responses`
 - `fastapi.staticfiles`
 - `os`
 - `owlbear_cockpit.deps`
-- `owlbear_cockpit.routes.events`
+- `owlbear_cockpit.models`
 - `owlbear_cockpit.routes.ideas`
 - `owlbear_cockpit.routes.memory`
-- `owlbear_cockpit.routes.mutation`
-- `owlbear_cockpit.routes.read`
-- `owlbear_cockpit.routes.requests`
-- `owlbear_kanban.errors`
+- `owlbear_cockpit.routes.target_work`
+- `owlbear_cockpit.target_context`
 - `owlbear_memory.errors`
 - `pathlib`
 - `sys`
 - `threading`
+- `typing`
 - `uvicorn`
 - `webbrowser`
 
 ### Interfaces
 
+- `def _get_health_memory_engine() -> object | None`
+- `def _get_health_ideas_path() -> Path`
 - `def _error_envelope(code: str, message: str) -> dict[str, str]`
-- `def _kanban_status(exc: KanbanError) -> int`
-- `def handle_kanban_error(_request: Request, exc: KanbanError) -> JSONResponse`
 - `def handle_memory_not_found(_request: Request, exc: MemoryNotFoundError) -> JSONResponse`
 - `def handle_memory_concurrency(_request: Request, exc: MemoryConcurrencyError) -> JSONResponse`
 - `def handle_memory_transition(_request: Request, exc: MemoryTransitionError) -> JSONResponse`
 - `def handle_unexpected_error(_request: Request, _exc: Exception) -> JSONResponse`
-- `def health() -> dict[str, str]`
+- `def _module_health(checker: object) -> HealthModule`
+- `def _ideas_health(ideas_path: Path) -> IdeasHealth`
+- `def health_live() -> dict[str, str]`
+- `def memory_health(memory_engine: _HealthMemoryEngine) -> HealthModule`
+- `def ideas_health(ideas_path: _IdeasPath) -> IdeasHealth`
+- `def _resolve_port() -> int`
+- `def _load_target_runtime() -> tuple[Path, object]`
+- `def _resolve_dist_dir() -> Path`
 - `def run() -> None`
 
 ## serve/cockpit/src/owlbear_cockpit/models.py
@@ -657,68 +743,57 @@ Pydantic response model for the cockpit GET /api/board endpoint.
 ### Interfaces
 
 - `class BoardOut(BaseModel)`
+- `class HealthModule(BaseModel)`
+- `class IdeasHealth(BaseModel)`
+- `class WorkspaceHealth(BaseModel)`
 
-## serve/cockpit/src/owlbear_cockpit/view.py
+## serve/cockpit/src/owlbear_cockpit/target_context.py
 
-CockpitView facade for cockpit-facing Kanban operations.
+Receipt-authorized Delivery application assembly for Cockpit.
 
 ### Imports
 
 - `__future__`
-- `owlbear_kanban.models`
+- `owlbear_delivery.delivery_application_loader`
+- `owlbear_delivery.target_cutover`
+- `pydantic`
 - `typing`
 
 ### Interfaces
 
-- `class CockpitView`
-  - `def __init__(self, engine: KanbanEngine) -> None`
-  - `def list_tasks(self, *, status: str = '', tag: str = '', priority: str = '', archival_reason: str = '', ids: list[int] | None = None, parent: int | None = None, search: str = '', sort: str = '', unclaimed: bool = False, archived: bool = False, limit: int = 0, reverse: bool = False, blocked: bool | None = None) -> ListTasksResponse`
-  - `def show_task(self, task_id: int, section: str | None = None) -> ShowTaskResponse`
-  - `def _to_single_response(task: Task) -> SingleTaskResponse`
-  - `def _to_task_response(response: SingleTaskResponse) -> SingleTaskResponse`
-  - `def _not_found(task_id: int) -> NotFoundError`
-  - `def edit_task(self, task_id: int, *, expected_updated: str, title: str | None = None, body: str | None | object = _FIELD_UNSET, append_body: str = '', timestamp: bool = False, priority: str = '', parent: int | None | object = _FIELD_UNSET, ac: list[str] | None = None, proof_bundle: str | None = None, add_dep: list[int] | None = None, remove_dep: list[int] | None = None, add_tag: list[str] | None = None, remove_tag: list[str] | None = None, block_reason: str | None | object = _BLOCK_REASON_UNSET, archival_reason: str = '', archival_refs: list[int] | None = None) -> SingleTaskResponse`
-  - `def move_task(self, task_id: int, status: str, *, expected_updated: str, archival_reason: str | None = None, archival_refs: list[int] | None = None) -> SingleTaskResponse`
-  - `def release_task(self, task_id: int, *, expected_updated: str) -> SingleTaskResponse`
-  - `def sweep(self) -> list[int]`
-  - `def cleanup(self) -> CleanupResult`
-  - `def list_activity(self, *, task_id: int | None = None, action: str | None = None, source: str | None = None, since: str | None = None, until: str | None = None, limit: int | None = None) -> list[ActivityEvent]`
-  - `def list_sessions(self, *, filter: str = 'active') -> list[SessionRecord]`
-  - `def scan_corruption(self) -> list`
-  - `def repair_storage(self) -> list`
-  - `def compact_activity(self) -> ActivityCompactionResult`
-  - `def board_config(self) -> BoardConfig`
+- `def load_target_context(workspace_root: Path, request_path: Path) -> PortfolioApplication`
+
+## serve/cockpit/src/owlbear_cockpit/target_models.py
+
+Strict HTTP models for current Delivery work and operator controls.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery.delivery_runtime`
+- `owlbear_delivery.portfolio_application`
+- `owlbear_delivery.work_items`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class _TargetHTTPModel(BaseModel)`
+- `class AttentionCounts(_TargetHTTPModel)`
+- `class WorkItemPortfolioResponse(_TargetHTTPModel)`
+- `class WorkItemLinks(_TargetHTTPModel)`
+- `class WorkItemSummaryResponse(_TargetHTTPModel)`
+- `class WorkItemDetailResponse(_TargetHTTPModel)`
+- `class AnswerRequestBody(_TargetHTTPModel)`
+  - `def _require_answer(self) -> AnswerRequestBody`
+- `class ClearBlockBody(_TargetHTTPModel)`
+- `class ConfirmLostClaimBody(_TargetHTTPModel)`
+- `class BackwardMoveBody(_TargetHTTPModel)`
+  - `def _validate_target(cls, value: str) -> str`
 
 ## serve/cockpit/src/owlbear_cockpit/routes/__init__.py
 
 Cockpit routes package.
-
-## serve/cockpit/src/owlbear_cockpit/routes/events.py
-
-Cockpit SSE routes for kanban surface invalidation events.
-
-### Imports
-
-- `__future__`
-- `fastapi`
-- `json`
-- `owlbear_cockpit.deps`
-- `owlbear_kanban`
-- `pathlib`
-- `sse_starlette`
-- `time`
-- `typing`
-- `watchfiles`
-
-### Interfaces
-
-- `def _resolve(path: Path | str) -> Path`
-- `def _is_direct_md(path: Path, parent_dir: Path) -> bool`
-- `def _build_watch_filter(tasks_dir: Path, archive_dir: Path, decisions_pending_dir: Path, activity_path: Path) -> callable`
-- `def _classify_path(changed_path: Path, tasks_dir: Path, archive_dir: Path, decisions_pending_dir: Path, activity_path: Path) -> str | None`
-- `def _batch_latest_mtimes(changes: set[tuple[object, str]], *, tasks_dir: Path, archive_dir: Path, decisions_pending_dir: Path, activity_path: Path) -> dict[str, int]`
-- `def _next_event_mtime(event_name: str, candidate_mtime: int, *, last_emitted_mtimes: dict[str, int]) -> int`
-- `async def events(request: Request, engine: _Engine) -> EventSourceResponse`
 
 ## serve/cockpit/src/owlbear_cockpit/routes/ideas.py
 
@@ -731,7 +806,7 @@ Ideas API routes for reading and persisting shared markdown content.
 - `fastapi`
 - `fastapi.responses`
 - `owlbear_cockpit.deps`
-- `owlbear_kanban.storage_io`
+- `owlbear_delivery.storage_io`
 - `pathlib`
 - `pydantic`
 - `typing`
@@ -764,657 +839,917 @@ Memory management routes for cockpit API.
 - `class MemoriesResponse(BaseModel)`
 - `class MemoryEntryEnvelope(BaseModel)`
 - `class ApproveRequest(BaseModel)`
+- `class ResolveRequest(BaseModel)`
 - `class EditRequest(BaseModel)`
 - `class DeleteRequest(BaseModel)`
 - `class DeleteResponse(BaseModel)`
+- `class PurgeRequest(BaseModel)`
 - `def _to_response(entry: MemoryEntry) -> MemoryEntryResponse`
 - `def list_memories(engine = Depends(get_memory_engine)) -> MemoriesResponse`
+- `def preview_memory_purge(req: PurgeRequest, engine = Depends(get_memory_engine)) -> PurgePreview`
+- `def purge_memories(req: PurgeRequest, engine = Depends(get_memory_engine)) -> PurgeResult`
 - `def approve_memory(entry_id: str, req: ApproveRequest, engine = Depends(get_memory_engine)) -> MemoryEntryEnvelope`
+- `def resolve_memory(entry_id: str, req: ResolveRequest, engine = Depends(get_memory_engine)) -> MemoryEntryEnvelope`
 - `def edit_memory(entry_id: str, req: EditRequest, engine = Depends(get_memory_engine)) -> MemoryEntryEnvelope`
 - `def delete_memory(entry_id: str, req: DeleteRequest, engine = Depends(get_memory_engine)) -> DeleteResponse`
 
-## serve/cockpit/src/owlbear_cockpit/routes/mutation.py
+## serve/cockpit/src/owlbear_cockpit/routes/target_work.py
 
-Cockpit mutation API routes — move, edit, release, sweep, scan, repair, compact-activity.
-
-### Imports
-
-- `__future__`
-- `fastapi`
-- `owlbear_cockpit.deps`
-- `owlbear_cockpit.view`
-- `owlbear_kanban.errors`
-- `owlbear_kanban.models`
-- `pydantic`
-- `typing`
-
-### Interfaces
-
-- `class MoveRequest(BaseModel)`
-- `class EditRequest(BaseModel)`
-- `class ReleaseRequest(BaseModel)`
-- `def _task_to_single(task: Any) -> SingleTaskResponse`
-- `def _serialize_scan_item(item: Any) -> dict[str, Any]`
-- `def move_task(task_id: int, req: MoveRequest, view: _View) -> SingleTaskResponse`
-- `def _build_edit_kwargs(req: EditRequest, task: Any | None = None) -> dict[str, Any]`
-- `def _apply_list_diff(kwargs: dict[str, Any], _field: str, add_key: str, remove_key: str, current: list[Any], desired: list[Any] | None) -> None`
-- `def _apply_block_kwargs(kwargs: dict[str, Any], current_tags: list[str], block_reason: str | None) -> None`
-- `def _add_tag_op(kwargs: dict[str, Any], key: str, tag: str) -> None`
-- `def _remove_tag_op(kwargs: dict[str, Any], key: str, tag: str) -> None`
-- `def edit_task(task_id: int, req: EditRequest, view: _View) -> SingleTaskResponse`
-- `def release_task(task_id: int, req: ReleaseRequest, view: _View) -> SingleTaskResponse`
-- `def sweep_tasks(view: _View) -> list[int]`
-- `def cleanup_tasks(view: _View) -> CleanupResult`
-- `def scan_corruption(view: _View) -> list[dict[str, Any]]`
-- `def repair_storage(view: _View) -> list[RepairOutcome]`
-- `def compact_activity(view: _View) -> ActivityCompactionResult`
-
-## serve/cockpit/src/owlbear_cockpit/routes/read.py
-
-Cockpit read-only API routes.
+Delivery work-item and operator HTTP adapter.
 
 ### Imports
 
 - `__future__`
 - `fastapi`
-- `owlbear_cockpit.cache`
+- `fastapi.exception_handlers`
+- `fastapi.exceptions`
+- `fastapi.responses`
 - `owlbear_cockpit.deps`
-- `owlbear_cockpit.models`
-- `owlbear_cockpit.view`
-- `owlbear_kanban`
-- `owlbear_kanban.models`
-- `pydantic`
-- `typing`
-
-### Interfaces
-
-- `class CockpitListTasksResponse(ListTasksResponse)`
-- `class SessionsResponse(BaseModel)`
-- `def _filter_cached_tasks(tasks: list, *, status: str, priority: str, tag: str, blocked: bool | None) -> list`
-- `def get_board(engine: _Engine) -> BoardOut`
-- `def list_tasks(view: _View, cache: _Cache, status: str = '', priority: str = '', tag: str = '', blocked: bool | None = None) -> CockpitListTasksResponse`
-- `def get_task(task_id: int, view: _View) -> ShowTaskResponse`
-- `def list_activity(view: _View, task_id: int | None = None, action: str | None = None, source: str | None = None, since: str | None = None, until: str | None = None, limit: int | None = None) -> list[ActivityEvent]`
-- `def list_sessions(view: _View, filter: str = 'active') -> SessionsResponse`
-
-## serve/cockpit/src/owlbear_cockpit/routes/requests.py
-
-Cockpit requests API routes.
-
-### Imports
-
-- `__future__`
-- `fastapi`
-- `logging`
-- `owlbear_cockpit.deps`
-- `pydantic`
+- `owlbear_cockpit.target_models`
+- `owlbear_delivery.change_workspace`
+- `owlbear_delivery.completed_history`
+- `owlbear_delivery.delivery_runtime`
+- `owlbear_delivery.portfolio_application`
+- `owlbear_delivery.work_items`
 - `typing`
 - `uuid`
 
 ### Interfaces
 
-- `class RequestOptionResponse(BaseModel)`
-- `class PendingRequestResponse(BaseModel)`
-- `class ResolveRequestBody(BaseModel)`
-- `class ResolveResponse(BaseModel)`
-- `def _validate_request_id(request_id: str) -> str`
-- `def _to_pending_response(record: object) -> PendingRequestResponse`
-- `def list_pending_requests(engine: _Engine) -> list[PendingRequestResponse]`
-- `def resolve_request(request_id: str, req: ResolveRequestBody, engine: _Engine) -> ResolveResponse`
-
-## serve/kanban/src/owlbear_kanban/__init__.py
-
-OwlBear kanban engine package.
-
-### Imports
-
-- `__future__`
-- `owlbear_kanban.agent_view`
-- `owlbear_kanban.engine`
-- `owlbear_kanban.errors`
-- `owlbear_kanban.models`
-- `owlbear_kanban.storage_io`
-
-## serve/kanban/src/owlbear_kanban/_duration.py
-
-### Imports
-
-- `__future__`
-- `datetime`
-- `owlbear_kanban.errors`
-- `re`
-
-### Interfaces
-
-- `def _parse_duration(s: str) -> timedelta`
-
-## serve/kanban/src/owlbear_kanban/_naming.py
-
-Shared filename/path safety helpers for kanban storage modules.
-
-### Imports
-
-- `__future__`
-- `owlbear_kanban.errors`
-- `pathlib`
-- `re`
-- `typing`
-
-### Interfaces
-
-- `def generate_slug(title: str) -> str`
-- `def make_task_filename(task_id: int, title: str) -> str`
-- `def validate_path_containment(tasks_dir: Path, path: Path) -> None`
-- `def validate_config_path_containment(path_value: str) -> None`
-- `def move_to_quarantine(task_path: Path, kanban_dir: Path) -> Path`
-
-## serve/kanban/src/owlbear_kanban/activity_store.py
-
-Activity stream append/query/compact for kanban boards (Brief C §7).
-
-### Imports
-
-- `__future__`
-- `datetime`
-- `json`
-- `owlbear_kanban.models`
-- `owlbear_kanban.storage_io`
-- `pathlib`
-
-### Interfaces
-
-- `def append_activity_event(event: ActivityEvent, kanban_dir: Path) -> None`
-- `def list_activity_events(kanban_dir: Path, *, task_id: int | None = None, action: str | None = None, source: str | None = None, since: str | None = None, until: str | None = None, limit: int | None = None) -> list[ActivityEvent]`
-- `def compact_activity_log(kanban_dir: Path, before_dt: datetime | None = None) -> ActivityCompactionResult`
-- `def _parse_dt(ts: object) -> datetime | None`
-- `def _find_last_closed_session_dt(parsed: list[tuple[str, dict]]) -> datetime | None`
-- `def _find_open_session_starts(parsed: list[tuple[str, dict]]) -> dict[int | None, list[int]]`
-- `def _entry_in_open_session(index: int, entry_data: dict, open_session_starts: dict[int | None, list[int]]) -> bool`
-
-## serve/kanban/src/owlbear_kanban/agent_names.py
-
-Word pool for session-stable agent-name generation.
-
-### Imports
-
-- `__future__`
-
-## serve/kanban/src/owlbear_kanban/agent_view.py
-
-Agent-facing Kanban view facade.
-
-### Imports
-
-- `__future__`
-- `datetime`
-- `importlib`
-- `logging`
-- `owlbear_kanban._duration`
-- `owlbear_kanban.body_parser`
-- `owlbear_kanban.corruption`
-- `owlbear_kanban.dispatch`
-- `owlbear_kanban.engine`
-- `owlbear_kanban.models`
-- `re`
-
-### Interfaces
-
-- `class AgentView`
-  - `def __init__(self, engine: KanbanEngine) -> None`
-  - `def _to_single_response(task: Task, guidance: list[str] | None = None) -> SingleTaskResponse`
-  - `def _skip_transition_guidance(*, before_status: str, after_status: str, status_names: list[str], include_target_column: bool = False) -> list[str]`
-  - `def _wrap_not_found(self, task_id: int) -> NotFoundError`
-  - `def list_tasks(self, *, status: str = '', tag: str = '', priority: str = '', archival_reason: str = '', ids: list[int] | None = None, parent: int | None = None, search: str = '', sort: str = '', unclaimed: bool = False, archived: bool = False, limit: int = 0, reverse: bool = False, blocked: bool | None = None) -> ListTasksResponse`
-  - `def show_task(self, task_id: int, section: str | None = None) -> ShowTaskResponse`
-  - `def pick_tasks(self, wave_size: int | None = None, max_waves: int = 3) -> PickTasksResponse`
-  - `def create_task(self, *, title: str, body: str = '', status: str = '', priority: str = '', tags: list[str] | None = None, parent: int | None = None, depends_on: list[int] | None = None, ac: list[str] | None = None, proof_bundle: str | None = None) -> SingleTaskResponse`
-  - `def edit_task(self, task_id: int, *, title: str | None = None, body: str | None = None, append_body: str | None = None, timestamp: bool = False, priority: str | None = None, parent: int | None = None, ac: list[str] | None = None, add_ac: list[str] | None = None, remove_ac: list[str] | None = None, proof_bundle: str | None = None, add_dep: list[int] | None = None, remove_dep: list[int] | None = None, add_tag: list[str] | None = None, remove_tag: list[str] | None = None, block_reason: str | None | object = _BLOCK_REASON_UNSET, archival_reason: str | None = None, archival_refs: list[int] | None = None) -> SingleTaskResponse`
-  - `def move_task(self, task_id: int, status: str, *, archival_reason: str | None = None, archival_refs: list[int] | None = None) -> SingleTaskResponse`
-  - `def start_work(self, task_id: int) -> SingleTaskResponse`
-  - `def end_work(self, task_id: int, *, outcome: str, note: str, move_to: str | None = None, block_reason: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None) -> SingleTaskResponse`
-
-## serve/kanban/src/owlbear_kanban/body_parser.py
-
-Markdown body parser for kanban task bodies (Brief C §2.4).
-
-### Imports
-
-- `__future__`
-- `owlbear_kanban.models`
-- `re`
-
-### Interfaces
-
-- `def _normalize_atx_heading(raw_heading: str) -> str`
-- `def parse_body(markdown: str) -> list[Section]`
-- `def render_body(sections: list[Section]) -> str`
-
-## serve/kanban/src/owlbear_kanban/config_loader.py
-
-Config loader for .owlbear/kanban/config.yml using ruamel.yaml round-trip mode.
-
-### Imports
-
-- `__future__`
-- `owlbear_kanban._duration`
-- `owlbear_kanban.models`
-- `owlbear_kanban.topology`
-- `owlbear_kanban.yaml_rt`
-- `typing`
-
-### Interfaces
-
-- `def load_config(kanban_dir: Path) -> BoardConfig`
-- `def _validate_claim_timeout(config: BoardConfig) -> None`
-- `def _to_plain(obj: Any) -> Any`
-
-## serve/kanban/src/owlbear_kanban/corruption.py
-
-Corruption detection and repair for kanban task files (Brief C §4).
-
-### Imports
-
-- `__future__`
-- `io`
-- `owlbear_kanban._naming`
-- `owlbear_kanban.errors`
-- `owlbear_kanban.models`
-- `owlbear_kanban.storage_io`
-- `owlbear_kanban.topology`
-- `pathlib`
-- `re`
-- `ruamel.yaml`
-- `ruamel.yaml.comments`
-- `typing`
-
-### Interfaces
-
-- `def _normalize_code(code: str | type[object]) -> str`
-- `def _configured_statuses(_config: BoardConfig) -> list[str]`
-- `def _configured_priorities(_config: BoardConfig) -> list[str]`
-- `class CorruptionError(KanbanError)`
-  - `def __init__(self, code: str | type[object], detail: str | None = None, path: Path | None = None, user_message: str | None = None, file_path: str | None = None) -> None`
-- `class _CorruptionCodeType(type)`
-  - `def __eq__(cls, other: object) -> bool`
-  - `def __hash__(cls) -> int`
-- `def _make_corruption_code_type(name: str) -> type[CorruptionError]`
-- `def _read_frontmatter(path: Path) -> tuple[str, dict, str]`
-- `def detect_corruption(path: Path, config: BoardConfig) -> CorruptionError | None`
-- `def attempt_repair(path: Path, code: str | type[object], config: BoardConfig) -> RepairOutcome`
-- `def _write_repaired(path: Path, fm: dict, body_text: str, code: str, task_id: int | None) -> RepairOutcome`
-- `def scan_and_fix(kanban_dir: Path, config: BoardConfig) -> list[RepairOutcome]`
-- `def _extract_file_id(path: Path) -> int | None`
-- `def _is_archive_path(path: Path, config: BoardConfig) -> bool`
-
-## serve/kanban/src/owlbear_kanban/decisions.py
-
-Decision request file helpers for kanban agents.
-
-### Imports
-
-- `.errors`
-- `__future__`
-- `io`
-- `logging`
-- `pathlib`
-- `re`
-- `ruamel.yaml`
-- `typing`
-
-### Interfaces
-
-- `class DecisionEngine(Protocol)`
-  - `def edit_task(self, task_id: int | str, **kwargs: object) -> object`
-- `def _slugify(text: str) -> str`
-- `def parse_dr(path: Path) -> tuple[dict[str, object], str]`
-- `def canonical_summary(response: str, body: str) -> str`
-- `def _append_summary(engine: DecisionEngine, task_id: int | str, response: str, body: str) -> None`
-- `def _append_response_section(body: str, response: str, notes: str | None) -> str`
-- `def _rewrite_response(path: Path, meta: dict[str, object], body: str) -> None`
-- `def _resolve_decisions_dir(engine: DecisionEngine) -> Path`
-- `def _resolved_candidate(base_path: Path, counter: int) -> Path`
-- `def move_to_resolved(path: Path, resolved_dir: Path) -> Path`
-- `def resolve_decision(path: Path, response: str, engine: DecisionEngine, *, notes: str | None = None, resolved_by: str = 'unknown') -> Path`
-- `def resolve_pending_drs(decisions_or_engine: Path | DecisionEngine, engine: DecisionEngine | None = None) -> list[Path]`
-
-## serve/kanban/src/owlbear_kanban/dispatch.py
-
-Dispatch logic for the owlbear kanban engine.
-
-### Imports
-
-- `__future__`
-- `datetime`
-- `owlbear_kanban.topology`
-- `re`
-- `typing`
-- `warnings`
-
-### Interfaces
-
-- `def _claim_is_active(task: Task, timeout: timedelta) -> bool`
-- `def _passes_clarity_gate(task: Task) -> bool`
-- `def _passes_dependency_gate(task: Task, active_ids: frozenset[int]) -> bool`
-- `def pick_dispatchable(engine: KanbanEngine, *, limit: int = 25, tag: str = '') -> list[Task]`
-
-## serve/kanban/src/owlbear_kanban/engine.py
-
-KanbanEngine — native read/write engine for the owlbear kanban board.
-
-### Imports
-
-- `__future__`
-- `collections`
-- `contextlib`
-- `dataclasses`
-- `datetime`
-- `io`
-- `json`
-- `logging`
-- `os`
-- `owlbear_kanban`
-- `owlbear_kanban._duration`
-- `owlbear_kanban.activity_store`
-- `owlbear_kanban.agent_names`
-- `owlbear_kanban.body_parser`
-- `owlbear_kanban.config_loader`
-- `owlbear_kanban.corruption`
-- `owlbear_kanban.dispatch`
-- `owlbear_kanban.errors`
-- `owlbear_kanban.models`
-- `owlbear_kanban.request_models`
-- `owlbear_kanban.storage`
-- `pydantic`
-- `random`
-- `ruamel.yaml`
-- `ruamel.yaml.error`
-- `sys`
-- `typing`
-- `uuid`
-
-### Interfaces
-
-- `class WorkSession`
-- `def _classify_end_work_state(detail: str) -> str`
-- `def _classify_end_work_outcome(detail: str) -> str`
-- `def _storage_module() -> object`
-- `def _compute_duration(claim_ts: str, close_ts: str) -> float`
-- `def _task_body_as_text(body: object) -> str`
-- `def _normalize_proof_bundle(value: str) -> str`
-- `def _validate_proof_bundle(proof_bundle: str | None) -> str | None`
-- `def _validate_ac_items(ac: list[str]) -> None`
-- `def _validate_dispatch_rank_coverage(config: BoardConfig) -> None`
-- `def _restore_snapshot_if_unchanged(original: Task, expected_updated: str, kanban_dir: Path) -> None`
-- `def _state_from_age(ref_ts: str, timeout: timedelta, now: datetime) -> str`
-- `def _collect_task_sessions(task_id: int, events: list[dict], timeout: timedelta, now: datetime, sessions: list[SessionRecord]) -> None`
-- `def _validate_session_filter(session_filter: str) -> None`
-- `def _apply_session_filter(sessions: list[SessionRecord], session_filter: str) -> list[SessionRecord]`
-- `def _task_id_from_filename(path: Path) -> int | None`
-- `def _move_file(src: Path, dest: Path, *, no_overwrite: bool = False) -> None`
-- `class KanbanEngine`
-  - `def __init__(self, kanban_dir: Path, *, activity_log: bool | None = None) -> None`
-  - `def agent_name(self) -> str`
-  - `def revision(self) -> int`
-  - `def tasks_dir(self) -> Path`
-  - `def archive_dir(self) -> Path`
-  - `def kanban_dir(self) -> Path`
-  - `def _priority_rank(self) -> dict[str, int]`
-  - `def _status_rank(self) -> dict[str, int]`
-  - `def board_config(self) -> BoardConfig`
-  - `def agent_view(self) -> AgentView`
-  - `def refresh_config(self) -> None`
-  - `def valid_transitions(self, status: str) -> set[str]`
-  - `def _dep_effect_from_archival_reason(reason: str | None) -> str`
-  - `def _compute_dep_status(self, task: Task, *, active_ids: set[int], archived_reasons: dict[int, str | None]) -> str | None`
-  - `def project_dep_status(self, task: Task, *, active_ids: set[int] | None = None, archived_reasons: dict[int, str | None] | None = None) -> str | None`
-  - `def _dep_status_context_for_task(self, task: Task) -> tuple[set[int], dict[int, str | None]]`
-  - `def list_tasks(self, *, status: str = '', tag: str = '', priority: str = '', parent: int | None = None, search: str = '', sort: str = '', unclaimed: bool = False, archived: bool = False, limit: int = 0, reverse: bool = False, blocked: bool | None = None) -> list[TaskSummary]`
-  - `def show_task(self, task_id: str) -> Task`
-  - `def _parse_request_file(path: Path) -> tuple[dict[str, object], str]`
-  - `def _serialize_request_content(request: DecisionRequest | ActionRequest, body: str, *, include_resolved_at: bool = False) -> str`
-  - `def create_request(self, task_id: int, kind: str, title: str, summary: str, agent: str, *, options: list[dict[str, object]] | None = None, body: str = '') -> RequestRecord`
-  - `def get_request(self, request_id: str) -> RequestRecord`
-  - `def list_requests(self, status: str = 'pending', task_id: int | None = None) -> list[RequestRecord]`
-  - `def _request_is_structured_pending(path: Path) -> bool`
-  - `def _build_request_writeback(request_model: DecisionRequest | ActionRequest, selected_option_id: str | None, free_text: str | None) -> str`
-  - `def _has_pending_structured_requests_for_task(self, task_id: int) -> bool`
-  - `def sweep_requests(self) -> list[str]`
-  - `def resolve_request(self, request_id: str, selected_option_id: str | None, free_text: str | None) -> RequestRecord`
-  - `def _required_sections_passes(body: str, sections: list[str]) -> bool`
-  - `def task_exists(self, task_id: int) -> bool`
-  - `def _has_archival_cycle(self, root_task_id: int, refs: list[int]) -> bool`
-  - `def validate_body_size(self, body: str) -> None`
-  - `def validate_archival(self, *, task_id: int, archival_reason: str | None, archival_refs: list[int], can_mark_completed: bool, config: BoardConfig) -> None`
-  - `def validate_status_predicate(self, *, target_status: str, body: str, config: BoardConfig) -> None`
-  - `def create_task(self, title: str, *, body: str = '', tags: list[str] | None = None, priority: str = '', status: str = '', parent: int | None = None, depends_on: list[int] | None = None, ac: list[str] | None = None, proof_bundle: str | None = None) -> Task`
-  - `def edit_task(self, task_id: str, *, title: str | None = None, body: str | None = None, priority: str | None = None, status: str | None = None, parent: int | None | object = _PARENT_UNSET, ac: list[str] | None = None, add_ac: list[str] | None = None, remove_ac: list[str] | None = None, proof_bundle: str | None = None, add_tags: list[str] | None = None, remove_tags: list[str] | None = None, add_deps: list[int] | None = None, remove_deps: list[int] | None = None, blocked: bool | None = None, block_reason: str | None = None, append_body: str | None = None, timestamp: bool = False, archival_reason: str | None = None, archival_refs: list[int] | None = None, expected_updated: str | None = None, source: str = 'engine') -> Task`
-  - `def move_task(self, task_id: str, status: str, *, archival_reason: str | None = None, archival_refs: list[int] | None = None, expected_updated: str | None = None, source: str = 'engine') -> Task`
-  - `def claim_task(self, task_id: str, *, now: datetime | None = None) -> Task`
-  - `def _append_timestamped_note(self, record: Task, note: str | None, now: datetime) -> None`
-  - `def release_task(self, task_id: str, *, expected_updated: str | None = None, source: str = 'engine', note: str | None = None) -> Task`
-  - `def start_work(self, task_id: str, *, now: datetime | None = None) -> Task`
-  - `def _apply_outcome(self, record: Task, outcome: str, block_reason: str, move_to: str | None, archival_reason: str | None, archival_refs: list[int]) -> bool`
-  - `def end_work(self, task_id: str, *, note: str, outcome: str = 'success', block_reason: str = '', move_to: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None, expected_updated: str | None = None, source: str = 'engine') -> Task`
-  - `def sweep(self) -> list[int]`
-  - `def cleanup(self) -> CleanupResult`
-  - `def repair_storage(self) -> list`
-  - `def _emit_event(self, action: str, task_id: int | None = None, detail: str | None = None, task_status_at_start: str | None = None, timestamp: datetime | None = None, source: str = 'engine') -> None`
-  - `def list_activity(self, *, task_id: int | None = None, action: str | None = None, source: str | None = None, since: str | None = None, until: str | None = None, limit: int | None = None) -> list[ActivityEvent]`
-  - `def scan_corruption(self) -> list`
-  - `def compact_activity(self) -> ActivityCompactionResult`
-  - `def list_sessions(self, *, filter: str = 'active') -> list[SessionRecord]`
-  - `def _session_matches_current_claim(self, session: SessionRecord, task_cache: dict[int, Task | None]) -> bool`
-  - `def _close_stale_active_sessions(self) -> list[int]`
-  - `def _read_log_entries(self) -> list[dict]`
-  - `def _derive_sessions(self) -> list[SessionRecord]`
-  - `def _parse_claim_timeout(self) -> timedelta`
-  - `def _find_task_path(self, task_id: str, search_dir: Path, *, include_archive_fallback: bool = False) -> Path`
-- `def __getattr__(name: str) -> object`
-
-## serve/kanban/src/owlbear_kanban/errors.py
-
-Kanban engine domain error catalogue and exception hierarchy.
-
-### Imports
-
-- `__future__`
-- `importlib`
-
-### Interfaces
-
-- `class KanbanError(Exception)`
-  - `def __init__(self, code: str, user_message: str) -> None`
-- `class ValidationError(KanbanError)`
-- `class NotFoundError(KanbanError)`
-- `class ConcurrencyError(KanbanError)`
-- `class ConfigError(KanbanError)`
-- `class MigrationRequiredError(KanbanError)`
-- `def __getattr__(name: str) -> object`
-
-## serve/kanban/src/owlbear_kanban/migrate.py
-
-kanban-migrate: migration script for owlbear-kanban boards.
+- `class TargetCockpitService`
+  - `def __init__(self, application: PortfolioApplication) -> None`
+  - `def list_items(self, change_id: str | None, stage: WorkItemStage | None, attention: WorkItemAttention | None) -> WorkItemPortfolioResponse`
+  - `def show_item(self, change_id: str, outcome_id: str) -> WorkItemDetailResponse`
+  - `def answer_request(self, change_id: str, request_id: str, body: AnswerRequestBody) -> object`
+  - `def clear_block(self, change_id: str, outcome_id: str, block_id: str, body: ClearBlockBody) -> object`
+  - `def recover_claim(self, change_id: str, outcome_id: str, body: ConfirmLostClaimBody) -> object`
+  - `def move_backward(self, change_id: str, outcome_id: str, body: BackwardMoveBody) -> object`
+  - `def show_integration_attention(self, change_id: str) -> object`
+  - `def retry_integration(self, change_id: str) -> object`
+  - `def list_completed(self, cursor: str | None, limit: int) -> object`
+  - `def search_completed(self, query: str, cursor: str | None, limit: int) -> object`
+  - `def show_completed(self, change_id: str, completion_id: str | None) -> object`
+  - `def _invoke(operation: Callable[[], object])`
+- `def _get_target_service(application: Annotated[PortfolioApplication, Depends(get_target_context)]) -> TargetCockpitService`
+- `def assemble_target_app(application: PortfolioApplication) -> FastAPI`
+- `def _target_router() -> APIRouter`
+- `def _register_queries(router: APIRouter) -> None`
+- `def _register_controls(router: APIRouter) -> None`
+- `def _attention_counts(items: tuple[WorkItemProjection, ...]) -> AttentionCounts`
+- `def _work_item_links(change_id: str, outcome_id: str) -> WorkItemLinks`
+- `def _http_error(status_code: int, code: object, detail: str, *, retry_safe: bool) -> None`
+- `async def handle_target_http_error(request: Request, exc: Exception) -> JSONResponse`
+- `async def handle_target_validation_error(request: Request, exc: Exception) -> JSONResponse`
+
+## serve/cockpit/web/e2e/support/prove-memory-lifecycle-mcp.py
+
+Capture exceptional-state curation rejections through MCP stdio transport.
 
 ### Imports
 
 - `__future__`
 - `argparse`
-- `datetime`
-- `io`
+- `asyncio`
+- `json`
+- `mcp`
+- `mcp.client.stdio`
+- `mcp.types`
 - `os`
-- `owlbear_kanban.body_parser`
-- `owlbear_kanban.storage_io`
 - `pathlib`
-- `re`
-- `ruamel.yaml`
-- `ruamel.yaml.comments`
+- `shutil`
+- `subprocess`
 - `sys`
-- `typing`
 
 ### Interfaces
 
-- `def _make_yaml_rt() -> YAML`
-- `def _make_yaml_safe() -> YAML`
-- `def _normalise_timestamp(ts: object) -> str | None`
-- `def _has_canonical_order(fm: dict[str, Any]) -> bool`
-- `def _is_timestamp_tz_aware(value: object) -> bool`
-- `def _is_archive_reason_valid(value: object) -> bool`
-- `def _is_archive_refs_valid(value: object) -> bool`
-- `def _is_task_migrated(fm: dict[str, Any]) -> bool`
-- `def _migrate_task_file(path: Path, *, dry_run: bool = False) -> tuple[str, str | None]`
-- `def _migrate_proof_bundle_field(path: Path, *, dry_run: bool = False) -> tuple[str, str | None]`
-- `def _migrate_archive_file(path: Path, *, dry_run: bool = False) -> tuple[str, str | None]`
-- `def _is_config_migrated(raw: dict) -> bool`
-- `def _has_unresolved_config_stubs(raw: dict[str, Any]) -> bool`
-- `def _config_requires_manual_action(kanban_dir: Path) -> bool`
-- `def _migrate_config(kanban_dir: Path, *, dry_run: bool = False) -> tuple[str, str | None]`
-- `def _to_plain(obj: Any) -> Any`
-- `def _run_lane(kanban_dir: Path, lane: str, *, dry_run: bool) -> tuple[dict[str, int], list[str]]`
+- `def _parse_args() -> argparse.Namespace`
+- `def _snapshot(memory_dir: Path) -> dict[str, bytes]`
+- `def _response_text(result: CallToolResult) -> str`
+- `async def _capture(root: Path, memory_dir: Path) -> list[dict[str, object]]`
+- `def _tested_sha(root: Path) -> str`
+- `def _write_receipt(output: Path, tested_sha: str, responses: list[dict[str, object]]) -> None`
 - `def main() -> None`
 
-## serve/kanban/src/owlbear_kanban/models.py
+## serve/cockpit/web/e2e/support/seed-target-cockpit-workspace.py
 
-Engine-internal Pydantic models for the native kanban engine.
+Create a minimal receipt-authorized target workspace for Cockpit E2E.
 
 ### Imports
 
 - `__future__`
-- `owlbear_kanban`
-- `owlbear_kanban._duration`
-- `owlbear_kanban._naming`
+- `argparse`
+- `owlbear_delivery.snapshot`
+- `owlbear_delivery.target_authority`
+- `owlbear_delivery.target_cutover`
+- `pathlib`
+
+### Interfaces
+
+- `def seed_workspace(workspace: Path) -> None`
+- `def main() -> None`
+
+## serve/cockpit/web/e2e/support/seed-work-portfolio-delivery.py
+
+Seed real Delivery owners and completed history for assembled Work E2E.
+
+### Imports
+
+- `__future__`
+- `argparse`
+- `hashlib`
+- `json`
+- `owlbear_delivery.change_workspace`
+- `owlbear_delivery.delivery_application_loader`
+- `owlbear_delivery.delivery_runtime`
+- `owlbear_delivery.design_package`
+- `owlbear_delivery.target_contract`
+- `pathlib`
+- `pydantic`
+- `subprocess`
+
+### Interfaces
+
+- `def _git(repository: Path, *arguments: str) -> str`
+- `def _canonical(value: object) -> bytes`
+- `def _outcome(identity: str, title: str, promise: str, dependencies: tuple[str, ...] = ()) -> DeliveryOutcome`
+- `def _contract(change_id: str, title: str, outcomes: tuple[DeliveryOutcome, ...]) -> DeliveryContract`
+- `def _task(outcome_id: str, index: int) -> DeliveryTaskDefinition`
+- `def _result(contract: DeliveryContract, task: DeliveryTaskDefinition, head: str) -> DeliveryTaskResult`
+- `def _current_bindings(contract: DeliveryContract, head: str) -> tuple[OutcomeAuthorityBinding, ...]`
+- `def _write_current_delivery(target_root: Path, repository: Path, worktrees: Path, head: str) -> None`
+- `def _completion_content(change_id: str, title: str, reviewed_head: str) -> dict[str, bytes]`
+- `def _publish_completion(repository: Path, change_id: str, title: str, reviewed_head: str) -> str`
+- `def _seed_repository(repository: Path) -> str`
+- `def _write_config(workspace: Path) -> None`
+- `def seed_delivery(workspace: Path) -> None`
+- `def main() -> None`
+
+## serve/delivery/src/owlbear_delivery/__init__.py
+
+OwlBear target delivery authority, runtime, and cutover package.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery.change_workspace`
+- `owlbear_delivery.completed_history`
+- `owlbear_delivery.delivery_application_loader`
+- `owlbear_delivery.delivery_runtime`
+- `owlbear_delivery.design_package`
+- `owlbear_delivery.portfolio_application`
+- `owlbear_delivery.proof_checkout`
+- `owlbear_delivery.snapshot`
+- `owlbear_delivery.target_admission`
+- `owlbear_delivery.target_authority`
+- `owlbear_delivery.target_contract`
+- `owlbear_delivery.target_cutover`
+- `owlbear_delivery.target_runtime`
+- `owlbear_delivery.work_items`
+
+## serve/delivery/src/owlbear_delivery/attempts.py
+
+Immutable attempt lifecycle event contracts.
+
+### Imports
+
+- `__future__`
+- `collections.abc`
+- `contextlib`
+- `enum`
+- `errno`
+- `json`
+- `os`
+- `owlbear_delivery.identities`
+- `owlbear_delivery.runtime_transaction`
+- `pathlib`
+- `pydantic`
+- `stat`
+- `typing`
+
+### Interfaces
+
+- `class AttemptEventDiagnosticCode(StrEnum)`
+- `class AttemptDiagnosticCode(StrEnum)`
+- `class _AttemptEventModel(BaseModel)`
+- `class AttemptEvent(_AttemptEventModel)`
+- `class AttemptEventDiagnostic(_AttemptEventModel)`
+- `class AttemptEventParseResult(_AttemptEventModel)`
+  - `def model_post_init(self, __context: object, /) -> None`
+- `class AttemptDiagnostic(_AttemptEventModel)`
+- `class AttemptResult(_AttemptEventModel)`
+  - `def _require_one_outcome(self) -> AttemptResult`
+- `class AttemptConflictError(FileExistsError)`
+  - `def __init__(self, attempt_id: str, sequence: int) -> None`
+- `def _diagnostic_from_validation(exc: PydanticValidationError) -> AttemptEventDiagnosticCode`
+- `def parse_attempt_event_mapping(value: Mapping[str, object]) -> AttemptEventParseResult`
+- `def serialize_attempt_event_mapping(event: AttemptEvent) -> dict[str, object]`
+- `def _diagnostic(code: AttemptDiagnosticCode, detail: str, path: str | None = None, target: str | None = None) -> AttemptDiagnostic`
+- `def _event_location(attempt_id: str, sequence: int) -> tuple[str, str, str]`
+- `def _event_content(event: AttemptEvent) -> bytes`
+- `class AttemptStore`
+  - `def __init__(self, work_root: Path) -> None`
+  - `def _directory(self, attempt_id: str, *, create: bool) -> Iterator[int | None]`
+  - `def _read(directory_fd: int, event: AttemptEvent, filename: str, path: str) -> AttemptResult`
+  - `def create(self, event: AttemptEvent) -> AttemptResult`
+  - `def create_participant(self, event: AttemptEvent) -> TransactionParticipant`
+  - `def read(self, attempt_id: str, sequence: int) -> AttemptResult`
+  - `def list(self) -> tuple[AttemptEvent, ...]`
+
+## serve/delivery/src/owlbear_delivery/change_workspace.py
+
+Per-change writer coordination and Git workspace management.
+
+### Imports
+
+- `__future__`
+- `hashlib`
+- `json`
+- `owlbear_delivery.delivery_runtime`
+- `owlbear_delivery.identities`
+- `owlbear_delivery.runtime_transaction`
+- `owlbear_delivery.storage_io`
+- `pathlib`
+- `pydantic`
+- `subprocess`
+- `typing`
+
+### Interfaces
+
+- `class _WorkspaceModel(BaseModel)`
+- `class WriterIdentity(_WorkspaceModel)`
+- `class ChangeWriter(WriterIdentity)`
+- `class ChangeCoordination(_WorkspaceModel)`
+- `class WorkspaceRecoverySnapshot(_WorkspaceModel)`
+- `class CapacityLedger(_WorkspaceModel)`
+  - `def _validate_holders(self) -> CapacityLedger`
+- `class IntegrationFinding(_WorkspaceModel)`
+- `class IntegrationResult(_WorkspaceModel)`
+  - `def _require_one_result(self) -> IntegrationResult`
+- `class AtomicIntegrationResult(_WorkspaceModel)`
+  - `def _require_one_result(self) -> AtomicIntegrationResult`
+- `class AtomicIntegrationPreparation(_WorkspaceModel)`
+  - `def _validate_preparation(self) -> AtomicIntegrationPreparation`
+- `class IntegrationContext(_WorkspaceModel)`
+- `class CoordinationConflictError(RuntimeError)`
+- `class PortfolioCoordinator`
+  - `def __init__(self, state_root: Path, capacity: int) -> None`
+  - `def integration_lock(self) -> AbstractContextManager[None]`
+  - `def acquisition_lock(self) -> AbstractContextManager[None]`
+  - `def writer_capacity_available(self) -> bool`
+  - `def register(self, coordination: ChangeCoordination) -> ChangeCoordination`
+  - `def show(self, change_id: str) -> ChangeCoordination`
+  - `def acquire(self, change_id: str, writer: ChangeWriter) -> ChangeCoordination`
+  - `def release(self, change_id: str, claim_id: str) -> ChangeCoordination`
+  - `def update(self, coordination: ChangeCoordination) -> ChangeCoordination`
+  - `def publish_finding(self, finding: IntegrationFinding) -> IntegrationFinding`
+  - `def admit_integration_repair(self, repair: DeliveryIntegrationRepair, participants: tuple[ReplacementTransactionParticipant, ReplacementTransactionParticipant]) -> None`
+  - `def integration_repair_replacement(self, previous: ChangeCoordination, replacement: ChangeCoordination) -> ReplacementTransactionParticipant`
+  - `def _initialize_ledger(self) -> None`
+  - `def _coordination_path(self, change_id: str) -> Path`
+  - `def _commit(self, transaction_id: str, participants: tuple[TransactionParticipant | ReplacementTransactionParticipant, ...]) -> None`
+- `class ChangeWorkspaceManager`
+  - `def __init__(self, repository: Path, worktree_root: Path, coordinator: PortfolioCoordinator, integration_target: str) -> None`
+  - `def create(self, change_id: str) -> ChangeCoordination`
+  - `def record_reviewed(self, change_id: str, commit: str) -> ChangeCoordination`
+  - `def show(self, change_id: str) -> ChangeCoordination`
+  - `def integration_context(self, change_id: str) -> IntegrationContext`
+  - `def integration_repair_replacement(self, repair: DeliveryIntegrationRepair) -> ReplacementTransactionParticipant`
+  - `def _require_integration_repair_identities(self, coordination: ChangeCoordination, repair: DeliveryIntegrationRepair) -> None`
+  - `def _require_integration_repair_worktree(self, coordination: ChangeCoordination, repair: DeliveryIntegrationRepair) -> None`
+  - `def _require_additive_conflict_repair(self, repair: DeliveryIntegrationRepair) -> str`
+  - `def _require_unchanged_completed_history(self, target_head: str, repaired_tree: str) -> None`
+  - `def reviewed_source_head(self, change_id: str) -> str`
+  - `def recovery_snapshot(self, change_id: str, attempt_id: str) -> WorkspaceRecoverySnapshot`
+  - `def validate_writer_head(self, change_id: str, claim_id: str, commit: str) -> ChangeCoordination`
+  - `def complete_reviewed(self, change_id: str, claim_id: str, commit: str) -> ChangeCoordination`
+  - `def release_writer_at_head(self, change_id: str, claim_id: str, commit: str) -> ChangeCoordination`
+  - `def restart(self, change_id: str, attempt_id: str, rejected_head: str) -> ChangeCoordination`
+  - `def _validate_released_restart(self, coordination: ChangeCoordination, rejected_head: str, branch_head: str, preserved: str | None) -> ChangeCoordination`
+  - `def _prepare_active_restart(self, coordination: ChangeCoordination, attempt_id: str, rejected_head: str) -> None`
+  - `def prepare_integration_candidate(self, candidate: DeliveryIntegrationCandidate, candidate_proof: Callable[[DeliveryIntegrationCandidate, str], tuple[str, ...]]) -> AtomicIntegrationPreparation`
+  - `def publish_prepared_integration(self, preparation: AtomicIntegrationPreparation) -> AtomicIntegrationResult`
+  - `def _reviewed_preparation_diagnostics(self, coordination: ChangeCoordination, expected_head: str) -> tuple[str, ...]`
+  - `def _preflight_integration(self, candidate: DeliveryIntegrationCandidate) -> AtomicIntegrationResult | tuple[ChangeCoordination, str, str]`
+  - `def _integration_candidate_tree(self, candidate: DeliveryIntegrationCandidate, change_head: str, target_head: str) -> AtomicIntegrationResult | str`
+  - `def _require_unchanged_completed_siblings(self, candidate_tree: str, target_head: str, change_id: str) -> None`
+  - `def _cas_integration(self, coordination: ChangeCoordination, candidate_commit: str, target_head: str) -> AtomicIntegrationResult`
+  - `def cleanup_integrated_worktree(self, change_id: str, completion_path: str, completion_id: str) -> None`
+  - `def _integration_identity_diagnostics(self, coordination: ChangeCoordination, candidate: DeliveryIntegrationCandidate) -> tuple[str, ...]`
+  - `def _merge_tree(self, target_head: str, change_head: str) -> tuple[str | None, tuple[str, ...]]`
+  - `def _integration_conflict_paths(self, target_head: str, change_head: str) -> set[bytes]`
+  - `def _changed_paths(self, parent: str, child: str) -> set[bytes]`
+  - `def _replace_tree_path(self, tree: str, path: tuple[str, ...], replacement_tree: str) -> str`
+  - `def _tree_entries(self, tree: str) -> dict[bytes, bytes]`
+  - `def _tree_entries_at_path(self, tree: str, path: tuple[bytes, ...]) -> dict[bytes, bytes]`
+  - `def _write_integration_commit(self, candidate: DeliveryIntegrationCandidate, tree: str, target_head: str, change_head: str) -> str`
+  - `def _published_completion_commit(self, candidate: DeliveryIntegrationCandidate) -> str | None`
+  - `def _completion_identity(self, commit: str, completion_path: str) -> str | None`
+  - `def integrate(self, change_id: str, reviewed_commits: tuple[str, ...]) -> IntegrationResult`
+  - `def _integrate_locked(self, change_id: str, reviewed_commits: tuple[str, ...]) -> IntegrationResult`
+  - `def _merge_target(self, coordination: ChangeCoordination, change_head: str, target_head: str) -> str | None`
+  - `def _publish_integration_finding(self, coordination: ChangeCoordination, change_head: str, target_head: str) -> IntegrationFinding`
+  - `def _require_worktree(self, worktree: Path, branch: str, expected_head: str) -> None`
+  - `def _require_ancestor(self, commit: str, descendant: str) -> None`
+  - `def _require_merge_commit(self, commit: str, reviewed: tuple[str, ...], *, cwd: Path) -> None`
+  - `def _is_ancestor(ancestor: str, descendant: str, *, cwd: Path) -> bool`
+  - `def _require_clean_checked_out_target(self, target: str) -> None`
+  - `def _refresh_checked_out_target(self, target: str, commit: str) -> None`
+  - `def _resolve(self, revision: str, *, cwd: Path | None = None, missing_ok: bool = False) -> str | None`
+  - `def _git(self, *arguments: str, cwd: Path | None = None, check: bool = True, input_bytes: bytes | None = None) -> str`
+  - `def _run_git(self, *arguments: str, cwd: Path | None = None, check: bool = True, input_bytes: bytes | None = None) -> subprocess.CompletedProcess[bytes]`
+- `def _replacement(root: Path, path: Path, previous: bytes, replacement: BaseModel) -> ReplacementTransactionParticipant`
+- `def _model_content(model: BaseModel) -> bytes`
+- `def _coordination_conflict(detail: str) -> Never`
+- `def _workspace_failure(detail: str) -> Never`
+
+## serve/delivery/src/owlbear_delivery/completed_history.py
+
+Bounded Git-backed projections of completed Delivery packages.
+
+### Imports
+
+- `__future__`
+- `base64`
+- `binascii`
+- `enum`
+- `hashlib`
+- `json`
+- `owlbear_delivery.delivery_runtime`
+- `owlbear_delivery.design_package`
+- `owlbear_delivery.identities`
+- `owlbear_delivery.target_contract`
+- `pydantic`
+- `re`
+- `subprocess`
+- `typing`
+
+### Interfaces
+
+- `class _CompletedHistoryModel(BaseModel)`
+- `class CompletedHistoryDiagnosticCode(StrEnum)`
+- `class CompletedHistoryDiagnostic(_CompletedHistoryModel)`
+- `class CompletedHistoryError(RuntimeError)`
+  - `def __init__(self, diagnostic: CompletedHistoryDiagnostic) -> None`
+- `class CompletedHistoryMissingError(CompletedHistoryError)`
+- `class CompletedHistoryMalformedError(CompletedHistoryError)`
+- `class CompletedHistoryStaleError(CompletedHistoryError)`
+- `class CompletedHistoryDigestMismatchError(CompletedHistoryError)`
+- `class CompletedChangeRecord(_CompletedHistoryModel)`
+- `class CompletedChangePage(_CompletedHistoryModel)`
+- `class _Cursor(_CompletedHistoryModel)`
+- `def _decode_cursor(cursor: str) -> _Cursor`
+- `def _encode_cursor(cursor: _Cursor) -> str`
+- `def _query_digest(query: str) -> str`
+- `class CompletedHistoryCatalog`
+  - `def __init__(self, repository: Path, integration_target: str) -> None`
+  - `def list(self, cursor: str | None = None, limit: int = 100) -> CompletedChangePage`
+  - `def search(self, query: str, cursor: str | None = None, limit: int = 100) -> CompletedChangePage`
+  - `def show(self, change_id: str, completion_id: str | None = None) -> CompletedChangeRecord`
+  - `def _rebuild(self) -> tuple[str, tuple[CompletedChangeRecord, ...]]`
+  - `def _record(self, target_commit: str, path: str) -> CompletedChangeRecord`
+  - `def _snapshot(self, commit: str, path: str) -> CompletionPackageSnapshot`
+  - `def _verify_design_package(self, commit: str, path: str, snapshot: CompletionPackageSnapshot) -> DeliveryContract`
+  - `def _verify_authored_digests(self, commit: str, path: str, snapshot: CompletionPackageSnapshot, manifest: DesignPackageManifest) -> None`
+  - `def _contract(self, commit: str, path: str, snapshot: CompletionPackageSnapshot) -> DeliveryContract`
+  - `def _verify_runtime_capture(self, commit: str, path: str, snapshot: CompletionPackageSnapshot, contract: DeliveryContract) -> None`
+  - `def _require_capture_digests(self, snapshot: CompletionPackageSnapshot, runtime_bytes: bytes, results_bytes: bytes) -> None`
+  - `def _require_capture_shape(self, snapshot: CompletionPackageSnapshot, contract: DeliveryContract, frontier: DeliveryFrontier, results: tuple[DeliveryTaskResult, ...]) -> None`
+  - `def _introduction(self, target_commit: str, path: str, snapshot: CompletionPackageSnapshot) -> tuple[str, str]`
+  - `def _require_reviewed_ancestry(self, introducing: str, snapshot: CompletionPackageSnapshot) -> None`
+  - `def _completion_paths(self, target_commit: str) -> tuple[str, ...]`
+  - `def _completion_path(self, entry: bytes) -> str`
+  - `def _require_completion_names(self, commit: str, path: str) -> None`
+  - `def _require_snapshot_binding(self, path: str, snapshot: CompletionPackageSnapshot) -> None`
+  - `def _page(self, records: tuple[CompletedChangeRecord, ...], source_commit: str, query: str, cursor: str | None, limit: int) -> CompletedChangePage`
+  - `def _cursor_offset(self, cursor: str | None, source_commit: str, query: str) -> int`
+  - `def _resolve_target(self) -> str`
+  - `def _blob(self, commit: str, path: str, name: str) -> bytes`
+  - `def _git(self, *arguments: str) -> bytes`
+  - `def _run_git(self, *arguments: str, check: bool) -> subprocess.CompletedProcess[bytes]`
+  - `def _missing(detail: str, change_id: str | None = None, completion_id: str | None = None) -> Never`
+  - `def _malformed(detail: str, change_id: str | None = None, *, cause: Exception | None = None) -> Never`
+  - `def _stale(detail: str, snapshot: CompletionPackageSnapshot) -> Never`
+  - `def _digest_mismatch(detail: str, snapshot: CompletionPackageSnapshot) -> Never`
+- `def _canonical_model(model: BaseModel) -> bytes`
+- `def _canonical_results(results: tuple[DeliveryTaskResult, ...]) -> bytes`
+
+## serve/delivery/src/owlbear_delivery/delivery_application_loader.py
+
+Transport-free Delivery application configuration and composition.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `owlbear_delivery.change_workspace`
+- `owlbear_delivery.completed_history`
+- `owlbear_delivery.delivery_runtime`
+- `owlbear_delivery.design_package`
+- `owlbear_delivery.portfolio_application`
+- `owlbear_delivery.target_admission`
+- `owlbear_delivery.target_contract`
+- `pydantic`
+- `shutil`
+- `subprocess`
+- `typing`
+
+### Interfaces
+
+- `class _LoaderModel(BaseModel)`
+- `class DeliveryStartupConfig(_LoaderModel)`
+- `class _DeliveryPaths`
+- `class DeliveryApplicationLoadError(RuntimeError)`
+  - `def __init__(self, field: str, detail: str) -> None`
+- `def _load_error(field: str, detail: str) -> DeliveryApplicationLoadError`
+- `def _derive_paths(workspace_root: Path) -> _DeliveryPaths`
+- `def _validate_git_config(config: DeliveryStartupConfig, paths: _DeliveryPaths) -> None`
+- `def _read_contract(change_root: Path) -> DeliveryContract`
+- `def _load_contracts(target_root: Path) -> dict[str, DeliveryContract]`
+- `def _role_policies() -> tuple[DeliveryRolePolicy, ...]`
+- `def _validate_runtime_state(target_root: Path, contracts: dict[str, DeliveryContract]) -> None`
+- `def _compose_application(config: DeliveryStartupConfig, paths: _DeliveryPaths, contracts: dict[str, DeliveryContract]) -> PortfolioApplication`
+- `def load_delivery_application(config: DeliveryStartupConfig, *, workspace_root: Path, authorized_target_root: Path) -> PortfolioApplication`
+
+## serve/delivery/src/owlbear_delivery/delivery_runtime.py
+
+Mechanical schema-v2 Delivery state and worker-owned transitions.
+
+### Imports
+
+- `__future__`
+- `enum`
+- `hashlib`
+- `json`
+- `owlbear_delivery.runtime_transaction`
 - `pydantic`
 - `typing`
 
 ### Interfaces
 
-- `def _validate_status_and_priority(statuses: list[str], priorities: list[str]) -> None`
-- `def _validate_entry_and_terminal(statuses: list[str], entry_status: str, terminal_status: str) -> None`
-- `def _validate_agent_compatibility(compatibility: dict[str, Any]) -> None`
-- `class BoardInfo(BaseModel)`
-- `class BoardDefaults(BaseModel)`
-- `class PathsConfig(BaseModel)`
-  - `def _validate_board_relative_paths(cls, value: str) -> str`
-- `class PipelineConfig(BaseModel)`
-- `class AgentsConfig(BaseModel)`
-- `class PolicyConfig(BaseModel)`
-- `class BoardConfig(BaseModel)`
-  - `def _normalise_legacy(cls, data: object) -> object`
-  - `def status_names(self) -> list[str]`
-  - `def _validate_semantics(self) -> BoardConfig`
-- `class Task(BaseModel)`
-  - `def _drop_projection_only_fields(cls, data: object) -> object`
-  - `def _normalize_proof_bundle(cls, value: str | None) -> str | None`
-- `class TaskSummary(BaseModel)`
-  - `def _coerce_claimed(cls, data: object) -> object`
-  - `def __getitem__(self, key: str) -> object`
-- `class Section(BaseModel)`
-- `class ActivityEvent(BaseModel)`
-- `class ActivityCompactionResult(BaseModel)`
-- `class SessionRecord(BaseModel)`
-- `class RepairOutcome(BaseModel)`
-- `class CleanupResult(BaseModel)`
-- `class TaskFull(TaskSummary)`
-- `class DispatchEntry(BaseModel)`
-- `class Wave(BaseModel)`
-- `class ListTasksResponse(BaseModel)`
-- `class ShowTaskResponse(TaskFull)`
-- `class PickTasksResponse(BaseModel)`
-- `class SingleTaskResponse(TaskFull)`
+- `class DeliveryStage(StrEnum)`
+- `class DeliveryChangeStage(StrEnum)`
+- `class DeliveryOutputKind(StrEnum)`
+- `class DeliveryRequestKind(StrEnum)`
+- `class DeliveryWorkerRole(StrEnum)`
+- `class _DeliveryModel(BaseModel)`
+- `class DeliveryOutputReference(_DeliveryModel)`
+- `class DeliveryTaskDefinition(_DeliveryModel)`
+  - `def _validate_references(self) -> DeliveryTaskDefinition`
+  - `def digest(self) -> str`
+- `class DeliveryPlanCandidate(_DeliveryModel)`
+  - `def output(self) -> DeliveryOutputReference`
+- `class DeliveryTaskResult(_DeliveryModel)`
+- `class DeliveryResultCandidate(_DeliveryModel)`
+  - `def output(self) -> DeliveryOutputReference`
+- `class DeliveryRequestOption(_DeliveryModel)`
+- `class DeliveryRequestResolution(_DeliveryModel)`
+  - `def _require_answer(self) -> DeliveryRequestResolution`
+- `class DeliveryRequest(_DeliveryModel)`
+  - `def _validate_options(self) -> DeliveryRequest`
+- `class DeliveryBlock(_DeliveryModel)`
+  - `def resolved(self) -> bool`
+- `class DeliveryOperatorMove(_DeliveryModel)`
+- `class DeliveryReturnContext(_DeliveryModel)`
+- `class DeliveryRecoveryAttention(_DeliveryModel)`
+- `class DeliveryIntegrationAttentionCode(StrEnum)`
+- `class DeliveryIntegrationCandidate(_DeliveryModel)`
+- `class DeliveryIntegrationCompletion(_DeliveryModel)`
+- `class DeliveryIntegrationAttention(_DeliveryModel)`
+- `class DeliveryIntegrationRepairReview(_DeliveryModel)`
+- `class DeliveryIntegrationRepair(_DeliveryModel)`
+  - `def _validate_review_binding(self) -> DeliveryIntegrationRepair`
+- `class DeliveryActiveClaim(_DeliveryModel)`
+- `class OutcomeAuthorityBinding(_DeliveryModel)`
+  - `def _validate_state(self) -> OutcomeAuthorityBinding`
+  - `def _validate_active_claim(self) -> None`
+  - `def _validate_recovery_attention(self) -> None`
+  - `def task_ids(self) -> tuple[str, ...]`
+  - `def result_ids(self) -> tuple[str, ...]`
+  - `def active_claim_id(self) -> str | None`
+  - `def active_task_id(self) -> str | None`
+- `class DeliveryFrontier(_DeliveryModel)`
+  - `def _validate_identities(self) -> DeliveryFrontier`
+- `class ActivateDeliveryClaim(_DeliveryModel)`
+  - `def claim_id(self) -> str`
+  - `def task_id(self) -> str | None`
+- `class PublishDeliveryOutput(_DeliveryModel)`
+- `class PublishDeliveryPlan(_DeliveryModel)`
+- `class PublishDeliveryResult(_DeliveryModel)`
+- `class AdvanceDelivery(_DeliveryModel)`
+- `class RetryDelivery(_DeliveryModel)`
+- `class ReturnDelivery(_DeliveryModel)`
+- `class BlockDelivery(_DeliveryModel)`
+- `class AdministrativeDeliveryMove(_DeliveryModel)`
+- `class AdministrativeDeliveryMoveResult(_DeliveryModel)`
+- `class DeliveryRuntimeConflictError(RuntimeError)`
+- `class DeliveryRuntimeReferenceError(ValueError)`
+- `class DeliveryRuntime`
+  - `def __init__(self, target_root: Path, contract: DeliveryContract, *, workspace_manager: ChangeWorkspaceManager | None = None) -> None`
+  - `def authority_digest(self) -> str`
+  - `def contract(self) -> DeliveryContract`
+  - `def frontier_bytes(self) -> bytes`
+  - `def completion_capture_bytes(self) -> tuple[bytes, bytes]`
+  - `def integration_completion(self) -> DeliveryIntegrationCompletion | None`
+  - `def integration_attention(self) -> DeliveryIntegrationAttention | None`
+  - `def show_binding(self, outcome_id: str) -> OutcomeAuthorityBinding`
+  - `def active_claims(self) -> tuple[tuple[str, DeliveryActiveClaim], ...]`
+  - `def require_active_claim(self, outcome_id: str, attempt_id: str, claim_id: str) -> OutcomeAuthorityBinding`
+  - `def remove_active_claim(self, outcome_id: str, attempt_id: str, claim_id: str) -> OutcomeAuthorityBinding`
+  - `def publish_recovery_attention(self, outcome_id: str, attention: DeliveryRecoveryAttention) -> OutcomeAuthorityBinding`
+  - `def publish_integration_completion(self, completion: DeliveryIntegrationCompletion) -> DeliveryIntegrationCompletion`
+  - `def publish_integration_attention(self, attention: DeliveryIntegrationAttention) -> DeliveryIntegrationAttention`
+  - `def integration_repair_replacement(self, repair: DeliveryIntegrationRepair) -> ReplacementTransactionParticipant`
+  - `def claimable_outcome_ids(self) -> tuple[str, ...]`
+  - `def claimable_task_ids(self, outcome_id: str) -> tuple[str, ...]`
+  - `def change_stage(self) -> DeliveryChangeStage`
+  - `def activate_claim(self, request: ActivateDeliveryClaim) -> OutcomeAuthorityBinding`
+  - `def publish_output(self, request: PublishDeliveryOutput) -> DeliveryOutputReference`
+  - `def publish_plan(self, request: PublishDeliveryPlan) -> DeliveryPlanCandidate`
+  - `def publish_result(self, request: PublishDeliveryResult) -> DeliveryResultCandidate`
+  - `def transition(self, request: DeliveryTransition) -> OutcomeAuthorityBinding`
+  - `def resolve_request(self, request_id: str, resolution: DeliveryRequestResolution) -> DeliveryRequest`
+  - `def unblock(self, outcome_id: str, block_id: str, operator_note: str, locators: tuple[str, ...]) -> OutcomeAuthorityBinding`
+  - `def administrative_move(self, request: AdministrativeDeliveryMove) -> AdministrativeDeliveryMoveResult`
+  - `def _advance(self, binding: OutcomeAuthorityBinding, request: AdvanceDelivery) -> OutcomeAuthorityBinding`
+  - `def _retry(self, binding: OutcomeAuthorityBinding, request: RetryDelivery) -> OutcomeAuthorityBinding`
+  - `def _require_workspace(self) -> ChangeWorkspaceManager`
+  - `def _validate_plan(self, binding: OutcomeAuthorityBinding, tasks: tuple[DeliveryTaskDefinition, ...]) -> None`
+  - `def _return(self, binding: OutcomeAuthorityBinding, request: ReturnDelivery) -> OutcomeAuthorityBinding`
+  - `def _block(self, binding: OutcomeAuthorityBinding, request: BlockDelivery) -> OutcomeAuthorityBinding`
+  - `def _read(self) -> tuple[DeliveryFrontier, bytes]`
+  - `def _replace(self, previous: bytes, frontier: DeliveryFrontier) -> None`
+  - `def _validate_frontier(self, frontier: DeliveryFrontier) -> None`
+- `def _find_binding(frontier: DeliveryFrontier, outcome_id: str) -> OutcomeAuthorityBinding`
+- `def _find_request(frontier: DeliveryFrontier, request_id: str) -> tuple[OutcomeAuthorityBinding, DeliveryRequest]`
+- `def _replace_binding(frontier: DeliveryFrontier, previous: OutcomeAuthorityBinding, replacement: OutcomeAuthorityBinding) -> DeliveryFrontier`
+- `def _require_claim(binding: OutcomeAuthorityBinding, claim_id: str) -> None`
+- `def _reset_binding(binding: OutcomeAuthorityBinding, stage: DeliveryStage) -> OutcomeAuthorityBinding`
+- `def _completed_dependent_closure(contract: DeliveryContract, frontier: DeliveryFrontier, outcome_id: str) -> set[str]`
+- `def _model_content(model: BaseModel) -> bytes`
+- `def _canonical_content(models: tuple[BaseModel, ...]) -> bytes`
+- `def _conflict(message: str) -> None`
+- `def _reference(message: str, cause: Exception | None = None) -> None`
 
-## serve/kanban/src/owlbear_kanban/predicates.py
+## serve/delivery/src/owlbear_delivery/design_package.py
 
-Section-based predicate DSL for kanban task gates (Brief C §6).
+Replay-safe authored Design packages and semantic Git checkpoints.
 
 ### Imports
 
 - `__future__`
-- `markdown_it`
-- `owlbear_kanban.body_parser`
+- `hashlib`
+- `json`
+- `os`
+- `owlbear_delivery.identities`
+- `owlbear_delivery.runtime_transaction`
+- `owlbear_delivery.storage_io`
+- `pathlib`
+- `pydantic`
+- `re`
+- `shutil`
+- `subprocess`
 - `typing`
 
 ### Interfaces
 
-- `def _get_sections(task: Task) -> list[Section]`
-- `def _section_matches(section: Section, name: str) -> bool`
-- `def required_sections(task: Task, section_names: list[str]) -> bool`
-- `def require_list_in_section(task: Task, section_name: str) -> bool`
-- `def _has_list_outside_fences(content: str) -> bool`
+- `class DesignPackageConflictError(RuntimeError)`
+- `class _PackageModel(BaseModel)`
+- `class DesignPackageManifest(_PackageModel)`
+  - `def from_content(cls, change_id: str, intent_bytes: bytes, design_bytes: bytes, authority_bytes: bytes = b'') -> DesignPackageManifest`
+  - `def canonical_bytes(self) -> bytes`
+- `class DesignPackageResult(_PackageModel)`
+- `class VerifiedDesignPackage(_PackageModel)`
+- `class CompletionPackageManifest(_PackageModel)`
+  - `def canonical_bytes(self) -> bytes`
+  - `def completion_id(self) -> Digest`
+- `class CompletionPackageSnapshot(_PackageModel)`
+- `class CompletionCapture(_PackageModel)`
+- `class DesignCheckpointResult(_PackageModel)`
+- `class DesignPackageStore`
+  - `def __init__(self, active_root: Path, repository: Path, *, failure: Callable[[str], None] | None = None) -> None`
+  - `def create(self, change_id: str, intent_bytes: bytes, design_bytes: bytes) -> DesignPackageResult`
+  - `def read_verified(self, change_id: str) -> VerifiedDesignPackage`
+  - `def revise(self, change_id: str, expected_package_id: str, intent_bytes: bytes, design_bytes: bytes) -> VerifiedDesignPackage`
+  - `def publish_contract(self, change_id: str, expected_package_id: str, contract_bytes: bytes, validation_callback: Callable[[bytes, bytes, bytes], None]) -> VerifiedDesignPackage`
+  - `def checkpoint(self, change_id: str) -> DesignCheckpointResult`
+  - `def capture_completion(self, capture: CompletionCapture, validation_callback: Callable[[CompletionPackageSnapshot], _CaptureResult], publication_callback: Callable[[_CaptureResult], _PublicationResult]) -> _PublicationResult`
+  - `def _completion_snapshot(self, capture: CompletionCapture, package_id: str, content: dict[str, bytes]) -> CompletionPackageSnapshot`
+  - `def cleanup_completed(self, change_id: str, expected_package_id: str) -> None`
+  - `def _existing_content(self, change_id: str) -> dict[str, bytes] | None`
+  - `def _verify_package(self, change_id: str) -> tuple[DesignPackageManifest, dict[str, bytes]]`
+  - `def _write_tree(self, content: dict[str, bytes], *, names: tuple[str, ...] = _PACKAGE_NAMES) -> str`
+  - `def _write_commit(self, change_id: str, package_id: str, tree: str, parent: str | None) -> str`
+  - `def _resolve_reference(self, reference: str) -> str | None`
+  - `def _git(self, *arguments: str, input_bytes: bytes | None = None, environment: dict[str, str] | None = None) -> str`
+  - `def _run_git(self, *arguments: str, input_bytes: bytes | None = None, environment: dict[str, str] | None = None, check: bool = True) -> subprocess.CompletedProcess[bytes]`
+  - `def _result(self, change_id: str, manifest: DesignPackageManifest, package_id: str, *, replayed: bool) -> DesignPackageResult`
+- `def _validate_change_id(change_id: str) -> None`
+- `def _digest(content: bytes) -> str`
+- `def _read_contained(package_root: Path, path: Path) -> bytes`
+- `def _stdout(result: subprocess.CompletedProcess[bytes]) -> str`
 
-## serve/kanban/src/owlbear_kanban/request_models.py
+## serve/delivery/src/owlbear_delivery/identities.py
 
-Pydantic models for structured decision/action requests.
+Constrained identities shared by target delivery modules.
 
 ### Imports
 
 - `__future__`
+- `pydantic`
+- `typing`
+
+## serve/delivery/src/owlbear_delivery/portfolio_application.py
+
+Deterministic portfolio acquisition and bounded worker context.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
 - `datetime`
+- `enum`
+- `hashlib`
+- `json`
+- `owlbear_delivery.change_workspace`
+- `owlbear_delivery.delivery_runtime`
+- `owlbear_delivery.design_package`
+- `owlbear_delivery.target_authority`
+- `owlbear_delivery.target_contract`
+- `owlbear_delivery.work_items`
+- `pathlib`
 - `pydantic`
 - `typing`
 - `uuid`
 
 ### Interfaces
 
-- `class RequestOption(BaseModel)`
-- `class Resolution(BaseModel)`
-- `class _RequestBase(BaseModel)`
-  - `def _validate_request_id(cls, value: str) -> str`
-  - `def _validate_created_at(cls, value: str) -> str`
-- `class DecisionRequest(_RequestBase)`
-  - `def _validate_recommended_count(self) -> DecisionRequest`
-- `class ActionRequest(_RequestBase)`
-- `class Request`
-  - `def model_validate(cls, data: object) -> DecisionRequest | ActionRequest`
-- `class RequestRecord(BaseModel)`
-  - `def from_request(cls, request: DecisionRequest | ActionRequest, body: str) -> RequestRecord`
+- `def _reject_unconfigured_candidate(_candidate: DeliveryIntegrationCandidate, _commit: str) -> tuple[str, ...]`
+- `def _project_runtime_authority(contract: DeliveryContract, frontier: DeliveryFrontier) -> TargetAuthority`
+- `def _project_runtime_evidence(contract: DeliveryContract, frontier: DeliveryFrontier) -> WorkItemEvidence`
+- `def _operator_claim(claim: DeliveryActiveClaim | None) -> DeliveryOperatorClaim | None`
+- `def _operator_recovery_attention(attention: DeliveryRecoveryAttention | None) -> DeliveryOperatorRecoveryAttention | None`
+- `def _operator_integration_attention(attention: DeliveryIntegrationAttention | None) -> DeliveryOperatorIntegrationAttention | None`
+- `class _ApplicationModel(BaseModel)`
+- `class DeliveryRolePolicy(_ApplicationModel)`
+- `class DeliveryLaunchPackage(_ApplicationModel)`
+  - `def _validate_role_custody(self) -> DeliveryLaunchPackage`
+- `class DeliveryAcquisitionFailure(_ApplicationModel)`
+- `class DeliveryAcquisitionResult(_ApplicationModel)`
+- `class DeliveryPlanContext(_ApplicationModel)`
+- `class DeliveryBuildContext(_ApplicationModel)`
+- `class DeliveryOperatorClaim(_ApplicationModel)`
+- `class DeliveryOperatorRecoveryAttention(_ApplicationModel)`
+- `class DeliveryOperatorIntegrationAttention(_ApplicationModel)`
+- `class DeliveryOperatorContext(_ApplicationModel)`
+- `class DeliveryClaimRecoveryStatus(StrEnum)`
+- `class DeliveryClaimRecoveryResult(_ApplicationModel)`
+  - `def _validate_disposition(self) -> DeliveryClaimRecoveryResult`
+- `class DeliveryIntegrationResult(_ApplicationModel)`
+  - `def _validate_disposition(self) -> DeliveryIntegrationResult`
+- `class PortfolioApplicationError(RuntimeError)`
+- `class PortfolioApplicationConfig(_ApplicationModel)`
+  - `def _validate_roles(self) -> PortfolioApplicationConfig`
+- `class PortfolioApplicationDependencies`
+- `class PortfolioApplicationHooks`
+- `class _Candidate`
+- `class _PreparedSource`
+- `class _PreparedIntegration`
+- `class PortfolioApplication`
+  - `def __init__(self, runtimes: Mapping[str, DeliveryRuntime], dependencies: PortfolioApplicationDependencies, config: PortfolioApplicationConfig, hooks: PortfolioApplicationHooks | None = None) -> None`
+  - `def create_design_session(self, change_id: str, intent_bytes: bytes, design_bytes: bytes) -> DesignPackageResult`
+  - `def read_design_session(self, change_id: str) -> VerifiedDesignPackage`
+  - `def revise_design_session(self, change_id: str, expected_package_id: str, intent_bytes: bytes, design_bytes: bytes) -> VerifiedDesignPackage`
+  - `def publish_design_checkpoint(self, change_id: str) -> DesignCheckpointResult`
+  - `def derive_delivery_contract(self, change_id: str) -> DeliveryCompilationResult`
+  - `def validate_delivery_contract(self, change_id: str) -> DeliveryCompilationResult`
+  - `def admit_delivery_change(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult`
+  - `def publish_delivery_plan(self, change_id: str, request: PublishDeliveryPlan) -> DeliveryPlanCandidate`
+  - `def publish_delivery_result(self, change_id: str, request: PublishDeliveryResult) -> DeliveryResultCandidate`
+  - `def transition_delivery(self, change_id: str, request: DeliveryTransition) -> OutcomeAuthorityBinding`
+  - `def list_integration_ready_changes(self) -> tuple[str, ...]`
+  - `def show_integration_attention(self, change_id: str) -> DeliveryIntegrationAttention | None`
+  - `def list_work_items(self) -> tuple[WorkItemProjection, ...]`
+  - `def show_work_item(self, change_id: str, work_item_id: str) -> WorkItemDetail`
+  - `def show_operator_context(self, change_id: str, outcome_id: str) -> DeliveryOperatorContext`
+  - `def resolve_request(self, change_id: str, request_id: str, resolution: DeliveryRequestResolution) -> DeliveryRequest`
+  - `def clear_block(self, change_id: str, outcome_id: str, block_id: str, operator_note: str, locators: tuple[str, ...]) -> OutcomeAuthorityBinding`
+  - `def administrative_move(self, change_id: str, request: AdministrativeDeliveryMove) -> AdministrativeDeliveryMoveResult`
+  - `def _work_item_projector(self, runtime: DeliveryRuntime) -> WorkItemProjector`
+  - `def list_completed_changes(self, cursor: str | None = None, limit: int = 100) -> CompletedChangePage`
+  - `def search_completed_changes(self, query: str, cursor: str | None = None, limit: int = 100) -> CompletedChangePage`
+  - `def show_completed_change(self, change_id: str, completion_id: str | None = None) -> CompletedChangeRecord`
+  - `def _completed_history(self) -> CompletedHistoryCatalog`
+  - `def acquire_frontier_work(self) -> DeliveryAcquisitionResult`
+  - `def show_plan_context(self, change_id: str, outcome_id: str, attempt_id: str, claim_id: str) -> DeliveryPlanContext`
+  - `def show_build_context(self, change_id: str, outcome_id: str, attempt_id: str, claim_id: str) -> DeliveryBuildContext`
+  - `def recover_claim(self, change_id: str, outcome_id: str, attempt_id: str, claim_id: str) -> DeliveryClaimRecoveryResult`
+  - `def _recover_active_claims(self) -> tuple[DeliveryClaimRecoveryResult, ...]`
+  - `def _recover_claim(self, change_id: str, outcome_id: str, attempt_id: str, claim_id: str) -> DeliveryClaimRecoveryResult`
+  - `def integrate_ready_change(self, change_id: str) -> DeliveryIntegrationResult`
+  - `def admit_reviewed_integration_repair(self, repair: DeliveryIntegrationRepair) -> DeliveryIntegrationRepair`
+  - `def _capture_ready_integration(self, change_id: str, runtime: DeliveryRuntime, context: IntegrationContext) -> DeliveryIntegrationResult`
+  - `def _prepare_integration_snapshot(self, runtime: DeliveryRuntime, context: IntegrationContext, snapshot: CompletionPackageSnapshot) -> _PreparedIntegration`
+  - `def _publish_prepared_integration(self, runtime: DeliveryRuntime, context: IntegrationContext, prepared: _PreparedIntegration) -> DeliveryIntegrationResult`
+  - `def _integration_candidate(self, runtime: DeliveryRuntime, context: IntegrationContext, snapshot: CompletionPackageSnapshot) -> DeliveryIntegrationCandidate`
+  - `def _integration_attention(self, runtime: DeliveryRuntime, context: IntegrationContext, code: DeliveryIntegrationAttentionCode, diagnostics: tuple[str, ...], *, candidate: DeliveryIntegrationCandidate | None = None) -> DeliveryIntegrationResult`
+  - `def _cleanup_integration(self, change_id: str, completion: DeliveryIntegrationCompletion) -> None`
+  - `def _package_attention_code(runtime: DeliveryRuntime, package: VerifiedDesignPackage) -> DeliveryIntegrationAttentionCode | None`
+  - `def _candidates(self) -> tuple[_Candidate, ...]`
+  - `def _prepare_source(self, change_id: str, runtime: DeliveryRuntime, outcome_id: str) -> _PreparedSource | DeliveryAcquisitionFailure`
+  - `def _activate_candidate(self, candidate: _Candidate, source: _PreparedSource) -> DeliveryLaunchPackage | DeliveryAcquisitionFailure`
+  - `def _current_launch(self, change_id: str, runtime: DeliveryRuntime, binding: OutcomeAuthorityBinding) -> DeliveryLaunchPackage`
+  - `def _launch_package(self, candidate: _Candidate, claim: DeliveryActiveClaim, source: _PreparedSource, writer: ChangeWriter | None) -> DeliveryLaunchPackage`
+  - `def _new_claim(self, role: DeliveryWorkerRole, task_id: str | None) -> DeliveryActiveClaim`
+  - `def _released_recovery_matches(snapshot: WorkspaceRecoverySnapshot) -> bool`
+  - `def _active_recovery_matches(snapshot: WorkspaceRecoverySnapshot, attempt_id: str, claim_id: str) -> bool`
+  - `def _retain_recovery_attention(self, runtime: DeliveryRuntime, outcome_id: str, claim: DeliveryActiveClaim, snapshot: WorkspaceRecoverySnapshot) -> DeliveryClaimRecoveryResult`
+  - `def _recovery_reason(snapshot: WorkspaceRecoverySnapshot, claim: DeliveryActiveClaim) -> str`
+  - `def _recovered(change_id: str, outcome_id: str, attempt_id: str, claim_id: str, preserved_commit: str | None = None) -> DeliveryClaimRecoveryResult`
+  - `def _validate_package_authority(self, runtime: DeliveryRuntime, package: VerifiedDesignPackage) -> None`
+  - `def _dependency_depth(self, runtime: DeliveryRuntime, outcome_id: str) -> int`
+  - `def _runtime(self, change_id: str) -> DeliveryRuntime`
+  - `def _outcome(runtime: DeliveryRuntime, outcome_id: str) -> DeliveryOutcome`
+  - `def _commitments(runtime: DeliveryRuntime, commitment_ids: tuple[str, ...]) -> tuple[DeliveryCommitment, ...]`
+  - `def _fail(message: str, cause: Exception | None = None) -> Never`
+- `def _canonical(payload: object) -> bytes`
 
-## serve/kanban/src/owlbear_kanban/storage.py
+## serve/delivery/src/owlbear_delivery/proof_checkout.py
 
-Public storage persistence surface for owlbear-kanban (Brief C §1.3).
+Contained exact-commit checkouts for independent target review.
 
 ### Imports
 
 - `__future__`
 - `contextlib`
-- `datetime`
+- `enum`
+- `hashlib`
 - `io`
-- `owlbear_kanban._naming`
-- `owlbear_kanban.corruption`
-- `owlbear_kanban.models`
-- `owlbear_kanban.storage_io`
+- `owlbear_delivery.yaml_rt`
 - `pathlib`
 - `pydantic`
-- `re`
-- `ruamel.yaml.comments`
-- `ruamel.yaml.scalarstring`
-- `threading`
+- `shutil`
+- `stat`
+- `subprocess`
+- `typing`
+
+### Interfaces
+
+- `class ProofCheckoutDiagnosticCode(StrEnum)`
+- `class ProofCheckoutDiagnostic(BaseModel)`
+- `class ProofCheckout(BaseModel)`
+- `class ProofCheckoutSnapshot(BaseModel)`
+- `class ProofCheckoutResult(BaseModel)`
+- `class ProofCheckoutManager`
+  - `def __init__(self, repository: Path, proof_root: Path, authority_root: Path | None = None) -> None`
+  - `def materialize(self, job: TargetJob, commit: str, *, environment: Mapping[str, str] | None = None, replacements: Sequence[str] = ()) -> ProofCheckoutResult`
+  - `def cleanup(self, job_id: int) -> None`
+  - `def snapshot(self, job_id: int) -> ProofCheckoutSnapshot | None`
+  - `def restore(self, job: TargetJob, snapshot: ProofCheckoutSnapshot) -> bool`
+  - `def existing(self, job_id: int) -> ProofCheckout | None`
+  - `def resolve_commit(self, commit: str) -> str | None`
+  - `def validate(self, job_id: int, expected_commit: str) -> ProofCheckoutDiagnostic | None`
+  - `def health_paths(self) -> tuple[str, ...]`
+  - `def is_orphan(self, path: str) -> bool`
+  - `def _paths(self, job_id: int) -> tuple[Path, Path, Path, Path] | None`
+  - `def _authority_source(self, change_id: str) -> Path | None`
+  - `def _resolve_commit(self, commit: str) -> str | None`
+  - `def _git(self, *arguments: str) -> str`
+  - `def _make_tracked_files_read_only(self, checkout: Path) -> None`
+  - `def _make_tree_read_only(root: Path) -> None`
+  - `def _tree_digest(root: Path) -> str`
+  - `def _write_manifest(path: Path, job: TargetJob, commit: str, authority_digest: str, environment: Mapping[str, str], replacements: Sequence[str]) -> None`
+  - `def _remove(self, root: Path, checkout: Path) -> None`
+  - `def _diagnostic(code: ProofCheckoutDiagnosticCode, detail: str) -> ProofCheckoutResult`
+
+## serve/delivery/src/owlbear_delivery/runtime_transaction.py
+
+Durable publication of a bounded set of contained runtime records.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `dataclasses`
+- `hashlib`
+- `os`
+- `owlbear_delivery.storage_io`
+- `pathlib`
+- `secrets`
 - `typing`
 - `yaml`
 
 ### Interfaces
 
-- `class YAML12SafeLoader(yaml.SafeLoader)`
-- `def _make_yaml() -> YAML`
-- `def _allocation_thread_lock(kanban_dir: Path) -> threading.Lock`
-- `def _allocation_lock(kanban_dir: Path) -> Iterator[None]`
-- `def _load_yaml12_frontmatter(frontmatter_str: str, *, path: Path) -> dict[str, Any]`
-- `def _parse_task_file(path: Path) -> dict[str, Any]`
-- `def _is_archive_path(path: Path, board_dir: Path, config: BoardConfig | None) -> bool`
-- `def _resolve_board_config(path: Path, config: BoardConfig | None) -> tuple[Path, BoardConfig | None]`
-- `def _as_plain_timestamp_scalar(value: str) -> str | PlainScalarString`
-- `def _unquote_timestamp_scalars(yaml_str: str) -> str`
-- `def _validation_to_corruption(path: Path, exc: ValidationError) -> CorruptionError`
-- `def save_config(config: BoardConfig, kanban_dir: Path) -> None`
-- `def _yaml_safe_value(value: object) -> object`
-- `def _normalize_timestamp(ts: str | None) -> str | None`
-- `def read_task(path: Path, *, config: BoardConfig | None = None) -> Task`
-- `def write_task(task: Task, kanban_dir: Path, *, target_dir: Path | None = None) -> Path`
-- `def write_task_if_unchanged(task: Task, expected_updated: str, kanban_dir: Path) -> Path`
-- `def list_task_files(kanban_dir: Path) -> list[Path]`
-- `def list_archive_files(kanban_dir: Path) -> list[Path]`
-- `def move_to_archive(task_id: int, kanban_dir: Path) -> Path`
-- `def allocate_next_id(kanban_dir: Path, *, write_task_fn: Callable[[int], None] | None = None) -> int`
+- `class TransactionConflictError(RuntimeError)`
+- `class TransactionPathError(ValueError)`
+- `class TransactionManifestError(ValueError)`
+- `class TransactionParticipant`
+  - `def destination(self) -> Path`
+- `class ReplacementTransactionParticipant`
+  - `def destination(self) -> Path`
+- `class MoveTransactionParticipant`
+  - `def source(self) -> Path`
+  - `def destination(self) -> Path`
+- `def _contained_path(root: Path, relative_path: Path) -> Path`
+- `class RuntimeTransaction`
+  - `def __init__(self, manifest_root: Path, transaction_id: str, participants: tuple[TransactionParticipant | ReplacementTransactionParticipant | MoveTransactionParticipant, ...]) -> None`
+  - `def _directory(self) -> Path`
+  - `def _manifest_path(self) -> Path`
+  - `def commit(self, *, failure: Callable[[str], None] | None = None) -> None`
+  - `def recover(self) -> None`
+  - `def abort(self) -> None`
+  - `def _locked_roots(self) -> tuple[Path, ...]`
+  - `def recover_all(cls, manifest_root: Path, *, roots: tuple[Path, ...] | None = None) -> None`
+  - `def _from_manifest(cls, manifest_root: Path, manifest_path: Path, allowed_roots: tuple[Path, ...]) -> RuntimeTransaction`
+  - `def _prepare_manifest(self) -> None`
+  - `def _participant_paths(self) -> tuple[Path, ...]`
+  - `def _manifest(self) -> dict[str, object]`
+  - `def _publish(self, failure: Callable[[str], None] | None) -> None`
+  - `def _cleanup(self) -> None`
+- `def _atomic_write_yaml(path: Path, value: dict[str, object]) -> None`
+- `def _load_yaml(path: Path) -> dict[str, object]`
+- `def _participant_from_manifest(entry: object, allowed_roots: tuple[Path, ...]) -> TransactionParticipant | ReplacementTransactionParticipant | MoveTransactionParticipant`
+- `def _participant_manifest(participant: TransactionParticipant | ReplacementTransactionParticipant | MoveTransactionParticipant) -> dict[str, str]`
+- `def _replacement_participant_from_manifest(entry: dict[object, object], allowed_roots: tuple[Path, ...]) -> ReplacementTransactionParticipant`
+- `def _move_participant_from_manifest(entry: dict[object, object], allowed_roots: tuple[Path, ...]) -> MoveTransactionParticipant`
+- `def _publish_replacement(destination: Path, participant: ReplacementTransactionParticipant) -> None`
+- `def _publish_move(source: Path, destination: Path, expected_content: bytes, destination_content: bytes) -> None`
+- `def _restore_path(path: Path, content: bytes | None) -> None`
+- `def _replace_bytes(destination: Path, content: bytes) -> None`
+- `def _fsync_directory(directory: Path) -> None`
 
-## serve/kanban/src/owlbear_kanban/storage_io.py
+## serve/delivery/src/owlbear_delivery/snapshot.py
+
+Immutable inventory and snapshot publication for legacy stores.
+
+### Imports
+
+- `__future__`
+- `collections.abc`
+- `contextlib`
+- `enum`
+- `fcntl`
+- `hashlib`
+- `json`
+- `os`
+- `pathlib`
+- `pydantic`
+- `re`
+- `shutil`
+- `stat`
+- `typing`
+
+### Interfaces
+
+- `class LegacyDisposition(StrEnum)`
+- `class LegacySnapshotError(RuntimeError)`
+- `class LegacySnapshotDispositionError(LegacySnapshotError)`
+- `class LegacySnapshotDestinationError(LegacySnapshotError)`
+- `class LegacySnapshotPathError(LegacySnapshotError)`
+- `class LegacySnapshotSourceChangedError(LegacySnapshotError)`
+- `class LegacySnapshotVerificationError(LegacySnapshotError)`
+- `class LegacySnapshotPublicationError(LegacySnapshotError)`
+- `class _SnapshotModel(BaseModel)`
+- `class LegacyActiveItem(_SnapshotModel)`
+  - `def validate_relative_path(cls, value: str) -> str`
+- `class LegacySnapshotFile(_SnapshotModel)`
+  - `def validate_digest(cls, value: str) -> str`
+- `class LegacySnapshotDisposition(_SnapshotModel)`
+- `class LegacySnapshotManifest(_SnapshotModel)`
+  - `def validate_source_digest(cls, value: str) -> str`
+  - `def validate_counts(self) -> LegacySnapshotManifest`
+- `class LegacySnapshotResult(_SnapshotModel)`
+  - `def validate_manifest_digest(cls, value: str) -> str`
+- `def inventory_legacy_source(source: Path, active_items: tuple[LegacyActiveItem, ...], dispositions: Mapping[str, LegacyDisposition]) -> LegacySnapshotManifest`
+- `def verify_legacy_snapshot(destination: Path) -> LegacySnapshotResult`
+- `def create_legacy_snapshot(source: Path, destination: Path, active_items: tuple[LegacyActiveItem, ...], dispositions: Mapping[str, LegacyDisposition], *, failure: SnapshotFailureHook | None = None) -> LegacySnapshotResult`
+- `def _ensure_source_stable(source: Path, expected: _Inventory) -> None`
+- `def _ensure_destination_available(parent_fd: int, name: str, destination: Path) -> None`
+- `def _validate_roots(source: Path, destination: Path) -> tuple[Path, Path, int]`
+- `def _prepare_destination_parent(path: Path, *, create: bool = True) -> tuple[Path, int]`
+- `def _ensure_destination_parent_stable(path: Path, expected_fd: int) -> None`
+- `def _locked_destination_parent(parent_fd: int) -> Iterator[None]`
+- `def _inventory(source: Path) -> _Inventory`
+- `def _inventory_descriptor(root_fd: int) -> _Inventory`
+- `def _walk_directory(directory_fd: int, prefix: PurePosixPath, directories: list[str], files: list[LegacySnapshotFile]) -> None`
+- `def _walk_child_directory(parent_fd: int, name: str, relative: PurePosixPath, directories: list[str], files: list[LegacySnapshotFile]) -> None`
+- `def _read_file(directory_fd: int, name: str, relative: PurePosixPath, expected: os.stat_result) -> LegacySnapshotFile`
+- `def _read_open_file(directory_fd: int, name: str, relative: PurePosixPath, expected: os.stat_result) -> bytes`
+- `def _identity(metadata: os.stat_result) -> tuple[int, int, int, int]`
+- `def _resolve_dispositions(active_items: tuple[LegacyActiveItem, ...], dispositions: Mapping[str, LegacyDisposition], inventory: _Inventory) -> tuple[LegacySnapshotDisposition, ...]`
+- `def _build_manifest(inventory: _Inventory, dispositions: tuple[LegacySnapshotDisposition, ...]) -> LegacySnapshotManifest`
+- `def _manifest_bytes(manifest: LegacySnapshotManifest) -> bytes`
+- `def _staging_path(destination: Path, source_digest: str) -> Path`
+- `def _remove_staging(parent_fd: int, name: str, path: Path) -> None`
+- `def _remove_published_snapshot(parent_fd: int, name: str, path: Path) -> None`
+- `def _materialize(source: Path, parent_fd: int, staging_name: str, inventory: _Inventory, manifest_bytes: bytes) -> None`
+- `def _open_relative_directory(root_fd: int, relative: PurePosixPath, *, create: bool) -> int`
+- `def _read_relative_file(source: Path, relative: PurePosixPath) -> bytes`
+- `def _write_descriptor_file(directory_fd: int, name: str, content: bytes) -> None`
+- `def _verify_staging(parent_fd: int, staging_name: str, inventory: _Inventory, manifest_bytes: bytes) -> None`
+- `def _invoke_failure(failure: SnapshotFailureHook | None, stage: str, staging: Path) -> None`
+
+## serve/delivery/src/owlbear_delivery/storage_io.py
 
 Crash-safe atomic text write utility.
 
@@ -1422,31 +1757,448 @@ Crash-safe atomic text write utility.
 
 - `__future__`
 - `contextlib`
+- `fcntl`
 - `os`
 - `pathlib`
+- `stat`
 - `tempfile`
+- `typing`
 
 ### Interfaces
 
+- `def _open_lock(root_fd: int) -> int`
+- `def locked_roots(roots: Sequence[Path]) -> Iterator[None]`
 - `def atomic_write(target: Path, content: str) -> None`
 
-## serve/kanban/src/owlbear_kanban/topology.py
+## serve/delivery/src/owlbear_delivery/target_admission.py
 
-Canonical product topology constants for the kanban engine.
+Transactional admission of target semantic authority and initial plan work.
+
+### Imports
+
+- `__future__`
+- `hashlib`
+- `json`
+- `owlbear_delivery.delivery_runtime`
+- `owlbear_delivery.runtime_transaction`
+- `owlbear_delivery.storage_io`
+- `owlbear_delivery.target_authority`
+- `owlbear_delivery.target_contract`
+- `owlbear_delivery.target_runtime`
+- `pathlib`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class TargetAdmissionError(RuntimeError)`
+- `class TargetAdmissionValidationError(TargetAdmissionError)`
+- `class TargetAdmissionConflictError(TargetAdmissionError)`
+- `class TargetAdmissionReferenceError(TargetAdmissionError)`
+- `class _AdmissionModel(BaseModel)`
+- `class TargetChallengeEntry(_AdmissionModel)`
+- `class TargetAdmissionCandidate(_AdmissionModel)`
+- `class TargetAdmissionRequest(_AdmissionModel)`
+- `class TargetAdmissionAssessment(_AdmissionModel)`
+- `class TargetAdmissionReceipt(_AdmissionModel)`
+  - `def validate_receipt_id(self) -> TargetAdmissionReceipt`
+- `class TargetAdmissionResult(_AdmissionModel)`
+- `class DeliveryAdmissionValidationError(TargetAdmissionError)`
+  - `def __init__(self, message: str, diagnostics: tuple[DeliveryCompilationDiagnostic, ...] = ()) -> None`
+- `class DeliveryAdmissionConflictError(TargetAdmissionError)`
+- `class DeliveryAdmissionRequest(_AdmissionModel)`
+  - `def _validate_claims(self) -> DeliveryAdmissionRequest`
+- `class RevisionCarryForward(_AdmissionModel)`
+- `class DeliveryAdmissionReceipt(_AdmissionModel)`
+  - `def _validate_receipt_id(self) -> DeliveryAdmissionReceipt`
+- `class DeliveryAdmissionResult(_AdmissionModel)`
+- `class _CurrentDelivery(_AdmissionModel)`
+  - `def is_partial(self) -> bool`
+- `class _CompiledDelivery(_AdmissionModel)`
+- `class DeliveryAuthorityRegistry`
+  - `def __init__(self, target_root: Path, package_store: DesignPackageStore, *, integration_target: str, failure: Callable[[str], None] | None = None) -> None`
+  - `def admit(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult`
+  - `def _compile_package(self, change_id: str) -> _CompiledDelivery`
+  - `def _validate_current(self, request: DeliveryAdmissionRequest, current: _CurrentDelivery | None) -> None`
+  - `def _publish_package_contract(self, change_id: str, compiled: _CompiledDelivery) -> str`
+  - `def _read_current(self, change_id: str) -> _CurrentDelivery | None`
+  - `def _delivery_participants(self, change_id: str, contract_bytes: bytes, frontier: DeliveryFrontier, receipt: DeliveryAdmissionReceipt, current: _CurrentDelivery | None) -> tuple[tuple[TransactionParticipant | ReplacementTransactionParticipant, ...], bool]`
+- `class TargetAuthorityRegistry`
+  - `def __init__(self, target_root: Path) -> None`
+  - `def list_authorities(self) -> tuple[TargetAuthority, ...]`
+  - `def show_authority(self, change_id: str) -> TargetAuthority`
+  - `def validate(self, candidate: TargetAdmissionCandidate) -> TargetAdmissionAssessment`
+  - `def admit(self, request: TargetAdmissionRequest) -> TargetAdmissionResult`
+  - `def _publication_participants(self, relative_root: Path, content: tuple[bytes, bytes, bytes]) -> tuple[tuple[TransactionParticipant | ReplacementTransactionParticipant, ...], bool]`
+  - `def _revision_participants(self, relative_paths: tuple[Path, Path, Path], current: tuple[bytes | None, bytes | None, bytes | None], replacements: tuple[bytes, bytes, bytes]) -> tuple[TransactionParticipant | ReplacementTransactionParticipant, ...]`
+  - `def _read_authority(self, change_root: Path) -> TargetAuthority`
+- `def _initial_jobs(authority: TargetAuthority, digest: str, created_at: str) -> tuple[TargetJob, ...]`
+- `def _receipt(request: TargetAdmissionRequest, assessment: TargetAdmissionAssessment) -> TargetAdmissionReceipt`
+- `def _authority_digest(authority: TargetAuthority) -> str`
+- `def _delivery_frontier(contract: DeliveryContract, current: _CurrentDelivery | None) -> tuple[DeliveryFrontier, RevisionCarryForward | None]`
+- `def _invalidated_outcomes(previous: DeliveryContract, replacement: DeliveryContract) -> set[str]`
+- `def _outcome_projection(contract: DeliveryContract, outcome: DeliveryOutcome) -> tuple[object, ...]`
+- `def _validate_delivery_frontier(contract: DeliveryContract, frontier: DeliveryFrontier) -> None`
+- `def _delivery_receipt(contract: DeliveryContract, contract_digest: str, frontier: DeliveryFrontier, integration_target: str, checkpoint_commit: str) -> DeliveryAdmissionReceipt`
+- `def _is_delivery_replay(current: _CurrentDelivery, contract_bytes: bytes, frontier: DeliveryFrontier, receipt: DeliveryAdmissionReceipt) -> bool`
+- `def _delivery_result(compiled: _CompiledDelivery, frontier: DeliveryFrontier, receipt: DeliveryAdmissionReceipt, carry_forward: RevisionCarryForward | None, *, replayed: bool) -> DeliveryAdmissionResult`
+- `def _digest(content: bytes) -> str`
+- `def _canonical_json(payload: object) -> bytes`
+- `def _model_content(model: BaseModel) -> bytes`
+
+## serve/delivery/src/owlbear_delivery/target_authority.py
+
+Semantic authority for the target delivery runtime.
+
+### Imports
+
+- `__future__`
+- `enum`
+- `owlbear_delivery.identities`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class CommitmentClass(StrEnum)`
+- `class AuthorityStatus(StrEnum)`
+- `class PlanScopeKind(StrEnum)`
+- `class _AuthorityModel(BaseModel)`
+- `class Commitment(_AuthorityModel)`
+  - `def _validate_supersession(self) -> Commitment`
+- `class Outcome(_AuthorityModel)`
+  - `def _validate_supersession(self) -> Outcome`
+- `class TaskPlanScope(_AuthorityModel)`
+  - `def _validate_change_assembly(self) -> TaskPlanScope`
+- `class DesignReentryBriefing(_AuthorityModel)`
+- `class SemanticUpdate(_AuthorityModel)`
+- `class CompletionSummary(_AuthorityModel)`
+- `class TargetAuthority(_AuthorityModel)`
+  - `def _validate_references(self) -> TargetAuthority`
+- `def _unique(items: tuple[BaseModel, ...], field: str, label: str) -> set[str]`
+- `def _require_references(references: tuple[str, ...], available: set[str], label: str) -> None`
+- `def _require_work_item(work_item_id: str, available: set[str]) -> None`
+
+## serve/delivery/src/owlbear_delivery/target_contract.py
+
+Deterministic schema-v2 Delivery Contract compilation.
 
 ### Imports
 
 - `__future__`
 - `dataclasses`
+- `enum`
+- `hashlib`
+- `json`
+- `markdown_it`
+- `pydantic`
+- `re`
+- `ruamel.yaml`
+- `ruamel.yaml.error`
 - `typing`
 
 ### Interfaces
 
-- `class ProductTopology`
+- `class DeliveryCommitmentClass(StrEnum)`
+- `class DeliveryCompilationDiagnosticCode(StrEnum)`
+- `class _ContractModel(BaseModel)`
+- `class DeliveryCommitment(_ContractModel)`
+- `class DeliveryOutcome(_ContractModel)`
+- `class DeliveryPlanScope(_ContractModel)`
+- `class DeliverySourceBinding(_ContractModel)`
+- `class DeliveryContract(_ContractModel)`
+- `class DeliveryCompilationDiagnostic(_ContractModel)`
+- `class DeliveryCompilationResult(_ContractModel)`
+  - `def _validate_exclusive_result(self) -> DeliveryCompilationResult`
+- `class _DefinitionContext`
+- `def compile_delivery_contract(change_id: str, intent_bytes: bytes, design_bytes: bytes) -> DeliveryCompilationResult`
+- `def _decode_source(source_name: SourceName, content: bytes, diagnostics: list[DeliveryCompilationDiagnostic]) -> str | None`
+- `def _parse_markdown(source_name: SourceName, text: str, diagnostics: list[DeliveryCompilationDiagnostic], *, require_title: bool) -> tuple[str, tuple[tuple[SourceName, str], ...]]`
+- `def _parse_definitions(blocks: tuple[tuple[SourceName, str], ...], diagnostics: list[DeliveryCompilationDiagnostic]) -> tuple[list[DeliveryCommitment], list[DeliveryOutcome], dict[str, SourceName]]`
+- `def _load_yaml(source_name: SourceName, content: str, diagnostics: list[DeliveryCompilationDiagnostic]) -> dict[object, object] | None`
+- `def _parse_commitment(payload: dict[object, object], source_name: SourceName, diagnostics: list[DeliveryCompilationDiagnostic]) -> DeliveryCommitment | None`
+- `def _parse_outcome(payload: dict[object, object], source_name: SourceName, diagnostics: list[DeliveryCompilationDiagnostic]) -> DeliveryOutcome | None`
+- `def _validate_keys(payload: dict[object, object], allowed: tuple[str, ...], source_name: SourceName, subject: str | None, diagnostics: list[DeliveryCompilationDiagnostic]) -> bool`
+- `def _identity(value: object, pattern: re.Pattern[str], label: str, context: _DefinitionContext) -> str | None`
+- `def _text(value: object, label: str, context: _DefinitionContext) -> str | None`
+- `def _text_sequence(value: object, label: str, context: _DefinitionContext, *, require_items: bool = False) -> tuple[str, ...] | None`
+- `def _identity_sequence(value: object, pattern: re.Pattern[str], label: str, context: _DefinitionContext) -> tuple[str, ...] | None`
+- `def _accept_identity(identity: str, seen: set[str], source_name: SourceName, diagnostics: list[DeliveryCompilationDiagnostic]) -> bool`
+- `def _validate_definitions(commitments: list[DeliveryCommitment], outcomes: list[DeliveryOutcome], outcome_sources: dict[str, SourceName], diagnostics: list[DeliveryCompilationDiagnostic]) -> None`
+- `def _validate_dependency_dag(outcomes: list[DeliveryOutcome], outcome_ids: set[str], outcome_sources: dict[str, SourceName], diagnostics: list[DeliveryCompilationDiagnostic]) -> None`
+- `def _derive_scopes(outcomes: list[DeliveryOutcome], diagnostics: list[DeliveryCompilationDiagnostic]) -> tuple[DeliveryPlanScope, ...]`
+- `def _diagnostic(code: DeliveryCompilationDiagnosticCode, detail: str, source_name: SourceName | None = None, subject: str | None = None) -> DeliveryCompilationDiagnostic`
+- `def _canonical_json(contract: DeliveryContract) -> bytes`
+- `def _digest(content: bytes) -> str`
 
-## serve/kanban/src/owlbear_kanban/yaml_rt.py
+## serve/delivery/src/owlbear_delivery/target_cutover.py
 
-Shared ruamel.yaml round-trip factory for the kanban package.
+Receipt-gated transition from bootstrap stores to the target runtime.
+
+### Imports
+
+- `__future__`
+- `base64`
+- `collections.abc`
+- `contextlib`
+- `dataclasses`
+- `enum`
+- `hashlib`
+- `json`
+- `os`
+- `owlbear_delivery.snapshot`
+- `owlbear_delivery.storage_io`
+- `owlbear_delivery.target_authority`
+- `owlbear_delivery.target_runtime`
+- `pathlib`
+- `pydantic`
+- `re`
+- `secrets`
+- `shutil`
+- `stat`
+- `typing`
+
+### Interfaces
+
+- `class TargetCutoverError(RuntimeError)`
+- `class TargetCutoverReadinessError(TargetCutoverError)`
+  - `def __init__(self, code: str, detail: str, blocking_identity: str) -> None`
+- `class TargetCutoverPathError(TargetCutoverError)`
+- `class TargetCutoverPublicationError(TargetCutoverError)`
+- `class TargetCutoverReceiptError(TargetCutoverError)`
+- `class TargetMutationGateError(TargetCutoverError)`
+  - `def __init__(self, code: str, detail: str, required_actions: tuple[str, ...] = ()) -> None`
+- `class _CutoverModel(BaseModel)`
+- `class TargetCutoverSubjectKind(StrEnum)`
+- `class TargetCutoverClassification(_CutoverModel)`
+- `class TargetCutoverSource(_CutoverModel)`
+  - `def validate_source_path(cls, value: str) -> str`
+  - `def validate_source_digest(cls, value: str) -> str`
+- `class TargetAdapterRef(_CutoverModel)`
+  - `def validate_relative_path(cls, value: str) -> str`
+- `class TargetCutoverReadiness(_CutoverModel)`
+- `class TargetCutoverRequest(_CutoverModel)`
+  - `def validate_relative_path(cls, value: str) -> str`
+  - `def validate_digest(cls, value: str) -> str`
+- `class TargetCutoverSnapshot(_CutoverModel)`
+- `class TargetStoreManifest(_CutoverModel)`
+- `class TargetCutoverReceipt(_CutoverModel)`
+  - `def validate_receipt_id(self) -> TargetCutoverReceipt`
+- `class TargetCutoverResult(_CutoverModel)`
+- `class TargetMutationAuthority(_CutoverModel)`
+- `class _RefBackup(_CutoverModel)`
+- `class _PendingCutover(_CutoverModel)`
+- `class _CutoverPaths`
+- `def target_authority_digest(authorities: tuple[TargetAuthority, ...]) -> str`
+- `def validate_target_cutover_readiness(request: TargetCutoverRequest) -> None`
+- `def cut_over_target_runtime(workspace_root: Path, request: TargetCutoverRequest, *, smoke: TargetCutoverSmokeCheck, failure: TargetCutoverFailureHook | None = None) -> TargetCutoverResult`
+- `def _cut_over_locked(paths: _CutoverPaths, request: TargetCutoverRequest, *, smoke: TargetCutoverSmokeCheck, failure: TargetCutoverFailureHook | None) -> TargetCutoverResult`
+- `def _validate_source_currentness(paths: _CutoverPaths, request: TargetCutoverRequest) -> None`
+- `def authorize_target_mutation(workspace_root: Path, request: TargetCutoverRequest) -> TargetMutationAuthority`
+- `def _authorize_target_mutation_locked(paths: _CutoverPaths, request: TargetCutoverRequest) -> TargetMutationAuthority`
+- `def query_target_snapshot(workspace_root: Path, request: TargetCutoverRequest, snapshot_name: str) -> LegacySnapshotResult`
+- `def _resolve_paths(workspace_root: Path, request: TargetCutoverRequest) -> _CutoverPaths`
+- `def _resolve_workspace_path(root: Path, value: str) -> Path`
+- `def _validate_distinct_paths(paths: _CutoverPaths) -> None`
+- `def _create_pending(paths: _CutoverPaths, fingerprint: str) -> _PendingCutover`
+- `def _recover_pending(paths: _CutoverPaths, request: TargetCutoverRequest, fingerprint: str) -> None`
+- `def _snapshot_sources(paths: _CutoverPaths, request: TargetCutoverRequest) -> tuple[TargetCutoverSnapshot, ...]`
+- `def _snapshot_record(paths: _CutoverPaths, source: TargetCutoverSource, result: LegacySnapshotResult) -> TargetCutoverSnapshot`
+- `def _initialize_target(paths: _CutoverPaths, request: TargetCutoverRequest) -> TargetStoreManifest`
+- `def _stage_adapter_refs(paths: _CutoverPaths, request: TargetCutoverRequest) -> None`
+- `def _verify_staging(paths: _CutoverPaths, request: TargetCutoverRequest, manifest: TargetStoreManifest, snapshots: tuple[TargetCutoverSnapshot, ...]) -> None`
+- `def _build_receipt(request: TargetCutoverRequest, fingerprint: str, manifest: TargetStoreManifest, snapshots: tuple[TargetCutoverSnapshot, ...]) -> TargetCutoverReceipt`
+- `def _publish_receipt(paths: _CutoverPaths, receipt: TargetCutoverReceipt, failure: TargetCutoverFailureHook | None) -> None`
+- `def _replay_completed(paths: _CutoverPaths, request: TargetCutoverRequest, fingerprint: str) -> TargetCutoverResult`
+- `def _read_receipt(root: Path, path: Path) -> TargetCutoverReceipt`
+- `def _read_target_authorities(paths: _CutoverPaths, manifest: TargetStoreManifest) -> tuple[TargetAuthority, ...]`
+- `def _verify_adapter_refs(paths: _CutoverPaths, refs: tuple[TargetAdapterRef, ...]) -> None`
+- `def _verify_source_absence(root: Path, sources: tuple[Path, ...]) -> None`
+- `def _retire_sources(paths: _CutoverPaths, request: TargetCutoverRequest) -> None`
+- `def _remove_retired_sources(paths: _CutoverPaths, request: TargetCutoverRequest) -> None`
+- `def _retired_paths(paths: _CutoverPaths, request: TargetCutoverRequest) -> tuple[Path, ...]`
+- `def _rollback(paths: _CutoverPaths, request: TargetCutoverRequest, pending: _PendingCutover) -> None`
+- `def _restore_refs(paths: _CutoverPaths, pending: _PendingCutover) -> None`
+- `def _restore_sources(paths: _CutoverPaths, request: TargetCutoverRequest) -> None`
+- `def _remove_path(root: Path, path: Path) -> None`
+- `def _rename_directory(root: Path, source: Path, destination: Path) -> None`
+- `def _backup(root: Path, path: Path) -> str | None`
+- `def _publish_file(root: Path, path: Path, content: bytes, *, immutable: bool) -> None`
+- `def _open_parent_descriptor(root: Path, path: Path, *, create: bool) -> int`
+- `def _read_descriptor_file(parent_fd: int, name: str) -> bytes`
+- `def _read_workspace_file(root: Path, path: Path) -> bytes`
+- `def _workspace_path_kind(root: Path, path: Path) -> Literal['missing', 'file', 'directory']`
+- `def _find_current_job(root: Path, source: Path) -> str | None`
+- `def _find_regular_file(directory_fd: int, prefix: PurePosixPath) -> str | None`
+- `def _request_fingerprint(request: TargetCutoverRequest) -> str`
+- `def _model_content(model: BaseModel) -> bytes`
+- `def _json_payload(payload: object) -> object`
+- `def _invoke_failure(failure: TargetCutoverFailureHook | None, stage: str, path: Path) -> None`
+- `def _required_classifications(authorities: tuple[TargetAuthority, ...]) -> set[str]`
+- `def _classification_keys(classifications: tuple[TargetCutoverClassification, ...]) -> set[str]`
+- `def _classification_key(change_id: str, kind: TargetCutoverSubjectKind, subject_id: str) -> str`
+- `def _fail_readiness(code: str, detail: str, identity: str) -> Never`
+- `def _fail_path(detail: str) -> Never`
+- `def _fail_publication(detail: str) -> Never`
+- `def _fail_receipt(detail: str) -> Never`
+- `def _fail_gate(code: str, detail: str, actions: tuple[str, ...] = ()) -> Never`
+- `def _relative_path(value: str) -> str`
+- `def _digest(value: str) -> str`
+- `def _canonical_json(payload: object) -> bytes`
+
+## serve/delivery/src/owlbear_delivery/target_runtime.py
+
+Dormant target execution contracts and runtime kernel.
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `enum`
+- `hashlib`
+- `json`
+- `owlbear_delivery.attempts`
+- `owlbear_delivery.identities`
+- `owlbear_delivery.runtime_transaction`
+- `owlbear_delivery.target_authority`
+- `owlbear_delivery.work_items`
+- `pathlib`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class TargetJobState(StrEnum)`
+- `class ReturnLevel(StrEnum)`
+- `class ReviewDisposition(StrEnum)`
+- `class _TargetModel(BaseModel)`
+- `class TargetJob(_TargetModel)`
+  - `def _validate_kind_and_state(self) -> TargetJob`
+- `class StartTargetJobRequest(_TargetModel)`
+- `class TargetTask(_TargetModel)`
+  - `def _validate_reviewed_receipt(self) -> TargetTask`
+- `class FinishTargetJobRequest(_TargetModel)`
+  - `def _validate_receipt_identity(self) -> FinishTargetJobRequest`
+- `class RecoverInterruptedTaskRequest(_TargetModel)`
+- `class RespondToReviewRequest(_TargetModel)`
+- `class ArbitrateTargetAttemptRequest(_TargetModel)`
+  - `def _validate_receipt_identity(self) -> ArbitrateTargetAttemptRequest`
+- `class TargetReview(_TargetModel)`
+- `class TargetEvidenceResponse(_TargetModel)`
+- `class TargetArbiterDecision(_TargetModel)`
+- `class TargetAttemptState(StrEnum)`
+- `class TargetAttempt(_TargetModel)`
+- `class TargetRequestStatus(StrEnum)`
+- `class TargetRequest(_TargetModel)`
+  - `def _validate_resolution(self) -> TargetRequest`
+- `class TargetReceipt(_TargetModel)`
+- `class StartedTargetJob(_TargetModel)`
+- `class FinishedTargetJob(_TargetModel)`
+- `class _ClosingEvidence(_TargetModel)`
+- `class _AttemptEventContext(_TargetModel)`
+- `class TargetRuntimeState(_TargetModel)`
+  - `def _validate_identities(self) -> TargetRuntimeState`
+- `class TargetRuntimeConflictError(RuntimeError)`
+- `class TargetRuntimeReferenceError(ValueError)`
+- `class TargetRecoveryError(RuntimeError)`
+- `class _TargetRuntimeStore`
+  - `def __init__(self, work_root: Path) -> None`
+  - `def initialize(self, state: TargetRuntimeState) -> None`
+  - `def read(self) -> tuple[TargetRuntimeState, bytes]`
+  - `def replace(self, previous: bytes, state: TargetRuntimeState, *, receipt: TargetReceipt | None = None, attempt_events: tuple[AttemptEvent, ...] = ()) -> None`
+  - `def _commit(self, transaction_id: str, participants: tuple[TransactionParticipant | ReplacementTransactionParticipant, ...]) -> None`
+- `class TargetRuntime`
+  - `def __init__(self, authority: TargetAuthority, work_root: Path) -> None`
+  - `def authority_digest(self) -> str`
+  - `def materialize(self, jobs: tuple[TargetJob, ...], tasks: tuple[TargetTask, ...] = ()) -> None`
+  - `def show_job(self, job_id: int) -> TargetJob`
+  - `def show_attempt(self, attempt_id: str) -> TargetAttempt`
+  - `def show_receipt(self, receipt_id: str) -> TargetReceipt`
+  - `def list_attempts(self, work_item_id: str | None = None) -> tuple[TargetAttempt, ...]`
+  - `def list_requests(self, work_item_id: str | None = None) -> tuple[TargetRequest, ...]`
+  - `def list_receipts(self, work_item_id: str | None = None) -> tuple[TargetReceipt, ...]`
+  - `def list_frontier(self) -> tuple[TargetJob, ...]`
+  - `def create_request(self, request: TargetRequest) -> TargetRequest`
+  - `def resolve_request(self, request_id: str, resolved_at: str) -> TargetRequest`
+  - `def start_job(self, request: StartTargetJobRequest) -> StartedTargetJob`
+  - `def finish_job(self, request: FinishTargetJobRequest) -> FinishedTargetJob`
+  - `def respond_to_review(self, request: RespondToReviewRequest) -> TargetAttempt`
+  - `def arbitrate(self, request: ArbitrateTargetAttemptRequest) -> FinishedTargetJob`
+  - `def recover_expired_claims(self, recovered_at: str) -> tuple[TargetJob, ...]`
+  - `def recover_interrupted_task(self, request: RecoverInterruptedTaskRequest, *, process_is_alive: Callable[[str], bool]) -> TargetJob`
+  - `def work_item_evidence(self) -> WorkItemEvidence`
+  - `def _validate_materialization(self, jobs: tuple[TargetJob, ...], tasks: tuple[TargetTask, ...]) -> None`
+  - `def _validate_request(self, request: TargetRequest, state: TargetRuntimeState) -> None`
+  - `def _validate_start_identity(self, state: TargetRuntimeState, job: TargetJob, request: StartTargetJobRequest) -> None`
+  - `def _validate_review(self, state: TargetRuntimeState, attempt: TargetAttempt, request: FinishTargetJobRequest) -> None`
+  - `def _validate_planned_tasks(self, state: TargetRuntimeState, job: TargetJob, tasks: tuple[TargetTask, ...]) -> None`
+  - `def _validate_arbitration(self, attempt: TargetAttempt, request: ArbitrateTargetAttemptRequest) -> None`
+  - `def _active_attempt(self, state: TargetRuntimeState, job_id: int, attempt_id: str, claim_id: str) -> tuple[TargetJob, TargetAttempt]`
+  - `def _review_transition(self, state: TargetRuntimeState, job: TargetJob, attempt: TargetAttempt, request: FinishTargetJobRequest) -> tuple[TargetRuntimeState, TargetJob, TargetAttempt, TargetReceipt | None, AttemptEvent | None]`
+  - `def _arbiter_transition(self, state: TargetRuntimeState, job: TargetJob, attempt: TargetAttempt, request: ArbitrateTargetAttemptRequest) -> tuple[TargetRuntimeState, TargetJob, TargetAttempt, TargetReceipt | None, AttemptEvent]`
+  - `def _close_attempt(self, state: TargetRuntimeState, job: TargetJob, attempt: TargetAttempt, closing: _ClosingEvidence) -> tuple[TargetRuntimeState, TargetJob, TargetAttempt, TargetReceipt | None, AttemptEvent]`
+  - `def _apply_return(self, state: TargetRuntimeState, job: TargetJob, closing: _ClosingEvidence) -> tuple[TargetRuntimeState, str]`
+  - `def _republish_plan(self, state: TargetRuntimeState, job: TargetJob, level: ReturnLevel, timestamp: str) -> tuple[TargetRuntimeState, str]`
+  - `def _validated_briefing(self, briefing: DesignReentryBriefing | None, job: TargetJob) -> DesignReentryBriefing`
+  - `def _publish_accepted_plan(self, state: TargetRuntimeState, job: TargetJob, receipt: TargetReceipt | None) -> TargetRuntimeState`
+  - `def _target_receipt(self, job: TargetJob, attempt: TargetAttempt, closing: _ClosingEvidence) -> TargetReceipt`
+  - `def _review_task(tasks: tuple[TargetTask, ...], job: TargetJob, receipt_id: str) -> tuple[TargetTask, ...]`
+  - `def _crash_attempt(self, state: TargetRuntimeState, attempt: TargetAttempt, timestamp: str, detail: str) -> tuple[TargetRuntimeState, TargetJob, AttemptEvent]`
+  - `def _attempt_event(self, job: TargetJob, attempt: TargetAttempt, kind: Literal['started', 'failed', 'crashed', 'succeeded'], context: _AttemptEventContext | None = None) -> AttemptEvent`
+  - `def _blocked_work_items(self, state: TargetRuntimeState) -> set[str]`
+- `def _require_unique(items: tuple[BaseModel, ...], field: str, label: str) -> None`
+- `def _find(items: tuple[ItemT, ...], field: str, identity: object, label: str) -> ItemT`
+- `def _replace(items: tuple[ItemT, ...], current: ItemT, replacement: ItemT) -> tuple[ItemT, ...]`
+- `def _rebind_predecessor(job: TargetJob, previous_job_id: int, replacement_job_id: int) -> TargetJob`
+- `def _model_identity(model: BaseModel) -> tuple[str, object]`
+- `def _timestamp(value: str) -> datetime`
+- `def _completed_job(job: TargetJob, receipt_id: str) -> TargetJob`
+- `def _restarted_job(job: TargetJob, reviewer_id: str) -> TargetJob`
+- `def _returned_job(job: TargetJob, level: ReturnLevel) -> TargetJob`
+- `def _conflict(detail: str) -> Never`
+- `def _reference(detail: str, cause: Exception | None = None) -> Never`
+- `def _recovery_failure(detail: str) -> Never`
+- `def _model_content(model: BaseModel) -> bytes`
+- `def _state_content(state: TargetRuntimeState) -> bytes`
+- `def _participant_content(participant: TransactionParticipant | ReplacementTransactionParticipant) -> bytes`
+
+## serve/delivery/src/owlbear_delivery/work_items.py
+
+Pure work-item projections over target semantic authority and evidence.
+
+### Imports
+
+- `__future__`
+- `enum`
+- `owlbear_delivery.target_authority`
+- `pydantic`
+
+### Interfaces
+
+- `class WorkItemStage(StrEnum)`
+- `class WorkItemAttention(StrEnum)`
+- `class _ProjectionModel(BaseModel)`
+- `class TaskProgress(_ProjectionModel)`
+  - `def _validate_reviewed_count(self) -> TaskProgress`
+- `class WorkItemEvidence(_ProjectionModel)`
+  - `def _validate_unique_progress(self) -> WorkItemEvidence`
+- `class WorkItemProjection(_ProjectionModel)`
+- `class WorkItemDetail(_ProjectionModel)`
+- `class WorkItemProjector`
+  - `def __init__(self, authority: TargetAuthority, evidence: WorkItemEvidence) -> None`
+  - `def list_items(self) -> tuple[WorkItemProjection, ...]`
+  - `def show(self, work_item_id: str) -> WorkItemDetail`
+  - `def _project_items(self) -> dict[str, WorkItemProjection]`
+  - `def _project_change_design(self) -> WorkItemProjection`
+  - `def _project_outcome(self, outcome: Outcome) -> WorkItemProjection`
+  - `def _projection(self, outcome: Outcome, stage: WorkItemStage, attention: WorkItemAttention, scope: TaskPlanScope | None) -> WorkItemProjection`
+  - `def _project_change_assembly(self, scope: TaskPlanScope) -> WorkItemProjection`
+  - `def _apply_dependency_state(items: dict[str, WorkItemProjection]) -> dict[str, WorkItemProjection]`
+- `def _next_action(stage: WorkItemStage, attention: WorkItemAttention) -> str`
+
+## serve/delivery/src/owlbear_delivery/yaml_rt.py
+
+Shared ruamel.yaml round-trip factory for the Delivery package.
 
 ### Imports
 
@@ -1456,6 +2208,164 @@ Shared ruamel.yaml round-trip factory for the kanban package.
 ### Interfaces
 
 - `def make_yaml(*, explicit_start: bool = False) -> YAML`
+
+## serve/delivery-mcp/src/owlbear_delivery_mcp/__init__.py
+
+OwlBear MCP delivery package.
+
+### Imports
+
+- `__future__`
+
+## serve/delivery-mcp/src/owlbear_delivery_mcp/__main__.py
+
+Entry point for ``python -m owlbear_delivery_mcp``.
+
+### Imports
+
+- `__future__`
+- `owlbear_delivery_mcp.server`
+
+## serve/delivery-mcp/src/owlbear_delivery_mcp/server.py
+
+Live OwlBear MCP server for target delivery.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `mcp.server`
+- `os`
+- `owlbear_delivery`
+- `owlbear_delivery.target_cutover`
+- `owlbear_delivery_mcp.target_models`
+- `owlbear_delivery_mcp.target_server`
+- `pathlib`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `def _resolve_workspace_root() -> Path`
+- `def _resolve_request_path(workspace_root: Path) -> Path`
+- `def _delivery_config_path(workspace_root: Path) -> Path`
+- `def load_delivery_config(path: Path) -> DeliveryStartupConfig`
+- `def _validation_field(error: dict[str, object]) -> str`
+- `def _is_missing_required(error: dict[str, object], field: str) -> bool`
+- `def _authorize_configured_target(workspace_root: Path) -> Path`
+- `def load_delivery_application(config: DeliveryStartupConfig, workspace_root: Path) -> PortfolioApplication`
+- `def _live_application() -> PortfolioApplication`
+- `async def app_lifespan(_server: MCPServer) -> AsyncGenerator[DeliveryAppContext]`
+
+## serve/delivery-mcp/src/owlbear_delivery_mcp/target_models.py
+
+Protocol models for the target delivery MCP surface.
+
+### Imports
+
+- `__future__`
+- `functools`
+- `json`
+- `owlbear_delivery.delivery_application_loader`
+- `owlbear_delivery.delivery_runtime`
+- `owlbear_delivery.identities`
+- `owlbear_delivery.target_admission`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class _TargetProtocolModel(BaseModel)`
+- `class DeliveryStartupDiagnostic(RuntimeError)`
+  - `def __init__(self, code: str, detail: str, field: str) -> None`
+  - `def model_dump(self) -> dict[str, str | bool]`
+- `class TargetDiagnostic(_TargetProtocolModel)`
+- `class EmptyParams(_TargetProtocolModel)`
+- `class ChangeParams(_TargetProtocolModel)`
+- `class CreateDesignSessionParams(ChangeParams)`
+- `class ReviseDesignSessionParams(CreateDesignSessionParams)`
+- `class WorkItemParams(ChangeParams)`
+- `class ClaimContextParams(ChangeParams)`
+- `class AdmitDeliveryChangeParams(_TargetProtocolModel)`
+- `class PublishDeliveryPlanParams(ChangeParams)`
+- `class PublishDeliveryResultParams(ChangeParams)`
+- `class DeliveryPlanPublication(_TargetProtocolModel)`
+  - `def from_candidate(cls, candidate: DeliveryPlanCandidate) -> DeliveryPlanPublication`
+- `class DeliveryResultPublication(_TargetProtocolModel)`
+  - `def from_candidate(cls, candidate: DeliveryResultCandidate) -> DeliveryResultPublication`
+- `class TransitionDeliveryParams(ChangeParams)`
+- `class IntegrationRepairParams(_TargetProtocolModel)`
+- `class CompletedPageParams(_TargetProtocolModel)`
+- `class SearchCompletedParams(CompletedPageParams)`
+- `class ShowCompletedParams(ChangeParams)`
+- `def _parse_json_model(model: type[ModelT], value: object) -> ModelT`
+
+## serve/delivery-mcp/src/owlbear_delivery_mcp/target_server.py
+
+Strict MCPServer adapter for the Delivery portfolio application.
+
+### Imports
+
+- `__future__`
+- `collections.abc`
+- `contextlib`
+- `dataclasses`
+- `json`
+- `mcp.server`
+- `mcp.server.mcpserver.exceptions`
+- `mcp.types`
+- `owlbear_delivery.change_workspace`
+- `owlbear_delivery.completed_history`
+- `owlbear_delivery.delivery_runtime`
+- `owlbear_delivery.design_package`
+- `owlbear_delivery.portfolio_application`
+- `owlbear_delivery.runtime_transaction`
+- `owlbear_delivery.target_admission`
+- `owlbear_delivery_mcp.target_models`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class DeliveryAppContext`
+- `class TargetMCPAdapter`
+  - `def __init__(self, application: PortfolioApplication | None = None, *, provider: ApplicationProvider | None = None) -> None`
+  - `def from_provider(cls, provider: ApplicationProvider) -> TargetMCPAdapter`
+  - `def _application(self) -> PortfolioApplication`
+  - `async def create_design_session(self, request: CreateDesignSessionRequest) -> dict[str, object]`
+  - `async def read_design_session(self, request: ChangeRequest) -> dict[str, object]`
+  - `async def revise_design_session(self, request: ReviseDesignSessionRequest) -> dict[str, object]`
+  - `async def publish_design_checkpoint(self, request: ChangeRequest) -> dict[str, object]`
+  - `async def derive_delivery_contract(self, request: ChangeRequest) -> dict[str, object]`
+  - `async def validate_delivery_contract(self, request: ChangeRequest) -> dict[str, object]`
+  - `async def admit_delivery_change(self, request: AdmitDeliveryChangeRequest) -> dict[str, object]`
+  - `async def list_work_items(self, request: EmptyRequest) -> list[object]`
+  - `async def show_work_item(self, request: WorkItemRequest) -> dict[str, object]`
+  - `async def acquire_frontier_work(self, request: EmptyRequest) -> dict[str, object]`
+  - `async def show_plan_context(self, request: ClaimContextRequest) -> dict[str, object]`
+  - `async def show_build_context(self, request: ClaimContextRequest) -> dict[str, object]`
+  - `async def publish_delivery_plan(self, request: PublishDeliveryPlanRequest) -> DeliveryPlanPublication`
+  - `async def publish_delivery_result(self, request: PublishDeliveryResultRequest) -> DeliveryResultPublication`
+  - `async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]`
+  - `async def recover_claim(self, request: ClaimContextRequest) -> dict[str, object]`
+  - `async def list_integration_ready_changes(self, request: EmptyRequest) -> list[object]`
+  - `async def show_integration_attention(self, request: ChangeRequest) -> dict[str, object] | None`
+  - `async def integrate_ready_change(self, request: ChangeRequest) -> dict[str, object]`
+  - `async def admit_reviewed_integration_repair(self, request: IntegrationRepairRequest) -> dict[str, object]`
+  - `async def list_completed_changes(self, request: CompletedPageRequest) -> dict[str, object]`
+  - `async def search_completed_changes(self, request: SearchCompletedRequest) -> dict[str, object]`
+  - `async def show_completed_change(self, request: ShowCompletedRequest) -> dict[str, object]`
+  - `def _validate(model: type[ModelT], payload: ModelT | dict[str, object]) -> ModelT`
+  - `def _call_model(self, params: BaseModel, operation: Callable[[], object], model: type[ModelT]) -> ModelT`
+  - `def _call(self, params: BaseModel, operation: Callable[[], object]) -> StructuredOutput`
+  - `def _call_raw(self, params: BaseModel, operation: Callable[[], object]) -> object`
+  - `def _serialize(value: object) -> StructuredOutput`
+  - `def _authority(cls, params: BaseModel) -> str`
+  - `def _payload_authority(cls, payload: dict[str, object]) -> str`
+  - `def _find_field(value: object, field: str) -> str | None`
+  - `def _raise(code: str, detail: str, authority: str, *, retry_safe: bool) -> Never`
+- `def assemble_target_server(application: PortfolioApplication) -> MCPServer`
+- `def register_target_tools(server: MCPServer, adapter: TargetMCPAdapter) -> None`
 
 ## serve/knowledge/src/owlbear_knowledge/__init__.py
 
@@ -2204,202 +3114,7 @@ SQLite implementation of the SourceStore protocol.
   - `def _row_to_record(self, row: sqlite3.Row) -> SourceRecord`
   - `def _ensure_configured_shape(self, values: dict[str, object], update: SourceUpdate) -> None`
 
-## serve/mcp-browser/src/owlbear_mcp_browser/__init__.py
-
-OwlBear MCP browser server — exposes browser content fetching via MCP.
-
-### Imports
-
-- `owlbear_mcp_browser`
-- `owlbear_mcp_browser.server`
-
-## serve/mcp-browser/src/owlbear_mcp_browser/__main__.py
-
-Entry point for ``python -m owlbear_mcp_browser``.
-
-### Imports
-
-- `__future__`
-- `owlbear_mcp_browser.server`
-
-## serve/mcp-browser/src/owlbear_mcp_browser/allowlist.py
-
-Domain allowlist for browser MCP navigation.
-
-### Imports
-
-- `__future__`
-- `urllib.parse`
-
-### Interfaces
-
-- `class DomainAllowlist`
-  - `def __init__(self, domains: list[str]) -> None`
-  - `def check(self, url: str) -> None`
-
-## serve/mcp-browser/src/owlbear_mcp_browser/server.py
-
-OwlBear MCP browser server — browser-control tools with domain allowlist.
-
-### Imports
-
-- `__future__`
-- `asyncio`
-- `contextlib`
-- `dataclasses`
-- `ipaddress`
-- `mcp.server.fastmcp`
-- `mcp.server.fastmcp.exceptions`
-- `mcp.types`
-- `os`
-- `owlbear_browser`
-- `owlbear_browser._errors`
-- `owlbear_browser.extractor`
-- `owlbear_browser.fetcher`
-- `owlbear_browser.playwright_launcher`
-- `owlbear_mcp_browser.allowlist`
-- `pathlib`
-- `socket`
-- `typing`
-- `urllib.parse`
-
-### Interfaces
-
-- `def _is_blocked_ip(ip_str: str) -> bool`
-- `async def _check_ssrf(url: str) -> None`
-- `class AppContext`
-- `def _apply_tool_exclusions(server: FastMCP) -> set[str]`
-- `async def app_lifespan(server: FastMCP) -> AsyncGenerator[AppContext, None]`
-- `def _serialize_acquisition(result: AcquisitionSuccess | AcquisitionFailure) -> dict[str, Any]`
-- `async def acquire(ctx: Context, url: str, readiness_selector: str | None = None, content_selector: str | None = None, navigation_timeout_ms: int = 30000, readiness_timeout_ms: int = 10000, include_diagnostic_html: bool = False) -> dict[str, Any]`
-- `async def navigate(ctx: Context, url: str) -> str`
-- `async def click(ctx: Context, selector: str) -> str`
-- `async def type_input(ctx: Context, selector: str, text: str) -> str`
-- `async def select(ctx: Context, selector: str, value: str) -> str`
-- `async def read_text(ctx: Context) -> str`
-- `async def snapshot(ctx: Context) -> str`
-
-## serve/mcp-kanban/src/owlbear_mcp_kanban/__init__.py
-
-OwlBear MCP kanban package.
-
-### Imports
-
-- `__future__`
-
-## serve/mcp-kanban/src/owlbear_mcp_kanban/__main__.py
-
-Entry point for ``python -m owlbear_mcp_kanban``.
-
-### Imports
-
-- `__future__`
-- `owlbear_mcp_kanban.server`
-
-## serve/mcp-kanban/src/owlbear_mcp_kanban/guidance.py
-
-Contextual guidance messages for kanban MCP operations.
-
-### Imports
-
-- `__future__`
-- `typing`
-
-### Interfaces
-
-- `def collect_guidance(operation: str, before: KanbanTask | None, after: KanbanTask, **kwargs: object) -> list[str]`
-- `def _is_block_operation(operation: str, after: KanbanTask, kwargs: dict[str, object]) -> bool`
-- `def _is_success_operation(operation: str, kwargs: dict[str, object]) -> bool`
-- `def _block_guidance(after: KanbanTask) -> list[str]`
-- `def _move_guidance(before: KanbanTask | None, after: KanbanTask, kwargs: dict[str, object]) -> list[str]`
-
-## serve/mcp-kanban/src/owlbear_mcp_kanban/models.py
-
-Pydantic models for kanban-md task data at the MCP protocol boundary.
-
-### Imports
-
-- `__future__`
-- `pydantic`
-- `typing`
-
-### Interfaces
-
-- `class MCPParamsBase(BaseModel)`
-- `class ListTasksParams(MCPParamsBase)`
-  - `def _validate_ids_exclusivity(self) -> ListTasksParams`
-- `class ShowTaskParams(MCPParamsBase)`
-- `class PickTasksParams(MCPParamsBase)`
-- `class CreateTaskParams(MCPParamsBase)`
-- `class EditTaskParams(MCPParamsBase)`
-- `class MoveTaskParams(MCPParamsBase)`
-- `class StartWorkParams(MCPParamsBase)`
-- `class EndWorkParams(MCPParamsBase)`
-- `class KanbanTask(BaseModel)`
-  - `def _coerce_claimed(cls, data: dict[str, object]) -> dict[str, object]`
-
-## serve/mcp-kanban/src/owlbear_mcp_kanban/server.py
-
-OwlBear MCP kanban server — exposes KanbanEngine operations as MCP tools.
-
-### Imports
-
-- `__future__`
-- `asyncio`
-- `contextlib`
-- `dataclasses`
-- `json`
-- `mcp.server.fastmcp`
-- `mcp.server.fastmcp.exceptions`
-- `mcp.types`
-- `os`
-- `owlbear_kanban`
-- `owlbear_kanban.errors`
-- `owlbear_kanban.models`
-- `owlbear_mcp_kanban.guidance`
-- `owlbear_mcp_kanban.models`
-- `pathlib`
-- `pydantic`
-- `typing`
-- `uuid`
-
-### Interfaces
-
-- `def _coerce_to_str(v: str | int) -> str`
-- `def _resolve_kanban_dir() -> Path`
-- `def _normalize_escaped_newlines(text: str) -> tuple[str, bool]`
-- `def _sanitize_agent_strings(kwargs: dict[str, object]) -> None`
-- `def _append_norm_guidance(guidance: list[str] | None, *, changed: bool) -> list[str]`
-- `def _startup_error(kanban_dir: Path, detail: str) -> RuntimeError`
-- `def parse_task_id(value: str | int, *, field: str = 'task_id') -> int`
-- `def _map_kanban_error(exc: KanbanError) -> None`
-- `def _raise_tool_error(code: str, message: str) -> None`
-- `def _raise_param_validation(message: str) -> None`
-- `def _require_uuid4(value: str, *, field: str) -> str`
-- `def _raise_not_found(message: str = 'Task not found') -> None`
-- `def _safe_not_found_message(raw_message: str, fallback: str) -> str`
-- `def _validate_archival_constraints(app_ctx: AppContext, *, task_id: int, current_status: str | None, target_status: str | None, archival: tuple[str | None, list[int] | None]) -> None`
-- `class AppContext`
-  - `def __contains__(self, item: object) -> bool`
-- `def _apply_tool_exclusions(server: FastMCP) -> set[str]`
-- `async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]`
-- `async def list_tasks(ctx: Context, *, status: str | None = None, tag: str | None = None, priority: str | None = None, archival_reason: str | None = None, ids: list[int] | None = None, parent: int | None = None, search: str | None = None, sort: str | None = None, unclaimed: bool = False, limit: int = 0, reverse: bool = False, blocked: bool | None = None) -> ListTasksResponse`
-- `def _record_to_task(record: Task) -> KanbanTask`
-- `def _to_single_task_response(record: object) -> SingleTaskResponse`
-- `async def _show_validated(app_ctx: AppContext, task_id: int) -> KanbanTask`
-- `async def show_task(ctx: Context, id: StrId, section: str | None = None) -> ShowTaskResponse`
-- `async def create_task(ctx: Context, *, title: str, body: str = '', status: str = '', depends_on: list[int] | None = None, parent: int | None = None, priority: str = '', tags: list[str] | None = None, ac: list[str] | None = None, proof_bundle: str | None = None) -> SingleTaskResponse`
-- `async def create_request(ctx: Context, task_id: str | int, kind: str, title: str, summary: str, agent: str, options: list[dict[str, object]] | None = None, body: str = '') -> dict[str, object]`
-- `async def list_requests(ctx: Context, status: str = 'pending', task_id: str | int | None = None) -> list[dict[str, object]]`
-- `async def show_request(ctx: Context, request_id: str) -> dict[str, object]`
-- `async def move_task(ctx: Context, id: StrId, status: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None) -> SingleTaskResponse`
-- `async def edit_task(ctx: Context, *, id: StrId, title: str | None = None, body: str | None = None, append_body: str | None = None, timestamp: bool = False, priority: str | None = None, parent: int | None = None, ac: list[str] | None = None, add_ac: list[str] | None = None, remove_ac: list[str] | None = None, proof_bundle: str | None = None, add_dep: list[int] | None = None, remove_dep: list[int] | None = None, add_tag: list[str] | None = None, remove_tag: list[str] | None = None, block_reason: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None) -> SingleTaskResponse`
-- `async def start_work(ctx: Context, id: StrId) -> SingleTaskResponse`
-- `async def end_work(ctx: Context, *, id: StrId, note: str | None = None, outcome: Literal['success', 'fail', 'reject', 'block', 'release'] = 'success', block_reason: str | None = None, move_to: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None) -> SingleTaskResponse`
-- `async def pick_tasks(ctx: Context, *, wave_size: int | None = None, max_waves: int = 3) -> PickTasksResponse`
-- `def _patch_params(tool_name: str, patches: dict[str, dict[str, object]]) -> None`
-
-## serve/mcp-knowledge/src/owlbear_mcp_knowledge/__init__.py
+## serve/knowledge-mcp/src/owlbear_knowledge_mcp/__init__.py
 
 OwlBear MCP knowledge package.
 
@@ -2407,16 +3122,16 @@ OwlBear MCP knowledge package.
 
 - `__future__`
 
-## serve/mcp-knowledge/src/owlbear_mcp_knowledge/__main__.py
+## serve/knowledge-mcp/src/owlbear_knowledge_mcp/__main__.py
 
-Entry point for the owlbear-mcp-knowledge MCP server.
+Entry point for the owlbear-knowledge-mcp MCP server.
 
 ### Imports
 
 - `__future__`
-- `owlbear_mcp_knowledge.server`
+- `owlbear_knowledge_mcp.server`
 
-## serve/mcp-knowledge/src/owlbear_mcp_knowledge/_helpers.py
+## serve/knowledge-mcp/src/owlbear_knowledge_mcp/_helpers.py
 
 Utility functions: normalization and serialization helpers.
 
@@ -2424,7 +3139,7 @@ Utility functions: normalization and serialization helpers.
 
 - `._types`
 - `__future__`
-- `mcp.server.fastmcp.exceptions`
+- `mcp.server.mcpserver.exceptions`
 - `owlbear_knowledge.fetcher`
 - `re`
 - `typing`
@@ -2444,9 +3159,9 @@ Utility functions: normalization and serialization helpers.
 - `def _normalize_optional_read_limit(limit: int | None) -> int | None`
 - `def _normalize_enrichment_items(value: object, *, field_name: str) -> list[dict[str, Any]]`
 
-## serve/mcp-knowledge/src/owlbear_mcp_knowledge/_types.py
+## serve/knowledge-mcp/src/owlbear_knowledge_mcp/_types.py
 
-Shared TypedDicts and constants for owlbear-mcp-knowledge.
+Shared TypedDicts and constants for owlbear-knowledge-mcp.
 
 ### Imports
 
@@ -2467,9 +3182,9 @@ Shared TypedDicts and constants for owlbear-mcp-knowledge.
 - `class _BrowserContentFetcher`
   - `async def fetch(self, url: str) -> str`
 
-## serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py
+## serve/knowledge-mcp/src/owlbear_knowledge_mcp/server.py
 
-FastMCP server for owlbear-mcp-knowledge: knowledge ingestion and search tools.
+MCPServer application for knowledge ingestion and search tools.
 
 ### Imports
 
@@ -2481,8 +3196,9 @@ FastMCP server for owlbear-mcp-knowledge: knowledge ingestion and search tools.
 - `dataclasses`
 - `datetime`
 - `logging`
-- `mcp.server.fastmcp`
-- `mcp.server.fastmcp.exceptions`
+- `mcp.server`
+- `mcp.server.mcpserver`
+- `mcp.server.mcpserver.exceptions`
 - `mcp.types`
 - `os`
 - `owlbear_knowledge.fetcher`
@@ -2519,9 +3235,9 @@ FastMCP server for owlbear-mcp-knowledge: knowledge ingestion and search tools.
 - `async def retry_enrichment(ctx: Context, chunk_ids: list[str] | None = None, limit: int = 100, scopes: list[str] | None = None) -> RetryEnrichmentResult`
 - `class AppContext`
 - `class RegisteredSourceResult(TypedDict)`
-- `def _apply_tool_exclusions(server: FastMCP) -> set[str]`
+- `def _apply_tool_exclusions(server: MCPServer) -> set[str]`
 - `async def _web_read(url: str) -> str | None`
-- `async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]`
+- `async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]`
 - `def _serialize_query_facade_results(app_ctx: AppContext, result: QueryResult) -> list[SearchResult]`
 - `async def knowledge_search(ctx: Context, query: str, limit: int = 5, scopes: list[str] | None = None) -> list[SearchResult]`
 - `async def list_knowledge_sources(ctx: Context, scope: str | None = None) -> list[SourceInfo]`
@@ -2531,169 +3247,6 @@ FastMCP server for owlbear-mcp-knowledge: knowledge ingestion and search tools.
 - `async def knowledge_stats(ctx: Context) -> StatsResult`
 - `async def refresh_knowledge_source(ctx: Context, source_id: str) -> dict[str, Any]`
 - `async def delete_knowledge_source(ctx: Context, source_id: str) -> dict[str, Any]`
-
-## serve/mcp-memory/src/owlbear_mcp_memory/__init__.py
-
-Stub package for owlbear_mcp_memory.
-
-## serve/mcp-memory/src/owlbear_mcp_memory/__main__.py
-
-Entry point for ``python -m owlbear_mcp_memory``.
-
-### Imports
-
-- `__future__`
-- `owlbear_mcp_memory.server`
-
-## serve/mcp-memory/src/owlbear_mcp_memory/engine.py
-
-Markdown frontmatter file engine for memory entries.
-
-### Imports
-
-- `__future__`
-- `contextlib`
-- `logging`
-- `os`
-- `owlbear_mcp_memory.models`
-- `pathlib`
-- `pydantic`
-- `re`
-- `secrets`
-- `string`
-- `tempfile`
-- `yaml`
-
-### Interfaces
-
-- `def _slugify(value: str) -> str`
-- `def _random_suffix(length: int = _SUFFIX_LEN) -> str`
-- `class MtimeScanCache`
-  - `def __init__(self, memory_dir: Path) -> None`
-  - `def has_changed(self) -> bool`
-- `class MemoryEngine`
-  - `def __init__(self, memory_dir: Path | str = '.owlbear/memory') -> None`
-  - `def load(self) -> list[MemoryEntry]`
-  - `def get_entries(self) -> list[MemoryEntry]`
-  - `def write(self, entry: MemoryEntry) -> Path`
-  - `def get_entry(self, entry_id: str) -> MemoryEntry`
-  - `def delete(self, entry_id: str) -> None`
-  - `def _load_file(self, file_path: Path) -> MemoryEntry | None`
-
-## serve/mcp-memory/src/owlbear_mcp_memory/git.py
-
-Git helpers for mcp-memory batch commit operations.
-
-### Imports
-
-- `__future__`
-- `argparse`
-- `logging`
-- `pathlib`
-- `subprocess`
-- `sys`
-- `typing`
-- `yaml`
-
-### Interfaces
-
-- `def _git(repo_dir: Path, *args: str) -> str`
-- `def _state_from_file(file_path: Path) -> str | None`
-- `def commit_batch(memory_dir: Path, *, session_type: str) -> str`
-- `def main(argv: Sequence[str] | None = None) -> int`
-
-## serve/mcp-memory/src/owlbear_mcp_memory/models.py
-
-Pydantic models for owlbear-mcp-memory.
-
-### Imports
-
-- `__future__`
-- `datetime`
-- `enum`
-- `pydantic`
-- `re`
-
-### Interfaces
-
-- `class MemoryCategory(enum.StrEnum)`
-- `class MemoryState(enum.StrEnum)`
-- `class MemoryEntry(BaseModel)`
-  - `def _drop_legacy_approval_state(cls, data: object) -> object`
-  - `def _validate_title_not_blank(cls, value: str) -> str`
-  - `def _validate_source_agent_not_blank(cls, value: str) -> str`
-  - `def _validate_id_uuid_v4(cls, value: str) -> str`
-  - `def _validate_iso_datetime(cls, value: str | None) -> str | None`
-
-## serve/mcp-memory/src/owlbear_mcp_memory/server.py
-
-OwlBear MCP memory server for markdown-frontmatter memory operations.
-
-### Imports
-
-- `__future__`
-- `contextlib`
-- `dataclasses`
-- `mcp.server.fastmcp`
-- `mcp.types`
-- `os`
-- `owlbear_mcp_memory.tools`
-- `owlbear_memory`
-- `pathlib`
-- `pydantic`
-- `typing`
-
-### Interfaces
-
-- `class AppContext`
-- `async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]`
-- `async def save_memory(ctx: Context, *, title: _Title, content: _Content, categories: _Categories, confidence: _Confidence, source_agent: _Agent, scope_agents: list[str] | None = None) -> dict[str, Any]`
-- `async def list_memories(ctx: Context, *, states: list[MemoryState] | None = None, categories: Annotated[list[MemoryCategory] | None, Field(min_length=1)] = None, scope_agents: list[str] | None = None) -> list[dict[str, Any]]`
-- `async def recall_memory(ctx: Context, *, agent: _Agent, categories: list[MemoryCategory] | None = None, limit: _Limit | None = None) -> str`
-- `async def read_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
-- `async def curate_memory(ctx: Context, *, entry_id: str, title: _Title | None = None, content: _Content | None = None, categories: list[MemoryCategory] | None = None, confidence: _Confidence | None = None, scope_agents: list[str] | None = None) -> dict[str, Any]`
-- `async def delete_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
-- `async def approve_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
-- `async def assess_memories(ctx: Context, *, assessments: Annotated[list[dict[str, str]], Field(min_length=1)], task_id: _Agent) -> dict[str, Any]`
-
-## serve/mcp-memory/src/owlbear_mcp_memory/tools.py
-
-MCP tool implementations for markdown-backed memory entries.
-
-### Imports
-
-- `__future__`
-- `mcp.server.fastmcp.exceptions`
-- `owlbear_memory`
-- `pydantic`
-- `typing`
-
-### Interfaces
-
-- `def _allowed_assessment_values() -> str`
-- `def _engine_from_ctx(ctx: Context) -> MemoryEngine`
-- `def _allowed_category_values() -> str`
-- `def _allowed_state_values() -> str`
-- `def _coerce_categories(categories: list[MemoryCategory | str] | None) -> list[MemoryCategory] | None`
-- `def _coerce_states(states: list[MemoryState | str] | None) -> list[MemoryState] | None`
-- `def _validate_limit(limit: int | None) -> int | None`
-- `def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]`
-- `def _load_entry_or_raise(engine: MemoryEngine, entry_id: str) -> MemoryEntry`
-- `def _metadata_dict(entry: MemoryEntry) -> dict[str, object]`
-- `def _state_rank_for_list(state: MemoryState) -> int`
-- `def _teaching_validation_message(exc: ValidationError) -> str`
-- `def _with_hint(data: dict[str, Any], hint: str) -> dict[str, Any]`
-- `async def save_memory(ctx: Context, *, title: str, content: str, categories: list[MemoryCategory | str], confidence: float, source_agent: str, scope_agents: list[str] | None = None) -> dict[str, Any]`
-- `async def list_memories(ctx: Context, *, states: list[MemoryState | str] | None = None, categories: list[MemoryCategory | str] | None = None, scope_agents: list[str] | None = None) -> list[dict[str, Any]]`
-- `async def read_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
-- `async def recall_memory(ctx: Context, *, agent: str, categories: list[MemoryCategory | str] | None = None, limit: int | None = None) -> str`
-- `async def _update_entry(ctx: Context, *, current: MemoryEntry, title: str | None = None, content: str | None = None, categories: list[MemoryCategory | str] | None = None, confidence: float | None = None, scope_agents: list[str] | None = None) -> dict[str, Any]`
-- `async def _delete_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]`
-- `async def curate_memory(ctx: Context, *, entry_id: str, title: str | None = None, content: str | None = None, categories: list[MemoryCategory | str] | None = None, confidence: float | None = None, scope_agents: list[str] | None = None) -> dict[str, Any]`
-- `async def delete_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
-- `async def _approve_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]`
-- `async def approve_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
-- `async def assess_memories(ctx: Context, *, assessments: list[dict[str, str]], task_id: str) -> dict[str, list[dict[str, object]]]`
 
 ## serve/memory/src/owlbear_memory/__init__.py
 
@@ -2721,6 +3274,7 @@ Memory engine with state transitions, OCC, and mtime-based caching.
 - `pathlib`
 - `ruamel.yaml`
 - `ruamel.yaml.error`
+- `threading`
 - `typing`
 - `uuid`
 
@@ -2735,7 +3289,11 @@ Memory engine with state transitions, OCC, and mtime-based caching.
 - `class MemoryEngine`
   - `def __init__(self, memory_dir: Path | str = '.owlbear/memory') -> None`
   - `def load(self) -> list[MemoryEntry]`
+  - `def _load(self) -> list[MemoryEntry]`
   - `def get_entries(self) -> list[MemoryEntry]`
+  - `def preview_purge(self, min_age_days: int = 30) -> PurgePreview`
+  - `def purge(self, min_age_days: int = 30) -> PurgeResult`
+  - `def health(self) -> MemoryHealth`
   - `def get_entry(self, entry_id: str) -> MemoryEntry`
   - `def approve(self, entry_id: str, expected_updated_at: str) -> MemoryEntry`
   - `def resolve(self, entry_id: str, expected_updated_at: str) -> MemoryEntry`
@@ -2744,9 +3302,12 @@ Memory engine with state transitions, OCC, and mtime-based caching.
   - `def delete(self, entry_id: str, expected_updated_at: str) -> MemoryEntry`
   - `def record_factually_wrong(self, entry_id: str, task_id: str, expected_updated_at: str | None = None) -> MemoryEntry`
   - `def record_assessment(self, entry_id: str, bucket: str, expected_updated_at: str | None = None) -> MemoryEntry`
-  - `def save(self, title: str, content: str, categories: list[MemoryCategory], confidence: float, source_agent: str, scope_agents: list[str]) -> MemoryEntry`
+  - `def save(self, *, title: str, content: str, categories: list[MemoryCategory], confidence: float, source_agent: str, scope_agents: list[str]) -> MemoryEntry`
   - `def migrate_scores(self, *, dry_run: bool = False) -> int`
+  - `def _migrate_scores(self, *, dry_run: bool) -> int`
   - `def _validate_occ(self, entry: MemoryEntry, expected_updated_at: str) -> None`
+  - `def _eligible_deleted(self, min_age_days: int) -> tuple[list[MemoryEntry], list[MemoryEntry]]`
+  - `def _remove_from_cache(self, entry_id: str) -> None`
   - `def _write_updated_entry(self, entry: MemoryEntry) -> MemoryEntry`
   - `def _upsert_cache(self, entry: MemoryEntry) -> None`
   - `def _now_iso(self) -> str`
@@ -2802,6 +3363,10 @@ Pydantic data models for memory entries.
 
 - `class MemoryCategory(enum.StrEnum)`
 - `class MemoryState(enum.StrEnum)`
+- `class MemoryHealth(BaseModel)`
+  - `def healthy(self) -> bool`
+- `class PurgePreview(BaseModel)`
+- `class PurgeResult(BaseModel)`
 - `class MemoryEntry(BaseModel)`
   - `def _drop_legacy_approval_state(cls, data: object) -> object`
   - `def _validate_title_not_blank(cls, value: str) -> str`
@@ -2836,6 +3401,170 @@ File I/O primitives for markdown-backed memory entries.
 - `def write_entry(path: Path, entry: MemoryEntry | dict[str, Any], *, memory_dir: Path) -> None`
 - `def delete_entry(path: Path, *, memory_dir: Path) -> None`
 
+## serve/memory-mcp/src/owlbear_memory_mcp/__init__.py
+
+Stub package for owlbear_memory_mcp.
+
+## serve/memory-mcp/src/owlbear_memory_mcp/__main__.py
+
+Entry point for ``python -m owlbear_memory_mcp``.
+
+### Imports
+
+- `__future__`
+- `owlbear_memory_mcp.server`
+
+## serve/memory-mcp/src/owlbear_memory_mcp/engine.py
+
+Markdown frontmatter file engine for memory entries.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `logging`
+- `os`
+- `owlbear_memory_mcp.models`
+- `pathlib`
+- `pydantic`
+- `re`
+- `secrets`
+- `string`
+- `tempfile`
+- `yaml`
+
+### Interfaces
+
+- `def _slugify(value: str) -> str`
+- `def _random_suffix(length: int = _SUFFIX_LEN) -> str`
+- `class MtimeScanCache`
+  - `def __init__(self, memory_dir: Path) -> None`
+  - `def has_changed(self) -> bool`
+- `class MemoryEngine`
+  - `def __init__(self, memory_dir: Path | str = '.owlbear/memory') -> None`
+  - `def load(self) -> list[MemoryEntry]`
+  - `def get_entries(self) -> list[MemoryEntry]`
+  - `def write(self, entry: MemoryEntry) -> Path`
+  - `def get_entry(self, entry_id: str) -> MemoryEntry`
+  - `def delete(self, entry_id: str) -> None`
+  - `def _load_file(self, file_path: Path) -> MemoryEntry | None`
+
+## serve/memory-mcp/src/owlbear_memory_mcp/git.py
+
+Git helpers for memory-mcp batch commit operations.
+
+### Imports
+
+- `__future__`
+- `argparse`
+- `logging`
+- `pathlib`
+- `subprocess`
+- `sys`
+- `typing`
+- `yaml`
+
+### Interfaces
+
+- `def _git(repo_dir: Path, *args: str) -> str`
+- `def _state_from_file(file_path: Path) -> str | None`
+- `def commit_batch(memory_dir: Path, *, session_type: str) -> str`
+- `def main(argv: Sequence[str] | None = None) -> int`
+
+## serve/memory-mcp/src/owlbear_memory_mcp/models.py
+
+Pydantic models for owlbear-memory-mcp.
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `enum`
+- `pydantic`
+- `re`
+
+### Interfaces
+
+- `class MemoryCategory(enum.StrEnum)`
+- `class MemoryState(enum.StrEnum)`
+- `class MemoryEntry(BaseModel)`
+  - `def _drop_legacy_approval_state(cls, data: object) -> object`
+  - `def _validate_title_not_blank(cls, value: str) -> str`
+  - `def _validate_source_agent_not_blank(cls, value: str) -> str`
+  - `def _validate_id_uuid_v4(cls, value: str) -> str`
+  - `def _validate_iso_datetime(cls, value: str | None) -> str | None`
+
+## serve/memory-mcp/src/owlbear_memory_mcp/server.py
+
+OwlBear MCP memory server for markdown-frontmatter memory operations.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `dataclasses`
+- `mcp.server`
+- `mcp.server.mcpserver`
+- `mcp.types`
+- `os`
+- `owlbear_memory`
+- `owlbear_memory_mcp.tools`
+- `pathlib`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class AppContext`
+- `async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]`
+- `async def save_memory(ctx: Context, *, title: _Title, content: _Content, categories: _Categories, confidence: _Confidence, source_agent: _Agent, scope_agents: list[str] | None = None) -> dict[str, Any]`
+- `async def list_memories(ctx: Context, *, states: list[MemoryState] | None = None, categories: Annotated[list[MemoryCategory] | None, Field(min_length=1)] = None, scope_agents: list[str] | None = None) -> list[dict[str, Any]]`
+- `async def recall_memory(ctx: Context, *, agent: _Agent, categories: list[MemoryCategory] | None = None, limit: _Limit | None = None) -> str`
+- `async def read_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
+- `async def curate_memory(ctx: Context, *, entry_id: str, title: _Title | None = None, content: _Content | None = None, categories: list[MemoryCategory] | None = None, confidence: _Confidence | None = None, scope_agents: list[str] | None = None) -> dict[str, Any]`
+- `async def delete_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
+- `async def approve_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
+- `async def assess_memories(ctx: Context, *, assessments: Annotated[list[dict[str, str]], Field(min_length=1)], task_id: _Agent) -> dict[str, Any]`
+
+## serve/memory-mcp/src/owlbear_memory_mcp/tools.py
+
+MCP tool implementations for markdown-backed memory entries.
+
+### Imports
+
+- `__future__`
+- `mcp.server.mcpserver.exceptions`
+- `owlbear_memory`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `def _allowed_assessment_values() -> str`
+- `def _engine_from_ctx(ctx: Context) -> MemoryEngine`
+- `def _allowed_category_values() -> str`
+- `def _allowed_state_values() -> str`
+- `def _coerce_categories(categories: list[MemoryCategory | str] | None) -> list[MemoryCategory] | None`
+- `def _coerce_states(states: list[MemoryState | str] | None) -> list[MemoryState] | None`
+- `def _validate_limit(limit: int | None) -> int | None`
+- `def _entry_to_dict(entry: MemoryEntry) -> dict[str, object]`
+- `def _load_entry_or_raise(engine: MemoryEngine, entry_id: str) -> MemoryEntry`
+- `def _metadata_dict(entry: MemoryEntry) -> dict[str, object]`
+- `def _state_rank_for_list(state: MemoryState) -> int`
+- `def _teaching_validation_message(exc: ValidationError) -> str`
+- `def _with_hint(data: dict[str, Any], hint: str) -> dict[str, Any]`
+- `async def save_memory(ctx: Context, *, title: str, content: str, categories: list[MemoryCategory | str], confidence: float, source_agent: str, scope_agents: list[str] | None = None) -> dict[str, Any]`
+- `async def list_memories(ctx: Context, *, states: list[MemoryState | str] | None = None, categories: list[MemoryCategory | str] | None = None, scope_agents: list[str] | None = None) -> list[dict[str, Any]]`
+- `async def read_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
+- `async def recall_memory(ctx: Context, *, agent: str, categories: list[MemoryCategory | str] | None = None, limit: int | None = None) -> str`
+- `async def _update_entry(ctx: Context, *, current: MemoryEntry, title: str | None = None, content: str | None = None, categories: list[MemoryCategory | str] | None = None, confidence: float | None = None, scope_agents: list[str] | None = None) -> dict[str, Any]`
+- `async def _delete_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]`
+- `async def curate_memory(ctx: Context, *, entry_id: str, title: str | None = None, content: str | None = None, categories: list[MemoryCategory | str] | None = None, confidence: float | None = None, scope_agents: list[str] | None = None) -> dict[str, Any]`
+- `async def delete_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
+- `async def _approve_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]`
+- `async def approve_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
+- `async def assess_memories(ctx: Context, *, assessments: list[dict[str, str]], task_id: str) -> dict[str, list[dict[str, object]]]`
+
 ## serve/tools/src/owlbear_tools/__init__.py
 
 OwlBear utility tools package.
@@ -2852,19 +3581,22 @@ Commit explicitly owned paths without disturbing an existing Git index.
 
 - `__future__`
 - `argparse`
+- `os`
 - `pathlib`
 - `subprocess`
 - `sys`
+- `tempfile`
 - `typing`
 
 ### Interfaces
 
 - `class CommitOwnedError(RuntimeError)`
   - `def __init__(self, detail: str) -> None`
-- `def _git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]`
+- `def _git(cwd: Path, *args: str, check: bool = True, env: dict[str, str] | None = None, input_text: str | None = None) -> subprocess.CompletedProcess[str]`
 - `def _relative_paths(cwd: Path, paths: Sequence[str]) -> list[str]`
 - `def _staged_paths(cwd: Path, paths: Sequence[str]) -> list[str]`
-- `def commit_owned_paths(*, cwd: Path, message: str, paths: Sequence[str]) -> str`
+- `def _commit_staged_paths(*, cwd: Path, message: str, owned_paths: list[str]) -> str`
+- `def commit_owned_paths(*, cwd: Path, message: str, paths: Sequence[str], staged: bool = False) -> str`
 - `def main() -> None`
 
 ## serve/tools/src/owlbear_tools/doc_index.py
@@ -3015,6 +3747,27 @@ Generate a structural index of TypeScript and JavaScript source files.
 - `def generate_index(root: Path) -> None`
 - `def main() -> None`
 
+## setup/finalize.py
+
+Finalize one pre-cutover workspace into the target delivery runtime.
+
+### Imports
+
+- `__future__`
+- `argparse`
+- `json`
+- `owlbear_delivery`
+- `pathlib`
+- `pydantic`
+
+### Interfaces
+
+- `def _smoke_target_runtime(workspace: Path, request: TargetCutoverRequest) -> None`
+- `def run(workspace: Path, request_path: Path) -> TargetCutoverResult`
+- `def _build_parser() -> argparse.ArgumentParser`
+- `def _print(payload: object) -> None`
+- `def main(argv: list[str] | None = None) -> int`
+
 ## setup/init.py
 
 OwlBear workspace initialiser — setup/init.py.
@@ -3024,9 +3777,10 @@ OwlBear workspace initialiser — setup/init.py.
 - `__future__`
 - `contextlib`
 - `difflib`
-- `importlib.util`
+- `hashlib`
 - `json`
 - `os`
+- `owlbear_delivery`
 - `pathlib`
 - `re`
 - `shutil`
@@ -3035,7 +3789,6 @@ OwlBear workspace initialiser — setup/init.py.
 
 ### Interfaces
 
-- `def _install_openspec(target_dir: Path) -> None`
 - `def _strip_jsonc_comments(text: str) -> str`
 - `def _merge_settings(owlbear: dict, existing: dict) -> dict`
 - `def _replace_placeholders(content: str, replacements: dict[str, str]) -> str`
@@ -3044,41 +3797,12 @@ OwlBear workspace initialiser — setup/init.py.
 - `def _write_settings(src: Path, dest: Path, replacements: dict[str, str]) -> None`
 - `def _write_mcp(src: Path, dest: Path, replacements: dict[str, str]) -> None`
 - `def _write_seed_file(src: Path, dest: Path, replacements: dict[str, str]) -> None`
+- `def _write_delivery_config(target_dir: Path) -> None`
+- `def _target_code_revision(owlbear_dir: Path) -> str`
+- `def _activate_fresh_target(target_dir: Path, owlbear_dir: Path) -> None`
 - `def _hook_files_match(src: Path, dest: Path) -> bool`
 - `def _is_interactive_session() -> bool`
 - `def _should_replace_hook_file(dest: Path, *, src: Path, replace_hooks: bool, interactive: bool) -> bool`
 - `def _hook_diff(src: Path, dest: Path) -> str`
 - `def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None`
 - `def init(target_dir: Path, owlbear_dir: Path, *, replace_hooks: bool = False, interactive: bool | None = None) -> None`
-
-## setup/openspec.py
-
-Install the pinned OwlBear OpenSpec workflow into a target repository.
-
-### Imports
-
-- `__future__`
-- `argparse`
-- `os`
-- `pathlib`
-- `shutil`
-- `subprocess`
-- `yaml`
-
-### Interfaces
-
-- `class _IndentedSafeDumper(yaml.SafeDumper)`
-  - `def increase_indent(self, flow: bool = False, indentless: bool = False) -> None`
-- `def _openspec_env() -> dict[str, str]`
-- `def _has_pinned_version(executable: str) -> bool`
-- `def _ensure_openspec_cli() -> str`
-- `def _run_openspec_init(target: Path) -> None`
-- `def _remove_legacy_schema(target: Path) -> None`
-- `def _without_managed_context(context: str, managed_context: str) -> str`
-- `def _configure_schema(target: Path) -> None`
-- `def _remove_legacy_grill_skill(target: Path) -> None`
-- `def _remove_legacy_speckit(target: Path) -> None`
-- `def _update_gitignore(target: Path) -> None`
-- `def install(target: Path, *, initialize: bool = True) -> None`
-- `def _build_parser() -> argparse.ArgumentParser`
-- `def main(argv: list[str] | None = None) -> int`

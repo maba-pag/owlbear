@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from owlbear_mcp_knowledge.server import _DEFAULT_QDRANT_PATH, app_lifespan
+from owlbear_knowledge_mcp.server import _DEFAULT_QDRANT_PATH, app_lifespan
 
 
 class TestQdrantPersistencePathWiring:
@@ -25,7 +25,7 @@ class TestQdrantPersistencePathWiring:
         qdrant_cls = MagicMock(name="QdrantVectorStore")
         server_mock = MagicMock()
 
-        with patch("owlbear_mcp_knowledge.server.QdrantVectorStore", qdrant_cls):
+        with patch("owlbear_knowledge_mcp.server.QdrantVectorStore", qdrant_cls):
             async with app_lifespan(server_mock):
                 pass
 
@@ -45,7 +45,7 @@ class TestQdrantPersistencePathWiring:
         qdrant_cls = MagicMock(name="QdrantVectorStore")
         server_mock = MagicMock()
 
-        with patch("owlbear_mcp_knowledge.server.QdrantVectorStore", qdrant_cls):
+        with patch("owlbear_knowledge_mcp.server.QdrantVectorStore", qdrant_cls):
             async with app_lifespan(server_mock):
                 pass
 

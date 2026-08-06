@@ -22,17 +22,17 @@ from owlbear_cockpit.target_models import (
     WorkItemPortfolioResponse,
     WorkItemSummaryResponse,
 )
-from owlbear_kanban.change_workspace import CoordinationConflictError
-from owlbear_kanban.completed_history import CompletedHistoryError, CompletedHistoryMissingError
-from owlbear_kanban.delivery_runtime import (
+from owlbear_delivery.change_workspace import CoordinationConflictError
+from owlbear_delivery.completed_history import CompletedHistoryError, CompletedHistoryMissingError
+from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
     DeliveryRequestResolution,
     DeliveryRuntimeConflictError,
     DeliveryRuntimeReferenceError,
     DeliveryStage,
 )
-from owlbear_kanban.portfolio_application import PortfolioApplication, PortfolioApplicationError
-from owlbear_kanban.work_items import WorkItemAttention, WorkItemProjection, WorkItemStage
+from owlbear_delivery.portfolio_application import PortfolioApplication, PortfolioApplicationError
+from owlbear_delivery.work_items import WorkItemAttention, WorkItemProjection, WorkItemStage
 
 if TYPE_CHECKING:
     from collections.abc import Callable

@@ -5,14 +5,14 @@ applyTo: "serve/**"
 
 ## Architecture Overview
 
-OwlBear v2 has no custom Python agent runtime. Agents are `.agent.md` files executed by VS Code and GitHub Copilot. Tools are provided by MCP servers (`serve/mcp-*`) or VS Code built-in tools.
+OwlBear v2 has no custom Python agent runtime. Agents are `.agent.md` files executed by VS Code and GitHub Copilot. Tools are provided by MCP servers (`serve/*-mcp/`) or VS Code built-in tools.
 
 ```
 agents/*.agent.md            (agent definitions — pure markdown, no Python)
     use tools from
-serve/mcp-kanban/            (MCP server: kanban board operations)
-serve/mcp-knowledge/         (MCP server: knowledge base operations)
-serve/mcp-memory/            (MCP server: persistent agent memory)
+serve/delivery-mcp/          (MCP server: Delivery operations)
+serve/knowledge-mcp/         (MCP server: knowledge base operations)
+serve/memory-mcp/            (MCP server: persistent agent memory)
     import from
 serve/knowledge/             (core library: graph, vector, ingest, query)
 ```
@@ -27,7 +27,7 @@ Cross-namespace imports are enforced by `tests/test_package_boundary.py`. The `A
 
 - When adding a new package, update `ALLOWED_IMPORTS` — the manifest guard will fail otherwise.
 - TYPE_CHECKING import policy is documented in the test module docstring.
-- MCP servers may import from their corresponding core library (e.g., `mcp-knowledge` imports from `knowledge`) but not from other MCP servers.
+- MCP servers may import from their corresponding core library (e.g., `knowledge-mcp` imports from `knowledge`) but not from other MCP servers.
 
 ## Domain Scope Map
 
@@ -36,11 +36,11 @@ Each task targets exactly one domain. Multi-domain work must be split into separ
 | Domain | Scope |
 |--------|-------|
 | knowledge | `serve/knowledge/` (graph, vector, ingest, query, embeddings) |
-| mcp-kanban | `serve/mcp-kanban/` |
-| mcp-knowledge | `serve/mcp-knowledge/` |
-| mcp-memory | `serve/mcp-memory/` |
+| delivery-mcp | `serve/delivery-mcp/` |
+| knowledge-mcp | `serve/knowledge-mcp/` |
+| memory-mcp | `serve/memory-mcp/` |
 | browser | `serve/browser/` |
-| mcp-browser | `serve/mcp-browser/` |
+| browser-mcp | `serve/browser-mcp/` |
 | agent-config | `share/agents/`, `share/skills/`, `share/instructions/`, `.github/copilot-instructions.md` |
 | test-infra | shared conftest, fixtures, factories (not individual test files) |
 | docs | `docs/`, `README.md`, `SECURITY.md` |

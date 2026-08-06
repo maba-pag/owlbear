@@ -6,17 +6,17 @@ from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
 
-from owlbear_kanban.delivery_application_loader import (
+from owlbear_delivery.delivery_application_loader import (
     DeliveryApplicationLoadError,
     DeliveryStartupConfig,
     load_delivery_application,
 )
-from owlbear_kanban.target_cutover import TargetCutoverError, TargetCutoverRequest, authorize_target_mutation
+from owlbear_delivery.target_cutover import TargetCutoverError, TargetCutoverRequest, authorize_target_mutation
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from owlbear_kanban.portfolio_application import PortfolioApplication
+    from owlbear_delivery.portfolio_application import PortfolioApplication
 
 
 def load_target_context(workspace_root: Path, request_path: Path) -> PortfolioApplication:

@@ -25,7 +25,7 @@ applyTo: "**"
 ## 2. System Awareness
 
 - **Runtime.** Python 3.14+ with `uv` (never bare `pip`), VS Code/Copilot custom agents, MCP tools,
-  and a Kanban execution board.
+  and a Delivery execution board.
 - **Distribution and safety.** Clone = install; `setup/init.py` wires workspace configuration. Git
   history and audit logs provide review and recovery.
 - **Delivery.** `design → plan → build → optional assembly → completed`. Independent review is
@@ -37,12 +37,12 @@ applyTo: "**"
 
 | Store | What goes here |
 |-------|----------------|
-| mcp-memory `ob-memory` | Agent institutional knowledge: durable, scoped lessons for future agents |
+| memory-mcp `owlbear-memory` | Agent institutional knowledge: durable, scoped lessons for future agents |
 | Native changes, jobs, and requests | Change-specific context, blockers, decisions, and actions |
 | `.owlbear/research/` | Research findings and source-grounded analysis |
 | Project knowledge MCP | Domain knowledge and external-source knowledge |
 
-The VS Code built-in `/memories/` store is retired for OwlBear agents. Do not write user, session, repo inbox, or fallback notes there; if the built-in memory tool appears, treat it as unavailable for agent learning. Use `ob-memory` for institutional memory and normal project artifacts for task context.
+The VS Code built-in `/memories/` store is retired for OwlBear agents. Do not write user, session, repo inbox, or fallback notes there; if the built-in memory tool appears, treat it as unavailable for agent learning. Use `owlbear-memory` for institutional memory and normal project artifacts for task context.
 
 Do NOT store as memory: architecture decisions, research findings, code snippets, or task-specific working notes.
 
@@ -54,8 +54,8 @@ Before completing material work, decide whether you learned a specific, non-obvi
 
   | MCP server | `tools:` prefix | Runtime tool ID | `tool_search` query |
   |---|---|---|---|
-  | OwlBear Kanban | `ob-kanban/*` | `mcp_ob-kanban_<tool>` | `"OwlBear Kanban create_design_session read_design_session revise_design_session publish_design_checkpoint derive_delivery_contract validate_delivery_contract admit_delivery_change list_work_items show_work_item acquire_frontier_work show_plan_context show_build_context publish_delivery_plan publish_delivery_result transition_delivery recover_claim list_integration_ready_changes show_integration_attention integrate_ready_change admit_reviewed_integration_repair list_completed_changes search_completed_changes show_completed_change"` |
-  | OwlBear Memory | `ob-memory/*` | `mcp_ob-memory_<tool>` | `"memory"` |
+  | OwlBear Delivery | `owlbear-delivery/*` | `mcp_owlbear-delivery_<tool>` | `"OwlBear Delivery create_design_session read_design_session revise_design_session publish_design_checkpoint derive_delivery_contract validate_delivery_contract admit_delivery_change list_work_items show_work_item acquire_frontier_work show_plan_context show_build_context publish_delivery_plan publish_delivery_result transition_delivery recover_claim list_integration_ready_changes show_integration_attention integrate_ready_change admit_reviewed_integration_repair list_completed_changes search_completed_changes show_completed_change"` |
+  | OwlBear Memory | `owlbear-memory/*` | `mcp_owlbear-memory_<tool>` | `"memory"` |
   | MarkItDown | `markitdown/*` | `mcp_markitdown_<tool>` | `"markdown convert"` |
 
 - **Skill authority.** Skills override dispatch prompts. Dispatch prompts provide context, not procedure.

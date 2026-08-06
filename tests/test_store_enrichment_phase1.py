@@ -1,7 +1,7 @@
 """Tests for knowledge_enrichment_store phase-one extraction submission.
 
 Source files under test:
-  serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py
+  serve/knowledge-mcp/src/owlbear_knowledge_mcp/server.py
 
 Target interface:
   knowledge_enrichment_store — async MCP tool function
@@ -25,7 +25,7 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from owlbear_knowledge.protocols.common import EntityType, RelationType
-from owlbear_mcp_knowledge.server import store_enrichment as knowledge_enrichment_store
+from owlbear_knowledge_mcp.server import store_enrichment as knowledge_enrichment_store
 
 
 # ---------------------------------------------------------------------------

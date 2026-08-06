@@ -854,7 +854,7 @@ class TestMemoryExceptionHandlers:
         assert response.json()["code"] == "MEM_INVALID_TRANSITION"
 
     def test_all_memory_error_codes_have_mem_prefix(self, client: TestClient, mock_engine: MagicMock) -> None:
-        """All three memory error codes start with 'MEM_' — not 'ERR_' (kanban prefix)."""
+        """All three memory error codes start with 'MEM_' rather than the retired generic prefix."""
         cases = [
             (NotFoundError("nf"), 404, "MEM_NOT_FOUND"),
             (ConcurrencyError("cc"), 409, "MEM_CONFLICT"),

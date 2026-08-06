@@ -169,7 +169,7 @@ class TestMemoryVotingLifecycle:
     @pytest.mark.asyncio
     async def test_recall_returns_twenty_from_twenty_two_approved(self, tmp_path: Path) -> None:
         """recall_memory with limit=20 returns exactly 20 entries when 22 are approved."""
-        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
         for i, entry_id in enumerate(_IDS_BULK):
             entry = _make_approved_entry(entry_id, f"Bulk Entry {i:02d}")
@@ -190,7 +190,7 @@ class TestMemoryVotingLifecycle:
         Entry A and B have zero activity; C through V have high total activity.
         A and B must appear in recall result; the pool logic must include them.
         """
-        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
         # Two entries with zero activity → will land in explore pool
         entry_low_a = _make_approved_entry(_ID_SCORE_A, "Low Activity A", confidence=0.7)
@@ -225,7 +225,7 @@ class TestMemoryVotingLifecycle:
         Twenty entries have high outstanding → go to regular pool.
         The zero-outstanding entries appear in challenge pool.
         """
-        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
         # Give these two entries some total activity (didnt_use=1) so they're
         # NOT the lowest-activity entries (explore pool gets truly-zero ones).
@@ -318,7 +318,7 @@ class TestMemoryVotingLifecycle:
         Entry B: confidence=0.8 → score=0.80
         Recall must place A before B.
         """
-        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
         entry_a = _make_approved_entry(_ID_SCORE_A, "High Score After Boost", confidence=0.7)
         entry_b = _make_approved_entry(_ID_SCORE_B, "Medium Confidence No Boost", confidence=0.8)
@@ -340,7 +340,7 @@ class TestMemoryVotingLifecycle:
     @pytest.mark.asyncio
     async def test_record_factually_wrong_contested_entry_appears_in_recall(self, tmp_path: Path) -> None:
         """record_factually_wrong on approved entry → contested; entry still in recall result."""
-        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
         entry = _make_approved_entry(_ID_SCORE_C, "Contested But Recalled", confidence=0.8)
         _write_entry(tmp_path, entry)
@@ -363,7 +363,7 @@ class TestMemoryVotingLifecycle:
         recall_memory with limit=20 must return exactly 20 entries, proving that entries
         created via the real lifecycle are recallable — not a shortcut via direct file write.
         """
-        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine)
@@ -411,7 +411,7 @@ class TestMemoryVotingLifecycle:
         - challenge<2: ChallengeEntry displaced by high-outstanding entries
         - regular>16: RegularLow 00/01 appear in results
         """
-        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
         # Explore pool candidates: total activity=0 (lowest _explore_metric)
         for eid, name in [
@@ -499,7 +499,7 @@ class TestMemoryVotingStateTransitions:
     @pytest.mark.asyncio
     async def test_contested_entry_included_in_recall(self, tmp_path: Path) -> None:
         """Contested entry (state=contested) appears in recall_memory result."""
-        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
         entry = _make_approved_entry(
             _ID_TRANS_A,
@@ -530,7 +530,7 @@ class TestMemoryVotingStateTransitions:
     @pytest.mark.asyncio
     async def test_disputed_entry_excluded_from_recall(self, tmp_path: Path) -> None:
         """Disputed entry is excluded from recall_memory result."""
-        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
         entry = _make_approved_entry(
             _ID_TRANS_A,
@@ -576,7 +576,7 @@ class TestMemoryVotingStateTransitions:
     @pytest.mark.asyncio
     async def test_stale_entry_excluded_from_recall(self, tmp_path: Path) -> None:
         """Stale entry (state=stale) is excluded from recall_memory result."""
-        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
         entry = _make_approved_entry(
             _ID_STALE_A,
@@ -614,7 +614,7 @@ class TestMemoryVotingStateTransitions:
         Entry B: approved → contested → disputed → excluded from recall
         Entry C: approved → stale (via 51 didnt_use) → excluded from recall
         """
-        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
         entry_a = _make_approved_entry(_ID_TRANS_A, "Entry A Contested")
         entry_b = _make_approved_entry(_ID_TRANS_B, "Entry B Disputed")
@@ -765,7 +765,7 @@ class TestMemoryVotingMigration:
         Entry B: confidence=0.8 → score=0.8 (migration only)
         recall_memory must list A before B.
         """
-        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
         _write_legacy_entry(tmp_path, _ID_LEG_A, "Boosted After Migration", confidence=0.75)
         _write_legacy_entry(tmp_path, _ID_LEG_B, "Static After Migration", confidence=0.8)
@@ -793,7 +793,7 @@ class TestMemoryVotingMigration:
         Apply 3 outstanding to A: 0.7 + 3*0.1 = 1.0 → A.score=1.0 > C.score=0.9 > B.score=0.8.
         Recall order: A, C, B.
         """
-        from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
         _write_legacy_entry(tmp_path, _ID_LEG_A, "Legacy Low Conf Boosted", confidence=0.7)
         _write_legacy_entry(tmp_path, _ID_LEG_B, "Legacy Mid Conf Static", confidence=0.8)

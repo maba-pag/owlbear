@@ -24,7 +24,7 @@ import pytest
 from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState
 from owlbear_memory import storage
 from owlbear_memory.errors import ConcurrencyError, TransitionError, ValidationError
-from owlbear_mcp_memory.models import MemoryEntry as McpMemoryEntry
+from owlbear_memory_mcp.models import MemoryEntry as McpMemoryEntry
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -136,8 +136,8 @@ class TestConfirmationCycle:
         )
         assert entry.contested_by_task is None
 
-    def test_owlbear_mcp_memory_entry_has_contested_by_task_default_none(self) -> None:
-        """AC1: MemoryEntry in owlbear_mcp_memory has contested_by_task with default None."""
+    def test_owlbear_memory_mcp_entry_has_contested_by_task_default_none(self) -> None:
+        """AC1: MemoryEntry in owlbear_memory_mcp has contested_by_task with default None."""
         entry = McpMemoryEntry(
             id=_ID_APPROVED,
             title="Test",
@@ -160,9 +160,9 @@ class TestConfirmationCycle:
         assert reloaded is not None
         assert reloaded.contested_by_task == _TASK_A
 
-    def test_contested_by_task_survives_storage_roundtrip_owlbear_mcp_memory(self, tmp_path: Path) -> None:
-        """AC1: contested_by_task is frontmatter-serialized in owlbear_mcp_memory engine roundtrip."""
-        from owlbear_mcp_memory.engine import MemoryEngine as McpEngine
+    def test_contested_by_task_survives_storage_roundtrip_owlbear_memory_mcp(self, tmp_path: Path) -> None:
+        """AC1: contested_by_task is frontmatter-serialized in owlbear_memory_mcp engine roundtrip."""
+        from owlbear_memory_mcp.engine import MemoryEngine as McpEngine
 
         entry = McpMemoryEntry(
             id=_ID_APPROVED,

@@ -6,9 +6,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from owlbear_kanban.delivery_runtime import DeliveryStage
-from owlbear_kanban.portfolio_application import DeliveryOperatorContext
-from owlbear_kanban.work_items import WorkItemProjection
+from owlbear_delivery.delivery_runtime import DeliveryStage
+from owlbear_delivery.portfolio_application import DeliveryOperatorContext
+from owlbear_delivery.work_items import WorkItemProjection
 
 
 class _TargetHTTPModel(BaseModel):

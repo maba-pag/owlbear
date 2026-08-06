@@ -1,4 +1,7 @@
-## Kanban
+## Retired Kanban decomposition
+
+**Status:** Superseded by the native Delivery runtime. The names and API below describe the retired
+implementation and are retained only as historical proposal context.
 
 ### Status quo
 
