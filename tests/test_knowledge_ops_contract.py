@@ -18,6 +18,7 @@ _ROOT = Path(__file__).resolve().parents[1]
 _AGENT_PATH = _ROOT / "share/agents/knowledge-ingestor.agent.md"
 _PROMPT_PATH = _ROOT / "share/prompts/kb-ingest.prompt.md"
 _HANDBOOK_PATH = _ROOT / "share/skills/h-knowledge-ops/SKILL.md"
+_WORKFLOW_PATH = _ROOT / ".github/workflows/knowledge-source-contracts.yml"
 _REGISTRATION_FIELDS = {
     "name",
     "kind",
@@ -32,6 +33,20 @@ _REGISTRATION_FIELDS = {
 _REQUIRED_MARKERS = {
     "knowledge-registration-url-list",
     "knowledge-registration-file-glob",
+}
+_WORKFLOW_PATHS = {
+    ".owlbear/scripts/validate_agents.py",
+    ".github/workflows/knowledge-source-contracts.yml",
+    ".python-version",
+    "conftest.py",
+    "pyproject.toml",
+    "serve/knowledge/**",
+    "serve/mcp-knowledge/**",
+    "share/agents/knowledge-ingestor.agent.md",
+    "share/prompts/kb-ingest.prompt.md",
+    "share/skills/h-knowledge-ops/SKILL.md",
+    "tests/test_knowledge_ops_contract.py",
+    "uv.lock",
 }
 
 
@@ -96,6 +111,38 @@ def test_handbook_documents_current_source_contract_and_valid_payloads() -> None
     assert "## Config Examples per Source Type" not in handbook
 
     _registration_payloads()
+
+
+def test_source_contract_workflow_is_dev_only_and_canonical() -> None:
+    workflow = yaml.safe_load(_WORKFLOW_PATH.read_text(encoding="utf-8"))
+    assert isinstance(workflow, dict)
+    assert workflow["permissions"] == {}
+
+    triggers = workflow["on"]
+    assert isinstance(triggers, dict)
+    for event in ("pull_request", "push"):
+        event_filter = triggers[event]
+        assert event_filter["branches"] == ["dev"]
+        assert set(event_filter["paths"]) == _WORKFLOW_PATHS
+
+    job = workflow["jobs"]["knowledge-source-contracts"]
+    assert job["if"] == "github.repository == 'maba-pag/owlbear'"
+    assert job["permissions"] == {"contents": "read"}
+    assert job["runs-on"] == "ubuntu-latest"
+    assert job["timeout-minutes"] == 15
+
+    steps = job["steps"]
+    assert steps[0]["uses"] == "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+    assert steps[1]["uses"] == "astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9"
+    assert steps[1]["with"] == {
+        "cache-dependency-glob": "uv.lock",
+        "enable-cache": True,
+    }
+    assert [step["run"] for step in steps[2:]] == [
+        "uv python install",
+        "uv run python .owlbear/scripts/validate_agents.py",
+        "uv run --frozen pytest -q tests/test_knowledge_ops_contract.py",
+    ]
 
 
 def test_registration_examples_validate_and_persist_as_active_sources() -> None:

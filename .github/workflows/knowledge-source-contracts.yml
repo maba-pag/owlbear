@@ -1,0 +1,53 @@
+---
+name: Knowledge source contracts
+
+"on":
+  pull_request:
+    branches: [dev]
+    paths:
+      - .owlbear/scripts/validate_agents.py
+      - .github/workflows/knowledge-source-contracts.yml
+      - .python-version
+      - conftest.py
+      - pyproject.toml
+      - serve/knowledge/**
+      - serve/mcp-knowledge/**
+      - share/agents/knowledge-ingestor.agent.md
+      - share/prompts/kb-ingest.prompt.md
+      - share/skills/h-knowledge-ops/SKILL.md
+      - tests/test_knowledge_ops_contract.py
+      - uv.lock
+  push:
+    branches: [dev]
+    paths:
+      - .owlbear/scripts/validate_agents.py
+      - .github/workflows/knowledge-source-contracts.yml
+      - .python-version
+      - conftest.py
+      - pyproject.toml
+      - serve/knowledge/**
+      - serve/mcp-knowledge/**
+      - share/agents/knowledge-ingestor.agent.md
+      - share/prompts/kb-ingest.prompt.md
+      - share/skills/h-knowledge-ops/SKILL.md
+      - tests/test_knowledge_ops_contract.py
+      - uv.lock
+
+permissions: {}
+
+jobs:
+  knowledge-source-contracts:
+    if: github.repository == 'maba-pag/owlbear'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv python install
+      - run: uv run python .owlbear/scripts/validate_agents.py
+      - run: uv run --frozen pytest -q tests/test_knowledge_ops_contract.py
