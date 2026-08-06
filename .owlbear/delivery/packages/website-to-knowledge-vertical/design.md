@@ -1,7 +1,13 @@
 # Website-to-Knowledge Vertical Design
 
-> **Status:** Draft architecture; unresolved decisions remain.
+> **Status:** Roadmap architecture only; never approve or admit this umbrella.
 > **Research:** `.owlbear/research/website-to-knowledge-opportunity-assessment.md`
+
+## Governance
+
+`website-to-knowledge-vertical` is the stable roadmap and evidence container. It must never enter derivation, checkpoint, validation, approval, admission, Planning, Build, or Integration. The Designer uses it only to select and ground one separate focused Design session from the queue below.
+
+Before extracting “next,” inspect current Design and Delivery state. Resume an existing queue child when present. Otherwise create the lowest-order child whose prerequisites are complete. Never skip a blocked prerequisite, combine queue rows, or revise this umbrella as part of child work.
 
 ## Current Ownership
 
@@ -23,74 +29,66 @@
 6. **Proof gap:** adapter and unit tests are green, but no production-composition test proves register -> refresh -> search.
 7. **Operations gap:** Cockpit cannot expose Knowledge health or sources, but UI work must follow backend proof.
 
-## Proposed Delivery Shape
+## Ordered Focused Change Queue
 
-### Outcome 1: Contract And Runtime Truth
+| Order | Focused change ID | Bounded scope | Prerequisites |
+|---:|---|---|---|
+| 1 | `knowledge-source-contract-alignment` | Ingestor register/delete authority, valid handbook schemas, and contract tests | None |
+| 2 | `knowledge-runtime-readiness` | Consistent MCP/setup wiring, explicit Browser policy, package-boundary enforcement, and readiness diagnostics | 1 |
+| 3 | `static-website-knowledge-ingestion` | Static HTML extraction ownership, source identity/delta semantics, and register -> refresh -> search proof | 1, 2 |
+| 4 | `guided-knowledge-ingestion-workflow` | User preview, validation, registration, ingestion, verification, and actionable failure flow | 3 |
+| 5 | `cockpit-knowledge-workspace` | Source list, health, refresh, deletion confirmation, and search UI | 3, 4 |
+| 6 | `rendered-knowledge-source-refresh` | Authoritative Browser bridge with rendered/authenticated fixture proof and preserved safety | 3, 4 |
 
-Align tool grants, handbook schemas, source identity semantics, MCP checkout/configuration, and startup diagnostics. Restore or replace the missing package-boundary enforcement promised by architecture instructions.
+A focused child must cite this umbrella and `.owlbear/research/website-to-knowledge-opportunity-assessment.md`, but owns its own Product Promise, decisions, architecture, contract, gates, approval, admission, and Delivery lifecycle.
 
-### Outcome 2: Static Website Vertical
+## Child Extraction Procedure
 
-Write a failing deterministic local-server proof first. Choose one explicit extraction owner, then make a public static URL produce cleaned Markdown, a refreshable registered source, chunks, vectors, and searchable results. Prove unchanged refresh and structured failure behavior.
+1. Read this umbrella and the linked research without revising either.
+2. Inspect current Design/Delivery state for the six exact child IDs.
+3. Select the first child that is neither completed nor active and whose prerequisites are completed.
+4. Create or resume that child using only its queue-row scope and relevant current evidence.
+5. Resolve that child's material decisions and run its normal Design gates.
+6. Stop at explicit approval for the child; never ask approval for the umbrella.
+7. After the child completes, repeat the same command to select the next row.
 
-### Outcome 3: Knowledge Operations Surface
+## Proposed Product Outcomes
 
-Add Cockpit backend routes and a Knowledge workspace for source listing, registration, refresh, health, deletion confirmation, and search. Reuse current workspace health conventions and keep destructive operations explicit.
+The queue collectively aims to deliver contract/runtime truth, a proven static website vertical, a guided ingestion workflow, a Knowledge operations surface, and a separately gated rendered/authenticated extension. These are roadmap outcomes, not one Delivery contract.
 
-### Outcome 4: Rendered And Authenticated Extension
-
-Choose and implement one authoritative Browser-to-Knowledge composition boundary. Preserve allowlist, SSRF, authentication, content-boundary, diagnostic-redaction, and untrusted-content constraints. Prove it with a controlled rendered fixture before any corporate-site-specific automation.
-
-## Sequencing
-
-1. Contract truth and consistent runtime wiring.
-2. Failing end-to-end static fixture.
-3. Extraction ownership decision and static implementation.
-4. Agent-facing workflow proof.
-5. Cockpit Knowledge workspace.
-6. Rendered/authenticated bridge.
-7. Only then consider crawler, scheduler, graph explorer, or advanced automation.
-
-## Architecture Alternatives Still Open
+## Architecture Alternatives Delegated To Children
 
 ### Static HTML Extraction
 
-- Put a lightweight extractor in Knowledge.
-- Extract a shared package from Browser and Knowledge.
-- Route all website acquisition through Browser.
-- Use an existing conversion boundary such as MarkItDown when its contract fits.
-
-The decision must minimize duplicate extraction logic while keeping package dependencies explicit.
+The `static-website-knowledge-ingestion` child chooses among a lightweight Knowledge extractor, a shared extraction package, Browser-owned acquisition, or an existing conversion boundary such as MarkItDown. It must minimize duplicate logic and keep package dependencies explicit.
 
 ### Rendered Refresh Composition
 
-- In-process Browser library dependency owned by mcp-knowledge.
-- Explicit inter-service/browser acquisition handoff followed by source-bound Knowledge ingest.
-- Agent-mediated acquisition and ingest with a durable refresh recipe.
+The `rendered-knowledge-source-refresh` child chooses among an in-process Browser library dependency, an explicit browser-acquisition handoff followed by source-bound ingest, or an agent-mediated durable refresh recipe. The current placeholder is not an implementation.
 
-The current placeholder is not an implementation. The selected option must preserve source refreshability and test production composition.
-
-## Proof Strategy
+## Shared Proof Expectations
 
 - Contract tests for tool grants and handbook examples.
-- Setup tests proving all MCP entries resolve the intended OwlBear checkout and Browser policy is explicit.
+- Setup tests proving MCP entries resolve intended runtime authority and Browser policy is explicit.
 - Golden HTML-to-Markdown fixtures.
-- Local HTTP server integration test using deterministic embedding/vector doubles where appropriate.
+- Local HTTP integration using deterministic embedding/vector doubles where appropriate.
 - One assembled production-composition smoke for register -> refresh -> search.
-- Cockpit backend, frontend, and Playwright tests after the backend proof is green.
-- Rendered fixture tests with explicit selectors and structured acquisition outcomes.
+- Cockpit backend, frontend, and Playwright tests only after backend proof is green.
+- Rendered fixtures with explicit selectors and structured acquisition outcomes.
+
+Each child adopts only the proof relevant to its bounded scope.
 
 ## Known Risks
 
-- BGE-M3's model size and lazy startup can obscure ingestion failures unless diagnostics separate model readiness from acquisition and persistence.
+- BGE-M3 model size and lazy startup can obscure failures unless diagnostics distinguish model readiness from acquisition and persistence.
 - Moving extraction across package boundaries without a mechanical boundary test can create accidental coupling.
-- Browser safety criteria can be weakened accidentally if ordinary-page convenience is optimized without preserving ambiguity checks.
+- Browser safety criteria can be weakened accidentally if convenience is optimized without preserving ambiguity checks.
 - Prior research describes retired implementations; only current source and executable proof are authoritative.
 
-## Deferred Opportunities
+## Outside The Queue
 
-After the vertical is stable: bounded crawler, scheduled refresh and stale alerts, source-specific extraction profiles, provenance/graph exploration, and cross-project Knowledge management.
+Crawler, scheduled refresh, graph exploration, Assembly, rollback, and cross-project management remain deferred. They require new evidence and separate Design sessions after their prerequisites are complete.
 
 ## Admission State
 
-Not ready. Product scope is directionally stable, but extraction ownership, rendered composition, and first-change boundary require explicit decisions, architecture challenge, baseline, derived contract, validation, and user approval.
+**Permanently not admissible.** This umbrella intentionally has no Delivery contract. Do not call `derive_delivery_contract`, `publish_design_checkpoint`, `validate_delivery_contract`, or `admit_delivery_change` for `website-to-knowledge-vertical`. Only focused child changes may pass those gates.

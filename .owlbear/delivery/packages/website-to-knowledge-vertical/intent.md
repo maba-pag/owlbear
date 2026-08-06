@@ -1,7 +1,23 @@
 # Website-to-Knowledge Vertical
 
-> **Status:** Draft; research-backed, not approved or admitted.
+> **Status:** Roadmap only; never approve or admit this umbrella.
 > **Research:** `.owlbear/research/website-to-knowledge-opportunity-assessment.md`
+
+## Umbrella Governance
+
+This Design session preserves the overall product promise, evidence, dependencies, and extraction order. It is not an independently deliverable change. Never derive, validate, approve, admit, plan, or orchestrate `website-to-knowledge-vertical`.
+
+Implementation proceeds only through separate focused Design sessions from the ordered extraction queue in the linked research. “Next” means the first queue item without an active or completed focused child. Create or resume that exact child, copy only its bounded scope and relevant evidence, and leave this umbrella unchanged.
+
+Use:
+
+```text
+/design website-to-knowledge-vertical
+Extract the next unfinished focused change from the ordered queue in the linked research.
+Create or resume that child as a separate Design session and work only on its stated scope.
+Do not revise, derive, approve, admit, plan, or orchestrate the umbrella change.
+Stop at the child change's normal Design approval gate.
+```
 
 ## Problem
 
@@ -69,13 +85,17 @@ These exclusions defer breadth; they must not reduce the single-page public webs
 
 ## Success
 
+- Every queue item is delivered through its own approved and admitted focused change.
 - A local deterministic fixture proves a static website can be registered, refreshed, chunked, searched, refreshed unchanged, and diagnosed on failure.
 - The public tool schemas, agent authority, handbook, and runtime behavior agree.
 - Cockpit can list, inspect, refresh, and search proven sources.
 - Rendered/authenticated support is admitted only after its acquisition ownership and proof boundary are explicit.
+- The umbrella itself remains unadmitted.
 
 ## Technically Done But Wrong
 
+- Admitting or orchestrating this umbrella instead of extracting a focused child.
+- Combining multiple queue rows into one child merely to reduce tracking work.
 - A polished Cockpit screen over an empty or non-refreshable backend.
 - A crawler or scheduler built before one-page ingestion works.
 - Weakening ambiguous-page rejection to make a demo pass.
@@ -84,6 +104,8 @@ These exclusions defer breadth; they must not reduce the single-page public webs
 
 ## Open Material Decisions
 
+These are delegated to the focused child that owns them; they do not make the umbrella admissible.
+
 - Which package owns HTML-to-Markdown extraction for static HTTP sources.
 - Whether rendered refresh composes Browser in-process, through an explicit service boundary, or through a different authoritative ingestion workflow.
-- Whether the first admitted change includes Cockpit or ends at the proven backend and agent workflow.
+- Whether the Cockpit child should include registration or initially expose only proven source operations.

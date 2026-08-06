@@ -138,26 +138,40 @@ source identity, extraction, ingest, vector, and search semantics without browse
 allowlists, or corporate environment policy. Rendered/authenticated support should extend a proven
 contract rather than define the contract under harder-to-reproduce conditions.
 
-### 5.3 Correct Sequence
+### 5.3 Focused Change Extraction Queue
 
-1. Correct agent authority, handbook schemas, setup wiring, and package-boundary enforcement.
-2. Add a failing deterministic register -> refresh -> chunk -> search fixture.
-3. Decide the authoritative static extraction owner and make the fixture pass.
-4. Deliver the guided static website workflow.
-5. Add Knowledge source health and management to Cockpit.
-6. Decide and prove the rendered/browser composition boundary.
-7. Consider crawler and scheduler only after one-page refresh is reliable.
+`website-to-knowledge-vertical` is a roadmap and evidence container only. **Never derive, approve,
+admit, plan, or orchestrate this umbrella change.** Work proceeds by creating and completing the
+first unfinished focused child below. Each child gets its own Design session and normal admission.
 
-### 5.4 Attractive Work That Should Wait
+| Order | Focused change ID | Scope | Requires |
+|---:|---|---|---|
+| 1 | `knowledge-source-contract-alignment` | Ingestor register/delete authority, valid handbook schemas, contract tests | None |
+| 2 | `knowledge-runtime-readiness` | Consistent MCP/setup wiring, explicit Browser policy, package-boundary enforcement, readiness diagnostics | 1 |
+| 3 | `static-website-knowledge-ingestion` | Static HTML extraction ownership, source identity/delta semantics, register -> refresh -> search proof | 1, 2 |
+| 4 | `guided-knowledge-ingestion-workflow` | User preview, validation, registration, ingestion, verification, and actionable failure flow | 3 |
+| 5 | `cockpit-knowledge-workspace` | Source list, health, refresh, delete confirmation, and search UI | 3, 4 |
+| 6 | `rendered-knowledge-source-refresh` | Authoritative Browser bridge with rendered/authenticated fixture proof and preserved safety | 3, 4 |
 
-- A Cockpit-only implementation would present an empty or misleading backend.
-- Crawling multiplies extraction, policy, deduplication, progress, and cancellation problems before
-  one-page ingestion is reliable.
-- Scheduling automates failure until refresh semantics and diagnostics are stable.
-- Graph visualization has little value before a corpus exists and provenance is trustworthy.
-- Assembly is explicitly unsupported by current workflow and lacks demonstrated user demand.
-- Rollback is high-risk Git/runtime work and is less valuable than making an unused core product
-  surface functional.
+“Next” means the lowest-order item not already represented by a completed or active focused Design
+change. The Designer must inspect current Design/Delivery state, create that exact child ID, cite this
+research and the umbrella, copy only that row's scope and relevant evidence, and leave the umbrella
+unchanged. If a prerequisite is unfinished, resume it instead of skipping ahead.
+
+Use this command:
+
+```text
+/design website-to-knowledge-vertical
+Extract the next unfinished focused change from the ordered queue in the linked research.
+Create or resume that child as a separate Design session and work only on its stated scope.
+Do not revise, derive, approve, admit, plan, or orchestrate the umbrella change.
+Stop at the child change's normal Design approval gate.
+```
+
+### 5.4 Work Outside The Queue
+
+Crawler, scheduling, graph visualization, Assembly, rollback, and cross-project management remain
+deferred until all prerequisite queue items are complete and current evidence justifies a new Design.
 
 ## 6. Recommendation, Confidence, and Limits
 
