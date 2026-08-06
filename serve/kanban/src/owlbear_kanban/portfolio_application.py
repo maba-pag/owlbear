@@ -281,6 +281,7 @@ class DeliveryBuildContext(_ApplicationModel):
 
     launch: DeliveryLaunchPackage
     task: DeliveryTaskDefinition
+    task_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     commitments: tuple[DeliveryCommitment, ...]
     predecessor_results: tuple[DeliveryTaskResult, ...]
     requests: tuple[DeliveryRequest, ...]
@@ -747,6 +748,7 @@ class PortfolioApplication:
         return DeliveryBuildContext(
             launch=launch,
             task=task,
+            task_digest=task.digest,
             commitments=self._commitments(runtime, task.commitment_ids),
             predecessor_results=predecessor_results,
             requests=binding.requests,

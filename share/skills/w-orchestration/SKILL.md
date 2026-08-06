@@ -39,7 +39,9 @@ If Planner or Builder dispatch fails before returning a structurally valid worke
 same exact `recover_claim` request. Recovery attention remains runtime-owned evidence; report it
 without interpreting Git, liveness, or custody. An acquisition failure carrying attempt and claim
 IDs uses the same route. A failure without claim IDs is reported as bounded acquisition attention
-and is not recoverable by Orchestrator.
+and is not recoverable by Orchestrator. Do not report `recover_claim` as unavailable unless the
+bootstrap operation or the exact recovery call returned a recorded tool error; a missing local tool
+binding requires one focused `tool_search` for `recover_claim` before stopping.
 
 ## Step 3 - Forward One Worker Transition
 
@@ -55,7 +57,9 @@ transition as `request` byte-for-structure unchanged. A worker-owned `block`, `r
 is forwarded normally and must not be recovered.
 
 An identity mismatch or malformed result is a failed dispatch result: publish no substitute and use
-the exact Step 2 recovery route for the still-active claim.
+the exact Step 2 recovery route for the still-active claim. A rejected `transition_delivery` call
+for worker-output schema validation is also a malformed dispatch result and requires that recovery
+before session completion.
 
 ## Step 4 - Integrate Only Acquisition-Provided IDs
 

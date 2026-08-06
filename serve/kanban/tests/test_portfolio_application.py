@@ -815,6 +815,8 @@ def test_acquisition_returns_bounded_stage_packages_and_unclaimed_integration(tm
     )
     assert plan_context.outcome.outcome_id == "OUT-001"
     assert build_context.task.task_id == "TASK-001"
+    assert build_context.task_digest == build_context.task.digest
+    assert build_context.model_dump(mode="json")["task_digest"] == build_context.task.digest
     assert assembly_package.writer is None
     with pytest.raises(DeliveryRuntimeConflictError, match="execution identity"):
         application.show_plan_context(

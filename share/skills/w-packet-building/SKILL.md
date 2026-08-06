@@ -68,10 +68,10 @@ transition. Invalid review evidence publishes nothing.
 ## Step 4 - Publish Pass Or Route Finding
 
 On `pass`, construct one `DeliveryTaskResult` with a stable result ID, launch change and authority
-digest, exact task ID, canonical task digest, and reviewed commit. Obtain the digest through the
-existing `DeliveryTaskDefinition.digest` property applied to the context task; never reimplement its
-canonical hashing. Call `publish_delivery_result` with the unchanged change ID and a
-`PublishDeliveryResult` containing the outcome ID, claim ID, and result.
+digest, exact task ID, `DeliveryBuildContext.task_digest`, and reviewed commit. Require the context
+digest to be present and use it unchanged; never reconstruct `DeliveryTaskDefinition` from MCP JSON
+or reimplement its canonical hashing. Call `publish_delivery_result` with the unchanged change ID
+and a `PublishDeliveryResult` containing the outcome ID, claim ID, and result.
 
 Require the returned `DeliveryResultCandidate` to preserve the claim and exact result. Return its
 output directly in `AdvanceDelivery`:
@@ -83,14 +83,51 @@ claim_id: <launch claim ID>
 output: <published DeliveryResultCandidate.output unchanged>
 ```
 
-On a finding or safe local failure, publish nothing. Builder chooses one transition:
+On a finding or safe local failure, publish nothing. Builder chooses one schema-valid transition:
 
-- `retry` with the launch attempt ID and exact clean current head as `abandoned_commit` for an
-  implementation failure that cannot be repaired in this invocation;
-- `return` to `planning` or `design` with reason, locators, launch attempt ID, and exact clean current
-  head as `preserved_commit` for missing or contradictory earlier authority;
-- `block` with reason, unblock evidence, locators, exact clean current head as `resume_commit`, and
-  an embedded bounded `DeliveryRequest` when user-owned input is required.
+```yaml
+action: retry
+outcome_id: <context outcome ID>
+claim_id: <launch claim ID>
+attempt_id: <launch attempt ID>
+abandoned_commit: <exact clean current head>
+```
+
+Use `retry` for an implementation failure that cannot be repaired in this invocation.
+
+```yaml
+action: return
+outcome_id: <context outcome ID>
+claim_id: <launch claim ID>
+target: planning | design
+reason: <missing or contradictory earlier authority>
+locators: [<owning authority locator>]
+attempt_id: <launch attempt ID>
+preserved_commit: <exact clean current head>
+```
+
+Use `return` only for a Planning or Design authority defect.
+
+```yaml
+action: block
+outcome_id: <context outcome ID>
+claim_id: <launch claim ID>
+block_id: <stable block identity>
+reason: <user-owned blocker>
+unblock_condition: <observable resolution>
+expected_evidence: [<required evidence>]
+locators: [<relevant authority locator>]
+resume_commit: <exact clean current head>
+request:
+  request_id: <stable request identity>
+  kind: decision | action
+  outcome_id: <context outcome ID>
+  summary: <one bounded user request>
+```
+
+Use `block` only when user-owned input is required. Never substitute `unblock_evidence` for the
+required `unblock_condition` and `expected_evidence` fields, and never emit a requestless Build
+block for a local execution failure.
 
 Return the selected `DeliveryTransition` directly. Do not call `transition_delivery`; orchestration
 validates its outcome, claim, attempt, and commit identity and forwards it byte-for-structure
