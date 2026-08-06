@@ -28,6 +28,10 @@ from owlbear_browser_mcp.allowlist import DomainAllowlist
 
 __all__ = ["AppContext", "acquire", "app_lifespan", "mcp"]
 
+_ALLOWED_DOMAINS_ENV = "BROWSER_ALLOWED_DOMAINS"
+_DEFAULT_USER_DATA_DIR = Path.home() / ".owlbear" / "chromium-profile"
+_USER_DATA_DIR_ENV = "PLAYWRIGHT_USER_DATA_DIR"
+
 
 def _is_blocked_ip(ip_str: str) -> bool:
     """Return True if *ip_str* is private/loopback/link-local/reserved/unspecified (CWE-918).
@@ -98,42 +102,17 @@ class AppContext:
     last_content: str = ""
 
 
-def _apply_tool_exclusions(server: MCPServer) -> set[str]:
-    """Read BROWSER_TOOLS_EXCLUDE and remove each listed tool from the server.
-
-    Returns the set of tool names successfully removed.
-    """
-    excluded: set[str] = set()
-    env_val = os.environ.get("BROWSER_TOOLS_EXCLUDE", "")
-    if not env_val:
-        return excluded
-    for raw in env_val.split(","):
-        tool_name = raw.strip()
-        if not tool_name:
-            continue
-        try:
-            server.remove_tool(tool_name)
-            excluded.add(tool_name)
-        except Exception:  # noqa: BLE001, S110
-            pass
-    return excluded
-
-
 @asynccontextmanager
-async def app_lifespan(server: MCPServer) -> AsyncGenerator[AppContext]:
+async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
     """Configure DomainAllowlist, attempt Playwright launch, and yield AppContext."""
-    _apply_tool_exclusions(server)
-    domains_env = os.environ.get("BROWSER_ALLOWED_DOMAINS", "")
+    domains_env = os.environ.get(_ALLOWED_DOMAINS_ENV, "")
     domains = [d.strip() for d in domains_env.split(",") if d.strip()]
     allowlist = DomainAllowlist(domains=domains)
 
     launcher: PlaywrightLauncher | None = None
     page: Any = None
     try:
-        user_data_dir = os.environ.get(
-            "PLAYWRIGHT_USER_DATA_DIR",
-            str(Path.home() / ".owlbear" / "chromium-profile"),
-        )
+        user_data_dir = os.environ.get(_USER_DATA_DIR_ENV, str(_DEFAULT_USER_DATA_DIR))
         launcher = PlaywrightLauncher(user_data_dir=user_data_dir)
         await launcher.launch()
         page = await launcher.page()

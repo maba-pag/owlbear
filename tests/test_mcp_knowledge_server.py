@@ -46,9 +46,15 @@ class TestSourceFetcherWiring:
         assert "fetcher=" in src, "fetcher= argument not passed to IngestCoordinator in app_lifespan"
 
     @pytest.mark.asyncio
-    async def test_app_lifespan_uses_exact_fetcher_kwargs_and_handoff_to_coordinator(self) -> None:
+    async def test_app_lifespan_uses_exact_fetcher_kwargs_and_handoff_to_coordinator(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
         """AC1: lifespan passes workspace_root=Path.cwd() and content_fetcher_factory=select_content_fetcher to
         CompositeSourceFetcher, then passes the returned instance as fetcher= to IngestCoordinator."""
+        (tmp_path / ".owlbear").mkdir()
+        monkeypatch.chdir(tmp_path)
         with (
             patch("owlbear_knowledge_mcp.server.sqlite3") as mock_sqlite,
             patch("owlbear_knowledge_mcp.server.QdrantVectorStore"),
@@ -59,7 +65,6 @@ class TestSourceFetcherWiring:
             patch("owlbear_knowledge_mcp.server.EnrichmentStore"),
             patch("owlbear_knowledge_mcp.server.CompositeSourceFetcher") as mock_csf,
             patch("owlbear_knowledge_mcp.server.IngestCoordinator") as mock_ic,
-            patch("owlbear_knowledge_mcp.server._apply_tool_exclusions"),
         ):
             mock_sqlite.connect.return_value = MagicMock()
             async with server.app_lifespan(MagicMock()):

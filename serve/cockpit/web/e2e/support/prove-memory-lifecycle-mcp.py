@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -39,15 +38,12 @@ def _response_text(result: CallToolResult) -> str:
     return "\n".join(item.text for item in result.content if isinstance(item, TextContent)).strip()
 
 
-async def _capture(root: Path, memory_dir: Path) -> list[dict[str, object]]:
+async def _capture(memory_dir: Path) -> list[dict[str, object]]:
     before = _snapshot(memory_dir)
-    environment = os.environ.copy()
-    environment["OWLBEAR_MEMORY_DIR"] = str(memory_dir)
     server = StdioServerParameters(
         command=sys.executable,
         args=["-m", "owlbear_memory_mcp"],
-        env=environment,
-        cwd=root,
+        cwd=memory_dir.parent.parent,
     )
     responses: list[dict[str, object]] = []
 
@@ -62,7 +58,7 @@ async def _capture(root: Path, memory_dir: Path) -> list[dict[str, object]]:
                 {"entry_id": entry_id, "title": "Mutation must be rejected"},
             )
             message = _response_text(result)
-            if result.isError is not True or state not in message:
+            if result.is_error is not True or state not in message:
                 msg = f"curate_memory did not reject {state}: {message}"
                 raise RuntimeError(msg)
             responses.append(
@@ -116,7 +112,7 @@ def main() -> None:
     """Run the MCP memory lifecycle proof and write its receipt."""
     args = _parse_args()
     root = args.root.resolve()
-    responses = asyncio.run(_capture(root, args.memory_dir.resolve()))
+    responses = asyncio.run(_capture(args.memory_dir.resolve()))
     _write_receipt(args.output.resolve(), _tested_sha(root), responses)
 
 

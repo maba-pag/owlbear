@@ -6,8 +6,9 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery import DesignPackageConflictError, DesignPackageManifest, DesignPackageStore
+from owlbear_delivery.git_executable import resolve_git_executable
 
-_GIT = "/usr/bin/git"
+_GIT = resolve_git_executable()
 _PACKAGE_FILES = ("authority.json", "design.md", "intent.md", "manifest.json")
 
 

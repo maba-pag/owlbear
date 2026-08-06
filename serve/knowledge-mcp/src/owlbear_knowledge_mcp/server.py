@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import sqlite3
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -77,6 +76,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
 logger = logging.getLogger(__name__)
+_WORKSPACE_MARKER = Path(".owlbear")
 
 
 class _LegacyCompatibleEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
@@ -359,27 +359,6 @@ class RegisteredSourceResult(TypedDict):
     scope: str
 
 
-def _apply_tool_exclusions(server: MCPServer) -> set[str]:
-    """Read KNOWLEDGE_TOOLS_EXCLUDE and remove each listed tool from the server.
-
-    Returns the set of tool names successfully removed.
-    """
-    excluded: set[str] = set()
-    env_val = os.environ.get("KNOWLEDGE_TOOLS_EXCLUDE", "")
-    if not env_val:
-        return excluded
-    for raw in env_val.split(","):
-        tool_name = raw.strip()
-        if not tool_name:
-            continue
-        try:
-            server.remove_tool(tool_name)
-            excluded.add(tool_name)
-        except Exception:  # noqa: BLE001, S110
-            pass
-    return excluded
-
-
 async def _web_read(url: str) -> str | None:
     """Fetch a URL with the knowledge package's SSRF-safe HTTP fetcher."""
     try:
@@ -391,14 +370,19 @@ async def _web_read(url: str) -> str | None:
 @asynccontextmanager
 async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
     """Initialise knowledge-base services; close the DB connection on exit."""
-    path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get("OWLBEAR_KB_PATH", _DEFAULT_KB_PATH)
-    qdrant_path = os.environ.get("OWLBEAR_QDRANT_PATH", _DEFAULT_QDRANT_PATH)
-    conn = sqlite3.connect(path)
+    workspace_root = Path.cwd().resolve()
+    if not (workspace_root / _WORKSPACE_MARKER).is_dir():
+        message = f"OwlBear workspace marker not found: {_WORKSPACE_MARKER}"
+        raise RuntimeError(message)
+    db_path = workspace_root / _DEFAULT_KB_PATH
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    qdrant_path = workspace_root / _DEFAULT_QDRANT_PATH
+    conn = sqlite3.connect(db_path)
     try:
         from owlbear_knowledge.chunker import TextChunker  # noqa: PLC0415
         from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider  # noqa: PLC0415
 
-        vector_store = QdrantVectorStore(location=qdrant_path)
+        vector_store = QdrantVectorStore(location=str(qdrant_path))
         source_store_v2 = SqliteSourceStore(conn)
         graph_store_v2 = SqliteGraphStore(conn)
         content_store = ContentStore(
@@ -410,7 +394,7 @@ async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
         query_facade = QueryFacade(content=content_store, graph=graph_store_v2)
         enrichment_store = EnrichmentStore(db=conn, graph=graph_store_v2)
         source_fetcher = CompositeSourceFetcher(
-            workspace_root=Path.cwd(),
+            workspace_root=workspace_root,
             content_fetcher_factory=select_content_fetcher,
         )
         ingest_coordinator = IngestCoordinator(
@@ -434,7 +418,6 @@ async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
             source_store_v2=source_store_v2,
             ingest_coordinator=ingest_coordinator,
         )
-        _apply_tool_exclusions(_server)
         yield ctx
     finally:
         conn.close()
@@ -454,7 +437,6 @@ retry_enrichment = mcp.tool(
 __all__ = [
     "_MAX_ENRICHMENT_BATCH_SIZE",
     "AppContext",
-    "_apply_tool_exclusions",
     "app_lifespan",
     "claim_enrichment_batch",
     "delete_knowledge_source",

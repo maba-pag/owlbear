@@ -38,7 +38,6 @@ converted into a generic transport error.
 |----------|---------|-------------|
 | `BROWSER_ALLOWED_DOMAINS` | _(empty)_ | Comma-separated list of permitted hostnames; navigation to any other domain is blocked. **Required** — all domains are blocked when unset. |
 | `PLAYWRIGHT_USER_DATA_DIR` | `~/.owlbear/chromium-profile` | Path to an existing browser profile directory for authenticated sessions |
-| `BROWSER_TOOLS_EXCLUDE` | _(none)_ | Comma-separated tool names to remove at startup |
 
 ## Dependencies
 

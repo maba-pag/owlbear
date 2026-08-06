@@ -15,6 +15,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryIntegrationCandidate,
     DeliveryIntegrationRepair,
 )
+from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.identities import ChangeId
 from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
@@ -28,7 +29,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from contextlib import AbstractContextManager
 
-_GIT_EXECUTABLE = "/usr/bin/git"
 _MERGE_RECORD_PARTS = 3
 _TREE_ENTRY_PARTS = 3
 _OCC_RETRY_LIMIT = 8
@@ -1128,7 +1128,7 @@ class ChangeWorkspaceManager:
     @staticmethod
     def _is_ancestor(ancestor: str, descendant: str, *, cwd: Path) -> bool:
         result = subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
-            (_GIT_EXECUTABLE, "-C", str(cwd), "merge-base", "--is-ancestor", ancestor, descendant),
+            (resolve_git_executable(), "-C", str(cwd), "merge-base", "--is-ancestor", ancestor, descendant),
             check=False,
             capture_output=True,
         )
@@ -1169,7 +1169,7 @@ class ChangeWorkspaceManager:
         input_bytes: bytes | None = None,
     ) -> subprocess.CompletedProcess[bytes]:
         return subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
-            (_GIT_EXECUTABLE, "-C", str(cwd or self._repository), *arguments),
+            (resolve_git_executable(), "-C", str(cwd or self._repository), *arguments),
             check=check,
             capture_output=True,
             input=input_bytes,

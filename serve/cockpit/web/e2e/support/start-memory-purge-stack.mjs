@@ -8,9 +8,9 @@ const runFile = promisify(execFile)
 
 const root = resolve(import.meta.dirname, '../../../../..')
 const fixture = await mkdtemp(join(tmpdir(), 'owlbear-memory-purge-'))
-const memoryDir = join(fixture, 'memory')
+const memoryDir = join(fixture, '.owlbear/memory')
 const fixtureManifest = resolve(import.meta.dirname, '../../test-results/memory-purge-fixture.json')
-await mkdir(memoryDir)
+await mkdir(memoryDir, { recursive: true })
 
 const now = Date.now()
 const daysAgo = (days) => new Date(now - days * 24 * 60 * 60 * 1000).toISOString()
@@ -68,11 +68,9 @@ await runFile('uv', [
 ], { cwd: root })
 
 const server = spawn('uv', ['run', '--project', root, '--package', 'owlbear-cockpit', 'cockpit'], {
-  cwd: root,
+  cwd: fixture,
   env: {
     ...process.env,
-    OWLBEAR_WORKSPACE_ROOT: fixture,
-    MEMORY_DIR: memoryDir,
     COCKPIT_PORT: '8421',
     COCKPIT_NO_OPEN: '1',
   },

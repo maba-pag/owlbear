@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
@@ -18,6 +17,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryWorkerRole,
 )
 from owlbear_delivery.design_package import DesignPackageStore
+from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.portfolio_application import (
     DeliveryRolePolicy,
     PortfolioApplication,
@@ -88,10 +88,11 @@ def _derive_paths(workspace_root: Path) -> _DeliveryPaths:
 
 
 def _validate_git_config(config: DeliveryStartupConfig, paths: _DeliveryPaths) -> None:
-    git_executable = shutil.which("git")
-    if git_executable is None:
+    try:
+        git_executable = resolve_git_executable()
+    except RuntimeError as exc:
         error = _load_error("repository_root", "Git executable is unavailable")
-        raise error
+        raise error from exc
     checks = (
         (("rev-parse", "--git-dir"), "repository_root"),
         (("check-ref-format", f"refs/heads/{config.integration_target}"), "integration_target"),

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -57,6 +56,7 @@ __all__ = [
 ]
 
 _DEFAULT_MEMORY_DIR = Path(".owlbear/memory")
+_WORKSPACE_MARKER = Path(".owlbear")
 _Title = Annotated[str, Field(min_length=1)]
 _Content = Annotated[str, Field(max_length=1024)]
 _Confidence = Annotated[float, Field(ge=0.7, le=1.0)]
@@ -77,8 +77,11 @@ async def app_lifespan(
     _server: MCPServer,
 ) -> AsyncGenerator[AppContext]:  # pragma: no cover
     """Construct and expose memory runtime context for this MCP session."""
-    memory_dir = Path(os.environ.get("OWLBEAR_MEMORY_DIR", str(_DEFAULT_MEMORY_DIR)))
-    yield AppContext(engine=MemoryEngine(memory_dir=memory_dir))
+    workspace_root = Path.cwd().resolve()
+    if not (workspace_root / _WORKSPACE_MARKER).is_dir():
+        message = f"OwlBear workspace marker not found: {_WORKSPACE_MARKER}"
+        raise RuntimeError(message)
+    yield AppContext(engine=MemoryEngine(memory_dir=workspace_root / _DEFAULT_MEMORY_DIR))
 
 
 mcp = MCPServer("owlbear-memory", lifespan=app_lifespan)

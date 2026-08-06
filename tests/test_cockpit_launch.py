@@ -30,36 +30,38 @@ def _dist(tmp_path: Path) -> Path:
 
 
 def test_run_binds_target_context_before_uvicorn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from owlbear_cockpit.main import app, run
+    from owlbear_cockpit import main
 
     workspace_root = tmp_path / "workspace"
     workspace_root.mkdir()
     request_path = workspace_root / ".owlbear/target-cutover-request.json"
     context = object()
-    monkeypatch.setenv("OWLBEAR_WORKSPACE_ROOT", str(workspace_root))
-    monkeypatch.setenv("OWLBEAR_TARGET_CUTOVER_REQUEST", str(request_path))
-    monkeypatch.setenv("COCKPIT_DIST_DIR", str(_dist(tmp_path)))
+    monkeypatch.chdir(workspace_root)
+    monkeypatch.setattr(main, "_DIST_DIR", _dist(tmp_path))
+    monkeypatch.setenv("OWLBEAR_WORKSPACE_ROOT", str(tmp_path / "ignored-workspace"))
+    monkeypatch.setenv("OWLBEAR_TARGET_CUTOVER_REQUEST", str(tmp_path / "ignored-request.json"))
+    monkeypatch.setenv("COCKPIT_DIST_DIR", str(tmp_path / "ignored-dist"))
     monkeypatch.setenv("COCKPIT_NO_OPEN", "1")
     present: list[bool] = []
 
     def check_state(*_args: object, **_kwargs: object) -> None:
-        present.append(app.state.target_context is context)
+        present.append(main.app.state.target_context is context)
 
     with (
         patch("owlbear_cockpit.main.load_target_context", return_value=context) as load,
         patch("uvicorn.run", side_effect=check_state),
     ):
-        run()
+        main.run()
 
     assert present == [True]
-    assert app.state.workspace_root == workspace_root.resolve()
+    assert main.app.state.workspace_root == workspace_root.resolve()
     load.assert_called_once_with(workspace_root.resolve(), request_path.resolve())
 
 
 def test_run_rejects_missing_target_receipt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from owlbear_cockpit.main import run
 
-    monkeypatch.setenv("OWLBEAR_WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("COCKPIT_NO_OPEN", "1")
 
     with (

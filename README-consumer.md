@@ -97,16 +97,12 @@ bundled `dist/` directory in the owlbear clone.
 
 `uv run cockpit` without `--project` is only for running from inside the owlbear
 repository itself. If you launch Cockpit from outside the consumer project directory,
-use `uv run --project ../owlbear --directory /path/to/project cockpit` or set
-`OWLBEAR_WORKSPACE_ROOT` and `MEMORY_DIR` explicitly.
+use `uv run --project ../owlbear --directory /path/to/project cockpit`.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `COCKPIT_PORT` | `8420` | Override listen port (1-65535) |
 | `COCKPIT_NO_OPEN` | unset | Set to `1` to suppress browser auto-open |
-| `OWLBEAR_WORKSPACE_ROOT` | `$PWD` | Override the workspace containing target authority |
-| `OWLBEAR_TARGET_CUTOVER_REQUEST` | `.owlbear/target-cutover-request.json` | Override the exact activation request path |
-| `MEMORY_DIR` | `$PWD/.owlbear/memory/` | Override memory directory path |
 
 ## Target Workflow
 

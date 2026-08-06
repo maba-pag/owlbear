@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.identities import ChangeId, Digest
 from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
@@ -25,7 +26,6 @@ from owlbear_delivery.storage_io import locked_roots
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-_GIT_EXECUTABLE = "/usr/bin/git"
 _MANIFEST_NAME = "manifest.json"
 _PACKAGE_NAMES = ("authority.json", "design.md", "intent.md", _MANIFEST_NAME)
 _COMPLETION_NAMES = (*_PACKAGE_NAMES, "completion.json", "results.json", "runtime.json")
@@ -545,7 +545,7 @@ class DesignPackageStore:
         check: bool = True,
     ) -> subprocess.CompletedProcess[bytes]:
         return subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
-            (_GIT_EXECUTABLE, "-C", str(self._repository), *arguments),
+            (resolve_git_executable(), "-C", str(self._repository), *arguments),
             check=check,
             capture_output=True,
             input=input_bytes,

@@ -17,10 +17,11 @@ class TestQdrantPersistencePathWiring:
     async def test_qdrant_uses_default_path_when_env_var_is_unset(
         self,
         monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
     ) -> None:
         """QdrantVectorStore receives the default filesystem location."""
-        monkeypatch.setenv("OWLBEAR_LOCAL_KB_PATH", ":memory:")
-        monkeypatch.delenv("OWLBEAR_QDRANT_PATH", raising=False)
+        (tmp_path / ".owlbear").mkdir()
+        monkeypatch.chdir(tmp_path)
 
         qdrant_cls = MagicMock(name="QdrantVectorStore")
         server_mock = MagicMock()
@@ -29,18 +30,21 @@ class TestQdrantPersistencePathWiring:
             async with app_lifespan(server_mock):
                 pass
 
-        qdrant_cls.assert_called_once_with(location=_DEFAULT_QDRANT_PATH)
+        qdrant_cls.assert_called_once_with(location=str(tmp_path / _DEFAULT_QDRANT_PATH))
+        assert (tmp_path / ".owlbear/knowledge/local.db").is_file()
 
     @pytest.mark.asyncio
-    async def test_qdrant_uses_env_path_when_owlbear_qdrant_path_is_set(
+    async def test_legacy_storage_env_vars_do_not_override_workspace_paths(
         self,
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: Path,
     ) -> None:
-        """OWLBEAR_QDRANT_PATH overrides the default vector-store location."""
-        custom_path = str(tmp_path / "vectors")
+        """Retired storage variables cannot redirect Knowledge state outside the workspace."""
+        (tmp_path / ".owlbear").mkdir()
+        monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("OWLBEAR_LOCAL_KB_PATH", ":memory:")
-        monkeypatch.setenv("OWLBEAR_QDRANT_PATH", custom_path)
+        monkeypatch.setenv("OWLBEAR_KB_PATH", str(tmp_path.parent / "external.db"))
+        monkeypatch.setenv("OWLBEAR_QDRANT_PATH", str(tmp_path.parent / "vectors"))
 
         qdrant_cls = MagicMock(name="QdrantVectorStore")
         server_mock = MagicMock()
@@ -49,4 +53,5 @@ class TestQdrantPersistencePathWiring:
             async with app_lifespan(server_mock):
                 pass
 
-        qdrant_cls.assert_called_once_with(location=custom_path)
+        qdrant_cls.assert_called_once_with(location=str(tmp_path / _DEFAULT_QDRANT_PATH))
+        assert (tmp_path / ".owlbear/knowledge/local.db").is_file()

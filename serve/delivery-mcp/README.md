@@ -47,13 +47,9 @@ writer at a time. Agent frontmatter owns model selection; Delivery owns the fixe
 and reviewer routing. `integration_target` names the branch from which change worktrees start and
 into which reviewed changes are integrated.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OWLBEAR_WORKSPACE_ROOT` | Current working directory | Workspace used to verify the existing target-cutover receipt. |
-| `OWLBEAR_TARGET_CUTOVER_REQUEST` | `.owlbear/target-cutover-request.json` | Absolute or workspace-relative cutover request used only for receipt authorization. |
-
-The canonical `.owlbear/target` path must match the receipt-authorized target path. Use
-`OWLBEAR_WORKSPACE_ROOT` only when launching outside the consuming workspace.
+Delivery has no environment configuration. The canonical `.owlbear/target` path must match the
+receipt-authorized target path, and the server must be launched with the consuming workspace as
+its current directory.
 
 ## Dependencies
 

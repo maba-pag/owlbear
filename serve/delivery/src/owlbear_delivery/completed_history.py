@@ -19,6 +19,7 @@ from owlbear_delivery.design_package import (
     CompletionPackageSnapshot,
     DesignPackageManifest,
 )
+from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.identities import ChangeId, Digest
 from owlbear_delivery.target_contract import DeliveryContract
 
@@ -35,7 +36,6 @@ _COMPLETION_NAMES = {
     "results.json",
     "runtime.json",
 }
-_GIT_EXECUTABLE = "/usr/bin/git"
 _MAX_PAGE_SIZE = 100
 _SAFE_CHANGE_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _TREE_ENTRY_PARTS = 3
@@ -444,7 +444,7 @@ class CompletedHistoryCatalog:
 
     def _run_git(self, *arguments: str, check: bool) -> subprocess.CompletedProcess[bytes]:
         return subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
-            (_GIT_EXECUTABLE, "-C", str(self._repository), *arguments),
+            (resolve_git_executable(), "-C", str(self._repository), *arguments),
             check=check,
             capture_output=True,
         )

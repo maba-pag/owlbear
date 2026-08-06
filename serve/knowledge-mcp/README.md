@@ -32,12 +32,9 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 ## Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OWLBEAR_LOCAL_KB_PATH` | — | Path to the local SQLite knowledge database (takes precedence) |
-| `OWLBEAR_KB_PATH` | `.owlbear/knowledge/local.db` | Fallback KB path |
-| `OWLBEAR_QDRANT_PATH` | `.owlbear/knowledge/vectors` | Path to Qdrant vector store directory (filesystem persistence) |
-| `KNOWLEDGE_TOOLS_EXCLUDE` | _(none)_ | Comma-separated tool names to remove at startup |
+Knowledge storage is fixed to `.owlbear/knowledge/local.db` and
+`.owlbear/knowledge/vectors` under the current workspace. The server must be launched from an
+initialized OwlBear workspace and exposes its complete tool set.
 
 ## Dependencies
 

@@ -189,7 +189,6 @@ Exported from the `owlbear_memory` package top-level. Used internally by `Memory
 | `delete(id, expected_updated_at)` | `(str, str) → MemoryEntry` | Hard-delete for pending, soft-delete for curated/approved/contested/disputed/stale; raises `TransitionError` / `ConcurrencyError` |
 | `try_stale_transition(entry)` | `(MemoryEntry) → MemoryEntry` | Calls `check_slot_efficiency`; when True and state in {approved, curated, contested}, writes state=stale with refreshed updated_at. Returns unchanged entry (no error) when predicate is False or state is ineligible. No OCC. Logs INFO on transition. |
 | `load()` | `() → list[MemoryEntry]` | Force full reparse; skips malformed files (lenient) |
-| `migrate_scores(dry_run)` | `(*, dry_run: bool = False) → int` | Backfills `score=confidence` and all counters to `0` on entries missing any of the four migration keys. Skips malformed files. Returns migrated count. `dry_run=True` reports count without writing. |
 
 #### State Machine
 
@@ -230,29 +229,6 @@ raised. `save()` creates new entries and does not require an OCC token.
 `get_entries()` and `load()` skip unparseable files and track the count of skipped
 files in `engine.parse_errors`. When duplicate UUIDs are found across files, the entry
 with the later `updated_at` (parsed chronologically) is kept and a warning is logged.
-
----
-
-## CLI
-
-### `memory-migrate`
-
-Backfills `score` and counter fields on legacy memory entries that pre-date the
-score-based fields introduced in phase-2.
-
-```sh
-uv run memory-migrate [--memory-dir PATH] [--dry-run]
-```
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--memory-dir PATH` | `OWLBEAR_MEMORY_DIR` env → `.owlbear/memory` | Path to the memory directory |
-| `--dry-run` | off | Report migrated count without writing |
-
-Prints the number of migrated (or would-be-migrated) entries to stdout and exits 0.
-Idempotent: re-running on a fully migrated directory prints `0`.
-
----
 
 ### `MtimeScanCache`
 

@@ -299,9 +299,8 @@ Recommended category mapping for post-task reflection bullets:
 
 ## Configuration
 
-| Env var | Default | Description |
-|---------|---------|-------------|
-| `OWLBEAR_MEMORY_DIR` | `.owlbear/memory` | Path to memory markdown entry directory |
+Memory entries are stored at `.owlbear/memory` under the current initialized workspace. The server
+has no environment configuration.
 
 ## Error Behavior
 

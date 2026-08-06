@@ -6,11 +6,8 @@ import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import RLock
-from typing import Any, TypedDict
+from typing import TypedDict
 from uuid import uuid4
-
-from ruamel.yaml import YAML
-from ruamel.yaml.error import YAMLError
 
 from owlbear_memory import storage
 from owlbear_memory.errors import ConcurrencyError, NotFoundError, TransitionError, ValidationError
@@ -28,9 +25,6 @@ _LOGGER = logging.getLogger(__name__)
 OUTSTANDING_BOOST = 0.1
 UNREMARKABLE_PENALTY = 0.01
 STALE_THRESHOLD = 50
-_FRONTMATTER_PARTS = 3
-_MIGRATION_KEYS = ("score", "outstanding_count", "unremarkable_count", "didnt_use_count")
-_YAML = YAML(typ="safe")
 
 
 def compute_score(confidence: float, outstanding_count: int, unremarkable_count: int) -> float:
@@ -425,48 +419,6 @@ class MemoryEngine:
             )
             return self._write_updated_entry(entry)
 
-    def migrate_scores(self, *, dry_run: bool = False) -> int:
-        """Backfill score and counter fields on legacy entries.
-
-        Returns the count of entries that were migrated or would be migrated when
-        ``dry_run`` is enabled.
-        """
-        with self._lock:
-            return self._migrate_scores(dry_run=dry_run)
-
-    def _migrate_scores(self, *, dry_run: bool) -> int:
-        migrated = 0
-
-        for file_path in sorted(self._memory_dir.glob("*.md")):
-            entry = storage.read_entry(file_path)
-            if entry is None:
-                continue
-
-            frontmatter = self._read_frontmatter_raw(file_path)
-            if frontmatter is None:
-                continue
-
-            if all(key in frontmatter for key in _MIGRATION_KEYS):
-                continue
-
-            migrated += 1
-            if dry_run:
-                continue
-
-            updated = entry.model_copy(
-                update={
-                    "score": entry.confidence,
-                    "outstanding_count": 0,
-                    "unremarkable_count": 0,
-                    "didnt_use_count": 0,
-                }
-            )
-            storage.write_entry(file_path, updated, memory_dir=self._memory_dir)
-
-        if not dry_run:
-            self.load()
-        return migrated
-
     def _validate_occ(self, entry: MemoryEntry, expected_updated_at: str) -> None:
         if entry.updated_at != expected_updated_at:
             msg = (
@@ -515,17 +467,3 @@ class MemoryEngine:
 
     def _parse_iso_datetime(self, value: str) -> datetime:
         return datetime.fromisoformat(value)
-
-    def _read_frontmatter_raw(self, path: Path) -> dict[str, Any] | None:
-        try:
-            raw = path.read_text(encoding="utf-8-sig")
-            parts = raw.split("---", 2)
-            if len(parts) < _FRONTMATTER_PARTS:
-                return None
-            data = _YAML.load(parts[1])
-        except OSError, UnicodeDecodeError, YAMLError:
-            return None
-
-        if not isinstance(data, dict):
-            return None
-        return data

@@ -1,7 +1,7 @@
 """OwlBear workspace initialiser — setup/init.py.
 
 Usage (CLI):
-    python ../owlbear/setup/init.py [--name NAME]
+    python ../owlbear/setup/init.py [--replace-hooks]
 
 Run from the target project directory.  owlbear_dir is auto-detected from
 the location of this script.
@@ -414,8 +414,7 @@ def init(  # noqa: C901
     replaces ``{{placeholder}}`` tokens in ``.json`` / ``.yml`` templates.
     ``settings.json`` and ``mcp.json`` are deep-merged with existing files.
     Also receipt-activates an empty target authority store for fresh workspaces.
-    Existing pre-cutover stores remain untouched until ``setup/finalize.py``
-    activates them.
+    Existing legacy stores remain untouched.
 
     Args:
         target_dir: Destination project directory.
@@ -484,7 +483,6 @@ if __name__ == "__main__":  # pragma: no cover
     import argparse
 
     parser = argparse.ArgumentParser(description="Initialise an OwlBear workspace in the current directory.")
-    parser.add_argument("--name", default=None, help="Project name (default: directory name)")
     parser.add_argument(
         "--replace-hooks",
         action="store_true",

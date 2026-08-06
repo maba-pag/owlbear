@@ -50,7 +50,7 @@ uv run --project ../owlbear cockpit
 and opens a browser unless disabled with `COCKPIT_NO_OPEN=1`. Cockpit reads
 `.owlbear/target-cutover-request.json`, its immutable receipt, and `.owlbear/memory/` relative
 to the workspace root. Consumer launches must use the target project as their working directory
-or set `OWLBEAR_WORKSPACE_ROOT`.
+or pass it to `uv --directory`.
 
 ## Frontend Surface
 
@@ -89,10 +89,9 @@ its own.
 |----------|---------|---------|
 | `COCKPIT_PORT` | `8420` | Override listen port (1-65535) |
 | `COCKPIT_NO_OPEN` | unset | Set to `1` to suppress browser auto-open |
-| `COCKPIT_DIST_DIR` | package `dist/` | Override the built frontend asset directory |
-| `OWLBEAR_WORKSPACE_ROOT` | `$PWD` | Override the workspace containing target authority |
-| `OWLBEAR_TARGET_CUTOVER_REQUEST` | `.owlbear/target-cutover-request.json` | Override the cutover request path |
-| `MEMORY_DIR` | workspace `.owlbear/memory/` | Override memory directory path used by `MemoryEngine` |
+
+Cockpit always reads target authority and memory state from the current workspace and serves the
+package's bundled `dist/` directory.
 
 ## Delivery Packaging
 

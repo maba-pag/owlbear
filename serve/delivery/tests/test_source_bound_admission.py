@@ -20,8 +20,9 @@ from owlbear_delivery import (
     DesignPackageStore,
     OutcomeAuthorityBinding,
 )
+from owlbear_delivery.git_executable import resolve_git_executable
 
-_GIT = "/usr/bin/git"
+_GIT = resolve_git_executable()
 
 
 def _git(repository: Path, *arguments: str) -> str:

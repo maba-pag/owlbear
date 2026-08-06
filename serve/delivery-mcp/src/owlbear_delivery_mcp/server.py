@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -41,15 +40,8 @@ _REQUIRED_TOP_LEVEL_FIELDS = {"schema_version", "integration_target"}
 _live_context: DeliveryAppContext | None = None
 
 
-def _resolve_workspace_root() -> Path:
-    configured = os.environ.get("OWLBEAR_WORKSPACE_ROOT", "").strip()
-    return (Path(configured) if configured else Path.cwd()).resolve()
-
-
 def _resolve_request_path(workspace_root: Path) -> Path:
-    configured = os.environ.get("OWLBEAR_TARGET_CUTOVER_REQUEST", "").strip()
-    selected = Path(configured) if configured else _DEFAULT_CUTOVER_REQUEST
-    return selected.resolve() if selected.is_absolute() else (workspace_root / selected).resolve()
+    return (workspace_root / _DEFAULT_CUTOVER_REQUEST).resolve()
 
 
 def _delivery_config_path(workspace_root: Path) -> Path:
@@ -110,7 +102,7 @@ def _authorize_configured_target(workspace_root: Path) -> Path:
         raise DeliveryStartupDiagnostic(
             _INVALID,
             "target cutover authority is invalid",
-            "OWLBEAR_TARGET_CUTOVER_REQUEST",
+            str(_DEFAULT_CUTOVER_REQUEST),
         ) from exc
     return (workspace_root / request.target_path).resolve()
 
@@ -139,7 +131,7 @@ def _live_application() -> PortfolioApplication:
 async def app_lifespan(_server: MCPServer) -> AsyncGenerator[DeliveryAppContext]:
     """Construct one explicitly configured Delivery application for this process."""
     global _live_context  # noqa: PLW0603 - process lifespan owns this binding.
-    workspace_root = _resolve_workspace_root()
+    workspace_root = Path.cwd().resolve()
     config = load_delivery_config(_delivery_config_path(workspace_root))
     context = DeliveryAppContext(application=load_delivery_application(config, workspace_root))
     _live_context = context

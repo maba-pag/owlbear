@@ -38,6 +38,12 @@ from owlbear_cockpit.target_context import load_target_context
 
 _DEFAULT_PORT = 8420
 _MAX_PORT = 65535
+_DIST_DIR = Path(__file__).parent.parent.parent / "dist"
+_HOST = "127.0.0.1"
+_MEMORY_DIR = Path(".owlbear/memory")
+_NO_OPEN_ENV = "COCKPIT_NO_OPEN"
+_PORT_ENV = "COCKPIT_PORT"
+_TARGET_CUTOVER_REQUEST = Path(".owlbear/target-cutover-request.json")
 
 app = FastAPI(title="OwlBear Cockpit")
 app.add_exception_handler(HTTPException, handle_target_http_error)
@@ -175,7 +181,7 @@ def ideas_health(ideas_path: _IdeasPath) -> IdeasHealth:
 
 
 def _resolve_port() -> int:
-    port_str = os.environ.get("COCKPIT_PORT", str(_DEFAULT_PORT))
+    port_str = os.environ.get(_PORT_ENV, str(_DEFAULT_PORT))
     try:
         port = int(port_str)
     except ValueError:
@@ -188,12 +194,8 @@ def _resolve_port() -> int:
 
 
 def _load_target_runtime() -> tuple[Path, object]:
-    configured_root = os.environ.get("OWLBEAR_WORKSPACE_ROOT", "").strip()
-    workspace_root = (Path(configured_root) if configured_root else Path.cwd()).resolve()
-    configured_request = os.environ.get("OWLBEAR_TARGET_CUTOVER_REQUEST", "").strip()
-    request_path = Path(configured_request) if configured_request else Path(".owlbear/target-cutover-request.json")
-    if not request_path.is_absolute():
-        request_path = workspace_root / request_path
+    workspace_root = Path.cwd().resolve()
+    request_path = workspace_root / _TARGET_CUTOVER_REQUEST
     try:
         target_context = load_target_context(workspace_root, request_path.resolve())
     except RuntimeError as exc:
@@ -203,8 +205,7 @@ def _load_target_runtime() -> tuple[Path, object]:
 
 
 def _resolve_dist_dir() -> Path:
-    configured_dist = os.environ.get("COCKPIT_DIST_DIR", "").strip()
-    dist_dir = Path(configured_dist).resolve() if configured_dist else Path(__file__).parent.parent.parent / "dist"
+    dist_dir = _DIST_DIR.resolve()
     if not dist_dir.is_dir():
         sys.stderr.write(f"Error: dist/ directory not found at {dist_dir}. Run `npm run build` first.\n")
         sys.exit(1)
@@ -220,9 +221,7 @@ def run() -> None:
     dist_dir = _resolve_dist_dir()
 
     # --- runtime init (before uvicorn starts) ---
-    memory_dir_str = os.environ.get("MEMORY_DIR")
-    memory_dir = Path(memory_dir_str) if memory_dir_str else workspace_root / ".owlbear" / "memory"
-    memory_engine = MemoryEngine(memory_dir)
+    memory_engine = MemoryEngine(workspace_root / _MEMORY_DIR)
     app.state.workspace_root = workspace_root
     app.state.target_context = target_context
     app.state.memory_engine = memory_engine
@@ -249,13 +248,13 @@ def run() -> None:
         return HTMLResponse((dist_dir / "index.html").read_text(encoding="utf-8"))
 
     # --- browser auto-open ---
-    if not os.environ.get("COCKPIT_NO_OPEN"):
+    if not os.environ.get(_NO_OPEN_ENV):
 
         def _open_browser() -> None:
             with contextlib.suppress(Exception):
-                webbrowser.open(f"http://127.0.0.1:{port}/")
+                webbrowser.open(f"http://{_HOST}:{port}/")
 
         timer = threading.Timer(0.5, _open_browser)
         timer.start()
 
-    uvicorn.run(app, host="127.0.0.1", port=port)
+    uvicorn.run(app, host=_HOST, port=port)

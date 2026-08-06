@@ -92,9 +92,8 @@ All mutating tools return a `hint` field describing the transition or action tak
 
 ## Configuration
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `OWLBEAR_MEMORY_DIR` | `.owlbear/memory` | Directory for markdown memory files |
+Memory entries are stored at `.owlbear/memory` under the current initialized workspace. The server
+has no environment configuration.
 
 ## Batch Commits
 

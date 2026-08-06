@@ -83,30 +83,6 @@ For a fresh workspace, `init.py` activates only the empty target authority store
 retired task, decision, board, accept, or audit stores, and reruns do not overwrite target records.
 If `.owlbear/kanban/` already exists, setup preserves it and publishes no target store or receipt.
 
-### Existing Pre-Cutover Workspaces
-
-1. Run `init.py` with the command above.
-
-  Expected outcome: copied setup files are refreshed, while `.owlbear/kanban/` remains unchanged
-  and target mutation remains blocked.
-
-2. Place the reviewed migration request at `.owlbear/target-cutover-request.json`. The request must
-  contain current source digests, explicit classifications, target authority, code revision, and
-  activation approval; do not hand-create a receipt.
-
-  Expected outcome: the request names every source and unfinished semantic identity that must be
-  preserved or reintroduced.
-
-3. Invoke the cutover service directly from the project root:
-
-  ```shell
-  uv run --project ../owlbear python ../owlbear/setup/finalize.py \
-    --workspace . --request .owlbear/target-cutover-request.json
-  ```
-
-  Expected outcome: the command returns `"ok": true`, snapshots and retires the source stores,
-  smoke-checks target authority/runtime, and only then publishes `.owlbear/target-cutover.json`.
-
 ## Shared vs Copied
 
 OwlBear uses two different update models:
@@ -323,31 +299,11 @@ Edit `.vscode/mcp.json` to add additional servers alongside the owlbear defaults
 > as defaults and your existing entries are preserved. Edit it manually to add new server
 > entries or customize existing ones.
 
-### Configuring the knowledge MCP server
+### Knowledge MCP storage
 
-The `owlbear-knowledge` server supports environment variables to customise its behaviour.
-Set these in `.vscode/mcp.json` under the server's `env` key:
-
-```json
-{
-  "servers": {
-    "owlbear-knowledge": {
-      "type": "stdio",
-      "command": "uv",
-      "args": ["run", "--project", "../owlbear", "-m", "owlbear_knowledge_mcp"],
-      "env": {
-        "OWLBEAR_KB_PATH": "/path/to/knowledge.db",
-        "KNOWLEDGE_TOOLS_EXCLUDE": "knowledge_ingest"
-      }
-    }
-  }
-}
-```
-
-| Variable | Description |
-|----------|-------------|
-| `OWLBEAR_KB_PATH` | Override the path to the SQLite knowledge database |
-| `KNOWLEDGE_TOOLS_EXCLUDE` | Comma-separated tool names to hide (e.g. for query-only access) |
+The `owlbear-knowledge` server stores its SQLite database and vectors under
+`.owlbear/knowledge/` in the current workspace. Launch it from the project root; it has no storage
+override or tool-exclusion environment settings.
 
 ---
 
@@ -361,8 +317,8 @@ Set these in `.vscode/mcp.json` under the server's `env` key:
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
 | `owlbear-delivery` reports `ERR_DELIVERY_STARTUP_UNCONFIGURED` | `.owlbear/delivery/config.json` is absent from the project root | Re-run `init.py`; setup recreates the file only when it is missing |
 | `uv run cockpit` says the command is missing | Command was run from the consumer project without `--project` | Use `uv run --project ../owlbear cockpit` from the project root |
-| Target MCP or Cockpit refuses to start after an update | A pre-cutover store has no valid target request and receipt | Prepare the reviewed request and invoke `setup/finalize.py` directly as described above |
-| Cockpit shows the wrong workspace or cannot find `.owlbear/target` | Cockpit was launched from the wrong working directory | Run from the project root, add `--directory /path/to/project`, or set `OWLBEAR_WORKSPACE_ROOT` explicitly |
+| Existing `.owlbear/kanban/` prevents target activation | Setup preserves legacy stores but does not convert them | Start from a fresh initialized workspace and reintroduce unfinished semantic work through the current Design workflow |
+| Cockpit shows the wrong workspace or cannot find `.owlbear/target` | Cockpit was launched from the wrong working directory | Run from the project root or add `--directory /path/to/project` |
 | `ValueError` on setup | Cross-drive path resolution | Place owlbear and your project on the same Windows drive |
 | Hook file not refreshed on rerun | Existing local `.owlbear/hooks/` file differs from seed | Re-run `init.py --replace-hooks` to overwrite, or choose `replace` when prompted interactively |
 | Agent name conflict | Same-name agent in both owlbear and project locations | Give project agents unique names (see Customization section above) |
