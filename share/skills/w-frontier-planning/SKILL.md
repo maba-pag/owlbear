@@ -54,8 +54,8 @@ the user resolves it, and a later acquisition supplies fresh context.
 
 Construct one candidate claim containing the unchanged launch identity, supplied plan context,
 complete task definitions, dependency order, required outputs, proof, repository evidence, and exact
-source head. Dispatch only `launch.policy.reviewer_agent` to `planner-challenger` using the configured
-reviewer model.
+source head. Dispatch only `launch.policy.reviewer_agent` to `planner-challenger`; the reviewer
+agent's frontmatter owns its model.
 
 Require exactly one advisory mapping with disposition `pass | finding` and non-empty evidence. The
 review is scoped to the supplied immutable candidate; it never chooses a transition or calls a

@@ -31,8 +31,6 @@ from owlbear_kanban.completed_history import (
 )
 from owlbear_kanban.delivery_application_loader import (
     DeliveryApplicationLoadError,
-    DeliveryRoleIdentityConfig,
-    DeliveryRolePoliciesConfig,
     DeliveryStartupConfig,
     load_delivery_application,
 )
@@ -321,8 +319,6 @@ __all__ = [
     "DeliveryRequestResolution",
     "DeliveryResultCandidate",
     "DeliveryReturnContext",
-    "DeliveryRoleIdentityConfig",
-    "DeliveryRolePoliciesConfig",
     "DeliveryRolePolicy",
     "DeliveryRuntime",
     "DeliveryRuntimeConflictError",

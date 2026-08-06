@@ -12,11 +12,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from owlbear_kanban.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator
-from owlbear_kanban.delivery_application_loader import (
-    DeliveryRoleIdentityConfig,
-    DeliveryRolePoliciesConfig,
-    DeliveryStartupConfig,
-)
+from owlbear_kanban.delivery_application_loader import DeliveryStartupConfig
 from owlbear_kanban.delivery_runtime import (
     DeliveryActiveClaim,
     DeliveryBlock,
@@ -282,7 +278,7 @@ def _publish_completion(repository: Path, change_id: str, title: str, reviewed_h
 
 
 def _seed_repository(repository: Path) -> str:
-    repository.mkdir()
+    repository.mkdir(exist_ok=True)
     _git(repository, "init", "-b", "main")
     _git(repository, "config", "user.name", "Work Portfolio E2E")
     _git(repository, "config", "user.email", "work-portfolio@example.invalid")
@@ -294,41 +290,21 @@ def _seed_repository(repository: Path) -> str:
     return _publish_completion(repository, "completed-beta", "Beta search", first)
 
 
-def _write_config(workspace: Path, repository: Path, target_root: Path, worktrees: Path) -> None:
-    identity = DeliveryRoleIdentityConfig(
-        worker_agent="worker",
-        worker_model="worker-model",
-        reviewer_agent="reviewer",
-        reviewer_model="reviewer-model",
-    )
-    config = DeliveryStartupConfig(
-        package_root=(workspace / "packages").resolve(),
-        target_root=target_root.resolve(),
-        repository_root=repository.resolve(),
-        worktree_root=worktrees.resolve(),
-        execution_capacity=4,
-        writer_capacity=1,
-        integration_target="main",
-        role_policies=DeliveryRolePoliciesConfig(
-            planner=identity,
-            builder=identity,
-            **{"assembly-reviewer": identity},
-        ),
-    )
-    (workspace / "delivery-config.json").write_text(
-        config.model_dump_json(by_alias=True),
-        encoding="utf-8",
-    )
+def _write_config(workspace: Path) -> None:
+    config = DeliveryStartupConfig(schema_version=1, integration_target="main")
+    path = workspace / ".owlbear/delivery/config.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(config.model_dump_json(by_alias=True), encoding="utf-8")
 
 
 def seed_delivery(workspace: Path) -> None:
     """Seed canonical current and completed Delivery data below the real application."""
-    repository = workspace / "repository"
+    repository = workspace
     target_root = workspace / ".owlbear/target"
-    worktrees = workspace / "worktrees"
+    worktrees = workspace / ".owlbear/worktrees"
     head = _seed_repository(repository)
     _write_current_delivery(target_root, repository, worktrees, head)
-    _write_config(workspace, repository, target_root, worktrees)
+    _write_config(workspace)
 
 
 def main() -> None:

@@ -333,9 +333,16 @@ class PortfolioCoordinator:
     def _initialize_ledger(self) -> None:
         initial = CapacityLedger(capacity=self._capacity)
         if self._ledger_path.exists():
-            existing = CapacityLedger.model_validate_json(self._ledger_path.read_bytes())
+            existing_bytes = self._ledger_path.read_bytes()
+            existing = CapacityLedger.model_validate_json(existing_bytes)
             if existing.capacity != self._capacity:
-                _coordination_conflict("configured writer capacity differs from the durable ledger")
+                if len(existing.change_ids) > self._capacity:
+                    _coordination_conflict("active writers exceed configured writer capacity")
+                updated = existing.model_copy(update={"capacity": self._capacity})
+                self._commit(
+                    "reconfigure-capacity",
+                    (_replacement(self._state_root, self._ledger_path, existing_bytes, updated),),
+                )
             return
         self._commit(
             "initialize-capacity",

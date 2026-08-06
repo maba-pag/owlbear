@@ -13,11 +13,7 @@ import pytest
 
 from owlbear_cockpit.routes.target_work import assemble_target_app
 from owlbear_cockpit.target_context import load_target_context
-from owlbear_kanban.delivery_application_loader import (
-    DeliveryRoleIdentityConfig,
-    DeliveryRolePoliciesConfig,
-    DeliveryStartupConfig,
-)
+from owlbear_kanban.delivery_application_loader import DeliveryStartupConfig
 from owlbear_kanban.delivery_runtime import DeliveryStage, DeliveryWorkerRole
 from owlbear_kanban.portfolio_application import DeliveryOperatorClaim, DeliveryOperatorContext
 from owlbear_kanban.work_items import WorkItemAttention, WorkItemProjection, WorkItemStage
@@ -106,36 +102,13 @@ def _client() -> tuple[TestClient, _DeliveryApplicationFake]:
 
 def test_startup_authorizes_shared_delivery_configuration(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    repository_root = tmp_path / "repository"
-    repository_root.mkdir()
-    role = DeliveryRoleIdentityConfig(
-        worker_agent="worker",
-        worker_model="model",
-        reviewer_agent="reviewer",
-        reviewer_model="model",
-    )
-    config = DeliveryStartupConfig(
-        package_root=tmp_path / "packages",
-        target_root=tmp_path / "workspace/.owlbear/target",
-        repository_root=repository_root,
-        worktree_root=tmp_path / "worktrees",
-        execution_capacity=3,
-        writer_capacity=1,
-        integration_target="dev",
-        role_policies=DeliveryRolePoliciesConfig(
-            planner=role,
-            builder=role,
-            **{"assembly-reviewer": role},
-        ),
-    )
-    config_path = tmp_path / "delivery.json"
-    config_path.write_text(config.model_dump_json(by_alias=True), encoding="utf-8")
-    monkeypatch.setenv("OWLBEAR_DELIVERY_CONFIG", str(config_path))
     workspace_root = tmp_path / "workspace"
+    config = DeliveryStartupConfig(schema_version=1, integration_target="dev")
+    config_path = workspace_root / ".owlbear/delivery/config.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(config.model_dump_json(by_alias=True), encoding="utf-8")
     request_path = workspace_root / ".owlbear/target-cutover-request.json"
-    request_path.parent.mkdir(parents=True)
     request_path.write_text("{}\n", encoding="utf-8")
     request = SimpleNamespace(target_path=".owlbear/target")
     application = object()
@@ -152,7 +125,41 @@ def test_startup_authorizes_shared_delivery_configuration(
 
     assert result is application
     authorize.assert_called_once_with(workspace_root, request)
-    load.assert_called_once_with(config, authorized_target_root=config.target_root)
+    load.assert_called_once_with(
+        config,
+        workspace_root=workspace_root,
+        authorized_target_root=workspace_root / ".owlbear/target",
+    )
+
+
+def test_startup_discovers_workspace_delivery_configuration(
+    tmp_path: Path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    config = DeliveryStartupConfig(schema_version=1, integration_target="dev")
+    config_path = workspace_root / ".owlbear/delivery/config.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(config.model_dump_json(by_alias=True), encoding="utf-8")
+    request_path = workspace_root / ".owlbear/target-cutover-request.json"
+    request_path.write_text("{}\n", encoding="utf-8")
+    request = SimpleNamespace(target_path=".owlbear/target")
+    application = object()
+    with (
+        patch(
+            "owlbear_cockpit.target_context.TargetCutoverRequest.model_validate_json",
+            return_value=request,
+        ),
+        patch("owlbear_cockpit.target_context.authorize_target_mutation"),
+        patch("owlbear_cockpit.target_context.load_delivery_application", return_value=application) as load,
+    ):
+        result = load_target_context(workspace_root, request_path)
+
+    assert result is application
+    load.assert_called_once_with(
+        config,
+        workspace_root=workspace_root,
+        authorized_target_root=workspace_root / ".owlbear/target",
+    )
 
 
 def test_list_and_detail_expose_current_bounded_delivery_state() -> None:

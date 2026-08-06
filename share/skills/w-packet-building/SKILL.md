@@ -55,7 +55,8 @@ fresh review. Never amend or erase a reviewed head.
 
 ## Step 3 - Obtain Advisory Exact-Commit Review
 
-Dispatch only `launch.policy.reviewer_agent` to `build-reviewer` using the configured reviewer model.
+Dispatch only `launch.policy.reviewer_agent` to `build-reviewer`; the reviewer agent's frontmatter
+owns its model.
 Supply the unchanged launch identity, full Build context, complete diff, changed paths, exact commit,
 focused proof, custody, ancestry, and prior evidence. Require the reviewer to echo the exact commit
 and return disposition `pass | finding`, matching `finding_boundary`, and non-empty evidence.

@@ -33,26 +33,17 @@ from owlbear_mcp_kanban.target_server import (
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-_DEFAULT_WORKSPACE_ROOT = Path.cwd()
 _DEFAULT_CUTOVER_REQUEST = Path(".owlbear/target-cutover-request.json")
+_DELIVERY_CONFIG_PATH = Path(".owlbear/delivery/config.json")
 _UNCONFIGURED = "ERR_DELIVERY_STARTUP_UNCONFIGURED"
 _INVALID = "ERR_DELIVERY_STARTUP_INVALID"
-_REQUIRED_TOP_LEVEL_FIELDS = {
-    "package_root",
-    "target_root",
-    "repository_root",
-    "worktree_root",
-    "execution_capacity",
-    "writer_capacity",
-    "integration_target",
-    "role_policies",
-}
+_REQUIRED_TOP_LEVEL_FIELDS = {"schema_version", "integration_target"}
 _live_context: DeliveryAppContext | None = None
 
 
 def _resolve_workspace_root() -> Path:
     configured = os.environ.get("OWLBEAR_WORKSPACE_ROOT", "").strip()
-    return (Path(configured) if configured else _DEFAULT_WORKSPACE_ROOT).resolve()
+    return (Path(configured) if configured else Path.cwd()).resolve()
 
 
 def _resolve_request_path(workspace_root: Path) -> Path:
@@ -61,20 +52,13 @@ def _resolve_request_path(workspace_root: Path) -> Path:
     return selected.resolve() if selected.is_absolute() else (workspace_root / selected).resolve()
 
 
-def _delivery_config_path() -> Path:
-    configured = os.environ.get("OWLBEAR_DELIVERY_CONFIG", "").strip()
-    if not configured:
-        raise DeliveryStartupDiagnostic(
-            _UNCONFIGURED,
-            "Delivery startup configuration path is required",
-            "OWLBEAR_DELIVERY_CONFIG",
-        )
-    path = Path(configured).expanduser().resolve()
+def _delivery_config_path(workspace_root: Path) -> Path:
+    path = workspace_root / _DELIVERY_CONFIG_PATH
     if not path.is_file():
         raise DeliveryStartupDiagnostic(
             _UNCONFIGURED,
             "Delivery startup configuration file is required",
-            "OWLBEAR_DELIVERY_CONFIG",
+            str(_DELIVERY_CONFIG_PATH),
         )
     return path
 
@@ -87,7 +71,7 @@ def load_delivery_config(path: Path) -> DeliveryStartupConfig:
         raise DeliveryStartupDiagnostic(
             _INVALID,
             "Delivery startup configuration cannot be read",
-            "OWLBEAR_DELIVERY_CONFIG",
+            str(_DELIVERY_CONFIG_PATH),
         ) from exc
     try:
         return DeliveryStartupConfig.model_validate_json(content)
@@ -106,9 +90,9 @@ def load_delivery_config(path: Path) -> DeliveryStartupConfig:
 def _validation_field(error: dict[str, object]) -> str:
     location = error.get("loc")
     if not isinstance(location, tuple | list):
-        return "OWLBEAR_DELIVERY_CONFIG"
+        return str(_DELIVERY_CONFIG_PATH)
     parts = tuple(str(part) for part in location)
-    return ".".join(parts) if parts else "OWLBEAR_DELIVERY_CONFIG"
+    return ".".join(parts) if parts else str(_DELIVERY_CONFIG_PATH)
 
 
 def _is_missing_required(error: dict[str, object], field: str) -> bool:
@@ -117,8 +101,7 @@ def _is_missing_required(error: dict[str, object], field: str) -> bool:
     return field.split(".", maxsplit=1)[0] in _REQUIRED_TOP_LEVEL_FIELDS
 
 
-def _authorize_configured_target(config: DeliveryStartupConfig) -> Path:
-    workspace_root = _resolve_workspace_root()
+def _authorize_configured_target(workspace_root: Path) -> Path:
     request_path = _resolve_request_path(workspace_root)
     try:
         request = TargetCutoverRequest.model_validate_json(request_path.read_bytes())
@@ -129,21 +112,18 @@ def _authorize_configured_target(config: DeliveryStartupConfig) -> Path:
             "target cutover authority is invalid",
             "OWLBEAR_TARGET_CUTOVER_REQUEST",
         ) from exc
-    expected_target = (workspace_root / request.target_path).resolve()
-    if config.target_root.resolve() != expected_target:
-        raise DeliveryStartupDiagnostic(
-            _INVALID,
-            "configured target root differs from cutover authority",
-            "target_root",
-        )
-    return expected_target
+    return (workspace_root / request.target_path).resolve()
 
 
-def load_delivery_application(config: DeliveryStartupConfig) -> PortfolioApplication:
+def load_delivery_application(config: DeliveryStartupConfig, workspace_root: Path) -> PortfolioApplication:
     """Authorize adapter configuration and delegate owner construction to Kanban."""
-    authorized_target = _authorize_configured_target(config)
+    authorized_target = _authorize_configured_target(workspace_root)
     try:
-        return load_core_delivery_application(config, authorized_target_root=authorized_target)
+        return load_core_delivery_application(
+            config,
+            workspace_root=workspace_root,
+            authorized_target_root=authorized_target,
+        )
     except DeliveryApplicationLoadError as exc:
         raise DeliveryStartupDiagnostic(_INVALID, exc.detail, exc.field) from exc
 
@@ -159,8 +139,9 @@ def _live_application() -> PortfolioApplication:
 async def app_lifespan(_server: FastMCP) -> AsyncGenerator[DeliveryAppContext]:
     """Construct one explicitly configured Delivery application for this process."""
     global _live_context  # noqa: PLW0603 - process lifespan owns this binding.
-    config = load_delivery_config(_delivery_config_path())
-    context = DeliveryAppContext(application=load_delivery_application(config))
+    workspace_root = _resolve_workspace_root()
+    config = load_delivery_config(_delivery_config_path(workspace_root))
+    context = DeliveryAppContext(application=load_delivery_application(config, workspace_root))
     _live_context = context
     try:
         yield context

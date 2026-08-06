@@ -38,7 +38,6 @@ const server = spawn('uv', ['run', '--project', root, '--package', 'owlbear-cock
   env: {
     ...process.env,
     OWLBEAR_WORKSPACE_ROOT: fixture,
-    OWLBEAR_DELIVERY_CONFIG: join(fixture, 'delivery-config.json'),
     COCKPIT_DIST_DIR: join(root, 'serve/cockpit/dist'),
     COCKPIT_PORT: '4175',
     COCKPIT_NO_OPEN: '1',

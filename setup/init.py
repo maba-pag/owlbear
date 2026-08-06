@@ -63,7 +63,6 @@ _SKIP_NAMES = frozenset({"scratch-pad.txt"})
 _SKIP_IF_EXISTS_REL = frozenset(
     {
         ".github/copilot-instructions.md",
-        ".owlbear/delivery-config.json",
         ".editorconfig",
         ".gitattributes",
         ".markdownlint-cli2.jsonc",
@@ -76,6 +75,7 @@ _OWLBEAR_GITIGNORE_MARKER = "# --- OwlBear managed paths ---"
 _HOOKS_REL_PREFIX = ".owlbear/hooks/"
 _TARGET_REQUEST_PATH = Path(".owlbear/target-cutover-request.json")
 _TARGET_RECEIPT_PATH = Path(".owlbear/target-cutover.json")
+_DELIVERY_CONFIG_PATH = Path(".owlbear/delivery/config.json")
 
 # Regex: match // line-comments outside of strings.  Handles the common JSONC
 # patterns VS Code uses (trailing comments like `true, // old value`).  Does
@@ -212,6 +212,16 @@ def _write_seed_file(src: Path, dest: Path, replacements: dict[str, str]) -> Non
         return
 
     shutil.copy2(src, dest)
+
+
+def _write_delivery_config(target_dir: Path) -> None:
+    """Create the workspace-local Delivery policy once."""
+    path = target_dir / _DELIVERY_CONFIG_PATH
+    if path.exists():
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = {"schema_version": 1, "integration_target": "main"}
+    path.write_text(json.dumps(content, indent=2) + "\n", encoding="utf-8")
 
 
 def _target_code_revision(owlbear_dir: Path) -> str:
@@ -460,6 +470,7 @@ def init(  # noqa: C901
 
         _write_seed_file(src, dest, replacements)
 
+    _write_delivery_config(target_dir)
     ops_root = target_dir / ".owlbear"
     if not (ops_root / "kanban").exists():
         _activate_fresh_target(target_dir, owlbear_dir)

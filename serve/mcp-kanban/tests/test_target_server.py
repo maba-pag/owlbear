@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 import hashlib
 import json
 import subprocess
@@ -138,26 +137,10 @@ def _repository(tmp_path: Path) -> Path:
     return repository
 
 
-def _config(tmp_path: Path, repository: Path | None = None) -> dict[str, object]:
-    identities = {
-        "worker_agent": "worker",
-        "worker_model": "worker-model",
-        "reviewer_agent": "reviewer",
-        "reviewer_model": "reviewer-model",
-    }
+def _config() -> dict[str, object]:
     return {
-        "package_root": str(tmp_path / "packages"),
-        "target_root": str(tmp_path / "target"),
-        "repository_root": str(repository or tmp_path),
-        "worktree_root": str(tmp_path / "worktrees"),
-        "execution_capacity": 3,
-        "writer_capacity": 1,
+        "schema_version": 1,
         "integration_target": "main",
-        "role_policies": {
-            "planner": dict(identities),
-            "builder": dict(identities),
-            "assembly-reviewer": dict(identities),
-        },
     }
 
 
@@ -237,23 +220,7 @@ async def test_registered_tool_invokes_strict_adapter_once() -> None:
     assert application.calls == ["list_work_items"]
 
 
-MISSING_FIELDS = [
-    ("package_root",),
-    ("target_root",),
-    ("repository_root",),
-    ("worktree_root",),
-    ("execution_capacity",),
-    ("writer_capacity",),
-    ("integration_target",),
-    ("role_policies", "planner"),
-    ("role_policies", "builder"),
-    ("role_policies", "assembly-reviewer"),
-    *(
-        ("role_policies", role, identity)
-        for role in ("planner", "builder", "assembly-reviewer")
-        for identity in ("worker_agent", "worker_model", "reviewer_agent", "reviewer_model")
-    ),
-]
+MISSING_FIELDS = [("schema_version",), ("integration_target",)]
 
 
 @pytest.mark.parametrize("field_path", MISSING_FIELDS)
@@ -261,7 +228,7 @@ def test_missing_required_config_fails_unconfigured_before_state_creation(
     tmp_path: Path,
     field_path: tuple[str, ...],
 ) -> None:
-    content = copy.deepcopy(_config(tmp_path))
+    content = _config()
     parent = content
     for key in field_path[:-1]:
         parent = parent[key]  # type: ignore[assignment,index]
@@ -280,36 +247,27 @@ def test_missing_required_config_fails_unconfigured_before_state_creation(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("configured_path", [None, "missing.json"])
-async def test_missing_config_path_or_file_fails_before_state_creation(
+async def test_missing_canonical_config_fails_before_state_creation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    configured_path: str | None,
 ) -> None:
-    monkeypatch.delenv("OWLBEAR_DELIVERY_CONFIG", raising=False)
-    if configured_path is not None:
-        monkeypatch.setenv("OWLBEAR_DELIVERY_CONFIG", str(tmp_path / configured_path))
+    monkeypatch.chdir(tmp_path)
 
     with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
         async with app_lifespan(mcp):
             pass
 
     assert exc_info.value.code == "ERR_DELIVERY_STARTUP_UNCONFIGURED"
-    assert exc_info.value.field == "OWLBEAR_DELIVERY_CONFIG"
-    assert not (tmp_path / "target").exists()
+    assert exc_info.value.field == ".owlbear/delivery/config.json"
+    assert not (tmp_path / ".owlbear/target").exists()
 
 
 @pytest.mark.parametrize(
     ("mutation", "field"),
     [
-        (lambda content, _tmp: content.update(execution_capacity=0), "execution_capacity"),
-        (lambda content, _tmp: content.update(writer_capacity="1"), "writer_capacity"),
-        (lambda content, _tmp: content.update(package_root="relative"), "package_root"),
-        (lambda content, tmp: content.update(repository_root=str(tmp / "absent")), "repository_root"),
-        (
-            lambda content, _tmp: content["role_policies"]["planner"].update(worker_agent=1),
-            "role_policies.planner.worker_agent",
-        ),
+        (lambda content, _tmp: content.update(schema_version=2), "schema_version"),
+        (lambda content, _tmp: content.update(integration_target=""), "integration_target"),
+        (lambda content, _tmp: content.update(execution_capacity=2), "execution_capacity"),
     ],
 )
 def test_invalid_config_fails_before_state_creation(
@@ -317,7 +275,7 @@ def test_invalid_config_fails_before_state_creation(
     mutation: Any,
     field: str,
 ) -> None:
-    content = _config(tmp_path)
+    content = _config()
     mutation(content, tmp_path)
     path = tmp_path / "delivery.json"
     _write_config(path, content)
@@ -339,7 +297,7 @@ def test_malformed_json_fails_invalid_without_exposing_content(tmp_path: Path) -
         load_delivery_config(path)
 
     assert exc_info.value.code == "ERR_DELIVERY_STARTUP_INVALID"
-    assert exc_info.value.field == "OWLBEAR_DELIVERY_CONFIG"
+    assert exc_info.value.field == ".owlbear/delivery/config.json"
     assert "do-not-report" not in str(exc_info.value)
 
 
@@ -348,15 +306,19 @@ def test_invalid_integration_target_fails_before_owner_state_mutation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repository = _repository(tmp_path)
-    content = _config(tmp_path, repository)
+    content = _config()
     content["integration_target"] = "bad target"
     path = tmp_path / "delivery.json"
     _write_config(path, content)
     config = load_delivery_config(path)
-    monkeypatch.setattr(live_server, "_authorize_configured_target", lambda config: config.target_root)
+    monkeypatch.setattr(
+        live_server,
+        "_authorize_configured_target",
+        lambda workspace_root: workspace_root / ".owlbear/target",
+    )
 
     with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
-        load_delivery_application(config)
+        load_delivery_application(config, repository)
 
     assert exc_info.value.code == "ERR_DELIVERY_STARTUP_INVALID"
     assert exc_info.value.field == "integration_target"
@@ -369,16 +331,21 @@ async def test_complete_config_constructs_application_before_lifespan_yield(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repository = _repository(tmp_path)
-    path = tmp_path / "delivery.json"
-    _write_config(path, _config(tmp_path, repository))
-    monkeypatch.setenv("OWLBEAR_DELIVERY_CONFIG", str(path))
-    monkeypatch.setattr(live_server, "_authorize_configured_target", lambda config: config.target_root)
+    path = repository / ".owlbear/delivery/config.json"
+    path.parent.mkdir(parents=True)
+    _write_config(path, _config())
+    monkeypatch.chdir(repository)
+    monkeypatch.setattr(
+        live_server,
+        "_authorize_configured_target",
+        lambda workspace_root: workspace_root / ".owlbear/target",
+    )
 
     async with app_lifespan(mcp) as context:
         tools = {tool.name: tool for tool in await mcp.list_tools()}
         assert isinstance(context.application, PortfolioApplication)
         assert set(tools) == DELIVERY_TOOLS
-        assert (tmp_path / "target/target-runtime/capacity.json").is_file()
+        assert (repository / ".owlbear/target/target-runtime/capacity.json").is_file()
 
     with pytest.raises(RuntimeError, match="outside server lifespan"):
         live_server._live_application()
@@ -390,20 +357,21 @@ def test_mcp_startup_delegates_owner_construction_to_kanban(
 ) -> None:
     repository = _repository(tmp_path)
     path = tmp_path / "delivery.json"
-    _write_config(path, _config(tmp_path, repository))
+    _write_config(path, _config())
     config = load_delivery_config(path)
     application = object()
-    calls: list[tuple[object, Path]] = []
+    calls: list[tuple[object, Path, Path]] = []
 
-    def load_core(candidate: object, *, authorized_target_root: Path) -> object:
-        calls.append((candidate, authorized_target_root))
+    def load_core(candidate: object, *, workspace_root: Path, authorized_target_root: Path) -> object:
+        calls.append((candidate, workspace_root, authorized_target_root))
         return application
 
-    monkeypatch.setattr(live_server, "_authorize_configured_target", lambda candidate: candidate.target_root)
+    target_root = repository / ".owlbear/target"
+    monkeypatch.setattr(live_server, "_authorize_configured_target", lambda _workspace_root: target_root)
     monkeypatch.setattr(live_server, "load_core_delivery_application", load_core)
 
-    assert load_delivery_application(config) is application
-    assert calls == [(config, config.target_root)]
+    assert load_delivery_application(config, repository) is application
+    assert calls == [(config, repository, target_root)]
 
 
 @pytest.mark.asyncio
@@ -412,13 +380,13 @@ async def test_assembled_work_item_tools_observe_runtime_transition(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repository = _repository(tmp_path)
-    target_root = tmp_path / "target"
+    target_root = repository / ".owlbear/target"
     _write_delivery_state(target_root)
     path = tmp_path / "delivery.json"
-    _write_config(path, _config(tmp_path, repository))
+    _write_config(path, _config())
     config = load_delivery_config(path)
-    monkeypatch.setattr(live_server, "_authorize_configured_target", lambda candidate: candidate.target_root)
-    application = load_delivery_application(config)
+    monkeypatch.setattr(live_server, "_authorize_configured_target", lambda _workspace_root: target_root)
+    application = load_delivery_application(config, repository)
     server = assemble_target_server(application)
     tools = server._tool_manager  # noqa: SLF001
     list_tool = tools.get_tool("list_work_items")

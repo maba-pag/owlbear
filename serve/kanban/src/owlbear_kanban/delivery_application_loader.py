@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from pathlib import Path
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from owlbear_kanban.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator
 from owlbear_kanban.completed_history import CompletedHistoryCatalog
@@ -26,58 +27,27 @@ from owlbear_kanban.portfolio_application import (
 from owlbear_kanban.target_admission import DeliveryAuthorityRegistry
 from owlbear_kanban.target_contract import DeliveryContract
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
 
 class _LoaderModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
-class DeliveryRoleIdentityConfig(_LoaderModel):
-    """Explicit worker and reviewer identities for one Delivery role."""
-
-    worker_agent: str = Field(min_length=1)
-    worker_model: str = Field(min_length=1)
-    reviewer_agent: str = Field(min_length=1)
-    reviewer_model: str = Field(min_length=1)
-
-
-class DeliveryRolePoliciesConfig(_LoaderModel):
-    """Complete role policy required before owner construction."""
-
-    planner: DeliveryRoleIdentityConfig
-    builder: DeliveryRoleIdentityConfig
-    assembly_reviewer: DeliveryRoleIdentityConfig = Field(alias="assembly-reviewer")
-
-
 class DeliveryStartupConfig(_LoaderModel):
-    """Validated roots, capacities, target, and identities for Delivery startup."""
+    """Workspace-local Delivery policy loaded before owner construction."""
 
+    schema_version: Literal[1]
+    integration_target: str = Field(min_length=1)
+
+
+@dataclass(frozen=True)
+class _DeliveryPaths:
     package_root: Path
     target_root: Path
     repository_root: Path
     worktree_root: Path
-    execution_capacity: int = Field(gt=0)
-    writer_capacity: int = Field(gt=0)
-    integration_target: str = Field(min_length=1)
-    role_policies: DeliveryRolePoliciesConfig
-
-    @field_validator("package_root", "target_root", "repository_root", "worktree_root")
-    @classmethod
-    def _validate_directory_path(cls, value: Path) -> Path:
-        if not value.is_absolute():
-            message = "path must be absolute"
-            raise ValueError(message)
-        if value.exists() and (value.is_symlink() or not value.is_dir()):
-            message = "path must name a directory"
-            raise ValueError(message)
-        return value
-
-    @field_validator("repository_root")
-    @classmethod
-    def _validate_repository_root(cls, value: Path) -> Path:
-        if not value.is_dir():
-            message = "repository root must exist"
-            raise ValueError(message)
-        return value
 
 
 class DeliveryApplicationLoadError(RuntimeError):
@@ -95,7 +65,29 @@ def _load_error(field: str, detail: str) -> DeliveryApplicationLoadError:
     return DeliveryApplicationLoadError(field, detail)
 
 
-def _validate_git_config(config: DeliveryStartupConfig) -> None:
+def _derive_paths(workspace_root: Path) -> _DeliveryPaths:
+    repository_root = workspace_root.resolve()
+    if not repository_root.is_dir():
+        field = "workspace_root"
+        detail = "workspace root must be an existing directory"
+        raise _load_error(field, detail)
+    paths = _DeliveryPaths(
+        package_root=repository_root / ".owlbear/delivery/packages",
+        target_root=repository_root / ".owlbear/target",
+        repository_root=repository_root,
+        worktree_root=repository_root / ".owlbear/worktrees",
+    )
+    for field, path in (
+        ("package_root", paths.package_root),
+        ("target_root", paths.target_root),
+        ("worktree_root", paths.worktree_root),
+    ):
+        if path.exists() and (path.is_symlink() or not path.is_dir()):
+            raise _load_error(field, "derived path must name a directory")
+    return paths
+
+
+def _validate_git_config(config: DeliveryStartupConfig, paths: _DeliveryPaths) -> None:
     git_executable = shutil.which("git")
     if git_executable is None:
         error = _load_error("repository_root", "Git executable is unavailable")
@@ -107,7 +99,7 @@ def _validate_git_config(config: DeliveryStartupConfig) -> None:
     )
     for arguments, field in checks:
         completed = subprocess.run(  # noqa: S603 - fixed executable and argument vector.
-            (git_executable, "-C", str(config.repository_root), *arguments),
+            (git_executable, "-C", str(paths.repository_root), *arguments),
             check=False,
             capture_output=True,
         )
@@ -148,16 +140,23 @@ def _load_contracts(target_root: Path) -> dict[str, DeliveryContract]:
     }
 
 
-def _role_policy(role: DeliveryWorkerRole, identity: DeliveryRoleIdentityConfig) -> DeliveryRolePolicy:
-    return DeliveryRolePolicy(worker_role=role, **identity.model_dump())
-
-
-def _role_policies(config: DeliveryStartupConfig) -> tuple[DeliveryRolePolicy, ...]:
-    policies = config.role_policies
+def _role_policies() -> tuple[DeliveryRolePolicy, ...]:
     return (
-        _role_policy(DeliveryWorkerRole.PLANNER, policies.planner),
-        _role_policy(DeliveryWorkerRole.BUILDER, policies.builder),
-        _role_policy(DeliveryWorkerRole.ASSEMBLY_REVIEWER, policies.assembly_reviewer),
+        DeliveryRolePolicy(
+            worker_role=DeliveryWorkerRole.PLANNER,
+            worker_agent="planner",
+            reviewer_agent="planner-challenger",
+        ),
+        DeliveryRolePolicy(
+            worker_role=DeliveryWorkerRole.BUILDER,
+            worker_agent="builder",
+            reviewer_agent="build-reviewer",
+        ),
+        DeliveryRolePolicy(
+            worker_role=DeliveryWorkerRole.ASSEMBLY_REVIEWER,
+            worker_agent="build-reviewer",
+            reviewer_agent="build-reviewer",
+        ),
     )
 
 
@@ -172,35 +171,37 @@ def _validate_runtime_state(target_root: Path, contracts: dict[str, DeliveryCont
 
 def _compose_application(
     config: DeliveryStartupConfig,
+    paths: _DeliveryPaths,
     contracts: dict[str, DeliveryContract],
 ) -> PortfolioApplication:
-    package_store = DesignPackageStore(config.package_root, config.repository_root)
-    coordinator = PortfolioCoordinator(config.target_root, capacity=config.writer_capacity)
+    package_store = DesignPackageStore(paths.package_root, paths.repository_root)
+    coordinator = PortfolioCoordinator(paths.target_root, capacity=1)
     workspace_manager = ChangeWorkspaceManager(
-        config.repository_root,
-        config.worktree_root,
+        paths.repository_root,
+        paths.worktree_root,
         coordinator,
         config.integration_target,
     )
     runtimes = {
-        change_id: DeliveryRuntime(config.target_root, contract, workspace_manager=workspace_manager)
+        change_id: DeliveryRuntime(paths.target_root, contract, workspace_manager=workspace_manager)
         for change_id, contract in contracts.items()
     }
     dependencies = PortfolioApplicationDependencies(
+        target_root=paths.target_root,
         package_store=package_store,
         authority_registry=DeliveryAuthorityRegistry(
-            config.target_root,
+            paths.target_root,
             package_store,
             integration_target=config.integration_target,
         ),
         coordinator=coordinator,
         workspace_manager=workspace_manager,
-        completed_history_catalog=CompletedHistoryCatalog(config.repository_root, config.integration_target),
+        completed_history_catalog=CompletedHistoryCatalog(paths.repository_root, config.integration_target),
     )
     application_config = PortfolioApplicationConfig(
-        package_root=config.package_root,
-        execution_capacity=config.execution_capacity,
-        role_policies=_role_policies(config),
+        package_root=paths.package_root,
+        execution_capacity=1,
+        role_policies=_role_policies(),
     )
     return PortfolioApplication(runtimes, dependencies, application_config)
 
@@ -208,13 +209,15 @@ def _compose_application(
 def load_delivery_application(
     config: DeliveryStartupConfig,
     *,
+    workspace_root: Path,
     authorized_target_root: Path,
 ) -> PortfolioApplication:
     """Validate external identities before constructing the Delivery state owners."""
-    if config.target_root.resolve() != authorized_target_root.resolve():
+    paths = _derive_paths(workspace_root)
+    if paths.target_root.resolve() != authorized_target_root.resolve():
         error = _load_error("target_root", "configured target root is not authorized")
         raise error
-    _validate_git_config(config)
-    contracts = _load_contracts(config.target_root)
-    _validate_runtime_state(config.target_root, contracts)
-    return _compose_application(config, contracts)
+    _validate_git_config(config, paths)
+    contracts = _load_contracts(paths.target_root)
+    _validate_runtime_state(paths.target_root, contracts)
+    return _compose_application(config, paths, contracts)

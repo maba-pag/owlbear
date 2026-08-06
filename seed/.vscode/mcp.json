@@ -10,11 +10,7 @@
         "python",
         "-m",
         "owlbear_mcp_kanban"
-      ],
-      "env": {
-        "OWLBEAR_DELIVERY_CONFIG": "{{target_abs_path}}/.owlbear/delivery-config.json",
-        "OWLBEAR_WORKSPACE_ROOT": "{{target_abs_path}}"
-      }
+      ]
     },
     "ob-knowledge": {
       "type": "stdio",

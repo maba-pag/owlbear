@@ -30,53 +30,30 @@ The server exposes 23 tools:
 
 ## Configuration
 
-`OWLBEAR_DELIVERY_CONFIG` is required and names a strict JSON document:
-`setup/init.py` creates `.owlbear/delivery-config.json`, wires its absolute path into the seeded
-`ob-kanban` environment, and preserves local edits on later setup runs.
+`setup/init.py` creates `.owlbear/delivery/config.json` in the consuming workspace and preserves
+local edits on later setup runs. Normal VS Code MCP launch uses the workspace folder as its working
+directory, so no Delivery environment variable is required.
 
 ```json
 {
- "package_root": "/absolute/path/to/packages",
- "target_root": "/absolute/path/to/target",
- "repository_root": "/absolute/path/to/repository",
- "worktree_root": "/absolute/path/to/worktrees",
- "execution_capacity": 3,
- "writer_capacity": 1,
- "integration_target": "main",
- "role_policies": {
-  "planner": {
-   "worker_agent": "planner",
-   "worker_model": "planning-model",
-   "reviewer_agent": "planner-challenger",
-   "reviewer_model": "review-model"
-  },
-  "builder": {
-   "worker_agent": "builder",
-   "worker_model": "build-model",
-   "reviewer_agent": "build-reviewer",
-   "reviewer_model": "review-model"
-  },
-  "assembly-reviewer": {
-   "worker_agent": "build-reviewer",
-   "worker_model": "review-model",
-    "reviewer_agent": "build-reviewer",
-   "reviewer_model": "review-model"
-  }
- }
+ "schema_version": 1,
+ "integration_target": "main"
 }
 ```
 
-All roots must be absolute directory paths. Capacities must be positive integers. Every listed role
-and identity is required; startup does not infer policy from agent files, environment model identity,
-runtime inventory, or target state.
+The workspace root determines the repository and the canonical `.owlbear/delivery/packages`,
+`.owlbear/target`, and `.owlbear/worktrees` locations. Delivery admits one active claim and one Build
+writer at a time. Agent frontmatter owns model selection; Kanban owns the fixed Planner, Builder,
+and reviewer routing. `integration_target` names the branch from which change worktrees start and
+into which reviewed changes are integrated.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OWLBEAR_DELIVERY_CONFIG` | None | Path to the required Delivery startup JSON document. |
 | `OWLBEAR_WORKSPACE_ROOT` | Current working directory | Workspace used to verify the existing target-cutover receipt. |
 | `OWLBEAR_TARGET_CUTOVER_REQUEST` | `.owlbear/target-cutover-request.json` | Absolute or workspace-relative cutover request used only for receipt authorization. |
 
-The configured `target_root` must match the receipt-authorized target path.
+The canonical `.owlbear/target` path must match the receipt-authorized target path. Use
+`OWLBEAR_WORKSPACE_ROOT` only when launching outside the consuming workspace.
 
 ## Dependencies
 

@@ -56,8 +56,8 @@ Running `init.py` writes the following files into your project directory:
 | File / Directory | Purpose | Idempotency |
 |------------------|---------|-------------|
 | `.vscode/settings.json` | Points VS Code at owlbear agents, skills, and instructions; enables `mermaid-chat.enabled` for Mermaid diagram rendering in chat | Merged (owlbear keys as defaults; your existing keys are preserved) |
-| `.vscode/mcp.json` | Registers 5 MCP servers (4 owlbear stdio, including browser access, + markitdown) and points `ob-kanban` at the Delivery startup configuration | Merged (owlbear servers as defaults; your existing servers are preserved) |
-| `.owlbear/delivery-config.json` | Declares absolute Delivery roots, capacities, Integration target, and worker/reviewer identities for `ob-kanban` | Seeded once, ignored by Git, and preserved on rerun so local policy changes remain intact |
+| `.vscode/mcp.json` | Registers 5 MCP servers (4 owlbear stdio, including browser access, + markitdown) | Merged (owlbear servers as defaults; your existing servers are preserved) |
+| `.owlbear/delivery/config.json` | Declares the Delivery integration branch; roots, single-worker capacities, agent routing, and models come from workspace conventions and agent definitions | Seeded once, ignored by Git, and preserved on rerun so local policy changes remain intact |
 | `.owlbear/target/changes/` | Admitted semantic authority and per-change runtime evidence | Fresh setup activates an empty store; reruns preserve target records |
 | `.owlbear/target-cutover-request.json` | Exact activation request loaded by target MCP and Cockpit startup | Published for a fresh workspace; preserved on rerun |
 | `.owlbear/target-cutover.json` | Immutable receipt authorizing target mutation | Published only after snapshot, staging, and smoke verification succeed |
@@ -359,7 +359,7 @@ Set these in `.vscode/mcp.json` under the server's `env` key:
 | Skills not auto-loading | `chat.agentSkillsLocations` missing or path wrong | Check `.vscode/settings.json`; re-run `init.py` if the key is absent |
 | Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
-| `ob-kanban` reports `ERR_DELIVERY_STARTUP_UNCONFIGURED` | `.owlbear/delivery-config.json` is absent or `ob-kanban.env` was customized without its path | Re-run `init.py`; for an existing custom `ob-kanban` entry, preserve the generated `OWLBEAR_DELIVERY_CONFIG` and `OWLBEAR_WORKSPACE_ROOT` values |
+| `ob-kanban` reports `ERR_DELIVERY_STARTUP_UNCONFIGURED` | `.owlbear/delivery/config.json` is absent from the project root | Re-run `init.py`; setup recreates the file only when it is missing |
 | `uv run cockpit` says the command is missing | Command was run from the consumer project without `--project` | Use `uv run --project ../owlbear cockpit` from the project root |
 | Target MCP or Cockpit refuses to start after an update | A pre-cutover store has no valid target request and receipt | Prepare the reviewed request and invoke `setup/finalize.py` directly as described above |
 | Cockpit shows the wrong workspace or cannot find `.owlbear/target` | Cockpit was launched from the wrong working directory | Run from the project root, add `--directory /path/to/project`, or set `OWLBEAR_WORKSPACE_ROOT` explicitly |

@@ -25,6 +25,7 @@ from owlbear_kanban import (
     DeliveryAdmissionConflictError,
     DeliveryAdmissionRequest,
     DeliveryAuthorityRegistry,
+    DeliveryClaimRecoveryResult,
     DeliveryClaimRecoveryStatus,
     DeliveryContract,
     DeliveryFrontier,
@@ -38,8 +39,6 @@ from owlbear_kanban import (
     DeliveryRequestKind,
     DeliveryRequestOption,
     DeliveryRequestResolution,
-    DeliveryRoleIdentityConfig,
-    DeliveryRolePoliciesConfig,
     DeliveryRolePolicy,
     DeliveryRuntime,
     DeliveryRuntimeConflictError,
@@ -168,46 +167,25 @@ def _policies() -> tuple[DeliveryRolePolicy, ...]:
         DeliveryRolePolicy(
             worker_role=DeliveryWorkerRole.PLANNER,
             worker_agent="planner",
-            worker_model="planning-model",
             reviewer_agent="planner-challenger",
-            reviewer_model="review-model",
         ),
         DeliveryRolePolicy(
             worker_role=DeliveryWorkerRole.BUILDER,
             worker_agent="builder",
-            worker_model="build-model",
             reviewer_agent="build-reviewer",
-            reviewer_model="review-model",
         ),
         DeliveryRolePolicy(
             worker_role=DeliveryWorkerRole.ASSEMBLY_REVIEWER,
             worker_agent="build-reviewer",
-            worker_model="review-model",
+            reviewer_agent="build-reviewer",
         ),
     )
 
 
-def _startup_config(tmp_path: Path, repository: Path, target_root: Path) -> DeliveryStartupConfig:
-    identity = DeliveryRoleIdentityConfig(
-        worker_agent="worker",
-        worker_model="worker-model",
-        reviewer_agent="reviewer",
-        reviewer_model="reviewer-model",
-    )
-    role_policies = DeliveryRolePoliciesConfig(
-        planner=identity,
-        builder=identity,
-        **{"assembly-reviewer": identity},
-    )
+def _startup_config() -> DeliveryStartupConfig:
     return DeliveryStartupConfig(
-        package_root=tmp_path / "packages",
-        target_root=target_root,
-        repository_root=repository,
-        worktree_root=tmp_path / "worktrees",
-        execution_capacity=3,
-        writer_capacity=1,
+        schema_version=1,
         integration_target="main",
-        role_policies=role_policies,
     )
 
 
@@ -257,6 +235,7 @@ def _portfolio(
     application = PortfolioApplication(
         dict(reversed(tuple(runtimes.items()))),
         PortfolioApplicationDependencies(
+            target_root=state_root,
             package_store=store,
             authority_registry=authority_registry,
             coordinator=coordinator,
@@ -280,9 +259,10 @@ def _portfolio(
 
 def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
-    target_root = tmp_path / "target"
+    target_root = repository / ".owlbear/target"
     application = load_delivery_application(
-        _startup_config(tmp_path, repository, target_root),
+        _startup_config(),
+        workspace_root=repository,
         authorized_target_root=target_root,
     )
     assert application.list_work_items() == ()
@@ -291,10 +271,11 @@ def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path
 
 def test_delivery_loader_rejects_unauthorized_root_before_owner_mutation(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
-    target_root = tmp_path / "target"
+    target_root = repository / ".owlbear/target"
     with pytest.raises(DeliveryApplicationLoadError) as exc_info:
         load_delivery_application(
-            _startup_config(tmp_path, repository, target_root),
+            _startup_config(),
+            workspace_root=repository,
             authorized_target_root=tmp_path / "other-target",
         )
     assert exc_info.value.field == "target_root"
@@ -304,30 +285,33 @@ def test_delivery_loader_rejects_unauthorized_root_before_owner_mutation(tmp_pat
 def test_delivery_loader_rejects_git_and_state_identity_before_composition(tmp_path: Path) -> None:
     non_repository = tmp_path / "not-a-repository"
     non_repository.mkdir()
-    target_root = tmp_path / "invalid-git-target"
+    target_root = non_repository / ".owlbear/target"
     with pytest.raises(DeliveryApplicationLoadError) as git_error:
         load_delivery_application(
-            _startup_config(tmp_path, non_repository, target_root),
+            _startup_config(),
+            workspace_root=non_repository,
             authorized_target_root=target_root,
         )
     assert git_error.value.field == "repository_root"
     assert not target_root.exists()
 
     repository = _repository(tmp_path / "valid")
-    state_root = tmp_path / "invalid-state-target"
+    state_root = repository / ".owlbear/target"
     change_root = state_root / "delivery/changes/change-a"
     change_root.mkdir(parents=True)
     contract = _contract("change-b", b"intent\n", b"design\n")
     (change_root / "contract.json").write_bytes(_canonical(contract))
     with pytest.raises(DeliveryApplicationLoadError) as state_error:
         load_delivery_application(
-            _startup_config(tmp_path, repository, state_root),
+            _startup_config(),
+            workspace_root=repository,
             authorized_target_root=state_root,
         )
     assert state_error.value.field == "target_root"
     assert not (state_root / "target-runtime").exists()
 
-    runtime_root = tmp_path / "invalid-runtime-target"
+    runtime_repository = _repository(tmp_path / "invalid-runtime")
+    runtime_root = runtime_repository / ".owlbear/target"
     runtime_change = runtime_root / "delivery/changes/change-a"
     runtime_change.mkdir(parents=True)
     valid_contract = _contract("change-a", b"intent\n", b"design\n")
@@ -335,7 +319,8 @@ def test_delivery_loader_rejects_git_and_state_identity_before_composition(tmp_p
     (runtime_change / "frontier.json").write_bytes(b"not-json\n")
     with pytest.raises(DeliveryApplicationLoadError) as runtime_error:
         load_delivery_application(
-            _startup_config(tmp_path, repository, runtime_root),
+            _startup_config(),
+            workspace_root=runtime_repository,
             authorized_target_root=runtime_root,
         )
     assert runtime_error.value.field == "target_root"
@@ -414,6 +399,12 @@ dependencies: []
     assert checkpoint.commit == admitted.receipt.checkpoint_commit
     assert checkpoint.replayed
     assert _git(tmp_path / "repository", "rev-parse", "main") == product_head
+    listed = application.list_work_items()
+    assert tuple((item.change_id, item.work_item_id) for item in listed) == (("composed-delivery", "OUT-001"),)
+    launch = application.acquire_frontier_work().launch_packages[0]
+    assert launch.change_id == "composed-delivery"
+    assert launch.outcome_id == "OUT-001"
+    assert launch.claim.worker_role == DeliveryWorkerRole.PLANNER
 
     delivery_root = state_root / "delivery/changes/composed-delivery"
     admitted_bytes = _file_bytes(delivery_root)
@@ -909,6 +900,53 @@ def test_read_only_claim_recovery_removes_only_exact_runtime_claim(tmp_path: Pat
     assert coordinator.show("change-a").writer is None
     ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
     assert ledger.change_ids == ()
+
+
+def test_acquisition_recovers_interrupted_planning_claim_before_relaunch(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    interrupted = application.acquire_frontier_work().launch_packages[0]
+
+    resumed = application.acquire_frontier_work()
+
+    assert resumed.recoveries == (
+        DeliveryClaimRecoveryResult(
+            status=DeliveryClaimRecoveryStatus.RECOVERED,
+            change_id=interrupted.change_id,
+            outcome_id=interrupted.outcome_id,
+            attempt_id=interrupted.claim.attempt_id,
+            claim_id=interrupted.claim.claim_id,
+        ),
+    )
+    assert len(resumed.launch_packages) == 1
+    replacement = resumed.launch_packages[0]
+    assert replacement.claim.claim_id != interrupted.claim.claim_id
+    assert runtimes["change-a"].active_claims() == (("OUT-001", replacement.claim),)
+
+
+def test_acquisition_retains_dirty_interrupted_build_as_attention(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    interrupted = application.acquire_frontier_work().launch_packages[0]
+    (interrupted.worktree_path / "product.txt").write_text("uncommitted attempt\n", encoding="utf-8")
+
+    resumed = application.acquire_frontier_work()
+
+    assert resumed.launch_packages == ()
+    assert len(resumed.recoveries) == 1
+    recovery = resumed.recoveries[0]
+    assert recovery.status == DeliveryClaimRecoveryStatus.ATTENTION
+    assert recovery.claim_id == interrupted.claim.claim_id
+    assert recovery.attention is not None
+    assert recovery.attention.custody_retained
+    assert runtimes["change-a"].active_claims() == (("OUT-001", interrupted.claim),)
+    assert coordinator.show("change-a").writer == interrupted.writer
+    ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
+    assert ledger.change_ids == ("change-a",)
 
 
 def test_clean_build_recovery_replays_after_workspace_reset(tmp_path: Path) -> None:

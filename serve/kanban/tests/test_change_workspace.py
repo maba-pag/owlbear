@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from owlbear_kanban.change_workspace import (
+    CapacityLedger,
     ChangeWorkspaceManager,
     ChangeCoordination,
     ChangeWriter,
@@ -154,6 +155,38 @@ def test_coordinator_recovers_pending_runtime_transaction(tmp_path: Path) -> Non
 
     assert (state_root / "target-runtime/recovered.json").read_bytes() == b"{}\n"
     assert not (state_root / ".runtime-transactions/pending-portfolio.yaml").exists()
+
+
+def test_coordinator_reconfigures_capacity_when_active_holders_fit(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    ledger_path = state_root / "target-runtime/capacity.json"
+    ledger_path.parent.mkdir(parents=True)
+    ledger_path.write_text(
+        CapacityLedger(capacity=4, change_ids=("change-a",)).model_dump_json(),
+        encoding="utf-8",
+    )
+
+    PortfolioCoordinator(state_root, capacity=1)
+
+    assert CapacityLedger.model_validate_json(ledger_path.read_bytes()) == CapacityLedger(
+        capacity=1,
+        change_ids=("change-a",),
+    )
+
+
+def test_coordinator_rejects_capacity_below_active_holders(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    ledger_path = state_root / "target-runtime/capacity.json"
+    ledger_path.parent.mkdir(parents=True)
+    ledger_path.write_text(
+        CapacityLedger(capacity=4, change_ids=("change-a", "change-b")).model_dump_json(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(CoordinationConflictError, match="active writers exceed configured writer capacity"):
+        PortfolioCoordinator(state_root, capacity=1)
+
+    assert CapacityLedger.model_validate_json(ledger_path.read_bytes()).capacity == 4
 
 
 def test_restart_preserves_rejected_head_and_returns_to_reviewed_commit(tmp_path: Path) -> None:

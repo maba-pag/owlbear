@@ -15,8 +15,8 @@ Require one non-empty `change_id`. Call `show_integration_attention` for that ex
 require a current `DeliveryIntegrationAttention` whose `change_id` matches and whose code is
 `merge-conflict`. Stop without mutation for absent, stale, or any other attention code.
 
-Read `OWLBEAR_DELIVERY_CONFIG` with a structured JSON parser and use its `target_root` to read only
-`target-runtime/coordination/{change_id}.json`. Require one exact coordination record with matching
+Read only `.owlbear/target/target-runtime/coordination/{change_id}.json`. Require one exact
+coordination record with matching
 change and Integration target, no active writer, `last_reviewed_commit == attention.change_head`,
 and `target_head == attention.target_head`. Require its assigned worktree to be clean, on its exact
 branch, and at the attention change head. Never edit startup configuration, coordination, Delivery

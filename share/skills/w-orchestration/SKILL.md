@@ -18,14 +18,16 @@ If target tools are deferred, load them once with `tool_search` using:
 
 Call `list_work_items` only for bounded portfolio reporting. Call `acquire_frontier_work` once for the
 current cycle. Its `DeliveryAcquisitionResult` is the sole source of launch order,
-`integration_ready_change_ids`, and acquisition failures. Do not filter for capacity, infer
-readiness, create identities, or reserve writer custody.
+`integration_ready_change_ids`, acquisition failures, and interrupted-claim recoveries. Report any
+recovery attention unchanged. Do not filter for capacity, infer readiness, create identities, or
+reserve writer custody.
 
 ## Step 2 - Dispatch Or Recover Each Launch
 
 Process `launch_packages` in returned order. For worker role `planner` or `builder`, dispatch exactly
-`launch.policy.worker_agent` using `launch.policy.worker_model` and pass only the serialized
-`DeliveryLaunchPackage`. Do not substitute a role, model, reviewer, worktree, branch, or source head.
+`launch.policy.worker_agent` and pass only the serialized `DeliveryLaunchPackage`. The selected
+agent's frontmatter owns its model. Do not substitute a role, agent, reviewer, worktree, branch, or
+source head.
 
 The current public surface has no Assembly context or publication operation. For worker role
 `assembly-reviewer`, call `recover_claim` immediately with the launch's exact `change_id`,
@@ -67,11 +69,16 @@ Finish the current acquired batch, discard it, and call `acquire_frontier_work` 
 independent changes when one outcome returns or blocks. Stop when both launch packages and
 Integration-ready IDs are empty, or when a fail-closed diagnostic requires user/operator action.
 
+Before reporting portfolio quiescence after an empty acquisition, call `list_work_items`. Quiescence
+requires that projection to be empty as well. If work items remain, report their identities and
+stages as bounded acquisition attention and stop; do not infer a launch or mutate their state.
+
 ## Output
 
 Report forwarded transition identities, Integration completion or attention, exact recovery results,
-unclaimed acquisition failures, and cycle count. Do not translate those typed results into invented
-completion or scheduling state.
+unclaimed acquisition failures, bounded acquisition attention, and cycle count. Report quiescence
+only when both acquisition and the final work-item projection are empty. Do not translate those typed
+results into invented completion or scheduling state.
 
 ## Known Pitfalls
 

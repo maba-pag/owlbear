@@ -200,20 +200,11 @@ class _ApplicationModel(BaseModel):
 
 
 class DeliveryRolePolicy(_ApplicationModel):
-    """Configured worker and reviewer policy for one mechanical stage role."""
+    """Worker and reviewer agents for one mechanical stage role."""
 
     worker_role: DeliveryWorkerRole
     worker_agent: str = Field(min_length=1)
-    worker_model: str = Field(min_length=1)
-    reviewer_agent: str | None = None
-    reviewer_model: str | None = None
-
-    @model_validator(mode="after")
-    def _validate_reviewer_policy(self) -> DeliveryRolePolicy:
-        if (self.reviewer_agent is None) != (self.reviewer_model is None):
-            message = "reviewer agent and model policy must be supplied together"
-            raise ValueError(message)
-        return self
+    reviewer_agent: str = Field(min_length=1)
 
 
 class DeliveryLaunchPackage(_ApplicationModel):
@@ -272,6 +263,7 @@ class DeliveryAcquisitionResult(_ApplicationModel):
     launch_packages: tuple[DeliveryLaunchPackage, ...]
     integration_ready_change_ids: tuple[str, ...]
     failures: tuple[DeliveryAcquisitionFailure, ...] = ()
+    recoveries: tuple[DeliveryClaimRecoveryResult, ...] = ()
 
 
 class DeliveryPlanContext(_ApplicationModel):
@@ -411,6 +403,7 @@ class PortfolioApplicationConfig(_ApplicationModel):
 class PortfolioApplicationDependencies:
     """Existing state owners composed by the portfolio application service."""
 
+    target_root: Path
     package_store: DesignPackageStore
     authority_registry: DeliveryAuthorityRegistry
     coordinator: PortfolioCoordinator
@@ -465,6 +458,7 @@ class PortfolioApplication:
             message = "runtime mapping keys must match admitted change identities"
             raise ValueError(message)
         self._runtimes = dict(runtimes)
+        self._target_root = dependencies.target_root.resolve()
         self._package_store = dependencies.package_store
         self._authority_registry = dependencies.authority_registry
         self._package_root = config.package_root.resolve()
@@ -519,7 +513,15 @@ class PortfolioApplication:
 
     def admit_delivery_change(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult:
         """Admit source-bound Delivery authority through the owning registry."""
-        return self._authority_registry.admit(request)
+        with self._coordinator.acquisition_lock():
+            result = self._authority_registry.admit(request)
+            self._workspace_manager.create(request.change_id)
+            self._runtimes[request.change_id] = DeliveryRuntime(
+                self._target_root,
+                result.contract,
+                workspace_manager=self._workspace_manager,
+            )
+            return result
 
     def publish_delivery_plan(
         self,
@@ -663,8 +665,9 @@ class PortfolioApplication:
         return self._completed_history_catalog
 
     def acquire_frontier_work(self) -> DeliveryAcquisitionResult:
-        """Start stable ready claims and reserve writer custody only for Build."""
+        """Recover interrupted claims, then start at most one ready claim."""
         with self._coordinator.acquisition_lock():
+            recoveries = self._recover_active_claims()
             integration_ready = self.list_integration_ready_changes()
             occupied = sum(len(runtime.active_claims()) for runtime in self._runtimes.values())
             available = max(self._execution_capacity - occupied, 0)
@@ -693,6 +696,7 @@ class PortfolioApplication:
                 launch_packages=tuple(launches),
                 integration_ready_change_ids=integration_ready,
                 failures=tuple(failures),
+                recoveries=recoveries,
             )
 
     def show_plan_context(
@@ -759,38 +763,54 @@ class PortfolioApplication:
     ) -> DeliveryClaimRecoveryResult:
         """Remove one exact failed claim or retain deterministic Build repair attention."""
         with self._coordinator.acquisition_lock():
-            runtime = self._runtime(change_id)
-            binding = runtime.require_active_claim(outcome_id, attempt_id, claim_id)
-            claim = binding.active_claim
-            if claim is None:
-                self._fail("outcome has no active claim")
-            if claim.worker_role != DeliveryWorkerRole.BUILDER:
-                runtime.remove_active_claim(outcome_id, attempt_id, claim_id)
-                return self._recovered(change_id, outcome_id, attempt_id, claim_id)
-            snapshot = self._workspace_manager.recovery_snapshot(change_id, attempt_id)
-            if snapshot.writer is None:
-                if self._released_recovery_matches(snapshot):
-                    runtime.remove_active_claim(outcome_id, attempt_id, claim_id)
-                    return self._recovered(
-                        change_id,
-                        outcome_id,
-                        attempt_id,
-                        claim_id,
-                        snapshot.preserved_commit,
-                    )
-                return self._retain_recovery_attention(runtime, outcome_id, claim, snapshot)
-            if not self._active_recovery_matches(snapshot, attempt_id, claim_id):
-                return self._retain_recovery_attention(runtime, outcome_id, claim, snapshot)
-            rejected_head = snapshot.preserved_commit or snapshot.branch_head
-            self._workspace_manager.restart(change_id, attempt_id, rejected_head)
+            return self._recover_claim(change_id, outcome_id, attempt_id, claim_id)
+
+    def _recover_active_claims(self) -> tuple[DeliveryClaimRecoveryResult, ...]:
+        return tuple(
+            self._recover_claim(change_id, outcome_id, claim.attempt_id, claim.claim_id)
+            for change_id, runtime in sorted(self._runtimes.items())
+            for outcome_id, claim in runtime.active_claims()
+        )
+
+    def _recover_claim(
+        self,
+        change_id: str,
+        outcome_id: str,
+        attempt_id: str,
+        claim_id: str,
+    ) -> DeliveryClaimRecoveryResult:
+        runtime = self._runtime(change_id)
+        binding = runtime.require_active_claim(outcome_id, attempt_id, claim_id)
+        claim = binding.active_claim
+        if claim is None:
+            self._fail("outcome has no active claim")
+        if claim.worker_role != DeliveryWorkerRole.BUILDER:
             runtime.remove_active_claim(outcome_id, attempt_id, claim_id)
-            return self._recovered(
-                change_id,
-                outcome_id,
-                attempt_id,
-                claim_id,
-                rejected_head,
-            )
+            return self._recovered(change_id, outcome_id, attempt_id, claim_id)
+        snapshot = self._workspace_manager.recovery_snapshot(change_id, attempt_id)
+        if snapshot.writer is None:
+            if self._released_recovery_matches(snapshot):
+                runtime.remove_active_claim(outcome_id, attempt_id, claim_id)
+                return self._recovered(
+                    change_id,
+                    outcome_id,
+                    attempt_id,
+                    claim_id,
+                    snapshot.preserved_commit,
+                )
+            return self._retain_recovery_attention(runtime, outcome_id, claim, snapshot)
+        if not self._active_recovery_matches(snapshot, attempt_id, claim_id):
+            return self._retain_recovery_attention(runtime, outcome_id, claim, snapshot)
+        rejected_head = snapshot.preserved_commit or snapshot.branch_head
+        self._workspace_manager.restart(change_id, attempt_id, rejected_head)
+        runtime.remove_active_claim(outcome_id, attempt_id, claim_id)
+        return self._recovered(
+            change_id,
+            outcome_id,
+            attempt_id,
+            claim_id,
+            rejected_head,
+        )
 
     def integrate_ready_change(self, change_id: str) -> DeliveryIntegrationResult:
         """Publish reviewed product and its completed package through one target CAS."""
