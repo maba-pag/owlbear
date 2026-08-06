@@ -163,9 +163,7 @@ class WorkItemProjector:
         projected_scope = scope
         if outcome.status != AuthorityStatus.ACTIVE:
             stage, attention, projected_scope = WorkItemStage.COMPLETED, WorkItemAttention.NONE, None
-        elif (
-            outcome.outcome_id in self._briefings or outcome.outcome_id in self._evidence.pending_request_work_item_ids
-        ):
+        elif outcome.outcome_id in self._briefings:
             stage, attention, projected_scope = WorkItemStage.DESIGN, WorkItemAttention.USER, None
         elif scope is None or scope.scope_id not in self._evidence.planned_scope_ids:
             stage, attention = WorkItemStage.PLANNING, WorkItemAttention.AGENT
@@ -180,6 +178,8 @@ class WorkItemProjector:
                 stage, attention = WorkItemStage.ASSEMBLY, WorkItemAttention.AGENT
             else:
                 stage, attention = WorkItemStage.COMPLETED, WorkItemAttention.NONE
+        if outcome.outcome_id in self._evidence.pending_request_work_item_ids and stage != WorkItemStage.COMPLETED:
+            attention = WorkItemAttention.USER
         return self._projection(outcome, stage, attention, projected_scope)
 
     def _projection(
@@ -251,7 +251,7 @@ class WorkItemProjector:
 
 def _next_action(stage: WorkItemStage, attention: WorkItemAttention) -> str:
     if attention == WorkItemAttention.USER:
-        return "Resume design"
+        return "Resume design" if stage == WorkItemStage.DESIGN else "Respond to request"
     if stage == WorkItemStage.COMPLETED:
         return "View result"
     return "Inspect progress"

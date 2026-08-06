@@ -77,7 +77,7 @@ def test_superseded_outcome_identity_and_replacements_remain_projectable() -> No
     assert items["OUT-003"].stage == WorkItemStage.PLANNING
 
 
-def test_request_attention_is_scoped_and_true_dependents_wait() -> None:
+def test_planning_request_preserves_stage_and_true_dependents_wait() -> None:
     authority = TargetAuthority(
         change_id="scoped-change",
         title="Scoped change",
@@ -92,9 +92,10 @@ def test_request_attention_is_scoped_and_true_dependents_wait() -> None:
 
     items = {item.work_item_id: item for item in WorkItemProjector(authority, evidence).list_items()}
 
-    assert (items["OUT-001"].stage, items["OUT-001"].attention) == (
-        WorkItemStage.DESIGN,
+    assert (items["OUT-001"].stage, items["OUT-001"].attention, items["OUT-001"].next_action) == (
+        WorkItemStage.PLANNING,
         WorkItemAttention.USER,
+        "Respond to request",
     )
     assert (items["OUT-002"].stage, items["OUT-002"].attention, items["OUT-002"].dependency_ready) == (
         WorkItemStage.PLANNING,
@@ -105,6 +106,30 @@ def test_request_attention_is_scoped_and_true_dependents_wait() -> None:
         WorkItemAttention.WAITING,
         False,
     )
+
+
+def test_implementation_request_preserves_stage_and_progress() -> None:
+    authority = TargetAuthority(
+        change_id="implementation-change",
+        title="Implementation change",
+        commitments=_commitments(),
+        outcomes=(_outcome("OUT-001"),),
+        task_plan_scopes=(_scope("PLAN-001", "OUT-001"),),
+    )
+    evidence = WorkItemEvidence(
+        planned_scope_ids=("PLAN-001",),
+        task_progress=(TaskProgress(scope_id="PLAN-001", task_count=2, reviewed_task_count=1),),
+        pending_request_work_item_ids=("OUT-001",),
+    )
+
+    projection = WorkItemProjector(authority, evidence).show("OUT-001").projection
+
+    assert (projection.stage, projection.attention, projection.next_action) == (
+        WorkItemStage.IMPLEMENTATION,
+        WorkItemAttention.USER,
+        "Respond to request",
+    )
+    assert (projection.task_count, projection.reviewed_task_count) == (2, 1)
 
 
 def test_reviewed_tasks_close_directly_or_enter_declared_assembly() -> None:
