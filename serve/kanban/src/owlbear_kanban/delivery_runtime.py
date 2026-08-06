@@ -1256,6 +1256,8 @@ class DeliveryRuntime:
         if request.request is not None and request.request.outcome_id != binding.outcome_id:
             _reference("block request belongs to another outcome")
         if binding.stage == DeliveryStage.IMPLEMENTATION:
+            if request.request is None:
+                _conflict("Implementation block requires a bounded user request")
             if request.resume_commit is None:
                 _conflict("Implementation block requires a clean resume commit")
             self._require_workspace().release_writer_at_head(

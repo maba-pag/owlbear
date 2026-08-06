@@ -502,6 +502,12 @@ def test_implementation_nonadvance_persists_only_consumed_successor_state(
             unblock_condition="The evidence is supplied.",
             expected_evidence=("External result",),
             locators=("TASK-002",),
+            request=DeliveryRequest(
+                request_id="request-002",
+                kind=DeliveryRequestKind.ACTION,
+                outcome_id="OUT-001",
+                summary="Supply the external result.",
+            ),
             resume_commit=attempt_commit,
         ),
     }
@@ -657,6 +663,28 @@ def test_request_resolution_and_requestless_unblock_preserve_stage_and_answer(tm
     runtime.unblock("OUT-003", "block-003", "Verification completed.", ("RESULT-003",))
     assert runtime.show_binding("OUT-003").stage == DeliveryStage.PLANNING
     assert "OUT-003" in runtime.claimable_outcome_ids()
+
+
+def test_implementation_block_requires_bounded_user_request(tmp_path: Path) -> None:
+    runtime, coordinator, _coordination, _initial, attempt_commit, _first_result, _tasks = _active_second_task(tmp_path)
+    before = runtime.frontier_bytes()
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="bounded user request"):
+        runtime.transition(
+            BlockDelivery(
+                outcome_id="OUT-001",
+                claim_id="claim-002",
+                block_id="build-context-tool-unavailable",
+                reason="Required live Build context is unavailable.",
+                unblock_condition="The Build context tool is available.",
+                expected_evidence=("Successful Build context lookup",),
+                locators=("TASK-002",),
+                resume_commit=attempt_commit,
+            )
+        )
+
+    assert runtime.frontier_bytes() == before
+    assert coordinator.show("delivery-runtime").writer is not None
 
 
 def test_administrative_backward_move_invalidates_completed_dependents_only(tmp_path: Path) -> None:

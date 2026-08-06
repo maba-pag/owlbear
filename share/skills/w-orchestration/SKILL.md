@@ -35,13 +35,18 @@ The current public surface has no Assembly context or publication operation. For
 attention and stop processing that affected change. Do not dispatch Build Reviewer, inspect
 composition, construct a transition, or leave the unsupported claim silently active.
 
-If Planner or Builder dispatch fails before returning a structurally valid worker result, use that
-same exact `recover_claim` request. Recovery attention remains runtime-owned evidence; report it
-without interpreting Git, liveness, or custody. An acquisition failure carrying attempt and claim
-IDs uses the same route. A failure without claim IDs is reported as bounded acquisition attention
-and is not recoverable by Orchestrator. Do not report `recover_claim` as unavailable unless the
-bootstrap operation or the exact recovery call returned a recorded tool error; a missing local tool
-binding requires one focused `tool_search` for `recover_claim` before stopping.
+If Builder returns `kind: dispatch_failure`, require its change, outcome, attempt, and claim IDs to
+equal the launch and require non-empty `failed_operation` and `reason`. Use that same exact
+`recover_claim` request. Never forward this result to `transition_delivery` or translate it into a
+worker lifecycle action.
+
+If Planner or Builder dispatch otherwise fails before returning a structurally valid worker result,
+use that same exact `recover_claim` request. Recovery attention remains runtime-owned evidence;
+report it without interpreting Git, liveness, or custody. An acquisition failure carrying attempt
+and claim IDs uses the same route. A failure without claim IDs is reported as bounded acquisition
+attention and is not recoverable by Orchestrator. Do not report `recover_claim` as unavailable
+unless the bootstrap operation or the exact recovery call returned a recorded tool error; a missing
+local tool binding requires one focused `tool_search` for `recover_claim` before stopping.
 
 ## Step 3 - Forward One Worker Transition
 

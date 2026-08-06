@@ -48,8 +48,8 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | designer-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
 | planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch and terminal mutation; publishes advisory-reviewed task chains and returns worker-owned transitions |
 | planner-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
-| orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, memory-curator, Explore | Five Delivery portfolio operations: report, acquire, transition, recover exact failed claims, and integrate ready changes; no repository write tools |
-| builder | GPT-5.6 Terra | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; task Build plus user-invoked reviewed Integration repair; `SessionStart`: repository context; `PostToolUse`: lint changed files |
+| orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, memory-curator, Explore | Five Delivery portfolio operations: report, acquire, transition, recover exact failed claims including Builder dispatch failures, and integrate ready changes; no repository write tools |
+| builder | GPT-5.6 Terra | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; task Build returns a lifecycle transition or claim-bound pre-execution dispatch failure; user-invoked reviewed Integration repair; `SessionStart`: repository context; `PostToolUse`: lint changed files |
 | build-reviewer | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | Read-only task-result or Integration-repair review; `PreToolUse`: deny writes except scratch |
 | test-curator | GPT-5.6 Terra | `w-test-curation` | None | `PreToolUse`: deny source writes |
 | memory-curator | GPT-5.6 Terra | `w-mem-curation` | None | None |
@@ -122,7 +122,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | designer-challenger | designer | Native admission lacks required repository-grounded entity challenge evidence |
 | planner | orchestrator | An acquired Planning launch cannot produce a published task chain and worker-owned transition |
 | planner-challenger | planner | A proposed Delivery task chain cannot receive independent advisory evidence |
-| builder | orchestrator | An acquired Build launch cannot produce a published exact-commit result and worker-owned transition |
+| builder | orchestrator | An acquired Build launch cannot produce a published exact-commit result and worker-owned transition; a pre-execution dispatch failure instead triggers exact claim recovery |
 | build-reviewer | builder | An exact-commit task result or Integration repair cannot receive advisory pass or finding evidence |
 | memory-curator | orchestrator | Periodic memory housekeeping is skipped |
 | Explore | designer, planner, orchestrator | Broad read-only orientation must be performed by the caller or omitted |

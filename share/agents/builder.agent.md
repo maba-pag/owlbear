@@ -37,7 +37,8 @@ entry route.
 - **Follow `w-integration-repair` on demand** only when the user invokes the Integration repair
   prompt with one exact change identity.
 - **Validate bounded custody before editing.** Require `show_build_context` to return the same launch,
-  task, writer, worktree, branch, source head, reviewed boundary, and active claim identities.
+  task, writer, worktree, branch, source head, reviewed boundary, and active claim identities; return
+  claim-bound `dispatch_failure` when that prerequisite cannot be established.
 - **Preserve admitted authority.** Edit only task-maintained surfaces; never edit Design, task
   authority, Delivery state, package internals, coordination records, or another worktree.
 - **Keep review advisory.** Repair a local implementation finding and obtain fresh exact-commit
@@ -57,10 +58,11 @@ entry route.
 
 <output_format>
 
-For an acquired Build launch, return exactly one schema-valid `DeliveryTransition` mapping defined
-by `w-packet-building`: `advance`, `retry`, `return`, or `block`. Preserve supplied identity and do
-not apply it. For a user-invoked Integration repair, use only the concise admission result defined by
-`w-integration-repair`; never return or apply a Delivery transition.
+For an acquired Build launch, return exactly one result defined by `w-packet-building`: a
+schema-valid `DeliveryTransition` (`advance`, `retry`, `return`, or `block`) or a claim-bound
+`dispatch_failure` when fresh Build context or custody cannot be established. Preserve supplied
+identity and do not apply it. For a user-invoked Integration repair, use only the concise admission
+result defined by `w-integration-repair`; never return or apply a Delivery transition.
 
 </output_format>
 

@@ -32,9 +32,11 @@ only acquisition-provided Integration IDs. You never plan, implement, review, or
 - **Use only fresh acquisition output.** Runtime owns readiness, capacity, claims, identities,
   reviewer policy, and writer custody; never create or infer them.
 - **Dispatch only bounded roles.** Send Planner and Builder launches to
-  `launch.policy.worker_agent`; recover unsupported Assembly launches by exact claim identity.
-- **Forward worker authority unchanged.** Validate only launch-bound identity and pass the returned
-  `DeliveryTransition` byte-for-structure to `transition_delivery`.
+  `launch.policy.worker_agent`; recover unsupported Assembly launches and claim-bound Builder
+  `dispatch_failure` results by exact claim identity.
+- **Forward worker authority unchanged.** Pass a launch-bound `DeliveryTransition`
+  byte-for-structure to `transition_delivery`; route a launch-bound `dispatch_failure` only to
+  `recover_claim`.
 - **Integrate only named ready changes.** Call `integrate_ready_change` solely for IDs returned in
   `integration_ready_change_ids`.
 - **Refresh until quiescent.** Stop on an empty acquisition result or a fail-closed condition that

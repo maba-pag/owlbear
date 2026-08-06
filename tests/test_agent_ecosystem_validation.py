@@ -445,6 +445,10 @@ def test_target_delivery_workflows_enforce_review_and_remove_obsolete_controls()
         assert operation in content
     assert "deliverylaunchpackage" in content.lower()
     assert "deliverytransition" in content.lower()
+    assert "kind: dispatch_failure" in content.lower()
+    assert "failed_operation: show_build_context" in content.lower()
+    assert "never forward this result to `transition_delivery`" in content.lower()
+    assert "use that same exact `recover_claim` request" in content.lower()
     assert "byte-for-structure unchanged" in content.lower()
     assert "deliverybuildcontext.task_digest" in content.lower()
     assert "unblock_condition" in content

@@ -28,8 +28,18 @@ Before edits, enter only `launch.worktree_path` and require:
   this fresh Build context.
 
 Do not infer malformed identity or edit under recovery attention. A structurally valid claim that
-cannot safely proceed returns to Orchestrator for fail-closed claim recovery; it does not fabricate
-a result or mutate another checkout.
+cannot establish fresh Build context or custody returns this non-transition result to Orchestrator
+for fail-closed claim recovery; it does not fabricate a lifecycle decision or mutate a checkout:
+
+```yaml
+kind: dispatch_failure
+change_id: <launch change ID>
+outcome_id: <launch outcome ID>
+attempt_id: <launch attempt ID>
+claim_id: <launch claim ID>
+failed_operation: show_build_context
+reason: <recorded prerequisite failure>
+```
 
 ## Step 1 - Fix The Task Boundary
 
@@ -126,12 +136,13 @@ request:
 ```
 
 Use `block` only when user-owned input is required. Never substitute `unblock_evidence` for the
-required `unblock_condition` and `expected_evidence` fields, and never emit a requestless Build
-block for a local execution failure.
+required `unblock_condition` and `expected_evidence` fields. Every Build block includes one bounded
+`request`; a missing tool, unavailable context, custody mismatch, or other pre-execution failure is
+`dispatch_failure`, not `block`.
 
-Return the selected `DeliveryTransition` directly. Do not call `transition_delivery`; orchestration
-validates its outcome, claim, attempt, and commit identity and forwards it byte-for-structure
-unchanged. Do not call job, receipt, request, recovery, or transition lifecycle operations.
+Return the selected `DeliveryTransition` or pre-execution `dispatch_failure` directly. Do not call
+`transition_delivery` or `recover_claim`; orchestration validates the launch identity and applies the
+matching route. Do not call job, receipt, request, or other lifecycle operations.
 
 ## Known Pitfalls
 
