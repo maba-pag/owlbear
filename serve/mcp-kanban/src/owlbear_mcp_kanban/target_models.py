@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import json
+from functools import partial
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 from owlbear_kanban.delivery_application_loader import DeliveryStartupConfig
 from owlbear_kanban.delivery_runtime import (
     DeliveryIntegrationRepair,
+    DeliveryOutputReference,
+    DeliveryPlanCandidate,
+    DeliveryResultCandidate,
+    DeliveryTaskDefinition,
+    DeliveryTaskResult,
     DeliveryTransition,
     PublishDeliveryPlan,
     PublishDeliveryResult,
@@ -107,6 +114,36 @@ class PublishDeliveryResultParams(ChangeParams):
     request: PublishDeliveryResult
 
 
+class DeliveryPlanPublication(_TargetProtocolModel):
+    """Planning publication response with its transition-ready output reference."""
+
+    candidate_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    tasks: tuple[DeliveryTaskDefinition, ...]
+    output: DeliveryOutputReference
+
+    @classmethod
+    def from_candidate(cls, candidate: DeliveryPlanCandidate) -> DeliveryPlanPublication:
+        """Project one domain candidate into its complete MCP response."""
+        return cls(**candidate.model_dump(), output=candidate.output)
+
+
+class DeliveryResultPublication(_TargetProtocolModel):
+    """Build publication response with its transition-ready output reference."""
+
+    candidate_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    result: DeliveryTaskResult
+    output: DeliveryOutputReference
+
+    @classmethod
+    def from_candidate(cls, candidate: DeliveryResultCandidate) -> DeliveryResultPublication:
+        """Project one domain candidate into its complete MCP response."""
+        return cls(**candidate.model_dump(), output=candidate.output)
+
+
 class TransitionDeliveryParams(ChangeParams):
     """Validate one worker-owned mechanical transition."""
 
@@ -138,22 +175,94 @@ class ShowCompletedParams(ChangeParams):
     completion_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
+def _parse_json_model[ModelT: BaseModel](model: type[ModelT], value: object) -> ModelT:
+    """Parse MCP JSON arguments before strict Python-mode model validation."""
+    if isinstance(value, model):
+        return value
+    return model.model_validate_json(json.dumps(value))
+
+
+type AdmitDeliveryChangeRequest = Annotated[
+    AdmitDeliveryChangeParams,
+    BeforeValidator(partial(_parse_json_model, AdmitDeliveryChangeParams)),
+]
+type ChangeRequest = Annotated[ChangeParams, BeforeValidator(partial(_parse_json_model, ChangeParams))]
+type ClaimContextRequest = Annotated[
+    ClaimContextParams,
+    BeforeValidator(partial(_parse_json_model, ClaimContextParams)),
+]
+type CompletedPageRequest = Annotated[
+    CompletedPageParams,
+    BeforeValidator(partial(_parse_json_model, CompletedPageParams)),
+]
+type CreateDesignSessionRequest = Annotated[
+    CreateDesignSessionParams,
+    BeforeValidator(partial(_parse_json_model, CreateDesignSessionParams)),
+]
+type EmptyRequest = Annotated[EmptyParams, BeforeValidator(partial(_parse_json_model, EmptyParams))]
+type IntegrationRepairRequest = Annotated[
+    IntegrationRepairParams,
+    BeforeValidator(partial(_parse_json_model, IntegrationRepairParams)),
+]
+type PublishDeliveryPlanRequest = Annotated[
+    PublishDeliveryPlanParams,
+    BeforeValidator(partial(_parse_json_model, PublishDeliveryPlanParams)),
+]
+type PublishDeliveryResultRequest = Annotated[
+    PublishDeliveryResultParams,
+    BeforeValidator(partial(_parse_json_model, PublishDeliveryResultParams)),
+]
+type ReviseDesignSessionRequest = Annotated[
+    ReviseDesignSessionParams,
+    BeforeValidator(partial(_parse_json_model, ReviseDesignSessionParams)),
+]
+type SearchCompletedRequest = Annotated[
+    SearchCompletedParams,
+    BeforeValidator(partial(_parse_json_model, SearchCompletedParams)),
+]
+type ShowCompletedRequest = Annotated[
+    ShowCompletedParams,
+    BeforeValidator(partial(_parse_json_model, ShowCompletedParams)),
+]
+type TransitionDeliveryRequest = Annotated[
+    TransitionDeliveryParams,
+    BeforeValidator(partial(_parse_json_model, TransitionDeliveryParams)),
+]
+type WorkItemRequest = Annotated[WorkItemParams, BeforeValidator(partial(_parse_json_model, WorkItemParams))]
+
+
 __all__ = [
     "AdmitDeliveryChangeParams",
+    "AdmitDeliveryChangeRequest",
     "ChangeParams",
+    "ChangeRequest",
     "ClaimContextParams",
+    "ClaimContextRequest",
     "CompletedPageParams",
+    "CompletedPageRequest",
     "CreateDesignSessionParams",
+    "CreateDesignSessionRequest",
+    "DeliveryPlanPublication",
+    "DeliveryResultPublication",
     "DeliveryStartupConfig",
     "DeliveryStartupDiagnostic",
     "EmptyParams",
+    "EmptyRequest",
     "IntegrationRepairParams",
+    "IntegrationRepairRequest",
     "PublishDeliveryPlanParams",
+    "PublishDeliveryPlanRequest",
     "PublishDeliveryResultParams",
+    "PublishDeliveryResultRequest",
     "ReviseDesignSessionParams",
+    "ReviseDesignSessionRequest",
     "SearchCompletedParams",
+    "SearchCompletedRequest",
     "ShowCompletedParams",
+    "ShowCompletedRequest",
     "TargetDiagnostic",
     "TransitionDeliveryParams",
+    "TransitionDeliveryRequest",
     "WorkItemParams",
+    "WorkItemRequest",
 ]

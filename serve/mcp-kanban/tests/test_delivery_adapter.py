@@ -15,7 +15,13 @@ from owlbear_kanban.completed_history import (
     CompletedHistoryDiagnosticCode,
     CompletedHistoryMissingError,
 )
-from owlbear_kanban.delivery_runtime import DeliveryRuntimeReferenceError
+from owlbear_kanban.delivery_runtime import (
+    DeliveryPlanCandidate,
+    DeliveryResultCandidate,
+    DeliveryRuntimeReferenceError,
+    DeliveryTaskDefinition,
+    DeliveryTaskResult,
+)
 from owlbear_kanban.design_package import DesignPackageConflictError
 from owlbear_kanban.runtime_transaction import TransactionPathError
 from owlbear_mcp_kanban.target_server import (
@@ -48,6 +54,24 @@ class _RecordingApplication:
                 raise failure
             if name in {"list_work_items", "list_integration_ready_changes"}:
                 return (_Result(operation=name),)
+            if name == "publish_delivery_plan":
+                request = args[1]
+                assert hasattr(request, "tasks")
+                tasks = request.tasks
+                assert isinstance(tasks, tuple)
+                assert all(isinstance(task, DeliveryTaskDefinition) for task in tasks)
+                return DeliveryPlanCandidate(candidate_id="plan", claim_id="claim", digest=DIGEST, tasks=tasks)
+            if name == "publish_delivery_result":
+                request = args[1]
+                assert hasattr(request, "result")
+                result = request.result
+                assert isinstance(result, DeliveryTaskResult)
+                return DeliveryResultCandidate(
+                    candidate_id="result",
+                    claim_id="claim",
+                    digest=DIGEST,
+                    result=result,
+                )
             return _Result(operation=name)
 
         return operation
@@ -164,11 +188,21 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
 
     assert [call[0] for call in application.calls] == [operation_name]
     tuple_results = {"list_work_items", "list_integration_ready_changes"}
-    assert result == (
-        [{"operation": operation_name}] if operation_name in tuple_results else {"operation": operation_name}
-    )
-    assert "intent_bytes" not in json.dumps(result)
-    assert "design_bytes" not in json.dumps(result)
+    publication_results = {
+        "publish_delivery_plan": {"candidate_id": "plan", "claim_id": "claim"},
+        "publish_delivery_result": {"candidate_id": "result", "claim_id": "claim"},
+    }
+    if operation_name in publication_results:
+        assert result.candidate_id == publication_results[operation_name]["candidate_id"]
+        assert result.claim_id == publication_results[operation_name]["claim_id"]
+        assert result.output.output_id == result.candidate_id
+    else:
+        assert result == (
+            [{"operation": operation_name}] if operation_name in tuple_results else {"operation": operation_name}
+        )
+    serialized = result.model_dump(mode="json") if isinstance(result, BaseModel) else result
+    assert "intent_bytes" not in json.dumps(serialized)
+    assert "design_bytes" not in json.dumps(serialized)
 
 
 @pytest.mark.asyncio

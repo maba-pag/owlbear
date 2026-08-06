@@ -15,7 +15,12 @@ from pydantic import BaseModel, ValidationError
 
 from owlbear_kanban.change_workspace import CoordinationConflictError
 from owlbear_kanban.completed_history import CompletedHistoryError, CompletedHistoryStaleError
-from owlbear_kanban.delivery_runtime import DeliveryRuntimeConflictError, DeliveryRuntimeReferenceError
+from owlbear_kanban.delivery_runtime import (
+    DeliveryPlanCandidate,
+    DeliveryResultCandidate,
+    DeliveryRuntimeConflictError,
+    DeliveryRuntimeReferenceError,
+)
 from owlbear_kanban.design_package import DesignPackageConflictError
 from owlbear_kanban.portfolio_application import PortfolioApplication, PortfolioApplicationError
 from owlbear_kanban.runtime_transaction import (
@@ -26,20 +31,36 @@ from owlbear_kanban.runtime_transaction import (
 from owlbear_kanban.target_admission import TargetAdmissionError
 from owlbear_mcp_kanban.target_models import (
     AdmitDeliveryChangeParams,
+    AdmitDeliveryChangeRequest,
     ChangeParams,
+    ChangeRequest,
     ClaimContextParams,
+    ClaimContextRequest,
     CompletedPageParams,
+    CompletedPageRequest,
     CreateDesignSessionParams,
+    CreateDesignSessionRequest,
+    DeliveryPlanPublication,
+    DeliveryResultPublication,
     EmptyParams,
+    EmptyRequest,
     IntegrationRepairParams,
+    IntegrationRepairRequest,
     PublishDeliveryPlanParams,
+    PublishDeliveryPlanRequest,
     PublishDeliveryResultParams,
+    PublishDeliveryResultRequest,
     ReviseDesignSessionParams,
+    ReviseDesignSessionRequest,
     SearchCompletedParams,
+    SearchCompletedRequest,
     ShowCompletedParams,
+    ShowCompletedRequest,
     TargetDiagnostic,
     TransitionDeliveryParams,
+    TransitionDeliveryRequest,
     WorkItemParams,
+    WorkItemRequest,
 )
 
 _READ = ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False)
@@ -129,7 +150,7 @@ class TargetMCPAdapter:
     def _application(self) -> PortfolioApplication:
         return self._application_provider()
 
-    async def create_design_session(self, request: dict[str, object]) -> dict[str, object]:
+    async def create_design_session(self, request: CreateDesignSessionRequest) -> dict[str, object]:
         """Create one authored Design session."""
         params = self._validate(CreateDesignSessionParams, request)
         return self._call(
@@ -141,12 +162,12 @@ class TargetMCPAdapter:
             ),
         )
 
-    async def read_design_session(self, request: dict[str, object]) -> dict[str, object]:
+    async def read_design_session(self, request: ChangeRequest) -> dict[str, object]:
         """Read one verified authored Design session and its current identity."""
         params = self._validate(ChangeParams, request)
         return self._call(params, lambda: self._application.read_design_session(params.change_id))
 
-    async def revise_design_session(self, request: dict[str, object]) -> dict[str, object]:
+    async def revise_design_session(self, request: ReviseDesignSessionRequest) -> dict[str, object]:
         """Replace authored Design bytes for one exact package identity."""
         params = self._validate(ReviseDesignSessionParams, request)
         return self._call(
@@ -159,97 +180,107 @@ class TargetMCPAdapter:
             ),
         )
 
-    async def publish_design_checkpoint(self, request: dict[str, object]) -> dict[str, object]:
+    async def publish_design_checkpoint(self, request: ChangeRequest) -> dict[str, object]:
         """Publish one verified Design checkpoint."""
         params = self._validate(ChangeParams, request)
         return self._call(params, lambda: self._application.publish_design_checkpoint(params.change_id))
 
-    async def derive_delivery_contract(self, request: dict[str, object]) -> dict[str, object]:
+    async def derive_delivery_contract(self, request: ChangeRequest) -> dict[str, object]:
         """Derive one Delivery contract without publication."""
         params = self._validate(ChangeParams, request)
         return self._call(params, lambda: self._application.derive_delivery_contract(params.change_id))
 
-    async def validate_delivery_contract(self, request: dict[str, object]) -> dict[str, object]:
+    async def validate_delivery_contract(self, request: ChangeRequest) -> dict[str, object]:
         """Validate one derived Delivery contract."""
         params = self._validate(ChangeParams, request)
         return self._call(params, lambda: self._application.validate_delivery_contract(params.change_id))
 
-    async def admit_delivery_change(self, request: dict[str, object]) -> dict[str, object]:
+    async def admit_delivery_change(self, request: AdmitDeliveryChangeRequest) -> dict[str, object]:
         """Admit one source-bound Delivery change."""
         params = self._validate(AdmitDeliveryChangeParams, request)
         return self._call(params, lambda: self._application.admit_delivery_change(params.request))
 
-    async def list_work_items(self, request: dict[str, object]) -> list[object]:
+    async def list_work_items(self, request: EmptyRequest) -> list[object]:
         """List bounded work-item projections."""
         params = self._validate(EmptyParams, request)
         return self._call(params, self._application.list_work_items)
 
-    async def show_work_item(self, request: dict[str, object]) -> dict[str, object]:
+    async def show_work_item(self, request: WorkItemRequest) -> dict[str, object]:
         """Show one exact bounded work item."""
         params = self._validate(WorkItemParams, request)
         return self._call(params, lambda: self._application.show_work_item(params.change_id, params.work_item_id))
 
-    async def acquire_frontier_work(self, request: dict[str, object]) -> dict[str, object]:
+    async def acquire_frontier_work(self, request: EmptyRequest) -> dict[str, object]:
         """Acquire currently available frontier work."""
         params = self._validate(EmptyParams, request)
         return self._call(params, self._application.acquire_frontier_work)
 
-    async def show_plan_context(self, request: dict[str, object]) -> dict[str, object]:
+    async def show_plan_context(self, request: ClaimContextRequest) -> dict[str, object]:
         """Show bounded Planning context for one claim."""
         params = self._validate(ClaimContextParams, request)
         return self._call(params, lambda: self._application.show_plan_context(**params.model_dump()))
 
-    async def show_build_context(self, request: dict[str, object]) -> dict[str, object]:
+    async def show_build_context(self, request: ClaimContextRequest) -> dict[str, object]:
         """Show bounded Build context for one claim."""
         params = self._validate(ClaimContextParams, request)
         return self._call(params, lambda: self._application.show_build_context(**params.model_dump()))
 
-    async def publish_delivery_plan(self, request: dict[str, object]) -> dict[str, object]:
+    async def publish_delivery_plan(self, request: PublishDeliveryPlanRequest) -> DeliveryPlanPublication:
         """Publish one claim-scoped Delivery plan."""
         params = self._validate(PublishDeliveryPlanParams, request)
-        return self._call(params, lambda: self._application.publish_delivery_plan(params.change_id, params.request))
+        candidate = self._call_model(
+            params,
+            lambda: self._application.publish_delivery_plan(params.change_id, params.request),
+            DeliveryPlanCandidate,
+        )
+        return DeliveryPlanPublication.from_candidate(candidate)
 
-    async def publish_delivery_result(self, request: dict[str, object]) -> dict[str, object]:
+    async def publish_delivery_result(self, request: PublishDeliveryResultRequest) -> DeliveryResultPublication:
         """Publish one claim-scoped Delivery result."""
         params = self._validate(PublishDeliveryResultParams, request)
-        return self._call(params, lambda: self._application.publish_delivery_result(params.change_id, params.request))
+        candidate = self._call_model(
+            params,
+            lambda: self._application.publish_delivery_result(params.change_id, params.request),
+            DeliveryResultCandidate,
+        )
+        return DeliveryResultPublication.from_candidate(candidate)
 
-    async def transition_delivery(self, request: dict[str, object]) -> dict[str, object]:
+    async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]:
         """Apply one worker-owned Delivery transition."""
         params = self._validate(TransitionDeliveryParams, request)
         return self._call(params, lambda: self._application.transition_delivery(params.change_id, params.request))
 
-    async def recover_claim(self, request: dict[str, object]) -> dict[str, object]:
+    async def recover_claim(self, request: ClaimContextRequest) -> dict[str, object]:
         """Recover one exact failed Delivery claim."""
         params = self._validate(ClaimContextParams, request)
         return self._call(params, lambda: self._application.recover_claim(**params.model_dump()))
 
-    async def list_integration_ready_changes(self, request: dict[str, object]) -> list[object]:
+    async def list_integration_ready_changes(self, request: EmptyRequest) -> list[object]:
         """List changes ready for Integration."""
         params = self._validate(EmptyParams, request)
         return self._call(params, self._application.list_integration_ready_changes)
 
-    async def show_integration_attention(self, request: dict[str, object]) -> dict[str, object] | None:
+    async def show_integration_attention(self, request: ChangeRequest) -> dict[str, object] | None:
         """Show current typed Integration attention."""
         params = self._validate(ChangeParams, request)
         return self._call(params, lambda: self._application.show_integration_attention(params.change_id))
 
-    async def integrate_ready_change(self, request: dict[str, object]) -> dict[str, object]:
+    async def integrate_ready_change(self, request: ChangeRequest) -> dict[str, object]:
         """Integrate one ready Delivery change."""
         params = self._validate(ChangeParams, request)
         return self._call(params, lambda: self._application.integrate_ready_change(params.change_id))
 
-    async def admit_reviewed_integration_repair(self, request: dict[str, object]) -> dict[str, object]:
+    async def admit_reviewed_integration_repair(self, request: IntegrationRepairRequest) -> dict[str, object]:
         """Admit one independently reviewed Integration repair."""
         params = self._validate(IntegrationRepairParams, request)
         return self._call(params, lambda: self._application.admit_reviewed_integration_repair(params.repair))
 
-    async def list_completed_changes(self, request: dict[str, object]) -> dict[str, object]:
+    async def list_completed_changes(self, request: CompletedPageRequest) -> dict[str, object]:
         """List one bounded completed-history page."""
         params = self._validate(CompletedPageParams, request)
         return self._call(params, lambda: self._application.list_completed_changes(params.cursor, params.limit))
 
-    async def search_completed_changes(self, request: dict[str, object]) -> dict[str, object]:
+    async def search_completed_changes(self, request: SearchCompletedRequest) -> dict[str, object]:
         """Search bounded completed-history summaries."""
         params = self._validate(SearchCompletedParams, request)
         return self._call(
@@ -257,7 +288,7 @@ class TargetMCPAdapter:
             lambda: self._application.search_completed_changes(params.query, params.cursor, params.limit),
         )
 
-    async def show_completed_change(self, request: dict[str, object]) -> dict[str, object]:
+    async def show_completed_change(self, request: ShowCompletedRequest) -> dict[str, object]:
         """Show one exact completed Delivery change."""
         params = self._validate(ShowCompletedParams, request)
         return self._call(
@@ -266,7 +297,9 @@ class TargetMCPAdapter:
         )
 
     @staticmethod
-    def _validate[ModelT: BaseModel](model: type[ModelT], payload: dict[str, object]) -> ModelT:
+    def _validate[ModelT: BaseModel](model: type[ModelT], payload: ModelT | dict[str, object]) -> ModelT:
+        if isinstance(payload, model):
+            return payload
         try:
             return model.model_validate_json(json.dumps(payload))
         except (TypeError, ValueError, ValidationError) as exc:
@@ -277,9 +310,24 @@ class TargetMCPAdapter:
                 retry_safe=False,
             )
 
+    def _call_model[ModelT: BaseModel](
+        self,
+        params: BaseModel,
+        operation: Callable[[], object],
+        model: type[ModelT],
+    ) -> ModelT:
+        value = self._call_raw(params, operation)
+        if not isinstance(value, model):
+            message = f"unsupported structured output: {type(value).__name__}"
+            raise TypeError(message)
+        return value
+
     def _call(self, params: BaseModel, operation: Callable[[], object]) -> StructuredOutput:
+        return self._serialize(self._call_raw(params, operation))
+
+    def _call_raw(self, params: BaseModel, operation: Callable[[], object]) -> object:
         try:
-            return self._serialize(operation())
+            return operation()
         except CompletedHistoryError as exc:
             authority = exc.diagnostic.change_id or exc.diagnostic.completion_id or self._authority(params)
             self._raise(

@@ -26,6 +26,7 @@ from owlbear_kanban import (
     OutcomeAuthorityBinding,
     PortfolioApplication,
 )
+from owlbear_kanban.delivery_runtime import DeliveryResultCandidate, PublishDeliveryResult
 from owlbear_mcp_kanban.server import (
     app_lifespan,
     load_delivery_application,
@@ -118,6 +119,27 @@ class _RecordingApplication:
         return operation
 
 
+class _PublicationApplication(_RecordingApplication):
+    def __init__(self) -> None:
+        super().__init__()
+        self.transition: object | None = None
+
+    def publish_delivery_result(self, _change_id: str, request: object) -> DeliveryResultCandidate:
+        self.calls.append("publish_delivery_result")
+        assert isinstance(request, PublishDeliveryResult)
+        return DeliveryResultCandidate(
+            candidate_id="result-" + "d" * 64,
+            claim_id="claim-1",
+            digest="d" * 64,
+            result=request.result,
+        )
+
+    def transition_delivery(self, _change_id: str, request: object) -> _Result:
+        self.calls.append("transition_delivery")
+        self.transition = request
+        return _Result(operation="transition_delivery")
+
+
 def _git(repository: Path, *arguments: str) -> None:
     subprocess.run(
         ("git", "-C", str(repository), *arguments),
@@ -204,6 +226,12 @@ async def test_live_registry_is_exact_and_annotated_from_assembled_tools() -> No
         assert tool.annotations.read_only_hint is (name in READ_TOOLS)
         assert tool.annotations.idempotent_hint is (name != "acquire_frontier_work")
         assert tool.annotations.destructive_hint is False
+        request_schema = tool.input_schema["properties"]["request"]
+        assert "$ref" in request_schema
+        request_definition = tool.input_schema["$defs"][request_schema["$ref"].removeprefix("#/$defs/")]
+        if "$ref" in request_definition:
+            request_definition = tool.input_schema["$defs"][request_definition["$ref"].removeprefix("#/$defs/")]
+        assert request_definition["additionalProperties"] is False
 
 
 @pytest.mark.asyncio
@@ -217,6 +245,66 @@ async def test_registered_tool_invokes_strict_adapter_once() -> None:
     assert set(tools) == DELIVERY_TOOLS
     assert result.structured_content == {"result": []}
     assert application.calls == ["list_work_items"]
+
+
+@pytest.mark.asyncio
+async def test_published_result_output_forwards_unchanged_to_transition() -> None:
+    application = _PublicationApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+    publication_request = {
+        "change_id": "change-a",
+        "request": {
+            "outcome_id": "OUT-001",
+            "claim_id": "claim-1",
+            "result": {
+                "result_id": "result-1",
+                "change_id": "change-a",
+                "authority_digest": "a" * 64,
+                "task_id": "TASK-001",
+                "task_digest": "b" * 64,
+                "completed_commit": "c" * 40,
+            },
+        },
+    }
+
+    async with Client(server) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+        published = await client.call_tool("publish_delivery_result", {"request": publication_request})
+        assert published.structured_content is not None
+        output = published.structured_content["output"]
+        transitioned = await client.call_tool(
+            "transition_delivery",
+            {
+                "request": {
+                    "change_id": "change-a",
+                    "request": {
+                        "action": "advance",
+                        "outcome_id": "OUT-001",
+                        "claim_id": "claim-1",
+                        "output": output,
+                    },
+                }
+            },
+        )
+
+    publication_schema = tools["publish_delivery_result"].input_schema["properties"]["request"]
+    publication_definitions = tools["publish_delivery_result"].input_schema["$defs"]
+    transition_definitions = tools["transition_delivery"].input_schema["$defs"]
+    publication_definition = publication_definitions[publication_schema["$ref"].removeprefix("#/$defs/")]
+    publication_definition = publication_definitions[publication_definition["$ref"].removeprefix("#/$defs/")]
+    assert publication_definition["properties"]["change_id"]["type"] == "string"
+    assert transition_definitions["DeliveryTransition"]["discriminator"]["propertyName"] == "action"
+    assert "output" in tools["publish_delivery_plan"].output_schema["required"]
+    assert "output" in tools["publish_delivery_result"].output_schema["required"]
+    assert output == {
+        "output_id": "result-" + "d" * 64,
+        "claim_id": "claim-1",
+        "stage": "implementation",
+        "kind": "implementation",
+        "digest": "d" * 64,
+    }
+    assert transitioned.structured_content == {"operation": "transition_delivery"}
+    assert application.calls == ["publish_delivery_result", "transition_delivery"]
 
 
 MISSING_FIELDS = [("schema_version",), ("integration_target",)]
