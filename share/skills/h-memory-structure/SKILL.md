@@ -91,10 +91,12 @@ Cockpit. Tool responses include hints describing the transition or deletion bran
 
 ## Candidate Production
 
-`save_memory` creates a pending candidate. Ordinary writers do not need `list_memories` or
-`read_memory` authority and must not attempt store-wide deduplication before saving. Avoid a duplicate
-only when the same insight is already visible in the current context. The memory curator performs
-cross-store comparison, conflict handling, scoping, and pruning through `w-mem-curation`.
+`save_memory` creates an unscoped pending candidate. `source_agent` must exactly match the producing
+custom agent's canonical name; generic host labels such as `GitHub Copilot` are not agent identities.
+Ordinary writers do not need `list_memories` or `read_memory` authority and must not attempt
+store-wide deduplication before saving. Avoid a duplicate only when the same insight is already
+visible in the current context. The memory curator performs cross-store comparison, conflict
+handling, relevance scoping, and pruning through `w-mem-curation`.
 
 ## Content-Quality Bar
 
@@ -109,8 +111,8 @@ An entry **fails** if any of the following are true:
 
 - Generic: "always write tests", "use type hints", "be careful with async"
 - No citation: no task ID, file, or tool mentioned
-- Ambiguous scope: the insight only applies to a specific project but `scope_agents` is null
-- Ambiguous scope: the insight only applies to a specific role but `scope_agents` is missing
+- Invalid provenance: `source_agent` is a product label, typo, case variant, or inactive role
+- Invalid curated scope: a promoted entry names no active role and is not universal (`['*']`)
 - Duplicate: substantially the same as an existing approved entry
 
 **Confidence calibration:**
@@ -126,6 +128,7 @@ An entry **fails** if any of the following are true:
 
 1. **Storing research findings as memory entries.** Research belongs in `.owlbear/research/`; memory is for agent behavioral learnings.
 2. **Writing to `/memories/` for agent learnings.** The built-in store is retired. Agent learnings go to `owlbear-memory` only.
-3. **Recording with `scope_agents=null`.** Global entries flood every agent's pre-flight. Always pass `scope_agents`.
+3. **Writer-assigned scope.** New candidates must remain unscoped. The curator assigns relevance
+ scope during promotion.
 4. **One entry per task regardless of insight count.** Record 0 entries if nothing notable happened. Record N entries for N distinct insights.
 5. **Confidence below 0.7.** The server rejects it. Do not round up to bypass the floor — raise confidence only when evidence justifies it.

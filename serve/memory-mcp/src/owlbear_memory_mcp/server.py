@@ -13,6 +13,7 @@ from mcp.types import ToolAnnotations
 from owlbear_memory import MemoryCategory, MemoryEngine, MemoryState
 from pydantic import Field
 
+from owlbear_memory_mcp.agents import AgentCatalog
 from owlbear_memory_mcp.tools import (
     approve_memory as approve_memory_impl,
 )
@@ -21,6 +22,9 @@ from owlbear_memory_mcp.tools import (
 )
 from owlbear_memory_mcp.tools import (
     curate_memory as curate_memory_impl,
+)
+from owlbear_memory_mcp.tools import (
+    delete_agent_memories as delete_agent_memories_impl,
 )
 from owlbear_memory_mcp.tools import (
     delete_memory as delete_memory_impl,
@@ -35,6 +39,9 @@ from owlbear_memory_mcp.tools import (
     recall_memory as recall_memory_impl,
 )
 from owlbear_memory_mcp.tools import (
+    rename_agent_memories as rename_agent_memories_impl,
+)
+from owlbear_memory_mcp.tools import (
     save_memory as save_memory_impl,
 )
 
@@ -47,11 +54,13 @@ __all__ = [
     "approve_memory",
     "assess_memories",
     "curate_memory",
+    "delete_agent_memories",
     "delete_memory",
     "list_memories",
     "mcp",
     "read_memory",
     "recall_memory",
+    "rename_agent_memories",
     "save_memory",
 ]
 
@@ -70,6 +79,7 @@ class AppContext:
     """Runtime context passed through MCP lifespan to all tools."""
 
     engine: MemoryEngine
+    agents: AgentCatalog
 
 
 @asynccontextmanager
@@ -81,7 +91,10 @@ async def app_lifespan(
     if not (workspace_root / _WORKSPACE_MARKER).is_dir():
         message = f"OwlBear workspace marker not found: {_WORKSPACE_MARKER}"
         raise RuntimeError(message)
-    yield AppContext(engine=MemoryEngine(memory_dir=workspace_root / _DEFAULT_MEMORY_DIR))
+    yield AppContext(
+        engine=MemoryEngine(memory_dir=workspace_root / _DEFAULT_MEMORY_DIR),
+        agents=AgentCatalog(workspace_root),
+    )
 
 
 mcp = MCPServer("owlbear-memory", lifespan=app_lifespan)
@@ -96,7 +109,6 @@ async def save_memory(  # noqa: PLR0913
     categories: _Categories,
     confidence: _Confidence,
     source_agent: _Agent,
-    scope_agents: list[str] | None = None,
 ) -> dict[str, Any]:  # pragma: no cover
     """Create a new pending memory entry with explicit source agent."""
     return await save_memory_impl(
@@ -106,7 +118,6 @@ async def save_memory(  # noqa: PLR0913
         categories=categories,
         confidence=confidence,
         source_agent=source_agent,
-        scope_agents=scope_agents,
     )
 
 
@@ -181,6 +192,23 @@ async def curate_memory(  # noqa: PLR0913
 async def delete_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:  # pragma: no cover
     """Delete a memory entry with lifecycle-aware semantics."""
     return await delete_memory_impl(ctx, entry_id=entry_id)
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))
+async def rename_agent_memories(
+    ctx: Context,
+    *,
+    old_name: _Agent,
+    new_name: _Agent,
+) -> dict[str, int]:  # pragma: no cover
+    """Rewrite memory provenance and scopes after an agent rename."""
+    return await rename_agent_memories_impl(ctx, old_name=old_name, new_name=new_name)
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))
+async def delete_agent_memories(ctx: Context, *, agent: _Agent) -> dict[str, int]:  # pragma: no cover
+    """Delete memories and scope references for a removed agent."""
+    return await delete_agent_memories_impl(ctx, agent=agent)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))

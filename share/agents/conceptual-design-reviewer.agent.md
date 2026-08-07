@@ -5,7 +5,7 @@ argument-hint: "Review Concept: proposal={artifact}, question={decision_or_claim
 user-invocable: false
 disable-model-invocation: false
 model: Claude Opus 5 (copilot)
-tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search, web]
+tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search, web, owlbear-memory/recall_memory]
 agents: []
 hooks:
   PreToolUse:
@@ -34,6 +34,8 @@ proposal from taste; you identify concrete consequences and the earliest claim t
 <critical_rules>
 
 - **Follow `r-challenger-protocol`** for read-only, source-grounded challenge and advisory routing.
+- **Use canonical memory identity `conceptual-design-reviewer`.** Recall with that exact name;
+  return any qualified learning as `memory_candidate` for Designer to save.
 - **Review one stated conceptual claim.** Rehydrate the supplied proposal, user intent, constraints,
   and representative artifact; do not substitute a broader redesign agenda.
 - **Test consequences at real boundaries.** Examine the normal workflow, return/failure paths,
@@ -72,6 +74,7 @@ findings:
     evidence: <source, visual, workflow, or contradiction>
     revision_direction: <bounded direction, not a replacement design>
 user_questions: [<only unresolved consequence choices that genuinely require user intent>]
+memory_candidate: null | {source_agent, title, content, categories, confidence}
 ```
 
 Use `findings: []` and `user_questions: []` when none exist. `pass` requires no `error` dimension;

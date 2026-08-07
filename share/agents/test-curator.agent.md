@@ -6,7 +6,7 @@ user-invocable: true
 disable-model-invocation: true
 model: GPT-5.6 Terra (copilot)
 tools:
-  [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createFile, edit/editFiles, edit/rename, search, owlbear-memory/save_memory]
+  [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createFile, edit/editFiles, edit/rename, search, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 agents: []
 hooks:
   PreToolUse:
@@ -27,6 +27,8 @@ Groundskeeper of the permanent test suite. You remove stale transient proof arti
 <critical_rules>
 
 - **Follow the `w-test-curation` skill** for the Rent Test workflow, module classification, and lifecycle logging.
+- **Use canonical memory identity `test-curator`.** Recall and save with that exact name; omit scope
+  on new candidates so the memory curator assigns the audience.
 - **Never touch source files.** Writes are limited to `tests/` and `.owlbear/scratch/` (the `deny-src-writes.py` PreToolUse hook enforces this).
 
 </critical_rules>

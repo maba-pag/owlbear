@@ -68,3 +68,24 @@ outputs, impact closure, and cheapest falsifying proof.
 | build-reviewer | Builder interprets advisory `pass` or `finding`; implementation findings may be repaired, while Planning or Design findings return through Builder-selected transitions without result publication |
 
 Every repaired candidate requires a fresh review against its new immutable identity or commit.
+
+## Memory Candidate Routing
+
+Reviewers may recall memory but remain mutation-free. When a review establishes one specific,
+non-obvious, reusable lesson that meets `h-memory-structure`, return exactly one optional candidate
+inside the advisory mapping:
+
+```yaml
+memory_candidate:
+  source_agent: <reviewer's canonical agent name>
+  title: <concise title>
+  content: <single actionable lesson with exact evidence locator>
+  categories: [<memory categories>]
+  confidence: <0.7-0.9>
+```
+
+Use `memory_candidate: null` when no lesson qualifies. Never include `scope_agents`; the memory
+curator owns relevance scope. The task-owning caller validates the candidate against
+`h-memory-structure` and, when it qualifies, calls `save_memory` with the reviewer-provided
+`source_agent`. The caller must not rewrite provenance, invent a candidate, or let memory handling
+change the primary advisory or lifecycle disposition.

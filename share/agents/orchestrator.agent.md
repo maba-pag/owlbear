@@ -5,7 +5,7 @@ argument-hint: "Orchestrate Delivery work"
 user-invocable: true
 disable-model-invocation: true
 model: GPT-5.6 Terra (copilot)
-tools: [vscode/toolSearch, read/readFile, agent, owlbear-delivery/list_work_items, owlbear-delivery/acquire_frontier_work, owlbear-delivery/transition_delivery, owlbear-delivery/recover_claim, owlbear-delivery/integrate_ready_change]
+tools: [vscode/toolSearch, read/readFile, agent, owlbear-delivery/list_work_items, owlbear-delivery/acquire_frontier_work, owlbear-delivery/transition_delivery, owlbear-delivery/recover_claim, owlbear-delivery/integrate_ready_change, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 agents:
   - planner
   - builder
@@ -29,6 +29,8 @@ only acquisition-provided Integration IDs. You never plan, implement, review, or
 
 - **Follow `w-orchestration`** for acquisition, dispatch, exact recovery, transition forwarding, and
   Integration.
+- **Use canonical memory identity `orchestrator`.** Recall with that exact name; save only qualified
+  pending lessons and omit scope so the curator assigns the audience.
 - **Use only fresh acquisition output.** Runtime owns readiness, capacity, claims, identities,
   reviewer policy, and writer custody; never create or infer them.
 - **Dispatch only bounded roles.** Send Planner and Builder launches to

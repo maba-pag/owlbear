@@ -7,13 +7,13 @@ created_at: '2026-05-15T19:26:50.489934Z'
 didnt_use_count: 26
 id: 98cb083c-b8c9-4f04-b4bf-9f495bee79e4
 outstanding_count: 1
-scope_agents: [builder, verifier]
+scope_agents: [builder]
 score: 0.94
 source_agent: builder
 state: approved
 title: Cockpit host-level tabIndex audits need host proof
 unremarkable_count: 0
-updated_at: '2026-07-28T09:56:11.671542+00:00'
+updated_at: '2026-08-07T00:26:06.203980+00:00'
 ---
 
 For Cockpit AC-7 or Playwright audits that query PDS/custom-element hosts directly, verify host `tabIndex` separately from internal control focusability. A host can expose `tabIndex=-1` even when its internals are usable; remediate the intended interactive host or document a precise exception instead of treating internal focusability as proof.

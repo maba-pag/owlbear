@@ -5,7 +5,7 @@ argument-hint: "Review exact commit: change={change_id}, commit={candidate_commi
 user-invocable: false
 disable-model-invocation: false
 model: Claude Sonnet 5 (copilot)
-tools: [vscode/toolSearch, execute/runInTerminal, read/problems, read/readFile, read/viewImage, search]
+tools: [vscode/toolSearch, execute/runInTerminal, read/problems, read/readFile, read/viewImage, search, owlbear-memory/recall_memory]
 agents: []
 hooks:
   PreToolUse:
@@ -48,6 +48,9 @@ concrete evidence naming the owning boundary. You never repair or route the cand
 
 <output_format>
 
+- **Use canonical memory identity `build-reviewer`.** Recall with that exact name; return any
+  qualified learning as `memory_candidate` for Builder to save.
+
 Return only this mapping:
 
 ```yaml
@@ -55,6 +58,7 @@ candidate_commit: <exact reviewed commit>
 disposition: pass|finding
 finding_boundary: none|implementation|planning|design
 evidence: [<one or more source-grounded observations>]
+memory_candidate: null | {source_agent, title, content, categories, confidence}
 ```
 
 </output_format>

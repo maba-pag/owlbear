@@ -7,13 +7,13 @@ created_at: '2026-05-14T03:01:24.945577Z'
 didnt_use_count: 19
 id: c026706e-d4c7-4a1a-9147-4825667b825e
 outstanding_count: 0
-scope_agents: [builder, verifier]
+scope_agents: [builder]
 score: 0.85
 source_agent: builder
 state: approved
 title: Raw public scripts need window globals in Vitest
 unremarkable_count: 0
-updated_at: '2026-07-28T02:54:20.863935+00:00'
+updated_at: '2026-08-07T00:26:06.204014+00:00'
 ---
 
 For raw public JavaScript files executed through `new Function` in Vitest/jsdom, use explicit `window.*` globals such as `window.localStorage` and `window.document`. Bare browser globals can throw `ReferenceError` or trigger `no-undef` because the file is not bundled like application TSX.

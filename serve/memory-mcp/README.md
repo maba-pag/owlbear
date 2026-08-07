@@ -22,6 +22,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 | Module | Purpose |
 |--------|---------|
+| `agents.py` | Dynamic canonical-agent discovery from active VS Code agent locations |
 | `server.py` | MCPServer app definition, tool registration, lifespan wiring |
 | `tools.py` | Tool implementation — validation, state transitions, response formatting |
 | `git.py` | Batch commit helper — stages non-pending entries by session type |
@@ -58,12 +59,14 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 
 | Tool | Description |
 |------|-------------|
-| `save_memory` | Create a `pending` entry; `scope_agents` defaults to `[source_agent]` |
+| `save_memory` | Create an unscoped `pending` entry from an active canonical agent identity |
 | `list_memories` | List metadata sorted by curation priority; filters: `states`, `categories`, `scope_agents` |
 | `read_memory` | Read one full entry by `entry_id`; errors on deleted entries |
 | `recall_memory` | Identity-bearing markdown blocks scoped to one agent (`## title`, entry ID, and body on consecutive lines; other metadata omitted); three-pool slot allocation (explore, challenge, regular) with final sort by `(state_rank, -score, id)`; constants `SLOT_EXPLORE=2`, `SLOT_CHALLENGE=2`; default limit 20 |
 | `curate_memory` | Mutate fields + auto-promote `pending→curated` (when scope provided) or auto-downgrade `approved→curated`; raises `TransitionError` for contested/disputed/stale (use resolve first) |
 | `delete_memory` | Hard-delete pending (file removed); soft-delete curated/approved/contested/disputed/stale (state→deleted) |
+| `rename_agent_memories` | Rewrite every matching `source_agent` and `scope_agents` reference after an agent rename |
+| `delete_agent_memories` | Physically delete sourced/orphaned memories and remove the deleted role from other scopes |
 | `approve_memory` | Promote `curated→approved`; user-initiated only (not exposed to any agent) |
 | `assess_memories` | Process batch assessment submissions; increments counters for `outstanding`/`unremarkable`/`didnt_use`, delegates `factually_wrong` to confirmation cycle; returns per-entry `{entry_id, success}` or `{entry_id, success=False, error}` results |
 
@@ -83,12 +86,23 @@ All mutating tools return a `hint` field describing the transition or action tak
 | `unremarkable_count` | int | Default `0`; incremented by assessment tool when entry was unremarkable |
 | `didnt_use_count` | int | Default `0`; incremented by assessment tool when entry was skipped |
 | `score` | float | Default `0.0`; initialized to `confidence` on creation |
-| `source_agent` | str | Required; immutable provenance marker |
-| `scope_agents` | list[str] | Agent visibility scope; defaults to `[source_agent]` on creation |
+| `source_agent` | str | Required active custom-agent name; immutable except through agent lifecycle rename |
+| `scope_agents` | list[str] | Curator-assigned relevance scope; new pending entries default to `[]` |
 | `created_at` | str | UTC timestamp |
 | `updated_at` | str | UTC timestamp |
 | `approved_at` | str \| null | Set on approve, cleared on downgrade/delete |
 | `contested_by_task` | str \| null | Task ID of the first factually-wrong confirmation; null until first confirmation; cleared on resolve |
+
+## Agent Identity
+
+The server discovers exact frontmatter names from `.github/agents`, `.owlbear/agents`, `share/agents`,
+and enabled `chat.agentFilesLocations` in workspace settings. Identity is self-reported by the
+caller and validated as vocabulary, not authenticated as an authorization boundary. Scope controls
+relevance filtering only.
+
+Agent definition lifecycle is destructive by design: rename memory references with
+`rename_agent_memories`; delete an agent's memory with `delete_agent_memories`. No aliases or
+backward-compatible role names are retained.
 
 ## Configuration
 

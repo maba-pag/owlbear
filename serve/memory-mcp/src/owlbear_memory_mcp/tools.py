@@ -19,16 +19,20 @@ from pydantic import ValidationError
 if TYPE_CHECKING:
     from mcp.server.mcpserver import Context
 
+    from owlbear_memory_mcp.agents import AgentCatalog
+
 __all__ = [
     "SLOT_CHALLENGE",
     "SLOT_EXPLORE",
     "approve_memory",
     "assess_memories",
     "curate_memory",
+    "delete_agent_memories",
     "delete_memory",
     "list_memories",
     "read_memory",
     "recall_memory",
+    "rename_agent_memories",
     "save_memory",
 ]
 
@@ -52,6 +56,28 @@ def _engine_from_ctx(ctx: Context) -> MemoryEngine:
     except AttributeError as exc:
         msg = "memory engine is not available in MCP context"
         raise ToolError(msg) from exc
+
+
+def _agents_from_ctx(ctx: Context) -> AgentCatalog:
+    try:
+        return ctx.request_context.lifespan_context.agents
+    except AttributeError as exc:
+        msg = "agent catalog is not available in MCP context"
+        raise ToolError(msg) from exc
+
+
+def _require_agent(ctx: Context, agent: str) -> None:
+    try:
+        _agents_from_ctx(ctx).require(agent)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+
+
+def _require_scope(ctx: Context, agents: list[str]) -> None:
+    try:
+        _agents_from_ctx(ctx).require_scope(agents)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
 
 
 def _allowed_category_values() -> str:
@@ -170,24 +196,23 @@ async def save_memory(  # noqa: PLR0913
     categories: list[MemoryCategory | str],
     confidence: float,
     source_agent: str,
-    scope_agents: list[str] | None = None,
 ) -> dict[str, Any]:
     """Create a pending memory entry with explicit source_agent."""
     engine = _engine_from_ctx(ctx)
+    _require_agent(ctx, source_agent)
     coerced_categories = _coerce_categories(categories)
-    initial_scope = scope_agents if scope_agents is not None else [source_agent]
     try:
         entry = engine.save(
             title=title,
             content=content,
             categories=coerced_categories,
             confidence=confidence,
-            scope_agents=initial_scope,
+            scope_agents=[],
             source_agent=source_agent,
         )
     except ValidationError as exc:
         raise ToolError(_teaching_validation_message(exc)) from exc
-    hint = f"Saved as pending. Scoped to {initial_scope}. Curate to promote to curated and adjust scope if needed."
+    hint = "Saved as pending and unscoped. The memory curator assigns relevance scope before promotion."
     return _with_hint(_entry_to_dict(entry), hint)
 
 
@@ -216,6 +241,7 @@ async def list_memories(
     )
     category_filter = set(coerced_categories or [])
     scope_filter = set(scope_agents or [])
+    _require_scope(ctx, list(scope_filter))
 
     entries = [entry for entry in engine.get_entries() if entry.state in allowed_states]
     if category_filter:
@@ -266,6 +292,7 @@ async def recall_memory(
     if not agent.strip():
         msg = "Agent must be non-empty."
         raise ToolError(msg)
+    _require_agent(ctx, agent)
 
     engine = _engine_from_ctx(ctx)
     category_filter = set(_coerce_categories(categories) or [])
@@ -312,7 +339,7 @@ async def recall_memory(
     return "\n\n".join(f"## {entry.title}\nEntry ID: `{entry.id}`\n{entry.content}" for entry in selected_entries)
 
 
-async def _update_entry(  # noqa: C901, PLR0913
+async def _update_entry(  # noqa: C901, PLR0912, PLR0913
     ctx: Context,
     *,
     current: MemoryEntry,
@@ -338,6 +365,8 @@ async def _update_entry(  # noqa: C901, PLR0913
         raise ToolError(msg)
 
     next_scope_agents = current.scope_agents if scope_agents is None else scope_agents
+    if scope_agents is not None:
+        _require_scope(ctx, scope_agents)
     if current.state == MemoryState.PENDING and not next_scope_agents:
         msg = "scope_agents are required when curating pending entries"
         raise ToolError(msg)
@@ -441,6 +470,33 @@ async def delete_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
     else:
         hint = "Soft-delete applied: entry retained for audit history."
     return _with_hint(deleted, hint)
+
+
+async def rename_agent_memories(ctx: Context, *, old_name: str, new_name: str) -> dict[str, int]:
+    """Rewrite all memory references after an agent definition is renamed."""
+    _require_agent(ctx, new_name)
+    engine = _engine_from_ctx(ctx)
+    try:
+        result = engine.rename_agent(old_name, new_name)
+    except ValidationError as exc:
+        raise ToolError(str(exc)) from exc
+    if result["entries_updated"] == 0:
+        msg = f"No memory references found for agent {old_name!r}."
+        raise ToolError(msg)
+    return dict(result)
+
+
+async def delete_agent_memories(ctx: Context, *, agent: str) -> dict[str, int]:
+    """Remove a deleted agent's sourced memories and remaining scope references."""
+    engine = _engine_from_ctx(ctx)
+    try:
+        result = engine.delete_agent(agent)
+    except ValidationError as exc:
+        raise ToolError(str(exc)) from exc
+    if result["entries_deleted"] == 0 and result["scopes_updated"] == 0:
+        msg = f"No memory references found for agent {agent!r}."
+        raise ToolError(msg)
+    return dict(result)
 
 
 async def _approve_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]:

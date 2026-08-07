@@ -48,6 +48,21 @@ class EditPayload(TypedDict, total=False):
     scope_agents: list[str]
 
 
+class AgentRenameResult(TypedDict):
+    """Counts from rewriting one agent identity."""
+
+    entries_updated: int
+    sources_updated: int
+    scopes_updated: int
+
+
+class AgentDeleteResult(TypedDict):
+    """Counts from deleting one agent's memory references."""
+
+    entries_deleted: int
+    scopes_updated: int
+
+
 class MtimeScanCache:
     """Track directory mtime so callers can skip unnecessary reparsing."""
 
@@ -296,6 +311,80 @@ class MemoryEngine:
             updated = entry.model_copy(update={"state": MemoryState.DELETED, "updated_at": self._now_iso()})
             return self._write_updated_entry(updated)
 
+    def rename_agent(self, old_name: str, new_name: str) -> AgentRenameResult:
+        """Rewrite an agent identity in provenance and relevance scopes."""
+        if not old_name.strip() or not new_name.strip() or old_name == new_name:
+            msg = "old_name and new_name must be distinct non-empty agent names"
+            raise ValidationError(msg)
+
+        with self._lock:
+            originals = self.get_entries()
+            updated_entries: list[MemoryEntry] = []
+            sources_updated = 0
+            scopes_updated = 0
+            for entry in originals:
+                source_agent = new_name if entry.source_agent == old_name else entry.source_agent
+                scope_agents = list(
+                    dict.fromkeys(new_name if name == old_name else name for name in entry.scope_agents)
+                )
+                if source_agent == entry.source_agent and scope_agents == entry.scope_agents:
+                    continue
+                sources_updated += source_agent != entry.source_agent
+                scopes_updated += scope_agents != entry.scope_agents
+                updated_entries.append(
+                    MemoryEntry.model_validate(
+                        {
+                            **entry.model_dump(),
+                            "source_agent": source_agent,
+                            "scope_agents": scope_agents,
+                            "updated_at": self._now_iso(),
+                        }
+                    )
+                )
+
+            self._write_agent_lifecycle_changes(originals, updated_entries, [])
+            return AgentRenameResult(
+                entries_updated=len(updated_entries),
+                sources_updated=sources_updated,
+                scopes_updated=scopes_updated,
+            )
+
+    def delete_agent(self, agent: str) -> AgentDeleteResult:
+        """Delete sourced memories and remove an agent from remaining scopes."""
+        if not agent.strip():
+            msg = "agent must not be empty"
+            raise ValidationError(msg)
+
+        with self._lock:
+            originals = self.get_entries()
+            updated_entries: list[MemoryEntry] = []
+            deleted_entries: list[MemoryEntry] = []
+            for entry in originals:
+                if entry.source_agent == agent:
+                    deleted_entries.append(entry)
+                    continue
+                if agent not in entry.scope_agents:
+                    continue
+                scope_agents = [name for name in entry.scope_agents if name != agent]
+                if not scope_agents:
+                    deleted_entries.append(entry)
+                    continue
+                updated_entries.append(
+                    MemoryEntry.model_validate(
+                        {
+                            **entry.model_dump(),
+                            "scope_agents": scope_agents,
+                            "updated_at": self._now_iso(),
+                        }
+                    )
+                )
+
+            self._write_agent_lifecycle_changes(originals, updated_entries, deleted_entries)
+            return AgentDeleteResult(
+                entries_deleted=len(deleted_entries),
+                scopes_updated=len(updated_entries),
+            )
+
     def record_factually_wrong(
         self,
         entry_id: str,
@@ -454,6 +543,25 @@ class MemoryEngine:
         self._id_to_path[entry.id] = path
         self._upsert_cache(entry)
         return entry
+
+    def _write_agent_lifecycle_changes(
+        self,
+        originals: list[MemoryEntry],
+        updated_entries: list[MemoryEntry],
+        deleted_entries: list[MemoryEntry],
+    ) -> None:
+        """Apply a multi-entry lifecycle change and restore originals on failure."""
+        original_paths = {entry.id: self._id_to_path[entry.id] for entry in originals}
+        try:
+            for entry in updated_entries:
+                storage.write_entry(original_paths[entry.id], entry, memory_dir=self._memory_dir)
+            for entry in deleted_entries:
+                storage.delete_entry(original_paths[entry.id], memory_dir=self._memory_dir)
+        except Exception:
+            for entry in originals:
+                storage.write_entry(original_paths[entry.id], entry, memory_dir=self._memory_dir)
+            raise
+        self._entries = self._load()
 
     def _upsert_cache(self, entry: MemoryEntry) -> None:
         for index, current in enumerate(self._entries):

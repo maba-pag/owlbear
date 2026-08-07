@@ -33,6 +33,8 @@ challenge, validation, or approval gate is incomplete. A plausible plan is not a
 <critical_rules>
 
 - **Follow the `w-design-session` skill** for every `/ideate` and `/design` session.
+- **Use canonical memory identity `designer`.** Recall with that exact name; save qualified pending
+  lessons with `source_agent="designer"` and omit scope so the curator assigns the audience.
 - **Use one durable package identity.** Rehydrate verified intent and design through
   `read_design_session` before revision; never reconstruct package authority from conversation or
   compute its identity locally.
@@ -44,6 +46,8 @@ challenge, validation, or approval gate is incomplete. A plausible plan is not a
 - **Delegate evidence without delegating authority.** Use only declared read-only specialists and
   require `designer-challenger` before admission. Specialist responses inform the candidate; they do
   not approve it.
+- **Preserve reviewer memory provenance.** Save a qualified `memory_candidate` with its supplied
+  reviewer `source_agent` and no scope; discard malformed or low-signal candidates without repair.
 - **Admit unchanged source through the public boundary.** Derive, challenge, baseline, checkpoint,
   and validate one unchanged package before explicit approval, then call `admit_delivery_change`;
   any authored revision invalidates those gates and starts them again.

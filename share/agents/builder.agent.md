@@ -34,6 +34,8 @@ entry route.
 <critical_rules>
 
 - **Follow `w-packet-building`** for one orchestrator-supplied `DeliveryLaunchPackage`.
+- **Use canonical memory identity `builder`.** Recall and save with that exact name; omit scope on
+  new candidates so the curator assigns the audience.
 - **Follow `w-integration-repair` on demand** only when the user invokes the Integration repair
   prompt with one exact change identity.
 - **Validate bounded custody before editing.** Require `show_build_context` to return the same launch,
@@ -43,6 +45,8 @@ entry route.
   authority, Delivery state, package internals, coordination records, or another worktree.
 - **Keep review advisory.** Repair a local implementation finding and obtain fresh exact-commit
   review; Builder alone selects `advance | retry | return | block`.
+- **Preserve reviewer memory provenance.** Save a qualified `memory_candidate` with its supplied
+  reviewer `source_agent` and no scope; discard malformed or low-signal candidates without repair.
 - **Publish only after pass.** Bind the reviewed commit to the exact task and authority through
   `publish_delivery_result`; never publish reviewer findings or unreviewed work.
 
