@@ -67,9 +67,11 @@ fresh review. Never amend or erase a reviewed head.
 
 Dispatch only `launch.policy.reviewer_agent` to `build-reviewer`; the reviewer agent's frontmatter
 owns its model.
-Supply the unchanged launch identity, full Build context, complete diff, changed paths, exact commit,
-focused proof, custody, ancestry, and prior evidence. Require the reviewer to echo the exact commit
-and return disposition `pass | finding`, matching `finding_boundary`, and non-empty evidence.
+Supply the unchanged launch identity, full Build context, source and exact candidate commits, changed
+paths, focused proof, custody, ancestry, and prior evidence. The reviewer must independently resolve
+the candidate and inspect its complete diff with read-only Git; a caller summary or mutable worktree
+read does not satisfy exact-commit evidence. Require the reviewer to echo the exact commit and return
+disposition `pass | finding`, matching `finding_boundary`, and non-empty evidence.
 
 Repair an `implementation` finding when it remains inside the task and obtain fresh review of the new
 commit. A `planning` or `design` finding is evidence for Builder's return choice, not a reviewer-owned

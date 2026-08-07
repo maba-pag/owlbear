@@ -397,9 +397,18 @@ def test_target_role_write_and_lifecycle_guards_are_preserved() -> None:
     assert not any(tool.startswith("edit/") for tool in orchestrator_tools)
     assert not any(tool.startswith("execute/") for tool in orchestrator_tools)
     assert metadata["build-reviewer"]["hooks"] == {
+        "PreToolUse": [
+            {
+                "type": "command",
+                "command": "uv run python .owlbear/hooks/deny-writes.py --terminal-read-only",
+            }
+        ]
+    }
+    assert "execute/runInTerminal" in metadata["build-reviewer"]["tools"]
+    assert "execute/runInTerminal" not in metadata["planner-challenger"]["tools"]
+    assert metadata["planner-challenger"]["hooks"] == {
         "PreToolUse": [{"type": "command", "command": "uv run python .owlbear/hooks/deny-writes.py"}]
     }
-    assert metadata["planner-challenger"]["hooks"] == metadata["build-reviewer"]["hooks"]
 
 
 def test_design_entries_preserve_gate_order_and_warning_policy() -> None:

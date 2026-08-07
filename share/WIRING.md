@@ -50,7 +50,7 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | planner-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
 | orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, memory-curator, Explore | Five Delivery portfolio operations: report, acquire, transition, recover exact failed claims including Builder dispatch failures, and integrate ready changes; no repository write tools |
 | builder | GPT-5.6 Terra | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; task Build returns a lifecycle transition or claim-bound pre-execution dispatch failure; user-invoked reviewed Integration repair; `SessionStart`: repository context; `PostToolUse`: lint changed files |
-| build-reviewer | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | Read-only task-result or Integration-repair review; `PreToolUse`: deny writes except scratch |
+| build-reviewer | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or Integration-repair review with read-only Git; `PreToolUse`: deny writes except scratch and terminal mutation |
 | test-curator | GPT-5.6 Terra | `w-test-curation` | None | `PreToolUse`: deny source writes |
 | memory-curator | GPT-5.6 Terra | `w-mem-curation` | None | None |
 | knowledge-ingestor | GPT-5.6 Luna | `h-knowledge-ops` | None | None |
@@ -135,7 +135,7 @@ The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignmen
 | Control | Attached roles | Enforcement job |
 |---------|----------------|-----------------|
 | Agent `tools:` allowlist | Every agent | Limits runtime capabilities exposed to the role |
-| `deny-writes.py` | designer, planner, conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer | Rejects writes outside the configured scratch/research boundary; designer and planner also enable terminal read-only mode |
+| `deny-writes.py` | designer, planner, conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer | Rejects writes outside the configured scratch/research boundary; designer, planner, and build-reviewer also enable terminal read-only mode |
 | `deny-src-writes.py` | test-curator | Restricts writes to tests and scratch |
 | `session-context.py` | builder | Adds repository context at session start |
 | `lint-changed.py` | builder | Runs changed-file checks after tool use |

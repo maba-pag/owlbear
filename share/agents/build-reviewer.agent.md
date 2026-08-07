@@ -5,12 +5,12 @@ argument-hint: "Review exact commit: change={change_id}, commit={candidate_commi
 user-invocable: false
 disable-model-invocation: false
 model: Claude Sonnet 5 (copilot)
-tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search]
+tools: [vscode/toolSearch, execute/runInTerminal, read/problems, read/readFile, read/viewImage, search]
 agents: []
 hooks:
   PreToolUse:
     - type: command
-      command: uv run python .owlbear/hooks/deny-writes.py
+      command: uv run python .owlbear/hooks/deny-writes.py --terminal-read-only
 ---
 
 <persona>
@@ -28,7 +28,11 @@ concrete evidence naming the owning boundary. You never repair or route the cand
 
 <critical_rules>
 
-- **Follow `r-challenger-protocol`** and remain hard read-only.
+- **Load and follow `r-challenger-protocol` and `h-codebase-orientation` before inspection** and
+  remain hard read-only.
+- **Bind review to immutable evidence.** Independently resolve the candidate commit and inspect its
+  complete diff and changed-path set with read-only Git; mutable worktree reads and caller summaries
+  do not establish exact-commit identity.
 - **Review the supplied exact commit.** For a task result, require claim identity,
   `DeliveryBuildContext`, task boundary, complete diff, changed paths, proof, and prior evidence. For
   an Integration repair, require current attention, exact coordination identities, original conflict

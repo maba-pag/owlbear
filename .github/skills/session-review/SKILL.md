@@ -39,8 +39,11 @@ Useful narrowing options:
 - `--format json` returns structured output for further analysis.
 
 The extractor streams JSONL, omits model reasoning, redacts likely secrets, bounds content, and does
-not write files. Tool completion records expose success but do not contain result bodies. Verify
-material tool outcomes against their owning current artifact or public boundary.
+not write files. Nested agent prompts remain inside their owning top-level turn. Tool completion
+records expose success but do not contain result bodies. If `incomplete_tool_calls` is non-empty,
+treat the raw tail as unresolved: compare it with the indexed turn and verify consequential outcomes
+against their owning current artifact or public boundary. Never infer success or failure from a
+requested or started tool that lacks a completion record.
 
 ## Step 3 - Reconstruct The Reviewed Claim
 
@@ -86,6 +89,8 @@ insufficient evidence for a consequential action.
 - **Summary substitution:** summaries orient discovery but do not replace ordered turns.
 - **Transcript authority:** chat records prove what was said or attempted, not current repository or
   runtime truth.
+- **Incomplete raw tail:** unresolved tool calls require indexed-tail and current-owner verification;
+  neither source silently substitutes for the missing raw events.
 - **Unbounded extraction:** select recent, ranged, or matching turns instead of dumping a large log.
 - **Argument exposure:** include tool arguments only when needed; redaction reduces but cannot remove
   every disclosure risk.

@@ -107,6 +107,121 @@ def transcript(tmp_path: Path) -> Path:
     return path
 
 
+@pytest.fixture
+def nested_transcript(tmp_path: Path) -> Path:
+    """Create a transcript with one parent turn and one nested agent invocation."""
+    path = tmp_path / "nested-session.jsonl"
+    events = (
+        {
+            "type": "session.start",
+            "id": "event-1",
+            "timestamp": "2026-08-05T10:00:00Z",
+            "parentId": None,
+            "data": {"sessionId": "22222222-2222-4222-8222-222222222222", "producer": "copilot"},
+        },
+        {
+            "type": "assistant.message",
+            "id": "event-2",
+            "timestamp": "2026-08-05T10:00:01Z",
+            "parentId": "event-1",
+            "data": {
+                "content": "parent preamble",
+                "toolRequests": [
+                    {
+                        "toolCallId": "call-agent",
+                        "name": "runSubagent",
+                        "arguments": {"agentName": "builder", "prompt": "nested prompt"},
+                    }
+                ],
+            },
+        },
+        {
+            "type": "tool.execution_start",
+            "id": "event-3",
+            "timestamp": "2026-08-05T10:00:02Z",
+            "parentId": "event-2",
+            "data": {
+                "toolCallId": "call-agent",
+                "toolName": "runSubagent",
+                "arguments": {"agentName": "builder", "prompt": "nested prompt"},
+            },
+        },
+        {
+            "type": "user.message",
+            "id": "event-4",
+            "timestamp": "2026-08-05T10:00:03Z",
+            "parentId": "event-3",
+            "data": {"content": "nested prompt", "attachments": []},
+        },
+        {
+            "type": "assistant.message",
+            "id": "event-5",
+            "timestamp": "2026-08-05T10:00:04Z",
+            "parentId": "event-4",
+            "data": {
+                "content": "nested response",
+                "toolRequests": [
+                    {
+                        "toolCallId": "call-read",
+                        "name": "read_file",
+                        "arguments": {"filePath": "README.md"},
+                    }
+                ],
+            },
+        },
+        {
+            "type": "tool.execution_start",
+            "id": "event-6",
+            "timestamp": "2026-08-05T10:00:05Z",
+            "parentId": "event-5",
+            "data": {
+                "toolCallId": "call-read",
+                "toolName": "read_file",
+                "arguments": {"filePath": "README.md"},
+            },
+        },
+        {
+            "type": "tool.execution_complete",
+            "id": "event-7",
+            "timestamp": "2026-08-05T10:00:06Z",
+            "parentId": "event-6",
+            "data": {"toolCallId": "call-read", "success": True},
+        },
+        {
+            "type": "tool.execution_complete",
+            "id": "event-8",
+            "timestamp": "2026-08-05T10:00:07Z",
+            "parentId": "event-7",
+            "data": {"toolCallId": "call-agent", "success": True},
+        },
+        {
+            "type": "assistant.message",
+            "id": "event-9",
+            "timestamp": "2026-08-05T10:00:08Z",
+            "parentId": "event-8",
+            "data": {
+                "content": "parent resumes",
+                "toolRequests": [
+                    {
+                        "toolCallId": "call-integrate",
+                        "name": "integrate_ready_change",
+                        "arguments": {"change_id": "example"},
+                    }
+                ],
+            },
+        },
+        {
+            "type": "assistant.turn_start",
+            "id": "event-10",
+            "timestamp": "2026-08-05T10:00:09Z",
+            "parentId": "event-9",
+            "data": {"turnId": "9"},
+        },
+    )
+    path.write_text("".join(f"{json.dumps(event)}\n" for event in events), encoding="utf-8")
+    return path
+
+
 def test_extracts_turns_tools_and_redacts_sensitive_values(
     extractor: types.ModuleType,
     transcript: Path,
@@ -169,6 +284,50 @@ def test_retains_only_bounded_tail_while_preserving_total_count(
 
     assert metadata["turn_count"] == _EXPECTED_TURNS
     assert [turn.index for turn in turns] == [2]
+
+
+def test_preserves_parent_turn_across_nested_agent_invocation(
+    extractor: types.ModuleType,
+    nested_transcript: Path,
+) -> None:
+    """Keep nested prompts and events inside their owning top-level turn."""
+    config = extractor.ExtractConfig(max_content_chars=100, include_tools=True, include_tool_arguments=False)
+
+    metadata, turns = extractor.extract_turns(nested_transcript, config)
+
+    assert metadata["turn_count"] == 1
+    assert metadata["synthetic_turn_count"] == 1
+    assert len(turns) == 1
+    assert turns[0].user == "<session input unavailable in raw transcript>"
+    assert turns[0].nested_users == ["nested prompt"]
+    assert turns[0].assistant == ["parent preamble", "nested response", "parent resumes"]
+    assert [(tool.name, tool.started, tool.success) for tool in turns[0].tools] == [
+        ("runSubagent", True, True),
+        ("read_file", True, True),
+        ("integrate_ready_change", False, None),
+    ]
+
+
+def test_reports_unresolved_tool_request_at_raw_transcript_tail(
+    extractor: types.ModuleType,
+    nested_transcript: Path,
+) -> None:
+    """Expose raw-tail loss instead of implying that requested tools completed."""
+    config = extractor.ExtractConfig(max_content_chars=100, include_tools=True, include_tool_arguments=False)
+
+    metadata, turns = extractor.extract_turns(nested_transcript, config)
+
+    assert metadata["last_event_type"] == "assistant.turn_start"
+    assert metadata["last_event_timestamp"] == "2026-08-05T10:00:09Z"
+    assert metadata["incomplete_tool_calls"] == [
+        {
+            "name": "integrate_ready_change",
+            "tool_call_id": "call-integrate",
+            "state": "requested",
+        }
+    ]
+    rendered = extractor.render_markdown(metadata, turns)
+    assert "1 tool call lacks a completion record" in rendered
 
 
 def test_bounds_tool_arguments_after_redaction(extractor: types.ModuleType, transcript: Path) -> None:
