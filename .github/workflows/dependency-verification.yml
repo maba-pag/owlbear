@@ -3,87 +3,149 @@ name: Dependency verification
 
 "on":
   pull_request:
+    branches:
+      - dev
     types:
       - opened
       - synchronize
       - reopened
-      - labeled
-      - unlabeled
       - ready_for_review
-  repository_dispatch:
-    types:
-      - dependency-autofix-updated
 
 concurrency:
-  group: dependency-verification-${{ github.event.pull_request.number || github.event.client_payload.prNumber }}
+  group: dependency-verification-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  verify:
-    if: >-
-      github.event_name == 'repository_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'dependencies') ||
-      contains(github.event.pull_request.labels.*.name, 'renovate')
+  classify:
+    name: Classify dependency surfaces
     runs-on: ubuntu-latest
-    timeout-minutes: 35
-    env:
-      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.client_payload.baseSha }}
-      HEAD_REF: ${{ github.event.pull_request.head.ref || github.event.client_payload.headRef }}
-      HEAD_REPOSITORY: >-
-        ${{ github.event.pull_request.head.repo.full_name || github.event.client_payload.headRepository }}
-      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.client_payload.headSha }}
-      PR_NUMBER: ${{ github.event.pull_request.number || github.event.client_payload.prNumber }}
-      PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-
+    timeout-minutes: 5
+    outputs:
+      applicable: ${{ steps.scope.outputs.applicable }}
+      compatibility: ${{ steps.scope.outputs.compatibility }}
+      frontend_runtime: ${{ steps.scope.outputs.frontend_runtime }}
+      megalinter: ${{ steps.scope.outputs.megalinter }}
+      node: ${{ steps.scope.outputs.node }}
+      node_tooling: ${{ steps.scope.outputs.node_tooling }}
+      pds: ${{ steps.scope.outputs.pds }}
+      python: ${{ steps.scope.outputs.python }}
+      python_tooling: ${{ steps.scope.outputs.python_tooling }}
+      renovate: ${{ steps.scope.outputs.renovate }}
+      workflows: ${{ steps.scope.outputs.workflows }}
     steps:
-      - name: Resolve verification mode
-        id: context
-        env:
-          DISPATCH_MODE: ${{ github.event.client_payload.mode }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [ "$EVENT_NAME" = "repository_dispatch" ]; then
-            mode="$DISPATCH_MODE"
-          else
-            safe="$(jq 'index("autofix") != null' <<< "$PR_LABELS")"
-            unsafe="$(jq 'index("unsafe-autofix") != null' <<< "$PR_LABELS")"
-            if [ "$safe" = true ] && [ "$unsafe" = true ]; then
-              echo "autofix and unsafe-autofix cannot be combined." >&2
-              exit 1
-            fi
-            mode=none
-            [ "$safe" = true ] && mode=safe
-            [ "$unsafe" = true ] && mode=unsafe
-          fi
-
-          case "$mode" in
-            none|safe|unsafe) ;;
-            *) echo "Invalid dependency verification mode: $mode" >&2; exit 1 ;;
-          esac
-          test -n "$PR_NUMBER" && test -n "$BASE_SHA" && test -n "$HEAD_SHA"
-          same_repository=false
-          [ "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY" ] && same_repository=true
-          if [ "$same_repository" = false ] && [ "$mode" != none ]; then
-            echo "Fork pull requests are verification-only; ignoring the autofix label."
-            mode=none
-          fi
-          echo "mode=$mode" >> "$GITHUB_OUTPUT"
-          echo "same_repository=$same_repository" >> "$GITHUB_OUTPUT"
-
       - name: Checkout pull request head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          ref: ${{ env.HEAD_SHA }}
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Classify changed dependency surfaces
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git diff --name-only -z "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/dependency-paths"
+          git diff --unified=0 "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/dependency.diff"
+          python3 serve/tools/src/owlbear_tools/dependency_ci.py \
+            --paths-file "$RUNNER_TEMP/dependency-paths" \
+            --diff-file "$RUNNER_TEMP/dependency.diff" \
+            --github-output "$GITHUB_OUTPUT" \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+  proof-python:
+    name: Prove Python dependency update
+    needs: classify
+    if: needs.classify.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - name: Setup uv
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
         with:
           enable-cache: true
+
+      - name: Install locked Python dependencies
+        id: install
+        run: uv sync --locked --all-extras
+
+      - name: Compile Python sources
+        id: compile
+        continue-on-error: true
+        run: uv run python -m compileall -q serve setup tests
+
+      - name: Exercise updated Python tooling
+        id: tooling
+        if: needs.classify.outputs.python_tooling == 'true'
+        continue-on-error: true
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run pre-commit run ruff-check --all-files --hook-stage manual
+          uv run pre-commit run ruff-format-check --all-files --hook-stage manual
+
+      - name: Run Python behavior tests
+        id: tests
+        continue-on-error: true
+        run: uv run pytest tests serve -m "not api and not e2e"
+
+      - name: Summarize Python proof
+        if: always()
+        env:
+          COMPILE: ${{ steps.compile.outcome }}
+          INSTALL: ${{ steps.install.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+          TOOLING: ${{ steps.tooling.outcome }}
+        run: |
+          {
+            echo "## Python dependency proof"
+            echo
+            echo "| Stage | Result | Reproduce |"
+            echo "|---|---|---|"
+            echo "| Locked install | $INSTALL | \`uv sync --locked --all-extras\` |"
+            echo "| Compile | $COMPILE | \`uv run python -m compileall -q serve setup tests\` |"
+            echo "| Tests | $TESTS | \`uv run pytest tests serve -m 'not api and not e2e'\` |"
+            echo "| Updated tooling | ${TOOLING:-skipped} | \`uv run ruff check .\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce Python proof
+        if: always()
+        env:
+          COMPILE: ${{ steps.compile.outcome }}
+          INSTALL: ${{ steps.install.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+          TOOLING: ${{ steps.tooling.outcome }}
+        run: |
+          for result in "$INSTALL" "$COMPILE" "$TESTS"; do
+            [ "$result" = success ] || exit 1
+          done
+          [ -z "$TOOLING" ] || [ "$TOOLING" = skipped ] || [ "$TOOLING" = success ]
+
+  proof-node:
+    name: Prove Cockpit dependency update
+    needs: classify
+    if: needs.classify.outputs.node == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: serve/cockpit/web
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
@@ -92,148 +154,261 @@ jobs:
           cache: npm
           cache-dependency-path: serve/cockpit/web/package-lock.json
 
-      - name: Install locked dependencies
-        run: uv run deps-sync
+      - name: Install locked Cockpit dependencies
+        id: install
+        run: npm ci
 
-      - name: Record pull request paths
-        run: git diff --name-only -z "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/pr-paths"
+      - name: Run Cockpit behavior tests
+        id: tests
+        continue-on-error: true
+        run: npm test
 
-      - name: Apply safe fixes
-        if: steps.context.outputs.mode == 'safe'
+      - name: Build production Cockpit
+        id: build
+        continue-on-error: true
+        run: npm run build
+
+      - name: Exercise updated frontend tooling
+        id: tooling
+        if: needs.classify.outputs.node_tooling == 'true'
+        continue-on-error: true
         run: |
-          uv run pds-sync
-          uv run lint-full || true
+          npm run lint:css
+          npm run lint:html
 
-      - name: Apply unsafe fixes
-        if: steps.context.outputs.mode == 'unsafe'
+      - name: Run maintained browser smoke tests
+        id: runtime
+        if: needs.classify.outputs.frontend_runtime == 'true'
+        continue-on-error: true
         run: |
-          uv run pds-sync
-          uv run lint-full --unsafe-fixes || true
+          npx playwright install chromium --with-deps
+          npm run test:e2e
 
-      - name: Restrict generated changes
-        if: steps.context.outputs.mode != 'none'
+      - name: Verify PDS generated assets
+        id: pds
+        if: needs.classify.outputs.pds == 'true'
+        continue-on-error: true
+        run: |
+          npm run sync:pds
+          git diff --exit-code -- public/porsche-design-system
+
+      - name: Summarize Cockpit proof
+        if: always()
         env:
-          PR_PATHS_FILE: ${{ runner.temp }}/pr-paths
+          BUILD: ${{ steps.build.outcome }}
+          INSTALL: ${{ steps.install.outcome }}
+          PDS: ${{ steps.pds.outcome }}
+          RUNTIME: ${{ steps.runtime.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+          TOOLING: ${{ steps.tooling.outcome }}
         run: |
-          git add -N -- serve/cockpit/web/public/porsche-design-system 2>/dev/null || true
-          uv run python - <<'PY'
-          import os
-          import subprocess
-          from pathlib import Path, PurePosixPath
+          {
+            echo "## Cockpit dependency proof"
+            echo
+            echo "| Stage | Result | Reproduce from serve/cockpit/web |"
+            echo "|---|---|---|"
+            echo "| Locked install | $INSTALL | \`npm ci\` |"
+            echo "| Tests | $TESTS | \`npm test\` |"
+            echo "| Production build | $BUILD | \`npm run build\` |"
+            echo "| Updated tooling | ${TOOLING:-skipped} | \`npm run lint:css && npm run lint:html\` |"
+            echo "| Browser smoke | ${RUNTIME:-skipped} | \`npm run test:e2e\` |"
+            echo "| PDS assets | ${PDS:-skipped} | \`npm run sync:pds\` then inspect \`git diff\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
-          generated = "serve/cockpit/web/public/porsche-design-system/"
-          denied = (".github/", ".owlbear/", "store/")
-          suffixes = {
-              ".css", ".html", ".js", ".json", ".jsx", ".md", ".mjs",
-              ".py", ".toml", ".ts", ".tsx", ".yaml", ".yml",
-          }
-          original = {
-              value.decode("utf-8")
-              for value in Path(os.environ["PR_PATHS_FILE"]).read_bytes().split(b"\0")
-              if value
-          }
-
-          def allowed(path: str) -> bool:
-              candidate = PurePosixPath(path)
-              return path.startswith(generated) or (
-                  path in original
-                  and not path.startswith(denied)
-                  and candidate.name not in {".gitmodules", ".npmrc", ".pypirc"}
-                  and (candidate.suffix in suffixes or candidate.name.endswith("lock"))
-              )
-
-          changed = subprocess.check_output(
-              ["git", "diff", "--name-only", "-z"],
-          ).split(b"\0")
-          for value in changed:
-              if not value:
-                  continue
-              path = value.decode("utf-8")
-              if not allowed(path):
-                  subprocess.run(["git", "restore", "--worktree", "--", path], check=True)
-          PY
-
-      - name: Verify formatting and static analysis
-        run: uv run lint-full --no-fix
-
-      - name: Run Python tests
-        run: uv run pytest tests serve -m "not api and not e2e"
-
-      - name: Run Cockpit tests
-        run: npm test --prefix serve/cockpit/web
-
-      - name: Build Cockpit
-        run: npm run build --prefix serve/cockpit/web
-
-      - name: Create autofix artifact
-        id: artifact
-        if: >-
-          steps.context.outputs.mode != 'none' &&
-          steps.context.outputs.same_repository == 'true'
+      - name: Enforce Cockpit proof
+        if: always()
         env:
-          MODE: ${{ steps.context.outputs.mode }}
+          BUILD: ${{ steps.build.outcome }}
+          INSTALL: ${{ steps.install.outcome }}
+          PDS: ${{ steps.pds.outcome }}
+          RUNTIME: ${{ steps.runtime.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+          TOOLING: ${{ steps.tooling.outcome }}
         run: |
-          artifact="$RUNNER_TEMP/dependency-autofix"
-          mkdir -p "$artifact"
-          if git diff --quiet; then
-            echo "has_patch=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git diff --binary --full-index --no-renames > "$artifact/fixes.patch"
-          PATCH_PATH="$artifact/fixes.patch" METADATA_PATH="$artifact/metadata.json" \
-            uv run python - <<'PY'
-          import hashlib
-          import json
-          import os
-          import subprocess
-          from pathlib import Path
+          for result in "$INSTALL" "$TESTS" "$BUILD"; do
+            [ "$result" = success ] || exit 1
+          done
+          for result in "$TOOLING" "$RUNTIME" "$PDS"; do
+            [ -z "$result" ] || [ "$result" = skipped ] || [ "$result" = success ] || exit 1
+          done
 
-          patch = Path(os.environ["PATCH_PATH"])
-          paths = [
-              value.decode("utf-8")
-              for value in subprocess.check_output(
-                  ["git", "diff", "--name-only", "-z"],
-              ).split(b"\0")
-              if value
-          ]
-          metadata = {
-              "baseSha": os.environ["BASE_SHA"],
-              "headRef": os.environ["HEAD_REF"],
-              "headRepository": os.environ["HEAD_REPOSITORY"],
-              "headSha": os.environ["HEAD_SHA"],
-              "mode": os.environ["MODE"],
-              "patchSha256": hashlib.sha256(patch.read_bytes()).hexdigest(),
-              "paths": paths,
-              "prNumber": int(os.environ["PR_NUMBER"]),
-          }
-          Path(os.environ["METADATA_PATH"]).write_text(
-              json.dumps(metadata, indent=2) + "\n",
-              encoding="utf-8",
-          )
-          PY
-          echo "has_patch=true" >> "$GITHUB_OUTPUT"
+  compatibility:
+    name: Prove dependency-specific compatibility
+    needs: classify
+    if: needs.classify.outputs.compatibility == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
 
-      - name: Upload autofix artifact
-        if: steps.artifact.outputs.has_patch == 'true'
+      - name: Setup uv
+        if: needs.classify.outputs.workflows == 'true'
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Install workflow validation dependencies
+        if: needs.classify.outputs.workflows == 'true'
+        run: uv sync --locked --all-extras
+
+      - name: Validate updated GitHub Actions workflows
+        if: needs.classify.outputs.workflows == 'true'
+        run: uv run pre-commit run actionlint --all-files
+
+      - name: Validate Renovate configuration syntax
+        if: needs.classify.outputs.renovate == 'true'
+        run: python3 -m json.tool .github/renovate.json >/dev/null
+
+      - name: Verify updated MegaLinter image is available
+        if: needs.classify.outputs.megalinter == 'true'
+        run: |
+          image="$(awk '/^OWLBEAR_MEGALINTER_IMAGE:/ { print $2 }' .mega-linter.yml)"
+          test -n "$image"
+          docker pull "$image"
+          docker image inspect "$image" >/dev/null
+          echo "The image is pullable; run the separate MegaLinter workflow for execution proof." \
+            >> "$GITHUB_STEP_SUMMARY"
+
+  repair-pds:
+    name: Prepare verified PDS repair
+    needs:
+      - classify
+      - proof-python
+      - proof-node
+      - compatibility
+    if: >-
+      always() &&
+      needs.classify.result == 'success' &&
+      needs.classify.outputs.pds == 'true' &&
+      needs.proof-node.result == 'failure' &&
+      (needs.proof-python.result == 'success' || needs.proof-python.result == 'skipped') &&
+      (needs.compatibility.result == 'success' || needs.compatibility.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: serve/cockpit/web
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: serve/cockpit/web/.nvmrc
+          cache: npm
+          cache-dependency-path: serve/cockpit/web/package-lock.json
+
+      - name: Generate PDS assets
+        run: |
+          npm ci
+          npm run sync:pds
+
+      - name: Restrict repair to the generated PDS tree
+        run: |
+          mapfile -d '' changed < <(git diff --name-only -z)
+          test "${#changed[@]}" -gt 0
+          for path in "${changed[@]}"; do
+            case "$path" in
+              serve/cockpit/web/public/porsche-design-system/*) ;;
+              *) echo "Repair changed unauthorized path: $path" >&2; exit 1 ;;
+            esac
+          done
+
+      - name: Verify repaired Cockpit tree
+        run: |
+          npm test
+          npm run build
+          npx playwright install chromium --with-deps
+          npm run test:e2e
+          git diff --binary --full-index --no-renames > "$RUNNER_TEMP/pds-assets.patch"
+          npm run sync:pds
+          git diff --binary --full-index --no-renames > "$RUNNER_TEMP/pds-assets-second.patch"
+          cmp "$RUNNER_TEMP/pds-assets.patch" "$RUNNER_TEMP/pds-assets-second.patch"
+
+      - name: Upload verified PDS repair
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: dependency-autofix-${{ env.PR_NUMBER }}-${{ env.HEAD_SHA }}
-          path: ${{ runner.temp }}/dependency-autofix
+          name: dependency-pds-repair-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/pds-assets.patch
           if-no-files-found: error
           retention-days: 1
 
-      - name: Write summary
-        if: always()
-        env:
-          MODE: ${{ steps.context.outputs.mode }}
+      - name: Explain repair policy
         run: |
           {
-            echo "## Dependency verification"
+            echo "## Verified PDS repair available"
             echo
-            echo "- Pull request: #$PR_NUMBER"
-            echo "- Head: \`$HEAD_SHA\`"
-            echo "- Mode: \`${MODE:-unresolved}\`"
-            echo "- Fork: $([ "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY" ] && echo no || echo yes)"
-            echo
-            echo "Use \`autofix\` for safe fixes or \`unsafe-autofix\` for unsafe fixes."
+            echo "The untouched PR head remains failing. Download the one-day repair artifact,"
+            echo "apply it with \`git apply pds-assets.patch\`, and push the resulting commit."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  gate:
+    name: Verify dependency update
+    needs:
+      - classify
+      - proof-python
+      - proof-node
+      - compatibility
+      - repair-pds
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Aggregate dependency proof
+        env:
+          APPLICABLE: ${{ needs.classify.outputs.applicable }}
+          CLASSIFY: ${{ needs.classify.result }}
+          COMPATIBILITY: ${{ needs.compatibility.result }}
+          COMPATIBILITY_EXPECTED: ${{ needs.classify.outputs.compatibility }}
+          NODE: ${{ needs.proof-node.result }}
+          NODE_EXPECTED: ${{ needs.classify.outputs.node }}
+          PYTHON: ${{ needs.proof-python.result }}
+          PYTHON_EXPECTED: ${{ needs.classify.outputs.python }}
+          REPAIR: ${{ needs.repair-pds.result }}
+        run: |
+          failed=false
+          [ "$CLASSIFY" = success ] || failed=true
+
+          check_expected() {
+            expected="$1"
+            result="$2"
+            if [ "$expected" = true ]; then
+              [ "$result" = success ] || failed=true
+            else
+              [ "$result" = skipped ] || [ "$result" = success ] || failed=true
+            fi
+          }
+
+          check_expected "$PYTHON_EXPECTED" "$PYTHON"
+          check_expected "$NODE_EXPECTED" "$NODE"
+          check_expected "$COMPATIBILITY_EXPECTED" "$COMPATIBILITY"
+
+          {
+            echo "## Dependency verification gate"
+            echo
+            echo "| Proof | Applicable | Result |"
+            echo "|---|---|---|"
+            echo "| Classification | yes | $CLASSIFY |"
+            echo "| Python | ${PYTHON_EXPECTED:-unknown} | $PYTHON |"
+            echo "| Cockpit | ${NODE_EXPECTED:-unknown} | $NODE |"
+            echo "| Compatibility | ${COMPATIBILITY_EXPECTED:-unknown} | $COMPATIBILITY |"
+            echo "| PDS repair artifact | conditional | $REPAIR |"
+            echo
+            if [ "$APPLICABLE" != true ]; then
+              echo "No maintained dependency surface changed; the gate is not applicable."
+            elif [ "$failed" = true ]; then
+              echo "At least one applicable proof failed. Open that job for its reproduction command and remedy."
+            else
+              echo "All applicable dependency proofs passed on the untouched pull-request head."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          [ "$failed" = false ]

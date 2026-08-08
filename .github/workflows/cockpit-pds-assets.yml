@@ -7,8 +7,6 @@ name: Cockpit PDS Assets
       - dev
     paths:
       - ".github/workflows/cockpit-pds-assets.yml"
-      - "serve/cockpit/web/package.json"
-      - "serve/cockpit/web/package-lock.json"
       - "serve/cockpit/web/scripts/sync-pds-assets.mjs"
       - "serve/cockpit/web/public/porsche-design-system/**"
       - "serve/cockpit/web/src/**"
@@ -19,8 +17,6 @@ name: Cockpit PDS Assets
       - dev
     paths:
       - ".github/workflows/cockpit-pds-assets.yml"
-      - "serve/cockpit/web/package.json"
-      - "serve/cockpit/web/package-lock.json"
       - "serve/cockpit/web/scripts/sync-pds-assets.mjs"
       - "serve/cockpit/web/public/porsche-design-system/**"
       - "serve/cockpit/web/src/**"

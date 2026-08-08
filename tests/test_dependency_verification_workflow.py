@@ -1,83 +1,117 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 import yaml
 
+from owlbear_tools.dependency_ci import classify_dependency_change
 
-ROOT = Path(__file__).resolve().parents[1]
-VERIFY_PATH = ROOT / ".github/workflows/dependency-verification.yml"
+
+ROOT = Path(__file__).parents[1]
+WORKFLOW_PATH = ROOT / ".github/workflows/dependency-verification.yml"
 WRITEBACK_PATH = ROOT / ".github/workflows/dependency-autofix-writeback.yml"
-RENOVATE_PATH = ROOT / ".github/renovate.json"
 
 
-def _workflow(path: Path) -> tuple[dict[str, object], str]:
-    raw = path.read_text(encoding="utf-8")
-    return yaml.safe_load(raw), raw
+def _workflow() -> dict[str, object]:
+    return yaml.safe_load(WORKFLOW_PATH.read_text())
 
 
-def test_dependency_verification_is_branch_agnostic_and_read_only() -> None:
-    workflow, raw = _workflow(VERIFY_PATH)
-    pull_request = workflow["on"]["pull_request"]
+def _job(workflow: dict[str, object], name: str) -> dict[str, object]:
+    jobs = workflow["jobs"]
+    assert isinstance(jobs, dict)
+    job = jobs[name]
+    assert isinstance(job, dict)
+    return job
 
-    assert "branches" not in pull_request
-    assert set(pull_request["types"]) == {
-        "opened",
-        "synchronize",
-        "reopened",
-        "labeled",
-        "unlabeled",
-        "ready_for_review",
-    }
+
+def test_dependency_verification_is_read_only_and_head_bound() -> None:
+    workflow = _workflow()
+
     assert workflow["permissions"] == {"contents": "read"}
-    assert "dependencies" in raw
-    assert "renovate" in raw
-    assert "autofix" in raw
-    assert "unsafe-autofix" in raw
-    assert "cannot be combined" in raw
-    assert "Fork pull requests are verification-only" in raw
-    assert "uv run lint-full --no-fix" in raw
+    assert "repository_dispatch" not in workflow["on"]
+    assert not WRITEBACK_PATH.exists()
+
+    workflow_text = WORKFLOW_PATH.read_text()
+    assert "github.event.pull_request.head.sha" in workflow_text
+    assert "persist-credentials: false" in workflow_text
+    assert "contents: write" not in workflow_text
 
 
-def test_dependency_writeback_never_checks_out_untrusted_code() -> None:
-    workflow, raw = _workflow(WRITEBACK_PATH)
+def test_dependency_gate_always_aggregates_each_proof() -> None:
+    gate = _job(_workflow(), "gate")
 
-    assert workflow["on"]["workflow_run"]["workflows"] == ["Dependency verification"]
-    assert workflow["permissions"] == {
-        "actions": "read",
-        "contents": "write",
-        "pull-requests": "read",
-    }
-    assert "actions/checkout" not in raw
-    assert "pulls/${PR_NUMBER}" in raw
-    assert "HEAD_SHA" in raw
-    assert "headRepository" in raw
-    assert "git apply --check" not in raw
-    assert "dependency-autofix-updated" in raw
-    assert "AUTHORIZATION: basic" in raw
+    assert gate["name"] == "Verify dependency update"
+    assert gate["if"] == "always()"
+    assert gate["needs"] == [
+        "classify",
+        "proof-python",
+        "proof-node",
+        "compatibility",
+        "repair-pds",
+    ]
+
+
+def test_dependency_repair_is_pds_only_and_artifact_only() -> None:
+    workflow_text = WORKFLOW_PATH.read_text()
+
+    assert "needs.classify.outputs.pds == 'true'" in workflow_text
+    assert "serve/cockpit/web/public/porsche-design-system/*" in workflow_text
+    assert "actions/upload-artifact@" in workflow_text
+    assert "retention-days: 1" in workflow_text
+    assert "git push" not in workflow_text
+    assert "pull-requests: write" not in workflow_text
 
 
 def test_dependency_workflow_actions_are_pinned() -> None:
-    uses = []
-    for path in (VERIFY_PATH, WRITEBACK_PATH):
-        _workflow_data, raw = _workflow(path)
-        uses.extend(re.findall(r"^\s*uses:\s*([^\s#]+)", raw, flags=re.MULTILINE))
+    for line in WORKFLOW_PATH.read_text().splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("uses:"):
+            continue
+        action = stripped.split("#", maxsplit=1)[0].strip().removeprefix("uses:").strip()
+        assert "@" in action
+        revision = action.rsplit("@", maxsplit=1)[1]
+        assert len(revision) == 40
+        assert all(character in "0123456789abcdef" for character in revision)
 
-    assert uses
-    assert all(re.fullmatch(r"[^@]+@[0-9a-f]{40}", action) for action in uses)
 
-
-def test_renovate_rules_preserve_dependency_gate_labels() -> None:
-    config = json.loads(RENOVATE_PATH.read_text(encoding="utf-8"))
-
-    assert set(config["labels"]) == {"dependencies", "renovate"}
-    pds_rule = next(
-        rule for rule in config["packageRules"] if rule["description"].startswith("Review Porsche Design System")
+def test_classifier_derives_python_and_frontend_runtime_from_lockfiles() -> None:
+    python_scope = classify_dependency_change(
+        ["uv.lock"],
+        '+name = "ruff"\n+version = "0.15.0"\n',
     )
-    assert "labels" not in pds_rule
-    assert set(pds_rule["addLabels"]) == {"cockpit", "pds"}
-    assert config["gitIgnoredAuthors"] == [
-        "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
-    ]
+    frontend_scope = classify_dependency_change(
+        ["serve/cockpit/web/package-lock.json"],
+        '+        "react": "19.3.0"\n',
+    )
+
+    assert python_scope.python
+    assert python_scope.python_tooling
+    assert frontend_scope.node
+    assert frontend_scope.frontend_runtime
+
+
+def test_classifier_derives_compatibility_and_pds_surfaces() -> None:
+    compatibility_scope = classify_dependency_change(
+        [".github/workflows/dependency-verification.yml", ".github/renovate.json"],
+        "",
+    )
+    pds_scope = classify_dependency_change(
+        ["serve/cockpit/web/package-lock.json"],
+        '+    "node_modules/@porsche-design-system/components-react": {\n',
+    )
+
+    assert compatibility_scope.workflows
+    assert compatibility_scope.renovate
+    assert compatibility_scope.compatibility
+    assert pds_scope.node
+    assert pds_scope.pds
+    assert pds_scope.frontend_runtime
+
+
+def test_renovate_automerge_waits_for_required_gate_configuration() -> None:
+    renovate = json.loads((ROOT / ".github/renovate.json").read_text())
+
+    assert renovate["lockFileMaintenance"]["automerge"] is False
+    for rule in renovate["packageRules"]:
+        assert rule.get("automerge") is not True
