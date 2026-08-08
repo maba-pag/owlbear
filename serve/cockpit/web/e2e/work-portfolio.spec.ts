@@ -158,7 +158,7 @@ test.describe('assembled Work portfolio', () => {
     await expect(page.getByTestId('cockpit-shell')).toBeVisible()
     await expectCenteredDesktopNavigation(page)
     await expect(page.locator('[data-work-item]')).toHaveCount(6)
-    for (const label of ['Design', 'Planning', 'Implementation', 'Assembly', 'Done']) {
+    for (const label of ['Design', 'Planning', 'Implementation', 'Assembly', 'Reviewed']) {
       await expect(page.getByText(label, { exact: true })).toBeVisible()
     }
     const summary = page.getByLabel('Delivery portfolio status')
@@ -296,7 +296,7 @@ test.describe('assembled Work portfolio', () => {
     await expectCenteredDesktopNavigation(page)
     await expect(page.locator('[data-work-item]')).toHaveCount(6)
     const metrics = page.getByTestId('workspace-header-summary').getByTestId('workspace-header-metric')
-    await expect(metrics).toHaveCount(5)
+    await expect(metrics).toHaveCount(6)
     await expect(metrics.last()).toContainText('no action needed')
     const metricBoxes = await metrics.evaluateAll((nodes) => nodes.map((node) => ({
       top: Math.round(node.getBoundingClientRect().top),

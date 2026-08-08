@@ -540,6 +540,7 @@ def test_work_item_queries_use_bounded_projector_models_only(tmp_path: Path) -> 
     assert tuple((item.change_id, item.work_item_id) for item in listed) == (
         ("change-a", "OUT-001"),
         ("change-b", "OUT-001"),
+        ("change-b", "change-b"),
     )
     assert shown.acceptance == ("The launch is observable.",)
     assert "internal semantic body sentinel" not in serialized
@@ -1316,6 +1317,30 @@ def test_integration_merge_conflict_retains_clean_heads_and_typed_attention(tmp_
     assert _git(repository, "rev-parse", coordinator.show("change-a").branch) == reviewed
     assert not _git(coordinator.show("change-a").worktree_path, "status", "--porcelain")
     assert runtimes["change-a"].change_stage().value == "integration"
+    acquired = application.acquire_frontier_work()
+    assert acquired.integration_ready_change_ids == ()
+    assert tuple(
+        (item.change_id, item.code.value, item.disposition.value) for item in acquired.integration_attention
+    ) == (("change-a", "merge-conflict", "repair-required"),)
+    integration_card = next(item for item in application.list_work_items() if item.work_item_id == "change-a")
+    operator = application.show_operator_context("change-a", "change-a")
+    assert (integration_card.scope, integration_card.attention.value, integration_card.next_action) == (
+        "change-integration",
+        "repair",
+        "Run reviewed Integration repair",
+    )
+    assert operator.integration_attention is not None
+    assert operator.integration_attention.disposition.value == "repair-required"
+    assert operator.integration_attention.retry_condition == (
+        "Admit a reviewed Integration repair for this attention, then retry Integration."
+    )
+
+    (repository / "after-attention.txt").write_text("target advanced\n", encoding="utf-8")
+    _git(repository, "add", "after-attention.txt")
+    _git(repository, "commit", "-m", "advance target after attention")
+    refreshed = application.acquire_frontier_work()
+    assert refreshed.integration_ready_change_ids == ("change-a",)
+    assert refreshed.integration_attention == ()
 
 
 def test_reviewed_integration_repair_advances_boundary_and_retries_publication(tmp_path: Path) -> None:

@@ -32,13 +32,14 @@ function AttentionMetricLabel({ state }: { state: WorkItemAttention }) {
  * so the parts always add up to the whole.
  */
 function PortfolioStatusSummary({ counts }: { counts: AttentionCounts }) {
-  const total = counts.user + counts.agent + counts.waiting + counts.none
+  const total = counts.user + counts.agent + counts.waiting + counts.repair + counts.none
   return (
     <>
       <WorkspaceHeaderMetric value={total} label={workItemCountLabel(total)} />
       <WorkspaceHeaderMetric value={counts.user} label={<AttentionMetricLabel state="user" />} tone={counts.user > 0 ? 'error' : 'neutral'} />
       <WorkspaceHeaderMetric value={counts.agent} label={<AttentionMetricLabel state="agent" />} />
       <WorkspaceHeaderMetric value={counts.waiting} label={<AttentionMetricLabel state="waiting" />} />
+      <WorkspaceHeaderMetric value={counts.repair} label={<AttentionMetricLabel state="repair" />} tone={counts.repair > 0 ? 'error' : 'neutral'} />
       <WorkspaceHeaderMetric value={counts.none} label={<AttentionMetricLabel state="none" />} />
     </>
   )
@@ -150,6 +151,7 @@ function PortfolioFilterPanel(props: FilterProps) {
         <PSelectOption value="user">{ATTENTION_LABELS.user}</PSelectOption>
         <PSelectOption value="agent">{ATTENTION_LABELS.agent}</PSelectOption>
         <PSelectOption value="waiting">{ATTENTION_LABELS.waiting}</PSelectOption>
+        <PSelectOption value="repair">{ATTENTION_LABELS.repair}</PSelectOption>
         <PSelectOption value="none">{ATTENTION_LABELS.none}</PSelectOption>
       </PSelect>
       <PButtonPure

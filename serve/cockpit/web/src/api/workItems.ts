@@ -1,6 +1,16 @@
 export type WorkItemStage = 'design' | 'planning' | 'implementation' | 'assembly' | 'completed'
-export type WorkItemAttention = 'user' | 'agent' | 'waiting' | 'none'
+export type WorkItemAttention = 'user' | 'agent' | 'waiting' | 'repair' | 'none'
 export type DeliveryWorkerRole = 'planner' | 'builder' | 'assembly-reviewer'
+export type DeliveryIntegrationAttentionDisposition = 'retryable' | 'repair-required' | 'operator-required'
+export type DeliveryIntegrationAttentionCode =
+  | 'revision-pending'
+  | 'target-identity-mismatch'
+  | 'package-mutated'
+  | 'completed-history-mutated'
+  | 'reviewed-boundary-mismatch'
+  | 'merge-conflict'
+  | 'candidate-proof-failed'
+  | 'target-cas-lost'
 
 export interface WorkItemProjection {
   work_item_id: string
@@ -38,6 +48,7 @@ export interface AttentionCounts {
   user: number
   agent: number
   waiting: number
+  repair: number
   none: number
 }
 
@@ -98,7 +109,8 @@ export interface DeliveryOperatorContext {
     retry_condition: string
   } | null
   integration_attention: {
-    code: string
+    code: DeliveryIntegrationAttentionCode
+    disposition: DeliveryIntegrationAttentionDisposition
     diagnostics: string[]
     retry_condition: string
   } | null

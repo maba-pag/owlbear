@@ -32,7 +32,7 @@ interface AsyncResource<T> {
 
 const EMPTY_PORTFOLIO: WorkItemPortfolioResponse = {
   items: [],
-  attention_counts: { user: 0, agent: 0, waiting: 0, none: 0 },
+  attention_counts: { user: 0, agent: 0, waiting: 0, repair: 0, none: 0 },
 }
 
 const EMPTY_HISTORY: CompletedChangePage = { records: [], next_cursor: null }

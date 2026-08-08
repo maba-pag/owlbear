@@ -33,6 +33,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryFrontier,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
+    DeliveryIntegrationAttentionDisposition,
     DeliveryIntegrationCandidate,
     DeliveryIntegrationCompletion,
     DeliveryIntegrationRepair,
@@ -51,6 +52,7 @@ from owlbear_delivery.delivery_runtime import (
     OutcomeAuthorityBinding,
     PublishDeliveryPlan,
     PublishDeliveryResult,
+    integration_attention_disposition,
 )
 from owlbear_delivery.design_package import (
     CompletionCapture,
@@ -74,7 +76,13 @@ from owlbear_delivery.target_contract import (
     DeliveryOutcome,
     compile_delivery_contract,
 )
-from owlbear_delivery.work_items import TaskProgress, WorkItemEvidence, WorkItemProjector
+from owlbear_delivery.work_items import (
+    TaskProgress,
+    WorkItemEvidence,
+    WorkItemIntegrationDisposition,
+    WorkItemIntegrationState,
+    WorkItemProjector,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -136,6 +144,15 @@ def _project_runtime_evidence(contract: DeliveryContract, frontier: DeliveryFron
     progressed = tuple(
         binding for binding in frontier.bindings if binding.stage not in {DeliveryStage.DESIGN, DeliveryStage.PLANNING}
     )
+    integration = None
+    if frontier.bindings and all(item.stage == DeliveryStage.COMPLETED for item in frontier.bindings):
+        attention = frontier.integration_attention
+        integration = WorkItemIntegrationState(
+            disposition=WorkItemIntegrationDisposition.READY
+            if attention is None
+            else WorkItemIntegrationDisposition(integration_attention_disposition(attention.code).value),
+            code=attention.code.value if attention is not None else None,
+        )
     return WorkItemEvidence(
         planned_scope_ids=tuple(scopes[item.outcome_id] for item in progressed),
         task_progress=tuple(
@@ -154,6 +171,7 @@ def _project_runtime_evidence(contract: DeliveryContract, frontier: DeliveryFron
         pending_request_work_item_ids=tuple(
             item.outcome_id for item in frontier.bindings if item.block is not None and not item.block.resolved
         ),
+        integration=integration,
     )
 
 
@@ -190,6 +208,7 @@ def _operator_integration_attention(
         return None
     return DeliveryOperatorIntegrationAttention(
         code=attention.code,
+        disposition=integration_attention_disposition(attention.code),
         diagnostics=attention.diagnostics,
         retry_condition=attention.retry_condition,
     )
@@ -257,11 +276,21 @@ class DeliveryAcquisitionFailure(_ApplicationModel):
     retry_condition: str = Field(min_length=1)
 
 
+class DeliveryIntegrationAttentionStatus(_ApplicationModel):
+    """One non-retryable Integration attention exposed by acquisition."""
+
+    change_id: str = Field(min_length=1)
+    code: DeliveryIntegrationAttentionCode
+    disposition: DeliveryIntegrationAttentionDisposition
+    retry_condition: str = Field(min_length=1)
+
+
 class DeliveryAcquisitionResult(_ApplicationModel):
     """Launchable claims and unclaimed Integration-ready changes from one refresh."""
 
     launch_packages: tuple[DeliveryLaunchPackage, ...]
     integration_ready_change_ids: tuple[str, ...]
+    integration_attention: tuple[DeliveryIntegrationAttentionStatus, ...] = ()
     failures: tuple[DeliveryAcquisitionFailure, ...] = ()
     recoveries: tuple[DeliveryClaimRecoveryResult, ...] = ()
 
@@ -313,6 +342,7 @@ class DeliveryOperatorIntegrationAttention(_ApplicationModel):
     """Integration attention without raw Git boundary identities."""
 
     code: DeliveryIntegrationAttentionCode
+    disposition: DeliveryIntegrationAttentionDisposition
     diagnostics: tuple[str, ...] = Field(min_length=1)
     retry_condition: str = Field(min_length=1)
 
@@ -321,7 +351,7 @@ class DeliveryOperatorContext(_ApplicationModel):
     """Current bounded state consumed by user-owned Delivery controls."""
 
     change_id: str = Field(min_length=1)
-    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    outcome_id: str = Field(min_length=1)
     stage: DeliveryStage
     block: DeliveryBlock | None = None
     requests: tuple[DeliveryRequest, ...] = ()
@@ -549,12 +579,49 @@ class PortfolioApplication:
         return self._runtime(change_id).transition(request)
 
     def list_integration_ready_changes(self) -> tuple[str, ...]:
-        """List unclaimed Integration-ready changes in stable identity order."""
-        return tuple(
-            change_id
-            for change_id, runtime in sorted(self._runtimes.items())
-            if runtime.change_stage() == DeliveryChangeStage.INTEGRATION and not runtime.active_claims()
-        )
+        """List unclaimed Integration changes that are ready or safe to retry."""
+        ready = []
+        for change_id, runtime in sorted(self._runtimes.items()):
+            attention = runtime.integration_attention()
+            target_changed = (
+                attention is not None
+                and self._workspace_manager.integration_context(change_id).target_head != attention.target_head
+            )
+            if (
+                runtime.change_stage() == DeliveryChangeStage.INTEGRATION
+                and not runtime.active_claims()
+                and (
+                    attention is None
+                    or target_changed
+                    or integration_attention_disposition(attention.code)
+                    == DeliveryIntegrationAttentionDisposition.RETRYABLE
+                )
+            ):
+                ready.append(change_id)
+        return tuple(ready)
+
+    def list_integration_attention(self) -> tuple[DeliveryIntegrationAttentionStatus, ...]:
+        """List non-retryable Integration attention in stable identity order."""
+        statuses = []
+        for change_id, runtime in sorted(self._runtimes.items()):
+            attention = runtime.integration_attention()
+            if (
+                attention is None
+                or self._workspace_manager.integration_context(change_id).target_head != attention.target_head
+            ):
+                continue
+            disposition = integration_attention_disposition(attention.code)
+            if disposition == DeliveryIntegrationAttentionDisposition.RETRYABLE:
+                continue
+            statuses.append(
+                DeliveryIntegrationAttentionStatus(
+                    change_id=change_id,
+                    code=attention.code,
+                    disposition=disposition,
+                    retry_condition=attention.retry_condition,
+                )
+            )
+        return tuple(statuses)
 
     def show_integration_attention(self, change_id: str) -> DeliveryIntegrationAttention | None:
         """Return current typed Integration attention without mutating runtime state."""
@@ -588,6 +655,15 @@ class PortfolioApplication:
     def show_operator_context(self, change_id: str, outcome_id: str) -> DeliveryOperatorContext:
         """Show current bounded operator state from one exact runtime binding."""
         runtime = self._runtime(change_id)
+        if outcome_id == change_id:
+            if runtime.change_stage() != DeliveryChangeStage.INTEGRATION:
+                self._fail("change work item is not in Integration")
+            return DeliveryOperatorContext(
+                change_id=change_id,
+                outcome_id=outcome_id,
+                stage=DeliveryStage.COMPLETED,
+                integration_attention=_operator_integration_attention(runtime.integration_attention()),
+            )
         binding = runtime.show_binding(outcome_id)
         return DeliveryOperatorContext(
             change_id=change_id,
@@ -696,6 +772,7 @@ class PortfolioApplication:
             return DeliveryAcquisitionResult(
                 launch_packages=tuple(launches),
                 integration_ready_change_ids=integration_ready,
+                integration_attention=self.list_integration_attention(),
                 failures=tuple(failures),
                 recoveries=recoveries,
             )
@@ -990,7 +1067,7 @@ class PortfolioApplication:
             target_head=context.target_head,
             integration_target=context.integration_target,
             diagnostics=diagnostics,
-            retry_condition="Restore the named identities, then retry this exact change Integration.",
+            retry_condition=_integration_retry_condition(code),
         )
         runtime.publish_integration_attention(attention)
         return DeliveryIntegrationResult(
@@ -1316,12 +1393,22 @@ def _canonical(payload: object) -> bytes:
     return f"{json.dumps(payload, sort_keys=True, separators=(',', ':'))}\n".encode()
 
 
+def _integration_retry_condition(code: DeliveryIntegrationAttentionCode) -> str:
+    disposition = integration_attention_disposition(code)
+    if disposition == DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED:
+        return "Admit a reviewed Integration repair for this attention, then retry Integration."
+    if disposition == DeliveryIntegrationAttentionDisposition.RETRYABLE:
+        return "Retry Integration against the current target head."
+    return "Resolve the reported Integration condition, then retry this exact change."
+
+
 __all__ = [
     "DeliveryAcquisitionFailure",
     "DeliveryAcquisitionResult",
     "DeliveryBuildContext",
     "DeliveryClaimRecoveryResult",
     "DeliveryClaimRecoveryStatus",
+    "DeliveryIntegrationAttentionStatus",
     "DeliveryIntegrationResult",
     "DeliveryLaunchPackage",
     "DeliveryPlanContext",

@@ -17,7 +17,7 @@ import {
   type WorkItemProjection,
   type WorkItemStage,
 } from '../api/workItems'
-import { ATTENTION_LABELS } from '../attentionVocabulary'
+import { ATTENTION_LABELS, INTEGRATION_ATTENTION_LABELS } from '../attentionVocabulary'
 
 type FieldValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }
 
@@ -106,6 +106,7 @@ function RequestControl({ request, pending, onAnswer }: {
 }
 
 function RequestsSection({ detail, pendingAction, onAnswerRequest }: WorkItemDetailProps) {
+  if (detail.operator.outcome_id === detail.operator.change_id) return null
   const requests = detail.operator.requests
   return (
     <section className="border-t border-contrast-low pt-static-md" aria-labelledby="work-requests-heading">
@@ -206,10 +207,15 @@ function AttentionSection({ detail, pendingAction, onRetryIntegration }: WorkIte
         {recovery ? <AttentionItem label="Recovery attention" reason={recovery.reason} retry={recovery.retry_condition} /> : null}
         {integration ? (
           <div className="border-l-2 border-warning pl-static-sm">
-            <AttentionItem label={`Integration: ${integration.code}`} reason={integration.diagnostics.join(' ')} retry={integration.retry_condition} />
-            <PButton className="mt-static-sm" type="button" compact disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
-              {pendingAction === 'integration' ? 'Retrying...' : 'Retry Integration'}
-            </PButton>
+            <AttentionItem label={INTEGRATION_ATTENTION_LABELS[integration.code]} reason={integration.diagnostics.join(' ')} retry={integration.retry_condition} />
+            {integration.disposition === 'retryable' ? (
+              <PButton className="mt-static-sm" type="button" compact disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
+                {pendingAction === 'integration' ? 'Retrying...' : 'Retry Integration'}
+              </PButton>
+            ) : null}
+            {integration.disposition === 'repair-required' ? (
+              <p className="mt-static-sm text-sm">Run <code>/integration-repair {detail.operator.change_id}</code> in Copilot Chat.</p>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -229,7 +235,7 @@ function BackwardMoveSection({ detail, pendingAction, onMoveBackward }: WorkItem
   const [reason, setReason] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
   const canMove = Boolean(target && reason.trim()) && pendingAction === null
-  if (available.length === 0) return null
+  if (detail.operator.outcome_id === detail.operator.change_id || available.length === 0) return null
   const move = async () => {
     if (!target) return
     await onMoveBackward(target, reason.trim())

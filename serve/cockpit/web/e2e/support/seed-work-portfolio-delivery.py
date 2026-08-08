@@ -208,13 +208,13 @@ def _write_current_delivery(target_root: Path, repository: Path, worktrees: Path
         bindings=_current_bindings(contract, head),
         integration_attention=DeliveryIntegrationAttention(
             attention_id=hashlib.sha256(b"work-e2e-integration-attention").hexdigest(),
-            code=DeliveryIntegrationAttentionCode.REVISION_PENDING,
+            code=DeliveryIntegrationAttentionCode.TARGET_CAS_LOST,
             change_id=contract.change_id,
             change_head=head,
             target_head=head,
             integration_target="main",
-            diagnostics=("A reviewed revision remains pending.",),
-            retry_condition="Complete every Delivery outcome.",
+            diagnostics=("The Integration target moved before publication.",),
+            retry_condition="Retry Integration against the current target head.",
         ),
     )
     change_root = target_root / "delivery/changes" / contract.change_id

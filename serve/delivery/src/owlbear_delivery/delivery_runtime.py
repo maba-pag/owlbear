@@ -256,6 +256,14 @@ class DeliveryRecoveryAttention(_DeliveryModel):
     retry_condition: str = Field(min_length=1)
 
 
+class DeliveryIntegrationAttentionDisposition(StrEnum):
+    """Operational route for one typed Integration attention."""
+
+    RETRYABLE = "retryable"
+    REPAIR_REQUIRED = "repair-required"
+    OPERATOR_REQUIRED = "operator-required"
+
+
 class DeliveryIntegrationAttentionCode(StrEnum):
     """Typed reason that atomic Integration retained completed outcomes."""
 
@@ -267,6 +275,17 @@ class DeliveryIntegrationAttentionCode(StrEnum):
     MERGE_CONFLICT = "merge-conflict"
     CANDIDATE_PROOF_FAILED = "candidate-proof-failed"
     TARGET_CAS_LOST = "target-cas-lost"
+
+
+def integration_attention_disposition(
+    code: DeliveryIntegrationAttentionCode,
+) -> DeliveryIntegrationAttentionDisposition:
+    """Return the single operational route owned by an Integration attention code."""
+    if code == DeliveryIntegrationAttentionCode.TARGET_CAS_LOST:
+        return DeliveryIntegrationAttentionDisposition.RETRYABLE
+    if code == DeliveryIntegrationAttentionCode.MERGE_CONFLICT:
+        return DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED
+    return DeliveryIntegrationAttentionDisposition.OPERATOR_REQUIRED
 
 
 class DeliveryIntegrationCandidate(_DeliveryModel):

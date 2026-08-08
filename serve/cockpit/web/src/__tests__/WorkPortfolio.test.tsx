@@ -42,7 +42,7 @@ vi.mock('../api/workItems', async (importOriginal) => {
 })
 
 const stages = ['design', 'planning', 'implementation', 'assembly'] as const
-const attention = ['user', 'agent', 'waiting', 'none'] as const
+const attention = ['user', 'agent', 'waiting', 'repair', 'none'] as const
 
 function portfolioFixture(): WorkItemSummaryResponse[] {
   return Array.from({ length: 120 }, (_, index) => {
@@ -156,7 +156,7 @@ beforeEach(() => {
   currentDetail = detailFixture()
   api.list.mockReset().mockResolvedValue({
     items,
-    attention_counts: { user: 30, agent: 30, waiting: 30, none: 30 },
+    attention_counts: { user: 24, agent: 24, waiting: 24, repair: 24, none: 24 },
   })
   api.show.mockReset().mockImplementation(() => Promise.resolve(currentDetail))
   api.answer.mockReset().mockResolvedValue({})
@@ -238,13 +238,13 @@ it('reveals the shown-of-total relationship only while a filter narrows the boar
   selectValue(filters[0], 'change-2')
   expect(screen.getByTestId('work-shown-count')).toHaveTextContent('40 of 120')
   selectValue(filters[1], 'user')
-  expect(screen.getByTestId('work-shown-count')).toHaveTextContent('10 of 120')
+  expect(screen.getByTestId('work-shown-count')).toHaveTextContent('8 of 120')
   expect(screen.getByTestId('work-filters-toggle')).toHaveTextContent('Filter (2)')
 
   inspectFirstItem()
   expect(await screen.findByText('Requests', { exact: true })).toBeInTheDocument()
   expect(screen.getByText('planning', { exact: true })).toBeInTheDocument()
-  expect(api.show).toHaveBeenCalledWith('change-2', 'OUT-005')
+  expect(api.show).toHaveBeenCalledWith('change-2', 'OUT-041')
 })
 
 it('clears one active filter from its summary chip', async () => {
@@ -262,7 +262,7 @@ it('clears one active filter from its summary chip', async () => {
 })
 
 it('summarises the portfolio as one total plus every counted attention state', async () => {
-  api.list.mockResolvedValue({ items, attention_counts: { user: 1, agent: 1, waiting: 0, none: 4 } })
+  api.list.mockResolvedValue({ items, attention_counts: { user: 1, agent: 1, waiting: 0, repair: 1, none: 3 } })
   renderPage()
 
   const summary = await screen.findByTestId('workspace-header-summary')
@@ -270,7 +270,8 @@ it('summarises the portfolio as one total plus every counted attention state', a
   expect(summary).toHaveTextContent('1need you')
   expect(summary).toHaveTextContent('1with agents')
   expect(summary).toHaveTextContent('0waiting')
-  expect(summary).toHaveTextContent('4no action needed')
+  expect(summary).toHaveTextContent('1need repair')
+  expect(summary).toHaveTextContent('3no action needed')
   expect(summary).not.toHaveTextContent('settled')
   expect(summary).toHaveTextContent('work items have no action needed')
   expect(summary).toHaveTextContent('work items are waiting on dependencies')
@@ -278,7 +279,7 @@ it('summarises the portfolio as one total plus every counted attention state', a
 })
 
 it('keeps the total consistent with the counted states and singular grammar', async () => {
-  api.list.mockResolvedValue({ items, attention_counts: { user: 1, agent: 0, waiting: 0, none: 0 } })
+  api.list.mockResolvedValue({ items, attention_counts: { user: 1, agent: 0, waiting: 0, repair: 0, none: 0 } })
   renderPage()
 
   const summary = await screen.findByTestId('workspace-header-summary')
@@ -301,7 +302,7 @@ it('uses one attention vocabulary across cards, filters, and detail', async () =
   expect(attentionSelect.label).toBe('Attention')
   const attentionOptions = [...attentionSelect.querySelectorAll('p-select-option')]
     .map((option) => option.textContent)
-  expect(attentionOptions).toEqual(['Any attention', 'Needs you', 'Agent working', 'Waiting on dependencies', 'No action needed'])
+  expect(attentionOptions).toEqual(['Any attention', 'Needs you', 'Agent working', 'Waiting on dependencies', 'Repair required', 'No action needed'])
 
   selectValue(container.querySelectorAll('p-select')[1], 'waiting')
   const chip = screen.getByTestId('work-filter-chip-attention') as HTMLElement & { label: string }
@@ -451,7 +452,8 @@ it('shows typed Integration failure and confirms an earlier-stage move', async (
       retry_condition: 'Resolve custody',
     },
     integration_attention: {
-      code: 'revision-pending',
+      code: 'target-cas-lost',
+      disposition: 'retryable',
       diagnostics: ['New revision requires review.'],
       retry_condition: 'Review the new revision',
     },
@@ -468,7 +470,7 @@ it('shows typed Integration failure and confirms an earlier-stage move', async (
   inspectFirstItem()
   expect(await screen.findByText('Returned to planning')).toBeInTheDocument()
   expect(screen.getByText('Recovery attention')).toBeInTheDocument()
-  expect(screen.getByText('Integration: revision-pending')).toBeInTheDocument()
+  expect(screen.getByText('Target moved during Integration')).toBeInTheDocument()
 
   fireEvent.click(screen.getByText('Retry Integration'))
   expect(await screen.findByRole('alert')).toHaveTextContent('ERR_DELIVERY_RUNTIME_CONFLICT: Integration is not ready')
@@ -482,4 +484,25 @@ it('shows typed Integration failure and confirms an earlier-stage move', async (
   fireEvent.click(screen.getByText('Confirm backward move'))
   await waitFor(() => expect(api.move).toHaveBeenCalledWith('change-1', 'OUT-001', 'planning', 'Authority changed'))
   expect(await screen.findByText('Moved backward. Reset: OUT-002.')).toBeInTheDocument()
+})
+
+it('routes merge conflicts to reviewed repair without offering retry', async () => {
+  currentDetail = detailFixture({
+    outcome_id: 'change-1',
+    stage: 'completed',
+    integration_attention: {
+      code: 'merge-conflict',
+      disposition: 'repair-required',
+      diagnostics: ['Two maintained files conflict.'],
+      retry_condition: 'Admit a reviewed Integration repair, then retry.',
+    },
+  })
+  renderPage()
+  await screen.findByTestId('work-portfolio-board')
+  inspectFirstItem()
+
+  expect(await screen.findByText('Merge conflict')).toBeInTheDocument()
+  expect(screen.getByText('/integration-repair change-1')).toBeInTheDocument()
+  expect(screen.queryByText('Retry Integration')).toBeNull()
+  expect(screen.queryByText('Move backward')).toBeNull()
 })

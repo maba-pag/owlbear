@@ -32,7 +32,17 @@ class WorkItemAttention(StrEnum):
     USER = "user"
     AGENT = "agent"
     WAITING = "waiting"
+    REPAIR = "repair"
     NONE = "none"
+
+
+class WorkItemIntegrationDisposition(StrEnum):
+    """Projected operational state for change-level Integration."""
+
+    READY = "ready"
+    RETRYABLE = "retryable"
+    REPAIR_REQUIRED = "repair-required"
+    OPERATOR_REQUIRED = "operator-required"
 
 
 class _ProjectionModel(BaseModel):
@@ -54,6 +64,20 @@ class TaskProgress(_ProjectionModel):
         return self
 
 
+class WorkItemIntegrationState(_ProjectionModel):
+    """Bounded Integration state supplied by the owning runtime."""
+
+    disposition: WorkItemIntegrationDisposition
+    code: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_code(self) -> WorkItemIntegrationState:
+        if (self.disposition == WorkItemIntegrationDisposition.READY) != (self.code is None):
+            msg = "only ready Integration omits an attention code"
+            raise ValueError(msg)
+        return self
+
+
 class WorkItemEvidence(_ProjectionModel):
     """Read-side contract written by the target runtime in T2."""
 
@@ -62,6 +86,7 @@ class WorkItemEvidence(_ProjectionModel):
     completed_assembly_scope_ids: tuple[str, ...] = ()
     pending_request_work_item_ids: tuple[str, ...] = ()
     design_reentry_briefings: tuple[DesignReentryBriefing, ...] = ()
+    integration: WorkItemIntegrationState | None = None
 
     @model_validator(mode="after")
     def _validate_unique_progress(self) -> WorkItemEvidence:
@@ -142,6 +167,8 @@ class WorkItemProjector:
         )
         if change_scope is not None:
             items[self._authority.change_id] = self._project_change_assembly(change_scope)
+        if self._evidence.integration is not None:
+            items[self._authority.change_id] = self._project_change_integration(self._evidence.integration)
         return self._apply_dependency_state(items)
 
     def _project_change_design(self) -> WorkItemProjection:
@@ -229,6 +256,31 @@ class WorkItemProjector:
             task_count=progress.task_count if progress is not None else 0,
             reviewed_task_count=progress.reviewed_task_count if progress is not None else 0,
             next_action=_next_action(stage, WorkItemAttention.AGENT),
+        )
+
+    def _project_change_integration(self, state: WorkItemIntegrationState) -> WorkItemProjection:
+        attention = {
+            WorkItemIntegrationDisposition.READY: WorkItemAttention.AGENT,
+            WorkItemIntegrationDisposition.RETRYABLE: WorkItemAttention.AGENT,
+            WorkItemIntegrationDisposition.REPAIR_REQUIRED: WorkItemAttention.REPAIR,
+            WorkItemIntegrationDisposition.OPERATOR_REQUIRED: WorkItemAttention.USER,
+        }[state.disposition]
+        next_action = {
+            WorkItemIntegrationDisposition.READY: "Integrate reviewed change",
+            WorkItemIntegrationDisposition.RETRYABLE: "Retry Integration",
+            WorkItemIntegrationDisposition.REPAIR_REQUIRED: "Run reviewed Integration repair",
+            WorkItemIntegrationDisposition.OPERATOR_REQUIRED: "Resolve Integration attention",
+        }[state.disposition]
+        return WorkItemProjection(
+            work_item_id=self._authority.change_id,
+            change_id=self._authority.change_id,
+            scope="change-integration",
+            title=self._authority.title,
+            promise="Publish the reviewed change and completed history to the Integration target.",
+            stage=WorkItemStage.COMPLETED,
+            attention=attention,
+            dependency_ready=True,
+            next_action=next_action,
         )
 
     @staticmethod

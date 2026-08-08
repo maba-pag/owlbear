@@ -26,10 +26,12 @@ from owlbear_delivery.change_workspace import CoordinationConflictError
 from owlbear_delivery.completed_history import CompletedHistoryError, CompletedHistoryMissingError
 from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
+    DeliveryIntegrationAttentionDisposition,
     DeliveryRequestResolution,
     DeliveryRuntimeConflictError,
     DeliveryRuntimeReferenceError,
     DeliveryStage,
+    integration_attention_disposition,
 )
 from owlbear_delivery.portfolio_application import PortfolioApplication, PortfolioApplicationError
 from owlbear_delivery.work_items import WorkItemAttention, WorkItemProjection, WorkItemStage
@@ -127,6 +129,17 @@ class TargetCockpitService:
 
     def retry_integration(self, change_id: str) -> object:
         """Retry one Integration-ready or attention-bearing change."""
+        attention = self._invoke(lambda: self._application.show_integration_attention(change_id))
+        if (
+            attention is not None
+            and integration_attention_disposition(attention.code) != DeliveryIntegrationAttentionDisposition.RETRYABLE
+        ):
+            _http_error(
+                409,
+                "ERR_DELIVERY_INTEGRATION_ACTION_REQUIRED",
+                attention.retry_condition,
+                retry_safe=False,
+            )
         return self._invoke(lambda: self._application.integrate_ready_change(change_id))
 
     def list_completed(self, cursor: str | None, limit: int) -> object:
@@ -278,6 +291,7 @@ def _attention_counts(items: tuple[WorkItemProjection, ...]) -> AttentionCounts:
         user=values.count(WorkItemAttention.USER),
         agent=values.count(WorkItemAttention.AGENT),
         waiting=values.count(WorkItemAttention.WAITING),
+        repair=values.count(WorkItemAttention.REPAIR),
         none=values.count(WorkItemAttention.NONE),
     )
 

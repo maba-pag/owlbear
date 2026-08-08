@@ -16,6 +16,8 @@ from owlbear_delivery.work_items import (
     TaskProgress,
     WorkItemAttention,
     WorkItemEvidence,
+    WorkItemIntegrationDisposition,
+    WorkItemIntegrationState,
     WorkItemProjector,
     WorkItemStage,
 )
@@ -155,6 +157,39 @@ def test_reviewed_tasks_close_directly_or_enter_declared_assembly() -> None:
 
     assert items["OUT-001"].stage == WorkItemStage.COMPLETED
     assert items["OUT-002"].stage == WorkItemStage.ASSEMBLY
+
+
+def test_integration_projects_one_change_card_with_repair_attention() -> None:
+    authority = TargetAuthority(
+        change_id="integration-change",
+        title="Integration change",
+        commitments=_commitments(),
+        outcomes=(_outcome("OUT-001"),),
+        task_plan_scopes=(_scope("PLAN-001", "OUT-001"),),
+    )
+    evidence = WorkItemEvidence(
+        planned_scope_ids=("PLAN-001",),
+        task_progress=(TaskProgress(scope_id="PLAN-001", task_count=1, reviewed_task_count=1),),
+        integration=WorkItemIntegrationState(
+            disposition=WorkItemIntegrationDisposition.REPAIR_REQUIRED,
+            code="merge-conflict",
+        ),
+    )
+
+    items = {item.work_item_id: item for item in WorkItemProjector(authority, evidence).list_items()}
+
+    assert items["OUT-001"].next_action == "View result"
+    assert (
+        items["integration-change"].scope,
+        items["integration-change"].stage,
+        items["integration-change"].attention,
+        items["integration-change"].next_action,
+    ) == (
+        "change-integration",
+        WorkItemStage.COMPLETED,
+        WorkItemAttention.REPAIR,
+        "Run reviewed Integration repair",
+    )
 
 
 def test_semantic_updates_completion_and_design_briefing_are_read_side_records() -> None:

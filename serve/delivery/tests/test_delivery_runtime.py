@@ -21,6 +21,8 @@ from owlbear_delivery import (
     DeliveryChangeStage,
     DeliveryContract,
     DeliveryFrontier,
+    DeliveryIntegrationAttentionCode,
+    DeliveryIntegrationAttentionDisposition,
     DeliveryOutcome,
     DeliveryOutputKind,
     DeliveryOutputReference,
@@ -43,7 +45,20 @@ from owlbear_delivery import (
     PublishDeliveryOutput,
     RetryDelivery,
     ReturnDelivery,
+    integration_attention_disposition,
 )
+
+
+def test_integration_attention_codes_have_one_operational_disposition() -> None:
+    expected = {
+        DeliveryIntegrationAttentionCode.MERGE_CONFLICT: DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED,
+        DeliveryIntegrationAttentionCode.TARGET_CAS_LOST: DeliveryIntegrationAttentionDisposition.RETRYABLE,
+    }
+
+    assert {code: integration_attention_disposition(code) for code in DeliveryIntegrationAttentionCode} == {
+        code: expected.get(code, DeliveryIntegrationAttentionDisposition.OPERATOR_REQUIRED)
+        for code in DeliveryIntegrationAttentionCode
+    }
 
 
 def _contract() -> DeliveryContract:

@@ -18,9 +18,12 @@ require a current `DeliveryIntegrationAttention` whose `change_id` matches and w
 Read only `.owlbear/target/target-runtime/coordination/{change_id}.json`. Require one exact
 coordination record with matching
 change and Integration target, no active writer, `last_reviewed_commit == attention.change_head`,
-and `target_head == attention.target_head`. Require its assigned worktree to be clean, on its exact
-branch, and at the attention change head. Never edit startup configuration, coordination, Delivery
-state, package bytes, completed history, another checkout, or either source or target reference.
+and the live Integration target ref at `attention.target_head`; `coordination.target_head` is the
+workspace creation snapshot and is not a liveness check. If the live target moved after attention
+was published, stop and run orchestration once to refresh that attention before restarting repair.
+Require the assigned worktree to be clean, on its exact branch, and at the attention change head.
+Never edit startup configuration, coordination, Delivery state, package bytes, completed history,
+another checkout, or either source or target reference.
 
 ## Step 1 - Make One Additive Conflict Repair
 

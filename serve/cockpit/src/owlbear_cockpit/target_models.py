@@ -21,6 +21,7 @@ class AttentionCounts(_TargetHTTPModel):
     user: int = Field(ge=0)
     agent: int = Field(ge=0)
     waiting: int = Field(ge=0)
+    repair: int = Field(ge=0)
     none: int = Field(ge=0)
 
 

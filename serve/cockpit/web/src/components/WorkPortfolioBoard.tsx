@@ -14,7 +14,7 @@ const GROUPS: Array<{ stage: WorkItemStage; label: string; emptyLabel: string }>
   { stage: 'planning', label: 'Planning', emptyLabel: 'Accepted design without a published task plan.' },
   { stage: 'implementation', label: 'Implementation', emptyLabel: 'Planned tasks under build and review.' },
   { stage: 'assembly', label: 'Assembly', emptyLabel: 'Reviewed tasks awaiting a composed result.' },
-  { stage: 'completed', label: 'Done', emptyLabel: 'Fully reviewed work, ready for Integration.' },
+  { stage: 'completed', label: 'Reviewed', emptyLabel: 'No fully reviewed work is awaiting Integration.' },
 ]
 
 function WorkItemCard({
@@ -46,7 +46,7 @@ function WorkItemCard({
       ) : null}
       <p className="mt-static-xs line-clamp-2 text-xs leading-relaxed text-contrast-medium">{item.promise}</p>
       <div className="mt-auto grid gap-1 pt-static-md text-xs">
-        <span className={item.attention === 'user' ? 'font-medium text-error' : 'font-medium text-primary'}>{ATTENTION_LABELS[item.attention]}</span>
+        <span className={['user', 'repair'].includes(item.attention) ? 'font-medium text-error' : 'font-medium text-primary'}>{ATTENTION_LABELS[item.attention]}</span>
         <div className="flex items-end justify-between gap-static-sm">
           <span className="whitespace-nowrap text-contrast-medium">
             {item.task_count === 0 ? 'No tasks yet' : `${item.reviewed_task_count}/${item.task_count} reviewed`}

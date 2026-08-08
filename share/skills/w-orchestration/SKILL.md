@@ -18,9 +18,9 @@ If target tools are deferred, load them once with `tool_search` using:
 
 Call `list_work_items` only for bounded portfolio reporting. Call `acquire_frontier_work` once for the
 current cycle. Its `DeliveryAcquisitionResult` is the sole source of launch order,
-`integration_ready_change_ids`, acquisition failures, and interrupted-claim recoveries. Report any
-recovery attention unchanged. Do not filter for capacity, infer readiness, create identities, or
-reserve writer custody.
+`integration_ready_change_ids`, non-retryable `integration_attention`, acquisition failures, and
+interrupted-claim recoveries. Report Integration and recovery attention unchanged. Do not filter
+for capacity, infer readiness, create identities, or reserve writer custody.
 
 ## Step 2 - Dispatch Or Recover Each Launch
 
@@ -72,11 +72,16 @@ For each `integration_ready_change_id` in returned order, call `integrate_ready_
 Report its completion or typed Integration attention unchanged. Never discover Integration
 candidates from work-item stages, worker prose, branch state, or cached results.
 
+Do not call Integration for entries in `integration_attention`. Acquisition has already classified
+those entries as requiring reviewed repair or operator action. Continue independent work and report
+the exact attention as bounded action at the end of the cycle.
+
 ## Step 5 - Refresh
 
 Finish the current acquired batch, discard it, and call `acquire_frontier_work` again. Continue
 independent changes when one outcome returns or blocks. Stop when both launch packages and
 Integration-ready IDs are empty, or when a fail-closed diagnostic requires user/operator action.
+Non-empty `integration_attention` is bounded action, not quiescence.
 
 Before reporting portfolio quiescence after an empty acquisition, call `list_work_items`. Quiescence
 requires that projection to be empty as well. If work items remain, report their identities and

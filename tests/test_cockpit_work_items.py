@@ -14,7 +14,12 @@ import pytest
 from owlbear_cockpit.routes.target_work import assemble_target_app
 from owlbear_cockpit.target_context import load_target_context
 from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
-from owlbear_delivery.delivery_runtime import DeliveryStage, DeliveryWorkerRole
+from owlbear_delivery.delivery_runtime import (
+    DeliveryIntegrationAttention,
+    DeliveryIntegrationAttentionCode,
+    DeliveryStage,
+    DeliveryWorkerRole,
+)
 from owlbear_delivery.portfolio_application import DeliveryOperatorClaim, DeliveryOperatorContext
 from owlbear_delivery.work_items import WorkItemAttention, WorkItemProjection, WorkItemStage
 
@@ -36,6 +41,7 @@ def _projection(change_id: str, outcome_id: str, attention: WorkItemAttention) -
 class _DeliveryApplicationFake:
     def __init__(self) -> None:
         self.calls: list[tuple[str, tuple[object, ...]]] = []
+        self.integration_attention: DeliveryIntegrationAttention | None = None
 
     def list_work_items(self) -> tuple[WorkItemProjection, ...]:
         self.calls.append(("list", ()))
@@ -74,9 +80,9 @@ class _DeliveryApplicationFake:
         self.calls.append(("move", args))
         return {"move": args[1]}
 
-    def show_integration_attention(self, *args: object) -> dict[str, object]:
+    def show_integration_attention(self, *args: object) -> DeliveryIntegrationAttention | None:
         self.calls.append(("integration-attention", args))
-        return {"code": "merge-conflict", "retry_condition": "Resolve conflict"}
+        return self.integration_attention
 
     def integrate_ready_change(self, *args: object) -> dict[str, object]:
         self.calls.append(("integration-retry", args))
@@ -169,7 +175,13 @@ def test_list_and_detail_expose_current_bounded_delivery_state() -> None:
     detail = client.get("/api/changes/change-a/outcomes/OUT-001")
 
     assert portfolio.status_code == 200
-    assert portfolio.json()["attention_counts"] == {"user": 1, "agent": 1, "waiting": 0, "none": 0}
+    assert portfolio.json()["attention_counts"] == {
+        "user": 1,
+        "agent": 1,
+        "waiting": 0,
+        "repair": 0,
+        "none": 0,
+    }
     first = portfolio.json()["items"][0]
     assert first["card"]["stage"] == "planning"
     assert first["links"]["self"] == "/api/changes/change-a/outcomes/OUT-001"
@@ -230,11 +242,37 @@ def test_integration_and_completed_history_routes_delegate_exactly_once() -> Non
     assert all(response.status_code == 200 for response in responses)
     assert application.calls == [
         ("integration-attention", ("change-a",)),
+        ("integration-attention", ("change-a",)),
         ("integration-retry", ("change-a",)),
         ("completed-list", (None, 25)),
         ("completed-search", ("delivery", None, 5)),
         ("completed-show", ("change-a", "a" * 64)),
     ]
+
+
+def test_merge_conflict_retry_is_rejected_without_integration_mutation() -> None:
+    client, application = _client()
+    application.integration_attention = DeliveryIntegrationAttention(
+        attention_id="a" * 64,
+        code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
+        change_id="change-a",
+        change_head="b" * 40,
+        target_head="c" * 40,
+        integration_target="dev",
+        diagnostics=("conflict",),
+        retry_condition="Admit a reviewed Integration repair, then retry.",
+    )
+
+    response = client.post("/api/changes/change-a/integration/retry")
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "ERR_DELIVERY_INTEGRATION_ACTION_REQUIRED",
+        "detail": "Admit a reviewed Integration repair, then retry.",
+        "authority": "delivery",
+        "retry_safe": False,
+    }
+    assert application.calls == [("integration-attention", ("change-a",))]
 
 
 @pytest.mark.parametrize(

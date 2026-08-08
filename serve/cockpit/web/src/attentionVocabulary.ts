@@ -5,6 +5,7 @@ export const ATTENTION_LABELS: Record<WorkItemAttention, string> = {
   user: 'Needs you',
   agent: 'Agent working',
   waiting: 'Waiting on dependencies',
+  repair: 'Repair required',
   none: 'No action needed',
 }
 
@@ -17,8 +18,20 @@ export const ATTENTION_SUMMARY_LABELS: Record<WorkItemAttention, { short: string
   user: { short: 'need you', full: 'work items need you' },
   agent: { short: 'with agents', full: 'work items are with agents' },
   waiting: { short: 'waiting', full: 'work items are waiting on dependencies' },
+  repair: { short: 'need repair', full: 'work items require reviewed repair' },
   none: { short: 'no action needed', full: 'work items have no action needed' },
 }
+
+export const INTEGRATION_ATTENTION_LABELS = {
+  'revision-pending': 'Revision review required',
+  'target-identity-mismatch': 'Target identity changed',
+  'package-mutated': 'Delivery package changed',
+  'completed-history-mutated': 'Completed history changed',
+  'reviewed-boundary-mismatch': 'Reviewed boundary changed',
+  'merge-conflict': 'Merge conflict',
+  'candidate-proof-failed': 'Integration proof failed',
+  'target-cas-lost': 'Target moved during Integration',
+} as const
 
 /**
  * Names the counted noun explicitly: the portfolio projects change design, outcome, and
