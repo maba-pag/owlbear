@@ -11,16 +11,16 @@ async function inspect(page: Page, title: string, detailTitle = title): Promise<
   await trigger.click()
   const detail = page.getByTestId('work-item-detail')
   await expect(detail.getByRole('heading', { name: detailTitle })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Current delivery' })).not.toBeVisible()
-  await expect(page.getByTestId('work-filters-toggle')).not.toBeVisible()
-  await expect(page.getByLabel('Recommended next steps')).not.toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Work Item detail' })).toBeVisible()
+  await expect(page.getByTestId('work-portfolio-table')).toBeVisible()
   await expect(page).toHaveURL(/\/delivery\/[^/]+\/[^/]+$/)
   return { detail, trigger }
 }
 
 async function returnToPortfolio(page: Page, trigger: Locator): Promise<void> {
-  await page.getByRole('button', { name: 'Back to current delivery' }).click()
+  await page.getByRole('button', { name: 'Dismiss flyout' }).click()
   await expect(page.getByTestId('work-item-detail')).not.toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Work Item detail' })).not.toBeVisible()
   await expect(page).toHaveURL(/\/delivery$/)
   await expect(trigger).toBeFocused()
 }
@@ -50,6 +50,15 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   expect(overflow.tables.every((value) => value <= 1)).toBe(true)
 }
 
+async function flyoutPanelBox(page: Page): Promise<{ width: number; height: number } | null> {
+  return page.locator('p-flyout').last().evaluate((element) => {
+    const panel = element.shadowRoot?.querySelector('.flyout')
+    if (!panel) return null
+    const box = panel.getBoundingClientRect()
+    return { width: box.width, height: box.height }
+  })
+}
+
 function formatViolations(violations: Array<{ id: string; impact?: string | null; help: string }>): string {
   return violations.map((item) => `[${item.impact ?? 'unknown'} ${item.id}] ${item.help}`).join('\n')
 }
@@ -66,7 +75,6 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(table).toBeVisible()
     await expect(await visibleRows(page)).toHaveCount(8)
     await expect(table).toContainText('Work portfolio E2E')
-    await expect(table).toContainText('1 of 6 Outcomes complete')
     for (const column of ['Work', 'Pipeline', 'Current state']) {
       await expect(table.getByRole('columnheader', { name: column })).toHaveCount(2)
       await expect(table.getByRole('columnheader', { name: column }).first()).toBeVisible()
@@ -80,18 +88,16 @@ test.describe('assembled Delivery portfolio', () => {
     const summary = page.getByLabel('Delivery portfolio status')
     await expect(summary).toContainText('2unfinished Changes')
     await expect(summary).toContainText('1being worked on')
-    await expect(summary).toContainText('2waiting for Orchestration')
-    await expect(summary).toContainText('1need you')
+    await expect(summary).toContainText('2need you')
 
-    await expect(page.getByText('Delivery is underway. 1 item being worked on. 2 items waiting for Orchestration.')).toBeVisible()
     const guidance = page.getByLabel('Recommended next steps')
-    await expect(guidance).toContainText('1 intervention requires you')
-    await expect(guidance).toContainText('Keep the current /orchestrate session running')
+    await expect(guidance).toContainText('Review 2 interventions')
+    await expect(guidance).toContainText('Let the current /orchestrate session continue')
     await expect(guidance).not.toContainText('Start /orchestrate')
 
     const integrationRow = (await visibleRows(page)).filter({ hasText: 'Integration' })
-    await expect(integrationRow).toContainText('Change Integration')
-    await expect(integrationRow).toContainText('Repair release / Change')
+    await expect(integrationRow).toContainText('Integration')
+    await expect(integrationRow).toContainText('Change')
 
     await page.getByTestId('work-filters-toggle').click()
     await selectValue(page.locator('p-select[name="work-needs-filter"]'), 'dependency')
@@ -116,10 +122,10 @@ test.describe('assembled Delivery portfolio', () => {
 
     const requestRow = (await visibleRows(page)).filter({ hasText: 'Choose release mode' })
     const requestTrigger = requestRow.getByRole('link', { name: /^Choose release mode/ })
-    await requestRow.getByRole('link', { name: 'Review request' }).click()
+    await requestRow.getByRole('link', { name: 'Answer request' }).click()
     let inspected = { detail: page.getByTestId('work-item-detail'), trigger: requestTrigger }
     await expect(inspected.detail.getByRole('heading', { name: 'Choose release mode' })).toBeVisible()
-    await expect(page.getByTestId('work-portfolio-table')).not.toBeVisible()
+    await expect(page.getByTestId('work-portfolio-table')).toBeVisible()
     await expect(inspected.detail).toContainText('Resolve the bounded release decision.')
     await expect(inspected.detail).toContainText('Observe Choose release mode.')
     await expectNoHorizontalOverflow(page)
@@ -131,7 +137,7 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(inspected.detail).toContainText('Safe rollout')
     await returnToPortfolio(page, inspected.trigger)
 
-    inspected = await inspect(page, 'Integration', 'Repair release')
+    inspected = await inspect(page, 'Integration')
     await expect(inspected.detail).toContainText('Repair in progress')
     await expect(inspected.detail).toContainText('A reviewed Integration repair is currently in progress.')
     await expect(inspected.detail).toContainText('Conflicting files')
@@ -149,7 +155,7 @@ test.describe('assembled Delivery portfolio', () => {
     const parentScrollHeight = await page.getByTestId('work-scroll-surface').evaluate((element) => element.scrollHeight)
     await inspected.detail.getByText('Administrative actions', { exact: true }).click()
     await expect.poll(() => page.getByTestId('work-scroll-surface').evaluate((element) => element.scrollHeight))
-      .toBeGreaterThan(parentScrollHeight)
+      .toBe(parentScrollHeight)
     const nestedScrollers = await inspected.detail.locator('*').evaluateAll((elements) => elements.filter((element) => {
       const style = getComputedStyle(element)
       return ['auto', 'scroll'].includes(style.overflowY) && element.scrollHeight > element.clientHeight
@@ -178,8 +184,8 @@ test.describe('assembled Delivery portfolio', () => {
     await page.screenshot({ path: testInfo.outputPath('delivery-wide-table.png'), fullPage: true })
   })
 
-  test('compact workspace uses routed detail and restores row focus', async ({ page }, testInfo) => {
-    await page.setViewportSize({ width: 960, height: 800 })
+  test('compact workspace uses a fullscreen flyout and restores row focus', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 })
     await page.goto('/delivery')
 
     await expect(await visibleRows(page)).toHaveCount(8)
@@ -187,10 +193,12 @@ test.describe('assembled Delivery portfolio', () => {
     await expectNoHorizontalOverflow(page)
 
     const inspected = await inspect(page, 'Build operator controls')
-    await expect(page.getByTestId('work-portfolio-table')).not.toBeVisible()
-    await expect(page.getByRole('button', { name: 'Back to current delivery' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Dismiss flyout' })).toBeVisible()
     await expect(inspected.detail).toContainText('Build OUT-002')
-    await page.screenshot({ path: testInfo.outputPath('delivery-compact-detail.png') })
+    const flyoutBox = await flyoutPanelBox(page)
+    expect(flyoutBox).not.toBeNull()
+    expect(flyoutBox!.width).toBeGreaterThan(380)
+    await page.screenshot({ path: testInfo.outputPath('delivery-compact-flyout.png') })
     await returnToPortfolio(page, inspected.trigger)
 
     await expectNoHorizontalOverflow(page)
@@ -215,20 +223,31 @@ test.describe('assembled Delivery portfolio', () => {
     await page.screenshot({ path: testInfo.outputPath('delivery-mobile-rows.png'), fullPage: true })
   })
 
-  test('routed detail uses the available workspace without horizontal scrolling', async ({ page }) => {
+  test('intermediate workspace uses a fullscreen detail sheet', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 800 })
+    await page.goto('/delivery')
+
+    const inspected = await inspect(page, 'Build operator controls')
+    await expect(inspected.detail).toContainText('Build OUT-002')
+    const flyoutBox = await flyoutPanelBox(page)
+    expect(flyoutBox).not.toBeNull()
+    expect(flyoutBox!.width).toBeGreaterThanOrEqual(1023)
+  })
+
+  test('wide detail flyout preserves overview context without horizontal scrolling', async ({ page }) => {
     await page.setViewportSize({ width: 1408, height: 800 })
     await page.goto('/delivery')
 
     const inspected = await inspect(page, 'Build operator controls')
-    await expect(page.getByTestId('work-portfolio-table')).not.toBeVisible()
     await expect(inspected.detail).toContainText('Build OUT-002')
-    const [surfaceBox, detailBox] = await Promise.all([
+    const [surfaceBox, flyoutBox] = await Promise.all([
       page.getByTestId('work-scroll-surface').boundingBox(),
-      inspected.detail.boundingBox(),
+      flyoutPanelBox(page),
     ])
     expect(surfaceBox).not.toBeNull()
-    expect(detailBox).not.toBeNull()
-    expect(detailBox!.width).toBeGreaterThan(surfaceBox!.width * 0.8)
+    expect(flyoutBox).not.toBeNull()
+    expect(flyoutBox!.width).toBeGreaterThan(surfaceBox!.width * 0.55)
+    expect(flyoutBox!.width).toBeLessThan(surfaceBox!.width * 0.75)
     await expectNoHorizontalOverflow(page)
   })
 
@@ -243,7 +262,7 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(detail.getByRole('heading', { name: 'Publish operator guide' })).toBeVisible()
     await expect(page.getByTestId('desktop-product-navigation').getByLabel('Delivery')).toHaveAttribute('aria-current', 'page')
 
-    await page.getByRole('button', { name: 'Back to current delivery' }).click()
+    await page.getByRole('button', { name: 'Dismiss flyout' }).click()
     const historyResponse = page.waitForResponse((response) =>
       response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/work-items/completed')
     await page.getByRole('button', { name: 'Completed history' }).click()

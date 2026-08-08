@@ -1,11 +1,11 @@
-import { useDeferredValue, useEffect, useRef, useState } from 'react'
-import { PButton, PButtonPure, PIcon, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'
+import { useDeferredValue, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { PButton, PButtonPure, PFlyout, PIcon, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'
 import { useLocation, useNavigate } from 'react-router'
 import type { ChangeGroupView, WorkItemNeed } from '../api/workItems'
 import CompletedHistoryWorkspace from '../components/CompletedHistoryWorkspace'
 import PortfolioOperatingSummary, { PortfolioHeaderSummary } from '../components/PortfolioOperatingSummary'
 import { WorkspaceHeader } from '../components/WorkspaceHeader'
-import WorkspaceViewHeader, { WorkspaceViewCount } from '../components/WorkspaceViewHeader'
+import { WorkspaceViewCount } from '../components/WorkspaceViewHeader'
 import WorkItemDetail from '../components/WorkItemDetail'
 import WorkPortfolioTable from '../components/WorkPortfolioTable'
 import { useWorkItemDetail, useWorkPortfolio, type WorkItemIdentity } from '../hooks/useWorkItems'
@@ -187,27 +187,13 @@ function PortfolioWorkspace({
   selected,
   emptyMessage,
   onSelect,
-  onClose,
-  onChanged,
 }: {
   groups: ChangeGroupView[]
   selected: WorkItemIdentity | null
   emptyMessage?: string
   onSelect: (identity: WorkItemIdentity, trigger: HTMLAnchorElement) => void
-  onClose: () => void
-  onChanged: () => void
 }) {
-  if (!selected) return <WorkPortfolioTable groups={groups} selected={null} emptyMessage={emptyMessage} onSelect={onSelect} />
-  return (
-    <section className="min-w-0" aria-label="Work Item detail">
-      <div className="border-b border-contrast-low pb-static-sm">
-        <PButton type="button" compact variant="secondary" icon="arrow-left" onClick={onClose}>Back to current delivery</PButton>
-      </div>
-      <div className="mx-auto w-full max-w-[80rem] py-static-lg">
-        <SelectedDetail key={`${selected.changeId}:${selected.itemKey}`} identity={selected} onChanged={onChanged} onClose={onClose} />
-      </div>
-    </section>
-  )
+  return <WorkPortfolioTable groups={groups} selected={selected} emptyMessage={emptyMessage} onSelect={onSelect} />
 }
 
 function EmptyDetail({ error, retry, onClose }: { error: Error | null; retry: () => void; onClose: () => void }) {
@@ -318,19 +304,14 @@ export default function WorkPortfolioPage() {
       >
         {workspace === 'current' ? (
           <>
-            {hasData && !selected ? <PortfolioOperatingSummary operating={portfolio.operating} /> : null}
-            {!selected ? (
-              <div className="grid gap-static-xs">
-                <WorkspaceViewHeader
-                  headingId="work-board-heading"
-                  title="Current delivery"
-                  metaTestId="work-shown-count"
-                  meta={isFiltered ? <WorkspaceViewCount value={`${shownCount} of ${portfolio.totals.total}`} unit="work items shown" /> : null}
-                  tools={<PortfolioFilterTools {...filterProps} />}
-                />
-                {filtersOpen ? <PortfolioFilterPanel {...filterProps} /> : null}
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-static-lg gap-y-static-sm">
+              {hasData ? <PortfolioOperatingSummary operating={portfolio.operating} /> : null}
+              <div className="ml-auto flex min-w-0 flex-wrap items-center gap-static-xs">
+                {isFiltered ? <span data-testid="work-shown-count"><WorkspaceViewCount value={`${shownCount} of ${portfolio.totals.total}`} unit="work items shown" /></span> : null}
+                <PortfolioFilterTools {...filterProps} />
               </div>
-            ) : null}
+            </div>
+            {filtersOpen ? <PortfolioFilterPanel {...filterProps} /> : null}
 
             {isLoading ? <div className="grid gap-static-sm" role="status" aria-label="Loading current delivery">{Array.from({ length: 4 }, (_, index) => <span key={index} className="block h-12 animate-pulse bg-surface" />)}</div> : null}
             {error ? (
@@ -350,13 +331,26 @@ export default function WorkPortfolioPage() {
                   lastTrigger.current = trigger
                   lastTriggerIdentity.current = `${identity.changeId}:${identity.itemKey}`
                 }}
-                onClose={closeInspector}
-                onChanged={retry}
               />
             ) : null}
           </>
         ) : <CompletedHistoryWorkspace />}
       </div>
+
+      <PFlyout
+        open={selected !== null}
+        position="end"
+        backdrop="shading"
+        background="canvas"
+        fullscreen={{ base: true, l: false }}
+        style={{ '--p-flyout-width': 'min(56rem, 100vw)' } as CSSProperties}
+        aria={{ 'aria-label': 'Work Item detail' }}
+        onDismiss={closeInspector}
+      >
+        <div className="min-w-0 p-static-lg">
+          {selected ? <SelectedDetail key={selectedIdentity} identity={selected} onChanged={retry} onClose={closeInspector} /> : null}
+        </div>
+      </PFlyout>
     </main>
   )
 }

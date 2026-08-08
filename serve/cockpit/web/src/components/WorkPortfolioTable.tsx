@@ -1,10 +1,8 @@
-import { PTag } from '@porsche-design-system/components-react'
 import { Link } from 'react-router'
 import type {
   ChangeGroupView,
   DeliveryWorkerRole,
   WorkItemCardView,
-  WorkItemChangeLifecycle,
   WorkItemStage,
 } from '../api/workItems'
 import { workItemIdentity, type WorkItemIdentity } from '../hooks/useWorkItems'
@@ -24,11 +22,6 @@ const STAGE_LABELS: Record<WorkItemStage, string> = {
   implementation: 'Implementation',
   assembly: 'Assembly',
   completed: 'Complete',
-}
-
-const LIFECYCLE_LABELS: Record<WorkItemChangeLifecycle, string> = {
-  'in-delivery': 'In delivery',
-  integration: 'Integration',
 }
 
 const WORKER_LABELS: Record<DeliveryWorkerRole, string> = {
@@ -81,7 +74,8 @@ function ActionLink({ item, onSelect }: { item: WorkItemCardView; onSelect: Work
 }
 
 function PipelineState({ item }: { item: WorkItemCardView }) {
-  const stage = item.stage ? STAGE_LABELS[item.stage] : 'Change Integration'
+  if (item.stage === null) return <strong className="block font-medium text-primary">{item.progress.label}</strong>
+  const stage = STAGE_LABELS[item.stage]
   const showProgress = item.stage !== 'completed'
   return (
     <span>
@@ -112,27 +106,11 @@ function CurrentState({ item, onSelect }: { item: WorkItemCardView; onSelect: Wo
   )
 }
 
-function ChangeHeader({ group }: { group: ChangeGroupView }) {
-  const showId = group.title.toLocaleLowerCase() !== group.change_id.toLocaleLowerCase()
-  return (
-    <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-static-lg gap-y-static-xs">
-      <div className="min-w-0">
-        <h3 className="truncate text-sm font-semibold">{group.title}</h3>
-        {showId ? <p className="truncate text-xs text-contrast-medium">{group.change_id}</p> : null}
-      </div>
-      <div className="flex shrink-0 items-center gap-static-sm text-xs text-contrast-medium">
-        <PTag compact>{LIFECYCLE_LABELS[group.lifecycle]}</PTag>
-        <span>{group.outcome_completed} of {group.outcome_total} Outcomes complete</span>
-      </div>
-    </div>
-  )
-}
-
 function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
   const outcomes = group.items.filter((item) => item.scope === 'outcome')
   return (
     <div className="hidden overflow-x-auto lg:block" data-testid="work-table-scroll">
-      <table className="w-full min-w-[48rem] table-fixed border-collapse text-left text-sm">
+      <table className="w-full min-w-[48rem] table-fixed border-separate border-spacing-y-1 text-left text-sm">
         <caption className="sr-only">Current Outcomes for {group.title}</caption>
         <colgroup>
           <col className="w-[40%]" />
@@ -140,7 +118,7 @@ function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
           <col className="w-[35%]" />
         </colgroup>
         <thead>
-          <tr className="border-b border-contrast-low text-2xs font-semibold uppercase text-contrast-high">
+          <tr className="text-2xs font-semibold uppercase text-contrast-medium">
             <th className="px-static-sm py-static-xs" scope="col">Work</th>
             <th className="px-static-sm py-static-xs" scope="col">Pipeline</th>
             <th className="px-static-sm py-static-xs" scope="col">Current state</th>
@@ -152,15 +130,15 @@ function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
             return (
               <tr
                 key={workItemIdentity(item)}
-                className={['relative border-b border-contrast-low align-top', isSelected ? 'bg-frosted-soft' : 'hover:bg-surface'].join(' ')}
+                className={['relative align-top', isSelected ? 'bg-frosted-soft' : 'bg-surface hover:bg-frosted-soft'].join(' ')}
                 data-work-item={workItemIdentity(item)}
               >
-                <td className="px-static-sm py-static-xs">
+                <td className="rounded-l-sm px-static-sm py-static-xs">
                   <ItemLink item={item} selected={isSelected} onSelect={onSelect} />
-                  <span className="block text-xs text-contrast-medium">{group.title} / Outcome {item.work_item_id}</span>
+                  <span className="block text-xs text-contrast-medium">Outcome {item.work_item_id}</span>
                 </td>
                 <td className="px-static-sm py-static-sm"><PipelineState item={item} /></td>
-                <td className="px-static-sm py-static-sm"><CurrentState item={item} onSelect={onSelect} /></td>
+                <td className="rounded-r-sm px-static-sm py-static-sm"><CurrentState item={item} onSelect={onSelect} /></td>
               </tr>
             )
           })}
@@ -179,12 +157,12 @@ function CompactRows({ group, selected, onSelect }: GroupTableProps) {
         return (
           <article
             key={workItemIdentity(item)}
-            className={['relative grid gap-static-sm border-b border-contrast-low py-static-md', isSelected ? 'bg-frosted-soft px-static-xs' : ''].join(' ')}
+            className={['relative mb-1 grid gap-static-sm rounded-sm p-static-sm', isSelected ? 'bg-frosted-soft' : 'bg-surface'].join(' ')}
             data-work-item={workItemIdentity(item)}
             aria-label={`${item.title} work item`}
           >
             <ItemLink item={item} selected={isSelected} onSelect={onSelect} />
-            <span className="text-xs text-contrast-medium">{group.title} / Outcome {item.work_item_id}</span>
+            <span className="text-xs text-contrast-medium">Outcome {item.work_item_id}</span>
             <div className="grid grid-cols-2 gap-static-sm text-xs">
               <div><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium">Pipeline</span><PipelineState item={item} /></div>
               <div><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium">Current state</span><CurrentState item={item} onSelect={onSelect} /></div>
@@ -202,7 +180,7 @@ function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
   const isSelected = selected?.changeId === item.change_id && selected.itemKey === item.item_key
   return (
     <section
-      className={['relative grid gap-static-sm border-b border-contrast-low bg-surface px-static-sm py-static-md lg:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] lg:items-start lg:gap-0 lg:px-0 lg:py-0', isSelected ? 'bg-frosted-soft' : ''].join(' ')}
+      className={['relative grid gap-static-sm rounded-sm px-static-sm py-static-md lg:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] lg:items-start lg:gap-0 lg:px-0 lg:py-0', isSelected ? 'bg-frosted-soft' : 'bg-surface'].join(' ')}
       aria-label={`Change Integration for ${group.title}`}
       data-work-item={workItemIdentity(item)}
     >
@@ -217,10 +195,10 @@ function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
         >
           Integration
         </Link>
-        <span className="text-xs text-contrast-medium">{group.title} / Change</span>
+        <span className="text-xs text-contrast-medium">Change</span>
       </div>
-      <div className="lg:px-static-sm lg:py-static-sm"><PipelineState item={item} /></div>
-      <div className="relative z-[1] lg:px-static-sm lg:py-static-sm"><CurrentState item={item} onSelect={onSelect} /></div>
+      <div className="lg:px-static-sm lg:py-static-sm"><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium lg:hidden">Pipeline</span><PipelineState item={item} /></div>
+      <div className="relative z-[1] lg:px-static-sm lg:py-static-sm"><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium lg:hidden">Current state</span><CurrentState item={item} onSelect={onSelect} /></div>
     </section>
   )
 }
@@ -228,12 +206,10 @@ function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
 export default function WorkPortfolioTable({ groups, selected, emptyMessage, onSelect }: WorkPortfolioTableProps) {
   if (groups.length === 0) return <p className="py-static-lg text-sm text-contrast-medium">{emptyMessage ?? 'No current Delivery work.'}</p>
   return (
-    <section aria-labelledby="work-board-heading" data-testid="work-portfolio-table" className="grid gap-static-xl">
+    <section aria-label="Delivery work" data-testid="work-portfolio-table" className="grid gap-static-xl">
       {groups.map((group) => (
-        <section key={group.change_id} className="min-w-0" aria-labelledby={`change-${group.change_id}`}>
-          <div id={`change-${group.change_id}`} className="border-b border-contrast-medium pb-static-sm">
-            <ChangeHeader group={group} />
-          </div>
+        <section key={group.change_id} className="min-w-0" aria-labelledby={`work-group-${group.change_id}`}>
+          <h2 id={`work-group-${group.change_id}`} className="mb-static-xs px-static-sm text-xs font-semibold text-contrast-medium">{group.title}</h2>
           <DesktopTable group={group} selected={selected} onSelect={onSelect} />
           <CompactRows group={group} selected={selected} onSelect={onSelect} />
           <IntegrationGate group={group} selected={selected} onSelect={onSelect} />

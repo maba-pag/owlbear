@@ -5,39 +5,20 @@ function countLabel(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`
 }
 
-function pipelineStatement(operating: PortfolioOperatingView) {
-  const designWorkCount = operating.draft_design_change_ids.length + operating.design_required_change_ids.length
-  if (operating.unfinished_change_count === 0 && designWorkCount === 0) return 'No unfinished Design or Delivery work.'
-  if (operating.claimed.length > 0) {
-    const queue = operating.queued_for_orchestration.length > 0
-      ? ` ${countLabel(operating.queued_for_orchestration.length, 'item')} waiting for Orchestration.`
-      : ''
-    return `Delivery is underway. ${countLabel(operating.claimed.length, 'item')} being worked on.${queue}`
-  }
-  if (operating.queued_for_orchestration.length > 0) {
-    return `${countLabel(operating.queued_for_orchestration.length, 'item')} waiting for an Orchestration session.`
-  }
-  if (operating.interventions.length > 0) return 'Delivery is waiting for your intervention.'
-  if (designWorkCount > 0) {
-    return 'Design work exists, but no Delivery work is currently underway.'
-  }
-  return 'Work exists, but nothing can advance yet.'
-}
-
 function guidanceText(guidance: PortfolioGuidance) {
   switch (guidance.kind) {
     case 'intervene':
-      return `${countLabel(guidance.work_count, 'intervention')} ${guidance.work_count === 1 ? 'requires' : 'require'} you before affected work can continue.`
+      return `Review ${countLabel(guidance.work_count, 'intervention')}.`
     case 'resume-design':
       return `Resume ${guidance.change_ids.map((changeId) => `/design ${changeId}`).join(' or ')}.`
     case 'start-orchestration':
-      return `Start /orchestrate. It can pick up ${countLabel(guidance.work_count, 'waiting item')}.`
+      return 'Start /orchestrate.'
     case 'work-underway':
-      return 'Keep the current /orchestrate session running; it owns the portfolio queue.'
+      return 'Let the current /orchestrate session continue.'
     case 'wait':
-      return `${countLabel(guidance.work_count, 'item')} waiting on dependencies. No session needs starting.`
+      return 'No session action needed.'
     case 'create-change':
-      return 'Start /ideate to shape a new Change, or /design <change-id> to create one directly.'
+      return 'Start /ideate or /design <change-id>.'
   }
 }
 
@@ -64,19 +45,16 @@ export function PortfolioHeaderSummary({ operating }: { operating: PortfolioOper
 }
 
 export default function PortfolioOperatingSummary({ operating }: { operating: PortfolioOperatingView }) {
+  if (operating.guidance.length === 0) return null
   return (
-    <section className="border-y border-contrast-low py-static-md" aria-labelledby="pipeline-heading">
-      <p id="pipeline-heading" className="text-2xs font-semibold uppercase text-contrast-medium">Pipeline</p>
-      <p className="mt-static-xs max-w-[72ch] text-lg font-semibold leading-snug">{pipelineStatement(operating)}</p>
-      {operating.guidance.length > 0 ? (
-        <div className="mt-static-md grid gap-static-xs border-t border-contrast-low pt-static-sm" aria-label="Recommended next steps">
-          {operating.guidance.map((guidance) => (
-            <p key={guidance.kind} className="text-sm leading-relaxed">
-              {guidanceText(guidance)}
-            </p>
-          ))}
-        </div>
-      ) : null}
-    </section>
+    <div className="min-w-0 text-sm leading-relaxed" aria-label="Recommended next steps">
+      <span className="mr-static-xs font-semibold">Session</span>
+      {operating.guidance.map((guidance, index) => (
+        <span key={guidance.kind}>
+          {index > 0 ? <span className="mx-static-xs text-contrast-medium" aria-hidden="true">·</span> : null}
+          {guidanceText(guidance)}
+        </span>
+      ))}
+    </div>
   )
 }

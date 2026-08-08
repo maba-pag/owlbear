@@ -88,7 +88,7 @@ function DetailHeader({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
     <div className="flex min-w-0 flex-wrap items-start justify-between gap-static-sm">
       <div className="min-w-0">
         <span className="text-xs text-contrast-medium"><strong className="text-primary">{detail.item.change_title}</strong> / {scopeLabel}</span>
-        <PHeading id="work-detail-heading" tag="h2" size="lg">{card.scope === 'outcome' ? card.title : detail.item.change_title}</PHeading>
+        <PHeading id="work-detail-heading" tag="h2" size="lg">{card.scope === 'outcome' ? card.title : 'Integration'}</PHeading>
       </div>
       <div className="flex flex-wrap gap-static-xs">
         {card.stage ? <PTag compact>{STAGE_LABELS[card.stage]}</PTag> : null}
@@ -154,7 +154,7 @@ function RequestsSection({ detail, pendingAction, onAnswerRequest }: WorkItemDet
   const requests = detail.item.requests
   if (requests.length === 0) return null
   return (
-    <section className="border-t border-contrast-low pt-static-md" aria-labelledby="work-requests-heading">
+    <section aria-labelledby="work-requests-heading">
       <PHeading id="work-requests-heading" tag="h3" size="md">Requests</PHeading>
       <div className="mt-static-sm grid gap-static-md">
         {requests.map((request) => (
@@ -213,7 +213,7 @@ function ClaimSection({ detail, pendingAction, onRecoverClaim }: WorkItemDetailP
     setConfirmOpen(false)
   }
   return (
-    <section className="border-t border-contrast-low pt-static-md" aria-labelledby="work-claim-heading">
+    <section aria-labelledby="work-claim-heading">
       <PHeading id="work-claim-heading" tag="h3" size="md">Active claim</PHeading>
       <dl className="mt-static-sm grid gap-static-xs text-sm">
         <div className="flex justify-between gap-static-sm"><dt>Role</dt><dd>{WORKER_ROLE_LABELS[claim.worker_role]}</dd></div>
@@ -244,7 +244,7 @@ function ExceptionalStateSection({ detail }: Pick<WorkItemDetailProps, 'detail'>
   const { return_context: returned, recovery_attention: recovery } = detail.item
   if (!returned && !recovery) return null
   return (
-    <section className="border-t border-contrast-low pt-static-md" aria-labelledby="work-attention-heading">
+    <section aria-labelledby="work-attention-heading">
       <PHeading id="work-attention-heading" tag="h3" size="md">Current exception</PHeading>
       <div className="mt-static-sm grid gap-static-md text-sm">
         {returned ? (
@@ -266,7 +266,7 @@ function CourseChangesSection({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
   const moves = detail.item.operator_moves
   if (moves.length === 0) return null
   return (
-    <section className="border-t border-contrast-low pt-static-md" aria-labelledby="work-course-changes-heading">
+    <section aria-labelledby="work-course-changes-heading">
       <h3 id="work-course-changes-heading" className="text-xs font-semibold uppercase text-contrast-medium">Recorded Change course changes</h3>
       <ol className="mt-static-sm grid list-decimal gap-static-md pl-static-lg text-sm">
         {moves.map((move) => (
@@ -315,7 +315,7 @@ function BackwardMoveSection({ detail, pendingAction, onPreviewBackward, onMoveB
     setConfirmOpen(true)
   }
   return (
-    <details className="border-t border-contrast-low pt-static-md">
+    <details>
       <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Administrative actions</summary>
       <div className="mt-static-md">
       <div className="mt-static-sm flex flex-wrap items-end gap-static-sm">
@@ -339,7 +339,7 @@ function SemanticDetail({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
   return (
     <>
       {item.acceptance.length > 0 ? (
-        <details className="border-t border-contrast-low pt-static-md">
+        <details>
           <summary id="work-acceptance-heading" className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Acceptance ({item.acceptance.length})</summary>
           <ol className="mt-static-sm grid list-decimal gap-static-sm pl-static-lg text-sm text-primary">
             {item.acceptance.map((observation) => <li key={observation}>{observation}</li>)}
@@ -347,7 +347,7 @@ function SemanticDetail({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
         </details>
       ) : null}
       {item.tasks.length > 0 ? (
-        <details className="border-t border-contrast-low pt-static-md">
+        <details>
           <summary id="work-evidence-heading" className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Delivery task evidence ({item.tasks.length})</summary>
           <div className="mt-static-sm grid gap-static-md">
             {item.tasks.map((task) => (
@@ -361,7 +361,7 @@ function SemanticDetail({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
         </details>
       ) : null}
       {item.dependencies.length > 0 || item.commitments.length > 0 ? (
-        <details className="border-t border-contrast-low pt-static-md">
+        <details>
           <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">References</summary>
           <ol className="mt-static-sm grid list-decimal gap-static-md pl-static-lg text-sm text-primary">
             {item.dependencies.map((dependency) => <li key={dependency.outcome_id}><strong className="block text-xs">{dependency.outcome_id}</strong>{dependency.title} · {STAGE_LABELS[dependency.stage]}</li>)}
@@ -369,12 +369,20 @@ function SemanticDetail({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
           </ol>
         </details>
       ) : null}
-      <details className="border-t border-contrast-low pt-static-md">
+      <details>
         <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Technical identity</summary>
-        <code className="mt-static-sm block break-all text-xs text-primary">{item.card.change_id} / {item.card.item_key}</code>
+        <code className="mt-static-sm block break-all text-xs text-contrast-medium">{item.card.change_id} / {item.card.item_key}</code>
       </details>
     </>
   )
+}
+
+function ConflictedPaths({ paths }: { paths: string[] }) {
+  return <ul className="mt-static-xs grid list-disc gap-static-xs pl-static-lg font-mono text-xs text-contrast-medium">{paths.map((path) => <li key={path}>{path}</li>)}</ul>
+}
+
+function Diagnostics({ lines }: { lines: string[] }) {
+  return <pre className="mt-static-sm max-h-48 overflow-auto whitespace-pre text-xs text-contrast-medium">{lines.join('\n')}</pre>
 }
 
 function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkItemDetailProps) {
@@ -390,12 +398,10 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
       {!integration.superseded && integration.conflicted_paths.length > 0 ? (
         <div className="mt-static-sm">
           <p className="text-xs font-semibold">Conflicting files</p>
-          <ul className="mt-static-xs grid list-disc gap-static-xs pl-static-lg font-mono text-xs">
-            {integration.conflicted_paths.map((path) => <li key={path}>{path}</li>)}
-          </ul>
+          <ConflictedPaths paths={integration.conflicted_paths} />
         </div>
       ) : null}
-      {action.command ? <code className="mt-static-sm block break-all bg-canvas p-static-sm text-xs">{action.command}</code> : null}
+      {action.command ? <code className="mt-static-sm block break-all bg-canvas p-static-sm text-xs text-contrast-medium">{action.command}</code> : null}
       {canIntegrate ? (
         <PButton className="mt-static-md" type="button" compact disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
           {pendingAction === 'integration' ? 'Working...' : action.label}
@@ -403,16 +409,16 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
       ) : null}
       {!canIntegrate && !integration.repair_active && integration.retry_condition ? <p className="mt-static-sm text-xs text-contrast-medium">Next: {integration.retry_condition}</p> : null}
       {integration.superseded && integration.diagnostics.length > 0 ? (
-        <details className="mt-static-md border-t border-contrast-low pt-static-sm">
+        <details className="mt-static-md">
           <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Previous attempt (stale)</summary>
-          <p className="mt-static-sm text-xs text-contrast-medium">The previous target produced this evidence. It is retained for context but no longer describes the current Integration attempt.</p>
-          {integration.conflicted_paths.length > 0 ? <ul className="mt-static-sm grid list-disc gap-static-xs pl-static-lg font-mono text-xs">{integration.conflicted_paths.map((path) => <li key={path}>{path}</li>)}</ul> : null}
-          <pre className="mt-static-sm max-h-48 overflow-auto whitespace-pre text-xs text-contrast-medium">{integration.diagnostics.join('\n')}</pre>
+          <p className="mt-static-sm text-xs text-primary">The previous target produced this evidence. It is retained for context but no longer describes the current Integration attempt.</p>
+          {integration.conflicted_paths.length > 0 ? <ConflictedPaths paths={integration.conflicted_paths} /> : null}
+          <Diagnostics lines={integration.diagnostics} />
         </details>
       ) : !integration.superseded && integration.diagnostics.length > 0 ? (
-        <details className="mt-static-md border-t border-contrast-low pt-static-sm">
+        <details className="mt-static-md">
           <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Technical evidence</summary>
-          <pre className="mt-static-sm max-h-48 overflow-auto whitespace-pre text-xs text-contrast-medium">{integration.diagnostics.join('\n')}</pre>
+          <Diagnostics lines={integration.diagnostics} />
         </details>
       ) : null}
     </section>
@@ -439,7 +445,7 @@ export default function WorkItemDetail(props: WorkItemDetailProps) {
           <DetailHeader detail={props.detail} />
           <p className="mt-static-md max-w-[72ch] text-base leading-relaxed">{props.detail.item.promise}</p>
           {showSummary ? (
-            <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs border-y border-contrast-low py-static-sm text-sm">
+            <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs py-static-xs text-sm">
               {showOutcomeNext ? <><dt className="text-contrast-medium">Next</dt><dd><strong>{NEXT_ACTOR_LABELS[card.next_actor]}</strong><span className="ml-static-xs text-contrast-medium">{card.next_step}</span></dd></> : null}
               {card.stage ? <><dt className="text-contrast-medium">Stage</dt><dd>{STAGE_LABELS[card.stage]}</dd></> : null}
               {showOutcomeNext ? <><dt className="text-contrast-medium">Progress</dt><dd>{card.progress.label}</dd></> : null}
