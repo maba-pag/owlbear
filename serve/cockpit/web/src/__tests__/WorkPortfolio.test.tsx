@@ -273,7 +273,7 @@ it('presents Change-grouped Outcomes by work, progress, and status', async () =>
   expect(table).toHaveTextContent('Answer request')
   expect(table).toHaveTextContent('Outcome: OUT-001')
   expect(within(table).getAllByText('Portfolio redesign')).toHaveLength(1)
-  expect(await screen.findByLabelText('Delivery portfolio status')).toHaveTextContent('being worked on')
+  expect(await screen.findByLabelText('Delivery portfolio status')).toHaveTextContent('1work item active')
   const guidance = screen.getByLabelText('Session suggestions')
   expect(guidance).toHaveTextContent('Review 1 item that needs you')
   expect(guidance).toHaveTextContent('/orchestrate is already working')
@@ -297,7 +297,7 @@ it('shows unadmitted Design work on the board and opens its verified sources', a
   expect(designWork).toHaveTextContent('Design Draft')
   expect(designWork).toHaveTextContent('Not admitted to Delivery')
   expect(designWork).toHaveTextContent('/design design-draft')
-  expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('1unfinished Change')
+  expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('1current Change')
 
   const detailView = await screen.findByTestId('design-work-detail')
   expect(detailView).toHaveTextContent('Shape a coherent operator workflow.')
@@ -336,7 +336,7 @@ it('filters grouped rows by Change and Needs without conflating Activity', async
   expect(screen.getByTestId('work-portfolio-table')).not.toHaveTextContent('Runtime hardening')
 
   selectValue(selects[0], 'change-beta')
-  expect(await screen.findByText('No Work Items match the current filters.')).toBeInTheDocument()
+  expect(await screen.findByText('No portfolio entries match the current filters.')).toBeInTheDocument()
   expect(screen.queryByText('No current Delivery work.')).not.toBeInTheDocument()
 })
 
@@ -490,7 +490,7 @@ it('routes Integration repair through Orchestration while keeping raw diagnostic
   expect(inspector).toHaveTextContent('Merge conflict')
   expect(inspector).toHaveTextContent('Conflicting files')
   expect(inspector).toHaveTextContent('serve/delivery/work_items.py')
-  expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('waiting for Orchestration')
+  expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('1work item queued')
   expect(inspector).not.toHaveTextContent('/integration-repair')
   expect(screen.getByText('Technical evidence').closest('details')).not.toHaveAttribute('open')
   expect(screen.queryByText('Retry Integration')).not.toBeInTheDocument()
@@ -624,7 +624,7 @@ it('presents Integration retry as an optional manual alternative to Orchestratio
   expect(table).toHaveTextContent('Change: Portfolio redesign')
   expect(table).toHaveTextContent('Waiting for Orchestration')
   expect(table).toHaveTextContent('Manual option: Retry Integration')
-  expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('0need you')
+  expect(screen.getByLabelText('Delivery portfolio status')).not.toHaveTextContent('need you')
 })
 
 it('keeps cached routed detail visible when a background refresh fails', async () => {
@@ -731,7 +731,7 @@ it('shows active Integration repair state without instructing a duplicate repair
   currentPortfolio = portfolio([group({ lifecycle: 'integration', outcome_completed: 2, items: [integrationCard] })])
   renderPage('/delivery/change-alpha/integration')
 
-  expect(await screen.findByLabelText('Delivery portfolio status')).toHaveTextContent('being worked on')
+  expect(await screen.findByLabelText('Delivery portfolio status')).toHaveTextContent('1work item active')
   const detailView = await screen.findByTestId('work-item-detail')
   expect(detailView).toHaveTextContent('Repair in progress')
   expect(detailView).toHaveTextContent('A reviewed Integration repair is currently in progress.')

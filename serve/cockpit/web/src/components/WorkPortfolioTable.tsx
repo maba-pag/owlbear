@@ -15,6 +15,12 @@ interface WorkPortfolioTableProps {
 
 type GroupTableProps = Pick<WorkPortfolioTableProps, 'selected' | 'onSelect'> & { group: ChangeGroupView }
 
+function attentionBorder(item: WorkItemCardView): string {
+  if (item.needs === 'you') return 'border-l-4 border-l-error'
+  if (item.needs === 'repair') return 'border-l-4 border-l-warning'
+  return 'border-l border-l-contrast-low'
+}
+
 function workItemPath(item: WorkItemCardView): string {
   return `/delivery/${encodeURIComponent(item.change_id)}/${encodeURIComponent(item.item_key)}`
 }
@@ -112,12 +118,12 @@ function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
                 className={['relative align-top', isSelected ? 'bg-frosted-soft' : 'bg-surface hover:bg-frosted-soft'].join(' ')}
                 data-work-item={workItemIdentity(item)}
               >
-                <td className="rounded-l-sm px-static-sm py-static-xs">
+                <td className={`rounded-l-sm border-y border-contrast-low px-static-sm py-static-xs ${attentionBorder(item)}`}>
                   <ItemLink item={item} selected={isSelected} onSelect={onSelect} />
-                  <span className="block text-xs text-contrast-medium">Outcome: {item.work_item_id}</span>
+                  <span className="block text-xs text-contrast-medium">Outcome: <code>{item.work_item_id}</code></span>
                 </td>
-                <td className="px-static-sm py-static-sm"><ProgressState item={item} /></td>
-                <td className="rounded-r-sm px-static-sm py-static-sm"><CurrentState item={item} onSelect={onSelect} /></td>
+                <td className="border-y border-contrast-low px-static-sm py-static-sm"><ProgressState item={item} /></td>
+                <td className="rounded-r-sm border-y border-r border-contrast-low px-static-sm py-static-sm"><CurrentState item={item} onSelect={onSelect} /></td>
               </tr>
             )
           })}
@@ -136,12 +142,12 @@ function CompactRows({ group, selected, onSelect }: GroupTableProps) {
         return (
           <article
             key={workItemIdentity(item)}
-            className={['relative mb-1 grid gap-static-sm rounded-sm p-static-sm', isSelected ? 'bg-frosted-soft' : 'bg-surface'].join(' ')}
+            className={['relative mb-1 grid gap-static-sm rounded-sm border-y border-r border-contrast-low p-static-sm', attentionBorder(item), isSelected ? 'bg-frosted-soft' : 'bg-surface'].join(' ')}
             data-work-item={workItemIdentity(item)}
             aria-label={`${item.title} work item`}
           >
             <ItemLink item={item} selected={isSelected} onSelect={onSelect} />
-            <span className="text-xs text-contrast-medium">Outcome: {item.work_item_id}</span>
+            <span className="text-xs text-contrast-medium">Outcome: <code>{item.work_item_id}</code></span>
             <div className="grid grid-cols-2 gap-static-sm text-xs">
               <div><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium">Progress</span><ProgressState item={item} /></div>
               <div><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium">Status</span><CurrentState item={item} onSelect={onSelect} /></div>
@@ -159,7 +165,11 @@ function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
   const isSelected = selected?.changeId === item.change_id && selected.itemKey === item.item_key
   return (
     <section
-      className={['relative grid gap-static-sm rounded-sm px-static-sm py-static-md lg:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] lg:items-start lg:gap-0 lg:px-0 lg:py-0', isSelected ? 'bg-frosted-soft' : 'bg-surface'].join(' ')}
+      className={[
+        'relative mt-1 grid gap-static-sm rounded-sm border-y border-r border-contrast-low px-static-sm py-static-md lg:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] lg:items-start lg:gap-0 lg:px-0 lg:py-0',
+        attentionBorder(item),
+        isSelected ? 'bg-frosted-soft' : 'bg-surface hover:bg-frosted-soft',
+      ].join(' ')}
       aria-label={`Change Integration for ${group.title}`}
       data-work-item={workItemIdentity(item)}
     >
@@ -188,7 +198,7 @@ export default function WorkPortfolioTable({ groups, selected, emptyMessage, onS
     <section aria-label="Delivery work" data-testid="work-portfolio-table" className="grid gap-static-xl">
       {groups.map((group) => (
         <section key={group.change_id} className="min-w-0" aria-labelledby={`work-group-${group.change_id}`}>
-          <h2 id={`work-group-${group.change_id}`} className="mb-static-sm px-static-sm text-md font-semibold text-primary">{group.title}</h2>
+          <h2 id={`work-group-${group.change_id}`} className="mb-static-xs border-b border-contrast-low px-static-sm pb-static-xs text-md font-semibold text-primary">{group.title}</h2>
           <DesktopTable group={group} selected={selected} onSelect={onSelect} />
           <CompactRows group={group} selected={selected} onSelect={onSelect} />
           <IntegrationGate group={group} selected={selected} onSelect={onSelect} />

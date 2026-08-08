@@ -29,19 +29,27 @@ export function PortfolioHeaderSummary({ operating }: { operating: PortfolioOper
     <>
       <WorkspaceHeaderMetric
         value={operating.unfinished_change_count}
-        label={operating.unfinished_change_count === 1 ? 'unfinished Change' : 'unfinished Changes'}
+        label={operating.unfinished_change_count === 1 ? 'current Change' : 'current Changes'}
       />
       {operating.claimed.length > 0 ? (
-        <WorkspaceHeaderMetric value={operating.claimed.length} label="being worked on" />
+        <WorkspaceHeaderMetric
+          value={operating.claimed.length}
+          label={operating.claimed.length === 1 ? 'work item active' : 'work items active'}
+        />
       ) : null}
       {operating.queued_for_orchestration.length > 0 ? (
-        <WorkspaceHeaderMetric value={operating.queued_for_orchestration.length} label="waiting for Orchestration" />
+        <WorkspaceHeaderMetric
+          value={operating.queued_for_orchestration.length}
+          label={operating.queued_for_orchestration.length === 1 ? 'work item queued' : 'work items queued'}
+        />
       ) : null}
-      <WorkspaceHeaderMetric
-        value={operating.interventions.length}
-        label="need you"
-        tone={operating.interventions.length > 0 ? 'error' : 'neutral'}
-      />
+      {operating.interventions.length > 0 ? (
+        <WorkspaceHeaderMetric
+          value={operating.interventions.length}
+          label={operating.interventions.length === 1 ? 'work item needs you' : 'work items need you'}
+          tone="error"
+        />
+      ) : null}
     </>
   )
 }
