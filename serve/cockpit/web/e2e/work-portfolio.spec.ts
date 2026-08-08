@@ -150,6 +150,12 @@ test.describe('assembled Delivery portfolio', () => {
     expect(designRowBox!.y - (designLabelsBox!.y + designLabelsBox!.height)).toBeCloseTo(8, 0)
     expect(designBox!.y - (tableBox!.y + tableBox!.height)).toBeCloseTo(32, 0)
     expect(guidanceBox!.y - (designBox!.y + designBox!.height)).toBeCloseTo(32, 0)
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+    const designCommand = '/design design-operations-roadmap'
+    await designRow.getByRole('button', { name: `Copy command ${designCommand}` }).click()
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(designCommand)
+    await expect(page).toHaveURL(/\/delivery$/)
+    await expect(guidance.getByRole('button', { name: `Copy command ${designCommand}` })).toBeVisible()
     const designTrigger = designSection.getByRole('link', { name: 'Design Operations Roadmap' })
     await designTrigger.click()
     const designDetail = page.getByTestId('design-work-detail')

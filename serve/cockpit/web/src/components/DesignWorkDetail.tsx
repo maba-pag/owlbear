@@ -1,5 +1,6 @@
 import { PHeading, PTag } from '@porsche-design-system/components-react'
 import type { DesignWorkDetailResponse } from '../api/workItems'
+import CopyCommand from './CopyCommand'
 import MarkdownPreview from './MarkdownPreview'
 import { designCommand, designWorkTitle } from './designWorkPresentation'
 
@@ -16,7 +17,7 @@ export default function DesignWorkDetail({ detail }: { detail: DesignWorkDetailR
       <p className="mt-static-md max-w-[72ch] text-base leading-relaxed">Authored Design work that has not been admitted to Delivery.</p>
       <div className="mt-static-md flex flex-wrap items-baseline gap-static-xs text-sm">
         <span className="text-contrast-medium">Continue with</span>
-        <code className="rounded-sm border border-contrast-low bg-surface px-1.5 py-0.5 text-xs text-primary">{designCommand(detail.change_id)}</code>
+        <CopyCommand command={designCommand(detail.change_id)} className="text-xs" />
       </div>
       <div className="mt-static-lg grid gap-static-md">
         <details open className="min-w-0 border-t border-contrast-low pt-static-sm">

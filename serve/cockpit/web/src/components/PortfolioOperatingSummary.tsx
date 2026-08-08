@@ -1,5 +1,6 @@
 import { WorkspaceHeaderMetric } from './WorkspaceHeader'
 import type { PortfolioGuidance, PortfolioOperatingView } from '../api/workItems'
+import CopyCommand from './CopyCommand'
 import { designCommand } from './designWorkPresentation'
 
 function countLabel(count: number, singular: string, plural = `${singular}s`) {
@@ -7,7 +8,7 @@ function countLabel(count: number, singular: string, plural = `${singular}s`) {
 }
 
 function Command({ children }: { children: string }) {
-  return <code className="rounded-sm border border-contrast-low bg-surface px-1.5 py-0.5 text-xs text-primary">{children}</code>
+  return <CopyCommand command={children} className="text-xs" />
 }
 
 function Guidance({ guidance }: { guidance: PortfolioGuidance }) {

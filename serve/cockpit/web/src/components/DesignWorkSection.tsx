@@ -1,4 +1,5 @@
 import { Link } from 'react-router'
+import CopyCommand from './CopyCommand'
 import { designCommand, designWorkTitle } from './designWorkPresentation'
 
 interface DesignWorkSectionProps {
@@ -57,7 +58,7 @@ export default function DesignWorkSection({ changeIds, selectedChangeId, onSelec
                   <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high md:sr-only">Status</dt>
                   <dd>
                     <span className="block font-medium text-primary">Continue Design</span>
-                    <code className="mt-1 block break-all text-2xs text-contrast-medium">{designCommand(changeId)}</code>
+                    <CopyCommand command={designCommand(changeId)} className="mt-1 text-2xs" />
                   </dd>
                 </div>
               </dl>
