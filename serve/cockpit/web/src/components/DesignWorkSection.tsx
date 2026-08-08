@@ -11,7 +11,7 @@ export default function DesignWorkSection({ changeIds, selectedChangeId, onSelec
   if (changeIds.length === 0) return null
   return (
     <section className="min-w-0" aria-labelledby="design-work-heading" data-testid="design-work-section">
-      <h2 id="design-work-heading" className="mb-static-sm border-b border-contrast-low px-static-sm pb-static-xs text-md font-semibold text-primary">Design work</h2>
+      <h2 id="design-work-heading" className="mb-static-sm border-b border-contrast-lower px-static-sm pb-static-xs text-md font-semibold text-primary">Design work</h2>
       <div className="mb-static-sm hidden grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] text-2xs font-semibold uppercase text-contrast-high md:grid" aria-hidden="true">
         <span className="px-static-sm py-static-xs">Work</span>
         <span className="px-static-sm py-static-xs">Progress</span>
@@ -24,8 +24,8 @@ export default function DesignWorkSection({ changeIds, selectedChangeId, onSelec
             <article
               key={changeId}
               className={[
-                'relative min-w-0 rounded-lg border border-l-4 border-contrast-low px-static-sm py-static-sm text-sm',
-                selected ? 'bg-frosted-soft' : 'bg-surface hover:bg-frosted-soft',
+                'relative min-w-0 rounded-lg border border-l-4 border-contrast-lower px-static-sm py-static-sm text-sm',
+                selected ? 'bg-canvas' : 'bg-frosted-soft hover:bg-canvas',
               ].join(' ')}
               data-design-work={changeId}
             >
