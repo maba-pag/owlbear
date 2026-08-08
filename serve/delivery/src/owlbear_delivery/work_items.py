@@ -60,6 +60,17 @@ class WorkItemNeed(StrEnum):
     NONE = "none"
 
 
+class WorkItemNextActor(StrEnum):
+    """Who or what is expected to advance one work item next."""
+
+    YOU = "you"
+    AGENT = "agent"
+    AGENT_OR_YOU = "agent-or-you"
+    DEPENDENCY = "dependency"
+    REPAIR = "repair"
+    NONE = "none"
+
+
 class WorkItemActivityState(StrEnum):
     """Current execution state independent from Needs."""
 
@@ -208,6 +219,8 @@ class WorkItemCardView(_ProjectionModel):
     stage: WorkItemStage | None
     needs: WorkItemNeed
     needs_headline: str | None = None
+    next_actor: WorkItemNextActor
+    next_step: str = Field(min_length=1)
     activity: WorkItemActivity
     progress: WorkItemProgress
     action: WorkItemAction
@@ -283,6 +296,7 @@ class WorkItemDetailView(_ProjectionModel):
     """Semantic and operator detail from the same portfolio snapshot."""
 
     snapshot_version: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_title: str = Field(min_length=1)
     card: WorkItemCardView
     promise: str = Field(min_length=1)
     acceptance: tuple[str, ...] = ()
@@ -358,6 +372,7 @@ class WorkItemProjector:
         if card.scope == WorkItemScope.CHANGE_INTEGRATION:
             return WorkItemDetailView(
                 snapshot_version=self._snapshot.version,
+                change_title=self._snapshot.contract.title,
                 card=card,
                 promise="Publish the reviewed change and completed history to the Integration target.",
                 integration=self._integration_view(),
@@ -367,6 +382,7 @@ class WorkItemProjector:
         binding = self._bindings[outcome_id]
         return WorkItemDetailView(
             snapshot_version=self._snapshot.version,
+            change_title=self._snapshot.contract.title,
             card=card,
             promise=outcome.promise,
             acceptance=outcome.acceptance,
@@ -393,6 +409,7 @@ class WorkItemProjector:
 
     def _outcome_card(self, outcome: DeliveryOutcome, binding: OutcomeAuthorityBinding) -> WorkItemCardView:
         needs, headline = self._outcome_needs(outcome, binding)
+        next_actor, next_step = self._outcome_next(binding, needs, headline)
         return WorkItemCardView(
             item_key=f"outcome:{outcome.outcome_id}",
             work_item_id=outcome.outcome_id,
@@ -402,6 +419,8 @@ class WorkItemProjector:
             stage=WorkItemStage(binding.stage.value),
             needs=needs,
             needs_headline=headline,
+            next_actor=next_actor,
+            next_step=next_step,
             activity=self._outcome_activity(binding, needs),
             progress=self._outcome_progress(binding),
             action=self._outcome_action(binding),
@@ -428,6 +447,22 @@ class WorkItemProjector:
         if incomplete:
             return WorkItemNeed.DEPENDENCY, f"Waiting on {', '.join(incomplete)}"
         return WorkItemNeed.NONE, None
+
+    @staticmethod
+    def _outcome_next(
+        binding: OutcomeAuthorityBinding,
+        needs: WorkItemNeed,
+        headline: str | None,
+    ) -> tuple[WorkItemNextActor, str]:
+        if needs == WorkItemNeed.YOU:
+            return WorkItemNextActor.YOU, headline or "Your attention is required"
+        if needs == WorkItemNeed.DEPENDENCY:
+            return WorkItemNextActor.DEPENDENCY, headline or "Waiting on another Outcome"
+        if binding.active_claim is not None:
+            return WorkItemNextActor.AGENT, "Work in progress"
+        if binding.stage == DeliveryStage.COMPLETED:
+            return WorkItemNextActor.NONE, "Complete — no action needed"
+        return WorkItemNextActor.AGENT, "Ready for an agent"
 
     @staticmethod
     def _outcome_activity(binding: OutcomeAuthorityBinding, needs: WorkItemNeed) -> WorkItemActivity:
@@ -472,7 +507,7 @@ class WorkItemProjector:
             )
         return WorkItemProgress(
             kind=WorkItemProgressKind.TASKS,
-            label=f"{len(binding.results)} of {len(binding.tasks)} tasks reviewed",
+            label=f"{len(binding.results)} of {len(binding.tasks)} Delivery tasks reviewed",
             done=len(binding.results),
             total=len(binding.tasks),
         )
@@ -483,6 +518,8 @@ class WorkItemProjector:
         if repair_active:
             needs = WorkItemNeed.NONE
             headline = None
+            next_actor = WorkItemNextActor.AGENT
+            next_step = "Integration repair in progress"
             activity = WorkItemActivity(
                 state=WorkItemActivityState.REPAIRING,
                 worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER,
@@ -493,12 +530,16 @@ class WorkItemProjector:
         elif self._snapshot.integration_attention_superseded:
             needs = WorkItemNeed.NONE
             headline = "Integration target moved"
+            next_actor = WorkItemNextActor.AGENT_OR_YOU
+            next_step = "Retry against the current target"
             activity = WorkItemActivity(state=WorkItemActivityState.READY)
             action = WorkItemAction(kind=WorkItemActionKind.RETRY_INTEGRATION, label="Retry Integration")
             progress = "Awaiting retry against current target"
         elif attention is None:
             needs = WorkItemNeed.NONE
             headline = None
+            next_actor = WorkItemNextActor.AGENT_OR_YOU
+            next_step = "Integrate the reviewed Change"
             activity = WorkItemActivity(state=WorkItemActivityState.READY)
             action = WorkItemAction(kind=WorkItemActionKind.INTEGRATE_CHANGE, label="Integrate Change")
             progress = "Not attempted"
@@ -507,6 +548,8 @@ class WorkItemProjector:
             if disposition == DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED:
                 needs = WorkItemNeed.REPAIR
                 headline = "Merge conflict"
+                next_actor = WorkItemNextActor.REPAIR
+                next_step = "Run a reviewed Integration repair"
                 action = WorkItemAction(
                     kind=WorkItemActionKind.RUN_REPAIR_COMMAND,
                     label="Run reviewed repair",
@@ -515,10 +558,14 @@ class WorkItemProjector:
             elif disposition == DeliveryIntegrationAttentionDisposition.RETRYABLE:
                 needs = WorkItemNeed.NONE
                 headline = "Integration retry available"
+                next_actor = WorkItemNextActor.AGENT_OR_YOU
+                next_step = "Retry Integration"
                 action = WorkItemAction(kind=WorkItemActionKind.RETRY_INTEGRATION, label="Retry Integration")
             else:
                 needs = WorkItemNeed.YOU
                 headline = _integration_headline(attention.code)
+                next_actor = WorkItemNextActor.YOU
+                next_step = headline
                 action = WorkItemAction()
             activity = WorkItemActivity(state=WorkItemActivityState.IDLE)
             progress = "Attempt failed"
@@ -531,6 +578,8 @@ class WorkItemProjector:
             stage=None,
             needs=needs,
             needs_headline=headline,
+            next_actor=next_actor,
+            next_step=next_step,
             activity=activity,
             progress=WorkItemProgress(kind=WorkItemProgressKind.INTEGRATION, label=progress),
             action=action,
@@ -645,7 +694,7 @@ class WorkItemProjector:
             disposition=integration_attention_disposition(attention.code),
             headline=headline,
             explanation=explanation,
-            conflicted_paths=() if superseded else paths,
+            conflicted_paths=paths,
             diagnostics=attention.diagnostics,
             retry_condition=(
                 "Retry Integration against the current target head; the previous verdict is stale."

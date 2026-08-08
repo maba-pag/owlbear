@@ -1,6 +1,7 @@
 export type WorkItemStage = 'design' | 'planning' | 'implementation' | 'assembly' | 'completed'
 export type WorkItemScope = 'outcome' | 'change-integration'
 export type WorkItemNeed = 'you' | 'dependency' | 'repair' | 'none'
+export type WorkItemNextActor = 'you' | 'agent' | 'agent-or-you' | 'dependency' | 'repair' | 'none'
 export type WorkItemActivityState = 'idle' | 'ready' | 'working' | 'repairing'
 export type WorkItemActionKind =
   | 'none'
@@ -54,6 +55,8 @@ export interface WorkItemCardView {
   stage: WorkItemStage | null
   needs: WorkItemNeed
   needs_headline: string | null
+  next_actor: WorkItemNextActor
+  next_step: string
   activity: WorkItemActivity
   progress: WorkItemProgress
   action: WorkItemAction
@@ -158,6 +161,7 @@ export interface WorkItemIntegrationView {
 
 export interface WorkItemDetailView {
   snapshot_version: string
+  change_title: string
   card: WorkItemCardView
   promise: string
   acceptance: string[]

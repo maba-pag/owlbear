@@ -20,8 +20,10 @@ function card(overrides: Partial<WorkItemCardView> = {}): WorkItemCardView {
     stage: 'implementation',
     needs: 'none',
     needs_headline: null,
+    next_actor: 'agent',
+    next_step: 'Work in progress',
     activity: { state: 'working', worker_role: 'builder', started_at: '2026-08-08T10:00:00Z', task_id: 'TASK-001' },
-    progress: { kind: 'tasks', label: '1 of 2 tasks reviewed', done: 1, total: 2 },
+    progress: { kind: 'tasks', label: '1 of 2 Delivery tasks reviewed', done: 1, total: 2 },
     action: { kind: 'none', label: null, command: null },
     ...overrides,
   }
@@ -44,6 +46,8 @@ function group(overrides: Partial<ChangeGroupView> = {}): ChangeGroupView {
         stage: 'planning',
         needs: 'you',
         needs_headline: 'Decision required',
+        next_actor: 'you',
+        next_step: 'Decision required',
         activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
         progress: { kind: 'plan', label: 'Task plan not published', done: null, total: null },
         action: { kind: 'answer-request', label: 'Answer request', command: null },
@@ -80,6 +84,7 @@ function detail(overrides: Partial<WorkItemDetailResponse['item']> = {}): WorkIt
   return {
     item: {
       snapshot_version: 'a'.repeat(64),
+      change_title: 'Portfolio redesign',
       card: card(),
       promise: 'Make Delivery supervision coherent.',
       acceptance: ['The current state is unambiguous.'],
@@ -220,22 +225,22 @@ beforeEach(() => {
   installFetch()
 })
 
-it('presents Change-grouped rows with independent Needs, Stage, Progress, Activity, and Action', async () => {
+it('presents Change-grouped Outcomes with explicit next steps and review affordances', async () => {
   renderPage()
 
   const table = await screen.findByTestId('work-portfolio-table')
   expect(table).toHaveTextContent('Portfolio redesign')
   expect(table).toHaveTextContent('0 of 2 Outcomes complete')
-  expect(table).toHaveTextContent('Needs')
-  expect(table).toHaveTextContent('Work item')
+  expect(table).toHaveTextContent('Next')
+  expect(table).toHaveTextContent('Outcome')
   expect(table).toHaveTextContent('Stage')
   expect(table).toHaveTextContent('Progress')
-  expect(table).toHaveTextContent('Activity')
-  expect(table).toHaveTextContent('Action')
-  expect(table).toHaveTextContent('Builder working')
-  expect(table).not.toHaveTextContent('builder working')
+  expect(table).toHaveTextContent('Review')
+  expect(table).toHaveTextContent('Agent')
+  expect(table).toHaveTextContent('Work in progress')
+  expect(table).toHaveTextContent('You')
   expect(table).toHaveTextContent('Decision required')
-  expect(table).toHaveTextContent('Answer request')
+  expect(table).toHaveTextContent('Review request')
   expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('ready')
   expect(screen.queryByText('Reviewed', { exact: true })).not.toBeInTheDocument()
 })
@@ -246,7 +251,13 @@ it('filters grouped rows by Change and Needs without conflating Activity', async
     title: 'Runtime hardening',
     snapshot_version: 'b'.repeat(64),
     outcome_total: 1,
-    items: [card({ change_id: 'change-beta', needs: 'dependency', needs_headline: 'Waiting on OUT-009' })],
+    items: [card({
+      change_id: 'change-beta',
+      needs: 'dependency',
+      needs_headline: 'Waiting on OUT-009',
+      next_actor: 'dependency',
+      next_step: 'Waiting on OUT-009',
+    })],
   })
   currentPortfolio = portfolio([group(), secondGroup])
   const { container } = renderPage()
@@ -269,10 +280,13 @@ it('opens routed semantic detail with acceptance and bounded task evidence', asy
   fireEvent.click(within(table).getAllByRole('link', { name: /Delivery foundation/ })[0])
 
   const inspector = await screen.findByTestId('work-item-detail')
-  expect(inspector).toHaveTextContent('Promise: Make Delivery supervision coherent.')
+  expect(inspector).toHaveTextContent('Portfolio redesign / Outcome OUT-001')
+  expect(inspector).toHaveTextContent('Make Delivery supervision coherent.')
   expect(inspector).toHaveTextContent('The current state is unambiguous.')
   expect(inspector).toHaveTextContent('Build the projection')
   expect(inspector).toHaveTextContent('A reviewed grouped snapshot.')
+  expect(screen.getByText('Acceptance (1)').closest('details')).not.toHaveAttribute('open')
+  expect(screen.getByText('Delivery task evidence (1)').closest('details')).not.toHaveAttribute('open')
   expect(requests.some(({ url }) => url === '/api/changes/change-alpha/work-items/outcome%3AOUT-001')).toBe(true)
 })
 
@@ -376,6 +390,8 @@ it('shows structured Integration repair evidence while keeping raw diagnostics c
     stage: null,
     needs: 'repair',
     needs_headline: 'Merge conflict',
+    next_actor: 'repair',
+    next_step: 'Run a reviewed Integration repair',
     activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
     progress: { kind: 'integration', label: 'Attempt failed', done: null, total: null },
     action: { kind: 'run-repair-command', label: 'Run reviewed repair', command: '/integration-repair change-alpha' },
@@ -408,6 +424,51 @@ it('shows structured Integration repair evidence while keeping raw diagnostics c
   expect(screen.getByText('Technical evidence').closest('details')).not.toHaveAttribute('open')
   expect(screen.queryByText('Retry Integration')).not.toBeInTheDocument()
   expect(inspector).not.toHaveTextContent('Complete')
+})
+
+it('separates current Integration retry guidance from stale attempt evidence', async () => {
+  const integrationCard = card({
+    item_key: 'integration',
+    work_item_id: 'change-alpha',
+    scope: 'change-integration',
+    title: 'Integration',
+    stage: null,
+    needs: 'none',
+    needs_headline: 'Integration target moved',
+    next_actor: 'agent-or-you',
+    next_step: 'Retry against the current target',
+    activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'integration', label: 'Awaiting retry against current target', done: null, total: null },
+    action: { kind: 'retry-integration', label: 'Retry Integration', command: null },
+  })
+  currentDetail = detail({
+    card: integrationCard,
+    promise: 'Publish the reviewed Change.',
+    acceptance: [],
+    commitments: [],
+    tasks: [],
+    integration: {
+      code: 'merge-conflict',
+      disposition: 'repair-required',
+      headline: 'Integration target moved',
+      explanation: 'The Integration target moved since this attempt; retry against the current target.',
+      conflicted_paths: ['serve/delivery/work_items.py'],
+      diagnostics: ['CONFLICT (content): Merge conflict in serve/delivery/work_items.py'],
+      retry_condition: 'Retry Integration against the current target head; the previous verdict is stale.',
+      superseded: true,
+      repair_active: false,
+    },
+  })
+  renderPage('/delivery/change-alpha/integration')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(inspector).toHaveTextContent('Agent or you')
+  expect(inspector).toHaveTextContent('Retry against the current target')
+  expect(inspector).toHaveTextContent('Retry Integration')
+  const staleEvidence = screen.getByText('Previous attempt (stale)').closest('details')
+  expect(staleEvidence).not.toHaveAttribute('open')
+  expect(staleEvidence).toHaveTextContent('serve/delivery/work_items.py')
+  expect(inspector).not.toHaveTextContent('Next: Retry Integration')
 })
 
 it('keeps cached portfolio and inspector visible when a background refresh fails', async () => {
@@ -468,6 +529,8 @@ it('shows active Integration repair state without instructing a duplicate repair
     stage: null,
     needs: 'none',
     needs_headline: null,
+    next_actor: 'agent',
+    next_step: 'Integration repair in progress',
     activity: { state: 'repairing', worker_role: 'integration-repairer', started_at: '2026-08-08T10:00:00Z', task_id: null },
     progress: { kind: 'integration', label: 'Repair in progress', done: null, total: null },
     action: { kind: 'none', label: null, command: null },
@@ -493,7 +556,9 @@ it('shows active Integration repair state without instructing a duplicate repair
   currentPortfolio = portfolio([group({ lifecycle: 'integration', outcome_completed: 2, items: [integrationCard] })])
   renderPage('/delivery/change-alpha/integration')
 
-  expect(await screen.findByTestId('work-portfolio-table')).toHaveTextContent('Integration repairer working')
+  const table = await screen.findByTestId('work-portfolio-table')
+  expect(table).toHaveTextContent('Change-level step')
+  expect(table).toHaveTextContent('Integration repair in progress')
   const inspector = await screen.findByTestId('work-item-detail')
   expect(inspector).toHaveTextContent('Repair in progress')
   expect(inspector).toHaveTextContent('A reviewed Integration repair is currently in progress.')

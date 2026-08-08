@@ -85,9 +85,9 @@ function PortfolioFilterTools(props: FilterProps) {
       {props.needsFilter ? (
         <PTagDismissible
           compact
-          label={`Needs: ${props.needsFilter === 'you' ? 'You' : props.needsFilter === 'dependency' ? 'Dependency' : props.needsFilter === 'repair' ? 'Repair' : 'Nobody'}`}
+          label={`Attention: ${props.needsFilter === 'you' ? 'Needs you' : props.needsFilter === 'dependency' ? 'Waiting on dependency' : props.needsFilter === 'repair' ? 'Repair required' : 'No intervention'}`}
           data-testid="work-filter-chip-needs"
-          aria={{ 'aria-label': 'Remove Needs filter' }}
+          aria={{ 'aria-label': 'Remove Attention filter' }}
           onClick={() => props.onNeedsFilter('')}
         />
       ) : null}
@@ -127,16 +127,16 @@ function PortfolioFilterPanel(props: FilterProps) {
       <PSelect
         compact
         className="w-56"
-        label="Needs"
+        label="Attention"
         name="work-needs-filter"
         value={props.needsFilter}
         onChange={(event) => props.onNeedsFilter(selectedValue(event as SelectValueEvent) as WorkItemNeed | '')}
       >
-        <PSelectOption value="">Any need</PSelectOption>
-        <PSelectOption value="you">You</PSelectOption>
-        <PSelectOption value="dependency">Dependency</PSelectOption>
-        <PSelectOption value="repair">Repair</PSelectOption>
-        <PSelectOption value="none">Nobody</PSelectOption>
+        <PSelectOption value="">Any attention state</PSelectOption>
+        <PSelectOption value="you">Needs you</PSelectOption>
+        <PSelectOption value="dependency">Waiting on dependency</PSelectOption>
+        <PSelectOption value="repair">Repair required</PSelectOption>
+        <PSelectOption value="none">No intervention</PSelectOption>
       </PSelect>
       <PButtonPure
         type="button"
@@ -213,22 +213,33 @@ function PortfolioWorkspace({
 
   useEffect(() => {
     const workspace = workspaceRef.current
-    if (!workspace || typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(([entry]) => setSplit(entry.contentRect.width >= 1280))
+    if (!workspace) return
+    const updateSplit = () => setSplit(workspace.getBoundingClientRect().width >= 1200)
+    updateSplit()
+    window.addEventListener('resize', updateSplit)
+    if (typeof ResizeObserver === 'undefined') return () => window.removeEventListener('resize', updateSplit)
+    const observer = new ResizeObserver(updateSplit)
     observer.observe(workspace)
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', updateSplit)
+    }
   }, [])
 
   return (
     <div
       ref={workspaceRef}
-      className={['grid min-w-0 gap-static-lg', selected && split ? 'grid-cols-[minmax(0,1fr)_minmax(28rem,30rem)]' : ''].join(' ')}
+      className={['grid min-w-0 gap-static-lg', selected && split ? 'grid-cols-[minmax(0,1fr)_minmax(26rem,28rem)] items-start' : ''].join(' ')}
     >
       <div className="min-w-0"><WorkPortfolioTable groups={groups} selected={selected} onSelect={onSelect} /></div>
       {selected && split ? (
-        <aside className="min-w-0 border-l border-contrast-low pl-static-lg" aria-label="Work Item inspector">
-          <div className="mb-static-md flex justify-end"><PButton type="button" compact variant="secondary" icon="close" hideLabel onClick={onClose}>Close inspector</PButton></div>
-          <SelectedDetail key={`${selected.changeId}:${selected.itemKey}`} identity={selected} onChanged={onChanged} onClose={onClose} />
+        <aside className="sticky top-0 min-h-0 min-w-0 self-start overflow-hidden border-l border-contrast-low pl-static-lg" aria-label="Work Item inspector">
+          <div className="grid h-[calc(100dvh-13rem)] min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
+            <div className="flex justify-end border-b border-contrast-low pb-static-sm"><PButton type="button" compact variant="secondary" icon="close" hideLabel onClick={onClose}>Close inspector</PButton></div>
+            <div className="min-h-0 overflow-y-auto pb-static-lg pr-static-xs pt-static-md" data-testid="work-inspector-scroll">
+              <SelectedDetail key={`${selected.changeId}:${selected.itemKey}`} identity={selected} onChanged={onChanged} onClose={onClose} />
+            </div>
+          </div>
         </aside>
       ) : null}
       {selected && !split ? (

@@ -30,6 +30,7 @@ from owlbear_delivery.work_items import (
     WorkItemActivityState,
     WorkItemAttention,
     WorkItemNeed,
+    WorkItemNextActor,
     WorkItemProjector,
     WorkItemStage,
     integration_conflict_paths,
@@ -243,7 +244,9 @@ def test_dependency_and_active_claim_are_independent_axes() -> None:
 
     assert cards[0].activity.state == WorkItemActivityState.WORKING
     assert cards[0].needs == WorkItemNeed.NONE
+    assert (cards[0].next_actor, cards[0].next_step) == (WorkItemNextActor.AGENT, "Work in progress")
     assert (cards[1].needs, cards[1].needs_headline) == (WorkItemNeed.DEPENDENCY, "Waiting on OUT-001")
+    assert cards[1].next_actor == WorkItemNextActor.DEPENDENCY
 
 
 def test_assembly_uses_outcome_progress_and_detail_contains_result_evidence() -> None:
@@ -293,9 +296,13 @@ def test_target_movement_supersedes_attention_and_offers_retry() -> None:
 
     assert card.progress.label == "Awaiting retry against current target"
     assert card.action.kind == WorkItemActionKind.RETRY_INTEGRATION
+    assert (card.next_actor, card.next_step) == (
+        WorkItemNextActor.AGENT_OR_YOU,
+        "Retry against the current target",
+    )
     assert detail.integration is not None
     assert detail.integration.superseded
-    assert detail.integration.conflicted_paths == ()
+    assert detail.integration.conflicted_paths == ("file.py",)
     assert detail.integration.retry_condition == (
         "Retry Integration against the current target head; the previous verdict is stale."
     )

@@ -31,6 +31,7 @@ from owlbear_delivery.work_items import (
     WorkItemDetailView,
     WorkItemIntegrationView,
     WorkItemNeed,
+    WorkItemNextActor,
     WorkItemProgress,
     WorkItemProgressKind,
     WorkItemScope,
@@ -39,6 +40,8 @@ from owlbear_delivery.work_items import (
 
 
 def _card(change_id: str, outcome_id: str, needs: WorkItemNeed) -> WorkItemCardView:
+    next_actor = WorkItemNextActor.YOU if needs == WorkItemNeed.YOU else WorkItemNextActor.AGENT
+    next_step = "Your attention is required" if needs == WorkItemNeed.YOU else "Ready for an agent"
     return WorkItemCardView(
         item_key=f"outcome:{outcome_id}",
         work_item_id=outcome_id,
@@ -47,6 +50,8 @@ def _card(change_id: str, outcome_id: str, needs: WorkItemNeed) -> WorkItemCardV
         title=f"Outcome {outcome_id}",
         stage=WorkItemStage.PLANNING,
         needs=needs,
+        next_actor=next_actor,
+        next_step=next_step,
         activity=WorkItemActivity(state=WorkItemActivityState.READY),
         progress=WorkItemProgress(kind=WorkItemProgressKind.PLAN, label="Task plan not published"),
         action=WorkItemAction(),
@@ -83,7 +88,11 @@ class _DeliveryApplicationFake:
                 outcome_completed=1,
                 items=(
                     _card("change-b", "OUT-002", WorkItemNeed.NONE).model_copy(
-                        update={"stage": WorkItemStage.COMPLETED}
+                        update={
+                            "stage": WorkItemStage.COMPLETED,
+                            "next_actor": WorkItemNextActor.NONE,
+                            "next_step": "Complete — no action needed",
+                        }
                     ),
                     WorkItemCardView(
                         item_key="integration",
@@ -93,6 +102,8 @@ class _DeliveryApplicationFake:
                         title="Integration",
                         stage=None,
                         needs=WorkItemNeed.NONE,
+                        next_actor=WorkItemNextActor.AGENT_OR_YOU,
+                        next_step="Integrate the reviewed Change",
                         activity=WorkItemActivity(state=WorkItemActivityState.IDLE),
                         progress=WorkItemProgress(
                             kind=WorkItemProgressKind.INTEGRATION,
@@ -115,12 +126,17 @@ class _DeliveryApplicationFake:
                 title="Integration",
                 stage=None,
                 needs=WorkItemNeed.REPAIR if self.integration_attention else WorkItemNeed.NONE,
+                next_actor=WorkItemNextActor.REPAIR if self.integration_attention else WorkItemNextActor.AGENT_OR_YOU,
+                next_step="Run a reviewed Integration repair"
+                if self.integration_attention
+                else "Integrate the reviewed Change",
                 activity=WorkItemActivity(state=WorkItemActivityState.IDLE),
                 progress=WorkItemProgress(kind=WorkItemProgressKind.INTEGRATION, label="Attempt failed"),
                 action=WorkItemAction(),
             )
             return WorkItemDetailView(
                 snapshot_version="a" * 64,
+                change_title=f"Change {change_id}",
                 card=card,
                 promise="Publish the reviewed Change.",
                 integration=WorkItemIntegrationView(
@@ -138,6 +154,7 @@ class _DeliveryApplicationFake:
             )
         return WorkItemDetailView(
             snapshot_version="a" * 64,
+            change_title=f"Change {change_id}",
             card=_card(change_id, item_key.removeprefix("outcome:"), WorkItemNeed.NONE),
             promise="Deliver the Outcome.",
         )
