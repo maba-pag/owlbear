@@ -262,6 +262,48 @@ def test_selects_matching_turn_with_context(extractor: types.ModuleType, transcr
     assert [turn.index for turn in selected] == [1, 2]
 
 
+def test_selects_matching_events_inside_one_nested_turn(
+    extractor: types.ModuleType,
+    nested_transcript: Path,
+) -> None:
+    """Narrow a large nested turn without emitting unrelated messages and tools."""
+    config = extractor.ExtractConfig(max_content_chars=100, include_tools=True, include_tool_arguments=True)
+    _, turns = extractor.extract_turns(nested_transcript, config)
+
+    selected = extractor.select_events(turns, "README.md")
+
+    assert len(selected) == 1
+    assert selected[0].user == "<not selected by --around-event>"
+    assert selected[0].nested_users == []
+    assert selected[0].assistant == []
+    assert [(tool.name, tool.arguments) for tool in selected[0].tools] == [("read_file", {"filePath": "README.md"})]
+
+
+def test_cli_narrows_events_inside_one_turn(
+    extractor: types.ModuleType,
+    nested_transcript: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Expose event narrowing through the bundled command interface."""
+    exit_code = extractor.main(
+        (
+            "--transcript",
+            str(nested_transcript),
+            "--around-event",
+            "nested response",
+            "--include-tools",
+            "--format",
+            "json",
+        )
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert len(payload["turns"]) == 1
+    assert payload["turns"][0]["assistant"] == ["nested response"]
+    assert payload["turns"][0]["tools"] == []
+
+
 def test_bounds_content_and_omits_tools_by_default(extractor: types.ModuleType, transcript: Path) -> None:
     """Bound message content and keep tool evidence opt-in."""
     config = extractor.ExtractConfig(max_content_chars=8, include_tools=False, include_tool_arguments=False)
@@ -327,6 +369,7 @@ def test_reports_unresolved_tool_request_at_raw_transcript_tail(
         }
     ]
     rendered = extractor.render_markdown(metadata, turns)
+    assert "not result bodies or command/domain success" in rendered
     assert "1 tool call lacks a completion record" in rendered
 
 

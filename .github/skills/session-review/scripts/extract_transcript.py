@@ -338,12 +338,39 @@ def select_turns(turns: Sequence[Turn], selection: TurnSelection) -> list[Turn]:
     return selected
 
 
+def select_events(turns: Sequence[Turn], around_event: str | None) -> list[Turn]:
+    """Select matching messages, nested prompts, and tool calls inside turns."""
+    if around_event is None:
+        return list(turns)
+    needle = around_event.casefold()
+    selected: list[Turn] = []
+    for turn in turns:
+        user_matches = needle in turn.user.casefold()
+        nested_users = [message for message in turn.nested_users if needle in message.casefold()]
+        assistant = [message for message in turn.assistant if needle in message.casefold()]
+        tools = [tool for tool in turn.tools if needle in _searchable_tool(tool).casefold()]
+        if user_matches or nested_users or assistant or tools:
+            selected.append(
+                Turn(
+                    index=turn.index,
+                    timestamp=turn.timestamp,
+                    user=turn.user if user_matches else "<not selected by --around-event>",
+                    nested_users=nested_users,
+                    assistant=assistant,
+                    tools=tools,
+                )
+            )
+    return selected
+
+
 def _searchable_turn(turn: Turn) -> str:
-    tool_content = " ".join(
-        f"{tool.name} {json.dumps(tool.arguments, ensure_ascii=True) if tool.arguments is not None else ''}"
-        for tool in turn.tools
-    )
+    tool_content = " ".join(_searchable_tool(tool) for tool in turn.tools)
     return " ".join((turn.user, *turn.assistant, tool_content))
+
+
+def _searchable_tool(tool: ToolEvent) -> str:
+    arguments = json.dumps(tool.arguments, ensure_ascii=True) if tool.arguments is not None else ""
+    return f"{tool.name} {tool.tool_call_id} {arguments}"
 
 
 def render_json(metadata: Mapping[str, object], turns: Iterable[Turn]) -> str:
@@ -384,7 +411,7 @@ def render_markdown(metadata: Mapping[str, object], turns: Iterable[Turn]) -> st
 
 
 def _evidence_limit(metadata: Mapping[str, object]) -> str:
-    limit = "Tool completion records expose success but not result bodies."
+    limit = "Tool completion records expose tool-layer completion, not result bodies or command/domain success."
     incomplete = metadata.get("incomplete_tool_calls")
     count = len(incomplete) if isinstance(incomplete, list) else 0
     if count:
@@ -459,6 +486,10 @@ def parser() -> argparse.ArgumentParser:
     command.add_argument("--from-turn", type=_positive, help="First one-based turn to include")
     command.add_argument("--to-turn", type=_positive, help="Last one-based turn to include")
     command.add_argument("--around", help="Select turns containing this case-insensitive text")
+    command.add_argument(
+        "--around-event",
+        help="Within selected turns, keep only messages, nested prompts, and tools containing this text",
+    )
     command.add_argument("--context-turns", type=_nonnegative, default=1, help="Turns around each text match")
     command.add_argument("--include-tools", action="store_true", help="Include tool names and completion status")
     command.add_argument(
@@ -486,7 +517,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         retain_last = (
             args.last_turns
-            if args.last_turns is not None and args.from_turn is None and args.to_turn is None and args.around is None
+            if args.last_turns is not None
+            and args.from_turn is None
+            and args.to_turn is None
+            and args.around is None
+            and args.around_event is None
             else None
         )
         metadata, turns = extract_turns(path, config, retain_last=retain_last)
@@ -498,6 +533,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             context_turns=args.context_turns,
         )
         selected = select_turns(turns, selection)
+        selected = select_events(selected, args.around_event)
     except (FileNotFoundError, OSError, ValueError) as exc:
         sys.stderr.write(f"extract-transcript: {exc}\n")
         return 1
