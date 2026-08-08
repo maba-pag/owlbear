@@ -8,7 +8,7 @@ function countLabel(count: number, singular: string, plural = `${singular}s`) {
 }
 
 function Command({ children }: { children: string }) {
-  return <CopyCommand command={children} className="text-xs" />
+  return <span className="mx-static-xs inline-flex max-w-full"><CopyCommand command={children} className="text-xs" /></span>
 }
 
 function Guidance({ guidance }: { guidance: PortfolioGuidance }) {
