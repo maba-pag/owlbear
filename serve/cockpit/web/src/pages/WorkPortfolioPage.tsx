@@ -384,7 +384,7 @@ export default function WorkPortfolioPage() {
         position="end"
         backdrop="shading"
         background="canvas"
-        fullscreen={{ base: true, l: false }}
+        fullscreen={{ base: true, m: false }}
         style={{ '--p-flyout-width': 'min(56rem, 100vw)' } as CSSProperties}
         aria={{ 'aria-label': 'Work Item detail' }}
         onDismiss={closeInspector}

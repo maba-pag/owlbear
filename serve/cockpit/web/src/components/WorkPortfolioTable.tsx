@@ -100,7 +100,7 @@ function CurrentState({ item, onSelect }: { item: WorkItemCardView; onSelect: Wo
 function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
   const outcomes = group.items.filter((item) => item.scope === 'outcome')
   return (
-    <div className="hidden overflow-x-auto lg:block" data-testid="work-table-scroll">
+    <div className="hidden overflow-x-auto md:block" data-testid="work-table-scroll">
       <table className="w-full min-w-[48rem] table-fixed border-separate border-spacing-y-1 text-left text-sm">
         <caption className="sr-only">Current Outcomes for {group.title}</caption>
         <colgroup>
@@ -142,7 +142,7 @@ function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
 function CompactRows({ group, selected, onSelect }: GroupTableProps) {
   const outcomes = group.items.filter((item) => item.scope === 'outcome')
   return (
-    <div className="grid gap-static-sm lg:hidden">
+    <div className="grid gap-static-sm md:hidden">
       {outcomes.map((item) => {
         const isSelected = selected?.changeId === item.change_id && selected.itemKey === item.item_key
         return (
@@ -172,14 +172,14 @@ function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
   return (
     <section
       className={[
-        'relative mt-static-sm grid gap-static-sm rounded-lg border-y border-r border-contrast-low px-static-sm py-static-md lg:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] lg:items-start lg:gap-0 lg:px-0 lg:py-0',
+        'relative mt-static-sm grid gap-static-sm rounded-lg border-y border-r border-contrast-low px-static-sm py-static-md md:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] md:items-start md:gap-0 md:px-0 md:py-0',
         attentionBorder(item),
         isSelected ? 'bg-frosted-soft' : 'bg-surface hover:bg-frosted-soft',
       ].join(' ')}
       aria-label={`Change Integration for ${group.title}`}
       data-work-item={workItemIdentity(item)}
     >
-      <div className="min-w-0 lg:px-static-sm lg:py-static-sm">
+      <div className="min-w-0 md:px-static-sm md:py-static-sm">
         <Link
           to={workItemPath(item)}
           data-work-item-primary-trigger
@@ -192,8 +192,8 @@ function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
         </Link>
         <span className="text-xs text-contrast-medium">Change: {group.title}</span>
       </div>
-      <div className="lg:px-static-sm lg:py-static-sm"><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium lg:hidden">Progress</span><ProgressState item={item} /></div>
-      <div className="relative z-[1] lg:px-static-sm lg:py-static-sm"><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium lg:hidden">Status</span><CurrentState item={item} onSelect={onSelect} /></div>
+      <div className="md:px-static-sm md:py-static-sm"><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium md:hidden">Progress</span><ProgressState item={item} /></div>
+      <div className="relative z-[1] md:px-static-sm md:py-static-sm"><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium md:hidden">Status</span><CurrentState item={item} onSelect={onSelect} /></div>
     </section>
   )
 }

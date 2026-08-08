@@ -12,7 +12,7 @@ export default function DesignWorkSection({ changeIds, selectedChangeId, onSelec
   return (
     <section className="min-w-0" aria-labelledby="design-work-heading" data-testid="design-work-section">
       <h2 id="design-work-heading" className="mb-static-sm border-b border-contrast-low px-static-sm pb-static-xs text-md font-semibold text-primary">Design work</h2>
-      <div className="mb-static-sm hidden grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] text-2xs font-semibold uppercase text-contrast-medium lg:grid" aria-hidden="true">
+      <div className="mb-static-sm hidden grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] text-2xs font-semibold uppercase text-contrast-medium md:grid" aria-hidden="true">
         <span className="px-static-sm py-static-xs">Work</span>
         <span className="px-static-sm py-static-xs">Progress</span>
         <span className="px-static-sm py-static-xs">Status</span>
@@ -24,12 +24,12 @@ export default function DesignWorkSection({ changeIds, selectedChangeId, onSelec
             <article
               key={changeId}
               className={[
-                'relative grid min-w-0 gap-static-sm rounded-lg border border-l-4 border-contrast-low px-static-sm py-static-sm text-sm lg:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] lg:gap-0',
+                'relative grid min-w-0 gap-static-sm rounded-lg border border-l-4 border-contrast-low px-static-sm py-static-sm text-sm md:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] md:gap-0',
                 selected ? 'bg-frosted-soft' : 'bg-surface hover:bg-frosted-soft',
               ].join(' ')}
               data-design-work={changeId}
             >
-              <div className="min-w-0 lg:pr-static-sm">
+              <div className="min-w-0 md:pr-static-sm">
                 <Link
                   to={`/delivery/${encodeURIComponent(changeId)}/design`}
                   data-work-item-primary-trigger
@@ -42,13 +42,13 @@ export default function DesignWorkSection({ changeIds, selectedChangeId, onSelec
                 </Link>
                 <code className="text-xs text-contrast-medium">{changeId}</code>
               </div>
-              <div className="lg:px-static-sm">
-                <span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium lg:hidden">Progress</span>
+              <div className="md:px-static-sm">
+                <span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium md:hidden">Progress</span>
                 <strong className="font-medium text-primary">Design</strong>
                 <span className="block text-xs text-contrast-medium">Not admitted to Delivery</span>
               </div>
-              <div className="lg:pl-static-sm">
-                <span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium lg:hidden">Status</span>
+              <div className="md:pl-static-sm">
+                <span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium md:hidden">Status</span>
                 <span className="block font-medium text-primary">Continue Design</span>
                 <code className="mt-1 inline-block rounded-sm border border-contrast-low bg-canvas px-1.5 py-0.5 text-xs text-contrast-medium">{designCommand(changeId)}</code>
               </div>

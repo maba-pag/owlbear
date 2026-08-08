@@ -285,15 +285,23 @@ test.describe('assembled Delivery portfolio', () => {
     await page.screenshot({ path: testInfo.outputPath('delivery-mobile-rows.png'), fullPage: true })
   })
 
-  test('intermediate workspace uses a fullscreen detail sheet', async ({ page }) => {
-    await page.setViewportSize({ width: 1024, height: 800 })
-    await page.goto('/delivery')
+  test('desktop workspaces keep columns and overview context beside detail', async ({ page }) => {
+    for (const width of [1024, 1280]) {
+      await page.setViewportSize({ width, height: 800 })
+      await page.goto('/delivery')
 
-    const inspected = await inspect(page, 'Build operator controls')
-    await expect(inspected.detail).toContainText('Build OUT-002')
-    const flyoutBox = await flyoutPanelBox(page)
-    expect(flyoutBox).not.toBeNull()
-    expect(flyoutBox!.width).toBeGreaterThanOrEqual(1023)
+      const table = page.getByTestId('work-table-scroll').first()
+      await expect(table).toBeVisible()
+      await expect(table.getByRole('columnheader', { name: 'Work' })).toBeVisible()
+      const inspected = await inspect(page, 'Build operator controls')
+      await expect(inspected.detail).toContainText('Build OUT-002')
+      const flyoutBox = await flyoutPanelBox(page)
+      expect(flyoutBox).not.toBeNull()
+      expect(flyoutBox!.width).toBeLessThan(width)
+      await expect(page.getByTestId('work-portfolio-table')).toBeVisible()
+      await expectNoHorizontalOverflow(page)
+      await returnToPortfolio(page, inspected.trigger)
+    }
   })
 
   test('wide detail flyout preserves overview context without horizontal scrolling', async ({ page }) => {
