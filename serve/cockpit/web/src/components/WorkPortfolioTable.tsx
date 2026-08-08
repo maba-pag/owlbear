@@ -17,7 +17,7 @@ type GroupTableProps = Pick<WorkPortfolioTableProps, 'selected' | 'onSelect'> & 
 
 function attentionBorder(item: WorkItemCardView): string {
   if (item.needs === 'you') return 'border-l-4 border-l-error'
-  if (item.needs === 'repair') return 'border-l-4 border-l-warning'
+  if (item.needs === 'repair' || item.activity.state === 'repairing') return 'border-l-4 border-l-warning'
   return 'border-l border-l-contrast-low'
 }
 

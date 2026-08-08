@@ -29,7 +29,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryWorkerRole,
     OutcomeAuthorityBinding,
 )
-from owlbear_delivery.design_package import CompletionPackageManifest, DesignPackageManifest
+from owlbear_delivery.design_package import CompletionPackageManifest, DesignPackageManifest, DesignPackageStore
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCommitmentClass,
@@ -336,6 +336,11 @@ def seed_delivery(workspace: Path) -> None:
     target_root = workspace / ".owlbear/target"
     worktrees = workspace / ".owlbear/worktrees"
     head = _seed_repository(repository)
+    DesignPackageStore(workspace / ".owlbear/delivery/packages", repository).create(
+        "design-operations-roadmap",
+        b"# Design Operations Roadmap\n\nCoordinate the next focused Delivery change.\n",
+        b"# Design\n\nKeep roadmap authority separate from admitted Changes.\n",
+    )
     _write_current_delivery(target_root, head)
     _write_repair_delivery(target_root, head)
     coordinator = PortfolioCoordinator(target_root, capacity=2)
