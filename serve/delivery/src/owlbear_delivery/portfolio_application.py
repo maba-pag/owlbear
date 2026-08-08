@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -581,15 +582,14 @@ class PortfolioApplication:
         """List unclaimed Integration changes that are ready or safe to retry."""
         ready = []
         for change_id, runtime in sorted(self._runtimes.items()):
-            attention = runtime.integration_attention()
-            coordination = self._workspace_manager.show(change_id)
-            target_changed = attention is not None and coordination.target_head != attention.target_head
+            snapshot = self._delivery_snapshot(runtime)
+            attention = snapshot.frontier.integration_attention
             if (
-                runtime.change_stage() == DeliveryChangeStage.INTEGRATION
-                and not runtime.active_claims()
+                self._snapshot_change_stage(snapshot) == DeliveryChangeStage.INTEGRATION
+                and not self._snapshot_has_active_claims(snapshot)
                 and (
                     attention is None
-                    or target_changed
+                    or snapshot.integration_attention_superseded
                     or integration_attention_disposition(attention.code)
                     == DeliveryIntegrationAttentionDisposition.RETRYABLE
                 )
@@ -601,12 +601,12 @@ class PortfolioApplication:
         """List non-retryable Integration attention in stable identity order."""
         statuses = []
         for change_id, runtime in sorted(self._runtimes.items()):
-            attention = runtime.integration_attention()
-            coordination = self._workspace_manager.show(change_id)
+            snapshot = self._delivery_snapshot(runtime)
+            attention = snapshot.frontier.integration_attention
             if (
                 attention is None
-                or runtime.integration_repair_claim() is not None
-                or coordination.target_head != attention.target_head
+                or snapshot.frontier.integration_repair_claim is not None
+                or snapshot.integration_attention_superseded
             ):
                 continue
             disposition = integration_attention_disposition(attention.code)
@@ -833,15 +833,45 @@ class PortfolioApplication:
         return self._runtime(change_id).preview_administrative_move(outcome_id, target)
 
     def _work_item_projector(self, runtime: DeliveryRuntime) -> WorkItemProjector:
-        coordination = self._workspace_manager.show(runtime.contract.change_id)
-        return WorkItemProjector(
-            DeliveryPortfolioSnapshot.capture(
-                runtime.contract,
-                runtime.frontier_bytes(),
-                integration_target=coordination.integration_target,
-                target_head=coordination.target_head,
-            )
+        return WorkItemProjector(self._delivery_snapshot(runtime))
+
+    def _delivery_snapshot(self, runtime: DeliveryRuntime) -> DeliveryPortfolioSnapshot:
+        change_id = runtime.contract.change_id
+        coordination = self._workspace_manager.show(change_id)
+        frontier_bytes = runtime.frontier_bytes()
+        snapshot = DeliveryPortfolioSnapshot.capture(
+            runtime.contract,
+            frontier_bytes,
+            integration_target=coordination.integration_target,
+            target_head=coordination.target_head,
         )
+        if self._snapshot_change_stage(snapshot) != DeliveryChangeStage.INTEGRATION:
+            return snapshot
+        try:
+            context = self._workspace_manager.integration_context(change_id)
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            self._fail(f"current Integration target is unavailable for {change_id}", exc)
+        return DeliveryPortfolioSnapshot.capture(
+            runtime.contract,
+            frontier_bytes,
+            integration_target=context.integration_target,
+            target_head=context.target_head,
+        )
+
+    @staticmethod
+    def _snapshot_change_stage(snapshot: DeliveryPortfolioSnapshot) -> DeliveryChangeStage:
+        if snapshot.frontier.integration_result_id is not None:
+            return DeliveryChangeStage.COMPLETED
+        stages = {binding.stage for binding in snapshot.frontier.bindings}
+        if DeliveryStage.DESIGN in stages:
+            return DeliveryChangeStage.DESIGN
+        if stages == {DeliveryStage.COMPLETED}:
+            return DeliveryChangeStage.INTEGRATION
+        return DeliveryChangeStage.ACTIVE_DELIVERY
+
+    @staticmethod
+    def _snapshot_has_active_claims(snapshot: DeliveryPortfolioSnapshot) -> bool:
+        return any(binding.active_claim is not None for binding in snapshot.frontier.bindings)
 
     def list_completed_changes(self, cursor: str | None = None, limit: int = 100) -> CompletedChangePage:
         """List one bounded page rebuilt from configured target history."""
@@ -1488,15 +1518,16 @@ class PortfolioApplication:
     def _repair_candidates(self) -> tuple[str, ...]:
         candidates = []
         for change_id, runtime in sorted(self._runtimes.items()):
-            attention = runtime.integration_attention()
+            snapshot = self._delivery_snapshot(runtime)
+            attention = snapshot.frontier.integration_attention
             if (
-                runtime.change_stage() != DeliveryChangeStage.INTEGRATION
-                or runtime.active_claims()
-                or runtime.integration_repair_claim() is not None
+                self._snapshot_change_stage(snapshot) != DeliveryChangeStage.INTEGRATION
+                or self._snapshot_has_active_claims(snapshot)
+                or snapshot.frontier.integration_repair_claim is not None
                 or attention is None
                 or integration_attention_disposition(attention.code)
                 != DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED
-                or self._workspace_manager.integration_context(change_id).target_head != attention.target_head
+                or snapshot.integration_attention_superseded
             ):
                 continue
             candidates.append(change_id)
