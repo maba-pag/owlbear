@@ -21,6 +21,13 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
 )
+from owlbear_delivery.portfolio_operating import (
+    PortfolioGuidance,
+    PortfolioGuidanceKind,
+    PortfolioOperatingView,
+    PortfolioWorkReference,
+    PortfolioWorkScope,
+)
 from owlbear_delivery.work_items import (
     ChangeGroupView,
     WorkItemAction,
@@ -111,6 +118,38 @@ class _DeliveryApplicationFake:
                         ),
                         action=WorkItemAction(),
                     ),
+                ),
+            ),
+        )
+
+    def portfolio_operating_view(self) -> PortfolioOperatingView:
+        self.calls.append(("operating", ()))
+        queued = PortfolioWorkReference(
+            change_id="change-b",
+            item_key="integration",
+            scope=PortfolioWorkScope.INTEGRATION,
+        )
+        return PortfolioOperatingView(
+            unfinished_change_count=2,
+            completed_change_count=0,
+            queued_for_orchestration=(queued,),
+            interventions=(
+                PortfolioWorkReference(
+                    change_id="change-a",
+                    item_key="outcome:OUT-001",
+                    scope=PortfolioWorkScope.OUTCOME,
+                ),
+            ),
+            guidance=(
+                PortfolioGuidance(
+                    kind=PortfolioGuidanceKind.INTERVENE,
+                    change_ids=("change-a",),
+                    work_count=1,
+                ),
+                PortfolioGuidance(
+                    kind=PortfolioGuidanceKind.START_ORCHESTRATION,
+                    change_ids=("change-b",),
+                    work_count=1,
                 ),
             ),
         )
@@ -288,6 +327,20 @@ def test_list_and_detail_expose_current_bounded_delivery_state() -> None:
         "needs": {"you": 1, "dependency": 0, "repair": 0, "none": 2},
         "activity": {"idle": 1, "ready": 2, "working": 0, "repairing": 0},
     }
+    assert portfolio.json()["operating"] == {
+        "unfinished_change_count": 2,
+        "completed_change_count": 0,
+        "draft_design_change_ids": [],
+        "design_required_change_ids": [],
+        "claimed": [],
+        "queued_for_orchestration": [{"change_id": "change-b", "item_key": "integration", "scope": "integration"}],
+        "interventions": [{"change_id": "change-a", "item_key": "outcome:OUT-001", "scope": "outcome"}],
+        "dependency_waits": [],
+        "guidance": [
+            {"kind": "intervene", "change_ids": ["change-a"], "work_count": 1},
+            {"kind": "start-orchestration", "change_ids": ["change-b"], "work_count": 1},
+        ],
+    }
     first = portfolio.json()["groups"][0]["items"][0]
     assert first["stage"] == "planning"
     assert first["needs"] == "you"
@@ -298,6 +351,7 @@ def test_list_and_detail_expose_current_bounded_delivery_state() -> None:
     assert "process_id" not in json.dumps((portfolio.json(), detail.json()))
     assert application.calls == [
         ("list", ()),
+        ("operating", ()),
         ("show", ("change-a", "outcome:OUT-001")),
     ]
 

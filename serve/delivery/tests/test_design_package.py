@@ -67,6 +67,17 @@ def test_create_replays_identity_and_rejects_divergence_or_drift(repository: Pat
             store.create(unsafe, b"intent", b"design")
 
 
+def test_list_verified_returns_active_packages_in_stable_identity_order(repository: Path, tmp_path: Path) -> None:
+    store = DesignPackageStore(tmp_path / "active-packages", repository)
+    second = store.create("second-change", b"second intent\n", b"second design\n")
+    first = store.create("first-change", b"first intent\n", b"first design\n")
+
+    packages = store.list_verified()
+
+    assert tuple(package.change_id for package in packages) == ("first-change", "second-change")
+    assert tuple(package.package_id for package in packages) == (first.package_id, second.package_id)
+
+
 def test_previsibility_failure_leaves_no_package_and_clean_replay_succeeds(repository: Path, tmp_path: Path) -> None:
     active_root = tmp_path / "active-packages"
 

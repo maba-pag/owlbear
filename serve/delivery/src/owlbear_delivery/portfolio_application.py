@@ -62,6 +62,13 @@ from owlbear_delivery.design_package import (
     DesignPackageConflictError,
     DesignPackageResult,
 )
+from owlbear_delivery.portfolio_operating import (
+    PortfolioGuidanceFacts,
+    PortfolioOperatingView,
+    PortfolioWorkReference,
+    PortfolioWorkScope,
+    derive_portfolio_guidance,
+)
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCompilationResult,
@@ -72,7 +79,9 @@ from owlbear_delivery.work_items import (
     ChangeGroupView,
     DeliveryPortfolioSnapshot,
     WorkItemDetailView,
+    WorkItemNeed,
     WorkItemProjector,
+    WorkItemScope,
 )
 
 if TYPE_CHECKING:
@@ -93,6 +102,12 @@ if TYPE_CHECKING:
     from owlbear_delivery.work_items import WorkItemDetail, WorkItemProjection
 
 _COMPLETED_ROOT = ".owlbear/completed"
+
+
+def _operating_scope(scope: WorkItemScope) -> PortfolioWorkScope:
+    if scope == WorkItemScope.CHANGE_INTEGRATION:
+        return PortfolioWorkScope.INTEGRATION
+    return PortfolioWorkScope.OUTCOME
 
 
 def _operator_claim(claim: DeliveryActiveClaim | None) -> DeliveryOperatorClaim | None:
@@ -636,6 +651,108 @@ class PortfolioApplication:
             for change_id, runtime in sorted(self._runtimes.items())
             if runtime.change_stage() != DeliveryChangeStage.COMPLETED
         )
+
+    def portfolio_operating_view(self) -> PortfolioOperatingView:
+        """Return portfolio-wide operating facts and advisory session guidance."""
+        runtime_ids = set(self._runtimes)
+        draft_design_ids = tuple(
+            package.change_id for package in self._package_store.list_verified() if package.change_id not in runtime_ids
+        )
+        design_required_ids = tuple(
+            change_id
+            for change_id, runtime in sorted(self._runtimes.items())
+            if runtime.change_stage() == DeliveryChangeStage.DESIGN
+        )
+        claimed = self._claimed_work()
+        queued = self._queued_work()
+        groups = self.list_work_item_groups()
+        interventions = tuple(
+            PortfolioWorkReference(
+                change_id=item.change_id,
+                item_key=item.item_key,
+                scope=_operating_scope(item.scope),
+            )
+            for group in groups
+            for item in group.items
+            if item.needs == WorkItemNeed.YOU
+        )
+        dependency_waits = tuple(
+            PortfolioWorkReference(
+                change_id=item.change_id,
+                item_key=item.item_key,
+                scope=_operating_scope(item.scope),
+            )
+            for group in groups
+            for item in group.items
+            if item.needs == WorkItemNeed.DEPENDENCY
+        )
+        unfinished_runtime_count = sum(
+            runtime.change_stage() != DeliveryChangeStage.COMPLETED for runtime in self._runtimes.values()
+        )
+        unfinished_change_count = unfinished_runtime_count
+        design_change_ids = tuple(dict.fromkeys((*draft_design_ids, *design_required_ids)))
+        guidance = derive_portfolio_guidance(
+            PortfolioGuidanceFacts(
+                unfinished_change_count=unfinished_change_count,
+                design_change_ids=design_change_ids,
+                claimed=claimed,
+                queued=queued,
+                interventions=interventions,
+                dependency_waits=dependency_waits,
+            )
+        )
+        return PortfolioOperatingView(
+            unfinished_change_count=unfinished_change_count,
+            completed_change_count=len(self._runtimes) - unfinished_runtime_count,
+            draft_design_change_ids=draft_design_ids,
+            design_required_change_ids=design_required_ids,
+            claimed=claimed,
+            queued_for_orchestration=queued,
+            interventions=interventions,
+            dependency_waits=dependency_waits,
+            guidance=guidance,
+        )
+
+    def _claimed_work(self) -> tuple[PortfolioWorkReference, ...]:
+        claimed = []
+        for change_id, runtime in sorted(self._runtimes.items()):
+            claimed.extend(
+                PortfolioWorkReference(
+                    change_id=change_id,
+                    item_key=f"outcome:{outcome_id}",
+                    scope=PortfolioWorkScope.OUTCOME,
+                )
+                for outcome_id, _claim in runtime.active_claims()
+            )
+            if runtime.integration_repair_claim() is not None:
+                claimed.append(
+                    PortfolioWorkReference(
+                        change_id=change_id,
+                        item_key="integration",
+                        scope=PortfolioWorkScope.INTEGRATION,
+                    )
+                )
+        return tuple(claimed)
+
+    def _queued_work(self) -> tuple[PortfolioWorkReference, ...]:
+        queued = [
+            PortfolioWorkReference(
+                change_id=candidate.change_id,
+                item_key=f"outcome:{candidate.binding.outcome_id}",
+                scope=PortfolioWorkScope.OUTCOME,
+            )
+            for candidate in self._candidates()
+        ]
+        integration_ids = tuple(dict.fromkeys((*self.list_integration_ready_changes(), *self._repair_candidates())))
+        queued.extend(
+            PortfolioWorkReference(
+                change_id=change_id,
+                item_key="integration",
+                scope=PortfolioWorkScope.INTEGRATION,
+            )
+            for change_id in integration_ids
+        )
+        return tuple(queued)
 
     def show_work_item(self, change_id: str, work_item_id: str) -> WorkItemDetail:
         """Show bounded semantic detail from one exact change projector."""

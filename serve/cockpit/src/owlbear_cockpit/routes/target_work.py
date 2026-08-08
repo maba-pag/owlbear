@@ -97,6 +97,7 @@ class TargetCockpitService:
         return WorkItemPortfolioResponse(
             groups=groups,
             totals=_portfolio_totals(groups),
+            operating=self._invoke(self._application.portfolio_operating_view),
         )
 
     def show_item(self, change_id: str, item_key: str) -> WorkItemDetailResponse:

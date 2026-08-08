@@ -214,14 +214,23 @@ class DesignPackageStore:
         RuntimeTransaction.recover_all(self._active_root)
         with locked_roots((self._active_root,)):
             manifest, content = self._verify_package(change_id)
-            return VerifiedDesignPackage(
-                change_id=change_id,
-                package_id=_digest(manifest.canonical_bytes()),
-                intent_bytes=content["intent.md"],
-                design_bytes=content["design.md"],
-                authority_bytes=content["authority.json"],
-                manifest=manifest,
+            return self._verified_package(change_id, manifest, content)
+
+    def list_verified(self) -> tuple[VerifiedDesignPackage, ...]:
+        """Return all active Design packages in stable identity order."""
+        RuntimeTransaction.recover_all(self._active_root)
+        with locked_roots((self._active_root,)):
+            if not self._active_root.exists():
+                return ()
+            change_ids = tuple(
+                sorted(path.name for path in self._active_root.iterdir() if not path.name.startswith("."))
             )
+            packages = []
+            for change_id in change_ids:
+                _validate_change_id(change_id)
+                manifest, content = self._verify_package(change_id)
+                packages.append(self._verified_package(change_id, manifest, content))
+            return tuple(packages)
 
     def revise(
         self,
@@ -490,6 +499,21 @@ class DesignPackageStore:
             message = f"Design package bytes do not match its manifest: {change_id}"
             raise DesignPackageConflictError(message)
         return manifest, content
+
+    @staticmethod
+    def _verified_package(
+        change_id: str,
+        manifest: DesignPackageManifest,
+        content: dict[str, bytes],
+    ) -> VerifiedDesignPackage:
+        return VerifiedDesignPackage(
+            change_id=change_id,
+            package_id=_digest(manifest.canonical_bytes()),
+            intent_bytes=content["intent.md"],
+            design_bytes=content["design.md"],
+            authority_bytes=content["authority.json"],
+            manifest=manifest,
+        )
 
     def _write_tree(
         self,

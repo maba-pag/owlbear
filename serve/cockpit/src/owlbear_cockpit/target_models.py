@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from owlbear_delivery.delivery_runtime import DeliveryStage
+from owlbear_delivery.portfolio_operating import PortfolioOperatingView
 from owlbear_delivery.work_items import ChangeGroupView, WorkItemDetailView
 
 
@@ -46,6 +47,7 @@ class WorkItemPortfolioResponse(_TargetHTTPModel):
 
     groups: tuple[ChangeGroupView, ...]
     totals: WorkItemPortfolioTotals
+    operating: PortfolioOperatingView
 
 
 class WorkItemDetailResponse(_TargetHTTPModel):

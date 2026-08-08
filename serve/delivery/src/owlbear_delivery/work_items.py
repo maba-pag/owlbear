@@ -13,6 +13,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryFrontier,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
+    DeliveryOperatorMove,
     DeliveryRecoveryAttention,
     DeliveryRequest,
     DeliveryReturnContext,
@@ -89,7 +90,6 @@ class WorkItemActionKind(StrEnum):
     RECOVER_CLAIM = "recover-claim"
     INTEGRATE_CHANGE = "integrate-change"
     RETRY_INTEGRATION = "retry-integration"
-    RUN_REPAIR_COMMAND = "run-repair-command"
 
 
 class WorkItemProgressKind(StrEnum):
@@ -307,6 +307,7 @@ class WorkItemDetailView(_ProjectionModel):
     requests: tuple[DeliveryRequest, ...] = ()
     active_claim: WorkItemClaimView | None = None
     return_context: DeliveryReturnContext | None = None
+    operator_moves: tuple[DeliveryOperatorMove, ...] = ()
     recovery_attention: WorkItemRecoveryView | None = None
     integration: WorkItemIntegrationView | None = None
 
@@ -375,6 +376,7 @@ class WorkItemProjector:
                 change_title=self._snapshot.contract.title,
                 card=card,
                 promise="Publish the reviewed change and completed history to the Integration target.",
+                operator_moves=self._snapshot.frontier.operator_moves,
                 integration=self._integration_view(),
             )
         outcome_id = card.work_item_id
@@ -395,6 +397,7 @@ class WorkItemProjector:
             requests=binding.requests,
             active_claim=self._claim_view(binding),
             return_context=binding.return_context,
+            operator_moves=self._snapshot.frontier.operator_moves,
             recovery_attention=self._recovery_view(binding.recovery_attention),
         )
 
@@ -480,6 +483,8 @@ class WorkItemProjector:
 
     @staticmethod
     def _outcome_action(binding: OutcomeAuthorityBinding) -> WorkItemAction:
+        if binding.stage == DeliveryStage.DESIGN:
+            return WorkItemAction()
         pending_request = next((item for item in binding.requests if item.resolution is None), None)
         if pending_request is not None:
             return WorkItemAction(kind=WorkItemActionKind.ANSWER_REQUEST, label="Answer request")
@@ -550,11 +555,7 @@ class WorkItemProjector:
                 headline = "Merge conflict"
                 next_actor = WorkItemNextActor.REPAIR
                 next_step = "Run a reviewed Integration repair"
-                action = WorkItemAction(
-                    kind=WorkItemActionKind.RUN_REPAIR_COMMAND,
-                    label="Run reviewed repair",
-                    command=f"/integration-repair {self._snapshot.contract.change_id}",
-                )
+                action = WorkItemAction()
             elif disposition == DeliveryIntegrationAttentionDisposition.RETRYABLE:
                 needs = WorkItemNeed.NONE
                 headline = "Integration retry available"

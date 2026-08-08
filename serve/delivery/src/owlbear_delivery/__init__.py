@@ -131,6 +131,13 @@ from owlbear_delivery.portfolio_application import (
     PortfolioApplicationError,
     PortfolioApplicationHooks,
 )
+from owlbear_delivery.portfolio_operating import (
+    PortfolioGuidance,
+    PortfolioGuidanceKind,
+    PortfolioOperatingView,
+    PortfolioWorkReference,
+    PortfolioWorkScope,
+)
 from owlbear_delivery.proof_checkout import (
     ProofCheckout,
     ProofCheckoutDiagnostic,
@@ -404,6 +411,11 @@ __all__ = [
     "PortfolioApplicationError",
     "PortfolioApplicationHooks",
     "PortfolioCoordinator",
+    "PortfolioGuidance",
+    "PortfolioGuidanceKind",
+    "PortfolioOperatingView",
+    "PortfolioWorkReference",
+    "PortfolioWorkScope",
     "ProofCheckout",
     "ProofCheckoutDiagnostic",
     "ProofCheckoutDiagnosticCode",

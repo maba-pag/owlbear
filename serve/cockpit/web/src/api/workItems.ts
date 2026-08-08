@@ -10,7 +10,6 @@ export type WorkItemActionKind =
   | 'recover-claim'
   | 'integrate-change'
   | 'retry-integration'
-  | 'run-repair-command'
 export type WorkItemProgressKind = 'tasks' | 'assembly' | 'design-return' | 'plan' | 'integration'
 export type WorkItemChangeLifecycle = 'in-delivery' | 'integration'
 export type DeliveryWorkerRole = 'planner' | 'builder' | 'assembly-reviewer' | 'integration-repairer'
@@ -93,9 +92,43 @@ export interface WorkItemPortfolioTotals {
   activity: ActivityCounts
 }
 
+export type PortfolioWorkScope = 'outcome' | 'integration'
+export type PortfolioGuidanceKind =
+  | 'resume-design'
+  | 'start-orchestration'
+  | 'work-underway'
+  | 'intervene'
+  | 'wait'
+  | 'create-change'
+
+export interface PortfolioWorkReference {
+  change_id: string
+  item_key: string
+  scope: PortfolioWorkScope
+}
+
+export interface PortfolioGuidance {
+  kind: PortfolioGuidanceKind
+  change_ids: string[]
+  work_count: number
+}
+
+export interface PortfolioOperatingView {
+  unfinished_change_count: number
+  completed_change_count: number
+  draft_design_change_ids: string[]
+  design_required_change_ids: string[]
+  claimed: PortfolioWorkReference[]
+  queued_for_orchestration: PortfolioWorkReference[]
+  interventions: PortfolioWorkReference[]
+  dependency_waits: PortfolioWorkReference[]
+  guidance: PortfolioGuidance[]
+}
+
 export interface WorkItemPortfolioResponse {
   groups: ChangeGroupView[]
   totals: WorkItemPortfolioTotals
+  operating: PortfolioOperatingView
 }
 
 export interface DeliveryRequestResolution {
@@ -184,6 +217,13 @@ export interface WorkItemDetailView {
     source_boundary: string | null
     preserved_commit: string | null
   } | null
+  operator_moves: Array<{
+    move_id: string
+    outcome_id: string
+    destination: WorkItemStage
+    reason: string
+    invalidated_outcome_ids: string[]
+  }>
   recovery_attention: {
     attempt_id: string
     claim_id: string

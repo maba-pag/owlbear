@@ -251,12 +251,32 @@ function ExceptionalStateSection({ detail }: Pick<WorkItemDetailProps, 'detail'>
           <AttentionItem
             label={`Returned to ${STAGE_LABELS[returned.target]}`}
             reason={returned.reason}
+            retry={`Resume /design ${detail.item.card.change_id}.`}
             evidence={returned.locators.join(', ')}
             sourceBoundary={returned.source_boundary}
           />
         ) : null}
         {recovery ? <AttentionItem label="Recovery attention" reason={recovery.reason} retry={recovery.retry_condition} /> : null}
       </div>
+    </section>
+  )
+}
+
+function CourseChangesSection({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
+  const moves = detail.item.operator_moves
+  if (moves.length === 0) return null
+  return (
+    <section className="border-t border-contrast-low pt-static-md" aria-labelledby="work-course-changes-heading">
+      <h3 id="work-course-changes-heading" className="text-xs font-semibold uppercase text-contrast-medium">Recorded Change course changes</h3>
+      <ol className="mt-static-sm grid list-decimal gap-static-md pl-static-lg text-sm">
+        {moves.map((move) => (
+          <li key={move.move_id}>
+            <strong>{move.outcome_id} moved back to {STAGE_LABELS[move.destination]}</strong>
+            <p className="mt-static-xs">{move.reason}</p>
+            <p className="mt-static-xs text-contrast-medium">Reset: {move.invalidated_outcome_ids.join(', ')}</p>
+          </li>
+        ))}
+      </ol>
     </section>
   )
 }
@@ -296,9 +316,8 @@ function BackwardMoveSection({ detail, pendingAction, onPreviewBackward, onMoveB
   }
   return (
     <details className="border-t border-contrast-low pt-static-md">
-      <summary className="cursor-pointer text-sm font-semibold">Administrative actions</summary>
-      <section className="mt-static-md" aria-labelledby="work-move-heading">
-      <PHeading id="work-move-heading" tag="h3" size="md">Move backward</PHeading>
+      <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Administrative actions</summary>
+      <div className="mt-static-md">
       <div className="mt-static-sm flex flex-wrap items-end gap-static-sm">
         <PSelect compact className="w-48" label="Earlier stage" name="backward-stage" value={target} disabled={pendingAction !== null} onChange={(event) => { setTarget(fieldValue(event as FieldValueEvent) as WorkItemStage | ''); setPreview(null) }}><PSelectOption value="">Select a stage</PSelectOption>{available.map((stage) => <PSelectOption key={stage} value={stage}>{STAGE_LABELS[stage]}</PSelectOption>)}</PSelect>
         <PInputText compact className="min-w-48 flex-1" name="backward-reason" label="Reason" value={reason} disabled={pendingAction !== null} onChange={(event) => setReason(fieldValue(event as FieldValueEvent))} onInput={(event) => setReason(fieldValue(event as FieldValueEvent))} />
@@ -309,7 +328,7 @@ function BackwardMoveSection({ detail, pendingAction, onPreviewBackward, onMoveB
           <div className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary"><PHeading tag="h2" size="lg">Move to {target ? STAGE_LABELS[target] : ''}</PHeading><p className="text-sm">The following Outcomes will be reset:</p><ul className="grid list-disc gap-static-xs pl-static-lg text-sm">{preview?.invalidated_outcome_ids.map((outcomeId) => <li key={outcomeId}>{outcomeId}</li>)}</ul><p className="text-sm text-contrast-medium">Reason: {reason.trim()}</p><div className="flex flex-wrap justify-end gap-static-xs"><PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton><PButton type="button" disabled={pendingAction !== null} onClick={() => void move()}>{pendingAction === 'move' ? 'Moving...' : 'Confirm backward move'}</PButton></div></div>
         </PModal>
       ) : null}
-      </section>
+      </div>
     </details>
   )
 }
@@ -321,21 +340,21 @@ function SemanticDetail({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
     <>
       {item.acceptance.length > 0 ? (
         <details className="border-t border-contrast-low pt-static-md">
-          <summary id="work-acceptance-heading" className="cursor-pointer text-sm font-semibold">Acceptance ({item.acceptance.length})</summary>
-          <ul className="mt-static-sm grid list-disc gap-static-xs pl-static-lg text-sm">
+          <summary id="work-acceptance-heading" className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Acceptance ({item.acceptance.length})</summary>
+          <ol className="mt-static-sm grid list-decimal gap-static-sm pl-static-lg text-sm text-primary">
             {item.acceptance.map((observation) => <li key={observation}>{observation}</li>)}
-          </ul>
+          </ol>
         </details>
       ) : null}
       {item.tasks.length > 0 ? (
         <details className="border-t border-contrast-low pt-static-md">
-          <summary id="work-evidence-heading" className="cursor-pointer text-sm font-semibold">Delivery task evidence ({item.tasks.length})</summary>
+          <summary id="work-evidence-heading" className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Delivery task evidence ({item.tasks.length})</summary>
           <div className="mt-static-sm grid gap-static-md">
             {item.tasks.map((task) => (
-              <article key={task.task_id} className="border-l-2 border-contrast-low pl-static-sm text-sm">
+              <article key={task.task_id} className="border-l-2 border-contrast-low pl-static-sm text-sm text-primary">
                 <div className="flex flex-wrap items-start justify-between gap-static-xs"><strong>{task.title}</strong><PTag compact>{TASK_STATUS_LABELS[task.status]}</PTag></div>
-                <p className="mt-static-xs text-contrast-medium">{task.result}</p>
-                {task.completed_commit ? <p className="mt-static-xs break-all font-mono text-xs text-contrast-medium">{task.completed_commit}</p> : null}
+                <p className="mt-static-xs">{task.result}</p>
+                {task.completed_commit ? <code className="mt-static-xs inline-block bg-canvas px-static-xs py-1 text-xs text-contrast-medium" title={task.completed_commit}>{task.completed_commit.slice(0, 12)}</code> : null}
               </article>
             ))}
           </div>
@@ -343,16 +362,16 @@ function SemanticDetail({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
       ) : null}
       {item.dependencies.length > 0 || item.commitments.length > 0 ? (
         <details className="border-t border-contrast-low pt-static-md">
-          <summary className="cursor-pointer text-sm font-semibold">References</summary>
-          <div className="mt-static-sm grid gap-static-md text-sm">
-            {item.dependencies.map((dependency) => <p key={dependency.outcome_id}><strong>{dependency.outcome_id}</strong> · {dependency.title} · {STAGE_LABELS[dependency.stage]}</p>)}
-            {item.commitments.map((commitment) => <p key={commitment.commitment_id}><strong>{commitment.commitment_id}</strong> · {commitment.statement}</p>)}
-          </div>
+          <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">References</summary>
+          <ol className="mt-static-sm grid list-decimal gap-static-md pl-static-lg text-sm text-primary">
+            {item.dependencies.map((dependency) => <li key={dependency.outcome_id}><strong className="block text-xs">{dependency.outcome_id}</strong>{dependency.title} · {STAGE_LABELS[dependency.stage]}</li>)}
+            {item.commitments.map((commitment) => <li key={commitment.commitment_id}><strong className="block text-xs">{commitment.commitment_id}</strong>{commitment.statement}</li>)}
+          </ol>
         </details>
       ) : null}
       <details className="border-t border-contrast-low pt-static-md">
-        <summary className="cursor-pointer text-sm font-semibold">Technical identity</summary>
-        <code className="mt-static-sm block break-all text-xs text-contrast-medium">{item.card.change_id} / {item.card.item_key}</code>
+        <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Technical identity</summary>
+        <code className="mt-static-sm block break-all text-xs text-primary">{item.card.change_id} / {item.card.item_key}</code>
       </details>
     </>
   )
@@ -363,8 +382,9 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
   if (!integration) return null
   const action = detail.item.card.action
   const canIntegrate = action.kind === 'integrate-change' || action.kind === 'retry-integration'
+  const operatorRequired = integration.disposition === 'operator-required'
   return (
-    <section className="border-l-4 border-warning bg-surface p-static-md" aria-labelledby="work-integration-heading">
+    <section className={operatorRequired ? 'border-l-4 border-warning bg-surface p-static-md' : 'border-l border-contrast-low bg-surface p-static-md'} aria-labelledby="work-integration-heading">
       <PHeading id="work-integration-heading" tag="h3" size="md">{integration.repair_active ? 'Repair in progress' : integration.headline}</PHeading>
       <p className="mt-static-xs text-sm leading-relaxed">{integration.repair_active ? 'A reviewed Integration repair is currently in progress.' : integration.explanation}</p>
       {!integration.superseded && integration.conflicted_paths.length > 0 ? (
@@ -384,15 +404,15 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
       {!canIntegrate && !integration.repair_active && integration.retry_condition ? <p className="mt-static-sm text-xs text-contrast-medium">Next: {integration.retry_condition}</p> : null}
       {integration.superseded && integration.diagnostics.length > 0 ? (
         <details className="mt-static-md border-t border-contrast-low pt-static-sm">
-          <summary className="cursor-pointer text-xs font-semibold">Previous attempt (stale)</summary>
+          <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Previous attempt (stale)</summary>
           <p className="mt-static-sm text-xs text-contrast-medium">The previous target produced this evidence. It is retained for context but no longer describes the current Integration attempt.</p>
           {integration.conflicted_paths.length > 0 ? <ul className="mt-static-sm grid list-disc gap-static-xs pl-static-lg font-mono text-xs">{integration.conflicted_paths.map((path) => <li key={path}>{path}</li>)}</ul> : null}
-          <pre className="mt-static-sm max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs text-contrast-medium">{integration.diagnostics.join('\n')}</pre>
+          <pre className="mt-static-sm max-h-48 overflow-auto whitespace-pre text-xs text-contrast-medium">{integration.diagnostics.join('\n')}</pre>
         </details>
       ) : !integration.superseded && integration.diagnostics.length > 0 ? (
         <details className="mt-static-md border-t border-contrast-low pt-static-sm">
-          <summary className="cursor-pointer text-xs font-semibold">Technical evidence</summary>
-          <pre className="mt-static-sm max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs text-contrast-medium">{integration.diagnostics.join('\n')}</pre>
+          <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Technical evidence</summary>
+          <pre className="mt-static-sm max-h-48 overflow-auto whitespace-pre text-xs text-contrast-medium">{integration.diagnostics.join('\n')}</pre>
         </details>
       ) : null}
     </section>
@@ -410,24 +430,29 @@ function ActionFeedback({ error, result }: { error: Error | null; result: string
 export default function WorkItemDetail(props: WorkItemDetailProps) {
   const activity = activityLabel(props.detail)
   const { card } = props.detail.item
+  const showOutcomeNext = card.scope === 'outcome' && card.stage !== 'completed'
+  const showSummary = showOutcomeNext || card.stage !== null || activity !== null
   return (
     <div className="min-w-0" aria-labelledby="work-detail-heading" data-testid="work-item-detail">
       <div className="grid gap-static-lg">
         <div>
           <DetailHeader detail={props.detail} />
-          <div className="mt-static-md border-l-2 border-contrast-low pl-static-sm"><span className="text-xs font-semibold uppercase text-contrast-medium">Promise</span><p className="mt-static-xs text-sm leading-relaxed">{props.detail.item.promise}</p></div>
-          <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs border-y border-contrast-low py-static-sm text-sm">
-            <dt className="text-contrast-medium">Next</dt><dd><strong>{NEXT_ACTOR_LABELS[card.next_actor]}</strong><span className="ml-static-xs text-contrast-medium">{card.next_step}</span></dd>
-            {card.stage ? <><dt className="text-contrast-medium">Stage</dt><dd>{STAGE_LABELS[card.stage]}</dd></> : null}
-            <dt className="text-contrast-medium">Progress</dt><dd>{card.progress.label}</dd>
-            {activity ? <><dt className="text-contrast-medium">Current work</dt><dd>{activity}</dd></> : null}
-          </dl>
+          <p className="mt-static-md max-w-[72ch] text-base leading-relaxed">{props.detail.item.promise}</p>
+          {showSummary ? (
+            <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs border-y border-contrast-low py-static-sm text-sm">
+              {showOutcomeNext ? <><dt className="text-contrast-medium">Next</dt><dd><strong>{NEXT_ACTOR_LABELS[card.next_actor]}</strong><span className="ml-static-xs text-contrast-medium">{card.next_step}</span></dd></> : null}
+              {card.stage ? <><dt className="text-contrast-medium">Stage</dt><dd>{STAGE_LABELS[card.stage]}</dd></> : null}
+              {showOutcomeNext ? <><dt className="text-contrast-medium">Progress</dt><dd>{card.progress.label}</dd></> : null}
+              {activity ? <><dt className="text-contrast-medium">Current work</dt><dd>{activity}</dd></> : null}
+            </dl>
+          ) : null}
         </div>
         <ActionFeedback error={props.actionError} result={props.actionResult} />
-        <IntegrationSection {...props} />
-        <SemanticDetail detail={props.detail} />
         <BlockSection {...props} />
         <RequestsSection {...props} />
+        <IntegrationSection {...props} />
+        <CourseChangesSection detail={props.detail} />
+        <SemanticDetail detail={props.detail} />
         <ClaimSection {...props} />
         <ExceptionalStateSection detail={props.detail} />
         <BackwardMoveSection {...props} />

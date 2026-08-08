@@ -2,9 +2,9 @@ import { PTag } from '@porsche-design-system/components-react'
 import { Link } from 'react-router'
 import type {
   ChangeGroupView,
+  DeliveryWorkerRole,
   WorkItemCardView,
   WorkItemChangeLifecycle,
-  WorkItemNextActor,
   WorkItemStage,
 } from '../api/workItems'
 import { workItemIdentity, type WorkItemIdentity } from '../hooks/useWorkItems'
@@ -12,19 +12,11 @@ import { workItemIdentity, type WorkItemIdentity } from '../hooks/useWorkItems'
 interface WorkPortfolioTableProps {
   groups: ChangeGroupView[]
   selected: WorkItemIdentity | null
+  emptyMessage?: string
   onSelect: (identity: WorkItemIdentity, trigger: HTMLAnchorElement) => void
 }
 
 type GroupTableProps = Pick<WorkPortfolioTableProps, 'selected' | 'onSelect'> & { group: ChangeGroupView }
-
-const NEXT_ACTOR_LABELS: Record<WorkItemNextActor, string> = {
-  you: 'You',
-  agent: 'Agent',
-  'agent-or-you': 'Agent or you',
-  dependency: 'Dependency',
-  repair: 'Repair workflow',
-  none: 'No action',
-}
 
 const STAGE_LABELS: Record<WorkItemStage, string> = {
   design: 'Design',
@@ -39,18 +31,15 @@ const LIFECYCLE_LABELS: Record<WorkItemChangeLifecycle, string> = {
   integration: 'Integration',
 }
 
-function workItemPath(item: WorkItemCardView): string {
-  return `/delivery/${encodeURIComponent(item.change_id)}/${encodeURIComponent(item.item_key)}`
+const WORKER_LABELS: Record<DeliveryWorkerRole, string> = {
+  planner: 'Planner',
+  builder: 'Builder',
+  'assembly-reviewer': 'Assembly reviewer',
+  'integration-repairer': 'Integration repairer',
 }
 
-function NextStep({ item }: { item: WorkItemCardView }) {
-  const urgent = item.next_actor === 'you' || item.next_actor === 'repair'
-  return (
-    <span className={urgent ? 'font-semibold text-error' : 'font-medium text-primary'}>
-      {NEXT_ACTOR_LABELS[item.next_actor]}
-      <span className="mt-0.5 block text-xs font-normal text-contrast-medium">{item.next_step}</span>
-    </span>
-  )
+function workItemPath(item: WorkItemCardView): string {
+  return `/delivery/${encodeURIComponent(item.change_id)}/${encodeURIComponent(item.item_key)}`
 }
 
 function ItemLink({
@@ -73,21 +62,12 @@ function ItemLink({
       onClick={(event) => onSelect(identity, event.currentTarget)}
     >
       <span className="block overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{item.title}</span>
-      <span className="block text-xs font-normal text-contrast-medium">Outcome {item.work_item_id}</span>
     </Link>
   )
 }
 
-function reviewLabel(item: WorkItemCardView): string {
-  if (item.action.kind === 'answer-request') return 'Review request'
-  if (item.action.kind === 'clear-block') return 'Review block'
-  if (item.action.kind === 'recover-claim') return 'Review recovery'
-  if (item.action.kind === 'run-repair-command') return 'Review repair'
-  return 'Review Integration'
-}
-
 function ActionLink({ item, onSelect }: { item: WorkItemCardView; onSelect: WorkPortfolioTableProps['onSelect'] }) {
-  if (item.action.kind === 'none' || !item.action.label) return <span className="text-contrast-medium">—</span>
+  if (item.action.kind === 'none' || !item.action.label) return null
   const identity = { changeId: item.change_id, itemKey: item.item_key }
   return (
     <Link
@@ -95,8 +75,40 @@ function ActionLink({ item, onSelect }: { item: WorkItemCardView; onSelect: Work
       className="relative z-[1] inline-flex min-h-8 items-center font-semibold text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
       onClick={(event) => onSelect(identity, event.currentTarget)}
     >
-      {reviewLabel(item)}
+      {item.action.label}
     </Link>
+  )
+}
+
+function PipelineState({ item }: { item: WorkItemCardView }) {
+  const stage = item.stage ? STAGE_LABELS[item.stage] : 'Change Integration'
+  const showProgress = item.stage !== 'completed'
+  return (
+    <span>
+      <strong className="block font-medium text-primary">{stage}</strong>
+      {showProgress ? <span className="mt-0.5 block text-xs text-contrast-medium">{item.progress.label}</span> : null}
+    </span>
+  )
+}
+
+function CurrentState({ item, onSelect }: { item: WorkItemCardView; onSelect: WorkPortfolioTableProps['onSelect'] }) {
+  let state = item.next_step
+  if (item.needs === 'you') state = item.needs_headline ?? 'Needs your intervention'
+  else if (item.needs === 'dependency') state = item.needs_headline ?? 'Waiting on a dependency'
+  else if (item.needs === 'repair') state = 'Waiting for an Integration repair'
+  else if (item.activity.state === 'working' || item.activity.state === 'repairing') {
+    state = `${item.activity.worker_role ? WORKER_LABELS[item.activity.worker_role] : 'Agent'} working`
+  } else if (item.activity.state === 'ready') {
+    state = item.next_actor === 'agent-or-you' ? 'Ready for Orchestration or your action' : 'Waiting for Orchestration'
+  }
+  else if (item.stage === 'completed') state = 'Done'
+  const urgent = item.needs === 'you'
+  return (
+    <span>
+      <span className={urgent ? 'block font-semibold text-error' : 'block font-medium text-primary'}>{state}</span>
+      {item.activity.task_id ? <span className="mt-0.5 block text-xs text-contrast-medium">Task {item.activity.task_id}</span> : null}
+      {item.action.kind !== 'none' ? <span className="mt-static-xs block"><ActionLink item={item} onSelect={onSelect} /></span> : null}
+    </span>
   )
 }
 
@@ -119,23 +131,19 @@ function ChangeHeader({ group }: { group: ChangeGroupView }) {
 function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
   const outcomes = group.items.filter((item) => item.scope === 'outcome')
   return (
-    <div className="hidden overflow-x-auto md:block" data-testid="work-table-scroll">
+    <div className="hidden overflow-x-auto lg:block" data-testid="work-table-scroll">
       <table className="w-full min-w-[48rem] table-fixed border-collapse text-left text-sm">
         <caption className="sr-only">Current Outcomes for {group.title}</caption>
         <colgroup>
-          <col className="w-[22%]" />
-          <col className="w-[34%]" />
-          <col className="w-[14%]" />
-          <col className="w-[20%]" />
-          <col className="w-[10%]" />
+          <col className="w-[40%]" />
+          <col className="w-[25%]" />
+          <col className="w-[35%]" />
         </colgroup>
         <thead>
           <tr className="border-b border-contrast-low text-2xs font-semibold uppercase text-contrast-high">
-            <th className="px-static-sm py-static-xs" scope="col">Next</th>
-            <th className="px-static-sm py-static-xs" scope="col">Outcome</th>
-            <th className="px-static-sm py-static-xs" scope="col">Stage</th>
-            <th className="px-static-sm py-static-xs" scope="col">Progress</th>
-            <th className="px-static-sm py-static-xs" scope="col">Review</th>
+            <th className="px-static-sm py-static-xs" scope="col">Work</th>
+            <th className="px-static-sm py-static-xs" scope="col">Pipeline</th>
+            <th className="px-static-sm py-static-xs" scope="col">Current state</th>
           </tr>
         </thead>
         <tbody>
@@ -147,11 +155,12 @@ function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
                 className={['relative border-b border-contrast-low align-top', isSelected ? 'bg-frosted-soft' : 'hover:bg-surface'].join(' ')}
                 data-work-item={workItemIdentity(item)}
               >
-                <td className="px-static-sm py-static-sm"><NextStep item={item} /></td>
-                <td className="px-static-sm py-static-xs"><ItemLink item={item} selected={isSelected} onSelect={onSelect} /></td>
-                <td className="px-static-sm py-static-sm font-medium">{item.stage ? STAGE_LABELS[item.stage] : '—'}</td>
-                <td className="px-static-sm py-static-sm text-contrast-medium">{item.progress.label}</td>
-                <td className="px-static-sm py-static-xs"><ActionLink item={item} onSelect={onSelect} /></td>
+                <td className="px-static-sm py-static-xs">
+                  <ItemLink item={item} selected={isSelected} onSelect={onSelect} />
+                  <span className="block text-xs text-contrast-medium">{group.title} / Outcome {item.work_item_id}</span>
+                </td>
+                <td className="px-static-sm py-static-sm"><PipelineState item={item} /></td>
+                <td className="px-static-sm py-static-sm"><CurrentState item={item} onSelect={onSelect} /></td>
               </tr>
             )
           })}
@@ -164,7 +173,7 @@ function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
 function CompactRows({ group, selected, onSelect }: GroupTableProps) {
   const outcomes = group.items.filter((item) => item.scope === 'outcome')
   return (
-    <div className="md:hidden">
+    <div className="lg:hidden">
       {outcomes.map((item) => {
         const isSelected = selected?.changeId === item.change_id && selected.itemKey === item.item_key
         return (
@@ -174,14 +183,11 @@ function CompactRows({ group, selected, onSelect }: GroupTableProps) {
             data-work-item={workItemIdentity(item)}
             aria-label={`${item.title} work item`}
           >
-            <div className="grid grid-cols-[minmax(7rem,0.8fr)_minmax(0,1.5fr)_auto] items-start gap-static-sm">
-              <div className="grid gap-1"><span className="text-2xs font-semibold uppercase text-contrast-medium">Next</span><NextStep item={item} /></div>
-              <div className="grid min-w-0 gap-1"><span className="text-2xs font-semibold uppercase text-contrast-medium">Outcome</span><ItemLink item={item} selected={isSelected} onSelect={onSelect} /></div>
-              <div className="grid gap-1"><span className="text-2xs font-semibold uppercase text-contrast-medium">Stage</span><span className="text-xs font-medium">{item.stage ? STAGE_LABELS[item.stage] : '—'}</span></div>
-            </div>
-            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-static-sm text-xs text-contrast-medium">
-              <div className="grid gap-1"><span className="text-2xs font-semibold uppercase">Progress</span><span>{item.progress.label}</span></div>
-              <div className="grid gap-1"><span className="text-2xs font-semibold uppercase">Review</span><ActionLink item={item} onSelect={onSelect} /></div>
+            <ItemLink item={item} selected={isSelected} onSelect={onSelect} />
+            <span className="text-xs text-contrast-medium">{group.title} / Outcome {item.work_item_id}</span>
+            <div className="grid grid-cols-2 gap-static-sm text-xs">
+              <div><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium">Pipeline</span><PipelineState item={item} /></div>
+              <div><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium">Current state</span><CurrentState item={item} onSelect={onSelect} /></div>
             </div>
           </article>
         )
@@ -196,12 +202,11 @@ function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
   const isSelected = selected?.changeId === item.change_id && selected.itemKey === item.item_key
   return (
     <section
-      className={['relative grid gap-static-sm border-b border-contrast-low bg-surface px-static-sm py-static-md md:grid-cols-[minmax(12rem,1.25fr)_minmax(12rem,1fr)_minmax(12rem,1fr)_auto] md:items-center', isSelected ? 'bg-frosted-soft' : ''].join(' ')}
+      className={['relative grid gap-static-sm border-b border-contrast-low bg-surface px-static-sm py-static-md lg:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] lg:items-start lg:gap-0 lg:px-0 lg:py-0', isSelected ? 'bg-frosted-soft' : ''].join(' ')}
       aria-label={`Change Integration for ${group.title}`}
       data-work-item={workItemIdentity(item)}
     >
-      <div className="min-w-0">
-        <span className="text-2xs font-semibold uppercase text-contrast-medium">Change-level step</span>
+      <div className="min-w-0 lg:px-static-sm lg:py-static-sm">
         <Link
           to={workItemPath(item)}
           data-work-item-primary-trigger
@@ -212,17 +217,16 @@ function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
         >
           Integration
         </Link>
-        <span className="text-xs text-contrast-medium">Publishes the reviewed Change</span>
+        <span className="text-xs text-contrast-medium">{group.title} / Change</span>
       </div>
-      <div><span className="block text-2xs font-semibold uppercase text-contrast-medium">Next</span><NextStep item={item} /></div>
-      <div><span className="block text-2xs font-semibold uppercase text-contrast-medium">Status</span><span className="text-sm text-contrast-medium">{item.progress.label}</span></div>
-      <div className="relative z-[1]"><span className="block text-2xs font-semibold uppercase text-contrast-medium">Review</span><ActionLink item={item} onSelect={onSelect} /></div>
+      <div className="lg:px-static-sm lg:py-static-sm"><PipelineState item={item} /></div>
+      <div className="relative z-[1] lg:px-static-sm lg:py-static-sm"><CurrentState item={item} onSelect={onSelect} /></div>
     </section>
   )
 }
 
-export default function WorkPortfolioTable({ groups, selected, onSelect }: WorkPortfolioTableProps) {
-  if (groups.length === 0) return <p className="py-static-lg text-sm text-contrast-medium">No current Delivery work.</p>
+export default function WorkPortfolioTable({ groups, selected, emptyMessage, onSelect }: WorkPortfolioTableProps) {
+  if (groups.length === 0) return <p className="py-static-lg text-sm text-contrast-medium">{emptyMessage ?? 'No current Delivery work.'}</p>
   return (
     <section aria-labelledby="work-board-heading" data-testid="work-portfolio-table" className="grid gap-static-xl">
       {groups.map((group) => (

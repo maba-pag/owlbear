@@ -1,9 +1,10 @@
 import { useDeferredValue, useEffect, useRef, useState } from 'react'
-import { PButton, PButtonPure, PFlyout, PIcon, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'
+import { PButton, PButtonPure, PIcon, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'
 import { useLocation, useNavigate } from 'react-router'
-import type { ChangeGroupView, WorkItemNeed, WorkItemPortfolioTotals } from '../api/workItems'
+import type { ChangeGroupView, WorkItemNeed } from '../api/workItems'
 import CompletedHistoryWorkspace from '../components/CompletedHistoryWorkspace'
-import { WorkspaceHeader, WorkspaceHeaderMetric } from '../components/WorkspaceHeader'
+import PortfolioOperatingSummary, { PortfolioHeaderSummary } from '../components/PortfolioOperatingSummary'
+import { WorkspaceHeader } from '../components/WorkspaceHeader'
 import WorkspaceViewHeader, { WorkspaceViewCount } from '../components/WorkspaceViewHeader'
 import WorkItemDetail from '../components/WorkItemDetail'
 import WorkPortfolioTable from '../components/WorkPortfolioTable'
@@ -14,20 +15,6 @@ type SelectValueEvent = { target?: { value?: unknown }; detail?: { value?: unkno
 function selectedValue(event: SelectValueEvent): string {
   const value = event.detail?.value ?? event.target?.value
   return typeof value === 'string' ? value : ''
-}
-
-function PortfolioStatusSummary({ totals }: { totals: WorkItemPortfolioTotals }) {
-  return (
-    <>
-      <WorkspaceHeaderMetric value={totals.total} label={totals.total === 1 ? 'work item' : 'work items'} />
-      <WorkspaceHeaderMetric value={totals.needs.you} label="need you" tone={totals.needs.you > 0 ? 'error' : 'neutral'} />
-      <WorkspaceHeaderMetric value={totals.needs.dependency} label="dependency" />
-      <WorkspaceHeaderMetric value={totals.needs.repair} label="need repair" tone={totals.needs.repair > 0 ? 'error' : 'neutral'} />
-      <WorkspaceHeaderMetric value={totals.activity.working + totals.activity.repairing} label="active" />
-      <WorkspaceHeaderMetric value={totals.activity.ready} label="ready" />
-      <WorkspaceHeaderMetric value={totals.complete} label="complete" />
-    </>
-  )
 }
 
 function PortfolioViewSwitch({ workspace, onChange }: { workspace: 'current' | 'history'; onChange: (workspace: 'current' | 'history') => void }) {
@@ -198,58 +185,28 @@ function SelectedDetail({
 function PortfolioWorkspace({
   groups,
   selected,
+  emptyMessage,
   onSelect,
   onClose,
   onChanged,
 }: {
   groups: ChangeGroupView[]
   selected: WorkItemIdentity | null
+  emptyMessage?: string
   onSelect: (identity: WorkItemIdentity, trigger: HTMLAnchorElement) => void
   onClose: () => void
   onChanged: () => void
 }) {
-  const workspaceRef = useRef<HTMLDivElement>(null)
-  const [split, setSplit] = useState(false)
-
-  useEffect(() => {
-    const workspace = workspaceRef.current
-    if (!workspace) return
-    const updateSplit = () => setSplit(workspace.getBoundingClientRect().width >= 1200)
-    updateSplit()
-    window.addEventListener('resize', updateSplit)
-    if (typeof ResizeObserver === 'undefined') return () => window.removeEventListener('resize', updateSplit)
-    const observer = new ResizeObserver(updateSplit)
-    observer.observe(workspace)
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('resize', updateSplit)
-    }
-  }, [])
-
+  if (!selected) return <WorkPortfolioTable groups={groups} selected={null} emptyMessage={emptyMessage} onSelect={onSelect} />
   return (
-    <div
-      ref={workspaceRef}
-      className={['grid min-w-0 gap-static-lg', selected && split ? 'grid-cols-[minmax(0,1fr)_minmax(26rem,28rem)] items-start' : ''].join(' ')}
-    >
-      <div className="min-w-0"><WorkPortfolioTable groups={groups} selected={selected} onSelect={onSelect} /></div>
-      {selected && split ? (
-        <aside className="sticky top-0 min-h-0 min-w-0 self-start overflow-hidden border-l border-contrast-low pl-static-lg" aria-label="Work Item inspector">
-          <div className="grid h-[calc(100dvh-13rem)] min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
-            <div className="flex justify-end border-b border-contrast-low pb-static-sm"><PButton type="button" compact variant="secondary" icon="close" hideLabel onClick={onClose}>Close inspector</PButton></div>
-            <div className="min-h-0 overflow-y-auto pb-static-lg pr-static-xs pt-static-md" data-testid="work-inspector-scroll">
-              <SelectedDetail key={`${selected.changeId}:${selected.itemKey}`} identity={selected} onChanged={onChanged} onClose={onClose} />
-            </div>
-          </div>
-        </aside>
-      ) : null}
-      {selected && !split ? (
-        <PFlyout open position="end" aria={{ 'aria-label': 'Work Item inspector' }} onDismiss={onClose}>
-          <div className="p-static-lg">
-            <SelectedDetail key={`${selected.changeId}:${selected.itemKey}`} identity={selected} onChanged={onChanged} onClose={onClose} />
-          </div>
-        </PFlyout>
-      ) : null}
-    </div>
+    <section className="min-w-0" aria-label="Work Item detail">
+      <div className="border-b border-contrast-low pb-static-sm">
+        <PButton type="button" compact variant="secondary" icon="arrow-left" onClick={onClose}>Back to current delivery</PButton>
+      </div>
+      <div className="mx-auto w-full max-w-[80rem] py-static-lg">
+        <SelectedDetail key={`${selected.changeId}:${selected.itemKey}`} identity={selected} onChanged={onChanged} onClose={onClose} />
+      </div>
+    </section>
   )
 }
 
@@ -350,7 +307,7 @@ export default function WorkPortfolioPage() {
         title="Delivery portfolio"
         titleId="delivery-portfolio-heading"
         summaryLabel="Delivery portfolio status"
-        summary={workspace === 'current' ? <PortfolioStatusSummary totals={portfolio.totals} /> : undefined}
+        summary={workspace === 'current' && hasData ? <PortfolioHeaderSummary operating={portfolio.operating} /> : undefined}
       />
 
       <PortfolioViewSwitch workspace={workspace} onChange={setWorkspace} />
@@ -361,16 +318,19 @@ export default function WorkPortfolioPage() {
       >
         {workspace === 'current' ? (
           <>
-            <div className="grid gap-static-xs">
-              <WorkspaceViewHeader
-                headingId="work-board-heading"
-                title="Current delivery"
-                metaTestId="work-shown-count"
-                meta={isFiltered ? <WorkspaceViewCount value={`${shownCount} of ${portfolio.totals.total}`} unit="work items shown" /> : null}
-                tools={<PortfolioFilterTools {...filterProps} />}
-              />
-              {filtersOpen ? <PortfolioFilterPanel {...filterProps} /> : null}
-            </div>
+            {hasData && !selected ? <PortfolioOperatingSummary operating={portfolio.operating} /> : null}
+            {!selected ? (
+              <div className="grid gap-static-xs">
+                <WorkspaceViewHeader
+                  headingId="work-board-heading"
+                  title="Current delivery"
+                  metaTestId="work-shown-count"
+                  meta={isFiltered ? <WorkspaceViewCount value={`${shownCount} of ${portfolio.totals.total}`} unit="work items shown" /> : null}
+                  tools={<PortfolioFilterTools {...filterProps} />}
+                />
+                {filtersOpen ? <PortfolioFilterPanel {...filterProps} /> : null}
+              </div>
+            ) : null}
 
             {isLoading ? <div className="grid gap-static-sm" role="status" aria-label="Loading current delivery">{Array.from({ length: 4 }, (_, index) => <span key={index} className="block h-12 animate-pulse bg-surface" />)}</div> : null}
             {error ? (
@@ -385,6 +345,7 @@ export default function WorkPortfolioPage() {
               <PortfolioWorkspace
                 groups={filteredGroups}
                 selected={selected}
+                emptyMessage={isFiltered ? 'No Work Items match the current filters.' : undefined}
                 onSelect={(identity, trigger) => {
                   lastTrigger.current = trigger
                   lastTriggerIdentity.current = `${identity.changeId}:${identity.itemKey}`

@@ -8,6 +8,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryFrontier,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
+    DeliveryOperatorMove,
     DeliveryRequest,
     DeliveryRequestKind,
     DeliveryReturnContext,
@@ -139,10 +140,12 @@ def _snapshot(
     *,
     attention: DeliveryIntegrationAttention | None = None,
     repair_claim: DeliveryActiveClaim | None = None,
+    operator_moves: tuple[DeliveryOperatorMove, ...] = (),
     target_head: str = "2" * 40,
 ) -> DeliveryPortfolioSnapshot:
     frontier = DeliveryFrontier(
         bindings=bindings,
+        operator_moves=operator_moves,
         integration_attention=attention,
         integration_repair_claim=repair_claim,
     )
@@ -183,6 +186,52 @@ def test_design_return_is_user_owned_and_not_projected_as_planning() -> None:
     assert detail.projection.attention == WorkItemAttention.USER
     assert detail.return_context == return_context
     assert projector.group_view().lifecycle == "in-delivery"
+
+
+def test_design_return_suppresses_preserved_request_action_until_readmission() -> None:
+    request = DeliveryRequest(
+        request_id="REQ-001",
+        kind=DeliveryRequestKind.DECISION,
+        outcome_id="OUT-001",
+        summary="Choose the retained contract.",
+        options=({"option_id": "keep", "label": "Keep it"},),
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (
+                _binding("OUT-001", DeliveryStage.DESIGN, requests=(request,)),
+                _binding("OUT-002", DeliveryStage.PLANNING),
+            )
+        )
+    )
+
+    card = projector.group_view().items[0]
+
+    assert card.needs_headline == "Re-admission required"
+    assert card.action.kind == WorkItemActionKind.NONE
+
+
+def test_detail_exposes_operator_directed_course_changes() -> None:
+    move = DeliveryOperatorMove(
+        move_id="move-one",
+        outcome_id="OUT-001",
+        destination=DeliveryStage.PLANNING,
+        reason="The accepted scope changed.",
+        invalidated_outcome_ids=("OUT-001", "OUT-002"),
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (
+                _binding("OUT-001", DeliveryStage.PLANNING),
+                _binding("OUT-002", DeliveryStage.DESIGN),
+            ),
+            operator_moves=(move,),
+        )
+    )
+
+    detail = projector.show_view("outcome:OUT-001")
+
+    assert detail.operator_moves == (move,)
 
 
 def test_request_and_requestless_block_share_need_but_keep_distinct_actions() -> None:
@@ -356,6 +405,35 @@ def test_repair_activity_and_conflict_paths_use_retained_evidence() -> None:
     assert detail.integration.conflicted_paths == ("share/agent.md",)
     assert integration_conflict_paths(("unparseable raw evidence",)) == ()
     assert integration_conflict_paths(("CONFLICT (content): Merge conflict in docs/a in b.md",)) == ("docs/a in b.md",)
+
+
+def test_merge_conflict_waits_for_orchestrated_repair_without_user_command() -> None:
+    attention = DeliveryIntegrationAttention(
+        attention_id="a" * 64,
+        code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
+        change_id="portfolio-change",
+        change_head="1" * 40,
+        target_head="2" * 40,
+        integration_target="dev",
+        diagnostics=("CONFLICT (content): Merge conflict in share/agent.md",),
+        retry_condition="Admit a reviewed repair.",
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (
+                _binding("OUT-001", DeliveryStage.COMPLETED),
+                _binding("OUT-002", DeliveryStage.COMPLETED),
+            ),
+            attention=attention,
+        )
+    )
+
+    card = projector.group_view().items[-1]
+
+    assert card.needs == WorkItemNeed.REPAIR
+    assert card.next_actor == WorkItemNextActor.REPAIR
+    assert card.action.kind == WorkItemActionKind.NONE
+    assert card.action.command is None
 
 
 def test_candidate_proof_failure_requires_operator_correction() -> None:

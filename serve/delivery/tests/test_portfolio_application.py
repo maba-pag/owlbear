@@ -230,6 +230,7 @@ def _portfolio(
     stages: dict[str, DeliveryStage],
     *,
     writer_capacity: int = 1,
+    execution_capacity: int = 3,
     candidate_proof: Callable[[DeliveryIntegrationCandidate, str], tuple[str, ...]] | None = None,
 ):
     repository = tmp_path / "repository"
@@ -290,7 +291,7 @@ def _portfolio(
         ),
         PortfolioApplicationConfig(
             package_root=package_root,
-            execution_capacity=3,
+            execution_capacity=execution_capacity,
             role_policies=_policies(),
         ),
         PortfolioApplicationHooks(
@@ -299,6 +300,66 @@ def _portfolio(
         ),
     )
     return application, runtimes, coordinator, state_root
+
+
+def test_portfolio_operating_view_recommends_creation_when_no_work_exists(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(tmp_path, {})
+
+    view = application.portfolio_operating_view()
+
+    assert view.unfinished_change_count == 0
+    assert tuple(item.kind.value for item in view.guidance) == ("create-change",)
+
+
+def test_portfolio_operating_view_recommends_resuming_unadmitted_design(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(tmp_path, {})
+    application.create_design_session("draft-change", b"intent\n", b"design\n")
+
+    view = application.portfolio_operating_view()
+
+    assert view.unfinished_change_count == 0
+    assert view.draft_design_change_ids == ("draft-change",)
+    assert tuple(item.kind.value for item in view.guidance) == ("resume-design",)
+
+
+def test_portfolio_operating_view_counts_design_reentry_as_intervention(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.DESIGN},
+    )
+
+    view = application.portfolio_operating_view()
+
+    assert tuple(item.item_key for item in view.interventions) == ("outcome:OUT-001",)
+    assert tuple(item.kind.value for item in view.guidance) == ("intervene", "resume-design")
+
+
+def test_portfolio_operating_view_recommends_orchestration_for_unclaimed_work(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING, "change-b": DeliveryStage.PLANNING},
+    )
+
+    view = application.portfolio_operating_view()
+
+    assert len(view.queued_for_orchestration) == 2
+    assert tuple(item.kind.value for item in view.guidance) == ("start-orchestration",)
+
+
+def test_portfolio_claim_suppresses_second_orchestration_recommendation(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING, "change-b": DeliveryStage.PLANNING},
+        execution_capacity=1,
+    )
+    acquired = application.acquire_frontier_work()
+    assert len(acquired.launch_packages) == 1
+
+    view = application.portfolio_operating_view()
+
+    assert len(view.claimed) == 1
+    assert len(view.queued_for_orchestration) == 1
+    assert tuple(item.kind.value for item in view.guidance) == ("work-underway",)
 
 
 def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path: Path) -> None:

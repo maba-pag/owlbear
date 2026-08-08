@@ -39,6 +39,17 @@ const EMPTY_PORTFOLIO: WorkItemPortfolioResponse = {
     needs: { you: 0, dependency: 0, repair: 0, none: 0 },
     activity: { idle: 0, ready: 0, working: 0, repairing: 0 },
   },
+  operating: {
+    unfinished_change_count: 0,
+    completed_change_count: 0,
+    draft_design_change_ids: [],
+    design_required_change_ids: [],
+    claimed: [],
+    queued_for_orchestration: [],
+    interventions: [],
+    dependency_waits: [],
+    guidance: [{ kind: 'create-change', change_ids: [], work_count: 0 }],
+  },
 }
 
 const EMPTY_HISTORY: CompletedChangePage = { records: [], next_cursor: null }
