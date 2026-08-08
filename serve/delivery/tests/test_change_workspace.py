@@ -232,7 +232,7 @@ def test_restart_recovers_after_git_succeeds_before_writer_release(tmp_path: Pat
     assert original_release("recover-restart", "claim-recover-restart") == recovered
 
 
-@pytest.mark.parametrize("interruption", ["attempt-ref", "worktree-remove", "branch-reset", "worktree-add"])
+@pytest.mark.parametrize("interruption", ["attempt-ref", "worktree-reset"])
 def test_restart_recovers_from_each_git_interruption(tmp_path: Path, interruption: str) -> None:
     repository, initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)
@@ -272,9 +272,7 @@ def _restart_stage(
     checks = {
         "attempt-ref": arguments[:2]
         == ("update-ref", f"refs/owlbear/attempts/{coordination.change_id}/attempt-{coordination.change_id}"),
-        "worktree-remove": arguments[:2] == ("worktree", "remove"),
-        "branch-reset": arguments[:2] == ("update-ref", f"refs/heads/{coordination.branch}"),
-        "worktree-add": arguments[:2] == ("worktree", "add"),
+        "worktree-reset": arguments[:2] == ("reset", "--hard"),
     }
     return checks[interruption]
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
+import os
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -720,6 +721,36 @@ def _prepare_reviewed_integration_repair(tmp_path: Path):
     return application, runtimes, coordinator, state_root, repair, launch.claim
 
 
+def test_repair_recovery_preserves_worktree_for_next_claim(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, _state_root, repair, first_claim = _prepare_reviewed_integration_repair(
+        tmp_path
+    )
+    worktree = coordinator.show("change-a").worktree_path
+    directory_fd = os.open(worktree, os.O_RDONLY)
+    try:
+        original_directory = os.fstat(directory_fd)
+
+        recovered = application.recover_integration_repair_claim(
+            "change-a",
+            first_claim.attempt_id,
+            first_claim.claim_id,
+        )
+        acquired = application.acquire_frontier_work()
+        assert len(acquired.repair_launch_packages) == 1
+        second_launch = acquired.repair_launch_packages[0]
+        context = application.show_integration_repair_context(
+            "change-a",
+            second_launch.claim.attempt_id,
+            second_launch.claim.claim_id,
+        )
+
+        assert recovered.preserved_commit == repair.reviewed_repair_commit
+        assert os.path.samestat(worktree.stat(), original_directory)
+        assert context.launch == second_launch
+    finally:
+        os.close(directory_fd)
+
+
 def _with_reviewed_commit(repair: DeliveryIntegrationRepair, commit: str) -> DeliveryIntegrationRepair:
     return repair.model_copy(
         update={
@@ -1015,7 +1046,7 @@ def test_clean_build_recovery_replays_after_workspace_reset(tmp_path: Path) -> N
         runtimes["change-a"].transition(RetryDelivery(outcome_id="OUT-001", claim_id=package.claim.claim_id))
 
 
-@pytest.mark.parametrize("interruption", ["attempt-ref", "worktree-remove", "branch-reset", "worktree-add"])
+@pytest.mark.parametrize("interruption", ["attempt-ref", "worktree-reset"])
 def test_clean_build_recovery_replays_each_workspace_interruption(tmp_path: Path, interruption: str) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
@@ -1035,9 +1066,7 @@ def test_clean_build_recovery_replays_each_workspace_interruption(tmp_path: Path
         checks = {
             "attempt-ref": arguments[:2]
             == ("update-ref", f"refs/owlbear/attempts/change-a/{package.claim.attempt_id}"),
-            "worktree-remove": arguments[:2] == ("worktree", "remove"),
-            "branch-reset": arguments[:2] == ("update-ref", f"refs/heads/{package.branch}"),
-            "worktree-add": arguments[:2] == ("worktree", "add"),
+            "worktree-reset": arguments[:2] == ("reset", "--hard"),
         }
         if checks[interruption]:
             message = "injected workspace interruption"
