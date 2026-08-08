@@ -44,12 +44,12 @@ it('states healthy persisted-data modules without prose, repair, or a Memory det
   const trigger = screen.getByTestId('workspace-status')
   await waitFor(() => expect(trigger).toHaveAttribute('data-status', 'healthy'))
   expect(trigger).toHaveAttribute('aria-haspopup', 'dialog')
-  expect(trigger).toHaveAccessibleName('Memory and Ideas health: Healthy; open health details')
+  expect(trigger).toHaveAccessibleName('Workspace health: Healthy; open health details')
 
   fireEvent.click(trigger)
   const panel = await screen.findByTestId('workspace-status-panel')
   expect(panel).toHaveAttribute('role', 'dialog')
-  expect(panel).toHaveAccessibleName('Memory and Ideas health')
+  expect(panel).toHaveAccessibleName('Workspace health')
   const memoryModule = screen.getByTestId('workspace-status-module-memory')
   expect(memoryModule).toHaveTextContent('Memory store')
   expect(memoryModule).not.toHaveTextContent('No storage issues found')
@@ -72,7 +72,7 @@ it('states healthy persisted-data modules without prose, repair, or a Memory det
   expect(screen.getByTestId('workspace-status-recheck')).toHaveTextContent('Re-check')
 })
 
-it('names the checked property once and the checked surfaces once', async () => {
+it('presents workspace health, check scope, and checked surfaces in hierarchy order', async () => {
   stubHealth(
     { status: 'healthy', findings: [], repairable_count: 0, checked_paths: [] },
     { status: 'healthy', path: '.owlbear/ideas.md', detail: null },
@@ -82,11 +82,10 @@ it('names the checked property once and the checked surfaces once', async () => 
   fireEvent.click(screen.getByTestId('workspace-status'))
   const panel = await screen.findByTestId('workspace-status-panel')
 
-  // The heading states what is checked about the data and nothing else; only the rows name surfaces.
+  // The header names the control and its check scope before the rows name individual surfaces.
   const heading = visibleText(panel).slice(0, visibleText(panel).indexOf('Memory store'))
-  expect(heading).toBe('Persisted data integrity')
-  // Scope stays in the row names and the dialog name, never in a defensive sentence.
-  expect(panel).toHaveAccessibleName('Memory and Ideas health')
+  expect(heading).toBe('Workspace healthPersisted data integrity')
+  expect(panel).toHaveAccessibleName('Workspace health')
   expect(visibleText(panel)).toContain('Ideas file')
 })
 
@@ -110,11 +109,11 @@ it('advances the freshness label as time passes without issuing another health c
 
   // Wall-clock time moves on; only the display tick fires, staying below the 60s poll interval.
   act(() => {
-    vi.setSystemTime(Date.now() + 3 * 60_000)
-    vi.advanceTimersByTime(30_000)
+    vi.setSystemTime(Date.now() + 20_000)
+    vi.advanceTimersByTime(10_000)
   })
 
-  expect(freshness).toHaveTextContent('Checked 3m ago')
+  expect(freshness).toHaveTextContent('Checked 30s ago')
   expect(fetchMock.mock.calls.length).toBe(checksSoFar)
 })
 
@@ -152,7 +151,7 @@ it('reports an unreachable health check instead of claiming health', async () =>
 
   const trigger = screen.getByTestId('workspace-status')
   await waitFor(() => expect(trigger).toHaveAttribute('data-status', 'unavailable'))
-  expect(trigger).toHaveAccessibleName('Memory and Ideas health: Cannot be checked; open health details')
+  expect(trigger).toHaveAccessibleName('Workspace health: Cannot be checked; open health details')
 
   fireEvent.click(trigger)
   const memoryModule = await screen.findByTestId('workspace-status-module-memory')
