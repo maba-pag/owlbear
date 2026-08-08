@@ -628,16 +628,22 @@ def test_integration_queries_are_stable_bounded_and_read_only(tmp_path: Path) ->
     assert runtimes["change-a"].frontier_bytes() == attention_bytes
 
 
-def test_work_item_queries_use_bounded_projector_models_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_work_item_queries_resolve_live_target_once_per_portfolio_capture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     application, _runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-b": DeliveryStage.COMPLETED, "change-a": DeliveryStage.PLANNING},
     )
-    monkeypatch.setattr(
-        application._workspace_manager,  # noqa: SLF001
-        "integration_context",
-        lambda _change_id: pytest.fail("Work Item reads must not resolve Git Integration context"),
-    )
+    resolved = []
+    integration_context = application._workspace_manager.integration_context  # noqa: SLF001
+
+    def record_resolution(change_id: str):  # noqa: ANN202
+        resolved.append(change_id)
+        return integration_context(change_id)
+
+    monkeypatch.setattr(application._workspace_manager, "integration_context", record_resolution)  # noqa: SLF001
 
     listed = application.list_work_items()
     shown = application.show_work_item("change-a", "OUT-001")
@@ -658,6 +664,7 @@ def test_work_item_queries_use_bounded_projector_models_only(tmp_path: Path, mon
     assert shown.acceptance == ("The launch is observable.",)
     assert grouped[0].change_id == "change-a"
     assert detailed.card.work_item_id == "OUT-001"
+    assert resolved == ["change-b", "change-b"]
     assert "internal semantic body sentinel" not in serialized
     assert "internal completion body sentinel" not in serialized
 
@@ -1541,6 +1548,39 @@ def test_integration_merge_conflict_retains_clean_heads_and_typed_attention(tmp_
     assert refreshed.repair_recoveries[0].claim_id == repair_launch.claim.claim_id
     assert runtimes["change-a"].integration_repair_claim() is None
     assert coordinator.show("change-a").writer is None
+
+
+def test_target_advance_projects_stale_conflict_as_queued_retry_without_refresh(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+        candidate_proof=lambda _candidate, _commit: (),
+    )
+    _target_before, _reviewed = _review_product_change(coordinator, "change-a", "change side\n")
+    repository = tmp_path / "repository"
+    (repository / "product.txt").write_text("target side\n", encoding="utf-8")
+    _git(repository, "add", "product.txt")
+    _git(repository, "commit", "-m", "concurrent target")
+    failed = application.integrate_ready_change("change-a")
+    assert failed.attention is not None
+    persisted_target = coordinator.show("change-a").target_head
+
+    (repository / "after-attention.txt").write_text("target advanced\n", encoding="utf-8")
+    _git(repository, "add", "after-attention.txt")
+    _git(repository, "commit", "-m", "advance target after attention")
+
+    view = application.portfolio_read_view()
+    integration = view.groups[0].items[-1]
+
+    assert integration.progress.label == "Awaiting retry against current target"
+    assert integration.action.kind is not None
+    assert integration.action.kind.value == "retry-integration"
+    assert tuple(item.change_id for item in view.operating.queued_for_orchestration) == ("change-a",)
+    assert tuple(item.kind.value for item in view.operating.guidance) == ("start-orchestration",)
+    assert application.list_integration_ready_changes() == ("change-a",)
+    assert application.list_integration_attention() == ()
+    assert runtimes["change-a"].integration_attention() == failed.attention
+    assert coordinator.show("change-a").target_head == persisted_target
 
 
 def test_reviewed_integration_repair_advances_boundary_and_retries_publication(tmp_path: Path) -> None:

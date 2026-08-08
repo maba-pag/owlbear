@@ -76,6 +76,17 @@ class _DeliveryApplicationFake:
 
     def list_work_item_groups(self) -> tuple[ChangeGroupView, ...]:
         self.calls.append(("list", ()))
+        return self._work_item_groups()
+
+    def portfolio_read_view(self) -> SimpleNamespace:
+        self.calls.append(("portfolio", ()))
+        return SimpleNamespace(
+            groups=self._work_item_groups(),
+            operating=self._portfolio_operating_view(),
+        )
+
+    @staticmethod
+    def _work_item_groups() -> tuple[ChangeGroupView, ...]:
         return (
             ChangeGroupView(
                 change_id="change-a",
@@ -124,6 +135,10 @@ class _DeliveryApplicationFake:
 
     def portfolio_operating_view(self) -> PortfolioOperatingView:
         self.calls.append(("operating", ()))
+        return self._portfolio_operating_view()
+
+    @staticmethod
+    def _portfolio_operating_view() -> PortfolioOperatingView:
         queued = PortfolioWorkReference(
             change_id="change-b",
             item_key="integration",
@@ -359,8 +374,7 @@ def test_list_and_detail_expose_current_bounded_delivery_state() -> None:
     assert detail.json()["item"]["requests"] == []
     assert "process_id" not in json.dumps((portfolio.json(), detail.json()))
     assert application.calls == [
-        ("list", ()),
-        ("operating", ()),
+        ("portfolio", ()),
         ("show", ("change-a", "outcome:OUT-001")),
     ]
 
