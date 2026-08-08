@@ -1,9 +1,13 @@
 [project]
 name = "owlbear-tools"
 version = "0.1.0"
-requires-python = ">=3.12.13"
+requires-python = ">=3.14.6"
 description = "OwlBear utility tools — indexes and related scripts"
-dependencies = ["tree-sitter-language-pack>=1.12.5,<2"]
+dependencies = [
+    "owlbear-delivery",
+    "pyyaml>=6.0.3",
+    "tree-sitter-language-pack>=1.12.5,<2",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -21,7 +25,22 @@ semble = "owlbear_tools.semble:main"
 ts-index = "owlbear_tools.ts_index:main"
 test-root = "owlbear_tools.test_root:main"
 lint = "owlbear_tools.lint:lint"
-lint-all = "owlbear_tools.lint:lint_all"
 megalint = "owlbear_tools.lint:megalint"
+typecheck = "owlbear_tools.lint:typecheck"
+lint-full = "owlbear_tools.lint:lint_full"
 eslint-fix = "owlbear_tools.lint:eslint_fix"
+megalint-hook = "owlbear_tools.lint:megalint_hook"
+text-hygiene-check = "owlbear_tools.lint:text_hygiene_check"
 todo = "owlbear_tools.lint:todo_check"
+help = "owlbear_tools.commands:help_main"
+hooks-install = "owlbear_tools.project:hooks_install"
+setup-project = "owlbear_tools.project:setup_project"
+doctor = "owlbear_tools.project:doctor"
+integration-target = "owlbear_tools.project:integration_target"
+deps-status = "owlbear_tools.project:deps_status"
+deps-sync = "owlbear_tools.project:deps_sync"
+pds-sync = "owlbear_tools.project:pds_sync"
+megalint-clean = "owlbear_tools.project:megalint_clean"
+
+[tool.uv.sources]
+owlbear-delivery = { workspace = true }

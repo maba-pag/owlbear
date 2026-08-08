@@ -4,6 +4,6 @@
 # max_line_length from .editorconfig (with per-file-type overrides).
 extends: default
 ignore: |
-  openspec/changes/**/.openspec.yaml
+  .owlbear/legacy/**
 rules:
   line-length: disable

@@ -16,6 +16,9 @@
     "dependencies",
     "renovate"
   ],
+  "gitIgnoredAuthors": [
+    "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+  ],
   "rangeStrategy": "update-lockfile",
   "vulnerabilityAlerts": {
     "enabled": true,
@@ -41,7 +44,7 @@
   },
   "packageRules": [
     {
-      "description": "Freeze Python runtime floor to 3.12.x",
+      "description": "Freeze Python runtime floor to 3.14.x",
       "matchPackageNames": [
         "python"
       ],
@@ -49,7 +52,7 @@
         "pep621",
         "uv"
       ],
-      "allowedVersions": "<3.13.0"
+      "allowedVersions": ">=3.14.0,<3.15.0"
     },
     {
       "description": "Group routine version updates by ecosystem on Friday",
@@ -87,9 +90,7 @@
         "@porsche-design-system/components-js",
         "@porsche-design-system/components-react"
       ],
-      "labels": [
-        "dependencies",
-        "renovate",
+      "addLabels": [
         "cockpit",
         "pds"
       ],
@@ -144,12 +145,14 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "MegaLinter Docker image in pre-commit local hook",
+      "description": "MegaLinter runtime image",
       "managerFilePatterns": [
-        "/^\\.pre-commit-config\\.yaml$/"
+        "/^\\.mega-linter\\.yml$/"
       ],
-      "matchStrings": ["ghcr\\.io/oxsecurity/megalinter-cupcake:v(?<currentValue>[\\d.]+)"],
-      "depNameTemplate": "ghcr.io/oxsecurity/megalinter-cupcake",
+      "matchStrings": [
+        "OWLBEAR_MEGALINTER_IMAGE:\\s*(?<depName>ghcr\\.io/oxsecurity/megalinter-cupcake):v(?<currentValue>[\\d.]+)"
+      ],
+      "depNameTemplate": "{{{depName}}}",
       "datasourceTemplate": "docker"
     }
   ],

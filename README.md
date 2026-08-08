@@ -9,16 +9,18 @@ and MCP servers that work together out of the box. Clone once, run one setup com
 every project on your machine gains access to a consistent set of AI-powered development
 tools without any per-project configuration overhead.
 
-Agents handle structured tasks (research, architecture, testing, implementation, review),
-skills carry domain knowledge that loads automatically by relevance, and MCP servers give
-every agent live access to your project's kanban board, knowledge base, and persistent
-memory — all scoped to your project directory and shared through the filesystem.
+Agents design and admit durable semantic authority, then execute bounded Planning and Build work
+selected by the Delivery engine. Workers choose state transitions, reviewers provide independent
+advisory evidence, and the runtime owns recovery, Integration, and completed history. Skills carry
+domain knowledge that loads automatically by relevance, and MCP servers give agents access to
+target changes and work, the knowledge base, persistent Memory, and browser automation, all scoped
+to your project directory and shared through the filesystem.
 
 ## Prerequisites
 
 | Requirement | Why | How to get it |
 |-------------|-----|---------------|
-| Python 3.12+ | OwlBear runtime | [python.org](https://www.python.org/downloads/) |
+| Python 3.14+ | OwlBear runtime | [python.org](https://www.python.org/downloads/) |
 | [uv](https://docs.astral.sh/uv/) | Package manager and MCP server launcher | `pip install uv` or see uv docs |
 | VS Code | IDE | [code.visualstudio.com](https://code.visualstudio.com/) |
 | GitHub Copilot extension | Chat and agents | VS Code Extensions marketplace |
@@ -38,19 +40,16 @@ mkdir C:\Dev\my-project
 cd C:\Dev\my-project
 
 # 3. Bootstrap the OwlBear workspace
-python ..\owlbear\setup\init.py
-
-# Optional: set a project name and type
-python ..\owlbear\setup\init.py --name my-project --type webapp
+uv run --project ..\owlbear python ..\owlbear\setup\init.py
 
 # 4. Open the project in VS Code
 code .
 ```
 
-Setup creates merged VS Code settings/MCP config plus copied runtime files such as
-`.owlbear/hooks/` and `.owlbear/kanban/` in your project directory. Agents, skills, instructions, and prompts still load live from the owlbear
-clone via relative paths, so the same owlbear repo can be shared across multiple
-projects on your machine.
+Setup creates merged VS Code settings/MCP config, copied runtime files such as `.owlbear/hooks/`,
+and a receipt-authorized empty target store under `.owlbear/target/`. Agents, skills, instructions,
+and prompts still load live from the owlbear clone via relative paths, so the same owlbear repo can
+be shared across multiple projects on your machine.
 
 For more detail on what each file does and how to customise see
 [setup/setup-guide.md](setup/setup-guide.md).
@@ -62,9 +61,9 @@ For more detail on what each file does and how to customise see
 | `share/agents/` | Agent definitions (`.agent.md`) — loaded into VS Code automatically |
 | `share/skills/` | Agent skills (`SKILL.md`) — domain knowledge loaded by relevance |
 | `share/instructions/` | Shared instruction files (`*.instructions.md`) |
-| `serve/mcp-kanban/` | MCP server for kanban board operations |
-| `serve/mcp-memory/` | MCP server for persistent agent memory (markdown-file backed) |
-| `serve/mcp-knowledge/` | MCP server exposing the knowledge base |
+| `serve/delivery-mcp/` | MCP server for target authority, reviewed transformations, and recovery |
+| `serve/memory-mcp/` | MCP server for persistent agent memory (markdown-file backed) |
+| `serve/knowledge-mcp/` | MCP server exposing the knowledge base |
 | `serve/cockpit/` | Cockpit backend package and prebuilt frontend bundle (`dist/`) used by consumers |
 | `seed/` | Template files copied to new projects during `setup/init.py` |
 | `setup/` | Workspace initialiser (`init.py`), setup guide, and sharing guide |
@@ -77,7 +76,7 @@ run Cockpit.
 
 Run Cockpit from the consumer project root, not from the owlbear clone. `--project`
 points uv at the shared owlbear installation; the current directory keeps Cockpit scoped
-to the project so `.owlbear/kanban/` and `.owlbear/memory/` resolve correctly.
+to the project so `.owlbear/target/` and `.owlbear/memory/` resolve correctly.
 
 macOS / Linux:
 
@@ -98,15 +97,25 @@ bundled `dist/` directory in the owlbear clone.
 
 `uv run cockpit` without `--project` is only for running from inside the owlbear
 repository itself. If you launch Cockpit from outside the consumer project directory,
-use `uv run --project ../owlbear --directory /path/to/project cockpit` or set
-`KANBAN_DIR` and `MEMORY_DIR` explicitly.
+use `uv run --project ../owlbear --directory /path/to/project cockpit`.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `COCKPIT_PORT` | `8420` | Override listen port (1-65535) |
 | `COCKPIT_NO_OPEN` | unset | Set to `1` to suppress browser auto-open |
-| `KANBAN_DIR` | `$PWD/.owlbear/kanban/` | Override kanban directory path |
-| `MEMORY_DIR` | `$PWD/.owlbear/memory/` | Override memory directory path |
+
+## Target Workflow
+
+Use `/ideate` to refine a rough idea, then `/design` to create or resume one durable change under
+the target design session. The designer validates the exact semantic revision and asks for explicit
+approval before admission to `.owlbear/target/changes/`. Run `/orchestrate <change-id>` only after
+admission. The engine then acquires bounded Planning and Build work, workers select typed
+transitions, and independent reviewers return advisory evidence.
+
+The canonical Specification, Delivery, Correction, Integration, and recovery procedure is
+[Target Delivery Workflow](setup/setup-guide.md#target-delivery-workflow). Cockpit exposes current
+work items, requests, typed attention, controls, and completed history. Any migrated records under
+`.owlbear/legacy/` are immutable history for inspection, never executable work.
 
 If Cockpit fails because `dist/` assets are missing, refresh from the latest `main`
 branch release artifacts (the sync-to-main workflow builds and stages `serve/cockpit/dist/`).
@@ -124,7 +133,7 @@ After VS Code opens, verify the installation loaded correctly:
 | OwlBear agents loaded | Chat Customizations lists agents from the owlbear `agents/` directory |
 | OwlBear skills loaded | Chat Customizations lists skills from the owlbear `skills/` directory |
 | Instructions loaded | Chat Customizations includes `*.instructions.md` files from owlbear |
-| MCP servers running | Command Palette → `MCP: List Servers` — `ob-kanban`, `ob-memory`, and `ob-knowledge` show `running` |
+| MCP servers running | Command Palette → `MCP: List Servers` — `owlbear-delivery`, `owlbear-memory`, and `owlbear-knowledge` show `running` |
 
 > If agents or skills do not appear, check that `chat.agentFilesLocations` and
 > `chat.agentSkillsLocations` in `.vscode/settings.json` point to the correct relative
@@ -153,5 +162,5 @@ differ.
 ## Sharing with Teammates
 
 To give a teammate access on their machine, they need to clone both the owlbear repository
-and your project, then run `setup/init.py` from their project directory. See
+and your project, then run `setup/init.py` through the shared uv project from their project directory. See
 [setup/sharing-guide.md](setup/sharing-guide.md) for the step-by-step walkthrough.

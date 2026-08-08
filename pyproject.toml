@@ -19,7 +19,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "serve"]
-pythonpath = ["serve/kanban/src", "serve/tools/src"]
+pythonpath = ["serve/delivery/src", "serve/tools/src"]
 addopts = "--import-mode=importlib -m 'not e2e' -n auto --dist loadfile -p no:logfire -p no:pytest_logfire"
 timeout = 30
 session_timeout = 300
@@ -32,15 +32,16 @@ markers = [
 ]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 line-length = 120
+extend-exclude = ["*.md"]
 src = [
-  "serve/kanban/src",
+  "serve/delivery/src",
   "serve/knowledge/src",
-  "serve/mcp-kanban/src",
-  "serve/mcp-knowledge/src",
-  "serve/mcp-memory/src",
-  "serve/mcp-browser/src",
+  "serve/delivery-mcp/src",
+  "serve/knowledge-mcp/src",
+  "serve/memory-mcp/src",
+  "serve/browser-mcp/src",
   "serve/browser/src",
   "serve/cockpit/src",
   "serve/tools/src",
@@ -49,8 +50,10 @@ src = [
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-  "D1",     # missing docstring rules — not yet enforced
   "COM812", # trailing comma — conflicts with formatter
+  "CPY001", # per-file copyright headers are not used in this repository
+  "D105",   # magic methods usually inherit their behavioral contract from Python
+  "D107",   # constructor documentation belongs on the class
   "ISC001", # implicit string concatenation — conflicts with formatter
   "S101",   # assert used — needed in tests
   "SIM108", # ternary suggestion — if-else is often more readable
@@ -68,7 +71,6 @@ ignore = [
   "C901",   # hook scripts have inherently complex path-extraction logic
   "INP001", # seed/.owlbear/hooks/ is not a package — direct-run scripts are expected here
   "PLR0912", # guard scripts branch by path rule category
-  "S607",   # hook scripts invoke trusted workspace tooling by conventional names
   "T201",   # print() is the stdout I/O contract for VS Code hook scripts
 ]
 ".owlbear/scripts/*.py" = [
@@ -121,6 +123,7 @@ ignore = [
   "SLF001",  # private member access — needed for white-box testing
   "ERA001",  # commented-out code — section header comments
   "PLR2004", # magic values are fine in tests
+  "PLR0917", # test helpers favor explicit fixture parameters over argument bundles
   "PLC0415", # imports inside test functions are intentional
   "TCH",     # type-checking blocks impractical in tests
   "TRY003",  # exception messages — test helper functions
@@ -151,6 +154,7 @@ ignore = [
   "SLF001",  # private member access — needed for white-box testing
   "ERA001",  # commented-out code — section header comments
   "PLR2004", # magic values are fine in tests
+  "PLR0917", # test helpers favor explicit fixture parameters over argument bundles
   "PLC0415", # imports inside test functions are intentional
   "TCH",     # type-checking blocks impractical in tests
   "TRY003",  # exception messages — test helper functions
@@ -168,12 +172,12 @@ quote-style = "double"
 
 [tool.coverage.run]
 source_pkgs = [
-  "owlbear_kanban",
+  "owlbear_delivery",
   "owlbear_knowledge",
-  "owlbear_mcp_browser",
-  "owlbear_mcp_kanban",
-  "owlbear_mcp_knowledge",
-  "owlbear_mcp_memory",
+  "owlbear_browser_mcp",
+  "owlbear_delivery_mcp",
+  "owlbear_knowledge_mcp",
+  "owlbear_memory_mcp",
   "owlbear_browser",
   "owlbear_cockpit",
   "owlbear_tools",
