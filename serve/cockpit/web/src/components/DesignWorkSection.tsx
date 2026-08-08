@@ -24,34 +24,43 @@ export default function DesignWorkSection({ changeIds, selectedChangeId, onSelec
             <article
               key={changeId}
               className={[
-                'relative grid min-w-0 gap-static-sm rounded-lg border border-l-4 border-contrast-low px-static-sm py-static-sm text-sm md:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] md:gap-0',
+                'relative min-w-0 rounded-lg border border-l-4 border-contrast-low px-static-sm py-static-sm text-sm',
                 selected ? 'bg-frosted-soft' : 'bg-surface hover:bg-frosted-soft',
               ].join(' ')}
               data-design-work={changeId}
             >
-              <div className="min-w-0 md:pr-static-sm">
-                <Link
-                  to={`/delivery/${encodeURIComponent(changeId)}/design`}
-                  data-work-item-primary-trigger
-                  data-work-item-identity={`${changeId}:design`}
-                  className="block font-semibold text-primary underline-offset-4 after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-                  aria-current={selected ? 'location' : undefined}
-                  onClick={(event) => onSelect({ changeId, itemKey: 'design' }, event.currentTarget)}
-                >
-                  {designWorkTitle(changeId)}
-                </Link>
-                <code className="text-xs text-contrast-medium">{changeId}</code>
-              </div>
-              <div className="md:px-static-sm">
-                <span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium md:hidden">Progress</span>
-                <strong className="font-medium text-primary">Design</strong>
-                <span className="block text-xs text-contrast-medium">Not admitted to Delivery</span>
-              </div>
-              <div className="md:pl-static-sm">
-                <span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium md:hidden">Status</span>
-                <span className="block font-medium text-primary">Continue Design</span>
-                <code className="mt-1 inline-block rounded-sm border border-contrast-low bg-canvas px-1.5 py-0.5 text-xs text-contrast-medium">{designCommand(changeId)}</code>
-              </div>
+              <dl className="grid gap-static-sm md:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] md:gap-0">
+                <div className="min-w-0 md:pr-static-sm">
+                  <dt className="sr-only">Work</dt>
+                  <dd>
+                    <Link
+                      to={`/delivery/${encodeURIComponent(changeId)}/design`}
+                      data-work-item-primary-trigger
+                      data-work-item-identity={`${changeId}:design`}
+                      className="block font-semibold text-primary underline-offset-4 after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                      aria-current={selected ? 'location' : undefined}
+                      onClick={(event) => onSelect({ changeId, itemKey: 'design' }, event.currentTarget)}
+                    >
+                      {designWorkTitle(changeId)}
+                    </Link>
+                    <code className="text-xs text-contrast-medium">{changeId}</code>
+                  </dd>
+                </div>
+                <div className="md:px-static-sm">
+                  <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-medium md:sr-only">Progress</dt>
+                  <dd>
+                    <strong className="font-medium text-primary">Design</strong>
+                    <span className="block text-xs text-contrast-medium">Not admitted to Delivery</span>
+                  </dd>
+                </div>
+                <div className="md:pl-static-sm">
+                  <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-medium md:sr-only">Status</dt>
+                  <dd>
+                    <span className="block font-medium text-primary">Continue Design</span>
+                    <code className="mt-1 inline-block rounded-sm border border-contrast-low bg-canvas px-1.5 py-0.5 text-xs text-contrast-medium">{designCommand(changeId)}</code>
+                  </dd>
+                </div>
+              </dl>
             </article>
           )
         })}

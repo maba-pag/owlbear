@@ -299,6 +299,8 @@ it('shows unadmitted Design work on the board and opens its verified sources', a
   expect(designWork).toHaveTextContent('Design Draft')
   expect(designWork).toHaveTextContent('Not admitted to Delivery')
   expect(designWork).toHaveTextContent('/design design-draft')
+  expect(within(designWork).getAllByRole('term').map((term) => term.textContent)).toEqual(['Work', 'Progress', 'Status'])
+  expect(within(designWork).getAllByRole('definition')).toHaveLength(3)
   expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('1current Change')
 
   const detailView = await screen.findByTestId('design-work-detail')
@@ -326,7 +328,11 @@ it('filters grouped rows by Change and Needs without conflating Activity', async
       next_step: 'Waiting on OUT-009',
     })],
   })
-  currentPortfolio = portfolio([group(), secondGroup])
+  const basePortfolio = portfolio([group(), secondGroup])
+  currentPortfolio = {
+    ...basePortfolio,
+    operating: { ...basePortfolio.operating, draft_design_change_ids: ['design-draft'] },
+  }
   const { container } = renderPage()
   await screen.findByTestId('work-portfolio-table')
 
@@ -335,11 +341,20 @@ it('filters grouped rows by Change and Needs without conflating Activity', async
   selectValue(selects[0], 'change-alpha')
   selectValue(selects[1], 'you')
 
-  expect(screen.getByTestId('work-shown-count')).toHaveTextContent('1 of 3')
+  expect(screen.getByTestId('work-shown-count')).toHaveTextContent('1 of 4')
   expect(screen.getByTestId('work-portfolio-table')).toHaveTextContent('User controls')
   expect(screen.getByTestId('work-portfolio-table')).not.toHaveTextContent('Delivery foundation')
   expect(screen.getByTestId('work-portfolio-table')).not.toHaveTextContent('Runtime hardening')
 
+  selectValue(selects[0], '')
+  expect(await screen.findByTestId('design-work-section')).toHaveTextContent('Design Draft')
+  expect(screen.getByTestId('work-shown-count')).toHaveTextContent('2 of 4')
+
+  selectValue(selects[1], 'dependency')
+  await waitFor(() => expect(screen.queryByTestId('design-work-section')).not.toBeInTheDocument())
+  expect(screen.getByTestId('work-shown-count')).toHaveTextContent('1 of 4')
+
+  selectValue(selects[1], 'you')
   selectValue(selects[0], 'change-beta')
   expect(await screen.findByText('No portfolio entries match the current filters.')).toBeInTheDocument()
   expect(screen.queryByText('No current Delivery work.')).not.toBeInTheDocument()
@@ -493,6 +508,9 @@ it('routes Integration repair through Orchestration while keeping raw diagnostic
   renderPage('/delivery/change-alpha/integration')
 
   const inspector = await screen.findByTestId('work-item-detail')
+  const integrationRow = screen.getByLabelText('Change Integration for Portfolio redesign')
+  expect(within(integrationRow).getAllByRole('term').map((term) => term.textContent)).toEqual(['Work', 'Progress', 'Status'])
+  expect(within(integrationRow).getAllByRole('definition')).toHaveLength(3)
   expect(inspector).toHaveTextContent('Merge conflict')
   expect(inspector).toHaveTextContent('Conflicting files')
   expect(inspector).toHaveTextContent('serve/delivery/work_items.py')

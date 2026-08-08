@@ -256,7 +256,8 @@ export default function WorkPortfolioPage() {
     }))
     .filter((group) => group.items.length > 0)
   const shownCount = filteredGroups.reduce((total, group) => total + group.items.length, 0)
-  const visibleDesignWorkIds = !deferredNeeds && (!deferredChange || designWorkIds.includes(deferredChange))
+  const designMatchesAttention = !deferredNeeds || deferredNeeds === 'you'
+  const visibleDesignWorkIds = designMatchesAttention && (!deferredChange || designWorkIds.includes(deferredChange))
     ? designWorkIds.filter((changeId) => !deferredChange || changeId === deferredChange)
     : []
   const shownEntryCount = shownCount + visibleDesignWorkIds.length

@@ -107,6 +107,8 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(integrationRow).toContainText('Repair in progress')
     await expect(integrationRow).toContainText('Integration repairer working')
     await expect(integrationRow).not.toContainText('Manual option:')
+    await expect(integrationRow.locator('dt')).toHaveText(['Work', 'Progress', 'Status'])
+    await expect(integrationRow.locator('dd')).toHaveCount(3)
 
     const normalOutcome = (await visibleRows(page)).filter({ hasText: 'Publish operator guide' }).locator('td').first()
     await expect(normalOutcome).toHaveCSS('border-left-width', '4px')
@@ -123,6 +125,8 @@ test.describe('assembled Delivery portfolio', () => {
     const designRow = designSection.locator('[data-design-work]')
     await expect(designRow).toHaveCSS('border-left-width', '4px')
     await expect(designRow).toHaveCSS('border-top-left-radius', '8px')
+    await expect(designRow.locator('dt')).toHaveText(['Work', 'Progress', 'Status'])
+    await expect(designRow.locator('dd')).toHaveCount(3)
     const firstChange = table.locator(':scope > section').first()
     const [changeHeadingBox, changeLabelsBox, changeRowBox, designBox, designHeadingBox, designLabelsBox, designRowBox] = await Promise.all([
       firstChange.getByRole('heading').first().boundingBox(),
@@ -158,8 +162,12 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(page).toHaveURL(/\/delivery$/)
 
     await page.getByTestId('work-filters-toggle').click()
+    await selectValue(page.locator('p-select[name="work-needs-filter"]'), 'you')
+    await expect(page.getByTestId('work-shown-count')).toContainText('3 of 9')
+    await expect(page.getByTestId('design-work-section')).toBeVisible()
     await selectValue(page.locator('p-select[name="work-needs-filter"]'), 'dependency')
     await expect(page.getByTestId('work-shown-count')).toContainText('1 of 9')
+    await expect(page.getByTestId('design-work-section')).not.toBeVisible()
     await expect(await visibleRows(page)).toHaveCount(1)
     await page.getByTestId('work-filters-reset').click()
     await expect(await visibleRows(page)).toHaveCount(8)

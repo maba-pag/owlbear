@@ -172,28 +172,39 @@ function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
   return (
     <section
       className={[
-        'relative mt-static-sm grid gap-static-sm rounded-lg border-y border-r border-contrast-low px-static-sm py-static-md md:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] md:items-start md:gap-0 md:px-0 md:py-0',
+        'relative mt-static-sm rounded-lg border-y border-r border-contrast-low px-static-sm py-static-md md:px-0 md:py-0',
         attentionBorder(item),
         isSelected ? 'bg-frosted-soft' : 'bg-surface hover:bg-frosted-soft',
       ].join(' ')}
       aria-label={`Change Integration for ${group.title}`}
       data-work-item={workItemIdentity(item)}
     >
-      <div className="min-w-0 md:px-static-sm md:py-static-sm">
-        <Link
-          to={workItemPath(item)}
-          data-work-item-primary-trigger
-          data-work-item-identity={`${item.change_id}:${item.item_key}`}
-          className="block font-semibold text-primary underline-offset-4 after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-          aria-current={isSelected ? 'location' : undefined}
-          onClick={(event) => onSelect({ changeId: item.change_id, itemKey: item.item_key }, event.currentTarget)}
-        >
-          Integration
-        </Link>
-        <span className="text-xs text-contrast-medium">Change: {group.title}</span>
-      </div>
-      <div className="md:px-static-sm md:py-static-sm"><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium md:hidden">Progress</span><ProgressState item={item} /></div>
-      <div className="relative z-[1] md:px-static-sm md:py-static-sm"><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium md:hidden">Status</span><CurrentState item={item} onSelect={onSelect} /></div>
+      <dl className="grid gap-static-sm md:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] md:items-start md:gap-0">
+        <div className="min-w-0 md:px-static-sm md:py-static-sm">
+          <dt className="sr-only">Work</dt>
+          <dd>
+            <Link
+              to={workItemPath(item)}
+              data-work-item-primary-trigger
+              data-work-item-identity={`${item.change_id}:${item.item_key}`}
+              className="block font-semibold text-primary underline-offset-4 after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+              aria-current={isSelected ? 'location' : undefined}
+              onClick={(event) => onSelect({ changeId: item.change_id, itemKey: item.item_key }, event.currentTarget)}
+            >
+              Integration
+            </Link>
+            <span className="text-xs text-contrast-medium">Change: {group.title}</span>
+          </dd>
+        </div>
+        <div className="md:px-static-sm md:py-static-sm">
+          <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-medium md:sr-only">Progress</dt>
+          <dd><ProgressState item={item} /></dd>
+        </div>
+        <div className="relative z-[1] md:px-static-sm md:py-static-sm">
+          <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-medium md:sr-only">Status</dt>
+          <dd><CurrentState item={item} onSelect={onSelect} /></dd>
+        </div>
+      </dl>
     </section>
   )
 }
