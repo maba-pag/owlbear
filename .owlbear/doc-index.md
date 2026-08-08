@@ -63,9 +63,22 @@
 - [transcript extractor](./scripts/extract_transcript.py)
 
 ## .owlbear/ideas.md
-- ## `Retired Kanban decomposition`
-- ### `Status quo`
-- ### `Proposal`
+- ## `Delivery implementation audit and improvement plan`
+- ### `Why the old proposal no longer applies directly`
+- ### `Audit method and baseline`
+- ### `Architecture generations currently present`
+- ### `Reconciliation of the initial assessment`
+- ### `Priority 0 — prevent acquisition from revoking live work`
+- ### `Priority 0 — preserve Design stage in work-item projection`
+- ### `Priority 1 — delete the confirmed dead Integration API`
+- ### `Priority 1 decision — complete or remove Assembly`
+- ### `Priority 1 — prove and remove empty authority reintroduction`
+- ### `Priority 2 — make startup authorization a pure steady-state gate`
+- ### `Priority 2 — replace the transitional work-item projection`
+- ### `Priority 2 — validate supported concurrency before adding new lock abstractions`
+- ### `Priority 3 — reassess naming and decomposition after deletion`
+- ### `Reviewed and retained — Delivery MCP module split`
+- ### `Recommended execution order`
 - ## `Memory`
 - ## `Code index — push detail into file headers, keep the index thin`
 - ### `Status quo`
@@ -862,6 +875,7 @@
 
 ### Outbound links
 - [README.md](../../README.md)
+- [setup-guide.md](../../setup/setup-guide.md)
 
 ## serve/knowledge/README.md
 - # `owlbear-knowledge — Knowledge Engine`
@@ -959,8 +973,6 @@
 - #### `State Machine`
 - #### `OCC`
 - #### `Lenient Read`
-- ## `CLI`
-- ### ``memory-migrate``
 - ### ``MtimeScanCache``
 - ## `Dependencies`
 
@@ -975,6 +987,7 @@
 - ### `State Model`
 - ## `Tools`
 - ## `Entry Schema`
+- ## `Agent Identity`
 - ## `Configuration`
 - ## `Batch Commits`
 - ## `Dependencies`
@@ -998,7 +1011,6 @@
 - ## `Prerequisites`
 - ## `Quick Start`
 - ## `What Setup Creates`
-- ### `Existing Pre-Cutover Workspaces`
 - ## `Shared vs Copied`
 - ## `Target Delivery Workflow`
 - ### `Specification`
@@ -1012,7 +1024,7 @@
 - ### `Adding local agents`
 - ### `Overriding instructions`
 - ### `Adding project-specific MCP servers`
-- ### `Configuring the knowledge MCP server`
+- ### `Knowledge MCP storage`
 - ## `Troubleshooting`
 
 ### Outbound links
@@ -1161,8 +1173,6 @@
 - ## `Guardrails`
 
 ## share/prompts/ideate.prompt.md
-
-## share/prompts/integration-repair.prompt.md
 
 ## share/prompts/kb-enrich.prompt.md
 - ## `Execution Contract`
@@ -1408,6 +1418,7 @@
 - ## `recall_memory`
 - ## `assess_memories`
 - ## `curate_memory`
+- ## `Agent Lifecycle`
 - ## `delete_memory`
 - ## `approve_memory`
 - ## `Categories`
@@ -1497,6 +1508,7 @@
 - ## `Evidence Rules`
 - ### `Minimum Change Review`
 - ## `Caller Routing`
+- ## `Memory Candidate Routing`
 
 ## share/skills/r-doc-standards/SKILL.md
 - # `Documentation Quality Standards`
@@ -1640,9 +1652,3 @@
 - ## `Output`
 - ## `Known Pitfalls`
 - ## `Companion Skills`
-
-## test-results/serve-cockpit-web-e2e-memo-cfc43-isible-rows-and-shown-count/error-context.md
-- # `Instructions`
-- # `Test info`
-- # `Error details`
-- # `Test source`
