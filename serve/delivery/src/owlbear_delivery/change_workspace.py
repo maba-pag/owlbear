@@ -673,6 +673,8 @@ class ChangeWorkspaceManager:
             attempt_id,
             rejected_head,
         )
+        if not worktree.exists():
+            self._git("worktree", "add", str(worktree), coordination.branch)
         self._require_worktree(worktree, coordination.branch, coordination.last_reviewed_commit)
         return self._coordinator.release(change_id, coordination.writer.claim_id)
 
@@ -711,10 +713,18 @@ class ChangeWorkspaceManager:
             self._git("update-ref", attempt_ref, rejected_head, "0" * 40)
         if branch_head != rejected_head:
             return
-        self._require_worktree(coordination.worktree_path, coordination.branch, rejected_head)
-        if self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
-            _workspace_failure("restart requires a clean committed change worktree")
-        self._git("reset", "--hard", coordination.last_reviewed_commit, cwd=coordination.worktree_path)
+        if coordination.worktree_path.exists():
+            self._require_worktree(coordination.worktree_path, coordination.branch, rejected_head)
+            if self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
+                _workspace_failure("restart requires a clean committed change worktree")
+            self._git("reset", "--hard", coordination.last_reviewed_commit, cwd=coordination.worktree_path)
+            return
+        self._git(
+            "update-ref",
+            f"refs/heads/{coordination.branch}",
+            coordination.last_reviewed_commit,
+            rejected_head,
+        )
 
     def prepare_integration_candidate(
         self,

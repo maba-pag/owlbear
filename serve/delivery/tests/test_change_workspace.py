@@ -277,6 +277,41 @@ def _restart_stage(
     return checks[interruption]
 
 
+@pytest.mark.parametrize("interruption", ["branch-reset", "worktree-add"])
+def test_restart_recovers_missing_worktree_at_each_git_interruption(tmp_path: Path, interruption: str) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.create(f"restart-missing-{interruption}")
+    rejected = _commit_file(coordination.worktree_path, "rejected\n", "rejected attempt")
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build")
+    coordinator.acquire(coordination.change_id, writer)
+    _git(repository, "worktree", "remove", str(coordination.worktree_path))
+    original_git = manager._git
+
+    def interrupt_after_git(*arguments: str, **kwargs) -> str:
+        result = original_git(*arguments, **kwargs)
+        checks = {
+            "branch-reset": arguments[:2] == ("update-ref", f"refs/heads/{coordination.branch}"),
+            "worktree-add": arguments[:2] == ("worktree", "add"),
+        }
+        if checks[interruption]:
+            message = "injected"
+            raise RuntimeError(message)
+        return result
+
+    with (
+        patch.object(manager, "_git", side_effect=interrupt_after_git),
+        pytest.raises(RuntimeError, match="injected"),
+    ):
+        manager.restart(coordination.change_id, writer.attempt_id, rejected)
+
+    recovered = manager.restart(coordination.change_id, writer.attempt_id, rejected)
+
+    assert _git(repository, "rev-parse", recovered.branch) == initial
+    assert _git(recovered.worktree_path, "rev-parse", "HEAD") == initial
+    assert recovered.writer is None
+
+
 def test_integration_uses_merge_commit_and_configured_target_cas(tmp_path: Path) -> None:
     repository, initial = _repository(tmp_path, target="release")
     _coordinator, manager = _manager(tmp_path, repository, target="release")
