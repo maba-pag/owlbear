@@ -3661,7 +3661,6 @@ Lint shortcuts — thin wrappers around pre-commit.
 
 - `def _run(args: list[str], *, hint: str = '') -> None`
 - `def lint() -> None`
-- `def lint_all() -> None`
 - `def megalint() -> None`
 - `def eslint_fix() -> None`
 - `def todo_check() -> None`

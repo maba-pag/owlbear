@@ -144,12 +144,14 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "MegaLinter Docker image in pre-commit local hook",
+      "description": "MegaLinter runtime image",
       "managerFilePatterns": [
-        "/^\\.pre-commit-config\\.yaml$/"
+        "/^\\.mega-linter\\.yml$/"
       ],
-      "matchStrings": ["ghcr\\.io/oxsecurity/megalinter-cupcake:v(?<currentValue>[\\d.]+)"],
-      "depNameTemplate": "ghcr.io/oxsecurity/megalinter-cupcake",
+      "matchStrings": [
+        "OWLBEAR_MEGALINTER_IMAGE:\\s*(?<depName>ghcr\\.io/oxsecurity/megalinter-cupcake):v(?<currentValue>[\\d.]+)"
+      ],
+      "depNameTemplate": "{{{depName}}}",
       "datasourceTemplate": "docker"
     }
   ],

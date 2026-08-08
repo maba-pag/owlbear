@@ -19,7 +19,7 @@ build-backend = "hatchling.build"
 packages = ["src/owlbear_cockpit"]
 
 [project.scripts]
-cockpit = "owlbear_cockpit.main:run"
+cockpit = "owlbear_cockpit.main:main"
 
 [tool.uv.sources]
 owlbear-delivery = { workspace = true }

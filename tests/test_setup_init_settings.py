@@ -167,6 +167,43 @@ def test_init_rerun_preserves_user_settings_and_target_records(
     assert second_rerun == first_rerun
 
 
+def test_init_uses_requested_existing_integration_target(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target_dir = tmp_path / "project"
+    target_dir.mkdir()
+    monkeypatch.setattr(init_module, "_branch_exists", lambda _target, branch: branch == "release")
+
+    init_module.init(
+        target_dir,
+        _REPO_ROOT,
+        interactive=False,
+        integration_target="release",
+    )
+
+    config = json.loads((target_dir / ".owlbear/delivery/config.json").read_text(encoding="utf-8"))
+    assert config["integration_target"] == "release"
+
+
+def test_init_interactive_target_defaults_to_checked_out_branch(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target_dir = tmp_path / "project"
+    target_dir.mkdir()
+    monkeypatch.setattr(init_module, "_current_branch", lambda _target: "develop")
+    monkeypatch.setattr(init_module, "_branch_exists", lambda _target, branch: branch == "develop")
+    monkeypatch.setattr("builtins.input", lambda _prompt: "")
+
+    init_module.init(target_dir, _REPO_ROOT, interactive=True)
+
+    config = json.loads((target_dir / ".owlbear/delivery/config.json").read_text(encoding="utf-8"))
+    assert config["integration_target"] == "develop"
+
+
 def test_init_preserves_pre_cutover_store_without_creating_target(
     tmp_path: Path,
     init_module: types.ModuleType,

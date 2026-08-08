@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import argparse
 import contextlib
+import json
 import os
 import sys
+import tempfile
 import threading
 import webbrowser
+from datetime import UTC, datetime
+from http.client import HTTPConnection
 from pathlib import Path
 from typing import Annotated
 
@@ -26,7 +31,7 @@ from owlbear_memory.errors import (
 )
 
 from owlbear_cockpit.deps import get_ideas_path, get_memory_engine
-from owlbear_cockpit.models import HealthModule, IdeasHealth
+from owlbear_cockpit.models import CockpitInstance, HealthModule, IdeasHealth
 from owlbear_cockpit.routes.ideas import router as ideas_router
 from owlbear_cockpit.routes.memory import router as memory_router
 from owlbear_cockpit.routes.target_work import (
@@ -35,14 +40,17 @@ from owlbear_cockpit.routes.target_work import (
 )
 from owlbear_cockpit.routes.target_work import router as target_work_router
 from owlbear_cockpit.target_context import load_target_context
+from owlbear_delivery.storage_io import atomic_write
 
 _DEFAULT_PORT = 8420
 _MAX_PORT = 65535
+_HTTP_OK = 200
 _DIST_DIR = Path(__file__).parent.parent.parent / "dist"
 _HOST = "127.0.0.1"
 _MEMORY_DIR = Path(".owlbear/memory")
 _NO_OPEN_ENV = "COCKPIT_NO_OPEN"
 _PORT_ENV = "COCKPIT_PORT"
+_REGISTRY_ENV = "OWLBEAR_COCKPIT_REGISTRY"
 _TARGET_CUTOVER_REQUEST = Path(".owlbear/target-cutover-request.json")
 
 app = FastAPI(title="OwlBear Cockpit")
@@ -163,9 +171,15 @@ def _ideas_health(ideas_path: Path) -> IdeasHealth:
 
 
 @app.get("/health/live")
-def health_live() -> dict[str, str]:
+def health_live() -> dict[str, int | str | None]:
     """Return liveness without touching workspace storage."""
-    return {"status": "ok"}
+    workspace = getattr(app.state, "workspace_root", None)
+    return {
+        "status": "ok",
+        "pid": os.getpid(),
+        "port": getattr(app.state, "port", None),
+        "workspace": str(workspace) if workspace is not None else None,
+    }
 
 
 @app.get("/health/memory", response_model=HealthModule)
@@ -180,8 +194,8 @@ def ideas_health(ideas_path: _IdeasPath) -> IdeasHealth:
     return _ideas_health(ideas_path)
 
 
-def _resolve_port() -> int:
-    port_str = os.environ.get(_PORT_ENV, str(_DEFAULT_PORT))
+def _resolve_port(override: int | None = None) -> int:
+    port_str = str(override) if override is not None else os.environ.get(_PORT_ENV, str(_DEFAULT_PORT))
     try:
         port = int(port_str)
     except ValueError:
@@ -191,6 +205,88 @@ def _resolve_port() -> int:
         sys.stderr.write(f"Error: COCKPIT_PORT={port} is out of range (1-{_MAX_PORT}).\n")
         sys.exit(1)
     return port
+
+
+def _registry_dir() -> Path:
+    configured = os.environ.get(_REGISTRY_ENV)
+    if configured:
+        return Path(configured).expanduser().resolve()
+    user = str(os.getuid()) if hasattr(os, "getuid") else os.environ.get("USERNAME", "user")
+    return Path(tempfile.gettempdir()) / f"owlbear-cockpit-{user}"
+
+
+def _instance_path(pid: int) -> Path:
+    return _registry_dir() / f"{pid}.json"
+
+
+def _register_instance(instance: CockpitInstance) -> Path:
+    registry = _registry_dir()
+    registry.mkdir(parents=True, exist_ok=True)
+    path = _instance_path(instance.pid)
+    atomic_write(path, instance.model_dump_json(indent=2) + "\n")
+    return path
+
+
+def _process_exists(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _probe_instance(instance: CockpitInstance) -> bool:
+    if not _process_exists(instance.pid):
+        return False
+    connection = HTTPConnection(_HOST, instance.port, timeout=0.5)
+    try:
+        connection.request("GET", "/health/live")
+        response = connection.getresponse()
+        if response.status != _HTTP_OK:
+            return False
+        body = json.loads(response.read())
+    except OSError, json.JSONDecodeError:
+        return False
+    finally:
+        connection.close()
+    return (
+        body.get("status") == "ok"
+        and body.get("pid") == instance.pid
+        and body.get("port") == instance.port
+        and body.get("workspace") == instance.workspace
+    )
+
+
+def _running_instances() -> list[CockpitInstance]:
+    instances: list[CockpitInstance] = []
+    registry = _registry_dir()
+    if not registry.is_dir():
+        return instances
+    for path in sorted(registry.glob("*.json")):
+        try:
+            instance = CockpitInstance.model_validate_json(path.read_bytes())
+        except OSError, ValueError:
+            path.unlink(missing_ok=True)
+            continue
+        if _probe_instance(instance):
+            instances.append(instance)
+        else:
+            path.unlink(missing_ok=True)
+    return instances
+
+
+def list_instances() -> None:
+    """Print verified running Cockpit instances and clean stale records."""
+    instances = _running_instances()
+    if not instances:
+        print("No running Cockpit instances.")  # noqa: T201
+        return
+    print(f"{'PID':>7}  {'PORT':>5}  {'STARTED':<20}  WORKSPACE")  # noqa: T201
+    for instance in instances:
+        started = instance.started_at.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"{instance.pid:>7}  {instance.port:>5}  {started:<20}  {instance.workspace}")  # noqa: T201
 
 
 def _load_target_runtime() -> tuple[Path, object]:
@@ -212,11 +308,11 @@ def _resolve_dist_dir() -> Path:
     return dist_dir
 
 
-def run() -> None:
+def run(*, port_override: int | None = None, no_open: bool = False) -> None:
     """Start the Cockpit server — entry point for `uv run cockpit`."""
     from owlbear_memory.engine import MemoryEngine  # noqa: PLC0415
 
-    port = _resolve_port()
+    port = _resolve_port(port_override)
     workspace_root, target_context = _load_target_runtime()
     dist_dir = _resolve_dist_dir()
 
@@ -225,6 +321,7 @@ def run() -> None:
     app.state.workspace_root = workspace_root
     app.state.target_context = target_context
     app.state.memory_engine = memory_engine
+    app.state.port = port
 
     # --- static file mount and SPA catch-all (inside run() for test isolation) ---
     app.mount("/assets", StaticFiles(directory=dist_dir / "assets"), name="assets")
@@ -248,7 +345,7 @@ def run() -> None:
         return HTMLResponse((dist_dir / "index.html").read_text(encoding="utf-8"))
 
     # --- browser auto-open ---
-    if not os.environ.get(_NO_OPEN_ENV):
+    if not no_open and not os.environ.get(_NO_OPEN_ENV):
 
         def _open_browser() -> None:
             with contextlib.suppress(Exception):
@@ -257,4 +354,29 @@ def run() -> None:
         timer = threading.Timer(0.5, _open_browser)
         timer.start()
 
-    uvicorn.run(app, host=_HOST, port=port)
+    instance = CockpitInstance(
+        pid=os.getpid(),
+        port=port,
+        workspace=str(workspace_root),
+        started_at=datetime.now(UTC),
+    )
+    record = _register_instance(instance)
+    try:
+        uvicorn.run(app, host=_HOST, port=port)
+    finally:
+        record.unlink(missing_ok=True)
+
+
+def main() -> None:
+    """Dispatch Cockpit start and discovery commands."""
+    parser = argparse.ArgumentParser(prog="cockpit")
+    parser.add_argument("command", nargs="?", choices=("list",))
+    parser.add_argument("--port", type=int, metavar="PORT")
+    parser.add_argument("--no-open", action="store_true")
+    args = parser.parse_args()
+    if args.command == "list":
+        if args.port is not None or args.no_open:
+            parser.error("list does not accept start options")
+        list_instances()
+        return
+    run(port_override=args.port, no_open=args.no_open)

@@ -15,6 +15,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import warnings
 from contextlib import suppress
@@ -214,13 +215,72 @@ def _write_seed_file(src: Path, dest: Path, replacements: dict[str, str]) -> Non
     shutil.copy2(src, dest)
 
 
-def _write_delivery_config(target_dir: Path) -> None:
+def _current_branch(target_dir: Path) -> str | None:
+    """Return the checked-out local branch when the target is a Git repository."""
+    result = subprocess.run(
+        ["git", "branch", "--show-current"],  # noqa: S607
+        cwd=target_dir,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    branch = result.stdout.strip()
+    return branch or None
+
+
+def _branch_exists(target_dir: Path, branch: str) -> bool:
+    """Return whether *branch* is a valid local branch in the target repository."""
+    syntax = subprocess.run(  # noqa: S603
+        ["git", "check-ref-format", f"refs/heads/{branch}"],  # noqa: S607
+        cwd=target_dir,
+        check=False,
+        capture_output=True,
+    )
+    exists = subprocess.run(  # noqa: S603
+        ["git", "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"],  # noqa: S607
+        cwd=target_dir,
+        check=False,
+        capture_output=True,
+    )
+    return syntax.returncode == 0 and exists.returncode == 0
+
+
+def _select_integration_target(target_dir: Path, requested: str | None, *, interactive: bool) -> str:
+    """Resolve a fresh project's target from an option, prompt, or stable fallback."""
+    if requested is not None:
+        if not _branch_exists(target_dir, requested):
+            msg = f"Integration target must name an existing local branch: {requested}"
+            raise RuntimeError(msg)
+        return requested
+    if not interactive:
+        return "main"
+    suggested = _current_branch(target_dir) or "main"
+    selected = input(f"Integration target branch [{suggested}]: ").strip() or suggested
+    if not _branch_exists(target_dir, selected):
+        msg = f"Integration target must name an existing local branch: {selected}"
+        raise RuntimeError(msg)
+    return selected
+
+
+def _write_delivery_config(
+    target_dir: Path,
+    integration_target: str | None,
+    *,
+    interactive: bool,
+) -> None:
     """Create the workspace-local Delivery policy once."""
     path = target_dir / _DELIVERY_CONFIG_PATH
     if path.exists():
         return
     path.parent.mkdir(parents=True, exist_ok=True)
-    content = {"schema_version": 1, "integration_target": "main"}
+    content = {
+        "schema_version": 1,
+        "integration_target": _select_integration_target(
+            target_dir,
+            integration_target,
+            interactive=interactive,
+        ),
+    }
     path.write_text(json.dumps(content, indent=2) + "\n", encoding="utf-8")
 
 
@@ -407,6 +467,7 @@ def init(  # noqa: C901
     *,
     replace_hooks: bool = False,
     interactive: bool | None = None,
+    integration_target: str | None = None,
 ) -> None:
     """Initialise an OwlBear workspace in *target_dir*.
 
@@ -421,6 +482,7 @@ def init(  # noqa: C901
         owlbear_dir: Root of the owlbear installation (contains ``seed/``).
         replace_hooks: Overwrite differing existing hook runtime files.
         interactive: Whether hook conflicts may prompt. Defaults to TTY detect.
+        integration_target: Existing local branch used for fresh Delivery configuration.
     """
     seed_dir = owlbear_dir / "seed"
     replacements = _build_replacements(owlbear_dir, target_dir)
@@ -469,7 +531,11 @@ def init(  # noqa: C901
 
         _write_seed_file(src, dest, replacements)
 
-    _write_delivery_config(target_dir)
+    _write_delivery_config(
+        target_dir,
+        integration_target,
+        interactive=interactive_mode,
+    )
     ops_root = target_dir / ".owlbear"
     if not (ops_root / "kanban").exists():
         _activate_fresh_target(target_dir, owlbear_dir)
@@ -488,12 +554,22 @@ if __name__ == "__main__":  # pragma: no cover
         action="store_true",
         help="Overwrite differing existing .owlbear/hooks files instead of skipping or prompting.",
     )
+    parser.add_argument(
+        "--integration-target",
+        metavar="BRANCH",
+        help="Use an existing local branch for fresh Delivery configuration.",
+    )
     args = parser.parse_args()
 
     _target = Path.cwd()
     _owlbear = Path(__file__).resolve().parent.parent
     try:
-        init(_target, _owlbear, replace_hooks=args.replace_hooks)
+        init(
+            _target,
+            _owlbear,
+            replace_hooks=args.replace_hooks,
+            integration_target=args.integration_target,
+        )
     except RuntimeError as exc:
         raise SystemExit(str(exc)) from exc
     print(f"OwlBear workspace initialised in '{_target.name}'.")

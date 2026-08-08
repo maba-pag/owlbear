@@ -1,7 +1,8 @@
 ---
 # MegaLinter configuration for OwlBear
 # https://megalinter.io/configuration/
-# Version: v9.6.0 (cupcake flavor — general-purpose, includes Python + JS/TS + CSS + HTML)
+# Runtime image pin. Renovate updates this declaration.
+OWLBEAR_MEGALINTER_IMAGE: ghcr.io/oxsecurity/megalinter-cupcake:v9.6.0
 
 # Explicit linter list — only what applies to this project
 ENABLE_LINTERS:
@@ -22,8 +23,17 @@ ENABLE_LINTERS:
   - ACTION_ACTIONLINT
   - EDITORCONFIG_EDITORCONFIG_CHECKER
   # Security / Repository
-  - REPOSITORY_DEVSKIM
   - REPOSITORY_TRIVY
+
+# Apply deterministic fixes by default. Syntax-only validators and security
+# scanners remain check-only. The CLI's --unsafe-fixes mode adds Ruff unsafe
+# fixes and Stylelint lax parsing.
+APPLY_FIXES:
+  - PYTHON_RUFF
+  - PYTHON_RUFF_FORMAT
+  - TYPESCRIPT_ES
+  - CSS_STYLELINT
+  - MARKDOWN_MARKDOWNLINT
 
 # Reporters
 GITHUB_STATUS_REPORTER: true
@@ -95,9 +105,6 @@ JSON_JSONLINT_FILTER_REGEX_EXCLUDE: '(\.vscode/)'
 # false-positives on docstring content (2-space RST lists inside 4-space code).
 # Tabs-vs-spaces (indent_style) is still enforced.
 EDITORCONFIG_EDITORCONFIG_CHECKER_ARGUMENTS: "-f github-actions --disable-indent-size"
-
-# DevSkim — security anti-pattern detection (all languages)
-REPOSITORY_DEVSKIM_DISABLE_ERRORS: false
 
 # Trivy — vulnerability + misconfiguration scanning
 REPOSITORY_TRIVY_ARGUMENTS: "--scanners vuln,misconfig --skip-dirs .venv,.owlbear/scratch"
