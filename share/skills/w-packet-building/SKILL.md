@@ -51,6 +51,14 @@ not authority.
 
 Do not edit Design, task definitions, Delivery runtime, package internals, coordination records, or
 unlisted surfaces. A missing task premise belongs to Planning or Design, not local implementation.
+Builder may choose internal implementation details only when their alternatives are not observable
+at the supplied task boundary.
+
+If context contains a request or a request may be needed, load `h-decision-requests` before consuming
+or constructing it. Choose among authority-equivalent implementation alternatives; use a request
+for an expressly stakeholder-selectable choice or external action; use `return` for missing,
+contradictory, or observably ambiguous earlier authority; use `retry` for local failure and
+`dispatch_failure` for context, custody, or tool failure.
 
 ## Step 2 - Implement And Commit
 
@@ -135,6 +143,7 @@ request:
   kind: decision | action
   outcome_id: <context outcome ID>
   summary: <one bounded user request>
+  options: [{option_id: <stable option identity>, label: <bounded choice label>}]
 ```
 
 Use `block` only when user-owned input is required. Never substitute `unblock_evidence` for the

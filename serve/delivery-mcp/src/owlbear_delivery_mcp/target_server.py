@@ -44,6 +44,8 @@ from owlbear_delivery_mcp.target_models import (
     DeliveryResultPublication,
     EmptyParams,
     EmptyRequest,
+    IntegrationRepairAuthorityAttentionParams,
+    IntegrationRepairAuthorityAttentionRequest,
     IntegrationRepairParams,
     IntegrationRepairRequest,
     PublishDeliveryPlanParams,
@@ -92,6 +94,7 @@ DELIVERY_OPERATION_NAMES = (
     "show_integration_attention",
     "integrate_ready_change",
     "admit_reviewed_integration_repair",
+    "publish_integration_repair_authority_attention",
     "list_completed_changes",
     "search_completed_changes",
     "show_completed_change",
@@ -303,6 +306,21 @@ class TargetMCPAdapter:
                 params.attempt_id,
                 params.claim_id,
                 params.repair,
+            ),
+        )
+
+    async def publish_integration_repair_authority_attention(
+        self,
+        request: IntegrationRepairAuthorityAttentionRequest,
+    ) -> dict[str, object]:
+        """Publish one claim-bound non-claimable repair authority attention."""
+        params = self._validate(IntegrationRepairAuthorityAttentionParams, request)
+        return self._call(
+            params,
+            lambda: self._application.publish_integration_repair_authority_attention(
+                params.attempt_id,
+                params.claim_id,
+                params.attention,
             ),
         )
 

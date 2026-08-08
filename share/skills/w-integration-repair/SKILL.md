@@ -10,6 +10,9 @@ Repair one orchestrator-supplied `DeliveryIntegrationRepairLaunchPackage` whose 
 Integration attention reports a merge conflict. This is change-level claimed work, not a Build task
 or user-selected recovery path.
 
+Repair may choose only conflict-path reconciliation that preserves both reviewed change behavior and
+current target behavior. It cannot choose new product, architecture, scope, or public semantics.
+
 ## Step 0 - Bind Current Attention And Coordination
 
 Call `show_integration_repair_context` with the launch's exact `change_id`, `claim.attempt_id`, and
@@ -68,6 +71,11 @@ that typed repair. Treat the returned repair as the only successful result. Neve
 `integrate_ready_change`, retry Integration, move the target, publish a Build result, or select a
 Delivery transition from this workflow.
 
+If current evidence proves no conflict-only reconciliation can preserve both authorities, make no
+repair commit. Restore any edits owned by this attempt, require the branch and clean worktree at the
+exact launch source head, and return the `authority_attention` result below. Missing context,
+custody, or proof remains `dispatch_failure`; a merely difficult repair is not authority attention.
+
 ## Output
 
 On admission, return exactly:
@@ -78,6 +86,20 @@ change_id: <launch.change_id>
 attempt_id: <launch.claim.attempt_id>
 claim_id: <launch.claim.claim_id>
 attention_id: <launch.attention.attention_id>
+```
+
+When repair exceeds admitted authority, return exactly:
+
+```yaml
+kind: authority_attention
+change_id: <launch.change_id>
+attempt_id: <launch.claim.attempt_id>
+claim_id: <launch.claim.claim_id>
+attention:
+  attention_id: <launch.attention.attention_id>
+  change_id: <launch.change_id>
+  reason: <non-empty authority conflict>
+  locators: [<owning authority or conflict locator>]
 ```
 
 If fresh context, custody, review, or admission cannot be established, return exactly:

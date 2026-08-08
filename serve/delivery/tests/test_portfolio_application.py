@@ -32,6 +32,7 @@ from owlbear_delivery import (
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationCandidate,
     DeliveryIntegrationRepair,
+    DeliveryIntegrationRepairAuthorityAttention,
     DeliveryIntegrationRepairReview,
     DeliveryOutcome,
     DeliveryPlanScope,
@@ -1390,6 +1391,79 @@ def test_reviewed_integration_repair_advances_boundary_and_retries_publication(t
 
     assert retried.completion is not None
     assert _git(repository, "show", f"{retried.completion.target_commit}:product.txt") == "target side"
+
+
+def test_repair_authority_attention_releases_claim_and_is_not_reacquired(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+        candidate_proof=lambda _candidate, _commit: (),
+    )
+    _target_before, reviewed = _review_product_change(coordinator, "change-a", "change side\n")
+    repository = tmp_path / "repository"
+    (repository / "product.txt").write_text("target side\n", encoding="utf-8")
+    _git(repository, "add", "product.txt")
+    _git(repository, "commit", "-m", "concurrent target")
+    failed = application.integrate_ready_change("change-a")
+    acquired = application.acquire_frontier_work()
+    launch = acquired.repair_launch_packages[0]
+
+    attention = application.publish_integration_repair_authority_attention(
+        launch.claim.attempt_id,
+        launch.claim.claim_id,
+        DeliveryIntegrationRepairAuthorityAttention(
+            attention_id=launch.attention.attention_id,
+            change_id="change-a",
+            reason="The admitted authorities require incompatible public behavior.",
+            locators=("product.txt",),
+        ),
+    )
+
+    assert failed.attention is not None
+    assert attention.code == DeliveryIntegrationAttentionCode.REPAIR_AUTHORITY
+    assert attention.change_head == reviewed
+    assert runtimes["change-a"].integration_repair_claim() is None
+    assert coordinator.show("change-a").writer is None
+    assert (
+        CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes()).change_ids == ()
+    )
+    refreshed = application.acquire_frontier_work()
+    assert refreshed.repair_launch_packages == ()
+    assert refreshed.integration_ready_change_ids == ()
+    assert refreshed.integration_attention[0].code == DeliveryIntegrationAttentionCode.REPAIR_AUTHORITY
+
+
+def test_repair_authority_attention_preserves_claim_when_worktree_is_dirty(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+        candidate_proof=lambda _candidate, _commit: (),
+    )
+    _review_product_change(coordinator, "change-a", "change side\n")
+    repository = tmp_path / "repository"
+    (repository / "product.txt").write_text("target side\n", encoding="utf-8")
+    _git(repository, "add", "product.txt")
+    _git(repository, "commit", "-m", "concurrent target")
+    application.integrate_ready_change("change-a")
+    launch = application.acquire_frontier_work().repair_launch_packages[0]
+    (launch.worktree_path / "owned-edit.txt").write_text("uncommitted\n", encoding="utf-8")
+    request = DeliveryIntegrationRepairAuthorityAttention(
+        attention_id=launch.attention.attention_id,
+        change_id="change-a",
+        reason="The admitted authorities conflict.",
+        locators=("product.txt",),
+    )
+
+    with pytest.raises(RuntimeError, match="worktree is not clean"):
+        application.publish_integration_repair_authority_attention(
+            launch.claim.attempt_id,
+            launch.claim.claim_id,
+            request,
+        )
+
+    assert runtimes["change-a"].integration_repair_claim() == launch.claim
+    assert coordinator.show("change-a").writer == launch.writer
+    assert runtimes["change-a"].integration_attention() == launch.attention
 
 
 @pytest.mark.parametrize(

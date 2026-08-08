@@ -119,6 +119,15 @@ def _repair() -> dict[str, object]:
     }
 
 
+def _repair_authority_attention() -> dict[str, object]:
+    return {
+        "attention_id": DIGEST,
+        "change_id": CHANGE,
+        "reason": "Reviewed and target behavior cannot both be preserved.",
+        "locators": ["product.txt"],
+    }
+
+
 def _requests() -> dict[str, dict[str, object]]:
     change = {"change_id": CHANGE}
     claim = {**change, "outcome_id": "OUT-001", "attempt_id": "attempt", "claim_id": "claim"}
@@ -175,6 +184,10 @@ def _requests() -> dict[str, dict[str, object]]:
         "show_integration_attention": change,
         "integrate_ready_change": change,
         "admit_reviewed_integration_repair": {**repair_claim, "repair": _repair()},
+        "publish_integration_repair_authority_attention": {
+            **repair_claim,
+            "attention": _repair_authority_attention(),
+        },
         "list_completed_changes": {"limit": 25},
         "search_completed_changes": {"query": "delivery", "limit": 25},
         "show_completed_change": {**change, "completion_id": DIGEST},

@@ -37,6 +37,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryIntegrationCandidate,
     DeliveryIntegrationCompletion,
     DeliveryIntegrationRepair,
+    DeliveryIntegrationRepairAuthorityAttention,
     DeliveryPlanCandidate,
     DeliveryRecoveryAttention,
     DeliveryRequest,
@@ -1065,6 +1066,31 @@ class PortfolioApplication:
                 (*workspace_replacements, runtime_replacement),
             )
             return repair
+
+    def publish_integration_repair_authority_attention(
+        self,
+        attempt_id: str,
+        claim_id: str,
+        request: DeliveryIntegrationRepairAuthorityAttention,
+    ) -> DeliveryIntegrationAttention:
+        """End one repair claim that cannot preserve its admitted authority."""
+        with self._coordinator.integration_lock():
+            runtime = self._runtime(request.change_id)
+            runtime.require_integration_repair_claim(attempt_id, claim_id)
+            attention, runtime_replacement = runtime.integration_repair_authority_replacement(
+                request,
+                attempt_id,
+                claim_id,
+            )
+            workspace_replacements = self._workspace_manager.integration_repair_authority_replacements(
+                request,
+                claim_id,
+            )
+            self._coordinator.admit_integration_repair(
+                request,
+                (*workspace_replacements, runtime_replacement),
+            )
+            return attention
 
     def _capture_ready_integration(
         self,

@@ -11,6 +11,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
     DeliveryIntegrationRepair,
+    DeliveryIntegrationRepairAuthorityAttention,
     DeliveryOutputReference,
     DeliveryPlanCandidate,
     DeliveryResultCandidate,
@@ -163,6 +164,12 @@ class IntegrationRepairParams(RepairClaimContextParams):
     repair: DeliveryIntegrationRepair
 
 
+class IntegrationRepairAuthorityAttentionParams(RepairClaimContextParams):
+    """Validate one claim-bound Integration repair authority escalation."""
+
+    attention: DeliveryIntegrationRepairAuthorityAttention
+
+
 class CompletedPageParams(_TargetProtocolModel):
     """Validate one bounded completed-history page request."""
 
@@ -210,6 +217,10 @@ type EmptyRequest = Annotated[EmptyParams, BeforeValidator(partial(_parse_json_m
 type IntegrationRepairRequest = Annotated[
     IntegrationRepairParams,
     BeforeValidator(partial(_parse_json_model, IntegrationRepairParams)),
+]
+type IntegrationRepairAuthorityAttentionRequest = Annotated[
+    IntegrationRepairAuthorityAttentionParams,
+    BeforeValidator(partial(_parse_json_model, IntegrationRepairAuthorityAttentionParams)),
 ]
 type PublishDeliveryPlanRequest = Annotated[
     PublishDeliveryPlanParams,
@@ -259,6 +270,8 @@ __all__ = [
     "DeliveryStartupDiagnostic",
     "EmptyParams",
     "EmptyRequest",
+    "IntegrationRepairAuthorityAttentionParams",
+    "IntegrationRepairAuthorityAttentionRequest",
     "IntegrationRepairParams",
     "IntegrationRepairRequest",
     "PublishDeliveryPlanParams",

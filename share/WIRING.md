@@ -49,7 +49,7 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch and terminal mutation; publishes advisory-reviewed task chains and returns worker-owned transitions |
 | planner-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
 | orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, memory-curator, Explore | Reports and acquires portfolio work, dispatches task and repair claims, recovers exact failed claims, forwards task transitions, and integrates ready changes; no repository write tools |
-| builder | GPT-5.6 Terra | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; task Build returns a lifecycle transition; claimed Integration repair returns an admission or exact dispatch failure; `SessionStart`: repository context; `PostToolUse`: lint changed files |
+| builder | GPT-5.6 Terra | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; task Build returns a lifecycle transition; claimed Integration repair returns admission, authority attention, or exact dispatch failure; `SessionStart`: repository context; `PostToolUse`: lint changed files |
 | build-reviewer | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or Integration-repair review with read-only Git; `PreToolUse`: deny writes except scratch and terminal mutation |
 | test-curator | GPT-5.6 Terra | `w-test-curation` | None | `PreToolUse`: deny source writes |
 | memory-curator | GPT-5.6 Terra | `w-mem-curation` | None | None |
@@ -83,7 +83,7 @@ The named caller owns each on-demand condition and timing.
 
 | Caller or trigger | Conditional skill | Load condition |
 |-------------------|-------------------|----------------|
-| Planner or Builder context | `h-decision-requests` | One bounded user choice or action requires an embedded `DeliveryRequest` in `BlockDelivery` |
+| Planner or Builder context | `h-decision-requests` | Fresh context contains a request, or routing identifies an authority-compatible stakeholder choice or external action |
 | Builder via repair launch | `w-integration-repair` | Orchestrator dispatches one acquired `DeliveryIntegrationRepairLaunchPackage` |
 | native design/planning | `w-research` | Local evidence cannot resolve a material claim and the owning workflow permits research |
 | native design/planning | `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | Source ownership, architecture, packet boundaries, or acceptance drafting requires the specialist boundary |

@@ -14,7 +14,7 @@ and Integration. Orchestrator performs only the mechanical dispatch loop around 
 
 If target tools are deferred, load them once with `tool_search` using:
 
-`OwlBear Delivery target portfolio list_work_items acquire_frontier_work transition_delivery recover_claim recover_integration_repair_claim integrate_ready_change`
+`OwlBear Delivery target portfolio list_work_items acquire_frontier_work transition_delivery recover_claim recover_integration_repair_claim publish_integration_repair_authority_attention integrate_ready_change`
 
 Call `list_work_items` only for bounded portfolio reporting. Call `acquire_frontier_work` once for the
 current cycle. Its `DeliveryAcquisitionResult` is the sole source of task and repair launch order,
@@ -27,8 +27,10 @@ for capacity, infer readiness, create identities, or reserve writer custody.
 Process `repair_launch_packages` in returned order before `launch_packages`. Dispatch exactly
 `launch.policy.worker_agent` with only the serialized `DeliveryIntegrationRepairLaunchPackage`.
 Require either `integration_repair_admitted` bound to the launch's change, attempt, claim, and
-attention identities, or a claim-bound `dispatch_failure`. On success, perform no transition and
-let the next acquisition cycle own Integration retry. On malformed output, dispatch failure, or
+attention identities, `authority_attention` carrying those same outer identities and an attention
+payload bound to the launch attention and change, or a claim-bound `dispatch_failure`. Forward valid
+authority attention unchanged to `publish_integration_repair_authority_attention`. On admission,
+perform no transition and let the next acquisition cycle own Integration retry. On malformed output, dispatch failure, or
 agent failure, call `recover_integration_repair_claim` with the launch's exact change, attempt, and
 claim IDs and report its result unchanged.
 

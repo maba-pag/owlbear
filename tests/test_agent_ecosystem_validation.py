@@ -84,6 +84,7 @@ _TARGET_ROLE_TOOLS = {
         "transition_delivery",
         "recover_claim",
         "recover_integration_repair_claim",
+        "publish_integration_repair_authority_attention",
         "integrate_ready_change",
     },
 }
@@ -434,6 +435,22 @@ def test_planning_quality_reaches_author_and_independent_reviewer() -> None:
     assert "acceptance_observations" in workflow
     assert "proof_boundaries" in workflow
     assert "`h-ac-quality` - boundary-valid proof quality" in challenger
+
+
+def test_decision_request_guidance_reaches_primary_workers() -> None:
+    planning = (_SKILLS_ROOT / "w-frontier-planning" / "SKILL.md").read_text(encoding="utf-8")
+    building = (_SKILLS_ROOT / "w-packet-building" / "SKILL.md").read_text(encoding="utf-8")
+    handbook = (_SKILLS_ROOT / "h-decision-requests" / "SKILL.md").read_text(encoding="utf-8")
+
+    for workflow in (planning, building):
+        assert "If context contains a request or a request may be needed" in workflow
+        assert "load `h-decision-requests`" in workflow
+        assert "authority-equivalent" in workflow
+    assert "Planner may choose decomposition" in planning
+    assert "Builder may choose internal implementation details" in building
+    assert "options: [{option_id:" in building
+    assert "one concrete recommended proposal is valid" in handbook
+    assert "Never invent a meaningless second option" in handbook
 
 
 def test_target_delivery_workflows_enforce_review_and_remove_obsolete_controls() -> None:

@@ -5,7 +5,7 @@ argument-hint: "Orchestrate Delivery work"
 user-invocable: true
 disable-model-invocation: true
 model: GPT-5.6 Terra (copilot)
-tools: [vscode/toolSearch, read/readFile, agent, owlbear-delivery/list_work_items, owlbear-delivery/acquire_frontier_work, owlbear-delivery/transition_delivery, owlbear-delivery/recover_claim, owlbear-delivery/recover_integration_repair_claim, owlbear-delivery/integrate_ready_change, owlbear-memory/recall_memory, owlbear-memory/save_memory]
+tools: [vscode/toolSearch, read/readFile, agent, owlbear-delivery/list_work_items, owlbear-delivery/acquire_frontier_work, owlbear-delivery/transition_delivery, owlbear-delivery/recover_claim, owlbear-delivery/recover_integration_repair_claim, owlbear-delivery/publish_integration_repair_authority_attention, owlbear-delivery/integrate_ready_change, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 agents:
   - planner
   - builder
@@ -36,9 +36,8 @@ only acquisition-provided Integration IDs. You never plan, implement, review, or
 - **Dispatch only bounded roles.** Send task and Integration repair launches to
   `launch.policy.worker_agent`; recover unsupported Assembly launches and claim-bound dispatch
   failures with the matching exact recovery operation.
-- **Forward worker authority unchanged.** Pass a launch-bound `DeliveryTransition`
-  byte-for-structure to `transition_delivery`; route a launch-bound `dispatch_failure` only to
-  `recover_claim`.
+- **Forward worker authority unchanged.** Pass a launch-bound transition or repair authority
+  attention to its exact Delivery operation; route claim-bound dispatch failures only to recovery.
 - **Integrate only named ready changes.** Call `integrate_ready_change` solely for IDs returned in
   `integration_ready_change_ids`.
 - **Refresh until quiescent.** Stop on an empty acquisition result or a fail-closed condition that

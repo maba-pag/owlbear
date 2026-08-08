@@ -274,6 +274,7 @@ class DeliveryIntegrationAttentionCode(StrEnum):
     COMPLETED_HISTORY_MUTATED = "completed-history-mutated"
     REVIEWED_BOUNDARY_MISMATCH = "reviewed-boundary-mismatch"
     MERGE_CONFLICT = "merge-conflict"
+    REPAIR_AUTHORITY = "repair-authority"
     CANDIDATE_PROOF_FAILED = "candidate-proof-failed"
     TARGET_CAS_LOST = "target-cas-lost"
 
@@ -358,6 +359,15 @@ class DeliveryIntegrationRepair(_DeliveryModel):
             message = "Integration repair review must be independent"
             raise ValueError(message)
         return self
+
+
+class DeliveryIntegrationRepairAuthorityAttention(_DeliveryModel):
+    """Claim-bound evidence that conflict repair exceeds admitted authority."""
+
+    attention_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+    locators: tuple[str, ...] = Field(min_length=1)
 
 
 class DeliveryActiveClaim(_DeliveryModel):
@@ -885,6 +895,48 @@ class DeliveryRuntime:
             _conflict("Integration repair requires an Integration-ready runtime")
         replacement = frontier.model_copy(update={"integration_attention": None, "integration_repair_claim": None})
         return ReplacementTransactionParticipant(
+            self._target_root,
+            self._frontier_path.relative_to(self._target_root),
+            previous,
+            _model_content(replacement),
+        )
+
+    def integration_repair_authority_replacement(
+        self,
+        request: DeliveryIntegrationRepairAuthorityAttention,
+        attempt_id: str,
+        claim_id: str,
+    ) -> tuple[DeliveryIntegrationAttention, ReplacementTransactionParticipant]:
+        """Replace one claimed merge conflict with non-claimable authority attention."""
+        frontier, previous = self._read()
+        attention = frontier.integration_attention
+        claim = frontier.integration_repair_claim
+        if (
+            attention is None
+            or attention.attention_id != request.attention_id
+            or attention.change_id != request.change_id
+            or integration_attention_disposition(attention.code)
+            != DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED
+        ):
+            _conflict("repair authority attention does not match current repair attention")
+        if claim is None or claim.attempt_id != attempt_id or claim.claim_id != claim_id:
+            _conflict("repair authority attention does not match the active repair claim")
+        authority_attention = DeliveryIntegrationAttention(
+            attention_id=hashlib.sha256(_model_content(request)).hexdigest(),
+            code=DeliveryIntegrationAttentionCode.REPAIR_AUTHORITY,
+            change_id=attention.change_id,
+            change_head=attention.change_head,
+            target_head=attention.target_head,
+            integration_target=attention.integration_target,
+            diagnostics=(request.reason, *request.locators),
+            retry_condition=(
+                "Revise admitted authority or move the change to an earlier stage before retrying Integration."
+            ),
+        )
+        replacement = frontier.model_copy(
+            update={"integration_attention": authority_attention, "integration_repair_claim": None}
+        )
+        return authority_attention, ReplacementTransactionParticipant(
             self._target_root,
             self._frontier_path.relative_to(self._target_root),
             previous,

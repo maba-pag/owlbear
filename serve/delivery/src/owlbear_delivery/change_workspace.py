@@ -14,6 +14,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationCandidate,
     DeliveryIntegrationRepair,
+    DeliveryIntegrationRepairAuthorityAttention,
 )
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.identities import ChangeId
@@ -311,7 +312,7 @@ class PortfolioCoordinator:
 
     def admit_integration_repair(
         self,
-        repair: DeliveryIntegrationRepair,
+        repair: DeliveryIntegrationRepair | DeliveryIntegrationRepairAuthorityAttention,
         participants: tuple[ReplacementTransactionParticipant, ...],
     ) -> None:
         """Atomically advance reviewed workspace and runtime attention boundaries."""
@@ -472,6 +473,22 @@ class ChangeWorkspaceManager:
         self._require_unchanged_completed_history(repair.prior_target_head, repaired_tree)
         updated = coordination.model_copy(update={"last_reviewed_commit": repair.reviewed_repair_commit})
         return self._coordinator.integration_repair_replacements(coordination, updated, claim_id)
+
+    def integration_repair_authority_replacements(
+        self,
+        request: DeliveryIntegrationRepairAuthorityAttention,
+        claim_id: str,
+    ) -> tuple[ReplacementTransactionParticipant, ReplacementTransactionParticipant]:
+        """Require a restored reviewed source and prepare exact repair-writer release."""
+        coordination = self._coordinator.show(request.change_id)
+        if (
+            coordination.writer is None
+            or coordination.writer.claim_id != claim_id
+            or coordination.writer.kind != "repair"
+        ):
+            _coordination_conflict("repair authority attention requires exact repair writer custody")
+        self.reviewed_source_head(request.change_id)
+        return self._coordinator.integration_repair_replacements(coordination, coordination, claim_id)
 
     def _require_integration_repair_identities(
         self,

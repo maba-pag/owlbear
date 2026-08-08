@@ -66,7 +66,7 @@ For an acquired Build launch, return exactly one result defined by `w-packet-bui
 schema-valid `DeliveryTransition` (`advance`, `retry`, `return`, or `block`) or a claim-bound
 `dispatch_failure` when fresh Build context or custody cannot be established. Preserve supplied
 identity and do not apply it. For an acquired Integration repair, return exactly the claim-bound
-admission or dispatch-failure result defined by `w-integration-repair`; never return or apply a
+admission, authority-attention, or dispatch-failure result defined by `w-integration-repair`; never return or apply a
 Delivery transition.
 
 </output_format>
