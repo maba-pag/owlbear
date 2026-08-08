@@ -181,7 +181,7 @@ def test_design_return_is_user_owned_and_not_projected_as_planning() -> None:
         WorkItemActivityState.IDLE,
         WorkItemActionKind.NONE,
     )
-    assert card.progress.label == "Returned to Design — re-admission required"
+    assert card.progress.label == "Returned to Design"
     detail = projector.show("OUT-001")
     assert detail.projection.attention == WorkItemAttention.USER
     assert detail.return_context == return_context
@@ -346,7 +346,7 @@ def test_target_movement_supersedes_attention_and_offers_retry() -> None:
     assert card.progress.label == "Awaiting retry against current target"
     assert card.action.kind == WorkItemActionKind.RETRY_INTEGRATION
     assert (card.next_actor, card.next_step) == (
-        WorkItemNextActor.AGENT_OR_YOU,
+        WorkItemNextActor.AGENT,
         "Retry against the current target",
     )
     assert detail.integration is not None
@@ -355,6 +355,39 @@ def test_target_movement_supersedes_attention_and_offers_retry() -> None:
     assert detail.integration.retry_condition == (
         "Retry Integration against the current target head; the previous verdict is stale."
     )
+
+
+def test_retryable_integration_attention_is_ready_for_orchestration() -> None:
+    attention = DeliveryIntegrationAttention(
+        attention_id="a" * 64,
+        code=DeliveryIntegrationAttentionCode.TARGET_CAS_LOST,
+        change_id="portfolio-change",
+        change_head="1" * 40,
+        target_head="2" * 40,
+        integration_target="dev",
+        diagnostics=("Integration target changed during publication.",),
+        retry_condition="Retry against the current target.",
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (
+                _binding("OUT-001", DeliveryStage.COMPLETED),
+                _binding("OUT-002", DeliveryStage.COMPLETED),
+            ),
+            attention=attention,
+            target_head="2" * 40,
+        )
+    )
+
+    card = projector.group_view().items[-1]
+    detail = projector.show_view("integration")
+
+    assert card.activity.state == WorkItemActivityState.READY
+    assert card.progress.label == "Awaiting retry against current target"
+    assert card.next_actor == WorkItemNextActor.AGENT
+    assert card.action.kind == WorkItemActionKind.RETRY_INTEGRATION
+    assert detail.integration is not None
+    assert detail.integration.explanation == "Integration is ready to retry against the current target."
 
 
 def test_repair_activity_and_conflict_paths_use_retained_evidence() -> None:

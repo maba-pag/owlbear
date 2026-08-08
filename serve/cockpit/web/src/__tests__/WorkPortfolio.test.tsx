@@ -252,14 +252,14 @@ beforeEach(() => {
   installFetch()
 })
 
-it('presents Change-grouped Outcomes by work, pipeline, and current state', async () => {
+it('presents Change-grouped Outcomes by work, progress, and status', async () => {
   renderPage()
 
   const table = await screen.findByTestId('work-portfolio-table')
   expect(table).toHaveTextContent('Portfolio redesign')
   expect(table).toHaveTextContent('Work')
-  expect(table).toHaveTextContent('Pipeline')
-  expect(table).toHaveTextContent('Current state')
+  expect(table).toHaveTextContent('Progress')
+  expect(table).toHaveTextContent('Status')
   expect(table).toHaveTextContent('Builder working')
   expect(table).toHaveTextContent('Decision required')
   expect(table).toHaveTextContent('Answer request')
@@ -428,7 +428,7 @@ it('routes Integration repair through Orchestration while keeping raw diagnostic
     next_actor: 'repair',
     next_step: 'Run a reviewed Integration repair',
     activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
-    progress: { kind: 'integration', label: 'Attempt failed', done: null, total: null },
+    progress: { kind: 'integration', label: 'Integration repair required', done: null, total: null },
     action: { kind: 'none', label: null, command: null },
   })
   currentDetail = detail({
@@ -472,7 +472,7 @@ it('separates current Integration retry guidance from stale attempt evidence', a
     stage: null,
     needs: 'none',
     needs_headline: 'Integration target moved',
-    next_actor: 'agent-or-you',
+    next_actor: 'agent',
     next_step: 'Retry against the current target',
     activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
     progress: { kind: 'integration', label: 'Awaiting retry against current target', done: null, total: null },
@@ -500,15 +500,55 @@ it('separates current Integration retry guidance from stale attempt evidence', a
 
   const inspector = await screen.findByTestId('work-item-detail')
   expect(inspector).toHaveTextContent('Retry Integration')
-  expect(inspector).not.toHaveTextContent('Agent or you')
-  expect(inspector).not.toHaveTextContent('Awaiting retry against current target')
+  expect(inspector).toHaveTextContent('Waiting for Orchestration')
+  expect(inspector).toHaveTextContent('ProgressAwaiting retry against current target')
   const staleEvidence = screen.getByText('Previous attempt (stale)').closest('details')
   expect(staleEvidence).not.toHaveAttribute('open')
   expect(staleEvidence).toHaveTextContent('serve/delivery/work_items.py')
   expect(inspector).not.toHaveTextContent('Next: Retry Integration')
 })
 
-it('does not restate a terminal Outcome as a no-action instruction', async () => {
+it('states operator-required Integration status once', async () => {
+  const integrationCard = card({
+    item_key: 'integration',
+    work_item_id: 'change-alpha',
+    scope: 'change-integration',
+    title: 'Integration',
+    stage: null,
+    needs: 'you',
+    needs_headline: 'Revision pending',
+    next_actor: 'you',
+    next_step: 'Revision pending',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'integration', label: 'Attempt failed', done: null, total: null },
+    action: { kind: 'none', label: null, command: null },
+  })
+  currentDetail = detail({
+    card: integrationCard,
+    promise: 'Publish the reviewed Change.',
+    acceptance: [],
+    commitments: [],
+    tasks: [],
+    integration: {
+      code: 'revision-pending',
+      disposition: 'operator-required',
+      headline: 'Revision pending',
+      explanation: 'Integration retained evidence that requires your review.',
+      conflicted_paths: [],
+      diagnostics: [],
+      retry_condition: 'Publish a corrected revision.',
+      superseded: false,
+      repair_active: false,
+    },
+  })
+  renderPage('/delivery/change-alpha/integration')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(within(inspector).getAllByText('Revision pending')).toHaveLength(1)
+  expect(within(inspector).getByRole('region', { name: 'Integration requires your attention' })).toBeInTheDocument()
+})
+
+it('uses the Done status tag without leaking the internal Stage field', async () => {
   currentDetail = detail({
     card: card({
       stage: 'completed',
@@ -521,19 +561,21 @@ it('does not restate a terminal Outcome as a no-action instruction', async () =>
   renderPage('/delivery/change-alpha/outcome%3AOUT-001')
 
   const inspector = await screen.findByTestId('work-item-detail')
-  expect(inspector).toHaveTextContent('StageComplete')
-  expect(inspector).not.toHaveTextContent('No action')
+  expect(inspector).toHaveTextContent('Done')
+  expect(inspector).not.toHaveTextContent('Completed')
+  expect(inspector).not.toHaveTextContent('Stage')
+  expect(inspector).toHaveTextContent('Progress1 of 1 Delivery tasks reviewed')
   expect(inspector).not.toHaveTextContent('Complete — no action needed')
 })
 
-it('keeps shared retry ownership visible in the portfolio row', async () => {
+it('presents Integration retry as an optional manual alternative to Orchestration', async () => {
   const integrationCard = card({
     item_key: 'integration',
     work_item_id: 'change-alpha',
     scope: 'change-integration',
     title: 'Integration',
     stage: null,
-    next_actor: 'agent-or-you',
+    next_actor: 'agent',
     next_step: 'Retry against the current target',
     activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
     progress: { kind: 'integration', label: 'Awaiting retry against current target', done: null, total: null },
@@ -543,8 +585,10 @@ it('keeps shared retry ownership visible in the portfolio row', async () => {
   renderPage()
 
   const table = await screen.findByTestId('work-portfolio-table')
-  expect(table).toHaveTextContent('Ready for Orchestration or your action')
-  expect(table).toHaveTextContent('Retry Integration')
+  expect(table).toHaveTextContent('Change: Portfolio redesign')
+  expect(table).toHaveTextContent('Waiting for Orchestration')
+  expect(table).toHaveTextContent('Manual option: Retry Integration')
+  expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('0need you')
 })
 
 it('keeps cached routed detail visible when a background refresh fails', async () => {
@@ -576,7 +620,7 @@ it('explains returned Design progress and labels evidence without raw enum text'
     card: card({
       stage: 'design',
       activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
-      progress: { kind: 'design-return', label: 'Returned to Design — re-admission required', done: null, total: null },
+      progress: { kind: 'design-return', label: 'Returned to Design', done: null, total: null },
     }),
     return_context: {
       target: 'design',
@@ -589,7 +633,7 @@ it('explains returned Design progress and labels evidence without raw enum text'
   renderPage('/delivery/change-alpha/outcome%3AOUT-001')
 
   const inspector = await screen.findByTestId('work-item-detail')
-  expect(inspector).toHaveTextContent('Returned to Design — re-admission required')
+  expect(inspector).toHaveTextContent('Returned to Design')
   expect(inspector).toHaveTextContent('Next: Resume /design change-alpha.')
   expect(inspector).toHaveTextContent('Evidence: request:REQ-001')
   expect(inspector).toHaveTextContent('Source boundary: commit:abc123')

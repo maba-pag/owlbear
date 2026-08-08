@@ -18,6 +18,7 @@ import {
   type WorkItemStage,
   type DeliveryWorkerRole,
 } from '../api/workItems'
+import { PROGRESS_STAGE_LABELS, workItemStatusLabel } from './workItemPresentation'
 
 type FieldValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }
 
@@ -39,14 +40,6 @@ interface WorkItemDetailProps {
   onRetryIntegration: () => Promise<void>
 }
 
-const STAGE_LABELS: Record<WorkItemStage, string> = {
-  design: 'Design',
-  planning: 'Planning',
-  implementation: 'Implementation',
-  assembly: 'Assembly',
-  completed: 'Complete',
-}
-
 const WORKER_ROLE_LABELS: Record<DeliveryWorkerRole, string> = {
   planner: 'Planner',
   builder: 'Builder',
@@ -65,22 +58,6 @@ const TASK_STATUS_LABELS: Record<WorkItemDetailResponse['item']['tasks'][number]
   reviewed: 'Reviewed',
 }
 
-const NEXT_ACTOR_LABELS: Record<WorkItemDetailResponse['item']['card']['next_actor'], string> = {
-  you: 'You',
-  agent: 'Agent',
-  'agent-or-you': 'Agent or you',
-  dependency: 'Dependency',
-  repair: 'Repair workflow',
-  none: 'No action',
-}
-
-function activityLabel(detail: WorkItemDetailResponse): string | null {
-  const activity = detail.item.card.activity
-  if (activity.state === 'working' && activity.worker_role) return `${WORKER_ROLE_LABELS[activity.worker_role]} working`
-  if (activity.state === 'repairing') return 'Integration repairer working'
-  return null
-}
-
 function DetailHeader({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
   const { card } = detail.item
   const scopeLabel = card.scope === 'outcome' ? `Outcome ${card.work_item_id}` : 'Change Integration'
@@ -91,8 +68,7 @@ function DetailHeader({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
         <PHeading id="work-detail-heading" tag="h2" size="lg">{card.scope === 'outcome' ? card.title : 'Integration'}</PHeading>
       </div>
       <div className="flex flex-wrap gap-static-xs">
-        {card.stage ? <PTag compact>{STAGE_LABELS[card.stage]}</PTag> : null}
-        {card.needs !== 'none' ? <PTag compact>{card.needs === 'you' ? 'Needs you' : card.needs === 'dependency' ? 'Waiting on dependency' : 'Repair required'}</PTag> : null}
+        <PTag compact>{workItemStatusLabel(card)}</PTag>
       </div>
     </div>
   )
@@ -249,7 +225,7 @@ function ExceptionalStateSection({ detail }: Pick<WorkItemDetailProps, 'detail'>
       <div className="mt-static-sm grid gap-static-md text-sm">
         {returned ? (
           <AttentionItem
-            label={`Returned to ${STAGE_LABELS[returned.target]}`}
+            label={`Returned to ${PROGRESS_STAGE_LABELS[returned.target]}`}
             reason={returned.reason}
             retry={returned.target === 'design' ? `Resume /design ${detail.item.card.change_id}.` : undefined}
             evidence={returned.locators.join(', ')}
@@ -271,7 +247,7 @@ function CourseChangesSection({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
       <ol className="mt-static-sm grid list-decimal gap-static-md pl-static-lg text-sm">
         {moves.map((move) => (
           <li key={move.move_id}>
-            <strong>{move.outcome_id} moved back to {STAGE_LABELS[move.destination]}</strong>
+            <strong>{move.outcome_id} moved back to {PROGRESS_STAGE_LABELS[move.destination]}</strong>
             <p className="mt-static-xs">{move.reason}</p>
             <p className="mt-static-xs text-contrast-medium">Reset: {move.invalidated_outcome_ids.join(', ')}</p>
           </li>
@@ -319,13 +295,13 @@ function BackwardMoveSection({ detail, pendingAction, onPreviewBackward, onMoveB
       <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Administrative actions</summary>
       <div className="mt-static-md">
       <div className="mt-static-sm flex flex-wrap items-end gap-static-sm">
-        <PSelect compact className="w-48" label="Earlier stage" name="backward-stage" value={target} disabled={pendingAction !== null} onChange={(event) => { setTarget(fieldValue(event as FieldValueEvent) as WorkItemStage | ''); setPreview(null) }}><PSelectOption value="">Select a stage</PSelectOption>{available.map((stage) => <PSelectOption key={stage} value={stage}>{STAGE_LABELS[stage]}</PSelectOption>)}</PSelect>
+        <PSelect compact className="w-48" label="Earlier stage" name="backward-stage" value={target} disabled={pendingAction !== null} onChange={(event) => { setTarget(fieldValue(event as FieldValueEvent) as WorkItemStage | ''); setPreview(null) }}><PSelectOption value="">Select a stage</PSelectOption>{available.map((stage) => <PSelectOption key={stage} value={stage}>{PROGRESS_STAGE_LABELS[stage]}</PSelectOption>)}</PSelect>
         <PInputText compact className="min-w-48 flex-1" name="backward-reason" label="Reason" value={reason} disabled={pendingAction !== null} onChange={(event) => setReason(fieldValue(event as FieldValueEvent))} onInput={(event) => setReason(fieldValue(event as FieldValueEvent))} />
         <PButton className="w-fit" type="button" compact variant="secondary" disabled={!canMove} onClick={() => void review()}>{pendingAction === 'preview' ? 'Preparing preview...' : 'Review backward move'}</PButton>
       </div>
       {confirmOpen ? (
         <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm backward move' }}>
-          <div className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary"><PHeading tag="h2" size="lg">Move to {target ? STAGE_LABELS[target] : ''}</PHeading><p className="text-sm">The following Outcomes will be reset:</p><ul className="grid list-disc gap-static-xs pl-static-lg text-sm">{preview?.invalidated_outcome_ids.map((outcomeId) => <li key={outcomeId}>{outcomeId}</li>)}</ul><p className="text-sm text-contrast-medium">Reason: {reason.trim()}</p><div className="flex flex-wrap justify-end gap-static-xs"><PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton><PButton type="button" disabled={pendingAction !== null} onClick={() => void move()}>{pendingAction === 'move' ? 'Moving...' : 'Confirm backward move'}</PButton></div></div>
+          <div className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary"><PHeading tag="h2" size="lg">Move to {target ? PROGRESS_STAGE_LABELS[target] : ''}</PHeading><p className="text-sm">The following Outcomes will be reset:</p><ul className="grid list-disc gap-static-xs pl-static-lg text-sm">{preview?.invalidated_outcome_ids.map((outcomeId) => <li key={outcomeId}>{outcomeId}</li>)}</ul><p className="text-sm text-contrast-medium">Reason: {reason.trim()}</p><div className="flex flex-wrap justify-end gap-static-xs"><PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton><PButton type="button" disabled={pendingAction !== null} onClick={() => void move()}>{pendingAction === 'move' ? 'Moving...' : 'Confirm backward move'}</PButton></div></div>
         </PModal>
       ) : null}
       </div>
@@ -364,7 +340,7 @@ function SemanticDetail({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
         <details>
           <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">References</summary>
           <ol className="mt-static-sm grid list-decimal gap-static-md pl-static-lg text-sm text-primary">
-            {item.dependencies.map((dependency) => <li key={dependency.outcome_id}><strong className="block text-xs">{dependency.outcome_id}</strong>{dependency.title} · {STAGE_LABELS[dependency.stage]}</li>)}
+            {item.dependencies.map((dependency) => <li key={dependency.outcome_id}><strong className="block text-xs">{dependency.outcome_id}</strong>{dependency.title} · {PROGRESS_STAGE_LABELS[dependency.stage]}</li>)}
             {item.commitments.map((commitment) => <li key={commitment.commitment_id}><strong className="block text-xs">{commitment.commitment_id}</strong>{commitment.statement}</li>)}
           </ol>
         </details>
@@ -393,7 +369,7 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
   const operatorRequired = integration.disposition === 'operator-required'
   return (
     <section className={operatorRequired ? 'border-l-4 border-warning bg-surface p-static-md' : 'border-l border-contrast-low bg-surface p-static-md'} aria-labelledby="work-integration-heading">
-      <PHeading id="work-integration-heading" tag="h3" size="md">{integration.repair_active ? 'Repair in progress' : integration.headline}</PHeading>
+      <PHeading id="work-integration-heading" tag="h3" size="md">{integration.repair_active ? 'Integration repair' : operatorRequired ? 'Integration requires your attention' : integration.headline}</PHeading>
       <p className="mt-static-xs text-sm leading-relaxed">{integration.repair_active ? 'A reviewed Integration repair is currently in progress.' : integration.explanation}</p>
       {!integration.superseded && integration.conflicted_paths.length > 0 ? (
         <div className="mt-static-sm">
@@ -434,24 +410,16 @@ function ActionFeedback({ error, result }: { error: Error | null; result: string
 }
 
 export default function WorkItemDetail(props: WorkItemDetailProps) {
-  const activity = activityLabel(props.detail)
   const { card } = props.detail.item
-  const showOutcomeNext = card.scope === 'outcome' && card.stage !== 'completed'
-  const showSummary = showOutcomeNext || card.stage !== null || activity !== null
   return (
     <div className="min-w-0" aria-labelledby="work-detail-heading" data-testid="work-item-detail">
       <div className="grid gap-static-lg">
         <div>
           <DetailHeader detail={props.detail} />
           <p className="mt-static-md max-w-[72ch] text-base leading-relaxed">{props.detail.item.promise}</p>
-          {showSummary ? (
-            <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs py-static-xs text-sm">
-              {showOutcomeNext ? <><dt className="text-contrast-medium">Next</dt><dd><strong>{NEXT_ACTOR_LABELS[card.next_actor]}</strong><span className="ml-static-xs text-contrast-medium">{card.next_step}</span></dd></> : null}
-              {card.stage ? <><dt className="text-contrast-medium">Stage</dt><dd>{STAGE_LABELS[card.stage]}</dd></> : null}
-              {showOutcomeNext ? <><dt className="text-contrast-medium">Progress</dt><dd>{card.progress.label}</dd></> : null}
-              {activity ? <><dt className="text-contrast-medium">Current work</dt><dd>{activity}</dd></> : null}
-            </dl>
-          ) : null}
+          <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md py-static-xs text-sm">
+            <dt className="text-contrast-medium">Progress</dt><dd>{card.progress.label}</dd>
+          </dl>
         </div>
         <ActionFeedback error={props.actionError} result={props.actionResult} />
         <BlockSection {...props} />

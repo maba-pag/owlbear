@@ -66,7 +66,6 @@ class WorkItemNextActor(StrEnum):
 
     YOU = "you"
     AGENT = "agent"
-    AGENT_OR_YOU = "agent-or-you"
     DEPENDENCY = "dependency"
     REPAIR = "repair"
     NONE = "none"
@@ -465,7 +464,7 @@ class WorkItemProjector:
             return WorkItemNextActor.AGENT, "Work in progress"
         if binding.stage == DeliveryStage.COMPLETED:
             return WorkItemNextActor.NONE, "Complete — no action needed"
-        return WorkItemNextActor.AGENT, "Ready for an agent"
+        return WorkItemNextActor.AGENT, "Ready for Orchestration"
 
     @staticmethod
     def _outcome_activity(binding: OutcomeAuthorityBinding, needs: WorkItemNeed) -> WorkItemActivity:
@@ -499,7 +498,7 @@ class WorkItemProjector:
         if binding.stage == DeliveryStage.DESIGN:
             return WorkItemProgress(
                 kind=WorkItemProgressKind.DESIGN_RETURN,
-                label="Returned to Design — re-admission required",
+                label="Returned to Design",
             )
         if binding.stage == DeliveryStage.PLANNING:
             return WorkItemProgress(kind=WorkItemProgressKind.PLAN, label="Task plan not published")
@@ -521,8 +520,7 @@ class WorkItemProjector:
         attention = self._snapshot.frontier.integration_attention
         repair_active = self._snapshot.frontier.integration_repair_claim is not None
         if repair_active:
-            needs = WorkItemNeed.NONE
-            headline = None
+            needs, headline = WorkItemNeed.NONE, None
             next_actor = WorkItemNextActor.AGENT
             next_step = "Integration repair in progress"
             activity = WorkItemActivity(
@@ -533,17 +531,15 @@ class WorkItemProjector:
             action = WorkItemAction()
             progress = "Repair in progress"
         elif self._snapshot.integration_attention_superseded:
-            needs = WorkItemNeed.NONE
-            headline = "Integration target moved"
-            next_actor = WorkItemNextActor.AGENT_OR_YOU
+            needs, headline = WorkItemNeed.NONE, "Integration target moved"
+            next_actor = WorkItemNextActor.AGENT
             next_step = "Retry against the current target"
             activity = WorkItemActivity(state=WorkItemActivityState.READY)
             action = WorkItemAction(kind=WorkItemActionKind.RETRY_INTEGRATION, label="Retry Integration")
             progress = "Awaiting retry against current target"
         elif attention is None:
-            needs = WorkItemNeed.NONE
-            headline = None
-            next_actor = WorkItemNextActor.AGENT_OR_YOU
+            needs, headline = WorkItemNeed.NONE, None
+            next_actor = WorkItemNextActor.AGENT
             next_step = "Integrate the reviewed Change"
             activity = WorkItemActivity(state=WorkItemActivityState.READY)
             action = WorkItemAction(kind=WorkItemActionKind.INTEGRATE_CHANGE, label="Integrate Change")
@@ -551,25 +547,26 @@ class WorkItemProjector:
         else:
             disposition = integration_attention_disposition(attention.code)
             if disposition == DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED:
-                needs = WorkItemNeed.REPAIR
-                headline = "Merge conflict"
+                needs, headline = WorkItemNeed.REPAIR, "Merge conflict"
                 next_actor = WorkItemNextActor.REPAIR
                 next_step = "Run a reviewed Integration repair"
+                activity = WorkItemActivity(state=WorkItemActivityState.IDLE)
                 action = WorkItemAction()
+                progress = "Integration repair required"
             elif disposition == DeliveryIntegrationAttentionDisposition.RETRYABLE:
-                needs = WorkItemNeed.NONE
-                headline = "Integration retry available"
-                next_actor = WorkItemNextActor.AGENT_OR_YOU
-                next_step = "Retry Integration"
+                needs, headline = WorkItemNeed.NONE, "Integration retry available"
+                next_actor = WorkItemNextActor.AGENT
+                next_step = "Retry against the current target"
+                activity = WorkItemActivity(state=WorkItemActivityState.READY)
                 action = WorkItemAction(kind=WorkItemActionKind.RETRY_INTEGRATION, label="Retry Integration")
+                progress = "Awaiting retry against current target"
             else:
-                needs = WorkItemNeed.YOU
-                headline = _integration_headline(attention.code)
+                needs, headline = WorkItemNeed.YOU, _integration_headline(attention.code)
                 next_actor = WorkItemNextActor.YOU
                 next_step = headline
+                activity = WorkItemActivity(state=WorkItemActivityState.IDLE)
                 action = WorkItemAction()
-            activity = WorkItemActivity(state=WorkItemActivityState.IDLE)
-            progress = "Attempt failed"
+                progress = "Attempt failed"
         return WorkItemCardView(
             item_key="integration",
             work_item_id=self._snapshot.contract.change_id,
@@ -680,19 +677,22 @@ class WorkItemProjector:
             )
         superseded = self._snapshot.integration_attention_superseded
         paths = integration_conflict_paths(attention.diagnostics)
+        disposition = integration_attention_disposition(attention.code)
         headline = "Integration target moved" if superseded else _integration_headline(attention.code)
         explanation = (
             "The Integration target moved since this attempt; retry against the current target."
             if superseded
             else (
                 f"{len(paths)} conflicting files require a reviewed repair."
-                if attention.code == DeliveryIntegrationAttentionCode.MERGE_CONFLICT and paths
-                else "Integration retained typed operator evidence."
+                if disposition == DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED and paths
+                else "Integration is ready to retry against the current target."
+                if disposition == DeliveryIntegrationAttentionDisposition.RETRYABLE
+                else "Integration retained evidence that requires your review."
             )
         )
         return WorkItemIntegrationView(
             code=attention.code,
-            disposition=integration_attention_disposition(attention.code),
+            disposition=disposition,
             headline=headline,
             explanation=explanation,
             conflicted_paths=paths,

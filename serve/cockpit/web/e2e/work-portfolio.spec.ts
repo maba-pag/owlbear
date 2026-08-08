@@ -10,7 +10,7 @@ async function inspect(page: Page, title: string, detailTitle = title): Promise<
   const trigger = row.getByRole('link', { name: new RegExp(`^${title}`) })
   await trigger.click()
   const detail = page.getByTestId('work-item-detail')
-  await expect(detail.getByRole('heading', { name: detailTitle })).toBeVisible()
+  await expect(detail.getByRole('heading', { name: detailTitle, exact: true })).toBeVisible()
   await expect(page.getByRole('dialog', { name: 'Work Item detail' })).toBeVisible()
   await expect(page.getByTestId('work-portfolio-table')).toBeVisible()
   await expect(page).toHaveURL(/\/delivery\/[^/]+\/[^/]+$/)
@@ -75,7 +75,7 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(table).toBeVisible()
     await expect(await visibleRows(page)).toHaveCount(8)
     await expect(table).toContainText('Work portfolio E2E')
-    for (const column of ['Work', 'Pipeline', 'Current state']) {
+    for (const column of ['Work', 'Progress', 'Status']) {
       await expect(table.getByRole('columnheader', { name: column })).toHaveCount(2)
       await expect(table.getByRole('columnheader', { name: column }).first()).toBeVisible()
     }
@@ -97,7 +97,10 @@ test.describe('assembled Delivery portfolio', () => {
 
     const integrationRow = (await visibleRows(page)).filter({ hasText: 'Integration' })
     await expect(integrationRow).toContainText('Integration')
-    await expect(integrationRow).toContainText('Change')
+    await expect(integrationRow).toContainText('Change: Repair release')
+    await expect(integrationRow).toContainText('Repair in progress')
+    await expect(integrationRow).toContainText('Integration repairer working')
+    await expect(integrationRow).not.toContainText('Manual option:')
 
     await page.getByTestId('work-filters-toggle').click()
     await selectValue(page.locator('p-select[name="work-needs-filter"]'), 'dependency')
@@ -115,7 +118,7 @@ test.describe('assembled Delivery portfolio', () => {
     await page.mouse.click(progressBox!.x + progressBox!.width / 2, progressBox!.y + progressBox!.height / 2)
     const returnedDetail = page.getByTestId('work-item-detail')
     await expect(returnedDetail.getByRole('heading', { name: 'Plan release notes' })).toBeVisible()
-    await expect(returnedDetail).toContainText('Returned to Design — re-admission required')
+    await expect(returnedDetail).toContainText('Returned to Design')
     await expect(returnedDetail).toContainText('Evidence: request:release-notes-authority')
     await expect(returnedDetail).toContainText('Source boundary: design:release-notes-v2')
     await returnToPortfolio(page, returnedTrigger)
@@ -211,7 +214,7 @@ test.describe('assembled Delivery portfolio', () => {
     const rows = await visibleRows(page)
     await expect(rows).toHaveCount(8)
     const integrationRow = rows.filter({ hasText: 'Integration' })
-    for (const field of ['Pipeline', 'Current state']) {
+    for (const field of ['Progress', 'Status']) {
       await expect(integrationRow.getByText(field, { exact: true })).toBeVisible()
     }
     await expect(integrationRow).toHaveAttribute('aria-label', 'Change Integration for Repair release')

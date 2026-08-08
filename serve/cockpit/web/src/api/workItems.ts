@@ -1,7 +1,7 @@
 export type WorkItemStage = 'design' | 'planning' | 'implementation' | 'assembly' | 'completed'
 export type WorkItemScope = 'outcome' | 'change-integration'
 export type WorkItemNeed = 'you' | 'dependency' | 'repair' | 'none'
-export type WorkItemNextActor = 'you' | 'agent' | 'agent-or-you' | 'dependency' | 'repair' | 'none'
+export type WorkItemNextActor = 'you' | 'agent' | 'dependency' | 'repair' | 'none'
 export type WorkItemActivityState = 'idle' | 'ready' | 'working' | 'repairing'
 export type WorkItemActionKind =
   | 'none'

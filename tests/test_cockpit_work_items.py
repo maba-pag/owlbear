@@ -48,7 +48,7 @@ from owlbear_delivery.work_items import (
 
 def _card(change_id: str, outcome_id: str, needs: WorkItemNeed) -> WorkItemCardView:
     next_actor = WorkItemNextActor.YOU if needs == WorkItemNeed.YOU else WorkItemNextActor.AGENT
-    next_step = "Your attention is required" if needs == WorkItemNeed.YOU else "Ready for an agent"
+    next_step = "Your attention is required" if needs == WorkItemNeed.YOU else "Ready for Orchestration"
     return WorkItemCardView(
         item_key=f"outcome:{outcome_id}",
         work_item_id=outcome_id,
@@ -109,7 +109,7 @@ class _DeliveryApplicationFake:
                         title="Integration",
                         stage=None,
                         needs=WorkItemNeed.NONE,
-                        next_actor=WorkItemNextActor.AGENT_OR_YOU,
+                        next_actor=WorkItemNextActor.AGENT,
                         next_step="Integrate the reviewed Change",
                         activity=WorkItemActivity(state=WorkItemActivityState.IDLE),
                         progress=WorkItemProgress(
@@ -165,7 +165,7 @@ class _DeliveryApplicationFake:
                 title="Integration",
                 stage=None,
                 needs=WorkItemNeed.REPAIR if self.integration_attention else WorkItemNeed.NONE,
-                next_actor=WorkItemNextActor.REPAIR if self.integration_attention else WorkItemNextActor.AGENT_OR_YOU,
+                next_actor=WorkItemNextActor.REPAIR if self.integration_attention else WorkItemNextActor.AGENT,
                 next_step="Run a reviewed Integration repair"
                 if self.integration_attention
                 else "Integrate the reviewed Change",
