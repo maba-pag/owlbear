@@ -59,6 +59,7 @@ function ActionLink({ item, onSelect, subdued = false }: { item: WorkItemCardVie
     <PLinkPure
       href={path}
       color={subdued ? 'contrast-medium' : 'primary'}
+      size="xs"
       className="relative z-[1]"
       onClick={(event) => {
         event.preventDefault()
