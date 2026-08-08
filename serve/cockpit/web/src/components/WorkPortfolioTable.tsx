@@ -18,7 +18,7 @@ type GroupTableProps = Pick<WorkPortfolioTableProps, 'selected' | 'onSelect'> & 
 function attentionBorder(item: WorkItemCardView): string {
   if (item.needs === 'you') return 'border-l-4 border-l-error'
   if (item.needs === 'repair' || item.activity.state === 'repairing') return 'border-l-4 border-l-warning'
-  return 'border-l border-l-contrast-low'
+  return 'border-l-4 border-l-contrast-low'
 }
 
 function workItemPath(item: WorkItemCardView): string {
@@ -40,7 +40,7 @@ function ItemLink({
       to={workItemPath(item)}
       data-work-item-primary-trigger
       data-work-item-identity={`${item.change_id}:${item.item_key}`}
-      className="block min-w-0 py-1 font-semibold text-primary underline-offset-4 after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+      className="block min-w-0 font-semibold text-primary underline-offset-4 after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
       aria-current={selected ? 'location' : undefined}
       onClick={(event) => onSelect(identity, event.currentTarget)}
     >
@@ -56,7 +56,7 @@ function ActionLink({ item, onSelect, subdued = false }: { item: WorkItemCardVie
     <Link
       to={workItemPath(item)}
       className={[
-        'relative z-[1] inline-flex min-h-8 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+        'relative z-[1] inline-flex min-h-8 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus lg:min-h-0',
         subdued ? 'font-normal text-contrast-medium' : 'font-semibold text-primary',
       ].join(' ')}
       onClick={(event) => onSelect(identity, event.currentTarget)}
@@ -86,7 +86,7 @@ function CurrentState({ item, onSelect }: { item: WorkItemCardView; onSelect: Wo
     <span>
       <span className={urgent ? 'block font-semibold text-error' : 'block font-medium text-primary'}>{state}</span>
       {item.activity.task_id ? <span className="mt-0.5 block text-xs text-contrast-medium">Task {item.activity.task_id}</span> : null}
-      {item.action.kind !== 'none' ? <span className={manualOption ? 'mt-static-xs block text-xs text-contrast-medium' : 'mt-static-xs block'}>{manualOption ? 'Manual option: ' : null}<ActionLink item={item} onSelect={onSelect} subdued={manualOption} /></span> : null}
+      {item.action.kind !== 'none' ? <span className={manualOption ? 'mt-0.5 block text-xs text-contrast-medium' : 'mt-0.5 block'}>{manualOption ? 'Manual option: ' : null}<ActionLink item={item} onSelect={onSelect} subdued={manualOption} /></span> : null}
     </span>
   )
 }
@@ -118,12 +118,12 @@ function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
                 className={['relative align-top', isSelected ? 'bg-frosted-soft' : 'bg-surface hover:bg-frosted-soft'].join(' ')}
                 data-work-item={workItemIdentity(item)}
               >
-                <td className={`rounded-l-sm border-y border-contrast-low px-static-sm py-static-xs ${attentionBorder(item)}`}>
+                <td className={`rounded-l-lg border-y border-contrast-low px-static-sm py-static-sm ${attentionBorder(item)}`}>
                   <ItemLink item={item} selected={isSelected} onSelect={onSelect} />
                   <span className="block text-xs text-contrast-medium">Outcome: <code>{item.work_item_id}</code></span>
                 </td>
                 <td className="border-y border-contrast-low px-static-sm py-static-sm"><ProgressState item={item} /></td>
-                <td className="rounded-r-sm border-y border-r border-contrast-low px-static-sm py-static-sm"><CurrentState item={item} onSelect={onSelect} /></td>
+                <td className="rounded-r-lg border-y border-r border-contrast-low px-static-sm py-static-sm"><CurrentState item={item} onSelect={onSelect} /></td>
               </tr>
             )
           })}
@@ -142,7 +142,7 @@ function CompactRows({ group, selected, onSelect }: GroupTableProps) {
         return (
           <article
             key={workItemIdentity(item)}
-            className={['relative mb-1 grid gap-static-sm rounded-sm border-y border-r border-contrast-low p-static-sm', attentionBorder(item), isSelected ? 'bg-frosted-soft' : 'bg-surface'].join(' ')}
+            className={['relative mb-1 grid gap-static-sm rounded-lg border-y border-r border-contrast-low p-static-sm', attentionBorder(item), isSelected ? 'bg-frosted-soft' : 'bg-surface'].join(' ')}
             data-work-item={workItemIdentity(item)}
             aria-label={`${item.title} work item`}
           >
@@ -166,7 +166,7 @@ function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
   return (
     <section
       className={[
-        'relative mt-1 grid gap-static-sm rounded-sm border-y border-r border-contrast-low px-static-sm py-static-md lg:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] lg:items-start lg:gap-0 lg:px-0 lg:py-0',
+        'relative mt-1 grid gap-static-sm rounded-lg border-y border-r border-contrast-low px-static-sm py-static-md lg:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] lg:items-start lg:gap-0 lg:px-0 lg:py-0',
         attentionBorder(item),
         isSelected ? 'bg-frosted-soft' : 'bg-surface hover:bg-frosted-soft',
       ].join(' ')}
