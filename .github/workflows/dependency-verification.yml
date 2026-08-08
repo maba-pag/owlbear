@@ -1,5 +1,5 @@
 ---
-name: Dependency maintenance
+name: Dependency verification
 
 "on":
   pull_request:
@@ -9,7 +9,7 @@ name: Dependency maintenance
       - synchronize
 
 concurrency:
-  group: dependency-maintenance-${{ github.event.pull_request.number }}
+  group: dependency-verification-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
@@ -505,7 +505,7 @@ jobs:
           fi
 
           {
-            echo "## Dependency maintenance gate"
+            echo "## Dependency verification gate"
             echo
             echo "| Proof | Applicable | Result |"
             echo "|---|---|---|"

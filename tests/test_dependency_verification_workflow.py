@@ -47,7 +47,7 @@ def test_verification_is_read_only_and_writeback_owns_write_permission() -> None
         "contents": "write",
         "pull-requests": "read",
     }
-    assert writeback["on"] == {"workflow_run": {"workflows": ["Dependency maintenance"], "types": ["completed"]}}
+    assert writeback["on"] == {"workflow_run": {"workflows": ["Dependency verification"], "types": ["completed"]}}
     assert not PDS_PATH.exists()
 
 

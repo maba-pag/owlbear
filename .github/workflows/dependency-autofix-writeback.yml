@@ -4,7 +4,7 @@ name: Dependency autofix writeback
 "on":
   workflow_run:
     workflows:
-      - Dependency maintenance
+      - Dependency verification
     types:
       - completed
 
