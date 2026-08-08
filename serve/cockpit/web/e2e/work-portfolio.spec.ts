@@ -86,7 +86,9 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(table).not.toContainText('Reviewed')
 
     const summary = page.getByLabel('Delivery portfolio status')
-    await expect(summary).toContainText('2current Changes')
+    await expect(summary).toContainText('3current Changes')
+    await expect(summary).toContainText('2in Design')
+    await expect(summary).toContainText('1in Delivery')
     await expect(summary).toContainText('1work item active')
     await expect(summary).toContainText('2work items need you')
 
