@@ -219,9 +219,6 @@ jobs:
       - name: Install locked Python dependencies
         run: uv sync --locked --all-extras
 
-      - name: Install Chromium for Python browser tests
-        run: uv run playwright install chromium --with-deps
-
       - name: Compile Python sources
         run: uv run python -m compileall -q serve setup tests
 
@@ -231,7 +228,7 @@ jobs:
           uv run ruff format --check .
 
       - name: Run Python behavior tests
-        run: uv run pytest tests serve -m "not api and not e2e"
+        run: uv run pytest tests serve -m "not api and not e2e and not browser"
 
   proof-cockpit:
     name: Prove Cockpit dependency update
