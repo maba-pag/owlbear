@@ -29,12 +29,18 @@ function Guidance({ guidance }: { guidance: PortfolioGuidance }) {
 }
 
 export function PortfolioHeaderSummary({ operating }: { operating: PortfolioOperatingView }) {
+  const designCount = operating.draft_design_change_ids.length + operating.design_required_change_ids.length
+  const deliveryCount = Math.max(0, operating.unfinished_change_count - operating.design_required_change_ids.length)
+  const currentChangeCount = operating.unfinished_change_count + operating.draft_design_change_ids.length
+
   return (
     <>
       <WorkspaceHeaderMetric
-        value={operating.unfinished_change_count}
-        label={operating.unfinished_change_count === 1 ? 'current Change' : 'current Changes'}
+        value={currentChangeCount}
+        label={currentChangeCount === 1 ? 'current Change' : 'current Changes'}
       />
+      {designCount > 0 ? <WorkspaceHeaderMetric value={designCount} label="in Design" /> : null}
+      {deliveryCount > 0 ? <WorkspaceHeaderMetric value={deliveryCount} label="in Delivery" /> : null}
       {operating.claimed.length > 0 ? (
         <WorkspaceHeaderMetric
           value={operating.claimed.length}
@@ -52,6 +58,12 @@ export function PortfolioHeaderSummary({ operating }: { operating: PortfolioOper
           value={operating.interventions.length}
           label={operating.interventions.length === 1 ? 'work item needs you' : 'work items need you'}
           tone="error"
+        />
+      ) : null}
+      {operating.dependency_waits.length > 0 ? (
+        <WorkspaceHeaderMetric
+          value={operating.dependency_waits.length}
+          label={operating.dependency_waits.length === 1 ? 'work item waiting' : 'work items waiting'}
         />
       ) : null}
     </>

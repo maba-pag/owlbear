@@ -4,10 +4,12 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import type {
   ChangeGroupView,
   CompletedChangeRecord,
+  PortfolioOperatingView,
   WorkItemCardView,
   WorkItemDetailResponse,
   WorkItemPortfolioResponse,
 } from '../api/workItems'
+import { PortfolioHeaderSummary } from '../components/PortfolioOperatingSummary'
 import WorkPortfolioPage from '../pages/WorkPortfolioPage'
 
 function card(overrides: Partial<WorkItemCardView> = {}): WorkItemCardView {
@@ -260,6 +262,34 @@ beforeEach(() => {
   installFetch()
 })
 
+it('summarizes all current Change phases and nonzero operating states', () => {
+  const outcome = { change_id: 'delivery-change', item_key: 'outcome:OUT-001', scope: 'outcome' as const }
+  const integration = { change_id: 'integration-change', item_key: 'integration', scope: 'integration' as const }
+  const operating: PortfolioOperatingView = {
+    unfinished_change_count: 3,
+    completed_change_count: 8,
+    draft_design_change_ids: ['draft-change'],
+    design_required_change_ids: ['design-reentry'],
+    claimed: [outcome],
+    queued_for_orchestration: [integration],
+    interventions: [outcome],
+    dependency_waits: [integration],
+    guidance: [],
+  }
+
+  render(<PortfolioHeaderSummary operating={operating} />)
+
+  expect(screen.getAllByTestId('workspace-header-metric').map((metric) => metric.textContent)).toEqual([
+    '4current Changes',
+    '2in Design',
+    '2in Delivery',
+    '1work item active',
+    '1work item queued',
+    '1work item needs you',
+    '1work item waiting',
+  ])
+})
+
 it('presents Change-grouped Outcomes by work, progress, and status', async () => {
   renderPage()
 
@@ -303,7 +333,10 @@ it('shows unadmitted Design work on the board and opens its verified sources', a
   expect(within(designWork).getByRole('button', { name: 'Copy command /design design-draft' })).toBeInTheDocument()
   expect(within(designWork).getAllByRole('term').map((term) => term.textContent)).toEqual(['Work', 'Progress', 'Status'])
   expect(within(designWork).getAllByRole('definition')).toHaveLength(3)
-  expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('1current Change')
+  const status = screen.getByLabelText('Delivery portfolio status')
+  expect(status).toHaveTextContent('2current Changes')
+  expect(status).toHaveTextContent('1in Design')
+  expect(status).toHaveTextContent('1in Delivery')
 
   const detailView = await screen.findByTestId('design-work-detail')
   expect(detailView).toHaveTextContent('Shape a coherent operator workflow.')
