@@ -16,6 +16,9 @@
     "dependencies",
     "renovate"
   ],
+  "gitIgnoredAuthors": [
+    "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+  ],
   "rangeStrategy": "update-lockfile",
   "vulnerabilityAlerts": {
     "enabled": true,
@@ -87,9 +90,7 @@
         "@porsche-design-system/components-js",
         "@porsche-design-system/components-react"
       ],
-      "labels": [
-        "dependencies",
-        "renovate",
+      "addLabels": [
         "cockpit",
         "pds"
       ],

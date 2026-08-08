@@ -1,0 +1,239 @@
+---
+name: Dependency verification
+
+"on":
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+      - unlabeled
+      - ready_for_review
+  repository_dispatch:
+    types:
+      - dependency-autofix-updated
+
+concurrency:
+  group: dependency-verification-${{ github.event.pull_request.number || github.event.client_payload.prNumber }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: >-
+      github.event_name == 'repository_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'dependencies') ||
+      contains(github.event.pull_request.labels.*.name, 'renovate')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.client_payload.baseSha }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref || github.event.client_payload.headRef }}
+      HEAD_REPOSITORY: >-
+        ${{ github.event.pull_request.head.repo.full_name || github.event.client_payload.headRepository }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.client_payload.headSha }}
+      PR_NUMBER: ${{ github.event.pull_request.number || github.event.client_payload.prNumber }}
+      PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+
+    steps:
+      - name: Resolve verification mode
+        id: context
+        env:
+          DISPATCH_MODE: ${{ github.event.client_payload.mode }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "repository_dispatch" ]; then
+            mode="$DISPATCH_MODE"
+          else
+            safe="$(jq 'index("autofix") != null' <<< "$PR_LABELS")"
+            unsafe="$(jq 'index("unsafe-autofix") != null' <<< "$PR_LABELS")"
+            if [ "$safe" = true ] && [ "$unsafe" = true ]; then
+              echo "autofix and unsafe-autofix cannot be combined." >&2
+              exit 1
+            fi
+            mode=none
+            [ "$safe" = true ] && mode=safe
+            [ "$unsafe" = true ] && mode=unsafe
+          fi
+
+          case "$mode" in
+            none|safe|unsafe) ;;
+            *) echo "Invalid dependency verification mode: $mode" >&2; exit 1 ;;
+          esac
+          test -n "$PR_NUMBER" && test -n "$BASE_SHA" && test -n "$HEAD_SHA"
+          same_repository=false
+          [ "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY" ] && same_repository=true
+          if [ "$same_repository" = false ] && [ "$mode" != none ]; then
+            echo "Fork pull requests are verification-only; ignoring the autofix label."
+            mode=none
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "same_repository=$same_repository" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: serve/cockpit/web/.nvmrc
+          cache: npm
+          cache-dependency-path: serve/cockpit/web/package-lock.json
+
+      - name: Install locked dependencies
+        run: uv run deps-sync
+
+      - name: Record pull request paths
+        run: git diff --name-only -z "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/pr-paths"
+
+      - name: Apply safe fixes
+        if: steps.context.outputs.mode == 'safe'
+        run: |
+          uv run pds-sync
+          uv run lint-full || true
+
+      - name: Apply unsafe fixes
+        if: steps.context.outputs.mode == 'unsafe'
+        run: |
+          uv run pds-sync
+          uv run lint-full --unsafe-fixes || true
+
+      - name: Restrict generated changes
+        if: steps.context.outputs.mode != 'none'
+        env:
+          PR_PATHS_FILE: ${{ runner.temp }}/pr-paths
+        run: |
+          git add -N -- serve/cockpit/web/public/porsche-design-system 2>/dev/null || true
+          uv run python - <<'PY'
+          import os
+          import subprocess
+          from pathlib import Path, PurePosixPath
+
+          generated = "serve/cockpit/web/public/porsche-design-system/"
+          denied = (".github/", ".owlbear/", "store/")
+          suffixes = {
+              ".css", ".html", ".js", ".json", ".jsx", ".md", ".mjs",
+              ".py", ".toml", ".ts", ".tsx", ".yaml", ".yml",
+          }
+          original = {
+              value.decode("utf-8")
+              for value in Path(os.environ["PR_PATHS_FILE"]).read_bytes().split(b"\0")
+              if value
+          }
+
+          def allowed(path: str) -> bool:
+              candidate = PurePosixPath(path)
+              return path.startswith(generated) or (
+                  path in original
+                  and not path.startswith(denied)
+                  and candidate.name not in {".gitmodules", ".npmrc", ".pypirc"}
+                  and (candidate.suffix in suffixes or candidate.name.endswith("lock"))
+              )
+
+          changed = subprocess.check_output(
+              ["git", "diff", "--name-only", "-z"],
+          ).split(b"\0")
+          for value in changed:
+              if not value:
+                  continue
+              path = value.decode("utf-8")
+              if not allowed(path):
+                  subprocess.run(["git", "restore", "--worktree", "--", path], check=True)
+          PY
+
+      - name: Verify formatting and static analysis
+        run: uv run lint-full --no-fix
+
+      - name: Run Python tests
+        run: uv run pytest tests serve -m "not api and not e2e"
+
+      - name: Run Cockpit tests
+        run: npm test --prefix serve/cockpit/web
+
+      - name: Build Cockpit
+        run: npm run build --prefix serve/cockpit/web
+
+      - name: Create autofix artifact
+        id: artifact
+        if: >-
+          steps.context.outputs.mode != 'none' &&
+          steps.context.outputs.same_repository == 'true'
+        env:
+          MODE: ${{ steps.context.outputs.mode }}
+        run: |
+          artifact="$RUNNER_TEMP/dependency-autofix"
+          mkdir -p "$artifact"
+          if git diff --quiet; then
+            echo "has_patch=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --binary --full-index --no-renames > "$artifact/fixes.patch"
+          PATCH_PATH="$artifact/fixes.patch" METADATA_PATH="$artifact/metadata.json" \
+            uv run python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          patch = Path(os.environ["PATCH_PATH"])
+          paths = [
+              value.decode("utf-8")
+              for value in subprocess.check_output(
+                  ["git", "diff", "--name-only", "-z"],
+              ).split(b"\0")
+              if value
+          ]
+          metadata = {
+              "baseSha": os.environ["BASE_SHA"],
+              "headRef": os.environ["HEAD_REF"],
+              "headRepository": os.environ["HEAD_REPOSITORY"],
+              "headSha": os.environ["HEAD_SHA"],
+              "mode": os.environ["MODE"],
+              "patchSha256": hashlib.sha256(patch.read_bytes()).hexdigest(),
+              "paths": paths,
+              "prNumber": int(os.environ["PR_NUMBER"]),
+          }
+          Path(os.environ["METADATA_PATH"]).write_text(
+              json.dumps(metadata, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          echo "has_patch=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload autofix artifact
+        if: steps.artifact.outputs.has_patch == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: dependency-autofix-${{ env.PR_NUMBER }}-${{ env.HEAD_SHA }}
+          path: ${{ runner.temp }}/dependency-autofix
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Write summary
+        if: always()
+        env:
+          MODE: ${{ steps.context.outputs.mode }}
+        run: |
+          {
+            echo "## Dependency verification"
+            echo
+            echo "- Pull request: #$PR_NUMBER"
+            echo "- Head: \`$HEAD_SHA\`"
+            echo "- Mode: \`${MODE:-unresolved}\`"
+            echo "- Fork: $([ "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY" ] && echo no || echo yes)"
+            echo
+            echo "Use \`autofix\` for safe fixes or \`unsafe-autofix\` for unsafe fixes."
+          } >> "$GITHUB_STEP_SUMMARY"
