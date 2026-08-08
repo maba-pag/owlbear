@@ -92,7 +92,7 @@ function CurrentState({ item, onSelect }: { item: WorkItemCardView; onSelect: Wo
     <span>
       <span className={urgent ? 'block font-semibold text-error' : 'block font-medium text-primary'}>{state}</span>
       {item.activity.task_id ? <span className="mt-0.5 block text-xs text-contrast-medium">Task {item.activity.task_id}</span> : null}
-      {item.action.kind !== 'none' ? <span className={manualOption ? 'mt-0.5 block text-xs text-contrast-medium' : 'mt-0.5 block'}>{manualOption ? 'Manual option: ' : null}<ActionLink item={item} onSelect={onSelect} subdued={manualOption} /></span> : null}
+      {item.action.kind !== 'none' ? <span className={manualOption ? 'mt-0.5 block text-xs text-contrast-medium' : 'mt-0.5 block'}>{manualOption ? 'Optional now: ' : null}<ActionLink item={item} onSelect={onSelect} subdued={manualOption} /></span> : null}
     </span>
   )
 }
@@ -109,7 +109,7 @@ function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
           <col className="w-[35%]" />
         </colgroup>
         <thead>
-          <tr className="text-2xs font-semibold uppercase text-contrast-medium">
+          <tr className="text-2xs font-semibold uppercase text-contrast-high">
             <th className="px-static-sm py-static-xs" scope="col">Work</th>
             <th className="px-static-sm py-static-xs" scope="col">Progress</th>
             <th className="px-static-sm py-static-xs" scope="col">Status</th>
@@ -155,8 +155,8 @@ function CompactRows({ group, selected, onSelect }: GroupTableProps) {
             <ItemLink item={item} selected={isSelected} onSelect={onSelect} />
             <span className="text-xs text-contrast-medium">Outcome: <code>{item.work_item_id}</code></span>
             <div className="grid grid-cols-2 gap-static-sm text-xs">
-              <div><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium">Progress</span><ProgressState item={item} /></div>
-              <div><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium">Status</span><CurrentState item={item} onSelect={onSelect} /></div>
+              <div><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-high">Progress</span><ProgressState item={item} /></div>
+              <div><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-high">Status</span><CurrentState item={item} onSelect={onSelect} /></div>
             </div>
           </article>
         )
@@ -197,11 +197,11 @@ function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
           </dd>
         </div>
         <div className="md:px-static-sm md:py-static-sm">
-          <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-medium md:sr-only">Progress</dt>
+          <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high md:sr-only">Progress</dt>
           <dd><ProgressState item={item} /></dd>
         </div>
         <div className="relative z-[1] md:px-static-sm md:py-static-sm">
-          <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-medium md:sr-only">Status</dt>
+          <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high md:sr-only">Status</dt>
           <dd><CurrentState item={item} onSelect={onSelect} /></dd>
         </div>
       </dl>

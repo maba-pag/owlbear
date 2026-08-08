@@ -391,7 +391,7 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
         <div className="mt-static-md grid gap-static-sm">
           <p className="text-sm"><strong>Waiting for Orchestration.</strong> Orchestration will {action.kind === 'retry-integration' ? 'retry against the current target' : 'integrate this Change'}.</p>
           <div className="flex flex-wrap items-center gap-static-sm">
-            <span className="text-xs text-contrast-medium">Manual option</span>
+            <span className="text-xs text-contrast-medium">Optional now</span>
             <PButtonPure type="button" size="xs" color="contrast-medium" disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
               {pendingAction === 'integration' ? 'Working...' : action.kind === 'retry-integration' ? 'Retry now' : 'Integrate now'}
             </PButtonPure>

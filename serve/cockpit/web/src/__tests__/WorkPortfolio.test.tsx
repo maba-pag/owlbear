@@ -630,7 +630,7 @@ it('uses the Done status tag without leaking the internal Stage field', async ()
   expect(inspector).not.toHaveTextContent('Complete — no action needed')
 })
 
-it('presents Integration retry as an optional manual alternative to Orchestration', async () => {
+it('presents Integration retry as an optional alternative to Orchestration', async () => {
   const integrationCard = card({
     item_key: 'integration',
     work_item_id: 'change-alpha',
@@ -649,7 +649,7 @@ it('presents Integration retry as an optional manual alternative to Orchestratio
   const table = await screen.findByTestId('work-portfolio-table')
   expect(table).toHaveTextContent('Change: Portfolio redesign')
   expect(table).toHaveTextContent('Waiting for Orchestration')
-  expect(table).toHaveTextContent('Manual option: Retry Integration')
+  expect(table).toHaveTextContent('Optional now: Retry Integration')
   const retryLink = within(table).getByText('Retry Integration').closest('p-link-pure') as HTMLElement & { href: string; color: string; size: string }
   expect(retryLink.href).toBe('/delivery/change-alpha/integration')
   expect(retryLink.color).toBe('contrast-medium')
