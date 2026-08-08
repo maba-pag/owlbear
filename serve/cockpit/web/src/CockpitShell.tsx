@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router'
 import { routeConfig, routeForPath } from './routes'
 import ThemeToggle from './components/ThemeToggle'
 import WorkspaceStatus from './components/WorkspaceStatus'
+import { useWorkspaceHealth } from './hooks/useWorkspaceHealth'
 
 const ICONS = {
   work: 'grid',
@@ -66,6 +67,7 @@ export default function CockpitShell() {
   const location = useLocation()
   const navigate = useNavigate()
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
+  const workspaceHealth = useWorkspaceHealth()
   const activeRoute = routeForPath(location.pathname)
   const ActivePage = activeRoute?.component
 
@@ -92,7 +94,7 @@ export default function CockpitShell() {
           <ProductNavigation activePath={activeRoute?.path ?? ''} compact onNavigate={goTo} />
         </div>
         <div className="grid justify-items-center gap-1.5">
-          <WorkspaceStatus />
+          <WorkspaceStatus health={workspaceHealth} />
           <ThemeToggle compact />
         </div>
       </aside>
@@ -104,7 +106,7 @@ export default function CockpitShell() {
             <span className="block text-xs text-contrast-medium">Cockpit</span>
           </div>
           <div className="flex items-center gap-static-md">
-            <WorkspaceStatus />
+            <WorkspaceStatus health={workspaceHealth} />
             <ThemeToggle compact />
             <PButtonPure
               type="button"

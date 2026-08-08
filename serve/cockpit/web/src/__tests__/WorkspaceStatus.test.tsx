@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import WorkspaceStatus from '../components/WorkspaceStatus'
+import { useWorkspaceHealth } from '../hooks/useWorkspaceHealth'
 
 vi.mock('../hooks/EventSourceProvider', () => ({
   useSSEEvent: vi.fn(() => ({ mtime: null, status: 'closed' as const })),
@@ -24,6 +25,16 @@ function stubHealth(memory: unknown, ideas: unknown) {
   return fetchMock
 }
 
+function WorkspaceStatusHarness() {
+  const health = useWorkspaceHealth()
+  return <WorkspaceStatus health={health} />
+}
+
+function SharedWorkspaceStatusHarness() {
+  const health = useWorkspaceHealth()
+  return <><WorkspaceStatus health={health} /><WorkspaceStatus health={health} /></>
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
 })
@@ -35,19 +46,26 @@ afterEach(() => {
 })
 
 it('states healthy persisted-data modules without prose, repair, or a Memory detour', async () => {
-  stubHealth(
+  const fetchMock = stubHealth(
     { status: 'healthy', findings: [], repairable_count: 0, checked_paths: [] },
     { status: 'healthy', path: '.owlbear/ideas.md', detail: null },
   )
-  render(<WorkspaceStatus />)
+  render(<SharedWorkspaceStatusHarness />)
 
-  const trigger = screen.getByTestId('workspace-status')
-  await waitFor(() => expect(trigger).toHaveAttribute('data-status', 'healthy'))
+  const triggers = screen.getAllByTestId('workspace-status')
+  const trigger = triggers[0]
+  expect(trigger).toHaveAttribute('data-status', 'unknown')
   expect(trigger).toHaveAttribute('aria-haspopup', 'dialog')
-  expect(trigger).toHaveAccessibleName('Workspace health: Healthy; open health details')
+  expect(trigger).toHaveAccessibleName('Workspace health: Not checked; open health details')
+  expect(fetchMock).not.toHaveBeenCalled()
 
   fireEvent.click(trigger)
   const panel = await screen.findByTestId('workspace-status-panel')
+  expect(fetchMock).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByTestId('workspace-status-recheck'))
+  await waitFor(() => expect(trigger).toHaveAttribute('data-status', 'healthy'))
+  expect(triggers[1]).toHaveAttribute('data-status', 'healthy')
+  expect(fetchMock).toHaveBeenCalledTimes(2)
   expect(panel).toHaveAttribute('role', 'dialog')
   expect(panel).toHaveAccessibleName('Workspace health')
   const memoryModule = screen.getByTestId('workspace-status-module-memory')
@@ -77,7 +95,7 @@ it('presents workspace health, check scope, and checked surfaces in hierarchy or
     { status: 'healthy', findings: [], repairable_count: 0, checked_paths: [] },
     { status: 'healthy', path: '.owlbear/ideas.md', detail: null },
   )
-  render(<WorkspaceStatus />)
+  render(<WorkspaceStatusHarness />)
 
   fireEvent.click(screen.getByTestId('workspace-status'))
   const panel = await screen.findByTestId('workspace-status-panel')
@@ -95,25 +113,25 @@ it('advances the freshness label as time passes without issuing another health c
     { status: 'healthy', findings: [], repairable_count: 0, checked_paths: [] },
     { status: 'healthy', path: '.owlbear/ideas.md', detail: null },
   )
-  // Fake timers stall the library's polling helpers, so settle work by flushing microtasks instead.
+  // Fake timers stall async testing helpers, so settle the manual requests through microtasks.
   const settle = async () => { await act(async () => { await Promise.resolve() }) }
 
-  render(<WorkspaceStatus />)
+  render(<WorkspaceStatusHarness />)
   await settle()
   fireEvent.click(screen.getByTestId('workspace-status'))
+  fireEvent.click(screen.getByTestId('workspace-status-recheck'))
   await settle()
 
   const freshness = screen.getByTestId('workspace-status-freshness')
   expect(freshness).toHaveTextContent('Checked just now')
   const checksSoFar = fetchMock.mock.calls.length
 
-  // Wall-clock time moves on; only the display tick fires, staying below the 60s poll interval.
+  // Wall-clock time moves on; only the display tick fires and health remains manual.
   act(() => {
-    vi.setSystemTime(Date.now() + 20_000)
-    vi.advanceTimersByTime(10_000)
+    vi.advanceTimersByTime(20 * 60_000)
   })
 
-  expect(freshness).toHaveTextContent('Checked 30s ago')
+  expect(freshness).toHaveTextContent('Checked 20m ago')
   expect(fetchMock.mock.calls.length).toBe(checksSoFar)
 })
 
@@ -127,12 +145,13 @@ it('ranks the worst module status and lists memory storage findings without clai
     },
     { status: 'healthy', path: '.owlbear/ideas.md', detail: null },
   )
-  render(<WorkspaceStatus />)
+  render(<WorkspaceStatusHarness />)
 
   const trigger = screen.getByTestId('workspace-status')
+  fireEvent.click(trigger)
+  fireEvent.click(screen.getByTestId('workspace-status-recheck'))
   await waitFor(() => expect(trigger).toHaveAttribute('data-status', 'attention'))
 
-  fireEvent.click(trigger)
   const memoryModule = await screen.findByTestId('workspace-status-module-memory')
   // A problem state is never left to colour alone: the word stays on screen.
   expect(visibleText(memoryModule)).toContain('Needs attention')
@@ -147,13 +166,14 @@ it('ranks the worst module status and lists memory storage findings without clai
 
 it('reports an unreachable health check instead of claiming health', async () => {
   stubHealth(null, null)
-  render(<WorkspaceStatus />)
+  render(<WorkspaceStatusHarness />)
 
   const trigger = screen.getByTestId('workspace-status')
+  fireEvent.click(trigger)
+  fireEvent.click(screen.getByTestId('workspace-status-recheck'))
   await waitFor(() => expect(trigger).toHaveAttribute('data-status', 'unavailable'))
   expect(trigger).toHaveAccessibleName('Workspace health: Cannot be checked; open health details')
 
-  fireEvent.click(trigger)
   const memoryModule = await screen.findByTestId('workspace-status-module-memory')
   expect(memoryModule).toHaveTextContent('Failed to fetch')
   expect(visibleText(memoryModule)).toContain('Cannot be checked')

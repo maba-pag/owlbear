@@ -2,8 +2,8 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent }
 import { createPortal } from 'react-dom'
 import { PButtonPure } from '@porsche-design-system/components-react'
 import {
-  useWorkspaceHealth,
   WORKSPACE_HEALTH_LABELS,
+  type UseWorkspaceHealthResult,
   type WorkspaceHealthStatus,
 } from '../hooks/useWorkspaceHealth'
 import { getRailPanelPosition } from './railPanelPosition'
@@ -22,6 +22,7 @@ const DOT_CLASSES: Record<WorkspaceHealthStatus, string> = {
   unhealthy: 'bg-error',
   unavailable: 'bg-contrast-medium',
   checking: 'bg-contrast-medium',
+  unknown: 'bg-contrast-medium',
 }
 
 const STATUS_TEXT_CLASSES: Record<WorkspaceHealthStatus, string> = {
@@ -30,6 +31,7 @@ const STATUS_TEXT_CLASSES: Record<WorkspaceHealthStatus, string> = {
   unhealthy: 'text-error',
   unavailable: 'text-contrast-medium',
   checking: 'text-contrast-medium',
+  unknown: 'text-contrast-medium',
 }
 
 /** Elapsed wording for the last settled check; the panel never claims freshness it cannot show. */
@@ -65,8 +67,8 @@ function StatusDot({
  * store and the ideas file. Nothing here repairs anything: re-running the check is the only action
  * the backend supports.
  */
-export default function WorkspaceStatus() {
-  const { status, modules, isChecking, lastCheckedAt, refresh } = useWorkspaceHealth()
+export default function WorkspaceStatus({ health }: { health: UseWorkspaceHealthResult }) {
+  const { status, modules, isChecking, lastCheckedAt, refresh } = health
   const [isOpen, setIsOpen] = useState(false)
   const [position, setPosition] = useState({ top: '0px', left: '0px' })
   const [now, setNow] = useState(() => Date.now())
@@ -131,7 +133,6 @@ export default function WorkspaceStatus() {
     if (triggerRef.current) {
       setPosition(getRailPanelPosition(triggerRef.current, PANEL_WIDTH, ESTIMATED_PANEL_HEIGHT))
     }
-    refresh()
     setIsOpen(true)
   }
 
@@ -192,6 +193,7 @@ export default function WorkspaceStatus() {
           type="button"
           icon="refresh"
           size="small"
+          disabled={isChecking}
           data-testid="workspace-status-recheck"
           onClick={() => refresh()}
         >

@@ -1,13 +1,13 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   IDEAS_HEALTH_URL,
   MEMORY_HEALTH_URL,
   type IdeasHealthResponse,
   type MemoryHealthResponse,
 } from '../api/health'
-import { usePollingFetch } from './usePollingFetch'
+import { getResponseErrorMessage } from '../api/errorMessage'
 
-export type WorkspaceHealthStatus = 'healthy' | 'attention' | 'unhealthy' | 'unavailable' | 'checking'
+export type WorkspaceHealthStatus = 'healthy' | 'attention' | 'unhealthy' | 'unavailable' | 'checking' | 'unknown'
 
 export interface WorkspaceHealthModule {
   id: 'memory' | 'ideas'
@@ -33,14 +33,15 @@ export const WORKSPACE_HEALTH_LABELS: Record<WorkspaceHealthStatus, string> = {
   unhealthy: 'Unhealthy',
   unavailable: 'Cannot be checked',
   checking: 'Checking',
+  unknown: 'Not checked',
 }
 
-const HEALTH_INTERVAL_MS = 60_000
 const SEVERITY: Record<WorkspaceHealthStatus, number> = {
-  unhealthy: 4,
-  attention: 3,
-  unavailable: 2,
-  checking: 1,
+  unhealthy: 5,
+  attention: 4,
+  unavailable: 3,
+  checking: 2,
+  unknown: 1,
   healthy: 0,
 }
 
@@ -52,6 +53,14 @@ function toStatus(reported: string): WorkspaceHealthStatus {
 
 function findingLine(finding: { path?: string; code?: string; detail?: string }): string {
   return [finding.path, finding.code, finding.detail].filter(Boolean).join(' — ')
+}
+
+async function fetchHealth<TPayload>(url: string): Promise<TPayload> {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(await getResponseErrorMessage(response, `Health check failed with status ${response.status}`))
+  }
+  return await response.json() as TPayload
 }
 
 /**
@@ -74,50 +83,21 @@ function memoryModule(state: { status: WorkspaceHealthStatus; findings: string[]
 }
 
 /**
- * Poll the two health projections the backend still serves and rank them into one operator signal.
+ * Check the two health projections on explicit operator request and rank them into one signal.
  * A failed request means the check could not run, which is reported rather than hidden.
  */
 export function useWorkspaceHealth(): UseWorkspaceHealthResult {
   const [memory, setMemory] = useState<{ status: WorkspaceHealthStatus; findings: string[] }>({
-    status: 'checking',
+    status: 'unknown',
     findings: [],
   })
   const [ideas, setIdeas] = useState<{ status: WorkspaceHealthStatus; summary: string }>({
-    status: 'checking',
+    status: 'unknown',
     summary: '',
   })
+  const [isChecking, setIsChecking] = useState(false)
   const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null)
-
-  const { isFetching: memoryChecking, refetch: refetchMemory } = usePollingFetch<MemoryHealthResponse>(MEMORY_HEALTH_URL, {
-    intervalMs: HEALTH_INTERVAL_MS,
-    onSuccess: async (payload) => {
-      setMemory({
-        status: toStatus(payload.status),
-        findings: (payload.findings ?? []).map(findingLine).filter(Boolean),
-      })
-      setLastCheckedAt(Date.now())
-    },
-    onError: async (caught) => {
-      setMemory({ status: 'unavailable', findings: [caught.message] })
-      setLastCheckedAt(Date.now())
-    },
-  })
-
-  const { isFetching: ideasChecking, refetch: refetchIdeas } = usePollingFetch<IdeasHealthResponse>(IDEAS_HEALTH_URL, {
-    intervalMs: HEALTH_INTERVAL_MS,
-    onSuccess: async (payload) => {
-      const status = toStatus(payload.status)
-      setIdeas({
-        status,
-        summary: status === 'healthy' ? '' : payload.detail ?? `${payload.path} cannot be read`,
-      })
-      setLastCheckedAt(Date.now())
-    },
-    onError: async (caught) => {
-      setIdeas({ status: 'unavailable', summary: caught.message })
-      setLastCheckedAt(Date.now())
-    },
-  })
+  const checkingRef = useRef(false)
 
   const modules = useMemo<WorkspaceHealthModule[]>(() => [
     memoryModule(memory),
@@ -125,14 +105,44 @@ export function useWorkspaceHealth(): UseWorkspaceHealthResult {
   ], [ideas.status, ideas.summary, memory])
 
   const refresh = useCallback(() => {
-    refetchMemory()
-    refetchIdeas()
-  }, [refetchIdeas, refetchMemory])
+    if (checkingRef.current) return
+    checkingRef.current = true
+    setIsChecking(true)
+    setMemory({ status: 'checking', findings: [] })
+    setIdeas({ status: 'checking', summary: '' })
+
+    void Promise.allSettled([
+      fetchHealth<MemoryHealthResponse>(MEMORY_HEALTH_URL),
+      fetchHealth<IdeasHealthResponse>(IDEAS_HEALTH_URL),
+    ]).then(([memoryResult, ideasResult]) => {
+      if (memoryResult.status === 'fulfilled') {
+        setMemory({
+          status: toStatus(memoryResult.value.status),
+          findings: (memoryResult.value.findings ?? []).map(findingLine).filter(Boolean),
+        })
+      } else {
+        setMemory({ status: 'unavailable', findings: [memoryResult.reason instanceof Error ? memoryResult.reason.message : 'Health check failed'] })
+      }
+      if (ideasResult.status === 'fulfilled') {
+        const status = toStatus(ideasResult.value.status)
+        setIdeas({
+          status,
+          summary: status === 'healthy' ? '' : ideasResult.value.detail ?? `${ideasResult.value.path} cannot be read`,
+        })
+      } else {
+        setIdeas({ status: 'unavailable', summary: ideasResult.reason instanceof Error ? ideasResult.reason.message : 'Health check failed' })
+      }
+      setLastCheckedAt(Date.now())
+    }).finally(() => {
+      checkingRef.current = false
+      setIsChecking(false)
+    })
+  }, [])
 
   const status = modules.reduce<WorkspaceHealthStatus>(
     (worst, module) => (SEVERITY[module.status] > SEVERITY[worst] ? module.status : worst),
     'healthy',
   )
 
-  return { status, modules, isChecking: memoryChecking || ideasChecking, lastCheckedAt, refresh }
+  return { status, modules, isChecking, lastCheckedAt, refresh }
 }
