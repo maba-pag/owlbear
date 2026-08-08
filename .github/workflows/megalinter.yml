@@ -74,9 +74,11 @@ jobs:
       - name: Enable unsafe autofixes when requested
         if: inputs.unsafe_fixes
         run: |
-          echo "PYTHON_RUFF_ARGUMENTS=--unsafe-fixes" >> "$GITHUB_ENV"
-          echo "CSS_STYLELINT_COMMAND_REMOVE_ARGUMENTS=--fix" >> "$GITHUB_ENV"
-          echo "CSS_STYLELINT_ARGUMENTS=--fix=lax" >> "$GITHUB_ENV"
+          {
+            echo "PYTHON_RUFF_ARGUMENTS=--unsafe-fixes"
+            echo "CSS_STYLELINT_COMMAND_REMOVE_ARGUMENTS=--fix"
+            echo "CSS_STYLELINT_ARGUMENTS=--fix=lax"
+          } >> "$GITHUB_ENV"
 
       - name: MegaLinter
         id: megalinter
