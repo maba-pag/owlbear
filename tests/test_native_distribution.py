@@ -86,8 +86,13 @@ def test_consumer_sync_scopes_have_current_target_owners() -> None:
     assert "README-consumer.md" in workflow
     assert "serve/cockpit/dist/" in workflow
     assert "serve/cockpit/web/" in workflow
+    assert workflow.count(".github/workflows .github/renovate.json") == 4
+    assert "git rm -f .github/copilot-instructions.md" not in workflow
+    assert ".pre-commit-config.yaml" not in workflow
     assert not any((_ROOT / ".github/prompts").glob("opsx-*.prompt.md"))
     assert not any((_ROOT / ".github/skills").glob("openspec-*"))
+    assert "grep -rHnI '^> \\*\\*TODO:\\*\\*'" in workflow
+    assert "^\\.github/workflows/sync-to-main\\.yml:" not in workflow
 
     mcp = json.loads((_ROOT / "seed/.vscode/mcp.json").read_text(encoding="utf-8"))
     assert set(mcp["servers"]) == {

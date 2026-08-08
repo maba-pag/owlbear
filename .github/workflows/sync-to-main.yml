@@ -151,9 +151,10 @@ jobs:
           if [[ "$SYNC_MEMORY" == "true" ]]; then paths="$paths serve/memory serve/memory-mcp"; fi
           if [[ "$SYNC_SETUP" == "true" ]]; then paths="$paths setup seed"; fi
           if [[ "$SYNC_INFRA" == "true" ]]; then
-            paths="$paths .github .vscode .editorconfig .gitattributes .gitignore"
+            paths="$paths .github/workflows .github/renovate.json"
+            paths="$paths .vscode .editorconfig .gitattributes .gitignore"
             paths="$paths .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore"
-            paths="$paths .mega-linter.yml .pre-commit-config.yaml .python-version"
+            paths="$paths .mega-linter.yml .python-version"
             paths="$paths .yamllint.yml pyproject.toml SECURITY.md uv.lock"
             paths="$paths README-consumer.md"
           fi
@@ -164,9 +165,8 @@ jobs:
           fi
 
           # shellcheck disable=SC2086
-          todo_hits=$(grep -rHnI '> \*\*TODO:\*\*' $paths 2>/dev/null \
+          todo_hits=$(grep -rHnI '^> \*\*TODO:\*\*' $paths 2>/dev/null \
             | grep -v -e '^share/skills/w-doc-update/SKILL\.md:' \
-                      -e '^\.github/workflows/sync-to-main\.yml:' \
             || true)
 
           if [[ -z "$todo_hits" ]]; then
@@ -213,9 +213,10 @@ jobs:
             paths="$paths setup seed"
           fi
           if [[ "$SYNC_INFRA" == "true" ]]; then
-            paths="$paths .github .vscode .editorconfig .gitattributes .gitignore"
+            paths="$paths .github/workflows .github/renovate.json"
+            paths="$paths .vscode .editorconfig .gitattributes .gitignore"
             paths="$paths .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore"
-            paths="$paths .mega-linter.yml .pre-commit-config.yaml .python-version"
+            paths="$paths .mega-linter.yml .python-version"
             paths="$paths .yamllint.yml pyproject.toml SECURITY.md uv.lock"
             paths="$paths README-consumer.md"
           fi
@@ -273,9 +274,10 @@ jobs:
             git rm -rf . --quiet || true
             git checkout dev -- \
               share serve setup seed \
-              .github .vscode .editorconfig .gitattributes .gitignore \
+              .github/workflows .github/renovate.json \
+              .vscode .editorconfig .gitattributes .gitignore \
               .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore \
-              .mega-linter.yml .pre-commit-config.yaml .python-version \
+              .mega-linter.yml .python-version \
               .yamllint.yml pyproject.toml SECURITY.md uv.lock \
               README-consumer.md
             git mv -f README-consumer.md README.md
@@ -341,9 +343,10 @@ jobs:
               echo "--- infra (CI, linters, root configs)"
               git rm -rf .github .vscode --quiet 2>/dev/null || true
               git checkout dev -- \
-                .github .vscode .editorconfig .gitattributes .gitignore \
+                .github/workflows .github/renovate.json \
+                .vscode .editorconfig .gitattributes .gitignore \
                 .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore \
-                .mega-linter.yml .pre-commit-config.yaml .python-version \
+                .mega-linter.yml .python-version \
                 .yamllint.yml pyproject.toml SECURITY.md uv.lock \
                 README-consumer.md
               git mv -f README-consumer.md README.md
@@ -404,9 +407,6 @@ jobs:
         run: |
           # .vscode/ — consumers get theirs from seed/.vscode/ via init.py
           git rm -rf .vscode --quiet 2>/dev/null || true
-
-          # .github/copilot-instructions.md — describes owlbear-dev internals
-          git rm -f .github/copilot-instructions.md --quiet 2>/dev/null || true
 
           # Package test suites validate dev; consumers only execute package sources.
           find serve -mindepth 2 -maxdepth 2 -type d -name tests -print0 \
