@@ -90,10 +90,15 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(summary).toContainText('1being worked on')
     await expect(summary).toContainText('2need you')
 
-    const guidance = page.getByLabel('Recommended next steps')
-    await expect(guidance).toContainText('Review 2 interventions')
-    await expect(guidance).toContainText('Let the current /orchestrate session continue')
+    const guidance = page.getByLabel('Session suggestions')
+    await expect(guidance).toContainText('Review 2 items that need you')
+    await expect(guidance).toContainText('/orchestrate is already working')
     await expect(guidance).not.toContainText('Start /orchestrate')
+    const tableBox = await table.boundingBox()
+    const guidanceBox = await guidance.boundingBox()
+    expect(tableBox).not.toBeNull()
+    expect(guidanceBox).not.toBeNull()
+    expect(guidanceBox!.y).toBeGreaterThanOrEqual(tableBox!.y + tableBox!.height)
 
     const integrationRow = (await visibleRows(page)).filter({ hasText: 'Integration' })
     await expect(integrationRow).toContainText('Integration')

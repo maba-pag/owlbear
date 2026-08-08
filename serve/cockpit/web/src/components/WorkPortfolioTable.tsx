@@ -43,13 +43,16 @@ function ItemLink({
   )
 }
 
-function ActionLink({ item, onSelect }: { item: WorkItemCardView; onSelect: WorkPortfolioTableProps['onSelect'] }) {
+function ActionLink({ item, onSelect, subdued = false }: { item: WorkItemCardView; onSelect: WorkPortfolioTableProps['onSelect']; subdued?: boolean }) {
   if (item.action.kind === 'none' || !item.action.label) return null
   const identity = { changeId: item.change_id, itemKey: item.item_key }
   return (
     <Link
       to={workItemPath(item)}
-      className="relative z-[1] inline-flex min-h-8 items-center font-semibold text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+      className={[
+        'relative z-[1] inline-flex min-h-8 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+        subdued ? 'font-normal text-contrast-medium' : 'font-semibold text-primary',
+      ].join(' ')}
       onClick={(event) => onSelect(identity, event.currentTarget)}
     >
       {item.action.label}
@@ -77,7 +80,7 @@ function CurrentState({ item, onSelect }: { item: WorkItemCardView; onSelect: Wo
     <span>
       <span className={urgent ? 'block font-semibold text-error' : 'block font-medium text-primary'}>{state}</span>
       {item.activity.task_id ? <span className="mt-0.5 block text-xs text-contrast-medium">Task {item.activity.task_id}</span> : null}
-      {item.action.kind !== 'none' ? <span className="mt-static-xs block">{manualOption ? <span className="text-xs text-contrast-medium">Manual option: </span> : null}<ActionLink item={item} onSelect={onSelect} /></span> : null}
+      {item.action.kind !== 'none' ? <span className={manualOption ? 'mt-static-xs block text-xs text-contrast-medium' : 'mt-static-xs block'}>{manualOption ? 'Manual option: ' : null}<ActionLink item={item} onSelect={onSelect} subdued={manualOption} /></span> : null}
     </span>
   )
 }
@@ -111,7 +114,7 @@ function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
               >
                 <td className="rounded-l-sm px-static-sm py-static-xs">
                   <ItemLink item={item} selected={isSelected} onSelect={onSelect} />
-                  <span className="block text-xs text-contrast-medium">Outcome {item.work_item_id}</span>
+                  <span className="block text-xs text-contrast-medium">Outcome: {item.work_item_id}</span>
                 </td>
                 <td className="px-static-sm py-static-sm"><ProgressState item={item} /></td>
                 <td className="rounded-r-sm px-static-sm py-static-sm"><CurrentState item={item} onSelect={onSelect} /></td>
@@ -138,7 +141,7 @@ function CompactRows({ group, selected, onSelect }: GroupTableProps) {
             aria-label={`${item.title} work item`}
           >
             <ItemLink item={item} selected={isSelected} onSelect={onSelect} />
-            <span className="text-xs text-contrast-medium">Outcome {item.work_item_id}</span>
+            <span className="text-xs text-contrast-medium">Outcome: {item.work_item_id}</span>
             <div className="grid grid-cols-2 gap-static-sm text-xs">
               <div><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium">Progress</span><ProgressState item={item} /></div>
               <div><span className="mb-1 block text-2xs font-semibold uppercase text-contrast-medium">Status</span><CurrentState item={item} onSelect={onSelect} /></div>

@@ -680,7 +680,7 @@ class WorkItemProjector:
         disposition = integration_attention_disposition(attention.code)
         headline = "Integration target moved" if superseded else _integration_headline(attention.code)
         explanation = (
-            "The Integration target moved since this attempt; retry against the current target."
+            "The Integration target changed after the previous attempt."
             if superseded
             else (
                 f"{len(paths)} conflicting files require a reviewed repair."

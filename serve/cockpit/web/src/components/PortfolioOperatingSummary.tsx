@@ -8,13 +8,13 @@ function countLabel(count: number, singular: string, plural = `${singular}s`) {
 function guidanceText(guidance: PortfolioGuidance) {
   switch (guidance.kind) {
     case 'intervene':
-      return `Review ${countLabel(guidance.work_count, 'intervention')}.`
+      return `Review ${countLabel(guidance.work_count, 'item')} that needs you.`
     case 'resume-design':
-      return `Resume ${guidance.change_ids.map((changeId) => `/design ${changeId}`).join(' or ')}.`
+      return `Continue Design for ${guidance.change_ids.join(' or ')} with ${guidance.change_ids.map((changeId) => `/design ${changeId}`).join(' or ')}.`
     case 'start-orchestration':
-      return 'Start /orchestrate.'
+      return `Start /orchestrate for ${countLabel(guidance.work_count, 'queued item')}.`
     case 'work-underway':
-      return 'Let the current /orchestrate session continue.'
+      return '/orchestrate is already working; no new session is needed.'
     case 'wait':
       return 'No session action needed.'
     case 'create-change':
@@ -47,14 +47,9 @@ export function PortfolioHeaderSummary({ operating }: { operating: PortfolioOper
 export default function PortfolioOperatingSummary({ operating }: { operating: PortfolioOperatingView }) {
   if (operating.guidance.length === 0) return null
   return (
-    <div className="min-w-0 text-sm leading-relaxed" aria-label="Recommended next steps">
-      <span className="mr-static-xs font-semibold">Session</span>
-      {operating.guidance.map((guidance, index) => (
-        <span key={guidance.kind}>
-          {index > 0 ? <span className="mx-static-xs text-contrast-medium" aria-hidden="true">·</span> : null}
-          {guidanceText(guidance)}
-        </span>
-      ))}
-    </div>
+    <aside className="min-w-0 text-sm leading-relaxed text-contrast-medium" aria-label="Session suggestions">
+      <span className="mr-static-xs font-semibold text-primary">Session suggestions</span>
+      {operating.guidance.map((guidance) => <span className="mr-static-sm" key={guidance.kind}>{guidanceText(guidance)}</span>)}
+    </aside>
   )
 }

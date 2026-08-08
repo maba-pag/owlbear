@@ -305,7 +305,6 @@ export default function WorkPortfolioPage() {
         {workspace === 'current' ? (
           <>
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-static-lg gap-y-static-sm">
-              {hasData ? <PortfolioOperatingSummary operating={portfolio.operating} /> : null}
               <div className="ml-auto flex min-w-0 flex-wrap items-center gap-static-xs">
                 {isFiltered ? <span data-testid="work-shown-count"><WorkspaceViewCount value={`${shownCount} of ${portfolio.totals.total}`} unit="work items shown" /></span> : null}
                 <PortfolioFilterTools {...filterProps} />
@@ -323,15 +322,18 @@ export default function WorkPortfolioPage() {
             ) : null}
 
             {hasData ? (
-              <PortfolioWorkspace
-                groups={filteredGroups}
-                selected={selected}
-                emptyMessage={isFiltered ? 'No Work Items match the current filters.' : undefined}
-                onSelect={(identity, trigger) => {
-                  lastTrigger.current = trigger
-                  lastTriggerIdentity.current = `${identity.changeId}:${identity.itemKey}`
-                }}
-              />
+              <>
+                <PortfolioWorkspace
+                  groups={filteredGroups}
+                  selected={selected}
+                  emptyMessage={isFiltered ? 'No Work Items match the current filters.' : undefined}
+                  onSelect={(identity, trigger) => {
+                    lastTrigger.current = trigger
+                    lastTriggerIdentity.current = `${identity.changeId}:${identity.itemKey}`
+                  }}
+                />
+                <PortfolioOperatingSummary operating={portfolio.operating} />
+              </>
             ) : null}
           </>
         ) : <CompletedHistoryWorkspace />}
@@ -347,7 +349,7 @@ export default function WorkPortfolioPage() {
         aria={{ 'aria-label': 'Work Item detail' }}
         onDismiss={closeInspector}
       >
-        <div className="min-w-0 p-static-lg">
+        <div className="min-w-0 max-w-full p-static-lg">
           {selected ? <SelectedDetail key={selectedIdentity} identity={selected} onChanged={retry} onClose={closeInspector} /> : null}
         </div>
       </PFlyout>

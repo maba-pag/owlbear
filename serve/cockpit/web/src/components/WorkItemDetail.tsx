@@ -18,7 +18,7 @@ import {
   type WorkItemStage,
   type DeliveryWorkerRole,
 } from '../api/workItems'
-import { PROGRESS_STAGE_LABELS, workItemStatusLabel } from './workItemPresentation'
+import { hasOptionalManualAction, PROGRESS_STAGE_LABELS, workItemStatusLabel } from './workItemPresentation'
 
 type FieldValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }
 
@@ -358,7 +358,11 @@ function ConflictedPaths({ paths }: { paths: string[] }) {
 }
 
 function Diagnostics({ lines }: { lines: string[] }) {
-  return <pre className="mt-static-sm max-h-48 overflow-auto whitespace-pre text-xs text-contrast-medium">{lines.join('\n')}</pre>
+  return (
+    <div className="mt-static-sm min-w-0 max-w-full overflow-x-auto rounded-sm bg-canvas p-static-sm" data-testid="integration-diagnostics-scroll">
+      <pre className="m-0 w-max min-w-full whitespace-pre text-xs text-contrast-medium">{lines.join('\n')}</pre>
+    </div>
+  )
 }
 
 function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkItemDetailProps) {
@@ -367,8 +371,9 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
   const action = detail.item.card.action
   const canIntegrate = action.kind === 'integrate-change' || action.kind === 'retry-integration'
   const operatorRequired = integration.disposition === 'operator-required'
+  const manualOption = hasOptionalManualAction(detail.item.card)
   return (
-    <section className={operatorRequired ? 'border-l-4 border-warning bg-surface p-static-md' : 'border-l border-contrast-low bg-surface p-static-md'} aria-labelledby="work-integration-heading">
+    <section className={operatorRequired ? 'min-w-0 border-l-4 border-warning bg-surface p-static-md' : 'min-w-0 border-l border-contrast-low bg-surface p-static-md'} aria-labelledby="work-integration-heading">
       <PHeading id="work-integration-heading" tag="h3" size="md">{integration.repair_active ? 'Integration repair' : operatorRequired ? 'Integration requires your attention' : integration.headline}</PHeading>
       <p className="mt-static-xs text-sm leading-relaxed">{integration.repair_active ? 'A reviewed Integration repair is currently in progress.' : integration.explanation}</p>
       {!integration.superseded && integration.conflicted_paths.length > 0 ? (
@@ -378,21 +383,31 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
         </div>
       ) : null}
       {action.command ? <code className="mt-static-sm block break-all bg-canvas p-static-sm text-xs text-contrast-medium">{action.command}</code> : null}
-      {canIntegrate ? (
+      {canIntegrate && manualOption ? (
+        <div className="mt-static-md grid gap-static-sm">
+          <p className="text-sm"><strong>Waiting for Orchestration.</strong> Orchestration will {action.kind === 'retry-integration' ? 'retry against the current target' : 'integrate this Change'}.</p>
+          <div className="flex flex-wrap items-center gap-static-sm">
+            <span className="text-xs text-contrast-medium">Manual option</span>
+            <PButton type="button" compact variant="secondary" disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
+              {pendingAction === 'integration' ? 'Working...' : action.kind === 'retry-integration' ? 'Retry now' : 'Integrate now'}
+            </PButton>
+          </div>
+        </div>
+      ) : canIntegrate ? (
         <PButton className="mt-static-md" type="button" compact disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
           {pendingAction === 'integration' ? 'Working...' : action.label}
         </PButton>
       ) : null}
       {!canIntegrate && !integration.repair_active && integration.retry_condition ? <p className="mt-static-sm text-xs text-contrast-medium">Next: {integration.retry_condition}</p> : null}
       {integration.superseded && integration.diagnostics.length > 0 ? (
-        <details className="mt-static-md">
+        <details className="mt-static-md min-w-0 max-w-full">
           <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Previous attempt (stale)</summary>
           <p className="mt-static-sm text-xs text-primary">The previous target produced this evidence. It is retained for context but no longer describes the current Integration attempt.</p>
           {integration.conflicted_paths.length > 0 ? <ConflictedPaths paths={integration.conflicted_paths} /> : null}
           <Diagnostics lines={integration.diagnostics} />
         </details>
       ) : !integration.superseded && integration.diagnostics.length > 0 ? (
-        <details className="mt-static-md">
+        <details className="mt-static-md min-w-0 max-w-full">
           <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Technical evidence</summary>
           <Diagnostics lines={integration.diagnostics} />
         </details>
