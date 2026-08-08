@@ -96,11 +96,16 @@ def test_fix_labels_select_one_strongest_mode() -> None:
 def test_workflow_runs_native_and_megalinter_fixes_before_writeback() -> None:
     verification = VERIFY_PATH.read_text()
     writeback = WRITEBACK_PATH.read_text()
+    cockpit = _job(_workflow(VERIFY_PATH), "proof-cockpit")
 
     assert "uv run lint --all" in verification
     assert "uv run megalint" in verification
     assert "uv run playwright install chromium" not in verification
-    assert 'uv run pytest tests serve -m "not api and not e2e and not browser"' in verification
+    assert 'uv run pytest tests serve -m "not api and not e2e and not browser and not cockpit"' in verification
+    assert cockpit["if"] == "needs.classify.outputs.applicable == 'true'"
+    assert "npm ci" in verification
+    assert "npm run build" in verification
+    assert "COCKPIT_EXPECTED: ${{ needs.classify.outputs.applicable }}" in verification
     assert "Verified fixes are pending writeback" in verification
     assert "github.event.workflow_run.head_repository.full_name == github.repository" in writeback
     assert "git apply --check --binary" in writeback

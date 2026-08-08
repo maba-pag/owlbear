@@ -115,8 +115,6 @@ def test_init_creates_only_empty_target_control_plane_stores(
     assert delivery_config.schema_version == 1
     assert delivery_config.integration_target == "main"
     assert "/.owlbear/delivery/config.json" not in (target_dir / ".gitignore").read_text(encoding="utf-8")
-    assert (_REPO_ROOT / "serve/cockpit/dist/index.html").is_file()
-    assert (_REPO_ROOT / "serve/cockpit/dist/assets").is_dir()
     installed_text = "\n".join(
         path.read_text(encoding="utf-8")
         for path in target_dir.rglob("*")
