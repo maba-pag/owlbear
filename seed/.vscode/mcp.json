@@ -1,6 +1,6 @@
 {
   "servers": {
-    "ob-kanban": {
+    "owlbear-delivery": {
       "type": "stdio",
       "command": "uv",
       "args": [
@@ -9,10 +9,10 @@
         "run",
         "python",
         "-m",
-        "owlbear_mcp_kanban"
+        "owlbear_delivery_mcp"
       ]
     },
-    "ob-knowledge": {
+    "owlbear-knowledge": {
       "type": "stdio",
       "command": "uv",
       "args": [
@@ -21,10 +21,10 @@
         "run",
         "python",
         "-m",
-        "owlbear_mcp_knowledge"
+        "owlbear_knowledge_mcp"
       ]
     },
-    "ob-memory": {
+    "owlbear-memory": {
       "type": "stdio",
       "command": "uv",
       "args": [
@@ -33,10 +33,10 @@
         "run",
         "python",
         "-m",
-        "owlbear_mcp_memory"
+        "owlbear_memory_mcp"
       ]
     },
-    "ob-browser": {
+    "owlbear-browser": {
       "type": "stdio",
       "command": "uv",
       "args": [
@@ -45,7 +45,7 @@
         "run",
         "python",
         "-m",
-        "owlbear_mcp_browser"
+        "owlbear_browser_mcp"
       ]
     },
     "markitdown": {

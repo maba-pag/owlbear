@@ -1,7 +1,7 @@
 """OwlBear workspace initialiser — setup/init.py.
 
 Usage (CLI):
-    python ../owlbear/setup/init.py [--name NAME]
+    python ../owlbear/setup/init.py [--replace-hooks]
 
 Run from the target project directory.  owlbear_dir is auto-detected from
 the location of this script.
@@ -10,15 +10,27 @@ the location of this script.
 from __future__ import annotations
 
 import difflib
-import importlib.util
+import hashlib
 import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import warnings
 from contextlib import suppress
 from pathlib import Path
+
+from owlbear_delivery import (
+    TargetAdapterRef,
+    TargetAuthorityRegistry,
+    TargetCutoverReadiness,
+    TargetCutoverRequest,
+    TargetCutoverSource,
+    cut_over_target_runtime,
+    inventory_legacy_source,
+    target_authority_digest,
+)
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -61,23 +73,22 @@ _SKIP_IF_EXISTS_REL = frozenset(
 )
 
 _OWLBEAR_GITIGNORE_MARKER = "# --- OwlBear managed paths ---"
+_RETIRED_OWLBEAR_GITIGNORE_LINES = frozenset(
+    {
+        "# Host-local Delivery startup configuration",
+        "/.owlbear/delivery/config.json",
+    }
+)
 _HOOKS_REL_PREFIX = ".owlbear/hooks/"
+_TARGET_REQUEST_PATH = Path(".owlbear/target-cutover-request.json")
+_TARGET_RECEIPT_PATH = Path(".owlbear/target-cutover.json")
+_DELIVERY_CONFIG_PATH = Path(".owlbear/delivery/config.json")
+_VERIFICATION_PROFILE_PATH = Path(".owlbear/delivery/verification.json")
 
 # Regex: match // line-comments outside of strings.  Handles the common JSONC
 # patterns VS Code uses (trailing comments like `true, // old value`).  Does
 # NOT attempt to handle every edge case — just enough for settings.json files.
 _JSONC_LINE_COMMENT_RE = re.compile(r"(?<!:)//.*$", re.MULTILINE)
-
-
-def _install_openspec(target_dir: Path) -> None:
-    setup_path = Path(__file__).with_name("openspec.py")
-    spec = importlib.util.spec_from_file_location("owlbear_openspec_setup", setup_path)
-    if spec is None or spec.loader is None:
-        msg = f"Unable to load OpenSpec setup from {setup_path}"
-        raise RuntimeError(msg)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    module.install(target_dir)
 
 
 def _strip_jsonc_comments(text: str) -> str:
@@ -118,6 +129,7 @@ def _build_replacements(owlbear_dir: Path, target_dir: Path) -> dict[str, str]:
     return {
         "owlbear_rel_path": Path(os.path.relpath(owlbear_dir, target_dir)).as_posix(),
         "owlbear_abs_path": str(owlbear_dir.resolve()),
+        "target_abs_path": str(target_dir.resolve()),
     }
 
 
@@ -126,7 +138,7 @@ def _write_gitignore(src: Path, dest: Path) -> None:
 
     If the destination file does not exist, copies the full seed .gitignore.
     If it exists but has no owlbear marker, appends the owlbear-managed section.
-    If the marker is already present, does nothing (idempotent).
+    If the marker is already present, removes only retired OwlBear-managed rules.
     """
     seed_content = src.read_text(encoding="utf-8")
 
@@ -136,7 +148,14 @@ def _write_gitignore(src: Path, dest: Path) -> None:
 
     existing = dest.read_text(encoding="utf-8")
     if _OWLBEAR_GITIGNORE_MARKER in existing:
-        return  # already has the owlbear section
+        prefix, marker, managed = existing.partition(_OWLBEAR_GITIGNORE_MARKER)
+        retained = [
+            line for line in managed.splitlines(keepends=True) if line.strip() not in _RETIRED_OWLBEAR_GITIGNORE_LINES
+        ]
+        updated = prefix + marker + "".join(retained)
+        if updated != existing:
+            dest.write_text(updated, encoding="utf-8")
+        return
 
     # Extract the owlbear-managed section from the seed
     marker_pos = seed_content.find(_OWLBEAR_GITIGNORE_MARKER)
@@ -210,6 +229,211 @@ def _write_seed_file(src: Path, dest: Path, replacements: dict[str, str]) -> Non
     shutil.copy2(src, dest)
 
 
+def _current_branch(target_dir: Path) -> str | None:
+    """Return the checked-out local branch when the target is a Git repository."""
+    result = subprocess.run(
+        ["git", "branch", "--show-current"],  # noqa: S607
+        cwd=target_dir,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    branch = result.stdout.strip()
+    return branch or None
+
+
+def _branch_exists(target_dir: Path, branch: str) -> bool:
+    """Return whether *branch* is a valid local branch in the target repository."""
+    syntax = subprocess.run(  # noqa: S603
+        ["git", "check-ref-format", f"refs/heads/{branch}"],  # noqa: S607
+        cwd=target_dir,
+        check=False,
+        capture_output=True,
+    )
+    exists = subprocess.run(  # noqa: S603
+        ["git", "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"],  # noqa: S607
+        cwd=target_dir,
+        check=False,
+        capture_output=True,
+    )
+    return syntax.returncode == 0 and exists.returncode == 0
+
+
+def _select_integration_target(target_dir: Path, requested: str | None, *, interactive: bool) -> str:
+    """Resolve a fresh project's target from an option, prompt, or stable fallback."""
+    if requested is not None:
+        if not _branch_exists(target_dir, requested):
+            msg = f"Integration target must name an existing local branch: {requested}"
+            raise RuntimeError(msg)
+        return requested
+    if not interactive:
+        return "main"
+    suggested = _current_branch(target_dir) or "main"
+    selected = input(f"Integration target branch [{suggested}]: ").strip() or suggested
+    if not _branch_exists(target_dir, selected):
+        msg = f"Integration target must name an existing local branch: {selected}"
+        raise RuntimeError(msg)
+    return selected
+
+
+def _write_delivery_config(
+    target_dir: Path,
+    integration_target: str | None,
+    *,
+    interactive: bool,
+) -> None:
+    """Create the tracked project Delivery policy once."""
+    path = target_dir / _DELIVERY_CONFIG_PATH
+    if path.exists():
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = {
+        "schema_version": 1,
+        "integration_target": _select_integration_target(
+            target_dir,
+            integration_target,
+            interactive=interactive,
+        ),
+    }
+    path.write_text(json.dumps(content, indent=2) + "\n", encoding="utf-8")
+
+
+def _verification_steps(target_dir: Path) -> list[dict[str, object]]:
+    """Detect supported test surfaces once while scaffolding tracked policy."""
+    steps: list[dict[str, object]] = []
+    if (target_dir / "pyproject.toml").is_file() and (target_dir / "tests").is_dir():
+        steps.append(
+            {
+                "step_id": "python-tests",
+                "argv": ["uv", "run", "--locked", "pytest"],
+                "cwd": ".",
+                "timeout_seconds": 1800,
+            }
+        )
+    package_path = target_dir / "package.json"
+    try:
+        package = json.loads(package_path.read_text(encoding="utf-8")) if package_path.is_file() else {}
+    except OSError, json.JSONDecodeError:
+        package = {}
+    if isinstance(package.get("scripts"), dict) and isinstance(package["scripts"].get("test"), str):
+        if (target_dir / "package-lock.json").is_file():
+            steps.append(
+                {
+                    "step_id": "node-install",
+                    "argv": ["npm", "ci"],
+                    "cwd": ".",
+                    "timeout_seconds": 1800,
+                }
+            )
+        steps.append(
+            {
+                "step_id": "node-tests",
+                "argv": ["npm", "test"],
+                "cwd": ".",
+                "timeout_seconds": 1800,
+            }
+        )
+    return steps
+
+
+def _write_verification_profile(target_dir: Path) -> None:
+    """Scaffold tracked Integration policy once from supported manifests."""
+    path = target_dir / _VERIFICATION_PROFILE_PATH
+    if path.exists():
+        return
+    steps = _verification_steps(target_dir)
+    if not steps:
+        warnings.warn(
+            "No supported test surface was detected; create .owlbear/delivery/verification.json before Integration.",
+            stacklevel=2,
+        )
+        return
+    content = {
+        "schema_version": 1,
+        "pass_environment": ["PATH", "HOME", "TMPDIR", "UV_CACHE_DIR", "NPM_CONFIG_CACHE", "CI"],
+        "steps": steps,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(content, indent=2) + "\n", encoding="utf-8")
+
+
+def _target_code_revision(owlbear_dir: Path) -> str:
+    """Identify the installed target runtime and agent distribution."""
+    serve_root = owlbear_dir / "serve"
+    package_sources = (
+        tuple(path / "src" for path in sorted(serve_root.iterdir()) if path.is_dir()) if serve_root.exists() else ()
+    )
+    roots = (
+        owlbear_dir / "seed",
+        owlbear_dir / "setup",
+        owlbear_dir / "share" / "agents",
+        owlbear_dir / "share" / "instructions",
+        owlbear_dir / "share" / "prompts",
+        owlbear_dir / "share" / "skills",
+        owlbear_dir / "serve" / "cockpit" / "dist",
+        *package_sources,
+    )
+    files = [path for name in ("pyproject.toml", "uv.lock") if (path := owlbear_dir / name).is_file()]
+    files.extend(path for root in roots if root.exists() for path in root.rglob("*") if path.is_file())
+    digest = hashlib.sha256()
+    for path in sorted(files):
+        relative = path.relative_to(owlbear_dir).as_posix().encode()
+        digest.update(len(relative).to_bytes(8, "big"))
+        digest.update(relative)
+        content = path.read_bytes()
+        digest.update(len(content).to_bytes(8, "big"))
+        digest.update(content)
+    return digest.hexdigest()
+
+
+def _activate_fresh_target(target_dir: Path, owlbear_dir: Path) -> None:
+    """Publish a receipt-authorized empty target runtime for a fresh workspace."""
+    request_path = target_dir / _TARGET_REQUEST_PATH
+    if (target_dir / _TARGET_RECEIPT_PATH).exists():
+        return
+    if (target_dir / ".owlbear/target").exists():
+        message = "target store exists without its activation receipt"
+        raise RuntimeError(message)
+
+    if request_path.exists():
+        request = TargetCutoverRequest.model_validate_json(request_path.read_bytes())
+    else:
+        source = target_dir / ".owlbear/bootstrap/target-runtime"
+        source.mkdir(parents=True)
+        revision = _target_code_revision(owlbear_dir)
+        (source / "distribution-revision").write_text(revision + "\n", encoding="utf-8")
+        source_digest = inventory_legacy_source(source, (), {}).source_digest
+        request = TargetCutoverRequest(
+            sources=(
+                TargetCutoverSource(
+                    source_path=".owlbear/bootstrap/target-runtime",
+                    snapshot_name="bootstrap",
+                    expected_source_digest=source_digest,
+                ),
+            ),
+            snapshot_path=".owlbear/legacy/target-cutover",
+            target_path=".owlbear/target",
+            receipt_path=_TARGET_RECEIPT_PATH.as_posix(),
+            adapter_refs=(TargetAdapterRef(relative_path=".owlbear/adapters/delivery", target="target"),),
+            authorities=(),
+            classifications=(),
+            expected_authority_digest=target_authority_digest(()),
+            actual_code_revision=revision,
+            expected_code_revision=revision,
+            readiness=TargetCutoverReadiness(),
+            approval="ACTIVATE_TARGET_RUNTIME",
+        )
+        request_path.write_text(request.model_dump_json(indent=2) + "\n", encoding="utf-8")
+
+    def smoke(workspace: Path, cutover_request: TargetCutoverRequest) -> None:
+        authorities = TargetAuthorityRegistry(workspace / cutover_request.target_path).list_authorities()
+        if authorities:
+            message = "fresh target runtime contains unexpected authority"
+            raise RuntimeError(message)
+
+    cut_over_target_runtime(target_dir, request, smoke=smoke)
+
+
 def _hook_files_match(src: Path, dest: Path) -> bool:
     """Return True when the existing hook file already matches the seed file."""
     return dest.exists() and src.read_bytes() == dest.read_bytes()
@@ -266,7 +490,7 @@ def _hook_diff(src: Path, dest: Path) -> str:
     try:
         seed_lines = src.read_text(encoding="utf-8").splitlines(keepends=True)
         existing_lines = dest.read_text(encoding="utf-8").splitlines(keepends=True)
-    except (OSError, UnicodeDecodeError):
+    except OSError, UnicodeDecodeError:
         return ""
     diff_lines = list(
         difflib.unified_diff(
@@ -286,10 +510,10 @@ def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None:
     """Write .vscode/mcp.json, merging owlbear servers with existing entries.
 
     Writes five MCP server entries from the seed template:
-      - ob-kanban (owlbear_mcp_kanban)
-      - ob-knowledge (owlbear_mcp_knowledge)
-      - ob-memory (owlbear_mcp_memory)
-    - ob-browser (owlbear_mcp_browser)
+            - owlbear-delivery (owlbear_delivery_mcp)
+            - owlbear-knowledge (owlbear_knowledge_mcp)
+            - owlbear-memory (owlbear_memory_mcp)
+        - owlbear-browser (owlbear_browser_mcp)
       - microsoft/markitdown
 
     Standalone entry point for callers that only need the MCP config written.
@@ -316,20 +540,22 @@ def init(  # noqa: C901
     *,
     replace_hooks: bool = False,
     interactive: bool | None = None,
+    integration_target: str | None = None,
 ) -> None:
     """Initialise an OwlBear workspace in *target_dir*.
 
     Walks the seed/ tree inside *owlbear_dir*, copies static files, and
     replaces ``{{placeholder}}`` tokens in ``.json`` / ``.yml`` templates.
     ``settings.json`` and ``mcp.json`` are deep-merged with existing files.
-    Also creates the four kanban board directories under ``.owlbear/kanban/``
-    (``tasks``, ``archive``, ``decisions/pending``, ``decisions/resolved``).
+    Also receipt-activates an empty target authority store for fresh workspaces.
+    Existing legacy stores remain untouched.
 
     Args:
         target_dir: Destination project directory.
         owlbear_dir: Root of the owlbear installation (contains ``seed/``).
         replace_hooks: Overwrite differing existing hook runtime files.
         interactive: Whether hook conflicts may prompt. Defaults to TTY detect.
+        integration_target: Existing local branch used for fresh Delivery configuration.
     """
     seed_dir = owlbear_dir / "seed"
     replacements = _build_replacements(owlbear_dir, target_dir)
@@ -378,16 +604,15 @@ def init(  # noqa: C901
 
         _write_seed_file(src, dest, replacements)
 
-    board_root = target_dir / ".owlbear" / "kanban"
-    for rel_dir in (
-        Path("tasks"),
-        Path("archive"),
-        Path("decisions") / "pending",
-        Path("decisions") / "resolved",
-    ):
-        (board_root / rel_dir).mkdir(parents=True, exist_ok=True)
-
-    _install_openspec(target_dir)
+    _write_delivery_config(
+        target_dir,
+        integration_target,
+        interactive=interactive_mode,
+    )
+    _write_verification_profile(target_dir)
+    ops_root = target_dir / ".owlbear"
+    if not (ops_root / "kanban").exists():
+        _activate_fresh_target(target_dir, owlbear_dir)
 
 
 # ---------------------------------------------------------------------------
@@ -398,18 +623,27 @@ if __name__ == "__main__":  # pragma: no cover
     import argparse
 
     parser = argparse.ArgumentParser(description="Initialise an OwlBear workspace in the current directory.")
-    parser.add_argument("--name", default=None, help="Project name (default: directory name)")
     parser.add_argument(
         "--replace-hooks",
         action="store_true",
         help="Overwrite differing existing .owlbear/hooks files instead of skipping or prompting.",
+    )
+    parser.add_argument(
+        "--integration-target",
+        metavar="BRANCH",
+        help="Use an existing local branch for fresh Delivery configuration.",
     )
     args = parser.parse_args()
 
     _target = Path.cwd()
     _owlbear = Path(__file__).resolve().parent.parent
     try:
-        init(_target, _owlbear, replace_hooks=args.replace_hooks)
+        init(
+            _target,
+            _owlbear,
+            replace_hooks=args.replace_hooks,
+            integration_target=args.integration_target,
+        )
     except RuntimeError as exc:
         raise SystemExit(str(exc)) from exc
     print(f"OwlBear workspace initialised in '{_target.name}'.")

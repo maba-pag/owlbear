@@ -1,4 +1,4 @@
-"""PostToolUse lint and non-blocking minimum-change feedback for pipeline agents.
+"""PostToolUse lint and non-blocking minimum-change feedback for implementation agents.
 
 Reads VS Code hook JSON, runs Ruff on edited Python files, and warns about unusually broad edits.
 """
@@ -65,7 +65,7 @@ def _extract_paths(tool_name: str, tool_input: object) -> list[str]:
 def _git(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     """Run a non-interactive git query without raising on repository state."""
     return subprocess.run(  # noqa: S603
-        ["git", *arguments],
+        ["git", *arguments],  # noqa: S607 — git must be found via PATH
         cwd=root,
         capture_output=True,
         text=True,
@@ -165,6 +165,7 @@ def _minimum_change_warnings(candidate_paths: list[str], root: Path) -> list[str
 
 
 def main() -> None:
+    """Report Ruff failures and scope warnings for files changed by an edit tool."""
     raw = sys.stdin.buffer.read()
     # Strip UTF-8 BOM if present
     if raw.startswith(b"\xef\xbb\xbf"):
@@ -172,7 +173,7 @@ def main() -> None:
 
     try:
         payload = json.loads(raw.decode("utf-8", errors="replace"))
-    except (json.JSONDecodeError, ValueError):
+    except json.JSONDecodeError, ValueError:
         print("{}")
         return
 
@@ -201,7 +202,7 @@ def main() -> None:
     if existing_py:
         try:
             result = subprocess.run(  # noqa: S603
-                [
+                [  # noqa: S607 — uv must be found via PATH
                     "uv",
                     "run",
                     "--quiet",

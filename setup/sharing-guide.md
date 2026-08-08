@@ -36,13 +36,14 @@ git clone https://github.com/your-org/my-project.git ~/Dev/my-project
 
 # 3. Bootstrap owlbear into the project workspace
 cd ~/Dev/my-project
-python ../owlbear/setup/init.py
+uv run --project ../owlbear python ../owlbear/setup/init.py
 
 # 4. Open the project in VS Code
 code .
 ```
 
-> **Windows:** use `C:\Dev\...` paths and backslashes: `python ..\owlbear\setup\init.py`.
+> **Windows:** use `C:\Dev\...` paths and backslashes:
+> `uv run --project ..\owlbear python ..\owlbear\setup\init.py`.
 > owlbear and the project must be on the same drive.
 
 After VS Code opens, have the teammate verify the setup using the **Diagnostics view**
@@ -60,8 +61,8 @@ cd ~/Dev/my-project
 uv run --project ../owlbear cockpit
 ```
 
-This serves the prebuilt Cockpit bundle from owlbear while keeping `.owlbear/kanban/` and
-`.owlbear/memory/` scoped to the project.
+This serves the prebuilt Cockpit bundle from owlbear while keeping target change, delivery,
+Memory, and Ideas state scoped to the project.
 
 ---
 
@@ -71,13 +72,13 @@ This serves the prebuilt Cockpit bundle from owlbear while keeping `.owlbear/kan
 
 No platform-specific configuration is required:
 
-- **Hooks** — all 6 hooks are Python scripts (`allow-stances-only.py`, `deny-non-doc-writes.py`, `deny-src-writes.py`, `deny-writes.py`, `lint-changed.py`, `session-context.py`) executed by VS Code's extension host — no shell dependency
+- **Hooks** — all 5 hooks are Python scripts (`allow-stances-only.py`, `deny-src-writes.py`, `deny-writes.py`, `lint-changed.py`, `session-context.py`) executed by VS Code's extension host — no shell dependency
 - **MCP servers** — started via `uv run`, which works identically on macOS, Linux, and Windows
 
 ### Windows
 
 - owlbear and the project must be on the **same drive** (e.g., both on `C:\`)
-- Use backslashes in the bootstrap command: `python ..\owlbear\setup\init.py`
+- Use backslashes in the bootstrap command: `uv run --project ..\owlbear python ..\owlbear\setup\init.py`
 
 ---
 
@@ -91,7 +92,9 @@ No platform-specific configuration is required:
 | Prompts (`*.prompt.md`) | `../owlbear/share/prompts/` | Yes — shared baseline |
 | MCP server code | `../owlbear/serve/` | Yes — started from owlbear via `uv run --project` |
 | Hook runtime files | `.owlbear/hooks/` in project | No — copied from `seed/` into each project |
-| Kanban board | `.owlbear/kanban/tasks/` in project | No — per-project |
+| Target authority and runtime | `.owlbear/target/changes/` in project | No — per-project |
+| Target activation request and receipt | `.owlbear/target-cutover-*.json` in project | No — per-project |
+| Immutable legacy inventory | `.owlbear/legacy/` in project, when present | No — read-only history |
 | `.github/copilot-instructions.md` | project root | No — per-project (override layer) |
 | `.owlbear/knowledge/` | project root | No — per-project |
 
@@ -149,7 +152,8 @@ organization agent registry as a complement to the local installation.
 | `ValueError` during `init.py` | Ensure owlbear and project are on the same Windows drive |
 | Agents missing after setup | Run `init.py` again; check that `.vscode/settings.json` was created and contains `chat.agentFilesLocations` pointing to the owlbear installation |
 | Cockpit command not found in project | Run `uv run --project ../owlbear cockpit` from the project root instead of plain `uv run cockpit` |
-| Cockpit opens the wrong board | Launch from the project root or set `KANBAN_DIR` to the intended `.owlbear/kanban` directory |
+| Target MCP or Cockpit reports a missing receipt | Re-run `init.py` in a current workspace; legacy `.owlbear/kanban/` stores are preserved but not converted |
+| Cockpit opens the wrong workspace | Launch from the project root or pass the intended project directory to `uv --directory` |
 | Hook updates not taking effect after `git pull` | Re-run `init.py`; use `--replace-hooks` if local hook files differ and you want the seeded versions restored |
 | `uv` not found | Install uv globally: `pip install uv` or see [uv docs](https://docs.astral.sh/uv/) |
 | Different owlbear versions between teammates | Pin owlbear to a tag or commit SHA in team onboarding docs; `git pull` + re-run `init.py` to update |

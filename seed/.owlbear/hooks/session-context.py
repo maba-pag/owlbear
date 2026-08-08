@@ -1,4 +1,4 @@
-"""session-context.py — SessionStart hook for pipeline agents.
+"""session-context.py — SessionStart hook for implementation agents.
 
 Reads stdin JSON, runs git branch/log, outputs SessionStart additionalContext.
 Returns {} on any failure (non-blocking, fail-open).
@@ -30,14 +30,14 @@ def main() -> None:  # noqa: PLR0911
     # Return {} on malformed JSON (includes BOM-prefixed input)
     try:
         json.loads(stdin_text)
-    except (json.JSONDecodeError, ValueError):
+    except json.JSONDecodeError, ValueError:
         print("{}")
         return
 
     # Get current branch — return {} if git unavailable or not in a repo
     try:
         branch_result = subprocess.run(
-            ["git", "branch", "--show-current"],
+            ["git", "branch", "--show-current"],  # noqa: S607
             capture_output=True,
             text=True,
             check=False,
@@ -55,7 +55,7 @@ def main() -> None:  # noqa: PLR0911
     # Get recent commits — return {} on git failure
     try:
         log_result = subprocess.run(
-            ["git", "log", "--oneline", "-3", "--no-decorate"],
+            ["git", "log", "--oneline", "-3", "--no-decorate"],  # noqa: S607
             capture_output=True,
             text=True,
             check=False,

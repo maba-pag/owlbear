@@ -26,12 +26,13 @@
   "chat.tools.compressOutput.enabled": true,
   "chat.tools.terminal.autoApprove": {
     "npm test": true,
-    "openspec": true,
     "Test-Path": true,
     "uv run coverage": true,
     "uv run eslint-fix": true,
+    "uv run help": true,
     "uv run lint": true,
-    "uv run lint-all": true,
+    "uv run lint --all": true,
+    "uv run lint-full": true,
     "uv run megalint": true,
     "uv run pytest": true,
     "uv run python": true,
@@ -58,7 +59,7 @@
     "**/*.egg-info": true
   },
   "files.watcherExclude": {
-    ".owlbear/kanban/**": true
+    ".owlbear/target/**": true
   },
   "git.autorefresh": false,
   "github.copilot.chat.additionalReadAccessPaths": [
@@ -103,8 +104,7 @@
   "scm.defaultViewMode": "tree",
   "scm.graph.pageOnScroll": false,
   "search.exclude": {
-    ".owlbear/kanban/activity.jsonl": true,
-    ".owlbear/kanban/archive/**": true,
+    ".owlbear/legacy/**": true,
     ".owlbear/scratch/**": true,
     ".venv": true,
     "**/__pycache__": true,

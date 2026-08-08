@@ -1,8 +1,8 @@
 """deny-src-writes.py — PreToolUse hook for test-only roles.
 
-Allow-list path guard: only writes to `tests/`, `__tests__/`, `e2e/`, or
-`.owlbear/scratch/` are permitted. Reads VS Code hook stdin JSON, checks paths
-for write tools, denies writes outside those surfaces. Usage: invoked
+Allow-list path guard: only writes to test directories, colocated test files,
+or `.owlbear/scratch/` are permitted. Reads VS Code hook stdin JSON, checks
+paths for write tools, denies writes outside those surfaces. Usage: invoked
 automatically by VS Code as a PreToolUse hook.
 """
 
@@ -24,6 +24,7 @@ _WRITE_TOOLS = {
 _TESTS_RE = re.compile(r"(^|/)tests/")
 _DUNDER_TESTS_RE = re.compile(r"(^|/)__tests__/")
 _E2E_RE = re.compile(r"(^|/)e2e/")
+_TEST_FILE_RE = re.compile(r"(^|/)[^/]+\.(?:test|spec)\.[cm]?[jt]sx?$")
 _SCRATCH_RE = re.compile(r"(^|/)\.owlbear/scratch(/|$)")
 
 
@@ -65,11 +66,22 @@ def _extract_paths(tool_input: object) -> list[str]:
     return paths
 
 
+def _is_allowed_path(path: str) -> bool:
+    return bool(
+        _TESTS_RE.search(path)
+        or _DUNDER_TESTS_RE.search(path)
+        or _E2E_RE.search(path)
+        or _TEST_FILE_RE.search(path)
+        or _SCRATCH_RE.search(path)
+    )
+
+
 def main() -> None:
+    """Deny hook-request writes outside test and scratch directories."""
     raw = sys.stdin.buffer.read()
     try:
         payload = json.loads(raw.decode("utf-8", errors="replace"))
-    except (json.JSONDecodeError, ValueError):
+    except json.JSONDecodeError, ValueError:
         print("{}")
         return
 
@@ -85,20 +97,16 @@ def main() -> None:
 
     for p in paths:
         normalized = p.replace("\\", "/").removeprefix("./")
-        if not (
-            _TESTS_RE.search(normalized)
-            or _DUNDER_TESTS_RE.search(normalized)
-            or _E2E_RE.search(normalized)
-            or _SCRATCH_RE.search(normalized)
-        ):
+        if not _is_allowed_path(normalized):
             response = {
                 "hookSpecificOutput": {
                     "permissionDecision": "deny",
                     "permissionDecisionReason": (
                         f"test-writer path guard: write target "
                         f"'{normalized}' is outside the allowed "
-                        "directories. Only writes to tests/, __tests__/, e2e/, "
-                        "or .owlbear/scratch/ are permitted."
+                        "test surfaces. Only writes to tests/, __tests__/, e2e/, "
+                        "colocated *.test.* or *.spec.* files, or "
+                        ".owlbear/scratch/ are permitted."
                     ),
                 }
             }
