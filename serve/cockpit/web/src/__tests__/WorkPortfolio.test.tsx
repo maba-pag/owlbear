@@ -595,6 +595,25 @@ it('explains returned Design progress and labels evidence without raw enum text'
   expect(inspector).not.toHaveTextContent('Next: request:REQ-001')
 })
 
+it('does not prescribe Design for a return to Planning', async () => {
+  currentDetail = detail({
+    card: card({ stage: 'planning' }),
+    return_context: {
+      target: 'planning',
+      reason: 'The implementation plan needs revision.',
+      locators: ['finding:F-001'],
+      source_boundary: null,
+      preserved_commit: null,
+    },
+  })
+  renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(inspector).toHaveTextContent('Returned to Planning')
+  expect(inspector).toHaveTextContent('The implementation plan needs revision.')
+  expect(inspector).not.toHaveTextContent('/design')
+})
+
 it('shows active Integration repair state without instructing a duplicate repair', async () => {
   const integrationCard = card({
     item_key: 'integration',

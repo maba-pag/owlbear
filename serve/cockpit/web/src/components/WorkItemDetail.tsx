@@ -251,7 +251,7 @@ function ExceptionalStateSection({ detail }: Pick<WorkItemDetailProps, 'detail'>
           <AttentionItem
             label={`Returned to ${STAGE_LABELS[returned.target]}`}
             reason={returned.reason}
-            retry={`Resume /design ${detail.item.card.change_id}.`}
+            retry={returned.target === 'design' ? `Resume /design ${detail.item.card.change_id}.` : undefined}
             evidence={returned.locators.join(', ')}
             sourceBoundary={returned.source_boundary}
           />
