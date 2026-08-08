@@ -8,7 +8,9 @@ function countLabel(count: number, singular: string, plural = `${singular}s`) {
 function guidanceText(guidance: PortfolioGuidance) {
   switch (guidance.kind) {
     case 'intervene':
-      return `Review ${countLabel(guidance.work_count, 'item')} that needs you.`
+      return guidance.work_count === 1
+        ? 'Review 1 item that needs you.'
+        : `Review ${guidance.work_count} items that need you.`
     case 'resume-design':
       return `Continue Design for ${guidance.change_ids.join(' or ')} with ${guidance.change_ids.map((changeId) => `/design ${changeId}`).join(' or ')}.`
     case 'start-orchestration':
