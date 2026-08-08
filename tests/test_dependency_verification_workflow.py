@@ -99,9 +99,8 @@ def test_workflow_runs_native_and_megalinter_fixes_before_writeback() -> None:
 
     assert "uv run lint --all" in verification
     assert "uv run megalint" in verification
-    assert verification.index("uv run playwright install chromium --with-deps") < verification.index(
-        'uv run pytest tests serve -m "not api and not e2e"'
-    )
+    assert "uv run playwright install chromium" not in verification
+    assert 'uv run pytest tests serve -m "not api and not e2e and not browser"' in verification
     assert "Verified fixes are pending writeback" in verification
     assert "github.event.workflow_run.head_repository.full_name == github.repository" in writeback
     assert "git apply --check --binary" in writeback
