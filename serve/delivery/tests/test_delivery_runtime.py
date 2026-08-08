@@ -21,6 +21,7 @@ from owlbear_delivery import (
     DeliveryChangeStage,
     DeliveryContract,
     DeliveryFrontier,
+    DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
     DeliveryOutcome,
@@ -202,6 +203,42 @@ def _claim_with_output(runtime: DeliveryRuntime, outcome_id: str, claim_id: str)
     output = _output(claim_id, claimed.stage)
     runtime.publish_output(PublishDeliveryOutput(outcome_id=outcome_id, claim_id=claim_id, output=output))
     return output
+
+
+def test_integration_repair_claim_is_change_scoped_and_exact(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    runtime.publish_integration_attention(
+        DeliveryIntegrationAttention(
+            attention_id="a" * 64,
+            code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
+            change_id="delivery-runtime",
+            change_head="1" * 40,
+            target_head="2" * 40,
+            integration_target="main",
+            diagnostics=("merge conflict",),
+            retry_condition="Admit an independently reviewed repair.",
+        )
+    )
+    claim = DeliveryActiveClaim(
+        attempt_id="repair-attempt",
+        claim_id="repair-claim",
+        owner_id="repair-owner",
+        process_id="repair-process",
+        started_at="2026-08-04T00:00:00Z",
+        worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER,
+    )
+
+    assert runtime.activate_integration_repair_claim(claim) == claim
+    assert runtime.require_integration_repair_claim("repair-attempt", "repair-claim") == claim
+    with pytest.raises(DeliveryRuntimeConflictError, match="already claimed"):
+        runtime.activate_integration_repair_claim(claim)
+    with pytest.raises(DeliveryRuntimeConflictError, match="execution identity"):
+        runtime.require_integration_repair_claim("other-attempt", "repair-claim")
+    assert runtime.remove_integration_repair_claim("repair-attempt", "repair-claim") == claim
+    assert runtime.integration_repair_claim() is None
 
 
 def _task(

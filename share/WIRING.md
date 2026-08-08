@@ -48,8 +48,8 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | designer-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
 | planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch and terminal mutation; publishes advisory-reviewed task chains and returns worker-owned transitions |
 | planner-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
-| orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, memory-curator, Explore | Five Delivery portfolio operations: report, acquire, transition, recover exact failed claims including Builder dispatch failures, and integrate ready changes; no repository write tools |
-| builder | GPT-5.6 Terra | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; task Build returns a lifecycle transition or claim-bound pre-execution dispatch failure; user-invoked reviewed Integration repair; `SessionStart`: repository context; `PostToolUse`: lint changed files |
+| orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, memory-curator, Explore | Reports and acquires portfolio work, dispatches task and repair claims, recovers exact failed claims, forwards task transitions, and integrates ready changes; no repository write tools |
+| builder | GPT-5.6 Terra | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; task Build returns a lifecycle transition; claimed Integration repair returns an admission or exact dispatch failure; `SessionStart`: repository context; `PostToolUse`: lint changed files |
 | build-reviewer | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or Integration-repair review with read-only Git; `PreToolUse`: deny writes except scratch and terminal mutation |
 | test-curator | GPT-5.6 Terra | `w-test-curation` | None | `PreToolUse`: deny source writes |
 | memory-curator | GPT-5.6 Terra | `w-mem-curation` | None | None |
@@ -65,7 +65,6 @@ Tool allowlists remain in agent frontmatter; they are not duplicated here.
 | `ideate` | `prompt` -> designer in discovery mode | Agent required-reading loads `w-design-session`; selects or creates one target Design session |
 | `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same target Design session |
 | `orchestrate` | `prompt` -> orchestrator | Agent required-reading loads `w-orchestration` |
-| `integration-repair` | `prompt` -> builder | Loads `w-integration-repair` on demand for one supplied change ID |
 | `test-curation` | `prompt` -> test-curator | Agent required-reading loads `w-test-curation` |
 | `kb-ingest` | `prompt` -> knowledge-ingestor | Agent required-reading loads `h-knowledge-ops` |
 | `kb-enrich` | `prompt` -> knowledge-enricher | Agent required-reading loads `w-knowledge-enrichment` and `h-knowledge-ops` |
@@ -85,7 +84,7 @@ The named caller owns each on-demand condition and timing.
 | Caller or trigger | Conditional skill | Load condition |
 |-------------------|-------------------|----------------|
 | Planner or Builder context | `h-decision-requests` | One bounded user choice or action requires an embedded `DeliveryRequest` in `BlockDelivery` |
-| Builder via `integration-repair` prompt | `w-integration-repair` | A user supplies one exact change ID with current Integration merge-conflict attention |
+| Builder via repair launch | `w-integration-repair` | Orchestrator dispatches one acquired `DeliveryIntegrationRepairLaunchPackage` |
 | native design/planning | `w-research` | Local evidence cannot resolve a material claim and the owning workflow permits research |
 | native design/planning | `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | Source ownership, architecture, packet boundaries, or acceptance drafting requires the specialist boundary |
 | universal memory governance | `h-memory-structure`, `h-mcp-memory` | A save-capable role has a qualifying reusable insight |
@@ -122,7 +121,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | designer-challenger | designer | Native admission lacks required repository-grounded entity challenge evidence |
 | planner | orchestrator | An acquired Planning launch cannot produce a published task chain and worker-owned transition |
 | planner-challenger | planner | A proposed Delivery task chain cannot receive independent advisory evidence |
-| builder | orchestrator | An acquired Build launch cannot produce a published exact-commit result and worker-owned transition; a pre-execution dispatch failure instead triggers exact claim recovery |
+| builder | orchestrator | An acquired Build or Integration repair launch cannot produce its exact-commit result; a dispatch failure instead triggers the matching exact claim recovery |
 | build-reviewer | builder | An exact-commit task result or Integration repair cannot receive advisory pass or finding evidence |
 | memory-curator | orchestrator | Periodic memory housekeeping is skipped |
 | Explore | designer, planner, orchestrator | Broad read-only orientation must be performed by the caller or omitted |

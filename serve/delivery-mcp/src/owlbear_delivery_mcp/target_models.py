@@ -96,6 +96,13 @@ class ClaimContextParams(ChangeParams):
     claim_id: str = Field(min_length=1)
 
 
+class RepairClaimContextParams(ChangeParams):
+    """Validate one exact active change-level Integration repair claim."""
+
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+
+
 class AdmitDeliveryChangeParams(_TargetProtocolModel):
     """Validate source-bound Delivery admission."""
 
@@ -150,7 +157,7 @@ class TransitionDeliveryParams(ChangeParams):
     request: DeliveryTransition
 
 
-class IntegrationRepairParams(_TargetProtocolModel):
+class IntegrationRepairParams(RepairClaimContextParams):
     """Validate one independently reviewed Integration repair."""
 
     repair: DeliveryIntegrationRepair
@@ -208,6 +215,10 @@ type PublishDeliveryPlanRequest = Annotated[
     PublishDeliveryPlanParams,
     BeforeValidator(partial(_parse_json_model, PublishDeliveryPlanParams)),
 ]
+type RepairClaimContextRequest = Annotated[
+    RepairClaimContextParams,
+    BeforeValidator(partial(_parse_json_model, RepairClaimContextParams)),
+]
 type PublishDeliveryResultRequest = Annotated[
     PublishDeliveryResultParams,
     BeforeValidator(partial(_parse_json_model, PublishDeliveryResultParams)),
@@ -254,6 +265,8 @@ __all__ = [
     "PublishDeliveryPlanRequest",
     "PublishDeliveryResultParams",
     "PublishDeliveryResultRequest",
+    "RepairClaimContextParams",
+    "RepairClaimContextRequest",
     "ReviseDesignSessionParams",
     "ReviseDesignSessionRequest",
     "SearchCompletedParams",

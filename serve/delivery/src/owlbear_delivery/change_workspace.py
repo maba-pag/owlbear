@@ -52,7 +52,7 @@ class ChangeWriter(WriterIdentity):
     """One active writer bound to a target transformation."""
 
     job_id: int = Field(gt=0)
-    kind: Literal["plan", "build", "assembly"]
+    kind: Literal["plan", "build", "assembly", "repair"]
 
 
 class ChangeCoordination(_WorkspaceModel):
@@ -312,23 +312,37 @@ class PortfolioCoordinator:
     def admit_integration_repair(
         self,
         repair: DeliveryIntegrationRepair,
-        participants: tuple[ReplacementTransactionParticipant, ReplacementTransactionParticipant],
+        participants: tuple[ReplacementTransactionParticipant, ...],
     ) -> None:
         """Atomically advance reviewed workspace and runtime attention boundaries."""
         transaction_id = hashlib.sha256(_model_content(repair)).hexdigest()
         self._commit(f"integration-repair-{transaction_id}", participants)
 
-    def integration_repair_replacement(
+    def integration_repair_replacements(
         self,
         previous: ChangeCoordination,
         replacement: ChangeCoordination,
-    ) -> ReplacementTransactionParticipant:
-        """Prepare an OCC replacement for one validated reviewed-boundary advance."""
+        claim_id: str,
+    ) -> tuple[ReplacementTransactionParticipant, ReplacementTransactionParticipant]:
+        """Prepare OCC replacements for reviewed-boundary advance and writer release."""
         path = self._coordination_path(previous.change_id)
         previous_bytes = path.read_bytes()
         if ChangeCoordination.model_validate_json(previous_bytes) != previous:
             _coordination_conflict("workspace changed during Integration repair validation")
-        return _replacement(self._state_root, path, previous_bytes, replacement)
+        ledger_bytes = self._ledger_path.read_bytes()
+        ledger = CapacityLedger.model_validate_json(ledger_bytes)
+        if previous.writer is None or previous.writer.claim_id != claim_id:
+            _coordination_conflict("repair claim does not own the change workspace")
+        if previous.change_id not in ledger.change_ids:
+            _coordination_conflict("repair writer does not hold global capacity")
+        released = replacement.model_copy(update={"writer": None})
+        available = ledger.model_copy(
+            update={"change_ids": tuple(item for item in ledger.change_ids if item != previous.change_id)}
+        )
+        return (
+            _replacement(self._state_root, path, previous_bytes, released),
+            _replacement(self._state_root, self._ledger_path, ledger_bytes, available),
+        )
 
     def _initialize_ledger(self) -> None:
         initial = CapacityLedger(capacity=self._capacity)
@@ -448,23 +462,29 @@ class ChangeWorkspaceManager:
     def integration_repair_replacement(
         self,
         repair: DeliveryIntegrationRepair,
-    ) -> ReplacementTransactionParticipant:
+        claim_id: str,
+    ) -> tuple[ReplacementTransactionParticipant, ReplacementTransactionParticipant]:
         """Validate one additive conflict repair and prepare its reviewed-boundary update."""
         coordination = self._coordinator.show(repair.change_id)
-        self._require_integration_repair_identities(coordination, repair)
+        self._require_integration_repair_identities(coordination, repair, claim_id)
         self._require_integration_repair_worktree(coordination, repair)
         repaired_tree = self._require_additive_conflict_repair(repair)
         self._require_unchanged_completed_history(repair.prior_target_head, repaired_tree)
         updated = coordination.model_copy(update={"last_reviewed_commit": repair.reviewed_repair_commit})
-        return self._coordinator.integration_repair_replacement(coordination, updated)
+        return self._coordinator.integration_repair_replacements(coordination, updated, claim_id)
 
     def _require_integration_repair_identities(
         self,
         coordination: ChangeCoordination,
         repair: DeliveryIntegrationRepair,
+        claim_id: str,
     ) -> None:
-        if coordination.writer is not None:
-            _coordination_conflict("Integration repair cannot overlap active writer custody")
+        if (
+            coordination.writer is None
+            or coordination.writer.claim_id != claim_id
+            or coordination.writer.kind != "repair"
+        ):
+            _coordination_conflict("Integration repair requires exact repair writer custody")
         if (
             coordination.change_id != repair.change_id
             or coordination.integration_target != repair.integration_target

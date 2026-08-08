@@ -122,6 +122,7 @@ def _repair() -> dict[str, object]:
 def _requests() -> dict[str, dict[str, object]]:
     change = {"change_id": CHANGE}
     claim = {**change, "outcome_id": "OUT-001", "attempt_id": "attempt", "claim_id": "claim"}
+    repair_claim = {**change, "attempt_id": "repair-attempt", "claim_id": "repair-claim"}
     return {
         "create_design_session": {**change, "intent_bytes": "intent", "design_bytes": "design"},
         "read_design_session": change,
@@ -140,6 +141,7 @@ def _requests() -> dict[str, dict[str, object]]:
         "acquire_frontier_work": {},
         "show_plan_context": claim,
         "show_build_context": claim,
+        "show_integration_repair_context": repair_claim,
         "publish_delivery_plan": {
             **change,
             "request": {"outcome_id": "OUT-001", "claim_id": "claim", "tasks": [_task()]},
@@ -168,10 +170,11 @@ def _requests() -> dict[str, dict[str, object]]:
             },
         },
         "recover_claim": claim,
+        "recover_integration_repair_claim": repair_claim,
         "list_integration_ready_changes": {},
         "show_integration_attention": change,
         "integrate_ready_change": change,
-        "admit_reviewed_integration_repair": {"repair": _repair()},
+        "admit_reviewed_integration_repair": {**repair_claim, "repair": _repair()},
         "list_completed_changes": {"limit": 25},
         "search_completed_changes": {"query": "delivery", "limit": 25},
         "show_completed_change": {**change, "completion_id": DIGEST},
@@ -229,6 +232,7 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         "show_work_item",
         "show_plan_context",
         "show_build_context",
+        "show_integration_repair_context",
         "list_integration_ready_changes",
         "show_integration_attention",
         "list_completed_changes",

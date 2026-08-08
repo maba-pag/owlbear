@@ -14,15 +14,23 @@ and Integration. Orchestrator performs only the mechanical dispatch loop around 
 
 If target tools are deferred, load them once with `tool_search` using:
 
-`OwlBear Delivery target portfolio list_work_items acquire_frontier_work transition_delivery recover_claim integrate_ready_change`
+`OwlBear Delivery target portfolio list_work_items acquire_frontier_work transition_delivery recover_claim recover_integration_repair_claim integrate_ready_change`
 
 Call `list_work_items` only for bounded portfolio reporting. Call `acquire_frontier_work` once for the
-current cycle. Its `DeliveryAcquisitionResult` is the sole source of launch order,
+current cycle. Its `DeliveryAcquisitionResult` is the sole source of task and repair launch order,
 `integration_ready_change_ids`, non-retryable `integration_attention`, acquisition failures, and
 interrupted-claim recoveries. Report Integration and recovery attention unchanged. Do not filter
 for capacity, infer readiness, create identities, or reserve writer custody.
 
 ## Step 2 - Dispatch Or Recover Each Launch
+
+Process `repair_launch_packages` in returned order before `launch_packages`. Dispatch exactly
+`launch.policy.worker_agent` with only the serialized `DeliveryIntegrationRepairLaunchPackage`.
+Require either `integration_repair_admitted` bound to the launch's change, attempt, claim, and
+attention identities, or a claim-bound `dispatch_failure`. On success, perform no transition and
+let the next acquisition cycle own Integration retry. On malformed output, dispatch failure, or
+agent failure, call `recover_integration_repair_claim` with the launch's exact change, attempt, and
+claim IDs and report its result unchanged.
 
 Process `launch_packages` in returned order. For worker role `planner` or `builder`, dispatch exactly
 `launch.policy.worker_agent` and pass only the serialized `DeliveryLaunchPackage`. The selected
@@ -79,8 +87,9 @@ the exact attention as bounded action at the end of the cycle.
 ## Step 5 - Refresh
 
 Finish the current acquired batch, discard it, and call `acquire_frontier_work` again. Continue
-independent changes when one outcome returns or blocks. Stop when both launch packages and
-Integration-ready IDs are empty, or when a fail-closed diagnostic requires user/operator action.
+independent changes when one outcome returns or blocks. Stop when task launch packages, repair
+launch packages, and Integration-ready IDs are empty, or when a fail-closed diagnostic requires
+user/operator action.
 Non-empty `integration_attention` is bounded action, not quiescence.
 
 Before reporting portfolio quiescence after an empty acquisition, call `list_work_items`. Quiescence

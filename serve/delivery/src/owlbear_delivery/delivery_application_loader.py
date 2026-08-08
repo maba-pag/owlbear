@@ -158,6 +158,11 @@ def _role_policies() -> tuple[DeliveryRolePolicy, ...]:
             worker_agent="build-reviewer",
             reviewer_agent="build-reviewer",
         ),
+        DeliveryRolePolicy(
+            worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER,
+            worker_agent="builder",
+            reviewer_agent="build-reviewer",
+        ),
     )
 
 

@@ -6,24 +6,20 @@ user-invocable: false
 
 # Integration Repair
 
-Repair one user-selected change whose current typed Integration attention reports a merge conflict.
-This is an on-demand recovery path, not part of automatic orchestration or normal Build execution.
+Repair one orchestrator-supplied `DeliveryIntegrationRepairLaunchPackage` whose current typed
+Integration attention reports a merge conflict. This is change-level claimed work, not a Build task
+or user-selected recovery path.
 
 ## Step 0 - Bind Current Attention And Coordination
 
-Require one non-empty `change_id`. Call `show_integration_attention` for that exact identity and
-require a current `DeliveryIntegrationAttention` whose `change_id` matches and whose code is
-`merge-conflict`. Stop without mutation for absent, stale, or any other attention code.
+Call `show_integration_repair_context` with the launch's exact `change_id`, `claim.attempt_id`, and
+`claim.claim_id`. Require the returned launch to equal the supplied launch, the attention code to be
+`merge-conflict`, and writer custody to bind the same repair claim and owner. Require the assigned
+worktree to be clean, on its exact branch, and at `attention.change_head`.
 
-Read only `.owlbear/target/target-runtime/coordination/{change_id}.json`. Require one exact
-coordination record with matching
-change and Integration target, no active writer, `last_reviewed_commit == attention.change_head`,
-and the live Integration target ref at `attention.target_head`; `coordination.target_head` is the
-workspace creation snapshot and is not a liveness check. If the live target moved after attention
-was published, stop and run orchestration once to refresh that attention before restarting repair.
-Require the assigned worktree to be clean, on its exact branch, and at the attention change head.
-Never edit startup configuration, coordination, Delivery state, package bytes, completed history,
-another checkout, or either source or target reference.
+Any absent, stale, mismatched, or non-conflict context returns the claim-bound `dispatch_failure`
+defined below without mutation. Never edit startup configuration, coordination, Delivery state,
+package bytes, completed history, another checkout, or either source or target reference.
 
 ## Step 1 - Make One Additive Conflict Repair
 
@@ -61,15 +57,36 @@ Only an independent `pass` may construct one `DeliveryIntegrationRepair` with:
 - one `DeliveryIntegrationRepairReview` containing a stable review ID, the independent reviewer
   identity, and that same exact candidate commit.
 
-Call `admit_reviewed_integration_repair` once with that typed repair. Treat the returned repair as
-the only successful result. Never call `integrate_ready_change`, retry Integration, move the target,
-publish a Build result, or select a Delivery transition from this workflow.
+Call `admit_reviewed_integration_repair` once with the launch's exact `attempt_id`, `claim_id`, and
+that typed repair. Treat the returned repair as the only successful result. Never call
+`integrate_ready_change`, retry Integration, move the target, publish a Build result, or select a
+Delivery transition from this workflow.
 
 ## Output
 
-Report only whether the exact change's reviewed repair was admitted or why no admission occurred.
+On admission, return exactly:
+
+```yaml
+kind: integration_repair_admitted
+change_id: <launch.change_id>
+attempt_id: <launch.claim.attempt_id>
+claim_id: <launch.claim.claim_id>
+attention_id: <launch.attention.attention_id>
+```
+
+If fresh context, custody, review, or admission cannot be established, return exactly:
+
+```yaml
+kind: dispatch_failure
+change_id: <launch.change_id>
+attempt_id: <launch.claim.attempt_id>
+claim_id: <launch.claim.claim_id>
+failed_operation: <operation>
+reason: <non-empty bounded reason>
+```
+
 Do not expose raw diffs, internal Git hashes, target-update instructions, or unrelated portfolio
-state in the user-facing response.
+state.
 
 ## Known Pitfalls
 

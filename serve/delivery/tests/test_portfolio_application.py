@@ -179,6 +179,11 @@ def _policies() -> tuple[DeliveryRolePolicy, ...]:
             worker_agent="build-reviewer",
             reviewer_agent="build-reviewer",
         ),
+        DeliveryRolePolicy(
+            worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER,
+            worker_agent="builder",
+            reviewer_agent="build-reviewer",
+        ),
     )
 
 
@@ -689,6 +694,9 @@ def _prepare_reviewed_integration_repair(tmp_path: Path):
     target_head = _git(repository, "rev-parse", "main")
     failed = application.integrate_ready_change("change-a")
     assert failed.attention is not None
+    acquired = application.acquire_frontier_work()
+    assert len(acquired.repair_launch_packages) == 1
+    launch = acquired.repair_launch_packages[0]
     worktree = coordinator.show("change-a").worktree_path
     (worktree / "product.txt").write_text("target side\n", encoding="utf-8")
     _git(worktree, "add", "product.txt")
@@ -701,14 +709,14 @@ def _prepare_reviewed_integration_repair(tmp_path: Path):
         prior_change_head=reviewed,
         prior_target_head=target_head,
         reviewed_repair_commit=repair_commit,
-        owner_id="repair-builder",
+        owner_id=launch.claim.owner_id,
         review=DeliveryIntegrationRepairReview(
             review_id="repair-review-001",
             reviewer_id="independent-reviewer",
             candidate_commit=repair_commit,
         ),
     )
-    return application, runtimes, coordinator, state_root, repair
+    return application, runtimes, coordinator, state_root, repair, launch.claim
 
 
 def _with_reviewed_commit(repair: DeliveryIntegrationRepair, commit: str) -> DeliveryIntegrationRepair:
@@ -791,7 +799,11 @@ def test_acquisition_returns_bounded_stage_packages_and_unclaimed_integration(tm
         "change-b",
         "change-c",
     )
-    assert tuple(package.claim.worker_role for package in acquired.launch_packages) == tuple(DeliveryWorkerRole)
+    assert tuple(package.claim.worker_role for package in acquired.launch_packages) == (
+        DeliveryWorkerRole.PLANNER,
+        DeliveryWorkerRole.BUILDER,
+        DeliveryWorkerRole.ASSEMBLY_REVIEWER,
+    )
     assert acquired.integration_ready_change_ids == ("change-d",)
     assert acquired.failures == ()
     assert runtimes["change-d"].active_claims() == ()
@@ -1319,15 +1331,24 @@ def test_integration_merge_conflict_retains_clean_heads_and_typed_attention(tmp_
     assert runtimes["change-a"].change_stage().value == "integration"
     acquired = application.acquire_frontier_work()
     assert acquired.integration_ready_change_ids == ()
-    assert tuple(
-        (item.change_id, item.code.value, item.disposition.value) for item in acquired.integration_attention
-    ) == (("change-a", "merge-conflict", "repair-required"),)
+    assert len(acquired.repair_launch_packages) == 1
+    repair_launch = acquired.repair_launch_packages[0]
+    assert repair_launch.attention == failed.attention
+    assert (
+        application.show_integration_repair_context(
+            repair_launch.change_id,
+            repair_launch.claim.attempt_id,
+            repair_launch.claim.claim_id,
+        ).launch
+        == repair_launch
+    )
+    assert acquired.integration_attention == ()
     integration_card = next(item for item in application.list_work_items() if item.work_item_id == "change-a")
     operator = application.show_operator_context("change-a", "change-a")
     assert (integration_card.scope, integration_card.attention.value, integration_card.next_action) == (
         "change-integration",
-        "repair",
-        "Run reviewed Integration repair",
+        "agent",
+        "Agent repairing Integration",
     )
     assert operator.integration_attention is not None
     assert operator.integration_attention.disposition.value == "repair-required"
@@ -1341,17 +1362,21 @@ def test_integration_merge_conflict_retains_clean_heads_and_typed_attention(tmp_
     refreshed = application.acquire_frontier_work()
     assert refreshed.integration_ready_change_ids == ("change-a",)
     assert refreshed.integration_attention == ()
+    assert len(refreshed.repair_recoveries) == 1
+    assert refreshed.repair_recoveries[0].claim_id == repair_launch.claim.claim_id
+    assert runtimes["change-a"].integration_repair_claim() is None
+    assert coordinator.show("change-a").writer is None
 
 
 def test_reviewed_integration_repair_advances_boundary_and_retries_publication(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root, repair = _prepare_reviewed_integration_repair(tmp_path)
+    application, runtimes, coordinator, _state_root, repair, claim = _prepare_reviewed_integration_repair(tmp_path)
     repository = tmp_path / "repository"
     target_head = repair.prior_target_head
     repair_commit = repair.reviewed_repair_commit
     package_bytes = {path.name: path.read_bytes() for path in (tmp_path / "packages/change-a").iterdir()}
     completed_binding = runtimes["change-a"].show_binding("OUT-001")
 
-    admitted = application.admit_reviewed_integration_repair(repair)
+    admitted = application.admit_reviewed_integration_repair(claim.attempt_id, claim.claim_id, repair)
 
     assert admitted == repair
     assert coordinator.show("change-a").last_reviewed_commit == repair_commit
@@ -1388,7 +1413,7 @@ def test_reviewed_integration_repair_rejection_preserves_all_state(
     tmp_path: Path,
     invalid_case: str,
 ) -> None:
-    application, runtimes, coordinator, state_root, repair = _prepare_reviewed_integration_repair(tmp_path)
+    application, runtimes, coordinator, state_root, repair, claim = _prepare_reviewed_integration_repair(tmp_path)
     coordination = coordinator.show("change-a")
     worktree = coordination.worktree_path
     repository = tmp_path / "repository"
@@ -1409,7 +1434,7 @@ def test_reviewed_integration_repair_rejection_preserves_all_state(
     attention_before = runtimes["change-a"].integration_attention()
 
     with pytest.raises(RuntimeError):
-        application.admit_reviewed_integration_repair(repair)
+        application.admit_reviewed_integration_repair(claim.attempt_id, claim.claim_id, repair)
 
     assert (coordination_path.read_bytes(), frontier_path.read_bytes()) == persisted_before
     assert (
@@ -1451,7 +1476,7 @@ def test_integration_repair_requires_exact_independent_review_binding(invalid_re
 
 
 def test_interrupted_integration_repair_admission_converges_before_retry(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root, repair = _prepare_reviewed_integration_repair(tmp_path)
+    application, runtimes, coordinator, _state_root, repair, claim = _prepare_reviewed_integration_repair(tmp_path)
     repository = tmp_path / "repository"
     package_root = tmp_path / "packages/change-a"
     package_before = _file_bytes(package_root)
@@ -1472,7 +1497,7 @@ def test_interrupted_integration_repair_admission_converges_before_retry(tmp_pat
             match="interrupted repair admission",
         ),
     ):
-        application.admit_reviewed_integration_repair(repair)
+        application.admit_reviewed_integration_repair(claim.attempt_id, claim.claim_id, repair)
 
     assert coordinator.show("change-a").last_reviewed_commit == repair.reviewed_repair_commit
     assert runtimes["change-a"].integration_attention() is None

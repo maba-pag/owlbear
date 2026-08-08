@@ -50,6 +50,8 @@ from owlbear_delivery_mcp.target_models import (
     PublishDeliveryPlanRequest,
     PublishDeliveryResultParams,
     PublishDeliveryResultRequest,
+    RepairClaimContextParams,
+    RepairClaimContextRequest,
     ReviseDesignSessionParams,
     ReviseDesignSessionRequest,
     SearchCompletedParams,
@@ -80,10 +82,12 @@ DELIVERY_OPERATION_NAMES = (
     "acquire_frontier_work",
     "show_plan_context",
     "show_build_context",
+    "show_integration_repair_context",
     "publish_delivery_plan",
     "publish_delivery_result",
     "transition_delivery",
     "recover_claim",
+    "recover_integration_repair_claim",
     "list_integration_ready_changes",
     "show_integration_attention",
     "integrate_ready_change",
@@ -101,6 +105,7 @@ _DELIVERY_READS = frozenset(
         "show_work_item",
         "show_plan_context",
         "show_build_context",
+        "show_integration_repair_context",
         "list_integration_ready_changes",
         "show_integration_attention",
         "list_completed_changes",
@@ -225,6 +230,14 @@ class TargetMCPAdapter:
         params = self._validate(ClaimContextParams, request)
         return self._call(params, lambda: self._application.show_build_context(**params.model_dump()))
 
+    async def show_integration_repair_context(self, request: RepairClaimContextRequest) -> dict[str, object]:
+        """Show bounded Integration repair context for one claim."""
+        params = self._validate(RepairClaimContextParams, request)
+        return self._call(
+            params,
+            lambda: self._application.show_integration_repair_context(**params.model_dump()),
+        )
+
     async def publish_delivery_plan(self, request: PublishDeliveryPlanRequest) -> DeliveryPlanPublication:
         """Publish one claim-scoped Delivery plan."""
         params = self._validate(PublishDeliveryPlanParams, request)
@@ -255,6 +268,17 @@ class TargetMCPAdapter:
         params = self._validate(ClaimContextParams, request)
         return self._call(params, lambda: self._application.recover_claim(**params.model_dump()))
 
+    async def recover_integration_repair_claim(
+        self,
+        request: RepairClaimContextRequest,
+    ) -> dict[str, object]:
+        """Recover one exact failed Integration repair claim."""
+        params = self._validate(RepairClaimContextParams, request)
+        return self._call(
+            params,
+            lambda: self._application.recover_integration_repair_claim(**params.model_dump()),
+        )
+
     async def list_integration_ready_changes(self, request: EmptyRequest) -> list[object]:
         """List changes ready for Integration."""
         params = self._validate(EmptyParams, request)
@@ -273,7 +297,14 @@ class TargetMCPAdapter:
     async def admit_reviewed_integration_repair(self, request: IntegrationRepairRequest) -> dict[str, object]:
         """Admit one independently reviewed Integration repair."""
         params = self._validate(IntegrationRepairParams, request)
-        return self._call(params, lambda: self._application.admit_reviewed_integration_repair(params.repair))
+        return self._call(
+            params,
+            lambda: self._application.admit_reviewed_integration_repair(
+                params.attempt_id,
+                params.claim_id,
+                params.repair,
+            ),
+        )
 
     async def list_completed_changes(self, request: CompletedPageRequest) -> dict[str, object]:
         """List one bounded completed-history page."""

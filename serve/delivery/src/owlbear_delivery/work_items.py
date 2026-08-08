@@ -69,6 +69,7 @@ class WorkItemIntegrationState(_ProjectionModel):
 
     disposition: WorkItemIntegrationDisposition
     code: str | None = None
+    repair_active: bool = False
 
     @model_validator(mode="after")
     def _validate_code(self) -> WorkItemIntegrationState:
@@ -259,18 +260,22 @@ class WorkItemProjector:
         )
 
     def _project_change_integration(self, state: WorkItemIntegrationState) -> WorkItemProjection:
-        attention = {
-            WorkItemIntegrationDisposition.READY: WorkItemAttention.AGENT,
-            WorkItemIntegrationDisposition.RETRYABLE: WorkItemAttention.AGENT,
-            WorkItemIntegrationDisposition.REPAIR_REQUIRED: WorkItemAttention.REPAIR,
-            WorkItemIntegrationDisposition.OPERATOR_REQUIRED: WorkItemAttention.USER,
-        }[state.disposition]
-        next_action = {
-            WorkItemIntegrationDisposition.READY: "Integrate reviewed change",
-            WorkItemIntegrationDisposition.RETRYABLE: "Retry Integration",
-            WorkItemIntegrationDisposition.REPAIR_REQUIRED: "Run reviewed Integration repair",
-            WorkItemIntegrationDisposition.OPERATOR_REQUIRED: "Resolve Integration attention",
-        }[state.disposition]
+        if state.repair_active:
+            attention = WorkItemAttention.AGENT
+            next_action = "Agent repairing Integration"
+        else:
+            attention = {
+                WorkItemIntegrationDisposition.READY: WorkItemAttention.AGENT,
+                WorkItemIntegrationDisposition.RETRYABLE: WorkItemAttention.AGENT,
+                WorkItemIntegrationDisposition.REPAIR_REQUIRED: WorkItemAttention.REPAIR,
+                WorkItemIntegrationDisposition.OPERATOR_REQUIRED: WorkItemAttention.USER,
+            }[state.disposition]
+            next_action = {
+                WorkItemIntegrationDisposition.READY: "Integrate reviewed change",
+                WorkItemIntegrationDisposition.RETRYABLE: "Retry Integration",
+                WorkItemIntegrationDisposition.REPAIR_REQUIRED: "Run reviewed Integration repair",
+                WorkItemIntegrationDisposition.OPERATOR_REQUIRED: "Resolve Integration attention",
+            }[state.disposition]
         return WorkItemProjection(
             work_item_id=self._authority.change_id,
             change_id=self._authority.change_id,

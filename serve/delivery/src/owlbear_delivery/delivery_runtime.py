@@ -60,6 +60,7 @@ class DeliveryWorkerRole(StrEnum):
     PLANNER = "planner"
     BUILDER = "builder"
     ASSEMBLY_REVIEWER = "assembly-reviewer"
+    INTEGRATION_REPAIRER = "integration-repairer"
 
 
 class _DeliveryModel(BaseModel):
@@ -470,6 +471,7 @@ class DeliveryFrontier(_DeliveryModel):
     integration_result_id: str | None = None
     integration_completion: DeliveryIntegrationCompletion | None = None
     integration_attention: DeliveryIntegrationAttention | None = None
+    integration_repair_claim: DeliveryActiveClaim | None = None
 
     @model_validator(mode="after")
     def _validate_identities(self) -> DeliveryFrontier:
@@ -494,6 +496,27 @@ class DeliveryFrontier(_DeliveryModel):
         if self.integration_completion is not None and self.integration_attention is not None:
             message = "completed Integration cannot retain attention"
             raise ValueError(message)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_integration_repair_claim(self) -> DeliveryFrontier:
+        if self.integration_repair_claim is not None:
+            if self.integration_repair_claim.worker_role != DeliveryWorkerRole.INTEGRATION_REPAIRER:
+                message = "Integration repair claim must use the repair worker role"
+                raise ValueError(message)
+            if self.integration_repair_claim.task_id is not None:
+                message = "Integration repair claim cannot name task authority"
+                raise ValueError(message)
+            if (
+                self.integration_attention is None
+                or integration_attention_disposition(self.integration_attention.code)
+                != DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED
+            ):
+                message = "Integration repair claim requires current repair attention"
+                raise ValueError(message)
+            if any(binding.active_claim is not None for binding in self.bindings):
+                message = "Integration repair claim cannot coexist with outcome claims"
+                raise ValueError(message)
         return self
 
 
@@ -702,6 +725,47 @@ class DeliveryRuntime:
             if binding.active_claim is not None
         )
 
+    def integration_repair_claim(self) -> DeliveryActiveClaim | None:
+        """Return the current change-level Integration repair claim, if any."""
+        return self._read()[0].integration_repair_claim
+
+    def activate_integration_repair_claim(self, claim: DeliveryActiveClaim) -> DeliveryActiveClaim:
+        """Bind one fresh claim to current repair-required Integration attention."""
+        frontier, previous = self._read()
+        if self.change_stage() != DeliveryChangeStage.INTEGRATION:
+            _conflict("Integration repair claim requires an Integration-ready runtime")
+        if (
+            frontier.integration_attention is None
+            or integration_attention_disposition(frontier.integration_attention.code)
+            != DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED
+        ):
+            _conflict("Integration repair claim requires current repair attention")
+        if frontier.integration_repair_claim is not None:
+            _conflict("Integration repair is already claimed")
+        if any(binding.active_claim is not None for binding in frontier.bindings):
+            _conflict("Integration repair cannot coexist with outcome claims")
+        if claim.worker_role != DeliveryWorkerRole.INTEGRATION_REPAIRER or claim.task_id is not None:
+            _conflict("claim does not describe Integration repair work")
+        updated = frontier.model_copy(update={"integration_repair_claim": claim})
+        self._replace(previous, updated)
+        return claim
+
+    def require_integration_repair_claim(self, attempt_id: str, claim_id: str) -> DeliveryActiveClaim:
+        """Return the repair claim only when its exact execution identity remains active."""
+        claim = self.integration_repair_claim()
+        if claim is None or claim.attempt_id != attempt_id or claim.claim_id != claim_id:
+            _conflict("execution identity does not match the active Integration repair claim")
+        return claim
+
+    def remove_integration_repair_claim(self, attempt_id: str, claim_id: str) -> DeliveryActiveClaim:
+        """Remove one exact failed Integration repair claim without clearing attention."""
+        frontier, previous = self._read()
+        claim = frontier.integration_repair_claim
+        if claim is None or claim.attempt_id != attempt_id or claim.claim_id != claim_id:
+            _conflict("claim removal does not match the active Integration repair identity")
+        self._replace(previous, frontier.model_copy(update={"integration_repair_claim": None}))
+        return claim
+
     def require_active_claim(
         self,
         outcome_id: str,
@@ -769,6 +833,8 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         if {binding.stage for binding in frontier.bindings} != {DeliveryStage.COMPLETED}:
             _conflict("Integration completion requires every outcome to be completed")
+        if frontier.integration_repair_claim is not None:
+            _conflict("Integration completion cannot overlap an active repair claim")
         if frontier.integration_completion == completion:
             return completion
         if frontier.integration_completion is not None:
@@ -817,7 +883,7 @@ class DeliveryRuntime:
             _conflict("Integration repair does not match the current attention")
         if self.change_stage() != DeliveryChangeStage.INTEGRATION:
             _conflict("Integration repair requires an Integration-ready runtime")
-        replacement = frontier.model_copy(update={"integration_attention": None})
+        replacement = frontier.model_copy(update={"integration_attention": None, "integration_repair_claim": None})
         return ReplacementTransactionParticipant(
             self._target_root,
             self._frontier_path.relative_to(self._target_root),
@@ -867,6 +933,8 @@ class DeliveryRuntime:
         """Bind one fresh claim to a currently claimable outcome."""
         frontier, previous = self._read()
         binding = _find_binding(frontier, request.outcome_id)
+        if frontier.integration_repair_claim is not None:
+            _conflict("outcome claims cannot overlap an active Integration repair claim")
         if request.outcome_id not in self.claimable_outcome_ids():
             _conflict("outcome is not claimable")
         if any(item.active_claim_id == request.claim_id for item in frontier.bindings):

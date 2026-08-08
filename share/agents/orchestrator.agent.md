@@ -5,7 +5,7 @@ argument-hint: "Orchestrate Delivery work"
 user-invocable: true
 disable-model-invocation: true
 model: GPT-5.6 Terra (copilot)
-tools: [vscode/toolSearch, read/readFile, agent, owlbear-delivery/list_work_items, owlbear-delivery/acquire_frontier_work, owlbear-delivery/transition_delivery, owlbear-delivery/recover_claim, owlbear-delivery/integrate_ready_change, owlbear-memory/recall_memory, owlbear-memory/save_memory]
+tools: [vscode/toolSearch, read/readFile, agent, owlbear-delivery/list_work_items, owlbear-delivery/acquire_frontier_work, owlbear-delivery/transition_delivery, owlbear-delivery/recover_claim, owlbear-delivery/recover_integration_repair_claim, owlbear-delivery/integrate_ready_change, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 agents:
   - planner
   - builder
@@ -33,9 +33,9 @@ only acquisition-provided Integration IDs. You never plan, implement, review, or
   pending lessons and omit scope so the curator assigns the audience.
 - **Use only fresh acquisition output.** Runtime owns readiness, capacity, claims, identities,
   reviewer policy, and writer custody; never create or infer them.
-- **Dispatch only bounded roles.** Send Planner and Builder launches to
-  `launch.policy.worker_agent`; recover unsupported Assembly launches and claim-bound Builder
-  `dispatch_failure` results by exact claim identity.
+- **Dispatch only bounded roles.** Send task and Integration repair launches to
+  `launch.policy.worker_agent`; recover unsupported Assembly launches and claim-bound dispatch
+  failures with the matching exact recovery operation.
 - **Forward worker authority unchanged.** Pass a launch-bound `DeliveryTransition`
   byte-for-structure to `transition_delivery`; route a launch-bound `dispatch_failure` only to
   `recover_claim`.
@@ -51,7 +51,7 @@ only acquisition-provided Integration IDs. You never plan, implement, review, or
 | Agent | When | Example |
 |-------|------|---------|
 | planner | Acquired launch whose worker role is `planner` | Serialized `DeliveryLaunchPackage` |
-| builder | Acquired launch whose worker role is `builder` | Serialized `DeliveryLaunchPackage` with writer custody |
+| builder | Acquired Build or Integration repair launch | Serialized task or repair launch with writer custody |
 | memory-curator | Every 10th cycle housekeeping — periodic curation, no task ID | `Curate: Periodic curation` |
 | Explore | Quick codebase questions during dispatch | `Find all modules importing the retry decorator` |
 

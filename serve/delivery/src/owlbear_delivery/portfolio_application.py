@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Never
+from typing import TYPE_CHECKING, Literal, Never
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -152,6 +152,7 @@ def _project_runtime_evidence(contract: DeliveryContract, frontier: DeliveryFron
             if attention is None
             else WorkItemIntegrationDisposition(integration_attention_disposition(attention.code).value),
             code=attention.code.value if attention is not None else None,
+            repair_active=frontier.integration_repair_claim is not None,
         )
     return WorkItemEvidence(
         planned_scope_ids=tuple(scopes[item.outcome_id] for item in progressed),
@@ -264,11 +265,54 @@ class DeliveryLaunchPackage(_ApplicationModel):
         return self
 
 
+class DeliveryIntegrationRepairLaunchPackage(_ApplicationModel):
+    """Bounded change-level launch for one claimed Integration repair."""
+
+    change_id: str = Field(min_length=1)
+    claim: DeliveryActiveClaim
+    policy: DeliveryRolePolicy
+    attention: DeliveryIntegrationAttention
+    package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    package_root: Path
+    worktree_path: Path
+    branch: str = Field(min_length=1)
+    source_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    integration_target: str = Field(min_length=1)
+    last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    writer: ChangeWriter
+
+    @model_validator(mode="after")
+    def _validate_repair_custody(self) -> DeliveryIntegrationRepairLaunchPackage:
+        if (
+            self.claim.worker_role != DeliveryWorkerRole.INTEGRATION_REPAIRER
+            or self.policy.worker_role != self.claim.worker_role
+            or self.writer.kind != "repair"
+            or self.writer.attempt_id != self.claim.attempt_id
+            or self.writer.claim_id != self.claim.claim_id
+            or self.writer.actor_id != self.claim.owner_id
+            or self.writer.process_id != self.claim.process_id
+        ):
+            message = "repair launch policy and writer custody must match the active claim"
+            raise ValueError(message)
+        return self
+
+
 class DeliveryAcquisitionFailure(_ApplicationModel):
     """Bounded fail-closed preparation result, optionally tied to a started claim."""
 
     change_id: str = Field(min_length=1)
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    attempt_id: str | None = None
+    claim_id: str | None = None
+    code: str = Field(min_length=1)
+    detail: str = Field(min_length=1)
+    retry_condition: str = Field(min_length=1)
+
+
+class DeliveryIntegrationRepairAcquisitionFailure(_ApplicationModel):
+    """Fail-closed preparation result for one change-level repair claim."""
+
+    change_id: str = Field(min_length=1)
     attempt_id: str | None = None
     claim_id: str | None = None
     code: str = Field(min_length=1)
@@ -289,10 +333,13 @@ class DeliveryAcquisitionResult(_ApplicationModel):
     """Launchable claims and unclaimed Integration-ready changes from one refresh."""
 
     launch_packages: tuple[DeliveryLaunchPackage, ...]
+    repair_launch_packages: tuple[DeliveryIntegrationRepairLaunchPackage, ...] = ()
     integration_ready_change_ids: tuple[str, ...]
     integration_attention: tuple[DeliveryIntegrationAttentionStatus, ...] = ()
     failures: tuple[DeliveryAcquisitionFailure, ...] = ()
+    repair_failures: tuple[DeliveryIntegrationRepairAcquisitionFailure, ...] = ()
     recoveries: tuple[DeliveryClaimRecoveryResult, ...] = ()
+    repair_recoveries: tuple[DeliveryIntegrationRepairRecoveryResult, ...] = ()
 
 
 class DeliveryPlanContext(_ApplicationModel):
@@ -316,6 +363,12 @@ class DeliveryBuildContext(_ApplicationModel):
     requests: tuple[DeliveryRequest, ...]
     return_context: DeliveryReturnContext | None = None
     recovery_attention: DeliveryRecoveryAttention | None = None
+
+
+class DeliveryIntegrationRepairContext(_ApplicationModel):
+    """Current claim-bound source and conflict authority for Integration repair."""
+
+    launch: DeliveryIntegrationRepairLaunchPackage
 
 
 class DeliveryOperatorClaim(_ApplicationModel):
@@ -388,6 +441,16 @@ class DeliveryClaimRecoveryResult(_ApplicationModel):
         return self
 
 
+class DeliveryIntegrationRepairRecoveryResult(_ApplicationModel):
+    """Recovered exact Integration repair claim and preserved commit evidence."""
+
+    status: Literal[DeliveryClaimRecoveryStatus.RECOVERED] = DeliveryClaimRecoveryStatus.RECOVERED
+    change_id: str = Field(min_length=1)
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    preserved_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+
+
 class DeliveryIntegrationResult(_ApplicationModel):
     """One committed atomic publication or retained typed Integration attention."""
 
@@ -419,7 +482,7 @@ class PortfolioApplicationConfig(_ApplicationModel):
 
     package_root: Path
     execution_capacity: int = Field(gt=0)
-    role_policies: tuple[DeliveryRolePolicy, ...] = Field(min_length=3, max_length=3)
+    role_policies: tuple[DeliveryRolePolicy, ...] = Field(min_length=4, max_length=4)
 
     @model_validator(mode="after")
     def _validate_roles(self) -> PortfolioApplicationConfig:
@@ -607,6 +670,7 @@ class PortfolioApplication:
             attention = runtime.integration_attention()
             if (
                 attention is None
+                or runtime.integration_repair_claim() is not None
                 or self._workspace_manager.integration_context(change_id).target_head != attention.target_head
             ):
                 continue
@@ -745,11 +809,26 @@ class PortfolioApplication:
         """Recover interrupted claims, then start at most one ready claim."""
         with self._coordinator.acquisition_lock():
             recoveries = self._recover_active_claims()
+            repair_recoveries = self._recover_active_repair_claims()
             integration_ready = self.list_integration_ready_changes()
-            occupied = sum(len(runtime.active_claims()) for runtime in self._runtimes.values())
+            occupied = sum(
+                len(runtime.active_claims()) + int(runtime.integration_repair_claim() is not None)
+                for runtime in self._runtimes.values()
+            )
             available = max(self._execution_capacity - occupied, 0)
             launches: list[DeliveryLaunchPackage] = []
+            repair_launches: list[DeliveryIntegrationRepairLaunchPackage] = []
             failures: list[DeliveryAcquisitionFailure] = []
+            repair_failures: list[DeliveryIntegrationRepairAcquisitionFailure] = []
+            for change_id in self._repair_candidates():
+                if available == 0 or not self._coordinator.writer_capacity_available():
+                    break
+                launch = self._activate_repair_candidate(change_id)
+                available -= 1
+                if isinstance(launch, DeliveryIntegrationRepairAcquisitionFailure):
+                    repair_failures.append(launch)
+                    continue
+                repair_launches.append(launch)
             for candidate in self._candidates():
                 if available == 0:
                     break
@@ -771,10 +850,13 @@ class PortfolioApplication:
                 launches.append(launch)
             return DeliveryAcquisitionResult(
                 launch_packages=tuple(launches),
+                repair_launch_packages=tuple(repair_launches),
                 integration_ready_change_ids=integration_ready,
                 integration_attention=self.list_integration_attention(),
                 failures=tuple(failures),
+                repair_failures=tuple(repair_failures),
                 recoveries=recoveries,
+                repair_recoveries=repair_recoveries,
             )
 
     def show_plan_context(
@@ -833,6 +915,17 @@ class PortfolioApplication:
             recovery_attention=binding.recovery_attention,
         )
 
+    def show_integration_repair_context(
+        self,
+        change_id: str,
+        attempt_id: str,
+        claim_id: str,
+    ) -> DeliveryIntegrationRepairContext:
+        """Project exact current attention and writer custody for one repair claim."""
+        runtime = self._runtime(change_id)
+        claim = runtime.require_integration_repair_claim(attempt_id, claim_id)
+        return DeliveryIntegrationRepairContext(launch=self._current_repair_launch(change_id, runtime, claim))
+
     def recover_claim(
         self,
         change_id: str,
@@ -844,11 +937,53 @@ class PortfolioApplication:
         with self._coordinator.acquisition_lock():
             return self._recover_claim(change_id, outcome_id, attempt_id, claim_id)
 
+    def recover_integration_repair_claim(
+        self,
+        change_id: str,
+        attempt_id: str,
+        claim_id: str,
+    ) -> DeliveryIntegrationRepairRecoveryResult:
+        """Restart and remove one exact failed Integration repair claim."""
+        with self._coordinator.acquisition_lock():
+            return self._recover_integration_repair_claim(change_id, attempt_id, claim_id)
+
     def _recover_active_claims(self) -> tuple[DeliveryClaimRecoveryResult, ...]:
         return tuple(
             self._recover_claim(change_id, outcome_id, claim.attempt_id, claim.claim_id)
             for change_id, runtime in sorted(self._runtimes.items())
             for outcome_id, claim in runtime.active_claims()
+        )
+
+    def _recover_active_repair_claims(self) -> tuple[DeliveryIntegrationRepairRecoveryResult, ...]:
+        return tuple(
+            self._recover_integration_repair_claim(change_id, claim.attempt_id, claim.claim_id)
+            for change_id, runtime in sorted(self._runtimes.items())
+            for claim in (runtime.integration_repair_claim(),)
+            if claim is not None
+        )
+
+    def _recover_integration_repair_claim(
+        self,
+        change_id: str,
+        attempt_id: str,
+        claim_id: str,
+    ) -> DeliveryIntegrationRepairRecoveryResult:
+        runtime = self._runtime(change_id)
+        runtime.require_integration_repair_claim(attempt_id, claim_id)
+        snapshot = self._workspace_manager.recovery_snapshot(change_id, attempt_id)
+        preserved_commit = snapshot.preserved_commit or snapshot.branch_head
+        if snapshot.writer is not None:
+            if not self._active_recovery_matches(snapshot, attempt_id, claim_id):
+                self._fail("repair recovery does not match active writer custody")
+            self._workspace_manager.restart(change_id, attempt_id, preserved_commit)
+        elif not self._released_recovery_matches(snapshot):
+            self._fail("released repair recovery does not match reviewed workspace state")
+        runtime.remove_integration_repair_claim(attempt_id, claim_id)
+        return DeliveryIntegrationRepairRecoveryResult(
+            change_id=change_id,
+            attempt_id=attempt_id,
+            claim_id=claim_id,
+            preserved_commit=preserved_commit,
         )
 
     def _recover_claim(
@@ -913,16 +1048,21 @@ class PortfolioApplication:
 
     def admit_reviewed_integration_repair(
         self,
+        attempt_id: str,
+        claim_id: str,
         repair: DeliveryIntegrationRepair,
     ) -> DeliveryIntegrationRepair:
         """Admit one independently reviewed additive repair for current Integration attention."""
         with self._coordinator.integration_lock():
             runtime = self._runtime(repair.change_id)
+            claim = runtime.require_integration_repair_claim(attempt_id, claim_id)
+            if repair.owner_id != claim.owner_id:
+                self._fail("Integration repair owner does not match the active claim")
             runtime_replacement = runtime.integration_repair_replacement(repair)
-            workspace_replacement = self._workspace_manager.integration_repair_replacement(repair)
+            workspace_replacements = self._workspace_manager.integration_repair_replacement(repair, claim_id)
             self._coordinator.admit_integration_repair(
                 repair,
-                (workspace_replacement, runtime_replacement),
+                (*workspace_replacements, runtime_replacement),
             )
             return repair
 
@@ -1166,6 +1306,118 @@ class PortfolioApplication:
                 retry_condition="Restore the admitted package and clean reviewed source boundary.",
             )
         return _PreparedSource(package, coordination, source_head)
+
+    def _repair_candidates(self) -> tuple[str, ...]:
+        candidates = []
+        for change_id, runtime in sorted(self._runtimes.items()):
+            attention = runtime.integration_attention()
+            if (
+                runtime.change_stage() != DeliveryChangeStage.INTEGRATION
+                or runtime.active_claims()
+                or runtime.integration_repair_claim() is not None
+                or attention is None
+                or integration_attention_disposition(attention.code)
+                != DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED
+                or self._workspace_manager.integration_context(change_id).target_head != attention.target_head
+            ):
+                continue
+            candidates.append(change_id)
+        return tuple(candidates)
+
+    def _prepare_repair_source(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+    ) -> _PreparedSource | DeliveryIntegrationRepairAcquisitionFailure:
+        try:
+            package = self._package_store.read_verified(change_id)
+            self._validate_package_authority(runtime, package)
+            coordination = self._workspace_manager.show(change_id)
+            source_head = self._workspace_manager.reviewed_source_head(change_id)
+        except (OSError, RuntimeError, ValueError) as exc:
+            return DeliveryIntegrationRepairAcquisitionFailure(
+                change_id=change_id,
+                code=getattr(exc, "code", PortfolioApplicationError.code),
+                detail=str(exc),
+                retry_condition="Restore the admitted package and clean reviewed repair boundary.",
+            )
+        return _PreparedSource(package, coordination, source_head)
+
+    def _activate_repair_candidate(
+        self,
+        change_id: str,
+    ) -> DeliveryIntegrationRepairLaunchPackage | DeliveryIntegrationRepairAcquisitionFailure:
+        runtime = self._runtime(change_id)
+        source = self._prepare_repair_source(change_id, runtime)
+        if isinstance(source, DeliveryIntegrationRepairAcquisitionFailure):
+            return source
+        claim = self._new_claim(DeliveryWorkerRole.INTEGRATION_REPAIRER, None)
+        runtime.activate_integration_repair_claim(claim)
+        try:
+            coordination = self._coordinator.acquire(
+                change_id,
+                ChangeWriter(
+                    attempt_id=claim.attempt_id,
+                    claim_id=claim.claim_id,
+                    actor_id=claim.owner_id,
+                    process_id=claim.process_id,
+                    claimed_at=claim.started_at,
+                    job_id=1,
+                    kind="repair",
+                ),
+            )
+        except CoordinationConflictError as exc:
+            return DeliveryIntegrationRepairAcquisitionFailure(
+                change_id=change_id,
+                attempt_id=claim.attempt_id,
+                claim_id=claim.claim_id,
+                code=exc.code,
+                detail=str(exc),
+                retry_condition="Recover the exact failed repair claim after reconciling writer custody.",
+            )
+        if coordination.writer is None:
+            self._fail("repair writer acquisition did not publish custody")
+        return self._repair_launch_package(change_id, runtime, claim, source, coordination.writer)
+
+    def _current_repair_launch(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        claim: DeliveryActiveClaim,
+    ) -> DeliveryIntegrationRepairLaunchPackage:
+        source = self._prepare_repair_source(change_id, runtime)
+        if isinstance(source, DeliveryIntegrationRepairAcquisitionFailure):
+            self._fail(source.detail)
+        writer = source.coordination.writer
+        if writer is None:
+            self._fail("repair claim has no writer custody")
+        return self._repair_launch_package(change_id, runtime, claim, source, writer)
+
+    def _repair_launch_package(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        claim: DeliveryActiveClaim,
+        source: _PreparedSource,
+        writer: ChangeWriter,
+    ) -> DeliveryIntegrationRepairLaunchPackage:
+        attention = runtime.integration_attention()
+        if attention is None:
+            self._fail("repair claim has no current Integration attention")
+        return DeliveryIntegrationRepairLaunchPackage(
+            change_id=change_id,
+            claim=claim,
+            policy=self._policies[DeliveryWorkerRole.INTEGRATION_REPAIRER],
+            attention=attention,
+            package_id=source.package.package_id,
+            package_root=self._package_root / change_id,
+            worktree_path=source.coordination.worktree_path,
+            branch=source.coordination.branch,
+            source_head=source.source_head,
+            integration_target=source.coordination.integration_target,
+            last_reviewed_commit=source.coordination.last_reviewed_commit,
+            writer=writer,
+        )
 
     def _activate_candidate(
         self,
