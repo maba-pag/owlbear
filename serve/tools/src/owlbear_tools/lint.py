@@ -3,7 +3,8 @@
 Commands
 --------
 uv run lint [--no-fix | --unsafe-fixes] [FILE ...]
-                   Explicit files, or staged files when omitted.
+                   OwlBear hooks in the dev checkout; otherwise discover
+                   consumer-owned Ruff config and package lint scripts.
 uv run lint --all [--no-fix | --unsafe-fixes]
                    All files, default hooks.
 uv run megalint [--no-fix | --unsafe-fixes]
@@ -46,10 +47,12 @@ typecheck-frontend         no        TypeScript check (tsc --noEmit, whole-proje
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import subprocess
 import sys
+import tomllib
 from enum import StrEnum
 from pathlib import Path
 
@@ -57,6 +60,7 @@ from owlbear_tools.commands import command_footer
 from owlbear_tools.megalinter import load_megalinter_image
 
 COCKPIT_WEB = "serve/cockpit/web"
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 _NO_FIX_ENV = "OWLBEAR_LINT_NO_FIX"
 _UNSAFE_FIX_ENV = "OWLBEAR_LINT_UNSAFE_FIXES"
 _FIX_HOOK_ALIASES = (
@@ -78,6 +82,7 @@ _CHECK_HOOKS = (
 )
 _UNSAFE_REPLACED_HOOKS = ("ruff-fix", "stylelint-frontend-fix")
 _UNSAFE_HOOKS = ("ruff-unsafe-fix", "stylelint-frontend-lax")
+_PYTHON_SUFFIXES = frozenset({".py", ".pyi"})
 
 
 class FixMode(StrEnum):
@@ -152,8 +157,95 @@ def _mode_environment(fix_mode: FixMode) -> dict[str, str] | None:
     return None
 
 
+def _is_owlbear_dev_checkout(root: Path) -> bool:
+    return root.resolve() == _REPOSITORY_ROOT and (root / ".pre-commit-config.yaml").is_file()
+
+
+def _consumer_paths(files: list[str], *, all_files: bool) -> list[str]:
+    if all_files:
+        return ["."]
+    if files:
+        return files
+    try:
+        output = subprocess.check_output(
+            ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"],  # noqa: S607
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        msg = "lint needs explicit files or --all outside a Git working tree"
+        raise RuntimeError(msg) from exc
+    return [value.decode("utf-8") for value in output.split(b"\0") if value]
+
+
+def _has_ruff_config(root: Path) -> bool:
+    if any((root / name).is_file() for name in ("ruff.toml", ".ruff.toml")):
+        return True
+    pyproject = root / "pyproject.toml"
+    if not pyproject.is_file():
+        return False
+    config = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    tool = config.get("tool")
+    return isinstance(tool, dict) and isinstance(tool.get("ruff"), dict)
+
+
+def _ruff_commands(targets: list[str], fix_mode: FixMode) -> tuple[list[str], list[str]]:
+    if fix_mode is FixMode.NONE:
+        return ["ruff", "check", *targets], ["ruff", "format", "--check", *targets]
+    check = ["ruff", "check", "--fix"]
+    if fix_mode is FixMode.UNSAFE:
+        check.append("--unsafe-fixes")
+    return [*check, *targets], ["ruff", "format", *targets]
+
+
+def _package_lint_command(root: Path, fix_mode: FixMode) -> list[str] | None:
+    manifest = root / "package.json"
+    if not manifest.is_file():
+        return None
+    package = json.loads(manifest.read_text(encoding="utf-8"))
+    scripts = package.get("scripts")
+    if not isinstance(scripts, dict) or not isinstance(scripts.get("lint"), str):
+        return None
+    script = "lint:fix" if fix_mode is not FixMode.NONE and isinstance(scripts.get("lint:fix"), str) else "lint"
+    package_manager = package.get("packageManager", "")
+    if not isinstance(package_manager, str):
+        package_manager = ""
+    runner = next(
+        (
+            name
+            for name, marker in (
+                ("pnpm", "pnpm-lock.yaml"),
+                ("yarn", "yarn.lock"),
+                ("bun", "bun.lock"),
+            )
+            if package_manager.startswith(f"{name}@") or (root / marker).is_file()
+        ),
+        "npm",
+    )
+    return [runner, "run", script]
+
+
+def _consumer_lint(root: Path, files: list[str], *, all_files: bool, fix_mode: FixMode) -> int:
+    paths = _consumer_paths(files, all_files=all_files)
+    has_ruff = _has_ruff_config(root)
+    package_command = _package_lint_command(root, fix_mode)
+    commands: list[list[str]] = []
+    if has_ruff:
+        ruff_targets = [path for path in paths if Path(path).is_dir() or Path(path).suffix in _PYTHON_SUFFIXES]
+        if ruff_targets:
+            commands.extend(_ruff_commands(ruff_targets, fix_mode))
+    if package_command is not None and paths:
+        commands.append(package_command)
+    if not has_ruff and package_command is None:
+        sys.stderr.write(
+            "No consumer lint configuration found. Add [tool.ruff], ruff.toml, .ruff.toml, "
+            "or a package.json lint script.\n"
+        )
+        return 2
+    failures = sum(bool(_call(command, cwd=root)) for command in commands)
+    return int(bool(failures))
+
+
 def lint() -> None:
-    """Run default hooks on explicit files, or staged files when omitted."""
+    """Run OwlBear hooks or discover consumer-owned lint tools."""
     parser = argparse.ArgumentParser(prog="lint")
     parser.add_argument("-a", "--all", action="store_true", dest="all_files")
     _add_fix_mode(parser)
@@ -161,6 +253,15 @@ def lint() -> None:
     args = parser.parse_args()
     if args.all_files and args.files:
         parser.error("--all cannot be combined with file names")
+    root = Path.cwd()
+    if not _is_owlbear_dev_checkout(root):
+        try:
+            rc = _consumer_lint(root, args.files, all_files=args.all_files, fix_mode=args.fix_mode)
+        except (json.JSONDecodeError, RuntimeError, tomllib.TOMLDecodeError) as exc:
+            sys.stderr.write(f"Error: {exc}\n")
+            rc = 2
+        sys.stderr.write(command_footer() + "\n")
+        raise SystemExit(rc)
     pre_commit_args = ["run", "--all-files"] if args.all_files else ["run", "--files", *args.files]
     if not args.all_files and not args.files:
         pre_commit_args = ["run"]

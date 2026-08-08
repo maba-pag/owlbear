@@ -29,3 +29,16 @@ def test_help_topic_limits_output_to_selected_group(monkeypatch: object, capsys:
     assert "Setup:" in output
     assert "Everyday:" not in output
     assert "Maintenance:" not in output
+
+
+def test_consumer_help_hides_development_commands(tmp_path: object, monkeypatch: object, capsys: object) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["help"])
+
+    help_main()
+
+    output = capsys.readouterr().out
+    assert "uv run lint [" in output
+    assert "uv run lint-full" not in output
+    assert "uv run megalint" not in output
+    assert "uv run deps-sync" not in output

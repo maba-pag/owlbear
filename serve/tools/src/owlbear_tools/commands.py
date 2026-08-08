@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from pathlib import Path
+
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 
 
 @dataclass(frozen=True)
@@ -14,6 +17,7 @@ class Command:
     usage: str
     summary: str
     group: str
+    development_only: bool = False
 
 
 COMMANDS = (
@@ -29,13 +33,21 @@ COMMANDS = (
         "uv run lint-full [--no-fix | --unsafe-fixes]",
         "Run all local and full-project checks; safe fixes default.",
         "Everyday",
+        development_only=True,
     ),
-    Command("typecheck", "uv run typecheck", "Type-check the Cockpit frontend.", "Everyday"),
+    Command(
+        "typecheck",
+        "uv run typecheck",
+        "Type-check the Cockpit frontend.",
+        "Everyday",
+        development_only=True,
+    ),
     Command(
         "megalint",
         "uv run megalint [--no-fix | --unsafe-fixes]",
         "Run MegaLinter; safe fixes default.",
         "Everyday",
+        development_only=True,
     ),
     Command("cockpit", "uv run cockpit [list] [OPTIONS]", "Start or list Cockpit instances.", "Everyday"),
     Command("todo", "uv run todo", "Report documentation TODO markers.", "Everyday"),
@@ -53,14 +65,33 @@ COMMANDS = (
         "Show or safely change the Delivery target branch.",
         "Setup",
     ),
-    Command("deps-status", "uv run deps-status", "Check locks and available dependency updates.", "Maintenance"),
-    Command("deps-sync", "uv run deps-sync", "Install exactly the locked Python and npm dependencies.", "Maintenance"),
-    Command("pds-sync", "uv run pds-sync", "Transactionally refresh self-hosted PDS assets.", "Maintenance"),
+    Command(
+        "deps-status",
+        "uv run deps-status",
+        "Check locks and available dependency updates.",
+        "Maintenance",
+        development_only=True,
+    ),
+    Command(
+        "deps-sync",
+        "uv run deps-sync",
+        "Install exactly the locked Python and npm dependencies.",
+        "Maintenance",
+        development_only=True,
+    ),
+    Command(
+        "pds-sync",
+        "uv run pds-sync",
+        "Transactionally refresh self-hosted PDS assets.",
+        "Maintenance",
+        development_only=True,
+    ),
     Command(
         "megalint-clean",
         "uv run megalint-clean [--yes]",
         "Preview and remove obsolete MegaLinter images.",
         "Maintenance",
+        development_only=True,
     ),
 )
 
@@ -77,6 +108,11 @@ def command_footer() -> str:
     return "For the full command set, run `uv run help`."
 
 
+def _is_development_checkout() -> bool:
+    root = Path.cwd()
+    return root.resolve() == _REPOSITORY_ROOT and (root / ".pre-commit-config.yaml").is_file()
+
+
 def help_main() -> None:
     """Render the full command reference or one topic."""
     parser = argparse.ArgumentParser(add_help=False)
@@ -84,13 +120,18 @@ def help_main() -> None:
     parser.add_argument("-h", "--help", action="help")
     args = parser.parse_args()
     selected = _TOPICS.get(args.topic) if args.topic else None
+    development = _is_development_checkout()
 
     print("OwlBear commands\n")  # noqa: T201
     for group in ("Everyday", "Setup", "Maintenance"):
         if selected is not None and group != selected:
             continue
+        commands = [
+            command for command in COMMANDS if command.group == group and (development or not command.development_only)
+        ]
+        if not commands:
+            continue
         print(f"{group}:")  # noqa: T201
-        for command in COMMANDS:
-            if command.group == group:
-                print(f"  {command.usage:<58} {command.summary}")  # noqa: T201
+        for command in commands:
+            print(f"  {command.usage:<58} {command.summary}")  # noqa: T201
         print()  # noqa: T201

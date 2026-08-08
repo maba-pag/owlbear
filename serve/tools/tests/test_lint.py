@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from unittest.mock import patch
@@ -52,6 +53,56 @@ def test_lint_runs_all_files_for_all_option(option: str) -> None:
 def test_lint_rejects_all_with_explicit_paths() -> None:
     with patch.object(sys, "argv", ["lint", "--all", "README.md"]), pytest.raises(SystemExit, match="2"):
         lint()
+
+
+def test_consumer_lint_uses_declared_ruff_config_without_fixes(tmp_path: object, monkeypatch: object) -> None:
+    root = tmp_path
+    (root / "pyproject.toml").write_text("[tool.ruff]\nline-length = 100\n", encoding="utf-8")
+    source = root / "src/example.py"
+    source.parent.mkdir()
+    source.write_text("value = 1\n", encoding="utf-8")
+    monkeypatch.chdir(root)
+
+    with (
+        patch.object(sys, "argv", ["lint", "--no-fix", "src/example.py"]),
+        patch("owlbear_tools.lint.subprocess.call", return_value=0) as call,
+        pytest.raises(SystemExit, match="0"),
+    ):
+        lint()
+
+    assert [item.args[0] for item in call.call_args_list] == [
+        ["ruff", "check", "src/example.py"],
+        ["ruff", "format", "--check", "src/example.py"],
+    ]
+    assert all(item.kwargs["cwd"] == root for item in call.call_args_list)
+
+
+def test_consumer_lint_uses_project_owned_fix_script(tmp_path: object, monkeypatch: object) -> None:
+    root = tmp_path
+    package = {"scripts": {"lint": "eslint .", "lint:fix": "eslint . --fix"}}
+    (root / "package.json").write_text(json.dumps(package), encoding="utf-8")
+    (root / "package-lock.json").write_text("{}\n", encoding="utf-8")
+    monkeypatch.chdir(root)
+
+    with (
+        patch.object(sys, "argv", ["lint", "--all"]),
+        patch("owlbear_tools.lint.subprocess.call", return_value=0) as call,
+        pytest.raises(SystemExit, match="0"),
+    ):
+        lint()
+
+    call.assert_called_once_with(["npm", "run", "lint:fix"], cwd=root)
+
+
+def test_consumer_lint_requires_project_owned_configuration(
+    tmp_path: object, monkeypatch: object, capsys: object
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    with patch.object(sys, "argv", ["lint", "--all"]), pytest.raises(SystemExit, match="2"):
+        lint()
+
+    assert "No consumer lint configuration found" in capsys.readouterr().err
 
 
 def test_lint_no_fix_replaces_mutating_hooks_with_check_hooks() -> None:
