@@ -412,6 +412,13 @@ class PortfolioApplicationError(RuntimeError):
     code = "ERR_DELIVERY_PORTFOLIO"
 
 
+class PortfolioReadView(_ApplicationModel):
+    """Grouped work and operating facts derived from one portfolio capture."""
+
+    groups: tuple[ChangeGroupView, ...]
+    operating: PortfolioOperatingView
+
+
 class PortfolioApplicationConfig(_ApplicationModel):
     """Configured capacity, source root, and complete stage-role policy."""
 
@@ -580,9 +587,14 @@ class PortfolioApplication:
 
     def list_integration_ready_changes(self) -> tuple[str, ...]:
         """List unclaimed Integration changes that are ready or safe to retry."""
+        return self._integration_ready_change_ids(self._portfolio_snapshots())
+
+    def _integration_ready_change_ids(
+        self,
+        snapshots: tuple[DeliveryPortfolioSnapshot, ...],
+    ) -> tuple[str, ...]:
         ready = []
-        for change_id, runtime in sorted(self._runtimes.items()):
-            snapshot = self._delivery_snapshot(runtime)
+        for snapshot in snapshots:
             attention = snapshot.frontier.integration_attention
             if (
                 self._snapshot_change_stage(snapshot) == DeliveryChangeStage.INTEGRATION
@@ -594,14 +606,13 @@ class PortfolioApplication:
                     == DeliveryIntegrationAttentionDisposition.RETRYABLE
                 )
             ):
-                ready.append(change_id)
+                ready.append(snapshot.contract.change_id)
         return tuple(ready)
 
     def list_integration_attention(self) -> tuple[DeliveryIntegrationAttentionStatus, ...]:
         """List non-retryable Integration attention in stable identity order."""
         statuses = []
-        for change_id, runtime in sorted(self._runtimes.items()):
-            snapshot = self._delivery_snapshot(runtime)
+        for snapshot in self._portfolio_snapshots():
             attention = snapshot.frontier.integration_attention
             if (
                 attention is None
@@ -614,7 +625,7 @@ class PortfolioApplication:
                 continue
             statuses.append(
                 DeliveryIntegrationAttentionStatus(
-                    change_id=change_id,
+                    change_id=snapshot.contract.change_id,
                     code=attention.code,
                     disposition=disposition,
                     retry_condition=attention.retry_condition,
@@ -629,10 +640,10 @@ class PortfolioApplication:
     def list_work_items(self) -> tuple[WorkItemProjection, ...]:
         """List bounded work-item projections in stable portfolio order."""
         projections = []
-        for runtime in self._runtimes.values():
-            if runtime.change_stage() == DeliveryChangeStage.COMPLETED:
+        for snapshot in self._portfolio_snapshots():
+            if self._snapshot_change_stage(snapshot) == DeliveryChangeStage.COMPLETED:
                 continue
-            projections.extend(self._work_item_projector(runtime).list_items())
+            projections.extend(WorkItemProjector(snapshot).list_items())
         return tuple(
             sorted(
                 projections,
@@ -647,13 +658,39 @@ class PortfolioApplication:
     def list_work_item_groups(self) -> tuple[ChangeGroupView, ...]:
         """List grouped Cockpit views from exact per-change snapshots."""
         return tuple(
-            self._work_item_projector(runtime).group_view()
-            for change_id, runtime in sorted(self._runtimes.items())
-            if runtime.change_stage() != DeliveryChangeStage.COMPLETED
+            WorkItemProjector(snapshot).group_view()
+            for snapshot in self._portfolio_snapshots()
+            if self._snapshot_change_stage(snapshot) != DeliveryChangeStage.COMPLETED
+        )
+
+    def portfolio_read_view(self) -> PortfolioReadView:
+        """Return grouped work and operating facts from one immutable capture."""
+        snapshots = self._portfolio_snapshots()
+        groups = tuple(
+            WorkItemProjector(snapshot).group_view()
+            for snapshot in snapshots
+            if self._snapshot_change_stage(snapshot) != DeliveryChangeStage.COMPLETED
+        )
+        return PortfolioReadView(
+            groups=groups,
+            operating=self._portfolio_operating_view(snapshots, groups),
         )
 
     def portfolio_operating_view(self) -> PortfolioOperatingView:
         """Return portfolio-wide operating facts and advisory session guidance."""
+        snapshots = self._portfolio_snapshots()
+        groups = tuple(
+            WorkItemProjector(snapshot).group_view()
+            for snapshot in snapshots
+            if self._snapshot_change_stage(snapshot) != DeliveryChangeStage.COMPLETED
+        )
+        return self._portfolio_operating_view(snapshots, groups)
+
+    def _portfolio_operating_view(
+        self,
+        snapshots: tuple[DeliveryPortfolioSnapshot, ...],
+        groups: tuple[ChangeGroupView, ...],
+    ) -> PortfolioOperatingView:
         runtime_ids = set(self._runtimes)
         draft_design_ids = tuple(
             package.change_id for package in self._package_store.list_verified() if package.change_id not in runtime_ids
@@ -663,9 +700,8 @@ class PortfolioApplication:
             for change_id, runtime in sorted(self._runtimes.items())
             if runtime.change_stage() == DeliveryChangeStage.DESIGN
         )
-        claimed = self._claimed_work()
-        queued = self._queued_work()
-        groups = self.list_work_item_groups()
+        claimed = self._claimed_work(snapshots)
+        queued = self._queued_work(snapshots)
         interventions = tuple(
             PortfolioWorkReference(
                 change_id=item.change_id,
@@ -687,7 +723,7 @@ class PortfolioApplication:
             if item.needs == WorkItemNeed.DEPENDENCY
         )
         unfinished_runtime_count = sum(
-            runtime.change_stage() != DeliveryChangeStage.COMPLETED for runtime in self._runtimes.values()
+            self._snapshot_change_stage(snapshot) != DeliveryChangeStage.COMPLETED for snapshot in snapshots
         )
         unfinished_change_count = unfinished_runtime_count
         design_change_ids = tuple(dict.fromkeys((*draft_design_ids, *design_required_ids)))
@@ -713,37 +749,44 @@ class PortfolioApplication:
             guidance=guidance,
         )
 
-    def _claimed_work(self) -> tuple[PortfolioWorkReference, ...]:
+    def _claimed_work(
+        self,
+        snapshots: tuple[DeliveryPortfolioSnapshot, ...],
+    ) -> tuple[PortfolioWorkReference, ...]:
         claimed = []
-        for change_id, runtime in sorted(self._runtimes.items()):
+        for snapshot in snapshots:
             claimed.extend(
                 PortfolioWorkReference(
-                    change_id=change_id,
-                    item_key=f"outcome:{outcome_id}",
+                    change_id=snapshot.contract.change_id,
+                    item_key=f"outcome:{binding.outcome_id}",
                     scope=PortfolioWorkScope.OUTCOME,
                 )
-                for outcome_id, _claim in runtime.active_claims()
+                for binding in snapshot.frontier.bindings
+                if binding.active_claim is not None
             )
-            if runtime.integration_repair_claim() is not None:
+            if snapshot.frontier.integration_repair_claim is not None:
                 claimed.append(
                     PortfolioWorkReference(
-                        change_id=change_id,
+                        change_id=snapshot.contract.change_id,
                         item_key="integration",
                         scope=PortfolioWorkScope.INTEGRATION,
                     )
                 )
         return tuple(claimed)
 
-    def _queued_work(self) -> tuple[PortfolioWorkReference, ...]:
-        queued = [
-            PortfolioWorkReference(
-                change_id=candidate.change_id,
-                item_key=f"outcome:{candidate.binding.outcome_id}",
-                scope=PortfolioWorkScope.OUTCOME,
+    def _queued_work(
+        self,
+        snapshots: tuple[DeliveryPortfolioSnapshot, ...],
+    ) -> tuple[PortfolioWorkReference, ...]:
+        queued = list(self._queued_outcome_work(snapshots))
+        integration_ids = tuple(
+            dict.fromkeys(
+                (
+                    *self._integration_ready_change_ids(snapshots),
+                    *self._repair_candidate_ids(snapshots),
+                )
             )
-            for candidate in self._candidates()
-        ]
-        integration_ids = tuple(dict.fromkeys((*self.list_integration_ready_changes(), *self._repair_candidates())))
+        )
         queued.extend(
             PortfolioWorkReference(
                 change_id=change_id,
@@ -753,6 +796,66 @@ class PortfolioApplication:
             for change_id in integration_ids
         )
         return tuple(queued)
+
+    def _queued_outcome_work(
+        self,
+        snapshots: tuple[DeliveryPortfolioSnapshot, ...],
+    ) -> tuple[PortfolioWorkReference, ...]:
+        ranked = tuple(
+            candidate for snapshot in snapshots if (candidate := self._queued_outcome_candidate(snapshot)) is not None
+        )
+        return tuple(item[4] for item in sorted(ranked, key=lambda item: item[:4]))
+
+    def _queued_outcome_candidate(
+        self,
+        snapshot: DeliveryPortfolioSnapshot,
+    ) -> tuple[int, int, int, str, PortfolioWorkReference] | None:
+        if self._snapshot_change_stage(
+            snapshot
+        ) != DeliveryChangeStage.ACTIVE_DELIVERY or self._snapshot_has_active_claims(snapshot):
+            return None
+        completed = {
+            binding.outcome_id for binding in snapshot.frontier.bindings if binding.stage == DeliveryStage.COMPLETED
+        }
+        bindings = {binding.outcome_id: binding for binding in snapshot.frontier.bindings}
+        ranked = []
+        for outcome_index, outcome in enumerate(snapshot.contract.outcomes):
+            binding = bindings[outcome.outcome_id]
+            if (
+                binding.stage in {DeliveryStage.DESIGN, DeliveryStage.COMPLETED}
+                or binding.active_claim is not None
+                or (binding.block is not None and not binding.block.resolved)
+                or not set(outcome.dependency_ids) <= completed
+            ):
+                continue
+            task_index = self._snapshot_task_index(binding)
+            if task_index is None:
+                continue
+            ranked.append(
+                (
+                    self._snapshot_dependency_depth(snapshot, outcome.outcome_id),
+                    outcome_index,
+                    task_index,
+                    snapshot.contract.change_id,
+                    PortfolioWorkReference(
+                        change_id=snapshot.contract.change_id,
+                        item_key=f"outcome:{outcome.outcome_id}",
+                        scope=PortfolioWorkScope.OUTCOME,
+                    ),
+                )
+            )
+        return min(ranked, key=lambda item: item[:4]) if ranked else None
+
+    @staticmethod
+    def _snapshot_task_index(binding: OutcomeAuthorityBinding) -> int | None:
+        if binding.stage != DeliveryStage.IMPLEMENTATION:
+            return 0
+        completed = {result.task_id for result in binding.results}
+        task = next(
+            (item for item in binding.tasks if item.task_id not in completed and set(item.dependency_ids) <= completed),
+            None,
+        )
+        return binding.task_ids.index(task.task_id) if task is not None else None
 
     def show_work_item(self, change_id: str, work_item_id: str) -> WorkItemDetail:
         """Show bounded semantic detail from one exact change projector."""
@@ -835,6 +938,9 @@ class PortfolioApplication:
     def _work_item_projector(self, runtime: DeliveryRuntime) -> WorkItemProjector:
         return WorkItemProjector(self._delivery_snapshot(runtime))
 
+    def _portfolio_snapshots(self) -> tuple[DeliveryPortfolioSnapshot, ...]:
+        return tuple(self._delivery_snapshot(runtime) for _change_id, runtime in sorted(self._runtimes.items()))
+
     def _delivery_snapshot(self, runtime: DeliveryRuntime) -> DeliveryPortfolioSnapshot:
         change_id = runtime.contract.change_id
         coordination = self._workspace_manager.show(change_id)
@@ -872,6 +978,15 @@ class PortfolioApplication:
     @staticmethod
     def _snapshot_has_active_claims(snapshot: DeliveryPortfolioSnapshot) -> bool:
         return any(binding.active_claim is not None for binding in snapshot.frontier.bindings)
+
+    @staticmethod
+    def _snapshot_dependency_depth(snapshot: DeliveryPortfolioSnapshot, outcome_id: str) -> int:
+        dependencies = {outcome.outcome_id: outcome.dependency_ids for outcome in snapshot.contract.outcomes}
+
+        def depth(current: str) -> int:
+            return 0 if not dependencies[current] else 1 + max(depth(item) for item in dependencies[current])
+
+        return depth(outcome_id)
 
     def list_completed_changes(self, cursor: str | None = None, limit: int = 100) -> CompletedChangePage:
         """List one bounded page rebuilt from configured target history."""
@@ -1516,9 +1631,14 @@ class PortfolioApplication:
         return _PreparedSource(package, coordination, source_head)
 
     def _repair_candidates(self) -> tuple[str, ...]:
+        return self._repair_candidate_ids(self._portfolio_snapshots())
+
+    def _repair_candidate_ids(
+        self,
+        snapshots: tuple[DeliveryPortfolioSnapshot, ...],
+    ) -> tuple[str, ...]:
         candidates = []
-        for change_id, runtime in sorted(self._runtimes.items()):
-            snapshot = self._delivery_snapshot(runtime)
+        for snapshot in snapshots:
             attention = snapshot.frontier.integration_attention
             if (
                 self._snapshot_change_stage(snapshot) != DeliveryChangeStage.INTEGRATION
@@ -1530,7 +1650,7 @@ class PortfolioApplication:
                 or snapshot.integration_attention_superseded
             ):
                 continue
-            candidates.append(change_id)
+            candidates.append(snapshot.contract.change_id)
         return tuple(candidates)
 
     def _prepare_repair_source(

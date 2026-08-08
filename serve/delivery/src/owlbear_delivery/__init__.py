@@ -130,6 +130,7 @@ from owlbear_delivery.portfolio_application import (
     PortfolioApplicationDependencies,
     PortfolioApplicationError,
     PortfolioApplicationHooks,
+    PortfolioReadView,
 )
 from owlbear_delivery.portfolio_operating import (
     PortfolioGuidance,
@@ -414,6 +415,7 @@ __all__ = [
     "PortfolioGuidance",
     "PortfolioGuidanceKind",
     "PortfolioOperatingView",
+    "PortfolioReadView",
     "PortfolioWorkReference",
     "PortfolioWorkScope",
     "ProofCheckout",

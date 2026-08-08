@@ -95,11 +95,11 @@ class TargetCockpitService:
         self,
     ) -> WorkItemPortfolioResponse:
         """Return Change-grouped current Work Items from exact snapshots."""
-        groups = self._invoke(self._application.list_work_item_groups)
+        view = self._invoke(self._application.portfolio_read_view)
         return WorkItemPortfolioResponse(
-            groups=groups,
-            totals=_portfolio_totals(groups),
-            operating=self._invoke(self._application.portfolio_operating_view),
+            groups=view.groups,
+            totals=_portfolio_totals(view.groups),
+            operating=view.operating,
         )
 
     def show_item(self, change_id: str, item_key: str) -> WorkItemDetailResponse:
