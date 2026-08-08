@@ -34,6 +34,12 @@ worktree. Require the branch and clean worktree to end at that exact repair comm
 head, custody, path, ancestry, or cleanliness check changes, stop without admission or target
 mutation and report that the current attention must be reloaded.
 
+If proof or commit validation fails after edits but before a valid repair commit exists, restore only
+the edits made by this repair attempt to the exact launch source head and verify the assigned
+worktree is clean on its branch before returning `dispatch_failure`. If a clean candidate commit
+already exists, leave it intact so exact recovery can preserve it. Never ask recovery to erase a
+dirty worktree or discard edits whose ownership is uncertain.
+
 ## Step 2 - Obtain Independent Exact-Commit Review
 
 Dispatch `build-reviewer` with the complete current attention, exact coordination identities,
