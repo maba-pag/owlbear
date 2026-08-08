@@ -30,9 +30,12 @@ Require either `integration_repair_admitted` bound to the launch's change, attem
 attention identities, `authority_attention` carrying those same outer identities and an attention
 payload bound to the launch attention and change, or a claim-bound `dispatch_failure`. Forward valid
 authority attention unchanged to `publish_integration_repair_authority_attention`. On admission,
-perform no transition and let the next acquisition cycle own Integration retry. On malformed output, dispatch failure, or
-agent failure, call `recover_integration_repair_claim` with the launch's exact change, attempt, and
-claim IDs and report its result unchanged.
+perform no transition and let the next acquisition cycle own Integration retry. If the authority
+attention publication operation is unavailable or rejects the valid worker result, call
+`recover_integration_repair_claim` with the launch's exact change, attempt, and claim IDs, report the
+handoff failure and recovery result, and end the session after the current acquired batch rather
+than reacquiring the same repair. On malformed output, dispatch failure, or agent failure, use that
+same exact recovery call and report its result unchanged.
 
 Process `launch_packages` in returned order. For worker role `planner` or `builder`, dispatch exactly
 `launch.policy.worker_agent` and pass only the serialized `DeliveryLaunchPackage`. The selected

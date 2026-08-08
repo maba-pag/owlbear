@@ -27,15 +27,22 @@ package bytes, completed history, another checkout, or either source or target r
 ## Step 1 - Make One Additive Conflict Repair
 
 Identify the original conflict paths by comparing the attention target head and change head with
-Git's merge machinery. Edit only those conflicting source paths in the existing change worktree.
-The repair must preserve completed history, remove the conflict when merged with the exact attention
-target head, and introduce no unrelated behavior or cleanup.
+Git's merge machinery. Attribute each side's conflict-path delta from the merge base and read the
+admitted change authority before choosing a resolution. Preserve current target behavior for deltas
+outside that authority; a target rename or platform migration is not competing product authority
+merely because source-branch tests still encode the prior state. Edit only those conflicting source
+paths in the existing change worktree. The repair must preserve completed history, remove the
+conflict when merged with the exact attention target head, and introduce no unrelated behavior or
+cleanup.
 
 Run focused proof for the affected paths. Create one explicit commit whose sole parent is
 `attention.change_head`; do not amend, rebase, merge, squash, cherry-pick, or create another
-worktree. Require the branch and clean worktree to end at that exact repair commit. If any identity,
-head, custody, path, ancestry, or cleanliness check changes, stop without admission or target
-mutation and report that the current attention must be reloaded.
+worktree. Require `git merge-tree --write-tree` for the exact target head and repair commit to
+succeed, and treat that merged tree and its conflict-path blobs as the repair proof object. A
+source-checkout failure caused solely by target-owned evolution is non-probative and cannot justify
+authority attention. Require the branch and clean worktree to end at that exact repair commit. If
+any identity, head, custody, path, ancestry, or cleanliness check changes, stop without admission or
+target mutation and report that the current attention must be reloaded.
 
 If proof or commit validation fails after edits but before a valid repair commit exists, restore only
 the edits made by this repair attempt to the exact launch source head and verify the assigned
@@ -71,10 +78,12 @@ that typed repair. Treat the returned repair as the only successful result. Neve
 `integrate_ready_change`, retry Integration, move the target, publish a Build result, or select a
 Delivery transition from this workflow.
 
-If current evidence proves no conflict-only reconciliation can preserve both authorities, make no
-repair commit. Restore any edits owned by this attempt, require the branch and clean worktree at the
-exact launch source head, and return the `authority_attention` result below. Missing context,
-custody, or proof remains `dispatch_failure`; a merely difficult repair is not authority attention.
+Only when three-way attribution proves that admitted change authority and current target behavior
+require mutually exclusive observable semantics may the repair return authority attention. Make no
+repair commit in that case. Restore any edits owned by this attempt, require the branch and clean
+worktree at the exact launch source head, and return the `authority_attention` result below. Missing
+context, custody, or proof remains `dispatch_failure`; stale source expectations or a merely
+difficult repair are not authority attention.
 
 ## Output
 

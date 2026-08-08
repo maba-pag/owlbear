@@ -368,6 +368,19 @@ def test_installed_delivery_ecosystem_is_native_only() -> None:
     }
 
 
+def test_integration_repair_guidance_closes_observed_failure_routes() -> None:
+    repair = (_SKILLS_ROOT / "w-integration-repair/SKILL.md").read_text(encoding="utf-8")
+    orchestration = (_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8")
+
+    assert "Attribute each side's conflict-path delta from the merge base" in repair
+    assert "target rename or platform migration is not competing product authority" in repair
+    assert "treat that merged tree and its conflict-path blobs as the repair proof object" in repair
+    assert "stale source expectations" in repair
+    assert "attention publication operation is unavailable or rejects" in orchestration
+    assert "recover_integration_repair_claim" in orchestration
+    assert "end the session after the current acquired batch" in orchestration
+
+
 def test_target_role_write_and_lifecycle_guards_are_preserved() -> None:
     metadata = {path.stem.removesuffix(".agent"): _frontmatter(path) for path in _AGENTS_ROOT.glob("*.agent.md")}
 
