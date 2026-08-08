@@ -41,7 +41,7 @@ function ItemLink({
       to={workItemPath(item)}
       data-work-item-primary-trigger
       data-work-item-identity={`${item.change_id}:${item.item_key}`}
-      className="block min-w-0 font-semibold text-primary underline-offset-4 after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+      className="block min-w-0 font-semibold text-primary after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
       aria-current={selected ? 'location' : undefined}
       onClick={(event) => onSelect(identity, event.currentTarget)}
     >
@@ -187,7 +187,7 @@ function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
               to={workItemPath(item)}
               data-work-item-primary-trigger
               data-work-item-identity={`${item.change_id}:${item.item_key}`}
-              className="block font-semibold text-primary underline-offset-4 after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+              className="block font-semibold text-primary after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
               aria-current={isSelected ? 'location' : undefined}
               onClick={(event) => onSelect({ changeId: item.change_id, itemKey: item.item_key }, event.currentTarget)}
             >
