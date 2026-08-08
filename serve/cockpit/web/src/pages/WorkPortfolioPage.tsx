@@ -3,12 +3,15 @@ import { PButton, PButtonPure, PFlyout, PIcon, PSelect, PSelectOption, PTagDismi
 import { useLocation, useNavigate } from 'react-router'
 import type { ChangeGroupView, WorkItemNeed } from '../api/workItems'
 import CompletedHistoryWorkspace from '../components/CompletedHistoryWorkspace'
+import DesignWorkDetail from '../components/DesignWorkDetail'
+import DesignWorkSection from '../components/DesignWorkSection'
+import { designWorkTitle } from '../components/designWorkPresentation'
 import PortfolioOperatingSummary, { PortfolioHeaderSummary } from '../components/PortfolioOperatingSummary'
 import { WorkspaceHeader } from '../components/WorkspaceHeader'
 import { WorkspaceViewCount } from '../components/WorkspaceViewHeader'
 import WorkItemDetail from '../components/WorkItemDetail'
 import WorkPortfolioTable from '../components/WorkPortfolioTable'
-import { useWorkItemDetail, useWorkPortfolio, type WorkItemIdentity } from '../hooks/useWorkItems'
+import { useDesignWorkDetail, useWorkItemDetail, useWorkPortfolio, type WorkItemIdentity } from '../hooks/useWorkItems'
 
 type SelectValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }
 
@@ -154,7 +157,14 @@ function parseSelection(pathname: string): WorkItemIdentity | null {
   }
 }
 
-function SelectedDetail({
+function SelectedDesignDetail({ changeId, onClose }: { changeId: string; onClose: () => void }) {
+  const detail = useDesignWorkDetail(changeId)
+  if (detail.data) return <DesignWorkDetail detail={detail.data} />
+  if (detail.isLoading) return <p role="status">Loading Design work...</p>
+  return <EmptyDetail error={detail.error} retry={detail.retry} onClose={onClose} />
+}
+
+function SelectedWorkItemDetail({
   identity,
   onChanged,
   onClose,
@@ -180,6 +190,13 @@ function SelectedDetail({
   )
   if (selectedDetail.detail.isLoading) return <p role="status">Loading Work Item details...</p>
   return <EmptyDetail error={selectedDetail.detail.error} retry={selectedDetail.retry} onClose={onClose} />
+}
+
+function SelectedDetail(props: { identity: WorkItemIdentity; onChanged: () => void; onClose: () => void }) {
+  if (props.identity.itemKey === 'design') {
+    return <SelectedDesignDetail changeId={props.identity.changeId} onClose={props.onClose} />
+  }
+  return <SelectedWorkItemDetail {...props} />
 }
 
 function PortfolioWorkspace({
@@ -226,7 +243,11 @@ export default function WorkPortfolioPage() {
   const lastTriggerIdentity = useRef<string | null>(null)
   const restoreFocusAfterClose = useRef(false)
   const selectedWasPresent = useRef(false)
-  const changes = portfolio.groups.map((group) => ({ id: group.change_id, title: group.title }))
+  const designWorkIds = portfolio.operating.draft_design_change_ids
+  const changes = [
+    ...portfolio.groups.map((group) => ({ id: group.change_id, title: group.title })),
+    ...designWorkIds.map((changeId) => ({ id: changeId, title: designWorkTitle(changeId) })),
+  ]
   const filteredGroups = portfolio.groups
     .filter((group) => !deferredChange || group.change_id === deferredChange)
     .map((group) => ({
@@ -235,6 +256,11 @@ export default function WorkPortfolioPage() {
     }))
     .filter((group) => group.items.length > 0)
   const shownCount = filteredGroups.reduce((total, group) => total + group.items.length, 0)
+  const visibleDesignWorkIds = !deferredNeeds && (!deferredChange || designWorkIds.includes(deferredChange))
+    ? designWorkIds.filter((changeId) => !deferredChange || changeId === deferredChange)
+    : []
+  const shownEntryCount = shownCount + visibleDesignWorkIds.length
+  const totalEntryCount = portfolio.totals.total + designWorkIds.length
   const isFiltered = Boolean(deferredChange || deferredNeeds)
 
   const closeInspector = () => {
@@ -306,7 +332,7 @@ export default function WorkPortfolioPage() {
           <>
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-static-lg gap-y-static-sm">
               <div className="ml-auto flex min-w-0 flex-wrap items-center gap-static-xs">
-                {isFiltered ? <span data-testid="work-shown-count"><WorkspaceViewCount value={`${shownCount} of ${portfolio.totals.total}`} unit="work items shown" /></span> : null}
+                {isFiltered ? <span data-testid="work-shown-count"><WorkspaceViewCount value={`${shownEntryCount} of ${totalEntryCount}`} unit="portfolio entries shown" /></span> : null}
                 <PortfolioFilterTools {...filterProps} />
               </div>
             </div>
@@ -323,15 +349,29 @@ export default function WorkPortfolioPage() {
 
             {hasData ? (
               <>
-                <PortfolioWorkspace
-                  groups={filteredGroups}
-                  selected={selected}
-                  emptyMessage={isFiltered ? 'No Work Items match the current filters.' : undefined}
-                  onSelect={(identity, trigger) => {
-                    lastTrigger.current = trigger
-                    lastTriggerIdentity.current = `${identity.changeId}:${identity.itemKey}`
-                  }}
-                />
+                {filteredGroups.length > 0 ? (
+                  <PortfolioWorkspace
+                    groups={filteredGroups}
+                    selected={selected}
+                    onSelect={(identity, trigger) => {
+                      lastTrigger.current = trigger
+                      lastTriggerIdentity.current = `${identity.changeId}:${identity.itemKey}`
+                    }}
+                  />
+                ) : null}
+                {visibleDesignWorkIds.length > 0 ? (
+                  <DesignWorkSection
+                    changeIds={visibleDesignWorkIds}
+                    selectedChangeId={selected?.itemKey === 'design' ? selected.changeId : null}
+                    onSelect={(identity, trigger) => {
+                      lastTrigger.current = trigger
+                      lastTriggerIdentity.current = `${identity.changeId}:${identity.itemKey}`
+                    }}
+                  />
+                ) : null}
+                {filteredGroups.length === 0 && visibleDesignWorkIds.length === 0 ? (
+                  <p className="py-static-lg text-sm text-contrast-medium">{isFiltered ? 'No portfolio entries match the current filters.' : 'No current Delivery work.'}</p>
+                ) : null}
                 <PortfolioOperatingSummary operating={portfolio.operating} />
               </>
             ) : null}

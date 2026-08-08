@@ -20,6 +20,7 @@ from owlbear_cockpit.target_models import (
     BackwardMovePreviewBody,
     ClearBlockBody,
     ConfirmLostClaimBody,
+    DesignWorkDetailResponse,
     NeedsCounts,
     WorkItemDetailResponse,
     WorkItemPortfolioResponse,
@@ -36,6 +37,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryStage,
     integration_attention_disposition,
 )
+from owlbear_delivery.design_package import DesignPackageConflictError
 from owlbear_delivery.portfolio_application import PortfolioApplication, PortfolioApplicationError
 from owlbear_delivery.work_items import (
     ChangeGroupView,
@@ -104,6 +106,16 @@ class TargetCockpitService:
         """Return semantic and operator detail from one exact snapshot."""
         item = self._invoke(lambda: self._application.show_work_item_view(change_id, item_key))
         return WorkItemDetailResponse(item=item)
+
+    def show_design_work(self, change_id: str) -> DesignWorkDetailResponse:
+        """Return verified authored sources for one pre-admission Design package."""
+        package = self._invoke(lambda: self._application.read_design_session(change_id))
+        return DesignWorkDetailResponse(
+            change_id=package.change_id,
+            package_id=package.package_id,
+            intent_markdown=package.intent_bytes.decode(),
+            design_markdown=package.design_bytes.decode(),
+        )
 
     def answer_request(self, change_id: str, request_id: str, body: AnswerRequestBody) -> object:
         """Answer one exact pending Delivery request."""
@@ -229,6 +241,8 @@ class TargetCockpitService:
             _http_error(409, getattr(exc, "code", "ERR_DELIVERY_CONFLICT"), str(exc), retry_safe=True)
         except (DeliveryRuntimeReferenceError, PortfolioApplicationError) as exc:
             _http_error(409, exc.code, str(exc), retry_safe=False)
+        except DesignPackageConflictError as exc:
+            _http_error(409, exc.code, str(exc), retry_safe=False)
 
 
 def _get_target_service(
@@ -302,6 +316,10 @@ def _register_queries(router: APIRouter) -> None:
         completion_id: str | None = None,
     ) -> object:
         return service.show_completed(change_id, completion_id)
+
+    @router.get("/design-work/{change_id}", response_model=DesignWorkDetailResponse)
+    def show_design_work(change_id: str, service: _TargetService) -> DesignWorkDetailResponse:
+        return service.show_design_work(change_id)
 
     @router.get("/changes/{change_id}/work-items/{item_key}", response_model=WorkItemDetailResponse)
     def show_work_item(change_id: str, item_key: str, service: _TargetService) -> WorkItemDetailResponse:

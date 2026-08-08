@@ -154,6 +154,15 @@ class _DeliveryApplicationFake:
             ),
         )
 
+    def read_design_session(self, change_id: str) -> SimpleNamespace:
+        self.calls.append(("show-design", (change_id,)))
+        return SimpleNamespace(
+            change_id=change_id,
+            package_id="d" * 64,
+            intent_bytes=b"# Design intent\n",
+            design_bytes=b"# Design architecture\n",
+        )
+
     def show_work_item_view(self, change_id: str, item_key: str) -> WorkItemDetailView:
         self.calls.append(("show", (change_id, item_key)))
         if item_key == "integration":
@@ -354,6 +363,21 @@ def test_list_and_detail_expose_current_bounded_delivery_state() -> None:
         ("operating", ()),
         ("show", ("change-a", "outcome:OUT-001")),
     ]
+
+
+def test_design_work_detail_exposes_verified_authored_sources() -> None:
+    client, application = _client()
+
+    detail = client.get("/api/design-work/design-draft")
+
+    assert detail.status_code == 200
+    assert detail.json() == {
+        "change_id": "design-draft",
+        "package_id": "d" * 64,
+        "intent_markdown": "# Design intent\n",
+        "design_markdown": "# Design architecture\n",
+    }
+    assert application.calls == [("show-design", ("design-draft",))]
 
 
 def test_controls_require_exact_confirmation_and_delegate_once() -> None:

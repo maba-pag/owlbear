@@ -8,11 +8,13 @@ import {
   recoverWorkItemClaim,
   retryWorkItemIntegration,
   searchCompletedChanges,
+  showDesignWork,
   showCompletedChange,
   workItemDetailUrl,
   type CompletedChangePage,
   type CompletedChangeRecord,
   type DeliveryRequestResolution,
+  type DesignWorkDetailResponse,
   type WorkItemDetailResponse,
   type WorkItemPortfolioResponse,
   type WorkItemCardView,
@@ -73,6 +75,35 @@ export function useWorkPortfolio() {
     isLoading: polling.isFetching && portfolio === null,
     retry: polling.refetch,
   }
+}
+
+export function useDesignWorkDetail(changeId: string) {
+  const [retryNonce, setRetryNonce] = useState(0)
+  const [resource, setResource] = useState<AsyncResource<DesignWorkDetailResponse>>({
+    data: null,
+    error: null,
+    isLoading: true,
+  })
+
+  useEffect(() => {
+    let active = true
+    setResource({ data: null, error: null, isLoading: true })
+    void showDesignWork(changeId)
+      .then((data) => active && setResource({ data, error: null, isLoading: false }))
+      .catch((caught: unknown) => {
+        if (!active) return
+        setResource({
+          data: null,
+          error: caught instanceof Error ? caught : new Error('Design work is unavailable'),
+          isLoading: false,
+        })
+      })
+    return () => {
+      active = false
+    }
+  }, [changeId, retryNonce])
+
+  return { ...resource, retry: () => setRetryNonce((value) => value + 1) }
 }
 
 export function useCompletedHistory(query: string) {

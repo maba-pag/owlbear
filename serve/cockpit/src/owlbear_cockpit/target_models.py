@@ -56,6 +56,15 @@ class WorkItemDetailResponse(_TargetHTTPModel):
     item: WorkItemDetailView
 
 
+class DesignWorkDetailResponse(_TargetHTTPModel):
+    """Verified authored Design sources for one pre-admission package."""
+
+    change_id: str = Field(min_length=1)
+    package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    intent_markdown: str
+    design_markdown: str
+
+
 class AnswerRequestBody(_TargetHTTPModel):
     """Selected option, free-text answer, or both for one pending request."""
 
@@ -118,6 +127,7 @@ __all__ = [
     "BackwardMovePreviewBody",
     "ClearBlockBody",
     "ConfirmLostClaimBody",
+    "DesignWorkDetailResponse",
     "NeedsCounts",
     "WorkItemDetailResponse",
     "WorkItemPortfolioResponse",

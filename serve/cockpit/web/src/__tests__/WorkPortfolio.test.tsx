@@ -184,6 +184,14 @@ function installFetch() {
     if (method === 'GET' && url.startsWith('/api/changes/change-alpha/work-items/')) {
       return detailFailure ? response({ detail: 'Delivery runtime is absent: change-alpha' }, 409) : response(currentDetail)
     }
+    if (method === 'GET' && url === '/api/design-work/design-draft') {
+      return response({
+        change_id: 'design-draft',
+        package_id: 'd'.repeat(64),
+        intent_markdown: '# Design Draft\n\nShape a coherent operator workflow.',
+        design_markdown: '# Architecture\n\nKeep authority explicit.',
+      })
+    }
     if (method === 'GET' && url === '/api/work-items/completed') {
       return response({ records: [completed], next_cursor: null })
     }
@@ -272,6 +280,31 @@ it('presents Change-grouped Outcomes by work, progress, and status', async () =>
   expect(guidance).not.toHaveTextContent('Start /orchestrate')
   expect(table.compareDocumentPosition(guidance) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect(screen.queryByText('Reviewed', { exact: true })).not.toBeInTheDocument()
+})
+
+it('shows unadmitted Design work on the board and opens its verified sources', async () => {
+  currentPortfolio = {
+    ...portfolio(),
+    operating: {
+      ...portfolio().operating,
+      draft_design_change_ids: ['design-draft'],
+      guidance: [{ kind: 'resume-design', change_ids: ['design-draft'], work_count: 1 }],
+    },
+  }
+  renderPage('/delivery/design-draft/design')
+
+  const designWork = await screen.findByTestId('design-work-section')
+  expect(designWork).toHaveTextContent('Design Draft')
+  expect(designWork).toHaveTextContent('Not admitted to Delivery')
+  expect(designWork).toHaveTextContent('/design design-draft')
+  expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('1unfinished Change')
+
+  const detailView = await screen.findByTestId('design-work-detail')
+  expect(detailView).toHaveTextContent('Shape a coherent operator workflow.')
+  expect(detailView).toHaveTextContent('Continue with/design design-draft')
+  fireEvent.click(screen.getByText('Design', { selector: 'summary' }))
+  expect(detailView).toHaveTextContent('Keep authority explicit.')
+  expect(requests.some(({ url }) => url === '/api/design-work/design-draft')).toBe(true)
 })
 
 it('filters grouped rows by Change and Needs without conflating Activity', async () => {

@@ -131,6 +131,13 @@ export interface WorkItemPortfolioResponse {
   operating: PortfolioOperatingView
 }
 
+export interface DesignWorkDetailResponse {
+  change_id: string
+  package_id: string
+  intent_markdown: string
+  design_markdown: string
+}
+
 export interface DeliveryRequestResolution {
   selected_option_id: string | null
   response_text: string | null
@@ -351,6 +358,13 @@ export function showWorkItem(changeId: string, itemKey: string): Promise<WorkIte
   return workItemRequest(
     workItemDetailUrl(changeId, itemKey),
     { fallbackCode: 'ERR_WORK_ITEM_DETAIL' },
+  )
+}
+
+export function showDesignWork(changeId: string): Promise<DesignWorkDetailResponse> {
+  return workItemRequest(
+    `/api/design-work/${encodeURIComponent(changeId)}`,
+    { fallbackCode: 'ERR_DESIGN_WORK_DETAIL' },
   )
 }
 
