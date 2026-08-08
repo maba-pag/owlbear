@@ -49,12 +49,10 @@ class AgentCatalog:
                 self.require(agent)
 
     def validate_entries(self, entries: list[MemoryEntry]) -> list[str]:
-        """Return drift errors for provenance or scopes without active agents."""
+        """Return drift errors for scopes without active agents."""
         active = self.names()
         errors: list[str] = []
         for entry in entries:
-            if entry.source_agent not in active:
-                errors.append(f"{entry.id}: unknown source_agent {entry.source_agent!r}")
             unknown_scope = sorted(name for name in entry.scope_agents if name != "*" and name not in active)
             if unknown_scope:
                 errors.append(f"{entry.id}: unknown scope_agents {unknown_scope}")

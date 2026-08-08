@@ -350,7 +350,7 @@ class MemoryEngine:
             )
 
     def delete_agent(self, agent: str) -> AgentDeleteResult:
-        """Delete sourced memories and remove an agent from remaining scopes."""
+        """Remove an agent from scopes while preserving historical provenance."""
         if not agent.strip():
             msg = "agent must not be empty"
             raise ValidationError(msg)
@@ -360,9 +360,6 @@ class MemoryEngine:
             updated_entries: list[MemoryEntry] = []
             deleted_entries: list[MemoryEntry] = []
             for entry in originals:
-                if entry.source_agent == agent:
-                    deleted_entries.append(entry)
-                    continue
                 if agent not in entry.scope_agents:
                     continue
                 scope_agents = [name for name in entry.scope_agents if name != agent]

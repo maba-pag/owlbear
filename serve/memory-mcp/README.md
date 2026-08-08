@@ -66,7 +66,7 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 | `curate_memory` | Mutate fields + auto-promote `pending→curated` (when scope provided) or auto-downgrade `approved→curated`; raises `TransitionError` for contested/disputed/stale (use resolve first) |
 | `delete_memory` | Hard-delete pending (file removed); soft-delete curated/approved/contested/disputed/stale (state→deleted) |
 | `rename_agent_memories` | Rewrite every matching `source_agent` and `scope_agents` reference after an agent rename |
-| `delete_agent_memories` | Physically delete sourced/orphaned memories and remove the deleted role from other scopes |
+| `delete_agent_memories` | Preserve historical provenance, remove the retired role from scopes, and physically delete entries left without an audience |
 | `approve_memory` | Promote `curated→approved`; user-initiated only (not exposed to any agent) |
 | `assess_memories` | Process batch assessment submissions; increments counters for `outstanding`/`unremarkable`/`didnt_use`, delegates `factually_wrong` to confirmation cycle; returns per-entry `{entry_id, success}` or `{entry_id, success=False, error}` results |
 
@@ -86,7 +86,7 @@ All mutating tools return a `hint` field describing the transition or action tak
 | `unremarkable_count` | int | Default `0`; incremented by assessment tool when entry was unremarkable |
 | `didnt_use_count` | int | Default `0`; incremented by assessment tool when entry was skipped |
 | `score` | float | Default `0.0`; initialized to `confidence` on creation |
-| `source_agent` | str | Required active custom-agent name; immutable except through agent lifecycle rename |
+| `source_agent` | str | Active custom-agent name required at creation; immutable historical provenance except through an explicit lifecycle rename |
 | `scope_agents` | list[str] | Curator-assigned relevance scope; new pending entries default to `[]` |
 | `created_at` | str | UTC timestamp |
 | `updated_at` | str | UTC timestamp |
@@ -100,9 +100,10 @@ and enabled `chat.agentFilesLocations` in workspace settings. Identity is self-r
 caller and validated as vocabulary, not authenticated as an authorization boundary. Scope controls
 relevance filtering only.
 
-Agent definition lifecycle is destructive by design: rename memory references with
-`rename_agent_memories`; delete an agent's memory with `delete_agent_memories`. No aliases or
-backward-compatible role names are retained.
+Rename memory references with `rename_agent_memories`. When deleting an agent,
+`delete_agent_memories` preserves immutable source provenance, removes the retired identity from
+relevance scopes, and deletes only entries left without an audience. No aliases or retired role
+names remain in active relevance scope.
 
 ## Configuration
 

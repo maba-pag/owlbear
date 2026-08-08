@@ -25,7 +25,7 @@ Memory entries use markdown body + YAML frontmatter. Core fields:
 | `state` | str | One of: `pending`, `curated`, `approved`, `contested`, `disputed`, `stale`, `deleted` |
 | `content` | str | Markdown body |
 | `scope_agents` | list[str] | Scope list (empty list allowed) |
-| `source_agent` | str | Required; immutable provenance marker |
+| `source_agent` | str | Required; immutable historical provenance marker |
 | `created_at` | str | UTC timestamp |
 | `updated_at` | str | UTC timestamp |
 | `approved_at` | str \| null | Approval timestamp (set on approve, cleared on downgrade/delete) |
@@ -91,8 +91,9 @@ Cockpit. Tool responses include hints describing the transition or deletion bran
 
 ## Candidate Production
 
-`save_memory` creates an unscoped pending candidate. `source_agent` must exactly match the producing
-custom agent's canonical name; generic host labels such as `GitHub Copilot` are not agent identities.
+`save_memory` creates an unscoped pending candidate. At creation, `source_agent` must exactly match
+the producing custom agent's active canonical name; generic host labels such as `GitHub Copilot` are
+not accepted for new entries. Stored provenance remains historical when that agent is later retired.
 Ordinary writers do not need `list_memories` or `read_memory` authority and must not attempt
 store-wide deduplication before saving. Avoid a duplicate only when the same insight is already
 visible in the current context. The memory curator performs cross-store comparison, conflict
@@ -111,7 +112,7 @@ An entry **fails** if any of the following are true:
 
 - Generic: "always write tests", "use type hints", "be careful with async"
 - No citation: no task ID, file, or tool mentioned
-- Invalid provenance: `source_agent` is a product label, typo, case variant, or inactive role
+- Invalid new provenance: a candidate's `source_agent` is a product label, typo, case variant, or inactive role
 - Invalid curated scope: a promoted entry names no active role and is not universal (`['*']`)
 - Duplicate: substantially the same as an existing approved entry
 

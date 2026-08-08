@@ -81,7 +81,8 @@ Every promoted entry needs non-empty `scope_agents`.
 
 Prefer targeted scopes. Use `['*']` only for broadly reusable process/tool guidance. Never promote with an empty scope.
 Every named scope must exactly match an active custom-agent name. When an agent is renamed or
-deleted, use `rename_agent_memories` or `delete_agent_memories`; never retain an alias.
+deleted, use `rename_agent_memories` or `delete_agent_memories`; never retain an alias in relevance
+scope. A deleted agent may remain in immutable historical provenance.
 
 ## Step 4 — Act On MCP Entries
 

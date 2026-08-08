@@ -69,13 +69,12 @@ def test_catalog_rejects_host_product_identity(tmp_path: Path) -> None:
         AgentCatalog(tmp_path).require("GitHub Copilot")
 
 
-def test_catalog_reports_source_and_scope_drift(tmp_path: Path) -> None:
+def test_catalog_reports_scope_drift_without_rejecting_historical_sources(tmp_path: Path) -> None:
     _write_agent(tmp_path / "share/agents", "builder")
     engine = MemoryEngine(tmp_path / ".owlbear/memory")
     entry_id = _save(engine, source="GitHub Copilot", scope=["builder", "verifier"])
 
     assert AgentCatalog(tmp_path).validate_entries(engine.get_entries()) == [
-        f"{entry_id}: unknown source_agent 'GitHub Copilot'",
         f"{entry_id}: unknown scope_agents ['verifier']",
     ]
 
@@ -140,9 +139,10 @@ async def test_rename_agent_rewrites_sources_and_scopes(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_delete_agent_removes_sourced_and_scope_orphaned_memories(tmp_path: Path) -> None:
+async def test_delete_agent_preserves_sourced_memories_with_surviving_audiences(tmp_path: Path) -> None:
     engine = MemoryEngine(tmp_path / ".owlbear/memory")
     sourced_id = _save(engine, source="verifier", scope=["builder"])
+    universal_id = _save(engine, source="verifier", scope=["*"])
     orphaned_id = _save(engine, source="builder", scope=["verifier"])
     retained_id = _save(engine, source="builder", scope=["builder", "verifier"])
 
@@ -151,8 +151,9 @@ async def test_delete_agent_removes_sourced_and_scope_orphaned_memories(tmp_path
         agent="verifier",
     )
 
-    assert result == {"entries_deleted": 2, "scopes_updated": 1}
+    assert result == {"entries_deleted": 1, "scopes_updated": 1}
     entries = {entry.id: entry for entry in engine.get_entries()}
-    assert sourced_id not in entries
+    assert entries[sourced_id].source_agent == "verifier"
+    assert entries[universal_id].scope_agents == ["*"]
     assert orphaned_id not in entries
     assert entries[retained_id].scope_agents == ["builder"]

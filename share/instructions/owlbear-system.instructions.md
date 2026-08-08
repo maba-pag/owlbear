@@ -46,6 +46,10 @@ The VS Code built-in `/memories/` store is retired for OwlBear agents. Do not wr
 
 Do NOT store as memory: architecture decisions, research findings, code snippets, or task-specific working notes.
 
+For pre-flight loading, call `recall_memory(agent="{exact-agent-name}")` with categories omitted so
+all relevant memory types remain eligible. Add a category filter only when the task intentionally
+needs a narrower subset.
+
 Before completing material work, decide whether you learned a specific, non-obvious, reusable fact that would have improved the work had it been available at the start. If `save_memory` is available and an insight qualifies, load `h-memory-structure` for the content-quality bar and `h-mcp-memory` for tool syntax, then save each distinct insight. Do not save generic advice or information already documented elsewhere. Saving creates a pending candidate; the memory curator owns deduplication, scoping, and retention. If `save_memory` is unavailable, continue without a memory write.
 
 ## 4. Operational Fundamentals

@@ -207,7 +207,7 @@ async def rename_agent_memories(
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))
 async def delete_agent_memories(ctx: Context, *, agent: _Agent) -> dict[str, int]:  # pragma: no cover
-    """Delete memories and scope references for a removed agent."""
+    """Remove a retired agent from scopes while preserving provenance."""
     return await delete_agent_memories_impl(ctx, agent=agent)
 
 

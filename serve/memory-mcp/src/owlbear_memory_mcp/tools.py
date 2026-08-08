@@ -487,7 +487,7 @@ async def rename_agent_memories(ctx: Context, *, old_name: str, new_name: str) -
 
 
 async def delete_agent_memories(ctx: Context, *, agent: str) -> dict[str, int]:
-    """Remove a deleted agent's sourced memories and remaining scope references."""
+    """Remove a deleted agent from scopes while preserving source provenance."""
     engine = _engine_from_ctx(ctx)
     try:
         result = engine.delete_agent(agent)

@@ -75,7 +75,7 @@ The `--project` path must point to the OwlBear installation root. Find the corre
 | `curate_memory` | Curator mutation and code-managed state transition tool | `entry_id`, optional mutable fields, `scope_agents` |
 | `delete_memory` | Lifecycle-aware deletion with hard/soft semantics | `entry_id` |
 | `rename_agent_memories` | Rewrite provenance and scopes after an agent rename | `old_name`, `new_name` |
-| `delete_agent_memories` | Delete sourced/orphaned entries and remove scope references | `agent` |
+| `delete_agent_memories` | Remove retired scope references and delete entries left without an audience | `agent` |
 | `approve_memory` | Promote `curated -> approved` | `entry_id` |
 
 ## save_memory
@@ -138,6 +138,7 @@ Returns identity-bearing markdown blocks scoped to one agent for pre-flight load
 Behavior:
 
 - includes `curated`, `approved`, and `contested` entries scoped to the agent
+- treats omitted `categories` as all categories; this is the standard pre-flight call
 - returns `approved` entries before `curated`
 - formats each block as `## {title}`, `Entry ID:`{id}``, and the body on consecutive lines
 - omits all other entry metadata
@@ -214,9 +215,9 @@ Agent files and memory references change together; compatibility aliases are not
 - After renaming an agent definition, call
     `rename_agent_memories(old_name="old", new_name="new")`. The new name must already resolve from
     the active agent locations. Provenance and every matching relevance scope are rewritten.
-- When deleting an agent, call `delete_agent_memories(agent="name")`. Entries sourced by that agent
-    are physically deleted. Its scope reference is removed from other entries, and entries left with
-    no audience are also physically deleted.
+- When deleting an agent, call `delete_agent_memories(agent="name")`. Historical `source_agent`
+    provenance remains unchanged. The retired name is removed from relevance scopes, and entries
+    left with no audience are physically deleted.
 - Both operations restore original entries if a multi-file write fails. They return mutation counts
     and fail when no matching memory references exist.
 
@@ -287,6 +288,8 @@ curate_memory(entry_id="...", scope_agents=["builder", "build-reviewer"])
 ```
 
 ```text
+recall_memory(agent="builder")
+# Use categories only for an intentionally narrow lookup:
 recall_memory(agent="builder", categories=["pitfall"], limit=10)
 ```
 
