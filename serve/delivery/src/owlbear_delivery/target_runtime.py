@@ -19,7 +19,6 @@ from owlbear_delivery.runtime_transaction import (
     TransactionParticipant,
 )
 from owlbear_delivery.target_authority import DesignReentryBriefing
-from owlbear_delivery.work_items import TaskProgress, WorkItemEvidence
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -685,36 +684,6 @@ class TargetRuntime:
         updated, pending, event = self._crash_attempt(state, attempt, request.recovered_at, "owner process died")
         self._store.replace(previous, updated, attempt_events=(event,))
         return pending
-
-    def work_item_evidence(self) -> WorkItemEvidence:
-        """Project runtime records into the T1 evidence contract."""
-        state, _previous = self._store.read()
-        planned = tuple(
-            job.plan_scope_id for job in state.jobs if job.kind == "plan" and job.state == TargetJobState.COMPLETED
-        )
-        assembly = tuple(
-            job.plan_scope_id for job in state.jobs if job.kind == "assembly" and job.state == TargetJobState.COMPLETED
-        )
-        progress = tuple(
-            TaskProgress(
-                scope_id=scope_id,
-                task_count=sum(task.plan_scope_id == scope_id for task in state.tasks),
-                reviewed_task_count=sum(task.plan_scope_id == scope_id and task.reviewed for task in state.tasks),
-            )
-            for scope_id in sorted({task.plan_scope_id for task in state.tasks})
-        )
-        pending = tuple(
-            request.work_item_id
-            for request in state.requests
-            if request.status == TargetRequestStatus.PENDING and request.authority_digest == self.authority_digest
-        )
-        return WorkItemEvidence(
-            planned_scope_ids=planned,
-            task_progress=progress,
-            completed_assembly_scope_ids=assembly,
-            pending_request_work_item_ids=pending,
-            design_reentry_briefings=state.design_reentries,
-        )
 
     def _validate_materialization(self, jobs: tuple[TargetJob, ...], tasks: tuple[TargetTask, ...]) -> None:
         work_items = {self._authority.change_id, *(item.outcome_id for item in self._authority.outcomes)}

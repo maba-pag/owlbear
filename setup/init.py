@@ -73,10 +73,17 @@ _SKIP_IF_EXISTS_REL = frozenset(
 )
 
 _OWLBEAR_GITIGNORE_MARKER = "# --- OwlBear managed paths ---"
+_RETIRED_OWLBEAR_GITIGNORE_LINES = frozenset(
+    {
+        "# Host-local Delivery startup configuration",
+        "/.owlbear/delivery/config.json",
+    }
+)
 _HOOKS_REL_PREFIX = ".owlbear/hooks/"
 _TARGET_REQUEST_PATH = Path(".owlbear/target-cutover-request.json")
 _TARGET_RECEIPT_PATH = Path(".owlbear/target-cutover.json")
 _DELIVERY_CONFIG_PATH = Path(".owlbear/delivery/config.json")
+_VERIFICATION_PROFILE_PATH = Path(".owlbear/delivery/verification.json")
 
 # Regex: match // line-comments outside of strings.  Handles the common JSONC
 # patterns VS Code uses (trailing comments like `true, // old value`).  Does
@@ -131,7 +138,7 @@ def _write_gitignore(src: Path, dest: Path) -> None:
 
     If the destination file does not exist, copies the full seed .gitignore.
     If it exists but has no owlbear marker, appends the owlbear-managed section.
-    If the marker is already present, does nothing (idempotent).
+    If the marker is already present, removes only retired OwlBear-managed rules.
     """
     seed_content = src.read_text(encoding="utf-8")
 
@@ -141,7 +148,14 @@ def _write_gitignore(src: Path, dest: Path) -> None:
 
     existing = dest.read_text(encoding="utf-8")
     if _OWLBEAR_GITIGNORE_MARKER in existing:
-        return  # already has the owlbear section
+        prefix, marker, managed = existing.partition(_OWLBEAR_GITIGNORE_MARKER)
+        retained = [
+            line for line in managed.splitlines(keepends=True) if line.strip() not in _RETIRED_OWLBEAR_GITIGNORE_LINES
+        ]
+        updated = prefix + marker + "".join(retained)
+        if updated != existing:
+            dest.write_text(updated, encoding="utf-8")
+        return
 
     # Extract the owlbear-managed section from the seed
     marker_pos = seed_content.find(_OWLBEAR_GITIGNORE_MARKER)
@@ -268,7 +282,7 @@ def _write_delivery_config(
     *,
     interactive: bool,
 ) -> None:
-    """Create the workspace-local Delivery policy once."""
+    """Create the tracked project Delivery policy once."""
     path = target_dir / _DELIVERY_CONFIG_PATH
     if path.exists():
         return
@@ -281,6 +295,65 @@ def _write_delivery_config(
             interactive=interactive,
         ),
     }
+    path.write_text(json.dumps(content, indent=2) + "\n", encoding="utf-8")
+
+
+def _verification_steps(target_dir: Path) -> list[dict[str, object]]:
+    """Detect supported test surfaces once while scaffolding tracked policy."""
+    steps: list[dict[str, object]] = []
+    if (target_dir / "pyproject.toml").is_file() and (target_dir / "tests").is_dir():
+        steps.append(
+            {
+                "step_id": "python-tests",
+                "argv": ["uv", "run", "--locked", "pytest"],
+                "cwd": ".",
+                "timeout_seconds": 1800,
+            }
+        )
+    package_path = target_dir / "package.json"
+    try:
+        package = json.loads(package_path.read_text(encoding="utf-8")) if package_path.is_file() else {}
+    except OSError, json.JSONDecodeError:
+        package = {}
+    if isinstance(package.get("scripts"), dict) and isinstance(package["scripts"].get("test"), str):
+        if (target_dir / "package-lock.json").is_file():
+            steps.append(
+                {
+                    "step_id": "node-install",
+                    "argv": ["npm", "ci"],
+                    "cwd": ".",
+                    "timeout_seconds": 1800,
+                }
+            )
+        steps.append(
+            {
+                "step_id": "node-tests",
+                "argv": ["npm", "test"],
+                "cwd": ".",
+                "timeout_seconds": 1800,
+            }
+        )
+    return steps
+
+
+def _write_verification_profile(target_dir: Path) -> None:
+    """Scaffold tracked Integration policy once from supported manifests."""
+    path = target_dir / _VERIFICATION_PROFILE_PATH
+    if path.exists():
+        return
+    steps = _verification_steps(target_dir)
+    if not steps:
+        warnings.warn(
+            "No supported test surface was detected; create .owlbear/delivery/verification.json before Integration.",
+            stacklevel=2,
+        )
+        return
+    content = {
+        "schema_version": 1,
+        "pass_environment": ["PATH", "HOME", "TMPDIR", "UV_CACHE_DIR", "NPM_CONFIG_CACHE", "CI"],
+        "steps": steps,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(content, indent=2) + "\n", encoding="utf-8")
 
 
@@ -536,6 +609,7 @@ def init(  # noqa: C901
         integration_target,
         interactive=interactive_mode,
     )
+    _write_verification_profile(target_dir)
     ops_root = target_dir / ".owlbear"
     if not (ops_root / "kanban").exists():
         _activate_fresh_target(target_dir, owlbear_dir)

@@ -283,7 +283,10 @@ def integration_attention_disposition(
     code: DeliveryIntegrationAttentionCode,
 ) -> DeliveryIntegrationAttentionDisposition:
     """Return the single operational route owned by an Integration attention code."""
-    if code == DeliveryIntegrationAttentionCode.TARGET_CAS_LOST:
+    if code in {
+        DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED,
+        DeliveryIntegrationAttentionCode.TARGET_CAS_LOST,
+    }:
         return DeliveryIntegrationAttentionDisposition.RETRYABLE
     if code == DeliveryIntegrationAttentionCode.MERGE_CONFLICT:
         return DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED
@@ -633,6 +636,16 @@ class AdministrativeDeliveryMove(_DeliveryModel):
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     target: DeliveryStage
     reason: str = Field(min_length=1)
+    expected_version: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class AdministrativeDeliveryMovePreview(_DeliveryModel):
+    """Exact invalidation closure bound to one frontier version."""
+
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    target: DeliveryStage
+    snapshot_version: str = Field(pattern=r"^[0-9a-f]{64}$")
+    invalidated_outcome_ids: tuple[str, ...] = Field(min_length=1)
 
 
 class AdministrativeDeliveryMoveResult(_DeliveryModel):
@@ -1161,17 +1174,16 @@ class DeliveryRuntime:
     ) -> AdministrativeDeliveryMoveResult:
         """Move backward and invalidate the completed dependent closure."""
         frontier, previous = self._read()
-        binding = _find_binding(frontier, request.outcome_id)
-        if _STAGE_ORDER[request.target] >= _STAGE_ORDER[binding.stage]:
-            _conflict("administrative movement must target an earlier stage")
-        invalidated = _completed_dependent_closure(self._contract, frontier, request.outcome_id)
+        if hashlib.sha256(previous).hexdigest() != request.expected_version:
+            _conflict("administrative movement preview is stale")
+        ordered = _administrative_move_closure(self._contract, frontier, request.outcome_id, request.target)
+        invalidated = set(ordered)
         updated_bindings = tuple(
             _reset_binding(item, request.target if item.outcome_id == request.outcome_id else DeliveryStage.PLANNING)
             if item.outcome_id in invalidated
             else item
             for item in frontier.bindings
         )
-        ordered = tuple(item.outcome_id for item in frontier.bindings if item.outcome_id in invalidated)
         move = DeliveryOperatorMove(
             move_id=request.move_id,
             outcome_id=request.outcome_id,
@@ -1182,10 +1194,28 @@ class DeliveryRuntime:
         if any(item.move_id == move.move_id for item in frontier.operator_moves):
             _conflict("operator move identity already exists")
         updated = frontier.model_copy(
-            update={"bindings": updated_bindings, "operator_moves": (*frontier.operator_moves, move)}
+            update={
+                "bindings": updated_bindings,
+                "operator_moves": (*frontier.operator_moves, move),
+                "integration_attention": None,
+            }
         )
         self._replace(previous, updated)
         return AdministrativeDeliveryMoveResult(move=move, invalidated_outcome_ids=ordered)
+
+    def preview_administrative_move(
+        self,
+        outcome_id: str,
+        target: DeliveryStage,
+    ) -> AdministrativeDeliveryMovePreview:
+        """Return the exact invalidation closure without mutating authority."""
+        frontier, content = self._read()
+        return AdministrativeDeliveryMovePreview(
+            outcome_id=outcome_id,
+            target=target,
+            snapshot_version=hashlib.sha256(content).hexdigest(),
+            invalidated_outcome_ids=_administrative_move_closure(self._contract, frontier, outcome_id, target),
+        )
 
     def _advance(
         self,
@@ -1526,6 +1556,23 @@ def _completed_dependent_closure(
         if expanded == invalidated:
             return invalidated
         invalidated = expanded
+
+
+def _administrative_move_closure(
+    contract: DeliveryContract,
+    frontier: DeliveryFrontier,
+    outcome_id: str,
+    target: DeliveryStage,
+) -> tuple[str, ...]:
+    if frontier.integration_repair_claim is not None:
+        _conflict("administrative movement cannot overlap an active Integration repair claim")
+    if frontier.integration_completion is not None:
+        _conflict("completed Integration cannot move backward")
+    binding = _find_binding(frontier, outcome_id)
+    if _STAGE_ORDER[target] >= _STAGE_ORDER[binding.stage]:
+        _conflict("administrative movement must target an earlier stage")
+    invalidated = _completed_dependent_closure(contract, frontier, outcome_id)
+    return tuple(item.outcome_id for item in frontier.bindings if item.outcome_id in invalidated)
 
 
 def _model_content(model: BaseModel) -> bytes:

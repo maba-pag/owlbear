@@ -57,7 +57,8 @@ Running `init.py` writes the following files into your project directory:
 |------------------|---------|-------------|
 | `.vscode/settings.json` | Points VS Code at owlbear agents, skills, and instructions; enables `mermaid-chat.enabled` for Mermaid diagram rendering in chat | Merged (owlbear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 5 MCP servers (4 owlbear stdio, including browser access, + markitdown) | Merged (owlbear servers as defaults; your existing servers are preserved) |
-| `.owlbear/delivery/config.json` | Declares the Delivery integration branch; roots, single-worker capacities, agent routing, and models come from workspace conventions and agent definitions | Seeded once, ignored by Git, and preserved on rerun so local policy changes remain intact |
+| `.owlbear/delivery/config.json` | Declares the project Delivery integration branch; roots, single-worker capacities, agent routing, and models come from workspace conventions and agent definitions | Seeded once, tracked in Git, and preserved on rerun so project policy changes remain intact |
+| `.owlbear/delivery/verification.json` | Declares ordered commands that must pass against each exact merged candidate | Detected once from root Python tests and the root npm `test` script; tracked in Git and preserved on rerun |
 | `.owlbear/target/changes/` | Admitted semantic authority and per-change runtime evidence | Fresh setup activates an empty store; reruns preserve target records |
 | `.owlbear/target-cutover-request.json` | Exact activation request loaded by target MCP and Cockpit startup | Published for a fresh workspace; preserved on rerun |
 | `.owlbear/target-cutover.json` | Immutable receipt authorizing target mutation | Published only after snapshot, staging, and smoke verification succeed |
@@ -73,7 +74,7 @@ Running `init.py` writes the following files into your project directory:
 | `.github/copilot-instructions.md` | Consumer scaffold for project-specific Copilot instructions — placeholder sections for Project Identity, Directory Structure, Tech Stack, and Resources | Skipped if file already exists |
 | `.editorconfig` | Editor formatting rules | Skipped if file already exists |
 | `.gitattributes` | Git line-ending and diff rules | Skipped if file already exists |
-| `.gitignore` | Gitignore rules; owlbear section appended if marker absent | Appended if owlbear marker absent; idempotent once present |
+| `.gitignore` | Gitignore rules; OwlBear section appended if marker absent | Preserves user content and removes retired rules from the OwlBear-managed section on rerun |
 | `.markdownlint-cli2.jsonc` | Markdown linting configuration | Skipped if file already exists |
 | `.markdownlint.json` | Markdown linting rules | Skipped if file already exists |
 | `.markdownlintignore` | Markdown lint exclusion patterns | Skipped if file already exists |
@@ -82,6 +83,21 @@ Running `init.py` writes the following files into your project directory:
 For a fresh workspace, `init.py` activates only the empty target authority store. It does not create
 retired task, decision, board, accept, or audit stores, and reruns do not overwrite target records.
 If `.owlbear/kanban/` already exists, setup preserves it and publishes no target store or receipt.
+
+Commit `.owlbear/delivery/verification.json` after reviewing its generated commands. Setup adds
+`uv run --locked pytest` when a root `pyproject.toml` and `tests/` directory are present. It adds `npm ci`
+when a root lockfile exists and `npm test` when the root package declares that script. If setup
+detects neither surface, it warns and leaves the profile absent; create the file before Integration.
+Each command runs without a shell, from its declared candidate-relative directory, with only the
+listed environment variables. A change that edits its own verification profile is rejected; land
+policy changes on the Integration target before they govern later candidates.
+
+Verification is not a security sandbox. Commands run with the current user's filesystem permissions,
+so review the profile and project test code before enabling Integration for untrusted repositories.
+
+For an existing OwlBear workspace, rerun setup, review the generated profile, and commit it directly
+to the Integration target before retrying Delivery Integration. This one-time bootstrap is required
+because a candidate is never allowed to introduce or rewrite the policy that authorizes itself.
 
 ## Shared vs Copied
 

@@ -27,7 +27,6 @@ from owlbear_delivery.runtime_transaction import (
 from owlbear_delivery.storage_io import locked_roots
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from contextlib import AbstractContextManager
 
 _MERGE_RECORD_PARTS = 3
@@ -153,6 +152,7 @@ class AtomicIntegrationPreparation(_WorkspaceModel):
 
     change_id: ChangeId
     candidate_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    candidate_ref: str | None = None
     change_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     integration_target: str | None = None
     target_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
@@ -160,7 +160,13 @@ class AtomicIntegrationPreparation(_WorkspaceModel):
 
     @model_validator(mode="after")
     def _validate_preparation(self) -> AtomicIntegrationPreparation:
-        candidate_parts = (self.candidate_commit, self.change_head, self.integration_target, self.target_head)
+        candidate_parts = (
+            self.candidate_commit,
+            self.candidate_ref,
+            self.change_head,
+            self.integration_target,
+            self.target_head,
+        )
         prepared = all(part is not None for part in candidate_parts)
         if prepared == (self.result is not None):
             message = "Integration preparation requires a candidate or terminal result"
@@ -449,6 +455,14 @@ class ChangeWorkspaceManager:
         """Return current workspace coordination for transition validation."""
         return self._coordinator.show(change_id)
 
+    def refresh_integration_target(self, change_id: str) -> ChangeCoordination:
+        """Persist the current target head at an operational Git boundary."""
+        coordination = self._coordinator.show(change_id)
+        target_head = self._resolve(coordination.integration_target)
+        if target_head == coordination.target_head:
+            return coordination
+        return self._coordinator.update(coordination.model_copy(update={"target_head": target_head}))
+
     def integration_context(self, change_id: str) -> IntegrationContext:
         """Return exact source and target heads without mutating either reference."""
         coordination = self._coordinator.show(change_id)
@@ -729,9 +743,8 @@ class ChangeWorkspaceManager:
     def prepare_integration_candidate(
         self,
         candidate: DeliveryIntegrationCandidate,
-        candidate_proof: Callable[[DeliveryIntegrationCandidate, str], tuple[str, ...]],
     ) -> AtomicIntegrationPreparation:
-        """Build and prove detached Git objects without publishing a reference."""
+        """Build and anchor detached Git objects without publishing the target."""
         preflight = self._preflight_integration(candidate)
         if isinstance(preflight, AtomicIntegrationResult):
             return AtomicIntegrationPreparation(change_id=candidate.change_id, result=preflight)
@@ -739,19 +752,18 @@ class ChangeWorkspaceManager:
         candidate_tree = self._integration_candidate_tree(candidate, change_head, target_head)
         if isinstance(candidate_tree, AtomicIntegrationResult):
             return AtomicIntegrationPreparation(change_id=candidate.change_id, result=candidate_tree)
-        candidate_commit = self._write_integration_commit(candidate, candidate_tree, target_head, change_head)
-        proof_diagnostics = candidate_proof(candidate, candidate_commit)
-        if proof_diagnostics:
-            return AtomicIntegrationPreparation(
-                change_id=candidate.change_id,
-                result=AtomicIntegrationResult(
-                    code=DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED,
-                    diagnostics=proof_diagnostics,
-                ),
-            )
+        candidate_ref = self._integration_candidate_ref(candidate.change_id)
+        candidate_commit = self._anchored_integration_commit(
+            candidate,
+            candidate_tree,
+            target_head,
+            change_head,
+            candidate_ref,
+        )
         return AtomicIntegrationPreparation(
             change_id=candidate.change_id,
             candidate_commit=candidate_commit,
+            candidate_ref=candidate_ref,
             change_head=change_head,
             integration_target=coordination.integration_target,
             target_head=target_head,
@@ -766,11 +778,17 @@ class ChangeWorkspaceManager:
             return preparation.result
         if (
             preparation.candidate_commit is None
+            or preparation.candidate_ref is None
             or preparation.change_head is None
             or preparation.integration_target is None
             or preparation.target_head is None
         ):
             _workspace_failure("Integration preparation is incomplete")
+        if self._resolve(preparation.candidate_ref, missing_ok=True) != preparation.candidate_commit:
+            return AtomicIntegrationResult(
+                code=DeliveryIntegrationAttentionCode.REVIEWED_BOUNDARY_MISMATCH,
+                diagnostics=("anchored Integration candidate moved after verification",),
+            )
         coordination = self._coordinator.show(preparation.change_id)
         if coordination.integration_target != preparation.integration_target:
             return AtomicIntegrationResult(
@@ -784,6 +802,24 @@ class ChangeWorkspaceManager:
                 diagnostics=reviewed_diagnostics,
             )
         return self._cas_integration(coordination, preparation.candidate_commit, preparation.target_head)
+
+    def discard_integration_candidate(self, preparation: AtomicIntegrationPreparation) -> None:
+        """Delete one exact terminal candidate ref without touching another preparation."""
+        if preparation.candidate_commit is None or preparation.candidate_ref is None:
+            return
+        current = self._resolve(preparation.candidate_ref, missing_ok=True)
+        if current is None:
+            return
+        if current != preparation.candidate_commit:
+            return
+        self._git("update-ref", "-d", preparation.candidate_ref, preparation.candidate_commit)
+
+    def discard_stale_integration_candidate(self, change_id: str) -> None:
+        """Delete any candidate ref owned by a terminally replayed change."""
+        reference = self._integration_candidate_ref(change_id)
+        current = self._resolve(reference, missing_ok=True)
+        if current is not None:
+            self._git("update-ref", "-d", reference, current)
 
     def _reviewed_preparation_diagnostics(
         self,
@@ -1028,6 +1064,48 @@ class ChangeWorkspaceManager:
             arguments.extend(("-p", change_head))
         arguments.extend(("-m", f"Integrate {candidate.change_id} ({candidate.candidate_id})"))
         return self._git(*arguments)
+
+    def _anchored_integration_commit(
+        self,
+        candidate: DeliveryIntegrationCandidate,
+        tree: str,
+        target_head: str,
+        change_head: str,
+        reference: str,
+    ) -> str:
+        current = self._resolve(reference, missing_ok=True)
+        if current is not None and self._integration_commit_matches(
+            current,
+            candidate,
+            tree,
+            target_head,
+            change_head,
+        ):
+            return current
+        commit = self._write_integration_commit(candidate, tree, target_head, change_head)
+        self._git("update-ref", reference, commit, current or "0" * 40)
+        return commit
+
+    def _integration_commit_matches(
+        self,
+        commit: str,
+        candidate: DeliveryIntegrationCandidate,
+        tree: str,
+        target_head: str,
+        change_head: str,
+    ) -> bool:
+        parents = self._git("rev-list", "--parents", "-n", "1", commit).split()
+        expected_parents = [target_head] if change_head == target_head else [target_head, change_head]
+        return (
+            self._resolve(f"{commit}^{{tree}}") == tree
+            and parents == [commit, *expected_parents]
+            and self._git("show", "-s", "--format=%B", commit).strip()
+            == f"Integrate {candidate.change_id} ({candidate.candidate_id})"
+        )
+
+    @staticmethod
+    def _integration_candidate_ref(change_id: str) -> str:
+        return f"refs/owlbear/integration-candidates/{change_id}"
 
     def _published_completion_commit(self, candidate: DeliveryIntegrationCandidate) -> str | None:
         target_head = self._resolve(candidate.integration_target)

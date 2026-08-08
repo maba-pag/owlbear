@@ -26,11 +26,11 @@ from owlbear_delivery.change_workspace import (
 from owlbear_delivery.delivery_runtime import (
     ActivateDeliveryClaim,
     AdministrativeDeliveryMove,
+    AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
     DeliveryActiveClaim,
     DeliveryBlock,
     DeliveryChangeStage,
-    DeliveryFrontier,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
@@ -62,26 +62,16 @@ from owlbear_delivery.design_package import (
     DesignPackageConflictError,
     DesignPackageResult,
 )
-from owlbear_delivery.target_authority import (
-    Commitment,
-    CommitmentClass,
-    Outcome,
-    PlanScopeKind,
-    TargetAuthority,
-    TaskPlanScope,
-)
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCompilationResult,
-    DeliveryContract,
     DeliveryOutcome,
     compile_delivery_contract,
 )
 from owlbear_delivery.work_items import (
-    TaskProgress,
-    WorkItemEvidence,
-    WorkItemIntegrationDisposition,
-    WorkItemIntegrationState,
+    ChangeGroupView,
+    DeliveryPortfolioSnapshot,
+    WorkItemDetailView,
     WorkItemProjector,
 )
 
@@ -94,6 +84,7 @@ if TYPE_CHECKING:
         CompletedHistoryCatalog,
     )
     from owlbear_delivery.design_package import DesignPackageStore, VerifiedDesignPackage
+    from owlbear_delivery.integration_verification import IntegrationVerificationReceipt, IntegrationVerifier
     from owlbear_delivery.target_admission import (
         DeliveryAdmissionRequest,
         DeliveryAdmissionResult,
@@ -102,79 +93,6 @@ if TYPE_CHECKING:
     from owlbear_delivery.work_items import WorkItemDetail, WorkItemProjection
 
 _COMPLETED_ROOT = ".owlbear/completed"
-
-
-def _reject_unconfigured_candidate(
-    _candidate: DeliveryIntegrationCandidate,
-    _commit: str,
-) -> tuple[str, ...]:
-    return ("candidate proof dependency is not configured",)
-
-
-def _project_runtime_authority(contract: DeliveryContract, frontier: DeliveryFrontier) -> TargetAuthority:
-    bindings = {binding.outcome_id: binding for binding in frontier.bindings}
-    return TargetAuthority(
-        change_id=contract.change_id,
-        title=contract.title,
-        commitments=tuple(
-            Commitment(
-                commitment_id=item.commitment_id,
-                commitment_class=CommitmentClass(item.commitment_class.value),
-                provenance=item.provenance,
-                statement=item.statement,
-            )
-            for item in contract.commitments
-        ),
-        outcomes=tuple(Outcome.model_validate(item.model_dump()) for item in contract.outcomes),
-        task_plan_scopes=tuple(
-            TaskPlanScope(
-                scope_id=scope.scope_id,
-                kind=PlanScopeKind.OUTCOME,
-                target_id=scope.outcome_id,
-                composition_claim="Assemble reviewed Delivery outputs"
-                if bindings[scope.outcome_id].assembly_required
-                else None,
-            )
-            for scope in contract.plan_scopes
-        ),
-    )
-
-
-def _project_runtime_evidence(contract: DeliveryContract, frontier: DeliveryFrontier) -> WorkItemEvidence:
-    scopes = {scope.outcome_id: scope.scope_id for scope in contract.plan_scopes}
-    progressed = tuple(
-        binding for binding in frontier.bindings if binding.stage not in {DeliveryStage.DESIGN, DeliveryStage.PLANNING}
-    )
-    integration = None
-    if frontier.bindings and all(item.stage == DeliveryStage.COMPLETED for item in frontier.bindings):
-        attention = frontier.integration_attention
-        integration = WorkItemIntegrationState(
-            disposition=WorkItemIntegrationDisposition.READY
-            if attention is None
-            else WorkItemIntegrationDisposition(integration_attention_disposition(attention.code).value),
-            code=attention.code.value if attention is not None else None,
-            repair_active=frontier.integration_repair_claim is not None,
-        )
-    return WorkItemEvidence(
-        planned_scope_ids=tuple(scopes[item.outcome_id] for item in progressed),
-        task_progress=tuple(
-            TaskProgress(
-                scope_id=scopes[item.outcome_id],
-                task_count=len(item.tasks),
-                reviewed_task_count=len(item.results),
-            )
-            for item in progressed
-        ),
-        completed_assembly_scope_ids=tuple(
-            scopes[item.outcome_id]
-            for item in frontier.bindings
-            if item.assembly_required and item.stage == DeliveryStage.COMPLETED
-        ),
-        pending_request_work_item_ids=tuple(
-            item.outcome_id for item in frontier.bindings if item.block is not None and not item.block.resolved
-        ),
-        integration=integration,
-    )
 
 
 def _operator_claim(claim: DeliveryActiveClaim | None) -> DeliveryOperatorClaim | None:
@@ -503,7 +421,7 @@ class PortfolioApplicationDependencies:
     authority_registry: DeliveryAuthorityRegistry
     coordinator: PortfolioCoordinator
     workspace_manager: ChangeWorkspaceManager
-    candidate_proof: Callable[[DeliveryIntegrationCandidate, str], tuple[str, ...]] = _reject_unconfigured_candidate
+    integration_verifier: IntegrationVerifier
     completed_history_catalog: CompletedHistoryCatalog | None = None
 
 
@@ -534,6 +452,8 @@ class _PreparedSource:
 
 @dataclass(frozen=True)
 class _PreparedIntegration:
+    context: IntegrationContext
+    capture: CompletionCapture
     snapshot: CompletionPackageSnapshot
     candidate: DeliveryIntegrationCandidate
     preparation: AtomicIntegrationPreparation
@@ -559,7 +479,7 @@ class PortfolioApplication:
         self._package_root = config.package_root.resolve()
         self._coordinator = dependencies.coordinator
         self._workspace_manager = dependencies.workspace_manager
-        self._candidate_proof = dependencies.candidate_proof
+        self._integration_verifier = dependencies.integration_verifier
         self._completed_history_catalog = dependencies.completed_history_catalog
         self._execution_capacity = config.execution_capacity
         self._policies = {policy.worker_role: policy for policy in config.role_policies}
@@ -647,10 +567,8 @@ class PortfolioApplication:
         ready = []
         for change_id, runtime in sorted(self._runtimes.items()):
             attention = runtime.integration_attention()
-            target_changed = (
-                attention is not None
-                and self._workspace_manager.integration_context(change_id).target_head != attention.target_head
-            )
+            coordination = self._workspace_manager.show(change_id)
+            target_changed = attention is not None and coordination.target_head != attention.target_head
             if (
                 runtime.change_stage() == DeliveryChangeStage.INTEGRATION
                 and not runtime.active_claims()
@@ -669,10 +587,11 @@ class PortfolioApplication:
         statuses = []
         for change_id, runtime in sorted(self._runtimes.items()):
             attention = runtime.integration_attention()
+            coordination = self._workspace_manager.show(change_id)
             if (
                 attention is None
                 or runtime.integration_repair_claim() is not None
-                or self._workspace_manager.integration_context(change_id).target_head != attention.target_head
+                or coordination.target_head != attention.target_head
             ):
                 continue
             disposition = integration_attention_disposition(attention.code)
@@ -710,12 +629,27 @@ class PortfolioApplication:
             )
         )
 
+    def list_work_item_groups(self) -> tuple[ChangeGroupView, ...]:
+        """List grouped Cockpit views from exact per-change snapshots."""
+        return tuple(
+            self._work_item_projector(runtime).group_view()
+            for change_id, runtime in sorted(self._runtimes.items())
+            if runtime.change_stage() != DeliveryChangeStage.COMPLETED
+        )
+
     def show_work_item(self, change_id: str, work_item_id: str) -> WorkItemDetail:
         """Show bounded semantic detail from one exact change projector."""
         try:
             return self._work_item_projector(self._runtime(change_id)).show(work_item_id)
         except KeyError as exc:
             self._fail(f"work item is absent: {work_item_id}", exc)
+
+    def show_work_item_view(self, change_id: str, item_key: str) -> WorkItemDetailView:
+        """Show semantic and operator detail from one exact snapshot."""
+        try:
+            return self._work_item_projector(self._runtime(change_id)).show_view(item_key)
+        except (KeyError, StopIteration) as exc:
+            self._fail(f"work item is absent: {item_key}", exc)
 
     def show_operator_context(self, change_id: str, outcome_id: str) -> DeliveryOperatorContext:
         """Show current bounded operator state from one exact runtime binding."""
@@ -739,7 +673,6 @@ class PortfolioApplication:
             active_claim=_operator_claim(binding.active_claim),
             return_context=binding.return_context,
             recovery_attention=_operator_recovery_attention(binding.recovery_attention),
-            integration_attention=_operator_integration_attention(runtime.integration_attention()),
         )
 
     def resolve_request(
@@ -773,11 +706,24 @@ class PortfolioApplication:
         with self._coordinator.acquisition_lock():
             return self._runtime(change_id).administrative_move(request)
 
+    def preview_administrative_move(
+        self,
+        change_id: str,
+        outcome_id: str,
+        target: DeliveryStage,
+    ) -> AdministrativeDeliveryMovePreview:
+        """Preview one exact backward movement without mutating authority."""
+        return self._runtime(change_id).preview_administrative_move(outcome_id, target)
+
     def _work_item_projector(self, runtime: DeliveryRuntime) -> WorkItemProjector:
-        frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+        coordination = self._workspace_manager.show(runtime.contract.change_id)
         return WorkItemProjector(
-            _project_runtime_authority(runtime.contract, frontier),
-            _project_runtime_evidence(runtime.contract, frontier),
+            DeliveryPortfolioSnapshot.capture(
+                runtime.contract,
+                runtime.frontier_bytes(),
+                integration_target=coordination.integration_target,
+                target_head=coordination.target_head,
+            )
         )
 
     def list_completed_changes(self, cursor: str | None = None, limit: int = 100) -> CompletedChangePage:
@@ -809,6 +755,8 @@ class PortfolioApplication:
     def acquire_frontier_work(self) -> DeliveryAcquisitionResult:
         """Recover interrupted claims, then start at most one ready claim."""
         with self._coordinator.acquisition_lock():
+            for change_id in self._runtimes:
+                self._workspace_manager.refresh_integration_target(change_id)
             recoveries = self._recover_active_claims()
             repair_recoveries = self._recover_active_repair_claims()
             integration_ready = self.list_integration_ready_changes()
@@ -1031,9 +979,11 @@ class PortfolioApplication:
         """Publish reviewed product and its completed package through one target CAS."""
         with self._coordinator.integration_lock():
             runtime = self._runtime(change_id)
+            self._workspace_manager.refresh_integration_target(change_id)
             context = self._workspace_manager.integration_context(change_id)
             existing = runtime.integration_completion()
             if existing is not None:
+                self._workspace_manager.discard_stale_integration_candidate(change_id)
                 self._cleanup_integration(change_id, existing)
                 return DeliveryIntegrationResult(
                     change_id=change_id,
@@ -1042,7 +992,35 @@ class PortfolioApplication:
                 )
             if runtime.change_stage() != DeliveryChangeStage.INTEGRATION:
                 self._fail("change is not ready for Integration")
-            result = self._capture_ready_integration(change_id, runtime, context)
+            prepared = self._capture_ready_integration(change_id, runtime, context)
+            if isinstance(prepared, DeliveryIntegrationResult):
+                return prepared
+            if prepared.preparation.result is not None:
+                result = self._publish_prepared_integration(runtime, context, prepared)
+                self._workspace_manager.discard_stale_integration_candidate(change_id)
+                return result
+
+        receipt = self._integration_verifier.verify(prepared.candidate, prepared.preparation)
+
+        with self._coordinator.integration_lock():
+            runtime = self._runtime(change_id)
+            existing = runtime.integration_completion()
+            if existing is not None:
+                self._workspace_manager.discard_stale_integration_candidate(change_id)
+                self._cleanup_integration(change_id, existing)
+                return DeliveryIntegrationResult(change_id=change_id, completion=existing, replayed=True)
+            # Evidence stays bound to the heads that produced the receipt; publication revalidates current heads.
+            if not receipt.passed:
+                result = self._integration_attention(
+                    runtime,
+                    prepared.context,
+                    DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED,
+                    self._verification_diagnostics(receipt),
+                    candidate=prepared.candidate,
+                )
+            else:
+                result = self._publish_verified_integration(runtime, prepared.context, prepared)
+            self._workspace_manager.discard_integration_candidate(prepared.preparation)
             if result.completion is not None:
                 self._cleanup_integration(change_id, result.completion)
             return result
@@ -1097,7 +1075,7 @@ class PortfolioApplication:
         change_id: str,
         runtime: DeliveryRuntime,
         context: IntegrationContext,
-    ) -> DeliveryIntegrationResult:
+    ) -> DeliveryIntegrationResult | _PreparedIntegration:
         try:
             package = self._package_store.read_verified(change_id)
             attention_code = self._package_attention_code(runtime, package)
@@ -1121,8 +1099,13 @@ class PortfolioApplication:
             )
             return self._package_store.capture_completion(
                 capture,
-                validation_callback=lambda snapshot: self._prepare_integration_snapshot(runtime, context, snapshot),
-                publication_callback=lambda prepared: self._publish_prepared_integration(runtime, context, prepared),
+                validation_callback=lambda snapshot: self._prepare_integration_snapshot(
+                    runtime,
+                    context,
+                    capture,
+                    snapshot,
+                ),
+                publication_callback=lambda prepared: prepared,
             )
         except DesignPackageConflictError as exc:
             return self._integration_attention(
@@ -1136,14 +1119,66 @@ class PortfolioApplication:
         self,
         runtime: DeliveryRuntime,
         context: IntegrationContext,
+        capture: CompletionCapture,
         snapshot: CompletionPackageSnapshot,
     ) -> _PreparedIntegration:
         candidate = self._integration_candidate(runtime, context, snapshot)
-        preparation = self._workspace_manager.prepare_integration_candidate(
-            candidate,
-            self._candidate_proof,
-        )
-        return _PreparedIntegration(snapshot, candidate, preparation)
+        preparation = self._workspace_manager.prepare_integration_candidate(candidate)
+        return _PreparedIntegration(context, capture, snapshot, candidate, preparation)
+
+    def _publish_verified_integration(
+        self,
+        runtime: DeliveryRuntime,
+        context: IntegrationContext,
+        prepared: _PreparedIntegration,
+    ) -> DeliveryIntegrationResult:
+        runtime_bytes, result_history_bytes = runtime.completion_capture_bytes()
+        if (
+            runtime_bytes != prepared.capture.runtime_bytes
+            or result_history_bytes != prepared.capture.result_history_bytes
+        ):
+            return self._integration_attention(
+                runtime,
+                context,
+                DeliveryIntegrationAttentionCode.PACKAGE_MUTATED,
+                ("Delivery runtime changed during candidate verification",),
+                candidate=prepared.candidate,
+            )
+        try:
+            return self._package_store.capture_completion(
+                prepared.capture,
+                validation_callback=lambda snapshot: self._require_verified_snapshot(prepared, snapshot),
+                publication_callback=lambda verified: self._publish_prepared_integration(runtime, context, verified),
+            )
+        except DesignPackageConflictError as exc:
+            return self._integration_attention(
+                runtime,
+                context,
+                DeliveryIntegrationAttentionCode.PACKAGE_MUTATED,
+                (str(exc),),
+                candidate=prepared.candidate,
+            )
+
+    @staticmethod
+    def _require_verified_snapshot(
+        prepared: _PreparedIntegration,
+        snapshot: CompletionPackageSnapshot,
+    ) -> _PreparedIntegration:
+        if snapshot != prepared.snapshot:
+            message = "completion package identity changed during candidate verification"
+            raise DesignPackageConflictError(message)
+        return prepared
+
+    @staticmethod
+    def _verification_diagnostics(receipt: IntegrationVerificationReceipt) -> tuple[str, ...]:
+        diagnostics = [f"verification {receipt.status.value}", *receipt.diagnostics]
+        for step in receipt.steps:
+            diagnostics.append(f"step {step.step_id}: {step.status.value}")
+            if step.stderr:
+                diagnostics.append(step.stderr[:1_024])
+            elif step.stdout and step.status.value != "passed":
+                diagnostics.append(step.stdout[:1_024])
+        return tuple(diagnostics[:16])
 
     def _publish_prepared_integration(
         self,

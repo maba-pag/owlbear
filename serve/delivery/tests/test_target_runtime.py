@@ -31,7 +31,6 @@ from owlbear_delivery.target_runtime import (
     TargetRuntimeReferenceError,
     TargetTask,
 )
-from owlbear_delivery.work_items import WorkItemAttention, WorkItemProjector, WorkItemStage
 
 
 def _job() -> dict[str, object]:
@@ -234,7 +233,6 @@ def test_acceptable_build_publishes_receipt_and_marks_task_reviewed(tmp_path) ->
     assert runtime.list_attempts("OUT-002") == ()
     assert runtime.list_receipts("OUT-002") == ()
     assert (tmp_path / "target-runtime/receipts/build-receipt-001.json").is_file()
-    assert runtime.work_item_evidence().task_progress[0].reviewed_task_count == 1
 
 
 def test_repair_retains_reviewer_and_restart_requires_a_fresh_reviewer(tmp_path) -> None:
@@ -430,10 +428,6 @@ def test_plan_return_republishes_the_scope_and_drops_superseded_tasks(tmp_path) 
     frontier = runtime.list_frontier()
     assert tuple((job.job_id, job.kind) for job in frontier) == ((3, "plan"),)
     assert runtime.show_job(1).state == TargetJobState.RETURNED
-    progress = runtime.work_item_evidence().task_progress
-    assert tuple((item.scope_id, item.task_count, item.reviewed_task_count) for item in progress) == (
-        ("PLAN-001", 1, 1),
-    )
 
 
 def test_plan_return_rebinds_pending_successors_to_replacement(tmp_path) -> None:
@@ -458,7 +452,7 @@ def test_plan_return_rebinds_pending_successors_to_replacement(tmp_path) -> None
     assert tuple((job.job_id, job.kind) for job in runtime.list_frontier()) == ((3, "plan"),)
 
 
-def test_design_return_blocks_the_semantic_slice_and_surfaces_the_briefing(tmp_path) -> None:
+def test_design_return_blocks_the_semantic_slice(tmp_path) -> None:
     runtime = _runtime(tmp_path)
     runtime.materialize(tuple(_target_job(runtime, index, f"OUT-00{index}", kind="plan") for index in range(1, 4)))
     _start(runtime, 1, "attempt-001", "reviewer-one")
@@ -474,10 +468,6 @@ def test_design_return_blocks_the_semantic_slice_and_surfaces_the_briefing(tmp_p
     )
 
     assert tuple(job.work_item_id for job in runtime.list_frontier()) == ("OUT-002",)
-    projector = WorkItemProjector(_authority(), runtime.work_item_evidence())
-    projection = projector.show("OUT-001").projection
-    assert (projection.stage, projection.attention) == (WorkItemStage.DESIGN, WorkItemAttention.USER)
-    assert projector.show("OUT-001").briefing == _briefing()
 
 
 def test_design_return_requires_a_briefing_that_matches_its_authority(tmp_path) -> None:

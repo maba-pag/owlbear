@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -295,7 +296,11 @@ class TargetMCPAdapter:
     async def integrate_ready_change(self, request: ChangeRequest) -> dict[str, object]:
         """Integrate one ready Delivery change."""
         params = self._validate(ChangeParams, request)
-        return self._call(params, lambda: self._application.integrate_ready_change(params.change_id))
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.integrate_ready_change(params.change_id),
+        )
 
     async def admit_reviewed_integration_repair(self, request: IntegrationRepairRequest) -> dict[str, object]:
         """Admit one independently reviewed Integration repair."""

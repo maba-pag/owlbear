@@ -13,6 +13,7 @@ import pytest
 
 from owlbear_delivery import (
     AdministrativeDeliveryMove,
+    AtomicIntegrationPreparation,
     CapacityLedger,
     AdvanceDelivery,
     BlockDelivery,
@@ -63,6 +64,11 @@ from owlbear_delivery import (
     RetryDelivery,
     load_delivery_application,
 )
+from owlbear_delivery.integration_verification import (
+    IntegrationVerificationReceipt,
+    IntegrationVerificationStatus,
+    IntegrationVerifier,
+)
 from owlbear_delivery.runtime_transaction import RuntimeTransaction
 
 
@@ -73,6 +79,17 @@ def _git(repository: Path, *arguments: str) -> str:
         capture_output=True,
         text=True,
     ).stdout.strip()
+
+
+def _git_ref_exists(repository: Path, reference: str) -> bool:
+    return (
+        subprocess.run(
+            ("git", "-C", str(repository), "rev-parse", "--verify", reference),
+            check=False,
+            capture_output=True,
+        ).returncode
+        == 0
+    )
 
 
 def _canonical(model) -> bytes:
@@ -239,6 +256,27 @@ def _portfolio(
         coordination = manager.create(change_id)
         runtimes[change_id] = _runtime(state_root, contract, manager, stage, coordination.last_reviewed_commit)
     identities = (f"identity-{index:03}" for index in itertools.count(1))
+
+    class CallbackVerifier:
+        def verify(
+            self,
+            candidate: DeliveryIntegrationCandidate,
+            preparation: AtomicIntegrationPreparation,
+        ) -> IntegrationVerificationReceipt:
+            assert preparation.candidate_commit is not None
+            diagnostics = (
+                candidate_proof(candidate, preparation.candidate_commit)
+                if candidate_proof is not None
+                else ("candidate proof dependency is not configured",)
+            )
+            return IntegrationVerificationReceipt(
+                request_id=candidate.candidate_id,
+                candidate_commit=preparation.candidate_commit,
+                profile_digest="0" * 64,
+                status=(IntegrationVerificationStatus.FAILED if diagnostics else IntegrationVerificationStatus.PASSED),
+                diagnostics=diagnostics,
+            )
+
     application = PortfolioApplication(
         dict(reversed(tuple(runtimes.items()))),
         PortfolioApplicationDependencies(
@@ -247,8 +285,7 @@ def _portfolio(
             authority_registry=authority_registry,
             coordinator=coordinator,
             workspace_manager=manager,
-            candidate_proof=candidate_proof
-            or (lambda _candidate, _commit: ("candidate proof dependency is not configured",)),
+            integration_verifier=CallbackVerifier(),
             completed_history_catalog=CompletedHistoryCatalog(repository, "main"),
         ),
         PortfolioApplicationConfig(
@@ -273,6 +310,7 @@ def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path
         authorized_target_root=target_root,
     )
     assert application.list_work_items() == ()
+    assert isinstance(application._integration_verifier, IntegrationVerifier)  # noqa: SLF001
     assert (target_root / "target-runtime/capacity.json").is_file()
 
 
@@ -529,14 +567,21 @@ def test_integration_queries_are_stable_bounded_and_read_only(tmp_path: Path) ->
     assert runtimes["change-a"].frontier_bytes() == attention_bytes
 
 
-def test_work_item_queries_use_bounded_projector_models_only(tmp_path: Path) -> None:
+def test_work_item_queries_use_bounded_projector_models_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     application, _runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-b": DeliveryStage.COMPLETED, "change-a": DeliveryStage.PLANNING},
     )
+    monkeypatch.setattr(
+        application._workspace_manager,  # noqa: SLF001
+        "integration_context",
+        lambda _change_id: pytest.fail("Work Item reads must not resolve Git Integration context"),
+    )
 
     listed = application.list_work_items()
     shown = application.show_work_item("change-a", "OUT-001")
+    grouped = application.list_work_item_groups()
+    detailed = application.show_work_item_view("change-a", "outcome:OUT-001")
     serialized = json.dumps(
         {
             "listed": [item.model_dump(mode="json") for item in listed],
@@ -550,6 +595,8 @@ def test_work_item_queries_use_bounded_projector_models_only(tmp_path: Path) -> 
         ("change-b", "change-b"),
     )
     assert shown.acceptance == ("The launch is observable.",)
+    assert grouped[0].change_id == "change-a"
+    assert detailed.card.work_item_id == "OUT-001"
     assert "internal semantic body sentinel" not in serialized
     assert "internal completion body sentinel" not in serialized
 
@@ -656,18 +703,20 @@ def test_administrative_move_updates_live_projection_and_rejects_same_stage(tmp_
         {"change-a": DeliveryStage.COMPLETED},
     )
     assert application.show_work_item("change-a", "OUT-001").projection.stage.value == "completed"
+    preview = application.preview_administrative_move("change-a", "OUT-001", DeliveryStage.PLANNING)
     move = AdministrativeDeliveryMove(
         move_id="move-operator",
         outcome_id="OUT-001",
         target=DeliveryStage.PLANNING,
         reason="Operator evidence invalidated the reviewed result.",
+        expected_version=preview.snapshot_version,
     )
     result = application.administrative_move("change-a", move)
     assert result.invalidated_outcome_ids == ("OUT-001",)
     assert application.show_work_item("change-a", "OUT-001").projection.stage.value == "planning"
     before = runtimes["change-a"].frontier_bytes()
     with pytest.raises(DeliveryRuntimeConflictError, match="earlier stage"):
-        application.administrative_move("change-a", move)
+        application.preview_administrative_move("change-a", "OUT-001", DeliveryStage.PLANNING)
     assert runtimes["change-a"].frontier_bytes() == before
 
 
@@ -1202,6 +1251,7 @@ def test_integration_publishes_product_and_package_once_then_replays_cleanup(tmp
         "runtime.json",
     }
     assert runtimes["change-a"].change_stage().value == "completed"
+    assert not _git_ref_exists(tmp_path / "repository", "refs/owlbear/integration-candidates/change-a")
     assert not (tmp_path / "packages/change-a").exists()
     assert not coordinator.show("change-a").worktree_path.exists()
 
@@ -1217,6 +1267,35 @@ def test_integration_publishes_product_and_package_once_then_replays_cleanup(tmp
     assert _git(tmp_path / "repository", "rev-parse", "main") == target_commit
     assert not active_root.exists()
     assert not worktree_path.exists()
+
+
+def test_integration_replay_cleans_candidate_ref_after_runtime_publication_crash(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+        candidate_proof=lambda _candidate, _commit: (),
+    )
+    _review_product_change(coordinator, "change-a", "reviewed product\n")
+    repository = tmp_path / "repository"
+    reference = "refs/owlbear/integration-candidates/change-a"
+
+    with (
+        patch.object(
+            runtimes["change-a"],
+            "publish_integration_completion",
+            side_effect=DeliveryRuntimeConflictError("injected runtime publication crash"),
+        ),
+        pytest.raises(DeliveryRuntimeConflictError, match="injected runtime publication crash"),
+    ):
+        application.integrate_ready_change("change-a")
+
+    assert _git_ref_exists(repository, reference)
+
+    replayed = application.integrate_ready_change("change-a")
+
+    assert replayed.replayed
+    assert replayed.completion is not None
+    assert not _git_ref_exists(repository, reference)
 
 
 def test_integration_proof_failure_retains_heads_and_publishes_attention(tmp_path: Path) -> None:
@@ -1235,6 +1314,7 @@ def test_integration_proof_failure_retains_heads_and_publishes_attention(tmp_pat
     assert _git(tmp_path / "repository", "rev-parse", "main") == target_before
     assert _git(tmp_path / "repository", "rev-parse", coordinator.show("change-a").branch) == reviewed
     assert runtimes["change-a"].change_stage().value == "integration"
+    assert not _git_ref_exists(tmp_path / "repository", "refs/owlbear/integration-candidates/change-a")
     assert (tmp_path / "packages/change-a").is_dir()
     assert not _git(coordinator.show("change-a").worktree_path, "status", "--porcelain")
 
@@ -1377,8 +1457,8 @@ def test_integration_merge_conflict_retains_clean_heads_and_typed_attention(tmp_
     operator = application.show_operator_context("change-a", "change-a")
     assert (integration_card.scope, integration_card.attention.value, integration_card.next_action) == (
         "change-integration",
-        "agent",
-        "Agent repairing Integration",
+        "repair",
+        "Repair in progress",
     )
     assert operator.integration_attention is not None
     assert operator.integration_attention.disposition.value == "repair-required"

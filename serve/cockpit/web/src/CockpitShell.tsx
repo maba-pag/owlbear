@@ -66,7 +66,9 @@ export default function CockpitShell() {
   const location = useLocation()
   const navigate = useNavigate()
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
-  const activeRoute = routeConfig.find((route) => route.path === location.pathname) ?? routeConfig[0]
+  const activeRoute = routeConfig.find((route) => (
+    route.path === location.pathname || location.pathname.startsWith(`${route.path}/`)
+  )) ?? routeConfig[0]
   const ActivePage = activeRoute.component
 
   const goTo = (path: string) => {

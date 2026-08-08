@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import subprocess
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +18,7 @@ from pydantic import BaseModel, ConfigDict
 import owlbear_delivery_mcp.server as live_server
 from owlbear_delivery import (
     AdministrativeDeliveryMove,
+    ChangeCoordination,
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryContract,
@@ -34,7 +38,7 @@ from owlbear_delivery_mcp.server import (
     mcp,
 )
 from owlbear_delivery_mcp.target_models import DeliveryStartupDiagnostic
-from owlbear_delivery_mcp.target_server import assemble_target_server
+from owlbear_delivery_mcp.target_server import TargetMCPAdapter, assemble_target_server
 
 DELIVERY_TOOLS = {
     "create_design_session",
@@ -144,6 +148,18 @@ class _PublicationApplication(_RecordingApplication):
         return _Result(operation="transition_delivery")
 
 
+class _BlockingIntegrationApplication(_RecordingApplication):
+    def __init__(self, started: threading.Event, release: threading.Event) -> None:
+        super().__init__()
+        self._started = started
+        self._release = release
+
+    def integrate_ready_change(self, _change_id: str) -> _Result:
+        self._started.set()
+        self._release.wait(timeout=2)
+        return _Result(operation="integrate_ready_change")
+
+
 def _git(repository: Path, *arguments: str) -> None:
     subprocess.run(
         ("git", "-C", str(repository), *arguments),
@@ -175,7 +191,7 @@ def _write_config(path: Path, content: dict[str, object]) -> None:
     path.write_text(json.dumps(content), encoding="utf-8")
 
 
-def _write_delivery_state(target_root: Path) -> None:
+def _write_delivery_state(target_root: Path, repository: Path) -> None:
     digest = hashlib.sha256(b"source").hexdigest()
     contract = DeliveryContract(
         change_id="change-a",
@@ -217,6 +233,25 @@ def _write_delivery_state(target_root: Path) -> None:
     change_root.mkdir(parents=True)
     change_root.joinpath("contract.json").write_text(contract.model_dump_json(), encoding="utf-8")
     change_root.joinpath("frontier.json").write_text(frontier.model_dump_json(), encoding="utf-8")
+    target_head = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "main"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    coordination_root = target_root / "target-runtime/coordination"
+    coordination_root.mkdir(parents=True)
+    coordination_root.joinpath("change-a.json").write_text(
+        ChangeCoordination(
+            change_id="change-a",
+            branch="main",
+            worktree_path=repository,
+            integration_target="main",
+            target_head=target_head,
+            last_reviewed_commit=target_head,
+        ).model_dump_json(),
+        encoding="utf-8",
+    )
 
 
 @pytest.mark.asyncio
@@ -287,7 +322,7 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
                         "claim_id": "claim-1",
                         "output": output,
                     },
-                }
+                },
             },
         )
 
@@ -309,6 +344,26 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
     }
     assert transitioned.structured_content == {"operation": "transition_delivery"}
     assert application.calls == ["publish_delivery_result", "transition_delivery"]
+
+
+@pytest.mark.asyncio
+async def test_integration_verification_yields_the_mcp_event_loop() -> None:
+    started = threading.Event()
+    release = threading.Event()
+    fallback_release = threading.Timer(1, release.set)
+    fallback_release.start()
+    adapter = TargetMCPAdapter(_BlockingIntegrationApplication(started, release))  # type: ignore[arg-type]
+    launched_at = time.monotonic()
+
+    task = asyncio.create_task(adapter.integrate_ready_change({"change_id": "change-a"}))
+    assert await asyncio.to_thread(started.wait, 2)
+    elapsed = time.monotonic() - launched_at
+    release.set()
+    result = await task
+    fallback_release.cancel()
+
+    assert elapsed < 0.5
+    assert result == {"operation": "integrate_ready_change"}
 
 
 MISSING_FIELDS = [("schema_version",), ("integration_target",)]
@@ -472,7 +527,7 @@ async def test_assembled_work_item_tools_observe_runtime_transition(
 ) -> None:
     repository = _repository(tmp_path)
     target_root = repository / ".owlbear/target"
-    _write_delivery_state(target_root)
+    _write_delivery_state(target_root, repository)
     path = tmp_path / "delivery.json"
     _write_config(path, _config())
     config = load_delivery_config(path)
@@ -491,6 +546,11 @@ async def test_assembled_work_item_tools_observe_runtime_transition(
                 outcome_id="OUT-001",
                 target=DeliveryStage.PLANNING,
                 reason="Operator evidence invalidated the result.",
+                expected_version=application.preview_administrative_move(
+                    "change-a",
+                    "OUT-001",
+                    DeliveryStage.PLANNING,
+                ).snapshot_version,
             ),
         )
         listed = await client.call_tool("list_work_items", {"request": {}})

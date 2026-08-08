@@ -23,6 +23,7 @@ from owlbear_delivery import (
     DeliveryFrontier,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
+    DeliveryIntegrationCompletion,
     DeliveryIntegrationAttentionDisposition,
     DeliveryOutcome,
     DeliveryOutputKind,
@@ -53,6 +54,7 @@ from owlbear_delivery import (
 def test_integration_attention_codes_have_one_operational_disposition() -> None:
     expected = {
         DeliveryIntegrationAttentionCode.MERGE_CONFLICT: DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED,
+        DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED: DeliveryIntegrationAttentionDisposition.RETRYABLE,
         DeliveryIntegrationAttentionCode.TARGET_CAS_LOST: DeliveryIntegrationAttentionDisposition.RETRYABLE,
     }
 
@@ -745,6 +747,12 @@ def test_administrative_backward_move_invalidates_completed_dependents_only(tmp_
         stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
     )
     assert runtime.change_stage() == DeliveryChangeStage.INTEGRATION
+    before = runtime.frontier_bytes()
+    preview = runtime.preview_administrative_move("OUT-001", DeliveryStage.PLANNING)
+
+    assert preview.invalidated_outcome_ids == ("OUT-001", "OUT-002")
+    assert preview.snapshot_version == hashlib.sha256(before).hexdigest()
+    assert runtime.frontier_bytes() == before
 
     result = runtime.administrative_move(
         AdministrativeDeliveryMove(
@@ -752,6 +760,7 @@ def test_administrative_backward_move_invalidates_completed_dependents_only(tmp_
             outcome_id="OUT-001",
             target=DeliveryStage.PLANNING,
             reason="The foundation result was invalidated by operator evidence.",
+            expected_version=preview.snapshot_version,
         )
     )
 
@@ -761,6 +770,111 @@ def test_administrative_backward_move_invalidates_completed_dependents_only(tmp_
     assert runtime.show_binding("OUT-003").stage == DeliveryStage.COMPLETED
     assert runtime.show_binding("OUT-003").result_ids == ("RESULT-003",)
     assert runtime.change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
+
+
+def test_administrative_move_retires_integration_attention(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    runtime.publish_integration_attention(
+        DeliveryIntegrationAttention(
+            attention_id="a" * 64,
+            code=DeliveryIntegrationAttentionCode.REPAIR_AUTHORITY,
+            change_id="delivery-runtime",
+            change_head="1" * 40,
+            target_head="2" * 40,
+            integration_target="main",
+            diagnostics=("The repair exceeded admitted authority.",),
+            retry_condition="Move the change to an earlier stage.",
+        )
+    )
+
+    runtime.administrative_move(
+        AdministrativeDeliveryMove(
+            move_id="move-001",
+            outcome_id="OUT-001",
+            target=DeliveryStage.PLANNING,
+            reason="Revise the admitted authority.",
+            expected_version=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+        )
+    )
+
+    assert runtime.integration_attention() is None
+    assert runtime.change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
+
+
+def test_administrative_move_rejects_active_integration_repair(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    runtime.publish_integration_attention(
+        DeliveryIntegrationAttention(
+            attention_id="a" * 64,
+            code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
+            change_id="delivery-runtime",
+            change_head="1" * 40,
+            target_head="2" * 40,
+            integration_target="main",
+            diagnostics=("merge conflict",),
+            retry_condition="Admit an independently reviewed repair.",
+        )
+    )
+    runtime.activate_integration_repair_claim(
+        DeliveryActiveClaim(
+            attempt_id="repair-attempt",
+            claim_id="repair-claim",
+            owner_id="repair-owner",
+            process_id="repair-process",
+            started_at="2026-08-04T00:00:00Z",
+            worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER,
+        )
+    )
+    before = runtime.frontier_bytes()
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="active Integration repair claim"):
+        runtime.administrative_move(
+            AdministrativeDeliveryMove(
+                move_id="move-001",
+                outcome_id="OUT-001",
+                target=DeliveryStage.PLANNING,
+                reason="Revise the admitted authority.",
+                expected_version=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+            )
+        )
+
+    assert runtime.frontier_bytes() == before
+
+
+def test_administrative_move_rejects_completed_integration(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    runtime.publish_integration_completion(
+        DeliveryIntegrationCompletion(
+            completion_id="a" * 64,
+            candidate_id="b" * 64,
+            package_id="c" * 64,
+            target_commit="1" * 40,
+            completion_path=".owlbear/completed/delivery-runtime.json",
+        )
+    )
+    before = runtime.frontier_bytes()
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="completed Integration"):
+        runtime.administrative_move(
+            AdministrativeDeliveryMove(
+                move_id="move-001",
+                outcome_id="OUT-001",
+                target=DeliveryStage.PLANNING,
+                reason="Revise the admitted authority.",
+                expected_version=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
+            )
+        )
+
+    assert runtime.frontier_bytes() == before
 
 
 def test_administrative_move_preserves_active_dependent_claim(tmp_path: Path) -> None:
@@ -777,8 +891,40 @@ def test_administrative_move_preserves_active_dependent_claim(tmp_path: Path) ->
             outcome_id="OUT-001",
             target=DeliveryStage.PLANNING,
             reason="The foundation result was invalidated by operator evidence.",
+            expected_version=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
         )
     )
 
     assert result.invalidated_outcome_ids == ("OUT-001",)
     assert runtime.show_binding("OUT-002") == active_dependent
+
+
+def test_administrative_move_rejects_a_stale_preview(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    preview = runtime.preview_administrative_move("OUT-001", DeliveryStage.PLANNING)
+    runtime.publish_integration_attention(
+        DeliveryIntegrationAttention(
+            attention_id="a" * 64,
+            code=DeliveryIntegrationAttentionCode.REPAIR_AUTHORITY,
+            change_id="delivery-runtime",
+            change_head="1" * 40,
+            target_head="2" * 40,
+            integration_target="main",
+            diagnostics=("Authority changed.",),
+            retry_condition="Move backward.",
+        )
+    )
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="preview is stale"):
+        runtime.administrative_move(
+            AdministrativeDeliveryMove(
+                move_id="move-stale",
+                outcome_id="OUT-001",
+                target=DeliveryStage.PLANNING,
+                reason="Use stale evidence.",
+                expected_version=preview.snapshot_version,
+            )
+        )

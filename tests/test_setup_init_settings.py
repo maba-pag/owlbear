@@ -114,6 +114,7 @@ def test_init_creates_only_empty_target_control_plane_stores(
     delivery_config = DeliveryStartupConfig.model_validate_json(delivery_config_path.read_bytes())
     assert delivery_config.schema_version == 1
     assert delivery_config.integration_target == "main"
+    assert "/.owlbear/delivery/config.json" not in (target_dir / ".gitignore").read_text(encoding="utf-8")
     assert (_REPO_ROOT / "serve/cockpit/dist/index.html").is_file()
     assert (_REPO_ROOT / "serve/cockpit/dist/assets").is_dir()
     installed_text = "\n".join(
@@ -202,6 +203,60 @@ def test_init_interactive_target_defaults_to_checked_out_branch(
 
     config = json.loads((target_dir / ".owlbear/delivery/config.json").read_text(encoding="utf-8"))
     assert config["integration_target"] == "develop"
+
+
+def test_init_scaffolds_and_preserves_detected_verification_profile(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+) -> None:
+    target_dir = tmp_path / "project"
+    (target_dir / "tests").mkdir(parents=True)
+    (target_dir / "pyproject.toml").write_text("[project]\nname = 'example'\n", encoding="utf-8")
+    (target_dir / "package.json").write_text('{"scripts":{"test":"vitest run"}}\n', encoding="utf-8")
+    (target_dir / "package-lock.json").write_text("{}\n", encoding="utf-8")
+
+    init_module.init(target_dir, _REPO_ROOT, interactive=False)
+
+    profile_path = target_dir / ".owlbear/delivery/verification.json"
+    profile = json.loads(profile_path.read_text(encoding="utf-8"))
+    assert [step["step_id"] for step in profile["steps"]] == [
+        "python-tests",
+        "node-install",
+        "node-tests",
+    ]
+    assert profile["steps"][0]["argv"] == ["uv", "run", "--locked", "pytest"]
+    profile["steps"][0]["timeout_seconds"] = 42
+    profile_path.write_text(json.dumps(profile), encoding="utf-8")
+
+    init_module.init(target_dir, _REPO_ROOT, interactive=False)
+
+    preserved = json.loads(profile_path.read_text(encoding="utf-8"))
+    assert preserved["steps"][0]["timeout_seconds"] == 42
+
+
+def test_init_removes_retired_delivery_config_ignore_rule(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+) -> None:
+    target_dir = tmp_path / "project"
+    target_dir.mkdir()
+    gitignore = target_dir / ".gitignore"
+    gitignore.write_text(
+        "user-rule\n\n"
+        "# --- OwlBear managed paths ---\n"
+        "# Host-local Delivery startup configuration\n"
+        "/.owlbear/delivery/config.json\n"
+        "/.owlbear/worktrees/\n",
+        encoding="utf-8",
+    )
+
+    init_module.init(target_dir, _REPO_ROOT, interactive=False)
+
+    content = gitignore.read_text(encoding="utf-8")
+    assert "/.owlbear/delivery/config.json" not in content
+    assert "Host-local Delivery startup configuration" not in content
+    assert "user-rule" in content
+    assert "/.owlbear/worktrees/" in content
 
 
 def test_init_preserves_pre_cutover_store_without_creating_target(

@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "pass_environment": [
+    "PATH",
+    "HOME",
+    "TMPDIR",
+    "UV_CACHE_DIR",
+    "NPM_CONFIG_CACHE",
+    "CI"
+  ],
+  "steps": [
+    {
+      "step_id": "python-tests",
+      "argv": [
+        "uv",
+        "run",
+        "--locked",
+        "pytest"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 1800
+    },
+    {
+      "step_id": "cockpit-install",
+      "argv": [
+        "npm",
+        "ci"
+      ],
+      "cwd": "serve/cockpit/web",
+      "timeout_seconds": 1800
+    },
+    {
+      "step_id": "cockpit-tests",
+      "argv": [
+        "npm",
+        "test"
+      ],
+      "cwd": ".",
+      "timeout_seconds": 1800
+    }
+  ]
+}

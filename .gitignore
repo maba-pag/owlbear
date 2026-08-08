@@ -114,12 +114,10 @@ store/audit/
 .owlbear/knowledge/vectors/
 .owlbear/memory/*.db
 
-# Host-local Delivery startup configuration
-/.owlbear/delivery/config.json
-
 # Host-local Delivery worktrees and mutable capacity ledger
 /.owlbear/worktrees/
 /.owlbear/target/target-runtime/capacity.json
+/.owlbear/target/target-runtime/integration-verification/
 
 # Lock files (transient runtime artifacts)
 **/.storage.lock

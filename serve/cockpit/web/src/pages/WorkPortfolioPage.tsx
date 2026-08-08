@@ -1,12 +1,12 @@
-import { useDeferredValue, useState } from 'react'
+import { useDeferredValue, useEffect, useRef, useState } from 'react'
 import { PButton, PButtonPure, PFlyout, PIcon, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'
-import type { AttentionCounts, WorkItemAttention, WorkItemProjection } from '../api/workItems'
-import { ATTENTION_LABELS, ATTENTION_SUMMARY_LABELS, workItemCountLabel } from '../attentionVocabulary'
+import { useLocation, useNavigate } from 'react-router'
+import type { ChangeGroupView, WorkItemNeed, WorkItemPortfolioTotals } from '../api/workItems'
 import CompletedHistoryWorkspace from '../components/CompletedHistoryWorkspace'
 import { WorkspaceHeader, WorkspaceHeaderMetric } from '../components/WorkspaceHeader'
 import WorkspaceViewHeader, { WorkspaceViewCount } from '../components/WorkspaceViewHeader'
 import WorkItemDetail from '../components/WorkItemDetail'
-import WorkPortfolioBoard from '../components/WorkPortfolioBoard'
+import WorkPortfolioTable from '../components/WorkPortfolioTable'
 import { useWorkItemDetail, useWorkPortfolio, type WorkItemIdentity } from '../hooks/useWorkItems'
 
 type SelectValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }
@@ -16,31 +16,14 @@ function selectedValue(event: SelectValueEvent): string {
   return typeof value === 'string' ? value : ''
 }
 
-/** Short visible wording with the full phrase kept for assistive technology. */
-function AttentionMetricLabel({ state }: { state: WorkItemAttention }) {
-  const { short, full } = ATTENTION_SUMMARY_LABELS[state]
-  return (
-    <span title={full}>
-      <span aria-hidden="true">{short}</span>
-      <span className="sr-only">{full}</span>
-    </span>
-  )
-}
-
-/**
- * Portfolio status strip: one total plus the four orthogonal attention states the API counts,
- * so the parts always add up to the whole.
- */
-function PortfolioStatusSummary({ counts }: { counts: AttentionCounts }) {
-  const total = counts.user + counts.agent + counts.waiting + counts.repair + counts.none
+function PortfolioStatusSummary({ totals }: { totals: WorkItemPortfolioTotals }) {
   return (
     <>
-      <WorkspaceHeaderMetric value={total} label={workItemCountLabel(total)} />
-      <WorkspaceHeaderMetric value={counts.user} label={<AttentionMetricLabel state="user" />} tone={counts.user > 0 ? 'error' : 'neutral'} />
-      <WorkspaceHeaderMetric value={counts.agent} label={<AttentionMetricLabel state="agent" />} />
-      <WorkspaceHeaderMetric value={counts.waiting} label={<AttentionMetricLabel state="waiting" />} />
-      <WorkspaceHeaderMetric value={counts.repair} label={<AttentionMetricLabel state="repair" />} tone={counts.repair > 0 ? 'error' : 'neutral'} />
-      <WorkspaceHeaderMetric value={counts.none} label={<AttentionMetricLabel state="none" />} />
+      <WorkspaceHeaderMetric value={totals.total} label={totals.total === 1 ? 'work item' : 'work items'} />
+      <WorkspaceHeaderMetric value={totals.needs.you} label="need you" tone={totals.needs.you > 0 ? 'error' : 'neutral'} />
+      <WorkspaceHeaderMetric value={totals.needs.dependency} label="waiting" />
+      <WorkspaceHeaderMetric value={totals.needs.repair} label="need repair" tone={totals.needs.repair > 0 ? 'error' : 'neutral'} />
+      <WorkspaceHeaderMetric value={totals.activity.working + totals.activity.repairing} label="active" />
     </>
   )
 }
@@ -74,18 +57,18 @@ function PortfolioViewSwitch({ workspace, onChange }: { workspace: 'current' | '
 }
 
 interface FilterProps {
-  changes: string[]
+  changes: Array<{ id: string; title: string }>
   changeFilter: string
-  attentionFilter: WorkItemAttention | ''
+  needsFilter: WorkItemNeed | ''
   open: boolean
   onToggle: () => void
   onChangeFilter: (value: string) => void
-  onAttentionFilter: (value: WorkItemAttention | '') => void
+  onNeedsFilter: (value: WorkItemNeed | '') => void
 }
 
 /** Collapsed trigger plus active-filter chips; the expanded surface renders separately below. */
 function PortfolioFilterTools(props: FilterProps) {
-  const activeCount = (props.changeFilter ? 1 : 0) + (props.attentionFilter ? 1 : 0)
+  const activeCount = (props.changeFilter ? 1 : 0) + (props.needsFilter ? 1 : 0)
   return (
     <>
       {props.changeFilter ? (
@@ -97,13 +80,13 @@ function PortfolioFilterTools(props: FilterProps) {
           onClick={() => props.onChangeFilter('')}
         />
       ) : null}
-      {props.attentionFilter ? (
+      {props.needsFilter ? (
         <PTagDismissible
           compact
-          label={`Attention: ${ATTENTION_LABELS[props.attentionFilter]}`}
-          data-testid="work-filter-chip-attention"
-          aria={{ 'aria-label': `Remove attention filter ${ATTENTION_LABELS[props.attentionFilter]}` }}
-          onClick={() => props.onAttentionFilter('')}
+          label={`Needs: ${props.needsFilter === 'you' ? 'You' : props.needsFilter === 'dependency' ? 'Dependency' : props.needsFilter === 'repair' ? 'Repair' : 'Nobody'}`}
+          data-testid="work-filter-chip-needs"
+          aria={{ 'aria-label': 'Remove Needs filter' }}
+          onClick={() => props.onNeedsFilter('')}
         />
       ) : null}
       <PButtonPure
@@ -121,7 +104,7 @@ function PortfolioFilterTools(props: FilterProps) {
 }
 
 function PortfolioFilterPanel(props: FilterProps) {
-  const activeCount = (props.changeFilter ? 1 : 0) + (props.attentionFilter ? 1 : 0)
+  const activeCount = (props.changeFilter ? 1 : 0) + (props.needsFilter ? 1 : 0)
   return (
     <div
       id="work-filters-panel"
@@ -137,22 +120,21 @@ function PortfolioFilterPanel(props: FilterProps) {
         onChange={(event) => props.onChangeFilter(selectedValue(event as SelectValueEvent))}
       >
         <PSelectOption value="">All changes</PSelectOption>
-        {props.changes.map((changeId) => <PSelectOption key={changeId} value={changeId}>{changeId}</PSelectOption>)}
+        {props.changes.map((change) => <PSelectOption key={change.id} value={change.id}>{change.title}</PSelectOption>)}
       </PSelect>
       <PSelect
         compact
         className="w-56"
-        label="Attention"
-        name="work-attention-filter"
-        value={props.attentionFilter}
-        onChange={(event) => props.onAttentionFilter(selectedValue(event as SelectValueEvent) as WorkItemAttention | '')}
+        label="Needs"
+        name="work-needs-filter"
+        value={props.needsFilter}
+        onChange={(event) => props.onNeedsFilter(selectedValue(event as SelectValueEvent) as WorkItemNeed | '')}
       >
-        <PSelectOption value="">Any attention</PSelectOption>
-        <PSelectOption value="user">{ATTENTION_LABELS.user}</PSelectOption>
-        <PSelectOption value="agent">{ATTENTION_LABELS.agent}</PSelectOption>
-        <PSelectOption value="waiting">{ATTENTION_LABELS.waiting}</PSelectOption>
-        <PSelectOption value="repair">{ATTENTION_LABELS.repair}</PSelectOption>
-        <PSelectOption value="none">{ATTENTION_LABELS.none}</PSelectOption>
+        <PSelectOption value="">Any need</PSelectOption>
+        <PSelectOption value="you">You</PSelectOption>
+        <PSelectOption value="dependency">Dependency</PSelectOption>
+        <PSelectOption value="repair">Repair</PSelectOption>
+        <PSelectOption value="none">Nobody</PSelectOption>
       </PSelect>
       <PButtonPure
         type="button"
@@ -163,7 +145,7 @@ function PortfolioFilterPanel(props: FilterProps) {
         disabled={activeCount === 0}
         onClick={() => {
           props.onChangeFilter('')
-          props.onAttentionFilter('')
+          props.onNeedsFilter('')
         }}
       >
         Clear filters
@@ -173,51 +155,96 @@ function PortfolioFilterPanel(props: FilterProps) {
 }
 
 
-function PortfolioWorkspace({ items, onChanged }: { items: WorkItemProjection[]; onChanged: () => void }) {
-  const [selected, setSelected] = useState<WorkItemIdentity | null>(null)
-  const selectedDetail = useWorkItemDetail(selected, onChanged)
-  const selectedProjection = selected
-    ? items.find((item) => item.change_id === selected.changeId && item.work_item_id === selected.workItemId) ?? null
-    : null
+function parseSelection(pathname: string): WorkItemIdentity | null {
+  const parts = pathname.split('/').filter(Boolean)
+  if (parts.length !== 3 || parts[0] !== 'delivery') return null
+  try {
+    return { changeId: decodeURIComponent(parts[1]), itemKey: decodeURIComponent(parts[2]) }
+  } catch {
+    return null
+  }
+}
+
+function SelectedDetail({
+  identity,
+  onChanged,
+  onClose,
+}: {
+  identity: WorkItemIdentity
+  onChanged: () => void
+  onClose: () => void
+}) {
+  const selectedDetail = useWorkItemDetail(identity, onChanged)
+  if (selectedDetail.detail.data) return (
+    <WorkItemDetail
+      detail={selectedDetail.detail.data}
+      pendingAction={selectedDetail.pendingAction}
+      actionError={selectedDetail.actionError}
+      actionResult={selectedDetail.actionResult}
+      onAnswerRequest={selectedDetail.answerRequest}
+      onClearBlock={selectedDetail.clearBlock}
+      onRecoverClaim={selectedDetail.recoverClaim}
+      onPreviewBackward={selectedDetail.previewBackward}
+      onMoveBackward={selectedDetail.moveBackward}
+      onRetryIntegration={selectedDetail.retryIntegration}
+    />
+  )
+  if (selectedDetail.detail.isLoading) return <p role="status">Loading Work Item details...</p>
+  return <EmptyDetail error={selectedDetail.detail.error} retry={selectedDetail.retry} onClose={onClose} />
+}
+
+function PortfolioWorkspace({
+  groups,
+  selected,
+  onSelect,
+  onClose,
+  onChanged,
+}: {
+  groups: ChangeGroupView[]
+  selected: WorkItemIdentity | null
+  onSelect: (identity: WorkItemIdentity, trigger: HTMLAnchorElement) => void
+  onClose: () => void
+  onChanged: () => void
+}) {
+  const workspaceRef = useRef<HTMLDivElement>(null)
+  const [split, setSplit] = useState(false)
+
+  useEffect(() => {
+    const workspace = workspaceRef.current
+    if (!workspace || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(([entry]) => setSplit(entry.contentRect.width >= 1280))
+    observer.observe(workspace)
+    return () => observer.disconnect()
+  }, [])
+
   return (
-    <div className="min-w-0">
-      <WorkPortfolioBoard items={items} selected={selected} onSelect={setSelected} />
-      <PFlyout
-        id="work-item-flyout"
-        open={selected !== null}
-        position="end"
-        aria={{ 'aria-label': 'Work item details' }}
-        onDismiss={() => setSelected(null)}
-      >
-        {selectedDetail.detail.data && selectedProjection ? (
-          <WorkItemDetail
-            key={`${selectedDetail.detail.data.operator.change_id}:${selectedDetail.detail.data.operator.outcome_id}`}
-            detail={selectedDetail.detail.data}
-            projection={selectedProjection}
-            pendingAction={selectedDetail.pendingAction}
-            actionError={selectedDetail.actionError}
-            actionResult={selectedDetail.actionResult}
-            onAnswerRequest={selectedDetail.answerRequest}
-            onClearBlock={selectedDetail.clearBlock}
-            onRecoverClaim={selectedDetail.recoverClaim}
-            onMoveBackward={selectedDetail.moveBackward}
-            onRetryIntegration={selectedDetail.retryIntegration}
-          />
-        ) : selectedDetail.detail.isLoading ? (
-          <p className="p-static-lg" role="status">Loading work item details...</p>
-        ) : selectedDetail.detail.error ? (
-          <div className="p-static-lg"><EmptyDetail error={selectedDetail.detail.error} retry={selectedDetail.retry} /></div>
-        ) : null}
-      </PFlyout>
+    <div
+      ref={workspaceRef}
+      className={['grid min-w-0 gap-static-lg', selected && split ? 'grid-cols-[minmax(0,1fr)_minmax(28rem,30rem)]' : ''].join(' ')}
+    >
+      <div className="min-w-0"><WorkPortfolioTable groups={groups} selected={selected} onSelect={onSelect} /></div>
+      {selected && split ? (
+        <aside className="min-w-0 border-l border-contrast-low pl-static-lg" aria-label="Work Item inspector">
+          <div className="mb-static-md flex justify-end"><PButton type="button" compact variant="secondary" icon="close" hideLabel onClick={onClose}>Close inspector</PButton></div>
+          <SelectedDetail key={`${selected.changeId}:${selected.itemKey}`} identity={selected} onChanged={onChanged} onClose={onClose} />
+        </aside>
+      ) : null}
+      {selected && !split ? (
+        <PFlyout open position="end" aria={{ 'aria-label': 'Work Item inspector' }} onDismiss={onClose}>
+          <div className="p-static-lg">
+            <SelectedDetail key={`${selected.changeId}:${selected.itemKey}`} identity={selected} onChanged={onChanged} onClose={onClose} />
+          </div>
+        </PFlyout>
+      ) : null}
     </div>
   )
 }
 
-function EmptyDetail({ error, retry }: { error: Error | null; retry: () => void }) {
+function EmptyDetail({ error, retry, onClose }: { error: Error | null; retry: () => void; onClose: () => void }) {
   if (error) return (
-    <div className="flex items-center gap-static-sm" role="alert">
-      <span>Work item is unavailable. {error.message}</span>
-      <PButton type="button" variant="secondary" onClick={retry}>Retry item</PButton>
+    <div className="grid gap-static-sm" role="alert">
+      <span>This Work Item is unavailable. It may have completed or the link may be invalid. {error.message}</span>
+      <div className="flex flex-wrap gap-static-sm"><PButton type="button" variant="secondary" onClick={retry}>Retry item</PButton><PButton type="button" variant="secondary" onClick={onClose}>Back to current delivery</PButton></div>
     </div>
   )
   return null
@@ -225,27 +252,74 @@ function EmptyDetail({ error, retry }: { error: Error | null; retry: () => void 
 
 export default function WorkPortfolioPage() {
   const { portfolio, hasData, error, isLoading, retry } = useWorkPortfolio()
+  const location = useLocation()
+  const navigate = useNavigate()
   const [changeFilter, setChangeFilter] = useState('')
-  const [attentionFilter, setAttentionFilter] = useState<WorkItemAttention | ''>('')
+  const [needsFilter, setNeedsFilter] = useState<WorkItemNeed | ''>('')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [workspace, setWorkspace] = useState<'current' | 'history'>('current')
   const deferredChange = useDeferredValue(changeFilter)
-  const deferredAttention = useDeferredValue(attentionFilter)
-  const items = portfolio.items.map((item) => item.card)
-  const changes = [...new Set(items.map((item) => item.change_id))].sort()
-  const filteredItems = items.filter(
-    (item) => (!deferredChange || item.change_id === deferredChange)
-      && (!deferredAttention || item.attention === deferredAttention),
-  )
-  const isFiltered = Boolean(deferredChange || deferredAttention)
+  const deferredNeeds = useDeferredValue(needsFilter)
+  const selected = parseSelection(location.pathname)
+  const selectedIdentity = selected ? `${selected.changeId}:${selected.itemKey}` : null
+  const lastTrigger = useRef<HTMLAnchorElement | null>(null)
+  const restoreFocusAfterClose = useRef(false)
+  const selectedWasPresent = useRef(false)
+  const changes = portfolio.groups.map((group) => ({ id: group.change_id, title: group.title }))
+  const filteredGroups = portfolio.groups
+    .filter((group) => !deferredChange || group.change_id === deferredChange)
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !deferredNeeds || item.needs === deferredNeeds),
+    }))
+    .filter((group) => group.items.length > 0)
+  const shownCount = filteredGroups.reduce((total, group) => total + group.items.length, 0)
+  const isFiltered = Boolean(deferredChange || deferredNeeds)
+
+  const closeInspector = () => {
+    restoreFocusAfterClose.current = true
+    navigate('/delivery')
+  }
+
+  useEffect(() => {
+    if (selected || !restoreFocusAfterClose.current) return
+    let secondFrame: number | null = null
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        lastTrigger.current?.focus()
+        restoreFocusAfterClose.current = false
+      })
+    })
+    return () => {
+      window.cancelAnimationFrame(firstFrame)
+      if (secondFrame !== null) window.cancelAnimationFrame(secondFrame)
+    }
+  }, [selectedIdentity])
+
+  useEffect(() => {
+    if (!selected || !hasData) {
+      selectedWasPresent.current = false
+      return
+    }
+    const present = portfolio.groups.some((group) => group.change_id === selected.changeId
+      && group.items.some((item) => item.item_key === selected.itemKey))
+    if (present) selectedWasPresent.current = true
+    if (!present && selectedWasPresent.current) {
+      selectedWasPresent.current = false
+      const changeCompleted = portfolio.groups.every((group) => group.change_id !== selected.changeId)
+      if (changeCompleted) setWorkspace('history')
+      navigate('/delivery', { replace: true })
+    }
+  }, [hasData, navigate, portfolio.groups, selected])
+
   const filterProps: FilterProps = {
     changes,
     changeFilter,
-    attentionFilter,
+    needsFilter,
     open: filtersOpen,
     onToggle: () => setFiltersOpen((open) => !open),
     onChangeFilter: setChangeFilter,
-    onAttentionFilter: setAttentionFilter,
+    onNeedsFilter: setNeedsFilter,
   }
 
   return (
@@ -255,7 +329,7 @@ export default function WorkPortfolioPage() {
         title="Delivery portfolio"
         titleId="delivery-portfolio-heading"
         summaryLabel="Delivery portfolio status"
-        summary={workspace === 'current' ? <PortfolioStatusSummary counts={portfolio.attention_counts} /> : undefined}
+        summary={workspace === 'current' ? <PortfolioStatusSummary totals={portfolio.totals} /> : undefined}
       />
 
       <PortfolioViewSwitch workspace={workspace} onChange={setWorkspace} />
@@ -269,15 +343,15 @@ export default function WorkPortfolioPage() {
             <div className="grid gap-static-xs">
               <WorkspaceViewHeader
                 headingId="work-board-heading"
-                title="Delivery stages"
+                title="Current delivery"
                 metaTestId="work-shown-count"
-                meta={isFiltered ? <WorkspaceViewCount value={`${filteredItems.length} of ${items.length}`} unit={`${workItemCountLabel(items.length)} shown`} /> : null}
+                meta={isFiltered ? <WorkspaceViewCount value={`${shownCount} of ${portfolio.totals.total}`} unit="work items shown" /> : null}
                 tools={<PortfolioFilterTools {...filterProps} />}
               />
               {filtersOpen ? <PortfolioFilterPanel {...filterProps} /> : null}
             </div>
 
-            {isLoading ? <p role="status">Loading work portfolio...</p> : null}
+            {isLoading ? <div className="grid gap-static-sm" role="status" aria-label="Loading current delivery">{Array.from({ length: 4 }, (_, index) => <span key={index} className="block h-12 animate-pulse bg-surface" />)}</div> : null}
             {error ? (
               <section className="flex flex-wrap items-center gap-static-sm border-l-4 border-danger bg-surface p-static-md" role="alert">
                 <PIcon name="error" aria-hidden="true" />
@@ -286,7 +360,15 @@ export default function WorkPortfolioPage() {
               </section>
             ) : null}
 
-            {hasData && !error ? <PortfolioWorkspace items={filteredItems} onChanged={retry} /> : null}
+            {hasData && !error ? (
+              <PortfolioWorkspace
+                groups={filteredGroups}
+                selected={selected}
+                onSelect={(_identity, trigger) => { lastTrigger.current = trigger }}
+                onClose={closeInspector}
+                onChanged={retry}
+              />
+            ) : null}
           </>
         ) : <CompletedHistoryWorkspace />}
       </div>
