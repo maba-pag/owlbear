@@ -60,11 +60,14 @@ const TASK_STATUS_LABELS: Record<WorkItemDetailResponse['item']['tasks'][number]
 
 function DetailHeader({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
   const { card } = detail.item
-  const scopeLabel = card.scope === 'outcome' ? `Outcome ${card.work_item_id}` : 'Change Integration'
   return (
     <div className="flex min-w-0 flex-wrap items-start justify-between gap-static-sm">
       <div className="min-w-0">
-        <span className="text-xs text-contrast-medium"><strong className="text-primary">{detail.item.change_title}</strong> / {scopeLabel}</span>
+        <span className="text-xs text-contrast-medium">
+          <strong className="text-primary">{detail.item.change_title}</strong>
+          {' / '}
+          {card.scope === 'outcome' ? <code>{card.work_item_id}</code> : 'Change Integration'}
+        </span>
         <PHeading id="work-detail-heading" tag="h2" size="lg">{card.scope === 'outcome' ? card.title : 'Integration'}</PHeading>
       </div>
       <div className="flex flex-wrap gap-static-xs">

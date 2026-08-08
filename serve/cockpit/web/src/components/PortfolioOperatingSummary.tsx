@@ -1,26 +1,29 @@
 import { WorkspaceHeaderMetric } from './WorkspaceHeader'
 import type { PortfolioGuidance, PortfolioOperatingView } from '../api/workItems'
+import { designCommand } from './designWorkPresentation'
 
 function countLabel(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`
 }
 
-function guidanceText(guidance: PortfolioGuidance) {
+function Command({ children }: { children: string }) {
+  return <code className="rounded-sm border border-contrast-low bg-surface px-1.5 py-0.5 text-xs text-primary">{children}</code>
+}
+
+function Guidance({ guidance }: { guidance: PortfolioGuidance }) {
   switch (guidance.kind) {
     case 'intervene':
-      return guidance.work_count === 1
-        ? 'Review 1 item that needs you.'
-        : `Review ${guidance.work_count} items that need you.`
+      return <>{guidance.work_count === 1 ? 'Review 1 item that needs you.' : `Review ${guidance.work_count} items that need you.`}</>
     case 'resume-design':
-      return `Continue Design for ${guidance.change_ids.join(' or ')} with ${guidance.change_ids.map((changeId) => `/design ${changeId}`).join(' or ')}.`
+      return <>Continue Design with {guidance.change_ids.map((changeId, index) => <span key={changeId}>{index > 0 ? ' or ' : null}<Command>{designCommand(changeId)}</Command></span>)}.</>
     case 'start-orchestration':
-      return `Start /orchestrate for ${countLabel(guidance.work_count, 'queued item')}.`
+      return <>Process {countLabel(guidance.work_count, 'queued work item')} with <Command>/orchestrate</Command>.</>
     case 'work-underway':
-      return '/orchestrate is already working; no new session is needed.'
+      return <><Command>/orchestrate</Command> is already working; no new session is needed.</>
     case 'wait':
-      return 'No session action needed.'
+      return <>No session action needed.</>
     case 'create-change':
-      return 'Start /ideate or /design <change-id>.'
+      return <>Start with <Command>/ideate</Command> or <Command>/design &lt;change-id&gt;</Command>.</>
   }
 }
 
@@ -57,9 +60,11 @@ export function PortfolioHeaderSummary({ operating }: { operating: PortfolioOper
 export default function PortfolioOperatingSummary({ operating }: { operating: PortfolioOperatingView }) {
   if (operating.guidance.length === 0) return null
   return (
-    <aside className="min-w-0 text-sm leading-relaxed text-contrast-medium" aria-label="Session suggestions">
-      <span className="mr-static-xs font-semibold text-primary">Session suggestions</span>
-      {operating.guidance.map((guidance) => <span className="mr-static-sm" key={guidance.kind}>{guidanceText(guidance)}</span>)}
+    <aside className="grid min-w-0 gap-static-xs px-static-sm text-sm leading-relaxed text-contrast-medium sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start sm:gap-static-md" aria-label="Session suggestions">
+      <strong className="text-primary">Session suggestions</strong>
+      <ul className="m-0 flex min-w-0 list-none flex-wrap gap-x-static-lg gap-y-static-xs p-0">
+        {operating.guidance.map((guidance) => <li key={guidance.kind}><Guidance guidance={guidance} /></li>)}
+      </ul>
     </aside>
   )
 }
