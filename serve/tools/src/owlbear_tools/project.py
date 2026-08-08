@@ -165,22 +165,40 @@ def doctor() -> None:
 
 def deps_status() -> None:
     """Check lock consistency and report available dependency updates."""
+    print("Dependency status is informational; manifests and lockfiles will not be changed.")  # noqa: T201
     lock_status = _run(["uv", "lock", "--check"])
     python_status = _run(["uv", "tree", "--outdated"])
     npm_status = 0
     web = Path("serve/cockpit/web")
     if (web / "package-lock.json").is_file():
+        print(  # noqa: T201
+            "npm: Current is installed, Wanted is the newest version allowed by package.json, "
+            "and Latest is the newest published version."
+        )
         npm_status = _run(["npm", "outdated"], cwd=web)
+    if python_status == 1 or npm_status == 1:
+        print(  # noqa: T201
+            "Updates remain available. deps-sync may restore Current from the existing locks, "
+            "but it does not update locks or manifest ranges."
+        )
     _finish(1 if lock_status or python_status not in {0, 1} or npm_status not in {0, 1} else 0)
 
 
 def deps_sync() -> None:
     """Install the exact locked Python and npm dependency sets."""
+    print(  # noqa: T201
+        "Installing existing Python and npm lockfiles exactly; versions and manifest ranges will not be updated."
+    )
     python_status = _run(["uv", "sync", "--locked", "--all-extras"])
     if python_status:
         _finish(python_status)
     web = Path("serve/cockpit/web")
     npm_status = _run(["npm", "ci"], cwd=web) if (web / "package-lock.json").is_file() else 0
+    if npm_status == 0:
+        print(  # noqa: T201
+            "Installed dependencies now match the existing locks. Any remaining deps-status entries "
+            "require a lock or manifest update."
+        )
     _finish(npm_status)
 
 

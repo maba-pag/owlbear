@@ -3,10 +3,24 @@
 from __future__ import annotations
 
 import argparse
+import os
+import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TextIO
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
+_RESET = "\033[0m"
+_BOLD = "\033[1m"
+_MAGENTA = "\033[35m"
+_GREEN = "\033[32m"
+_INFO = "\N{INFORMATION SOURCE}"
+_GROUP_STYLES = {
+    "Everyday": "\033[36m",
+    "Setup": "\033[34m",
+    "Maintenance": "\033[33m",
+}
 
 
 @dataclass(frozen=True)
@@ -24,14 +38,14 @@ COMMANDS = (
     Command("help", "uv run help [TOPIC]", "Show this command reference.", "Everyday"),
     Command(
         "lint",
-        "uv run lint [--no-fix | --unsafe-fixes] [--all | FILE ...]",
-        "Lint staged, explicit, or all files; safe fixes default.",
+        "uv run lint [OPTIONS] [FILE ...]",
+        "Staged or explicit files; --all selects repository; safe fixes default.",
         "Everyday",
     ),
     Command(
         "lint-full",
-        "uv run lint-full [--no-fix | --unsafe-fixes]",
-        "Run all local and full-project checks; safe fixes default.",
+        "uv run lint-full [OPTIONS]",
+        "lint --all plus frontend and MegaLinter checks; safe fixes default.",
         "Everyday",
         development_only=True,
     ),
@@ -44,7 +58,7 @@ COMMANDS = (
     ),
     Command(
         "megalint",
-        "uv run megalint [--no-fix | --unsafe-fixes]",
+        "uv run megalint [OPTIONS]",
         "Run MegaLinter; safe fixes default.",
         "Everyday",
         development_only=True,
@@ -54,7 +68,7 @@ COMMANDS = (
     Command("hooks-install", "uv run hooks-install", "Install Git hooks and hook environments.", "Setup"),
     Command(
         "setup-project",
-        "uv run setup-project [PATH] [--integration-target BRANCH]",
+        "uv run setup-project [OPTIONS] [PATH]",
         "Initialize an OwlBear project.",
         "Setup",
     ),
@@ -68,14 +82,14 @@ COMMANDS = (
     Command(
         "deps-status",
         "uv run deps-status",
-        "Check locks and available dependency updates.",
+        "Report installed, allowed, and latest versions without updating locks.",
         "Maintenance",
         development_only=True,
     ),
     Command(
         "deps-sync",
         "uv run deps-sync",
-        "Install exactly the locked Python and npm dependencies.",
+        "Install existing locks exactly; do not update versions or ranges.",
         "Maintenance",
         development_only=True,
     ),
@@ -103,9 +117,22 @@ _TOPICS = {
 }
 
 
-def command_footer() -> str:
+def _supports_color(stream: TextIO) -> bool:
+    return "NO_COLOR" not in os.environ and os.environ.get("TERM") != "dumb" and stream.isatty()
+
+
+def _style(text: str, *codes: str, stream: TextIO) -> str:
+    if not _supports_color(stream):
+        return text
+    return f"{''.join(codes)}{text}{_RESET}"
+
+
+def command_footer(stream: TextIO | None = None) -> str:
     """Return the concise discovery hint printed by commands."""
-    return "For the full command set, run `uv run help`."
+    output = stream or sys.stderr
+    icon = _style(_INFO, _BOLD, _MAGENTA, stream=output)
+    command = _style("uv run help", _BOLD, _GREEN, stream=output)
+    return f"{icon} More commands and options: {command}"
 
 
 def _is_development_checkout() -> bool:
@@ -121,17 +148,30 @@ def help_main() -> None:
     args = parser.parse_args()
     selected = _TOPICS.get(args.topic) if args.topic else None
     development = _is_development_checkout()
+    visible_commands = [
+        command
+        for command in COMMANDS
+        if (selected is None or command.group == selected) and (development or not command.development_only)
+    ]
+    usage_width = max(len(command.usage) for command in visible_commands)
+    terminal_width = shutil.get_terminal_size(fallback=(120, 24)).columns
+    stacked = any(2 + usage_width + 1 + len(command.summary) > terminal_width for command in visible_commands)
 
-    print("OwlBear commands\n")  # noqa: T201
+    stream = sys.stdout
+    print(_style(f"{_INFO} OwlBear commands", _BOLD, _MAGENTA, stream=stream) + "\n")  # noqa: T201
     for group in ("Everyday", "Setup", "Maintenance"):
         if selected is not None and group != selected:
             continue
-        commands = [
-            command for command in COMMANDS if command.group == group and (development or not command.development_only)
-        ]
+        commands = [command for command in visible_commands if command.group == group]
         if not commands:
             continue
-        print(f"{group}:")  # noqa: T201
+        heading = _style(f"{group}:", _BOLD, _GROUP_STYLES[group], stream=stream)
+        print(heading)  # noqa: T201
         for command in commands:
-            print(f"  {command.usage:<58} {command.summary}")  # noqa: T201
+            if stacked:
+                usage = _style(command.usage, _GREEN, stream=stream)
+                print(f"  {usage}\n      {command.summary}")  # noqa: T201
+                continue
+            usage = _style(f"{command.usage:<{usage_width}}", _GREEN, stream=stream)
+            print(f"  {usage} {command.summary}")  # noqa: T201
         print()  # noqa: T201

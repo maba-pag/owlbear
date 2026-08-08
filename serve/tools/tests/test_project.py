@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from owlbear_tools.megalinter import MegaLinterImage, load_megalinter_image
-from owlbear_tools.project import integration_target, megalint_clean
+from owlbear_tools.project import deps_status, deps_sync, integration_target, megalint_clean
 
 
 def _git_result(command: list[str], *, cwd: Path | None = None) -> int:  # noqa: ARG001
@@ -79,6 +79,35 @@ def test_integration_target_rejects_unfinished_delivery_work(
         integration_target()
 
     assert json.loads(config.read_text(encoding="utf-8"))["integration_target"] == "dev"
+
+
+def test_deps_status_distinguishes_available_updates_from_sync(tmp_path, monkeypatch, capsys) -> None:
+    web = tmp_path / "serve/cockpit/web"
+    web.mkdir(parents=True)
+    (web / "package-lock.json").write_text("{}\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    with patch("owlbear_tools.project._run", side_effect=[0, 1, 1]), pytest.raises(SystemExit, match="0"):
+        deps_status()
+
+    output = capsys.readouterr().out
+    assert "Dependency status is informational" in output
+    assert "Wanted is the newest version allowed by package.json" in output
+    assert "does not update locks or manifest ranges" in output
+
+
+def test_deps_sync_explains_that_it_reproduces_existing_locks(tmp_path, monkeypatch, capsys) -> None:
+    web = tmp_path / "serve/cockpit/web"
+    web.mkdir(parents=True)
+    (web / "package-lock.json").write_text("{}\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    with patch("owlbear_tools.project._run", return_value=0), pytest.raises(SystemExit, match="0"):
+        deps_sync()
+
+    output = capsys.readouterr().out
+    assert "versions and manifest ranges will not be updated" in output
+    assert "remaining deps-status entries require a lock or manifest update" in output
 
 
 def test_megalint_clean_preserves_current_and_removes_only_obsolete_images(
