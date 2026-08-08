@@ -136,13 +136,13 @@ function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
 function CompactRows({ group, selected, onSelect }: GroupTableProps) {
   const outcomes = group.items.filter((item) => item.scope === 'outcome')
   return (
-    <div className="lg:hidden">
+    <div className="grid gap-static-sm lg:hidden">
       {outcomes.map((item) => {
         const isSelected = selected?.changeId === item.change_id && selected.itemKey === item.item_key
         return (
           <article
             key={workItemIdentity(item)}
-            className={['relative mb-1 grid gap-static-sm rounded-lg border-y border-r border-contrast-low p-static-sm', attentionBorder(item), isSelected ? 'bg-frosted-soft' : 'bg-surface'].join(' ')}
+            className={['relative grid gap-static-sm rounded-lg border-y border-r border-contrast-low p-static-sm', attentionBorder(item), isSelected ? 'bg-frosted-soft' : 'bg-surface'].join(' ')}
             data-work-item={workItemIdentity(item)}
             aria-label={`${item.title} work item`}
           >
@@ -166,7 +166,7 @@ function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
   return (
     <section
       className={[
-        'relative mt-1 grid gap-static-sm rounded-lg border-y border-r border-contrast-low px-static-sm py-static-md lg:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] lg:items-start lg:gap-0 lg:px-0 lg:py-0',
+        'relative mt-static-sm grid gap-static-sm rounded-lg border-y border-r border-contrast-low px-static-sm py-static-md lg:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] lg:items-start lg:gap-0 lg:px-0 lg:py-0',
         attentionBorder(item),
         isSelected ? 'bg-frosted-soft' : 'bg-surface hover:bg-frosted-soft',
       ].join(' ')}
@@ -195,7 +195,7 @@ function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
 export default function WorkPortfolioTable({ groups, selected, emptyMessage, onSelect }: WorkPortfolioTableProps) {
   if (groups.length === 0) return <p className="py-static-lg text-sm text-contrast-medium">{emptyMessage ?? 'No current Delivery work.'}</p>
   return (
-    <section aria-label="Delivery work" data-testid="work-portfolio-table" className="grid gap-static-xl">
+    <section aria-label="Delivery work" data-testid="work-portfolio-table" className="grid gap-static-lg">
       {groups.map((group) => (
         <section key={group.change_id} className="min-w-0" aria-labelledby={`work-group-${group.change_id}`}>
           <h2 id={`work-group-${group.change_id}`} className="mb-static-xs border-b border-contrast-low px-static-sm pb-static-xs text-md font-semibold text-primary">{group.title}</h2>

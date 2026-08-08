@@ -325,7 +325,7 @@ export default function WorkPortfolioPage() {
       <PortfolioViewSwitch workspace={workspace} onChange={setWorkspace} />
 
       <div
-        className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-static-md overflow-y-auto overflow-x-hidden px-static-lg pb-static-lg pt-6"
+        className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-static-lg overflow-y-auto overflow-x-hidden px-static-lg py-static-lg"
         data-testid="work-scroll-surface"
       >
         {workspace === 'current' ? (

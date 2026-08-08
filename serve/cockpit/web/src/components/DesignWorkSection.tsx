@@ -10,14 +10,14 @@ interface DesignWorkSectionProps {
 export default function DesignWorkSection({ changeIds, selectedChangeId, onSelect }: DesignWorkSectionProps) {
   if (changeIds.length === 0) return null
   return (
-    <section className="mt-static-sm min-w-0" aria-labelledby="design-work-heading" data-testid="design-work-section">
-      <h2 id="design-work-heading" className="mb-static-xs border-b border-contrast-low px-static-sm pb-static-xs text-md font-semibold text-primary">Design work</h2>
-      <div className="hidden grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] text-2xs font-semibold uppercase text-contrast-medium lg:grid" aria-hidden="true">
+    <section className="min-w-0" aria-labelledby="design-work-heading" data-testid="design-work-section">
+      <h2 id="design-work-heading" className="mb-static-sm border-b border-contrast-low px-static-sm pb-static-xs text-md font-semibold text-primary">Design work</h2>
+      <div className="mb-static-sm hidden grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] text-2xs font-semibold uppercase text-contrast-medium lg:grid" aria-hidden="true">
         <span className="px-static-sm py-static-xs">Work</span>
         <span className="px-static-sm py-static-xs">Progress</span>
         <span className="px-static-sm py-static-xs">Status</span>
       </div>
-      <div className="grid gap-1">
+      <div className="grid gap-static-sm">
         {changeIds.map((changeId) => {
           const selected = selectedChangeId === changeId
           return (

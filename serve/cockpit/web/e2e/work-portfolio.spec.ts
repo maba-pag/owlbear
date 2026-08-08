@@ -123,6 +123,29 @@ test.describe('assembled Delivery portfolio', () => {
     const designRow = designSection.locator('[data-design-work]')
     await expect(designRow).toHaveCSS('border-left-width', '4px')
     await expect(designRow).toHaveCSS('border-top-left-radius', '8px')
+    const firstChange = table.locator(':scope > section').first()
+    const [changeHeadingBox, changeLabelsBox, changeRowBox, designBox, designHeadingBox, designLabelsBox, designRowBox] = await Promise.all([
+      firstChange.getByRole('heading').first().boundingBox(),
+      firstChange.locator('thead').boundingBox(),
+      firstChange.locator('tbody tr').first().boundingBox(),
+      designSection.boundingBox(),
+      designSection.getByRole('heading', { name: 'Design work' }).boundingBox(),
+      designSection.locator('[aria-hidden="true"]').boundingBox(),
+      designRow.boundingBox(),
+    ])
+    expect(changeHeadingBox).not.toBeNull()
+    expect(changeLabelsBox).not.toBeNull()
+    expect(changeRowBox).not.toBeNull()
+    expect(designBox).not.toBeNull()
+    expect(designHeadingBox).not.toBeNull()
+    expect(designLabelsBox).not.toBeNull()
+    expect(designRowBox).not.toBeNull()
+    expect(changeLabelsBox!.y - (changeHeadingBox!.y + changeHeadingBox!.height)).toBeCloseTo(8, 0)
+    expect(changeRowBox!.y - (changeLabelsBox!.y + changeLabelsBox!.height)).toBeCloseTo(8, 0)
+    expect(designLabelsBox!.y - (designHeadingBox!.y + designHeadingBox!.height)).toBeCloseTo(8, 0)
+    expect(designRowBox!.y - (designLabelsBox!.y + designLabelsBox!.height)).toBeCloseTo(8, 0)
+    expect(designBox!.y - (tableBox!.y + tableBox!.height)).toBeCloseTo(32, 0)
+    expect(guidanceBox!.y - (designBox!.y + designBox!.height)).toBeCloseTo(32, 0)
     const designTrigger = designSection.getByRole('link', { name: 'Design Operations Roadmap' })
     await designTrigger.click()
     const designDetail = page.getByTestId('design-work-detail')
