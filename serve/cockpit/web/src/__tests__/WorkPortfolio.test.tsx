@@ -541,7 +541,8 @@ it('separates current Integration retry guidance from stale attempt evidence', a
   const inspector = await screen.findByTestId('work-item-detail')
   expect(inspector).toHaveTextContent('The Integration target moved since this attempt; retry against the current target.')
   expect(inspector).toHaveTextContent('Waiting for Orchestration. Orchestration will retry against the current target.')
-  expect(within(inspector).getByText('Retry now')).toBeInTheDocument()
+  const retryControl = within(inspector).getByText('Retry now').closest('p-button-pure') as HTMLElement & { color: string }
+  expect(retryControl.color).toBe('contrast-medium')
   expect(inspector).toHaveTextContent('ProgressAwaiting retry against current target')
   const staleEvidence = screen.getByText('Previous attempt (stale)').closest('details')
   expect(staleEvidence).not.toHaveAttribute('open')
@@ -630,6 +631,9 @@ it('presents Integration retry as an optional manual alternative to Orchestratio
   expect(table).toHaveTextContent('Change: Portfolio redesign')
   expect(table).toHaveTextContent('Waiting for Orchestration')
   expect(table).toHaveTextContent('Manual option: Retry Integration')
+  const retryLink = within(table).getByText('Retry Integration').closest('p-link-pure') as HTMLElement & { href: string; color: string }
+  expect(retryLink.href).toBe('/delivery/change-alpha/integration')
+  expect(retryLink.color).toBe('contrast-medium')
   expect(screen.getByLabelText('Delivery portfolio status')).not.toHaveTextContent('need you')
 })
 

@@ -1,4 +1,5 @@
-import { Link } from 'react-router'
+import { PLinkPure } from '@porsche-design-system/components-react'
+import { Link, useNavigate } from 'react-router'
 import type {
   ChangeGroupView,
   WorkItemCardView,
@@ -10,7 +11,7 @@ interface WorkPortfolioTableProps {
   groups: ChangeGroupView[]
   selected: WorkItemIdentity | null
   emptyMessage?: string
-  onSelect: (identity: WorkItemIdentity, trigger: HTMLAnchorElement) => void
+  onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void
 }
 
 type GroupTableProps = Pick<WorkPortfolioTableProps, 'selected' | 'onSelect'> & { group: ChangeGroupView }
@@ -50,19 +51,23 @@ function ItemLink({
 }
 
 function ActionLink({ item, onSelect, subdued = false }: { item: WorkItemCardView; onSelect: WorkPortfolioTableProps['onSelect']; subdued?: boolean }) {
+  const navigate = useNavigate()
   if (item.action.kind === 'none' || !item.action.label) return null
   const identity = { changeId: item.change_id, itemKey: item.item_key }
+  const path = workItemPath(item)
   return (
-    <Link
-      to={workItemPath(item)}
-      className={[
-        'relative z-[1] inline-flex min-h-8 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus lg:min-h-0',
-        subdued ? 'font-normal text-contrast-medium' : 'font-semibold text-primary',
-      ].join(' ')}
-      onClick={(event) => onSelect(identity, event.currentTarget)}
+    <PLinkPure
+      href={path}
+      color={subdued ? 'contrast-medium' : 'primary'}
+      className="relative z-[1]"
+      onClick={(event) => {
+        event.preventDefault()
+        onSelect(identity, event.currentTarget as HTMLElement)
+        navigate(path)
+      }}
     >
       {item.action.label}
-    </Link>
+    </PLinkPure>
   )
 }
 

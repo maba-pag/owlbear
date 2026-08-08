@@ -208,7 +208,7 @@ function PortfolioWorkspace({
   groups: ChangeGroupView[]
   selected: WorkItemIdentity | null
   emptyMessage?: string
-  onSelect: (identity: WorkItemIdentity, trigger: HTMLAnchorElement) => void
+  onSelect: (identity: WorkItemIdentity, trigger: HTMLElement) => void
 }) {
   return <WorkPortfolioTable groups={groups} selected={selected} emptyMessage={emptyMessage} onSelect={onSelect} />
 }
@@ -239,7 +239,7 @@ export default function WorkPortfolioPage() {
   const deferredNeeds = useDeferredValue(needsFilter)
   const selected = parseSelection(location.pathname)
   const selectedIdentity = selected ? `${selected.changeId}:${selected.itemKey}` : null
-  const lastTrigger = useRef<HTMLAnchorElement | null>(null)
+  const lastTrigger = useRef<HTMLElement | null>(null)
   const lastTriggerIdentity = useRef<string | null>(null)
   const restoreFocusAfterClose = useRef(false)
   const selectedWasPresent = useRef(false)
@@ -273,7 +273,7 @@ export default function WorkPortfolioPage() {
     let secondFrame: number | null = null
     const firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
-        const primaryTrigger = Array.from(document.querySelectorAll<HTMLAnchorElement>('[data-work-item-primary-trigger]'))
+        const primaryTrigger = Array.from(document.querySelectorAll<HTMLElement>('[data-work-item-primary-trigger]'))
           .find((candidate) => candidate.dataset.workItemIdentity === lastTriggerIdentity.current)
         const focusTarget = lastTrigger.current?.isConnected ? lastTrigger.current : primaryTrigger
         focusTarget?.focus()

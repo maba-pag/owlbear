@@ -180,7 +180,9 @@ test.describe('assembled Delivery portfolio', () => {
 
     const requestRow = (await visibleRows(page)).filter({ hasText: 'Choose release mode' })
     const requestTrigger = requestRow.getByRole('link', { name: /^Choose release mode/ })
-    await requestRow.getByRole('link', { name: 'Answer request' }).click()
+    const requestAction = requestRow.locator('p-link-pure', { hasText: 'Answer request' })
+    await expect(requestAction).toHaveJSProperty('href', '/delivery/work-e2e/outcome%3AOUT-001')
+    await requestAction.click()
     let inspected = { detail: page.getByTestId('work-item-detail'), trigger: requestTrigger }
     await expect(inspected.detail.getByRole('heading', { name: 'Choose release mode' })).toBeVisible()
     await expect(page.getByTestId('work-portfolio-table')).toBeVisible()

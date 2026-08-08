@@ -4,7 +4,7 @@ import { designCommand, designWorkTitle } from './designWorkPresentation'
 interface DesignWorkSectionProps {
   changeIds: string[]
   selectedChangeId: string | null
-  onSelect: (identity: { changeId: string; itemKey: string }, trigger: HTMLAnchorElement) => void
+  onSelect: (identity: { changeId: string; itemKey: string }, trigger: HTMLElement) => void
 }
 
 export default function DesignWorkSection({ changeIds, selectedChangeId, onSelect }: DesignWorkSectionProps) {

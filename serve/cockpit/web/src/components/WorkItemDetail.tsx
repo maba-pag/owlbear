@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   PButton,
+  PButtonPure,
   PHeading,
   PIcon,
   PInputText,
@@ -391,9 +392,9 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
           <p className="text-sm"><strong>Waiting for Orchestration.</strong> Orchestration will {action.kind === 'retry-integration' ? 'retry against the current target' : 'integrate this Change'}.</p>
           <div className="flex flex-wrap items-center gap-static-sm">
             <span className="text-xs text-contrast-medium">Manual option</span>
-            <PButton type="button" compact variant="secondary" disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
+            <PButtonPure type="button" size="small" color="contrast-medium" disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
               {pendingAction === 'integration' ? 'Working...' : action.kind === 'retry-integration' ? 'Retry now' : 'Integrate now'}
-            </PButton>
+            </PButtonPure>
           </div>
         </div>
       ) : canIntegrate ? (
