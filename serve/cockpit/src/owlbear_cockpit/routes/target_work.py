@@ -37,7 +37,13 @@ from owlbear_delivery.delivery_runtime import (
     integration_attention_disposition,
 )
 from owlbear_delivery.portfolio_application import PortfolioApplication, PortfolioApplicationError
-from owlbear_delivery.work_items import ChangeGroupView, WorkItemActivityState, WorkItemNeed
+from owlbear_delivery.work_items import (
+    ChangeGroupView,
+    WorkItemActivityState,
+    WorkItemNeed,
+    WorkItemScope,
+    WorkItemStage,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -171,6 +177,13 @@ class TargetCockpitService:
         """Reject Integration attempts that require a different operator route."""
         attention = self._invoke(lambda: self._application.show_integration_attention(change_id))
         detail = self._invoke(lambda: self._application.show_work_item_view(change_id, "integration"))
+        if detail.integration is not None and detail.integration.repair_active:
+            _http_error(
+                409,
+                "ERR_DELIVERY_INTEGRATION_ACTION_REQUIRED",
+                "A reviewed Integration repair is already in progress.",
+                retry_safe=False,
+            )
         superseded = detail.integration is not None and detail.integration.superseded
         if (
             attention is not None
@@ -366,7 +379,7 @@ def _portfolio_totals(groups: tuple[ChangeGroupView, ...]) -> WorkItemPortfolioT
     activity = [item.activity.state for item in items]
     return WorkItemPortfolioTotals(
         total=len(items),
-        complete=sum(item.stage.value == "completed" and item.scope.value == "outcome" for item in items),
+        complete=sum(item.scope == WorkItemScope.OUTCOME and item.stage == WorkItemStage.COMPLETED for item in items),
         needs=NeedsCounts(
             you=needs.count(WorkItemNeed.YOU),
             dependency=needs.count(WorkItemNeed.DEPENDENCY),

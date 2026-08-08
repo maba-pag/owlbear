@@ -1309,6 +1309,10 @@ def test_integration_proof_failure_retains_heads_and_publishes_attention(tmp_pat
 
     assert failed.attention is not None
     assert failed.attention.code == DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED
+    assert failed.attention.retry_condition == (
+        "Correct the Integration profile or failing candidate verification step, "
+        "then re-run Integration through Delivery orchestration."
+    )
     assert failed.attention.change_head == reviewed
     assert failed.attention.target_head == target_before
     assert _git(tmp_path / "repository", "rev-parse", "main") == target_before

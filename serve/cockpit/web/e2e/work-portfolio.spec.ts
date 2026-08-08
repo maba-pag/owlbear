@@ -11,7 +11,7 @@ async function inspect(page: Page, title: string): Promise<{ detail: Locator; tr
   await trigger.click()
   const detail = page.getByTestId('work-item-detail')
   await expect(detail.getByRole('heading', { name: title })).toBeVisible()
-  await expect(page).toHaveURL(/\/delivery\/work-e2e\//)
+  await expect(page).toHaveURL(/\/delivery\/[^/]+\/[^/]+$/)
   return { detail, trigger }
 }
 
@@ -66,33 +66,57 @@ test.describe('assembled Delivery portfolio', () => {
 
     const table = page.getByTestId('work-portfolio-table')
     await expect(table).toBeVisible()
-    await expect(await visibleRows(page)).toHaveCount(6)
+    await expect(await visibleRows(page)).toHaveCount(8)
     await expect(table).toContainText('Work portfolio E2E')
     await expect(table).toContainText('1 of 6 Outcomes complete')
     for (const column of ['Needs', 'Work item', 'Stage', 'Progress', 'Activity', 'Action']) {
-      await expect(table.getByRole('columnheader', { name: column })).toBeVisible()
+      await expect(table.getByRole('columnheader', { name: column })).toHaveCount(2)
+      await expect(table.getByRole('columnheader', { name: column }).first()).toBeVisible()
     }
     await expect(table).toContainText('Decision required')
-    await expect(table).toContainText('builder working')
+    await expect(table).toContainText('Integration repairer working')
     await expect(table).toContainText('Waiting on OUT-002')
     await expect(table).toContainText('Complete')
     await expect(table).not.toContainText('Reviewed')
 
     const summary = page.getByLabel('Delivery portfolio status')
-    await expect(summary).toContainText('6work items')
-    await expect(summary).toContainText('1need you')
-    await expect(summary).toContainText('1waiting')
+    await expect(summary).toContainText('8work items')
+    await expect(summary).toContainText('2need you')
+    await expect(summary).toContainText('1dependency')
+    await expect(summary).toContainText('0need repair')
     await expect(summary).toContainText('1active')
+    await expect(summary).toContainText('2ready')
+    await expect(summary).toContainText('2complete')
+
+    const integrationRow = (await visibleRows(page)).filter({ hasText: 'Integration' })
+    await expect(integrationRow.locator('td').nth(2)).toHaveText('—')
 
     await page.getByTestId('work-filters-toggle').click()
     await selectValue(page.locator('p-select[name="work-needs-filter"]'), 'dependency')
-    await expect(page.getByTestId('work-shown-count')).toContainText('1 of 6')
+    await expect(page.getByTestId('work-shown-count')).toContainText('1 of 8')
     await expect(await visibleRows(page)).toHaveCount(1)
     await page.getByTestId('work-filters-reset').click()
-    await expect(await visibleRows(page)).toHaveCount(6)
+    await expect(await visibleRows(page)).toHaveCount(8)
     await page.getByTestId('work-filters-toggle').click()
 
-    let inspected = await inspect(page, 'Choose release mode')
+    const returnedRow = (await visibleRows(page)).filter({ hasText: 'Plan release notes' })
+    const returnedTrigger = returnedRow.getByRole('link', { name: /^Plan release notes/ })
+    const progressCell = returnedRow.locator('td').nth(3)
+    const progressBox = await progressCell.boundingBox()
+    expect(progressBox).not.toBeNull()
+    await page.mouse.click(progressBox!.x + progressBox!.width / 2, progressBox!.y + progressBox!.height / 2)
+    const returnedDetail = page.getByTestId('work-item-detail')
+    await expect(returnedDetail.getByRole('heading', { name: 'Plan release notes' })).toBeVisible()
+    await expect(returnedDetail).toContainText('Returned to Design — re-admission required')
+    await expect(returnedDetail).toContainText('Evidence: request:release-notes-authority')
+    await expect(returnedDetail).toContainText('Source boundary: design:release-notes-v2')
+    await closeInspector(page, returnedTrigger)
+
+    const requestRow = (await visibleRows(page)).filter({ hasText: 'Choose release mode' })
+    const requestTrigger = requestRow.getByRole('link', { name: /^Choose release mode/ })
+    await requestRow.getByRole('link', { name: 'Answer request' }).click()
+    let inspected = { detail: page.getByTestId('work-item-detail'), trigger: requestTrigger }
+    await expect(inspected.detail.getByRole('heading', { name: 'Choose release mode' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Close inspector' })).toBeVisible()
     await expect(inspected.detail).toContainText('Promise: Resolve the bounded release decision.')
     await expect(inspected.detail).toContainText('Observe Choose release mode.')
@@ -105,9 +129,18 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(inspected.detail).toContainText('Safe rollout')
     await closeInspector(page, inspected.trigger)
 
+    inspected = await inspect(page, 'Integration')
+    await expect(inspected.detail).toContainText('Repair in progress')
+    await expect(inspected.detail).toContainText('A reviewed Integration repair is currently in progress.')
+    await expect(inspected.detail).toContainText('Conflicting files')
+    await expect(inspected.detail).toContainText('product.txt')
+    await expect(inspected.detail).not.toContainText('Admit the independently reviewed repair.')
+    await expect(inspected.detail).not.toContainText('Complete')
+    await page.screenshot({ path: testInfo.outputPath('delivery-wide-repair-inspector.png'), fullPage: true })
+    await closeInspector(page, inspected.trigger)
+
     inspected = await inspect(page, 'Build operator controls')
-    await expect(inspected.detail).toContainText('Active claim')
-    await expect(inspected.detail).toContainText('TASK-002')
+    await expect(inspected.detail).toContainText('Build OUT-002')
     await closeInspector(page, inspected.trigger)
 
     inspected = await inspect(page, 'Assemble release')
@@ -139,19 +172,38 @@ test.describe('assembled Delivery portfolio', () => {
     await page.setViewportSize({ width: 960, height: 800 })
     await page.goto('/delivery')
 
-    await expect(await visibleRows(page)).toHaveCount(6)
+    await expect(await visibleRows(page)).toHaveCount(8)
     await expect(page.getByTestId('work-portfolio-table')).toBeVisible()
     await expectNoHorizontalOverflow(page)
 
     const inspected = await inspect(page, 'Build operator controls')
     await expect(page.getByRole('button', { name: 'Close inspector' })).not.toBeVisible()
     await expect(page.getByRole('button', { name: 'Dismiss flyout' })).toBeVisible()
-    await expect(inspected.detail).toContainText('Active claim')
+    await expect(inspected.detail).toContainText('Build OUT-002')
     await page.screenshot({ path: testInfo.outputPath('delivery-compact-flyout.png') })
     await closeInspector(page, inspected.trigger)
 
     await expect(page.locator('p-flyout').filter({ has: page.getByTestId('work-item-detail') })).toHaveCount(0)
     await expectNoHorizontalOverflow(page)
+  })
+
+  test('mobile rows preserve field semantics without overflow', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('/delivery')
+
+    const rows = await visibleRows(page)
+    await expect(rows).toHaveCount(8)
+    const integrationRow = rows.filter({ hasText: 'Integration' })
+    for (const field of ['Needs', 'Work item', 'Stage', 'Progress', 'Activity', 'Action']) {
+      await expect(integrationRow.getByText(field, { exact: true })).toBeVisible()
+    }
+    await expect(integrationRow).toHaveAttribute('aria-label', 'Integration work item')
+    await expectNoHorizontalOverflow(page)
+    const accessibility = await new AxeBuilder({ page }).analyze()
+    const blocking = accessibility.violations.filter((violation) =>
+      violation.impact === 'serious' || violation.impact === 'critical')
+    expect(blocking, formatViolations(blocking)).toEqual([])
+    await page.screenshot({ path: testInfo.outputPath('delivery-mobile-rows.png'), fullPage: true })
   })
 
   test('split threshold preserves all table columns without horizontal scrolling', async ({ page }) => {
@@ -160,7 +212,7 @@ test.describe('assembled Delivery portfolio', () => {
 
     const inspected = await inspect(page, 'Build operator controls')
     await expect(page.getByRole('button', { name: 'Close inspector' })).toBeVisible()
-    await expect(inspected.detail).toContainText('Active claim')
+    await expect(inspected.detail).toContainText('Build OUT-002')
     await expectNoHorizontalOverflow(page)
   })
 
@@ -183,5 +235,14 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(page.getByTestId('completed-change-record')).toHaveCount(2)
     await expect(page.getByText('Alpha delivery', { exact: true })).toBeVisible()
     await page.screenshot({ path: testInfo.outputPath('delivery-completed-history.png'), fullPage: true })
+  })
+
+  test('unknown paths render the global Not Found view', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1280, height: 720 })
+    await page.goto('/delivery/work-e2e')
+
+    await expect(page.getByTestId('not-found-view')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+    await page.screenshot({ path: testInfo.outputPath('cockpit-not-found.png'), fullPage: true })
   })
 })

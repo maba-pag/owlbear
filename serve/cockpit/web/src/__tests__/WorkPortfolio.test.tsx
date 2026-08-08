@@ -124,6 +124,8 @@ const completed: CompletedChangeRecord = {
 let currentPortfolio: WorkItemPortfolioResponse
 let currentDetail: WorkItemDetailResponse
 let portfolioAfterIntegration: WorkItemPortfolioResponse | null
+let portfolioFailure: boolean
+let detailFailure: boolean
 let requests: Array<{ url: string; method: string; body: unknown }>
 
 function response(payload: unknown, status = 200): Response {
@@ -144,8 +146,12 @@ function installFetch() {
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null
     requests.push({ url, method, body })
 
-    if (method === 'GET' && url === '/api/work-items') return response(currentPortfolio)
-    if (method === 'GET' && url.startsWith('/api/changes/change-alpha/work-items/')) return response(currentDetail)
+    if (method === 'GET' && url === '/api/work-items') {
+      return portfolioFailure ? response({ detail: 'Temporary polling failure' }, 503) : response(currentPortfolio)
+    }
+    if (method === 'GET' && url.startsWith('/api/changes/change-alpha/work-items/')) {
+      return detailFailure ? response({ detail: 'Delivery runtime is absent: change-alpha' }, 409) : response(currentDetail)
+    }
     if (method === 'GET' && url === '/api/work-items/completed') {
       return response({ records: [completed], next_cursor: null })
     }
@@ -208,6 +214,8 @@ beforeEach(() => {
   currentPortfolio = portfolio()
   currentDetail = detail()
   portfolioAfterIntegration = null
+  portfolioFailure = false
+  detailFailure = false
   requests = []
   installFetch()
 })
@@ -224,9 +232,11 @@ it('presents Change-grouped rows with independent Needs, Stage, Progress, Activi
   expect(table).toHaveTextContent('Progress')
   expect(table).toHaveTextContent('Activity')
   expect(table).toHaveTextContent('Action')
-  expect(table).toHaveTextContent('builder working')
+  expect(table).toHaveTextContent('Builder working')
+  expect(table).not.toHaveTextContent('builder working')
   expect(table).toHaveTextContent('Decision required')
   expect(table).toHaveTextContent('Answer request')
+  expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('ready')
   expect(screen.queryByText('Reviewed', { exact: true })).not.toBeInTheDocument()
 })
 
@@ -363,7 +373,7 @@ it('shows structured Integration repair evidence while keeping raw diagnostics c
     work_item_id: 'change-alpha',
     scope: 'change-integration',
     title: 'Integration',
-    stage: 'completed',
+    stage: null,
     needs: 'repair',
     needs_headline: 'Merge conflict',
     activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
@@ -392,10 +402,103 @@ it('shows structured Integration repair evidence while keeping raw diagnostics c
 
   const inspector = await screen.findByTestId('work-item-detail')
   expect(inspector).toHaveTextContent('Merge conflict')
+  expect(inspector).toHaveTextContent('Conflicting files')
   expect(inspector).toHaveTextContent('serve/delivery/work_items.py')
   expect(inspector).toHaveTextContent('/integration-repair change-alpha')
   expect(screen.getByText('Technical evidence').closest('details')).not.toHaveAttribute('open')
   expect(screen.queryByText('Retry Integration')).not.toBeInTheDocument()
+  expect(inspector).not.toHaveTextContent('Complete')
+})
+
+it('keeps cached portfolio and inspector visible when a background refresh fails', async () => {
+  renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+  await screen.findByTestId('work-portfolio-table')
+  await screen.findByTestId('work-item-detail')
+  portfolioFailure = true
+
+  const alert = await screen.findByRole('alert', {}, { timeout: 4_000 })
+  expect(alert).toHaveTextContent('Showing the last successful refresh — live updates paused.')
+  expect(alert).toHaveTextContent('Temporary polling failure')
+  expect(alert).not.toHaveTextContent('Work portfolio is unavailable')
+  expect(screen.getByTestId('work-portfolio-table')).toBeInTheDocument()
+  expect(screen.getByTestId('work-item-detail')).toBeInTheDocument()
+}, 6_000)
+
+it('keeps backend detail collapsed when a selected Work Item is unavailable', async () => {
+  detailFailure = true
+  renderPage('/delivery/change-alpha/outcome%3AOUT-999')
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('This Work Item is unavailable.')
+  expect(alert).toHaveTextContent('Technical evidence')
+  const evidence = screen.getByText('Technical evidence').closest('details')
+  expect(evidence).not.toHaveAttribute('open')
+})
+
+it('explains returned Design progress and labels evidence without raw enum text', async () => {
+  currentDetail = detail({
+    card: card({
+      stage: 'design',
+      activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+      progress: { kind: 'design-return', label: 'Returned to Design — re-admission required', done: null, total: null },
+    }),
+    return_context: {
+      target: 'design',
+      reason: 'The admitted authority changed.',
+      locators: ['request:REQ-001'],
+      source_boundary: 'commit:abc123',
+      preserved_commit: null,
+    },
+  })
+  renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(inspector).toHaveTextContent('Returned to Design — re-admission required')
+  expect(inspector).toHaveTextContent('Evidence: request:REQ-001')
+  expect(inspector).toHaveTextContent('Source boundary: commit:abc123')
+  expect(inspector).not.toHaveTextContent('Next: request:REQ-001')
+})
+
+it('shows active Integration repair state without instructing a duplicate repair', async () => {
+  const integrationCard = card({
+    item_key: 'integration',
+    work_item_id: 'change-alpha',
+    scope: 'change-integration',
+    title: 'Integration',
+    stage: null,
+    needs: 'none',
+    needs_headline: null,
+    activity: { state: 'repairing', worker_role: 'integration-repairer', started_at: '2026-08-08T10:00:00Z', task_id: null },
+    progress: { kind: 'integration', label: 'Repair in progress', done: null, total: null },
+    action: { kind: 'none', label: null, command: null },
+  })
+  currentDetail = detail({
+    card: integrationCard,
+    promise: 'Publish the reviewed Change.',
+    acceptance: [],
+    commitments: [],
+    tasks: [],
+    integration: {
+      code: 'merge-conflict',
+      disposition: 'repair-required',
+      headline: 'Merge conflict',
+      explanation: 'One conflicting file requires a reviewed repair.',
+      conflicted_paths: ['serve/delivery/work_items.py'],
+      diagnostics: [],
+      retry_condition: 'Admit a reviewed repair.',
+      superseded: false,
+      repair_active: true,
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'integration', outcome_completed: 2, items: [integrationCard] })])
+  renderPage('/delivery/change-alpha/integration')
+
+  expect(await screen.findByTestId('work-portfolio-table')).toHaveTextContent('Integration repairer working')
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(inspector).toHaveTextContent('Repair in progress')
+  expect(inspector).toHaveTextContent('A reviewed Integration repair is currently in progress.')
+  expect(inspector).not.toHaveTextContent('Repair required')
+  expect(inspector).not.toHaveTextContent('Admit a reviewed repair.')
 })
 
 it('moves a completed selected Change into completed history instead of leaving a dead route', async () => {
@@ -404,7 +507,7 @@ it('moves a completed selected Change into completed history instead of leaving 
     work_item_id: 'change-alpha',
     scope: 'change-integration',
     title: 'Integration',
-    stage: 'completed',
+    stage: null,
     activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
     progress: { kind: 'integration', label: 'Not attempted', done: null, total: null },
     action: { kind: 'integrate-change', label: 'Integrate Change', command: null },
@@ -443,7 +546,7 @@ it('keeps current delivery open when only the selected Integration card disappea
     work_item_id: 'change-alpha',
     scope: 'change-integration',
     title: 'Integration',
-    stage: 'completed',
+    stage: null,
     activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
     progress: { kind: 'integration', label: 'Not attempted', done: null, total: null },
     action: { kind: 'integrate-change', label: 'Integrate Change', command: null },

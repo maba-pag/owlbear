@@ -37,6 +37,14 @@ export const routeConfig: RouteConfigEntry[] = [
   },
 ]
 
+export function routeForPath(pathname: string): RouteConfigEntry | undefined {
+  return routeConfig.find((route) => {
+    if (route.path !== '/delivery') return pathname === route.path
+    const segments = pathname.split('/').filter(Boolean)
+    return segments[0] === 'delivery' && (segments.length === 1 || segments.length === 3)
+  })
+}
+
 /** Superseded paths kept reachable so existing links and bookmarks still resolve. */
 export const legacyRouteRedirects: Array<{ from: string; to: string }> = [
   { from: '/', to: '/delivery' },

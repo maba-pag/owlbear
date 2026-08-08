@@ -1707,6 +1707,11 @@ def _canonical(payload: object) -> bytes:
 
 
 def _integration_retry_condition(code: DeliveryIntegrationAttentionCode) -> str:
+    if code == DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED:
+        return (
+            "Correct the Integration profile or failing candidate verification step, "
+            "then re-run Integration through Delivery orchestration."
+        )
     disposition = integration_attention_disposition(code)
     if disposition == DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED:
         return "Admit a reviewed Integration repair for this attention, then retry Integration."

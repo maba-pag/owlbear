@@ -291,10 +291,14 @@ def test_target_movement_supersedes_attention_and_offers_retry() -> None:
     card = projector.group_view().items[-1]
     detail = projector.show_view("integration")
 
-    assert card.progress.label == "Superseded"
+    assert card.progress.label == "Awaiting retry against current target"
     assert card.action.kind == WorkItemActionKind.RETRY_INTEGRATION
     assert detail.integration is not None
     assert detail.integration.superseded
+    assert detail.integration.conflicted_paths == ()
+    assert detail.integration.retry_condition == (
+        "Retry Integration against the current target head; the previous verdict is stale."
+    )
 
 
 def test_repair_activity_and_conflict_paths_use_retained_evidence() -> None:
@@ -336,6 +340,9 @@ def test_repair_activity_and_conflict_paths_use_retained_evidence() -> None:
     card = projector.group_view().items[-1]
     detail = projector.show_view("integration")
 
+    assert card.stage is None
+    assert card.needs == WorkItemNeed.NONE
+    assert card.needs_headline is None
     assert card.activity.state == WorkItemActivityState.REPAIRING
     assert card.action.kind == WorkItemActionKind.NONE
     assert detail.integration is not None
@@ -344,7 +351,7 @@ def test_repair_activity_and_conflict_paths_use_retained_evidence() -> None:
     assert integration_conflict_paths(("CONFLICT (content): Merge conflict in docs/a in b.md",)) == ("docs/a in b.md",)
 
 
-def test_candidate_proof_failure_offers_retry() -> None:
+def test_candidate_proof_failure_requires_operator_correction() -> None:
     attention = DeliveryIntegrationAttention(
         attention_id="a" * 64,
         code=DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED,
@@ -367,5 +374,6 @@ def test_candidate_proof_failure_offers_retry() -> None:
 
     card = projector.group_view().items[-1]
 
-    assert card.needs == WorkItemNeed.NONE
-    assert card.action.kind == WorkItemActionKind.RETRY_INTEGRATION
+    assert card.needs == WorkItemNeed.YOU
+    assert card.needs_headline == "Candidate verification failed"
+    assert card.action.kind == WorkItemActionKind.NONE

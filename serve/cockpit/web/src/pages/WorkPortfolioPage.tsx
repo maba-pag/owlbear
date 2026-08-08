@@ -21,9 +21,11 @@ function PortfolioStatusSummary({ totals }: { totals: WorkItemPortfolioTotals })
     <>
       <WorkspaceHeaderMetric value={totals.total} label={totals.total === 1 ? 'work item' : 'work items'} />
       <WorkspaceHeaderMetric value={totals.needs.you} label="need you" tone={totals.needs.you > 0 ? 'error' : 'neutral'} />
-      <WorkspaceHeaderMetric value={totals.needs.dependency} label="waiting" />
+      <WorkspaceHeaderMetric value={totals.needs.dependency} label="dependency" />
       <WorkspaceHeaderMetric value={totals.needs.repair} label="need repair" tone={totals.needs.repair > 0 ? 'error' : 'neutral'} />
       <WorkspaceHeaderMetric value={totals.activity.working + totals.activity.repairing} label="active" />
+      <WorkspaceHeaderMetric value={totals.activity.ready} label="ready" />
+      <WorkspaceHeaderMetric value={totals.complete} label="complete" />
     </>
   )
 }
@@ -243,7 +245,11 @@ function PortfolioWorkspace({
 function EmptyDetail({ error, retry, onClose }: { error: Error | null; retry: () => void; onClose: () => void }) {
   if (error) return (
     <div className="grid gap-static-sm" role="alert">
-      <span>This Work Item is unavailable. It may have completed or the link may be invalid. {error.message}</span>
+      <span>This Work Item is unavailable. It may have completed or the link may be invalid.</span>
+      <details>
+        <summary className="cursor-pointer text-xs font-semibold">Technical evidence</summary>
+        <p className="mt-static-xs break-words text-xs text-contrast-medium">{error.message}</p>
+      </details>
       <div className="flex flex-wrap gap-static-sm"><PButton type="button" variant="secondary" onClick={retry}>Retry item</PButton><PButton type="button" variant="secondary" onClick={onClose}>Back to current delivery</PButton></div>
     </div>
   )
@@ -263,6 +269,7 @@ export default function WorkPortfolioPage() {
   const selected = parseSelection(location.pathname)
   const selectedIdentity = selected ? `${selected.changeId}:${selected.itemKey}` : null
   const lastTrigger = useRef<HTMLAnchorElement | null>(null)
+  const lastTriggerIdentity = useRef<string | null>(null)
   const restoreFocusAfterClose = useRef(false)
   const selectedWasPresent = useRef(false)
   const changes = portfolio.groups.map((group) => ({ id: group.change_id, title: group.title }))
@@ -286,7 +293,10 @@ export default function WorkPortfolioPage() {
     let secondFrame: number | null = null
     const firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
-        lastTrigger.current?.focus()
+        const primaryTrigger = Array.from(document.querySelectorAll<HTMLAnchorElement>('[data-work-item-primary-trigger]'))
+          .find((candidate) => candidate.dataset.workItemIdentity === lastTriggerIdentity.current)
+        const focusTarget = lastTrigger.current?.isConnected ? lastTrigger.current : primaryTrigger
+        focusTarget?.focus()
         restoreFocusAfterClose.current = false
       })
     })
@@ -355,16 +365,19 @@ export default function WorkPortfolioPage() {
             {error ? (
               <section className="flex flex-wrap items-center gap-static-sm border-l-4 border-danger bg-surface p-static-md" role="alert">
                 <PIcon name="error" aria-hidden="true" />
-                <span className="min-w-0 flex-1">Work portfolio is unavailable. {error.message}</span>
+                <span className="min-w-0 flex-1">{hasData ? 'Showing the last successful refresh — live updates paused.' : 'Work portfolio is unavailable.'} {error.message}</span>
                 <PButton type="button" variant="secondary" onClick={retry}>Retry portfolio</PButton>
               </section>
             ) : null}
 
-            {hasData && !error ? (
+            {hasData ? (
               <PortfolioWorkspace
                 groups={filteredGroups}
                 selected={selected}
-                onSelect={(_identity, trigger) => { lastTrigger.current = trigger }}
+                onSelect={(identity, trigger) => {
+                  lastTrigger.current = trigger
+                  lastTriggerIdentity.current = `${identity.changeId}:${identity.itemKey}`
+                }}
                 onClose={closeInspector}
                 onChanged={retry}
               />

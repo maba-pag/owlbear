@@ -205,7 +205,7 @@ class WorkItemCardView(_ProjectionModel):
     change_id: str = Field(min_length=1)
     scope: WorkItemScope
     title: str = Field(min_length=1)
-    stage: WorkItemStage
+    stage: WorkItemStage | None
     needs: WorkItemNeed
     needs_headline: str | None = None
     activity: WorkItemActivity
@@ -481,8 +481,8 @@ class WorkItemProjector:
         attention = self._snapshot.frontier.integration_attention
         repair_active = self._snapshot.frontier.integration_repair_claim is not None
         if repair_active:
-            needs = WorkItemNeed.REPAIR
-            headline = "Repair in progress"
+            needs = WorkItemNeed.NONE
+            headline = None
             activity = WorkItemActivity(
                 state=WorkItemActivityState.REPAIRING,
                 worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER,
@@ -495,7 +495,7 @@ class WorkItemProjector:
             headline = "Integration target moved"
             activity = WorkItemActivity(state=WorkItemActivityState.READY)
             action = WorkItemAction(kind=WorkItemActionKind.RETRY_INTEGRATION, label="Retry Integration")
-            progress = "Superseded"
+            progress = "Awaiting retry against current target"
         elif attention is None:
             needs = WorkItemNeed.NONE
             headline = None
@@ -528,7 +528,7 @@ class WorkItemProjector:
             change_id=self._snapshot.contract.change_id,
             scope=WorkItemScope.CHANGE_INTEGRATION,
             title="Integration",
-            stage=WorkItemStage.COMPLETED,
+            stage=None,
             needs=needs,
             needs_headline=headline,
             activity=activity,
@@ -547,6 +547,8 @@ class WorkItemProjector:
             if card.activity.state in {WorkItemActivityState.READY, WorkItemActivityState.WORKING}
             else WorkItemAttention.NONE,
         }[card.needs]
+        if card.scope == WorkItemScope.CHANGE_INTEGRATION and card.activity.state == WorkItemActivityState.REPAIRING:
+            attention = WorkItemAttention.REPAIR
         return WorkItemProjection(
             work_item_id=card.work_item_id,
             change_id=card.change_id,
@@ -555,7 +557,7 @@ class WorkItemProjector:
             promise=outcome.promise
             if outcome is not None
             else "Publish the reviewed change and completed history to the Integration target.",
-            stage=card.stage,
+            stage=card.stage or WorkItemStage.COMPLETED,
             attention=attention,
             dependency_ready=card.needs != WorkItemNeed.DEPENDENCY,
             commitment_ids=outcome.commitment_ids if outcome is not None else (),
@@ -643,9 +645,13 @@ class WorkItemProjector:
             disposition=integration_attention_disposition(attention.code),
             headline=headline,
             explanation=explanation,
-            conflicted_paths=paths,
+            conflicted_paths=() if superseded else paths,
             diagnostics=attention.diagnostics,
-            retry_condition=attention.retry_condition,
+            retry_condition=(
+                "Retry Integration against the current target head; the previous verdict is stale."
+                if superseded
+                else attention.retry_condition
+            ),
             superseded=superseded,
             repair_active=repair_active,
         )

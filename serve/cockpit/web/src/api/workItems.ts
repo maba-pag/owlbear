@@ -21,6 +21,7 @@ export type DeliveryIntegrationAttentionCode =
   | 'completed-history-mutated'
   | 'reviewed-boundary-mismatch'
   | 'merge-conflict'
+  | 'repair-authority'
   | 'candidate-proof-failed'
   | 'target-cas-lost'
 
@@ -50,7 +51,7 @@ export interface WorkItemCardView {
   change_id: string
   scope: WorkItemScope
   title: string
-  stage: WorkItemStage
+  stage: WorkItemStage | null
   needs: WorkItemNeed
   needs_headline: string | null
   activity: WorkItemActivity

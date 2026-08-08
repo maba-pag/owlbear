@@ -58,6 +58,7 @@ class _DeliveryApplicationFake:
         self.calls: list[tuple[str, tuple[object, ...]]] = []
         self.integration_attention: DeliveryIntegrationAttention | None = None
         self.integration_superseded = False
+        self.integration_repair_active = False
         self.integration_started: threading.Event | None = None
         self.integration_release: threading.Event | None = None
 
@@ -77,10 +78,29 @@ class _DeliveryApplicationFake:
                 change_id="change-b",
                 title="Change B",
                 snapshot_version="b" * 64,
-                lifecycle=WorkItemChangeLifecycle.IN_DELIVERY,
+                lifecycle=WorkItemChangeLifecycle.INTEGRATION,
                 outcome_total=1,
-                outcome_completed=0,
-                items=(_card("change-b", "OUT-002", WorkItemNeed.NONE),),
+                outcome_completed=1,
+                items=(
+                    _card("change-b", "OUT-002", WorkItemNeed.NONE).model_copy(
+                        update={"stage": WorkItemStage.COMPLETED}
+                    ),
+                    WorkItemCardView(
+                        item_key="integration",
+                        work_item_id="change-b",
+                        change_id="change-b",
+                        scope=WorkItemScope.CHANGE_INTEGRATION,
+                        title="Integration",
+                        stage=None,
+                        needs=WorkItemNeed.NONE,
+                        activity=WorkItemActivity(state=WorkItemActivityState.IDLE),
+                        progress=WorkItemProgress(
+                            kind=WorkItemProgressKind.INTEGRATION,
+                            label="Ready to integrate",
+                        ),
+                        action=WorkItemAction(),
+                    ),
+                ),
             ),
         )
 
@@ -93,7 +113,7 @@ class _DeliveryApplicationFake:
                 change_id=change_id,
                 scope=WorkItemScope.CHANGE_INTEGRATION,
                 title="Integration",
-                stage=WorkItemStage.COMPLETED,
+                stage=None,
                 needs=WorkItemNeed.REPAIR if self.integration_attention else WorkItemNeed.NONE,
                 activity=WorkItemActivity(state=WorkItemActivityState.IDLE),
                 progress=WorkItemProgress(kind=WorkItemProgressKind.INTEGRATION, label="Attempt failed"),
@@ -113,6 +133,7 @@ class _DeliveryApplicationFake:
                     if self.integration_superseded
                     else "One conflict requires repair.",
                     superseded=self.integration_superseded,
+                    repair_active=self.integration_repair_active,
                 ),
             )
         return WorkItemDetailView(
@@ -245,10 +266,10 @@ def test_list_and_detail_expose_current_bounded_delivery_state() -> None:
 
     assert portfolio.status_code == 200
     assert portfolio.json()["totals"] == {
-        "total": 2,
-        "complete": 0,
-        "needs": {"you": 1, "dependency": 0, "repair": 0, "none": 1},
-        "activity": {"idle": 0, "ready": 2, "working": 0, "repairing": 0},
+        "total": 3,
+        "complete": 1,
+        "needs": {"you": 1, "dependency": 0, "repair": 0, "none": 2},
+        "activity": {"idle": 1, "ready": 2, "working": 0, "repairing": 0},
     }
     first = portfolio.json()["groups"][0]["items"][0]
     assert first["stage"] == "planning"
@@ -382,6 +403,33 @@ def test_superseded_integration_attention_can_retry() -> None:
         "show",
         "integration-retry",
     ]
+
+
+def test_active_integration_repair_rejects_retry_after_target_moves() -> None:
+    client, application = _client()
+    application.integration_attention = DeliveryIntegrationAttention(
+        attention_id="a" * 64,
+        code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
+        change_id="change-a",
+        change_head="b" * 40,
+        target_head="c" * 40,
+        integration_target="dev",
+        diagnostics=("conflict",),
+        retry_condition="Admit a reviewed Integration repair, then retry.",
+    )
+    application.integration_superseded = True
+    application.integration_repair_active = True
+
+    response = client.post("/api/changes/change-a/integration/retry")
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "ERR_DELIVERY_INTEGRATION_ACTION_REQUIRED",
+        "detail": "A reviewed Integration repair is already in progress.",
+        "authority": "delivery",
+        "retry_safe": False,
+    }
+    assert [name for name, _args in application.calls] == ["integration-attention", "show"]
 
 
 def test_integration_retry_is_single_flight_per_change() -> None:

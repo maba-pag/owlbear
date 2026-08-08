@@ -283,10 +283,7 @@ def integration_attention_disposition(
     code: DeliveryIntegrationAttentionCode,
 ) -> DeliveryIntegrationAttentionDisposition:
     """Return the single operational route owned by an Integration attention code."""
-    if code in {
-        DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED,
-        DeliveryIntegrationAttentionCode.TARGET_CAS_LOST,
-    }:
+    if code == DeliveryIntegrationAttentionCode.TARGET_CAS_LOST:
         return DeliveryIntegrationAttentionDisposition.RETRYABLE
     if code == DeliveryIntegrationAttentionCode.MERGE_CONFLICT:
         return DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED

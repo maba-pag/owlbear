@@ -22,6 +22,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryRequest,
     DeliveryRequestKind,
     DeliveryRequestOption,
+    DeliveryReturnContext,
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
@@ -156,15 +157,6 @@ def _current_bindings(contract: DeliveryContract, head: str) -> tuple[OutcomeAut
             plan_scope_id="SCOPE-002",
             stage=DeliveryStage.IMPLEMENTATION,
             tasks=(build_task,),
-            active_claim=DeliveryActiveClaim(
-                attempt_id="attempt-work-e2e",
-                claim_id="claim-work-e2e",
-                owner_id="owner-work-e2e",
-                process_id="process-work-e2e",
-                started_at="2026-08-04T12:00:00Z",
-                worker_role=DeliveryWorkerRole.BUILDER,
-                task_id=build_task.task_id,
-            ),
         ),
         OutcomeAuthorityBinding(
             outcome_id="OUT-003",
@@ -177,7 +169,13 @@ def _current_bindings(contract: DeliveryContract, head: str) -> tuple[OutcomeAut
         OutcomeAuthorityBinding(
             outcome_id="OUT-004",
             plan_scope_id="SCOPE-004",
-            stage=DeliveryStage.PLANNING,
+            stage=DeliveryStage.DESIGN,
+            return_context=DeliveryReturnContext(
+                target=DeliveryStage.DESIGN,
+                reason="The admitted release-note authority changed.",
+                locators=("request:release-notes-authority",),
+                source_boundary="design:release-notes-v2",
+            ),
         ),
         OutcomeAuthorityBinding(
             outcome_id="OUT-005",
@@ -194,7 +192,7 @@ def _current_bindings(contract: DeliveryContract, head: str) -> tuple[OutcomeAut
     )
 
 
-def _write_current_delivery(target_root: Path, repository: Path, worktrees: Path, head: str) -> None:
+def _write_current_delivery(target_root: Path, head: str) -> None:
     outcomes = (
         _outcome("OUT-001", "Choose release mode", "Resolve the bounded release decision."),
         _outcome("OUT-002", "Build operator controls", "Ship exact Delivery controls."),
@@ -206,23 +204,58 @@ def _write_current_delivery(target_root: Path, repository: Path, worktrees: Path
     contract = _contract("work-e2e", "Work portfolio E2E", outcomes)
     frontier = DeliveryFrontier(
         bindings=_current_bindings(contract, head),
+    )
+    change_root = target_root / "delivery/changes" / contract.change_id
+    change_root.mkdir(parents=True, exist_ok=True)
+    (change_root / "contract.json").write_bytes(_canonical(contract))
+    (change_root / "frontier.json").write_bytes(_canonical(frontier))
+
+
+def _write_repair_delivery(target_root: Path, head: str) -> None:
+    contract = _contract(
+        "repair-e2e",
+        "Repair release",
+        (_outcome("OUT-001", "Verify repaired release", "Publish the reviewed repair."),),
+    )
+    task = _task("OUT-001", 1)
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(
+                outcome_id="OUT-001",
+                plan_scope_id="SCOPE-001",
+                stage=DeliveryStage.COMPLETED,
+                tasks=(task,),
+                results=(_result(contract, task, head),),
+            ),
+        ),
         integration_attention=DeliveryIntegrationAttention(
-            attention_id=hashlib.sha256(b"work-e2e-integration-attention").hexdigest(),
-            code=DeliveryIntegrationAttentionCode.TARGET_CAS_LOST,
+            attention_id=hashlib.sha256(b"repair-e2e-integration-attention").hexdigest(),
+            code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
             change_id=contract.change_id,
             change_head=head,
             target_head=head,
             integration_target="main",
-            diagnostics=("The Integration target moved before publication.",),
-            retry_condition="Retry Integration against the current target head.",
+            diagnostics=(
+                f"100644 {'1' * 40} 1\tproduct.txt",
+                f"100644 {'2' * 40} 2\tproduct.txt",
+                f"100644 {'3' * 40} 3\tproduct.txt",
+                "CONFLICT (content): Merge conflict in product.txt",
+            ),
+            retry_condition="Admit the independently reviewed repair.",
+        ),
+        integration_repair_claim=DeliveryActiveClaim(
+            attempt_id="repair-attempt-work-e2e",
+            claim_id="repair-claim-work-e2e",
+            owner_id="repair-owner-work-e2e",
+            process_id="repair-process-work-e2e",
+            started_at="2026-08-04T12:05:00Z",
+            worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER,
         ),
     )
     change_root = target_root / "delivery/changes" / contract.change_id
     change_root.mkdir(parents=True, exist_ok=True)
     (change_root / "contract.json").write_bytes(_canonical(contract))
     (change_root / "frontier.json").write_bytes(_canonical(frontier))
-    coordinator = PortfolioCoordinator(target_root, capacity=1)
-    ChangeWorkspaceManager(repository, worktrees, coordinator, "main").create(contract.change_id)
 
 
 def _completion_content(change_id: str, title: str, reviewed_head: str) -> dict[str, bytes]:
@@ -303,7 +336,12 @@ def seed_delivery(workspace: Path) -> None:
     target_root = workspace / ".owlbear/target"
     worktrees = workspace / ".owlbear/worktrees"
     head = _seed_repository(repository)
-    _write_current_delivery(target_root, repository, worktrees, head)
+    _write_current_delivery(target_root, head)
+    _write_repair_delivery(target_root, head)
+    coordinator = PortfolioCoordinator(target_root, capacity=2)
+    workspace_manager = ChangeWorkspaceManager(repository, worktrees, coordinator, "main")
+    workspace_manager.create("work-e2e")
+    workspace_manager.create("repair-e2e")
     _write_config(workspace)
 
 

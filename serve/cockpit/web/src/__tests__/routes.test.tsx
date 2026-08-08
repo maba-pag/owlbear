@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { legacyRouteRedirects, routeConfig } from '../routes'
+import { legacyRouteRedirects, routeConfig, routeForPath } from '../routes'
 
 describe('RoutesConfigContracts', () => {
   it('exposes exactly target work and preserved utility routes', () => {
@@ -31,5 +31,13 @@ describe('RoutesConfigContracts', () => {
     const workEntry = routeConfig.find((entry) => entry.path === '/delivery')
     expect(workEntry?.component).toBeDefined()
     expect((workEntry?.component as { $$typeof?: symbol })?.$$typeof).toBe(Symbol.for('react.lazy'))
+  })
+
+  it('matches only valid route families and rejects malformed deep links', () => {
+    expect(routeForPath('/delivery')?.path).toBe('/delivery')
+    expect(routeForPath('/delivery/change-alpha/outcome%3AOUT-001')?.path).toBe('/delivery')
+    expect(routeForPath('/delivery/change-alpha')).toBeUndefined()
+    expect(routeForPath('/delivery/change-alpha/outcome%3AOUT-001/extra')).toBeUndefined()
+    expect(routeForPath('/unknown')).toBeUndefined()
   })
 })

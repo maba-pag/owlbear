@@ -54,7 +54,6 @@ from owlbear_delivery import (
 def test_integration_attention_codes_have_one_operational_disposition() -> None:
     expected = {
         DeliveryIntegrationAttentionCode.MERGE_CONFLICT: DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED,
-        DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED: DeliveryIntegrationAttentionDisposition.RETRYABLE,
         DeliveryIntegrationAttentionCode.TARGET_CAS_LOST: DeliveryIntegrationAttentionDisposition.RETRYABLE,
     }
 

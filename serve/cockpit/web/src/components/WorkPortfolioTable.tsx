@@ -38,13 +38,22 @@ const LIFECYCLE_LABELS: Record<WorkItemChangeLifecycle, string> = {
   integration: 'Integration',
 }
 
+const WORKER_ROLE_LABELS: Record<NonNullable<WorkItemActivity['worker_role']>, string> = {
+  planner: 'Planner',
+  builder: 'Builder',
+  'assembly-reviewer': 'Assembly reviewer',
+  'integration-repairer': 'Integration repairer',
+}
+
 function workItemPath(item: WorkItemCardView): string {
   return `/delivery/${encodeURIComponent(item.change_id)}/${encodeURIComponent(item.item_key)}`
 }
 
 function activityLabel(activity: WorkItemActivity): string {
-  if (activity.state === 'working' && activity.worker_role) return `${activity.worker_role} working`
-  if (activity.state === 'repairing') return 'Repairing'
+  if (activity.state === 'working' && activity.worker_role) return `${WORKER_ROLE_LABELS[activity.worker_role]} working`
+  if (activity.state === 'repairing') {
+    return activity.worker_role ? `${WORKER_ROLE_LABELS[activity.worker_role]} working` : 'Repairing'
+  }
   if (activity.state === 'ready') return 'Ready'
   return 'Idle'
 }
@@ -72,11 +81,13 @@ function ItemLink({
   return (
     <Link
       to={workItemPath(item)}
-      className="block min-w-0 py-1 font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+      data-work-item-primary-trigger
+      data-work-item-identity={`${item.change_id}:${item.item_key}`}
+      className="block min-w-0 py-1 font-semibold text-primary underline-offset-4 after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
       aria-current={selected ? 'location' : undefined}
       onClick={(event) => onSelect(identity, event.currentTarget)}
     >
-      <span className="block truncate">{item.title}</span>
+      <span className="block overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{item.title}</span>
       <span className="block text-xs font-normal text-contrast-medium">{item.scope === 'outcome' ? item.work_item_id : 'Change Integration'}</span>
     </Link>
   )
@@ -118,12 +129,12 @@ function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
       <table className="w-full min-w-[48rem] table-fixed border-collapse text-left text-sm">
         <caption className="sr-only">Current Work Items for {group.title}</caption>
         <colgroup>
-          <col className="w-[13%]" />
-          <col className="w-[24%]" />
-          <col className="w-[13%]" />
-          <col className="w-[21%]" />
+          <col className="w-[12%]" />
+          <col className="w-[28%]" />
           <col className="w-[15%]" />
-          <col className="w-[14%]" />
+          <col className="w-[19%]" />
+          <col className="w-[16%]" />
+          <col className="w-[10%]" />
         </colgroup>
         <thead>
           <tr className="border-b border-contrast-low text-2xs font-semibold uppercase text-contrast-high">
@@ -141,12 +152,12 @@ function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
             return (
               <tr
                 key={workItemIdentity(item)}
-                className={['border-b border-contrast-low align-top', isSelected ? 'bg-frosted-soft' : 'hover:bg-surface'].join(' ')}
+                className={['relative border-b border-contrast-low align-top', isSelected ? 'bg-frosted-soft' : 'hover:bg-surface'].join(' ')}
                 data-work-item={workItemIdentity(item)}
               >
                 <td className="px-static-sm py-static-sm"><Need item={item} /></td>
                 <td className="px-static-sm py-static-xs"><ItemLink item={item} selected={isSelected} onSelect={onSelect} /></td>
-                <td className="px-static-sm py-static-sm font-medium">{STAGE_LABELS[item.stage]}</td>
+                <td className="px-static-sm py-static-sm font-medium">{item.stage ? STAGE_LABELS[item.stage] : '—'}</td>
                 <td className="px-static-sm py-static-sm text-contrast-medium">{item.progress.label}</td>
                 <td className="px-static-sm py-static-sm text-contrast-medium">{activityLabel(item.activity)}</td>
                 <td className="px-static-sm py-static-xs"><ActionLink item={item} onSelect={onSelect} /></td>
@@ -167,18 +178,19 @@ function CompactRows({ group, selected, onSelect }: GroupTableProps) {
         return (
           <article
             key={workItemIdentity(item)}
-            className={['grid gap-static-sm border-b border-contrast-low py-static-md', isSelected ? 'bg-frosted-soft px-static-xs' : ''].join(' ')}
+            className={['relative grid gap-static-sm border-b border-contrast-low py-static-md', isSelected ? 'bg-frosted-soft px-static-xs' : ''].join(' ')}
             data-work-item={workItemIdentity(item)}
+            aria-label={`${item.title} work item`}
           >
             <div className="grid grid-cols-[minmax(6rem,0.7fr)_minmax(0,1.5fr)_auto] items-start gap-static-sm">
-              <Need item={item} />
-              <ItemLink item={item} selected={isSelected} onSelect={onSelect} />
-              <span className="text-xs font-medium">{STAGE_LABELS[item.stage]}</span>
+              <div className="grid gap-1"><span className="text-2xs font-semibold uppercase text-contrast-medium">Needs</span><Need item={item} /></div>
+              <div className="grid min-w-0 gap-1"><span className="text-2xs font-semibold uppercase text-contrast-medium">Work item</span><ItemLink item={item} selected={isSelected} onSelect={onSelect} /></div>
+              <div className="grid gap-1"><span className="text-2xs font-semibold uppercase text-contrast-medium">Stage</span><span className="text-xs font-medium">{item.stage ? STAGE_LABELS[item.stage] : '—'}</span></div>
             </div>
             <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-static-sm text-xs text-contrast-medium">
-              <span>{item.progress.label}</span>
-              <span>{activityLabel(item.activity)}</span>
-              <ActionLink item={item} onSelect={onSelect} />
+              <div className="grid gap-1"><span className="text-2xs font-semibold uppercase">Progress</span><span>{item.progress.label}</span></div>
+              <div className="grid gap-1"><span className="text-2xs font-semibold uppercase">Activity</span><span>{activityLabel(item.activity)}</span></div>
+              <div className="grid gap-1"><span className="text-2xs font-semibold uppercase">Action</span><ActionLink item={item} onSelect={onSelect} /></div>
             </div>
           </article>
         )
