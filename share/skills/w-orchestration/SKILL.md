@@ -16,6 +16,12 @@ If target tools are deferred, load them once with `tool_search` using:
 
 `OwlBear Delivery target portfolio list_work_items acquire_frontier_work transition_delivery recover_claim recover_integration_repair_claim publish_integration_repair_authority_attention integrate_ready_change`
 
+Before calling `acquire_frontier_work`, require callable bindings for both `recover_claim` and
+`recover_integration_repair_claim`. Run one focused `tool_search` for each missing recovery
+operation. If either binding remains unavailable or its focused search returns a tool error, report
+the exact missing operation and end the session without acquisition. Recovery is required dispatch
+safety authority, not an optional operation to discover after a claim has been acquired.
+
 Call `list_work_items` only for bounded portfolio reporting. Call `acquire_frontier_work` once for the
 current cycle. Its `DeliveryAcquisitionResult` is the sole source of task and repair launch order,
 `integration_ready_change_ids`, non-retryable `integration_attention`, acquisition failures, and
@@ -57,9 +63,8 @@ If Planner or Builder dispatch otherwise fails before returning a structurally v
 use that same exact `recover_claim` request. Recovery attention remains runtime-owned evidence;
 report it without interpreting Git, liveness, or custody. An acquisition failure carrying attempt
 and claim IDs uses the same route. A failure without claim IDs is reported as bounded acquisition
-attention and is not recoverable by Orchestrator. Do not report `recover_claim` as unavailable
-unless the bootstrap operation or the exact recovery call returned a recorded tool error; a missing
-local tool binding requires one focused `tool_search` for `recover_claim` before stopping.
+attention and is not recoverable by Orchestrator. Do not report a recovery operation as unavailable
+unless its Step 1 focused search or an exact recovery call returned a recorded tool error.
 
 ## Step 3 - Forward One Worker Transition
 

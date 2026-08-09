@@ -43,6 +43,7 @@ def test_init_writes_settings_without_hook_locations_and_with_local_hints(
     owlbear_rel_path = Path(os.path.relpath(_REPO_ROOT, target_dir)).as_posix()
 
     assert "chat.hookFilesLocations" not in data
+    assert data["chat.agentHost.copilot.toolSearch.enabled"] is True
     assert data["chat.agentFilesLocations"] == {
         f"{owlbear_rel_path}/share/agents": True,
         ".owlbear/agents": True,

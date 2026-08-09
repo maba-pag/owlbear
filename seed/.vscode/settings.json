@@ -5,6 +5,7 @@
     ".owlbear/agents": true,
     "{{owlbear_rel_path}}/share/agents": true
   },
+  "chat.agentHost.copilot.toolSearch.enabled": true,
   "chat.agentSkillsLocations": {
     ".owlbear/skills": true,
     "{{owlbear_rel_path}}/share/skills": true
