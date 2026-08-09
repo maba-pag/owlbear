@@ -252,23 +252,6 @@ Validate OwlBear agent files against conventions.
 - `def validate_agent(agent_file: Path) -> list[str]`
 - `def main(argv: list[str] | None = None) -> int`
 
-## .owlbear/scripts/validate_memory_agents.py
-
-Validate memory provenance and scopes against active custom agents.
-
-### Imports
-
-- `__future__`
-- `owlbear_memory`
-- `owlbear_memory_mcp.agents`
-- `pathlib`
-- `sys`
-
-### Interfaces
-
-- `def validate_memory_agents(workspace_root: Path) -> list[str]`
-- `def main() -> int`
-
 ## .owlbear/scripts/validate_skills.py
 
 Validate OwlBear skill directories against the Agent Skills Spec.
@@ -808,6 +791,7 @@ Strict HTTP models for current Delivery work and operator controls.
 
 - `__future__`
 - `owlbear_delivery.delivery_runtime`
+- `owlbear_delivery.portfolio_operating`
 - `owlbear_delivery.work_items`
 - `pydantic`
 - `typing`
@@ -820,6 +804,7 @@ Strict HTTP models for current Delivery work and operator controls.
 - `class WorkItemPortfolioTotals(_TargetHTTPModel)`
 - `class WorkItemPortfolioResponse(_TargetHTTPModel)`
 - `class WorkItemDetailResponse(_TargetHTTPModel)`
+- `class DesignWorkDetailResponse(_TargetHTTPModel)`
 - `class AnswerRequestBody(_TargetHTTPModel)`
   - `def _require_answer(self) -> AnswerRequestBody`
 - `class ClearBlockBody(_TargetHTTPModel)`
@@ -908,6 +893,7 @@ Delivery work-item and operator HTTP adapter.
 - `owlbear_delivery.change_workspace`
 - `owlbear_delivery.completed_history`
 - `owlbear_delivery.delivery_runtime`
+- `owlbear_delivery.design_package`
 - `owlbear_delivery.portfolio_application`
 - `owlbear_delivery.work_items`
 - `threading`
@@ -925,6 +911,7 @@ Delivery work-item and operator HTTP adapter.
   - `def __init__(self, application: PortfolioApplication) -> None`
   - `def list_items(self) -> WorkItemPortfolioResponse`
   - `def show_item(self, change_id: str, item_key: str) -> WorkItemDetailResponse`
+  - `def show_design_work(self, change_id: str) -> DesignWorkDetailResponse`
   - `def answer_request(self, change_id: str, request_id: str, body: AnswerRequestBody) -> object`
   - `def clear_block(self, change_id: str, outcome_id: str, block_id: str, body: ClearBlockBody) -> object`
   - `def recover_claim(self, change_id: str, outcome_id: str, body: ConfirmLostClaimBody) -> object`
@@ -1022,7 +1009,8 @@ Seed real Delivery owners and completed history for assembled Work E2E.
 - `def _task(outcome_id: str, index: int) -> DeliveryTaskDefinition`
 - `def _result(contract: DeliveryContract, task: DeliveryTaskDefinition, head: str) -> DeliveryTaskResult`
 - `def _current_bindings(contract: DeliveryContract, head: str) -> tuple[OutcomeAuthorityBinding, ...]`
-- `def _write_current_delivery(target_root: Path, repository: Path, worktrees: Path, head: str) -> None`
+- `def _write_current_delivery(target_root: Path, head: str) -> None`
+- `def _write_repair_delivery(target_root: Path, head: str) -> None`
 - `def _completion_content(change_id: str, title: str, reviewed_head: str) -> dict[str, bytes]`
 - `def _publish_completion(repository: Path, change_id: str, title: str, reviewed_head: str) -> str`
 - `def _seed_repository(repository: Path) -> str`
@@ -1044,6 +1032,7 @@ OwlBear target delivery authority, runtime, and cutover package.
 - `owlbear_delivery.design_package`
 - `owlbear_delivery.integration_verification`
 - `owlbear_delivery.portfolio_application`
+- `owlbear_delivery.portfolio_operating`
 - `owlbear_delivery.proof_checkout`
 - `owlbear_delivery.snapshot`
 - `owlbear_delivery.target_admission`
@@ -1499,6 +1488,7 @@ Replay-safe authored Design packages and semantic Git checkpoints.
   - `def __init__(self, active_root: Path, repository: Path, *, failure: Callable[[str], None] | None = None) -> None`
   - `def create(self, change_id: str, intent_bytes: bytes, design_bytes: bytes) -> DesignPackageResult`
   - `def read_verified(self, change_id: str) -> VerifiedDesignPackage`
+  - `def list_verified(self) -> tuple[VerifiedDesignPackage, ...]`
   - `def revise(self, change_id: str, expected_package_id: str, intent_bytes: bytes, design_bytes: bytes) -> VerifiedDesignPackage`
   - `def publish_contract(self, change_id: str, expected_package_id: str, contract_bytes: bytes, validation_callback: Callable[[bytes, bytes, bytes], None]) -> VerifiedDesignPackage`
   - `def checkpoint(self, change_id: str) -> DesignCheckpointResult`
@@ -1507,6 +1497,7 @@ Replay-safe authored Design packages and semantic Git checkpoints.
   - `def cleanup_completed(self, change_id: str, expected_package_id: str) -> None`
   - `def _existing_content(self, change_id: str) -> dict[str, bytes] | None`
   - `def _verify_package(self, change_id: str) -> tuple[DesignPackageManifest, dict[str, bytes]]`
+  - `def _verified_package(change_id: str, manifest: DesignPackageManifest, content: dict[str, bytes]) -> VerifiedDesignPackage`
   - `def _write_tree(self, content: dict[str, bytes], *, names: tuple[str, ...] = _PACKAGE_NAMES) -> str`
   - `def _write_commit(self, change_id: str, package_id: str, tree: str, parent: str | None) -> str`
   - `def _resolve_reference(self, reference: str) -> str | None`
@@ -1623,15 +1614,18 @@ Deterministic portfolio acquisition and bounded worker context.
 - `owlbear_delivery.change_workspace`
 - `owlbear_delivery.delivery_runtime`
 - `owlbear_delivery.design_package`
+- `owlbear_delivery.portfolio_operating`
 - `owlbear_delivery.target_contract`
 - `owlbear_delivery.work_items`
 - `pathlib`
 - `pydantic`
+- `subprocess`
 - `typing`
 - `uuid`
 
 ### Interfaces
 
+- `def _operating_scope(scope: WorkItemScope) -> PortfolioWorkScope`
 - `def _operator_claim(claim: DeliveryActiveClaim | None) -> DeliveryOperatorClaim | None`
 - `def _operator_recovery_attention(attention: DeliveryRecoveryAttention | None) -> DeliveryOperatorRecoveryAttention | None`
 - `def _operator_integration_attention(attention: DeliveryIntegrationAttention | None) -> DeliveryOperatorIntegrationAttention | None`
@@ -1659,6 +1653,7 @@ Deterministic portfolio acquisition and bounded worker context.
 - `class DeliveryIntegrationResult(_ApplicationModel)`
   - `def _validate_disposition(self) -> DeliveryIntegrationResult`
 - `class PortfolioApplicationError(RuntimeError)`
+- `class PortfolioReadView(_ApplicationModel)`
 - `class PortfolioApplicationConfig(_ApplicationModel)`
   - `def _validate_roles(self) -> PortfolioApplicationConfig`
 - `class PortfolioApplicationDependencies`
@@ -1679,10 +1674,19 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def publish_delivery_result(self, change_id: str, request: PublishDeliveryResult) -> DeliveryResultCandidate`
   - `def transition_delivery(self, change_id: str, request: DeliveryTransition) -> OutcomeAuthorityBinding`
   - `def list_integration_ready_changes(self) -> tuple[str, ...]`
+  - `def _integration_ready_change_ids(self, snapshots: tuple[DeliveryPortfolioSnapshot, ...]) -> tuple[str, ...]`
   - `def list_integration_attention(self) -> tuple[DeliveryIntegrationAttentionStatus, ...]`
   - `def show_integration_attention(self, change_id: str) -> DeliveryIntegrationAttention | None`
   - `def list_work_items(self) -> tuple[WorkItemProjection, ...]`
   - `def list_work_item_groups(self) -> tuple[ChangeGroupView, ...]`
+  - `def portfolio_read_view(self) -> PortfolioReadView`
+  - `def portfolio_operating_view(self) -> PortfolioOperatingView`
+  - `def _portfolio_operating_view(self, snapshots: tuple[DeliveryPortfolioSnapshot, ...], groups: tuple[ChangeGroupView, ...]) -> PortfolioOperatingView`
+  - `def _claimed_work(self, snapshots: tuple[DeliveryPortfolioSnapshot, ...]) -> tuple[PortfolioWorkReference, ...]`
+  - `def _queued_work(self, snapshots: tuple[DeliveryPortfolioSnapshot, ...]) -> tuple[PortfolioWorkReference, ...]`
+  - `def _queued_outcome_work(self, snapshots: tuple[DeliveryPortfolioSnapshot, ...]) -> tuple[PortfolioWorkReference, ...]`
+  - `def _queued_outcome_candidate(self, snapshot: DeliveryPortfolioSnapshot) -> tuple[int, int, int, str, PortfolioWorkReference] | None`
+  - `def _snapshot_task_index(binding: OutcomeAuthorityBinding) -> int | None`
   - `def show_work_item(self, change_id: str, work_item_id: str) -> WorkItemDetail`
   - `def show_work_item_view(self, change_id: str, item_key: str) -> WorkItemDetailView`
   - `def show_operator_context(self, change_id: str, outcome_id: str) -> DeliveryOperatorContext`
@@ -1691,6 +1695,11 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def administrative_move(self, change_id: str, request: AdministrativeDeliveryMove) -> AdministrativeDeliveryMoveResult`
   - `def preview_administrative_move(self, change_id: str, outcome_id: str, target: DeliveryStage) -> AdministrativeDeliveryMovePreview`
   - `def _work_item_projector(self, runtime: DeliveryRuntime) -> WorkItemProjector`
+  - `def _portfolio_snapshots(self) -> tuple[DeliveryPortfolioSnapshot, ...]`
+  - `def _delivery_snapshot(self, runtime: DeliveryRuntime) -> DeliveryPortfolioSnapshot`
+  - `def _snapshot_change_stage(snapshot: DeliveryPortfolioSnapshot) -> DeliveryChangeStage`
+  - `def _snapshot_has_active_claims(snapshot: DeliveryPortfolioSnapshot) -> bool`
+  - `def _snapshot_dependency_depth(snapshot: DeliveryPortfolioSnapshot, outcome_id: str) -> int`
   - `def list_completed_changes(self, cursor: str | None = None, limit: int = 100) -> CompletedChangePage`
   - `def search_completed_changes(self, query: str, cursor: str | None = None, limit: int = 100) -> CompletedChangePage`
   - `def show_completed_change(self, change_id: str, completion_id: str | None = None) -> CompletedChangeRecord`
@@ -1721,6 +1730,7 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def _candidates(self) -> tuple[_Candidate, ...]`
   - `def _prepare_source(self, change_id: str, runtime: DeliveryRuntime, outcome_id: str) -> _PreparedSource | DeliveryAcquisitionFailure`
   - `def _repair_candidates(self) -> tuple[str, ...]`
+  - `def _repair_candidate_ids(self, snapshots: tuple[DeliveryPortfolioSnapshot, ...]) -> tuple[str, ...]`
   - `def _prepare_repair_source(self, change_id: str, runtime: DeliveryRuntime) -> _PreparedSource | DeliveryIntegrationRepairAcquisitionFailure`
   - `def _activate_repair_candidate(self, change_id: str) -> DeliveryIntegrationRepairLaunchPackage | DeliveryIntegrationRepairAcquisitionFailure`
   - `def _current_repair_launch(self, change_id: str, runtime: DeliveryRuntime, claim: DeliveryActiveClaim) -> DeliveryIntegrationRepairLaunchPackage`
@@ -1742,6 +1752,28 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def _fail(message: str, cause: Exception | None = None) -> Never`
 - `def _canonical(payload: object) -> bytes`
 - `def _integration_retry_condition(code: DeliveryIntegrationAttentionCode) -> str`
+
+## serve/delivery/src/owlbear_delivery/portfolio_operating.py
+
+Portfolio-wide operating facts and advisory session guidance.
+
+### Imports
+
+- `__future__`
+- `enum`
+- `pydantic`
+
+### Interfaces
+
+- `class PortfolioWorkScope(StrEnum)`
+- `class PortfolioGuidanceKind(StrEnum)`
+- `class _OperatingModel(BaseModel)`
+- `class PortfolioWorkReference(_OperatingModel)`
+- `class PortfolioGuidance(_OperatingModel)`
+- `class PortfolioGuidanceFacts(_OperatingModel)`
+- `class PortfolioOperatingView(_OperatingModel)`
+- `def derive_portfolio_guidance(facts: PortfolioGuidanceFacts) -> tuple[PortfolioGuidance, ...]`
+- `def _change_ids(references: tuple[PortfolioWorkReference, ...]) -> tuple[str, ...]`
 
 ## serve/delivery/src/owlbear_delivery/proof_checkout.py
 
@@ -2350,6 +2382,7 @@ Pure Work Item projections over one immutable schema-v2 Delivery snapshot.
 - `class WorkItemAttention(StrEnum)`
 - `class WorkItemScope(StrEnum)`
 - `class WorkItemNeed(StrEnum)`
+- `class WorkItemNextActor(StrEnum)`
 - `class WorkItemActivityState(StrEnum)`
 - `class WorkItemActionKind(StrEnum)`
 - `class WorkItemProgressKind(StrEnum)`
@@ -2382,6 +2415,7 @@ Pure Work Item projections over one immutable schema-v2 Delivery snapshot.
   - `def _project_cards(self) -> tuple[WorkItemCardView, ...]`
   - `def _outcome_card(self, outcome: DeliveryOutcome, binding: OutcomeAuthorityBinding) -> WorkItemCardView`
   - `def _outcome_needs(self, outcome: DeliveryOutcome, binding: OutcomeAuthorityBinding) -> tuple[WorkItemNeed, str | None]`
+  - `def _outcome_next(binding: OutcomeAuthorityBinding, needs: WorkItemNeed, headline: str | None) -> tuple[WorkItemNextActor, str]`
   - `def _outcome_activity(binding: OutcomeAuthorityBinding, needs: WorkItemNeed) -> WorkItemActivity`
   - `def _outcome_action(binding: OutcomeAuthorityBinding) -> WorkItemAction`
   - `def _outcome_progress(binding: OutcomeAuthorityBinding) -> WorkItemProgress`
@@ -3596,30 +3630,6 @@ Entry point for ``python -m owlbear_memory_mcp``.
 - `__future__`
 - `owlbear_memory_mcp.server`
 
-## serve/memory-mcp/src/owlbear_memory_mcp/agents.py
-
-Discover canonical custom-agent identities from the active workspace.
-
-### Imports
-
-- `__future__`
-- `json`
-- `pathlib`
-- `re`
-- `typing`
-- `yaml`
-
-### Interfaces
-
-- `class AgentCatalog`
-  - `def __init__(self, workspace_root: Path) -> None`
-  - `def names(self) -> frozenset[str]`
-  - `def require(self, agent: str) -> None`
-  - `def require_scope(self, agents: list[str]) -> None`
-  - `def validate_entries(self, entries: list[MemoryEntry]) -> list[str]`
-  - `def _agent_directories(self) -> set[Path]`
-  - `def _read_name(path: Path) -> str | None`
-
 ## serve/memory-mcp/src/owlbear_memory_mcp/engine.py
 
 Markdown frontmatter file engine for memory entries.
@@ -3713,7 +3723,6 @@ OwlBear MCP memory server for markdown-frontmatter memory operations.
 - `mcp.server.mcpserver`
 - `mcp.types`
 - `owlbear_memory`
-- `owlbear_memory_mcp.agents`
 - `owlbear_memory_mcp.tools`
 - `pathlib`
 - `pydantic`
@@ -3725,7 +3734,7 @@ OwlBear MCP memory server for markdown-frontmatter memory operations.
 - `async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]`
 - `async def save_memory(ctx: Context, *, title: _Title, content: _Content, categories: _Categories, confidence: _Confidence, source_agent: _Agent) -> dict[str, Any]`
 - `async def list_memories(ctx: Context, *, states: list[MemoryState] | None = None, categories: Annotated[list[MemoryCategory] | None, Field(min_length=1)] = None, scope_agents: list[str] | None = None) -> list[dict[str, Any]]`
-- `async def recall_memory(ctx: Context, *, agent: _Agent, categories: list[MemoryCategory] | None = None, limit: _Limit | None = None) -> str`
+- `async def recall_memory(ctx: Context, *, agent: _RecallAgent = None, categories: list[MemoryCategory] | None = None, limit: _Limit | None = None) -> str`
 - `async def read_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
 - `async def curate_memory(ctx: Context, *, entry_id: str, title: _Title | None = None, content: _Content | None = None, categories: list[MemoryCategory] | None = None, confidence: _Confidence | None = None, scope_agents: list[str] | None = None) -> dict[str, Any]`
 - `async def delete_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
@@ -3750,9 +3759,9 @@ MCP tool implementations for markdown-backed memory entries.
 
 - `def _allowed_assessment_values() -> str`
 - `def _engine_from_ctx(ctx: Context) -> MemoryEngine`
-- `def _agents_from_ctx(ctx: Context) -> AgentCatalog`
-- `def _require_agent(ctx: Context, agent: str) -> None`
-- `def _require_scope(ctx: Context, agents: list[str]) -> None`
+- `def _validate_scope(agents: list[str]) -> None`
+- `def _recognized_agent_names(engine: MemoryEngine) -> list[str]`
+- `def _recall_fallback(known_agents: list[str]) -> str`
 - `def _allowed_category_values() -> str`
 - `def _allowed_state_values() -> str`
 - `def _coerce_categories(categories: list[MemoryCategory | str] | None) -> list[MemoryCategory] | None`
@@ -3767,7 +3776,7 @@ MCP tool implementations for markdown-backed memory entries.
 - `async def save_memory(ctx: Context, *, title: str, content: str, categories: list[MemoryCategory | str], confidence: float, source_agent: str) -> dict[str, Any]`
 - `async def list_memories(ctx: Context, *, states: list[MemoryState | str] | None = None, categories: list[MemoryCategory | str] | None = None, scope_agents: list[str] | None = None) -> list[dict[str, Any]]`
 - `async def read_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
-- `async def recall_memory(ctx: Context, *, agent: str, categories: list[MemoryCategory | str] | None = None, limit: int | None = None) -> str`
+- `async def recall_memory(ctx: Context, *, agent: str | int | None, categories: list[MemoryCategory | str] | None = None, limit: int | None = None) -> str`
 - `async def _update_entry(ctx: Context, *, current: MemoryEntry, title: str | None = None, content: str | None = None, categories: list[MemoryCategory | str] | None = None, confidence: float | None = None, scope_agents: list[str] | None = None) -> dict[str, Any]`
 - `async def _delete_entry(ctx: Context, *, entry_id: str) -> dict[str, Any]`
 - `async def curate_memory(ctx: Context, *, entry_id: str, title: str | None = None, content: str | None = None, categories: list[MemoryCategory | str] | None = None, confidence: float | None = None, scope_agents: list[str] | None = None) -> dict[str, Any]`
@@ -3795,11 +3804,19 @@ Central registry and help renderer for OwlBear workspace commands.
 - `__future__`
 - `argparse`
 - `dataclasses`
+- `os`
+- `pathlib`
+- `shutil`
+- `sys`
+- `typing`
 
 ### Interfaces
 
 - `class Command`
-- `def command_footer() -> str`
+- `def _supports_color(stream: TextIO) -> bool`
+- `def _style(text: str, *codes: str, stream: TextIO) -> str`
+- `def command_footer(stream: TextIO | None = None) -> str`
+- `def _is_development_checkout() -> bool`
 - `def help_main() -> None`
 
 ## serve/tools/src/owlbear_tools/commit_owned.py
@@ -3827,6 +3844,33 @@ Commit explicitly owned paths without disturbing an existing Git index.
 - `def _commit_staged_paths(*, cwd: Path, message: str, owned_paths: list[str]) -> str`
 - `def commit_owned_paths(*, cwd: Path, message: str, paths: Sequence[str], staged: bool = False) -> str`
 - `def main() -> None`
+
+## serve/tools/src/owlbear_tools/dependency_ci.py
+
+Classify dependency-update diffs for focused CI proof.
+
+### Imports
+
+- `__future__`
+- `argparse`
+- `dataclasses`
+- `enum`
+- `json`
+- `pathlib`
+- `typing`
+
+### Interfaces
+
+- `class FixMode(StrEnum)`
+- `class DependencyScope`
+  - `def compatibility(self) -> bool`
+  - `def applicable(self) -> bool`
+  - `def github_outputs(self) -> dict[str, str]`
+- `def classify_dependency_change(paths: Iterable[str], diff: str) -> DependencyScope`
+- `def select_fix_mode(labels: Iterable[str]) -> FixMode`
+- `def _read_paths(path: Path) -> list[str]`
+- `def _write_outputs(path: Path, values: dict[str, str]) -> None`
+- `def main() -> int`
 
 ## serve/tools/src/owlbear_tools/doc_index.py
 
@@ -3882,6 +3926,7 @@ Lint and static-analysis shortcuts.
 - `__future__`
 - `argparse`
 - `enum`
+- `json`
 - `os`
 - `owlbear_tools.commands`
 - `owlbear_tools.megalinter`
@@ -3889,6 +3934,7 @@ Lint and static-analysis shortcuts.
 - `re`
 - `subprocess`
 - `sys`
+- `tomllib`
 
 ### Interfaces
 
@@ -3901,6 +3947,12 @@ Lint and static-analysis shortcuts.
 - `def _add_fix_mode(parser: argparse.ArgumentParser) -> None`
 - `def _parse_fix_mode(prog: str) -> FixMode`
 - `def _mode_environment(fix_mode: FixMode) -> dict[str, str] | None`
+- `def _is_owlbear_dev_checkout(root: Path) -> bool`
+- `def _consumer_paths(files: list[str], *, all_files: bool) -> list[str]`
+- `def _has_ruff_config(root: Path) -> bool`
+- `def _ruff_commands(targets: list[str], fix_mode: FixMode) -> tuple[list[str], list[str]]`
+- `def _package_lint_command(root: Path, fix_mode: FixMode) -> list[str] | None`
+- `def _consumer_lint(root: Path, files: list[str], *, all_files: bool, fix_mode: FixMode) -> int`
 - `def lint() -> None`
 - `def megalint() -> None`
 - `def typecheck() -> None`

@@ -178,12 +178,6 @@ repos:
         entry: uv run --frozen python .owlbear/scripts/validate_agents.py
         files: ^share/agents/.*\.agent\.md$
         pass_filenames: true
-      - id: validate-memory-agents
-        name: Validate Memory Agent References
-        language: system
-        entry: uv run --frozen python .owlbear/scripts/validate_memory_agents.py
-        files: ^(share/agents/|\.github/agents/|\.owlbear/agents/|\.owlbear/memory/)
-        pass_filenames: false
       # TODO marker scan — warning only (always exit 0, output always shown)
       - id: todo-check
         name: TODO marker scan
