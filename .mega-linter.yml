@@ -52,7 +52,16 @@ ADDITIONAL_EXCLUDED_DIRECTORIES:
   - .ruff_cache
   - __pycache__
   - node_modules
+  - build
+  - _cache
   - coverage             # Vitest/Playwright HTML coverage reports
+  - sdist
+  - wheels
+  - parts
+  - downloads
+  - artifacts
+  - htmlcov
+  - .benchmarks
   - dist                 # Vite build output
   - playwright-report    # Playwright HTML reports
   - test-results         # Playwright test output
