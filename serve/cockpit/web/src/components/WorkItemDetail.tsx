@@ -418,13 +418,13 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
           <p className="text-sm"><strong>Waiting for Orchestration.</strong> Orchestration will {action.kind === 'retry-integration' ? 'retry against the current target' : 'integrate this Change'}.</p>
           <div className="flex flex-wrap items-center gap-static-sm">
             <span className="text-xs text-contrast-medium">Optional now</span>
-            <PButtonPure type="button" size="xs" color="contrast-medium" disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
+            <PButtonPure type="button" size="xs" color="contrast-medium" icon={action.kind === 'retry-integration' ? 'refresh' : undefined} disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
               {pendingAction === 'integration' ? 'Working...' : action.kind === 'retry-integration' ? 'Retry now' : 'Integrate now'}
             </PButtonPure>
           </div>
         </div>
       ) : canIntegrate ? (
-        <PButton className="mt-static-md" type="button" compact disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
+        <PButton className="mt-static-md" type="button" compact icon={action.kind === 'retry-integration' ? 'refresh' : undefined} disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
           {pendingAction === 'integration' ? 'Working...' : action.label}
         </PButton>
       ) : null}

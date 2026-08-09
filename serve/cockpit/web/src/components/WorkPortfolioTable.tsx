@@ -59,6 +59,7 @@ function ActionLink({ item, onSelect, subdued = false }: { item: WorkItemCardVie
   }
   const identity = { changeId: item.change_id, itemKey: item.item_key }
   const path = workItemPath(item)
+  const label = item.action.kind === 'retry-integration' ? 'Open Integration' : item.action.label
   return (
     <PLinkPure
       href={path}
@@ -71,7 +72,7 @@ function ActionLink({ item, onSelect, subdued = false }: { item: WorkItemCardVie
         navigate(path)
       }}
     >
-      {item.action.label}
+      {label}
     </PLinkPure>
   )
 }
