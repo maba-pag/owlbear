@@ -214,6 +214,7 @@ test.describe('assembled Delivery portfolio', () => {
         return {
           fontSize: buttonStyle.fontSize,
           color: buttonStyle.color,
+          iconName: (icon as HTMLElement & { name?: string }).name,
           centerDelta: Math.abs((iconBox.top + iconBox.height / 2) - (codeBox.top + codeBox.height / 2)),
           codeInsideButton: button.contains(code),
         }
@@ -221,9 +222,22 @@ test.describe('assembled Delivery portfolio', () => {
       expect(visualContract).not.toBeNull()
       expect(visualContract!.fontSize).toBe('13px')
       expect(visualContract!.color).toBe('rgba(17, 17, 19, 0.6)')
+      expect(visualContract!.iconName).toBe('copy')
       expect(visualContract!.centerDelta).toBeLessThanOrEqual(1)
       expect(visualContract!.codeInsideButton).toBe(true)
     }
+    const guidanceSpacing = await guidanceCommand.evaluate((button) => {
+      const wrapper = button.parentElement
+      const item = button.closest('li')
+      if (!wrapper || !item) return null
+      const prose = [...item.childNodes].find((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim())
+      if (!prose) return null
+      const proseRange = document.createRange()
+      proseRange.selectNodeContents(prose)
+      return wrapper.getBoundingClientRect().left - proseRange.getBoundingClientRect().right
+    })
+    expect(guidanceSpacing).not.toBeNull()
+    expect(guidanceSpacing!).toBeGreaterThanOrEqual(8)
     await page.screenshot({ path: testInfo.outputPath('delivery-command-alignment.png') })
     await designCommandButton.locator('code').click()
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(designCommand)
@@ -339,9 +353,32 @@ test.describe('assembled Delivery portfolio', () => {
 
     await expect(await visibleRows(page)).toHaveCount(8)
     await expect(page.getByTestId('design-work-section')).toBeVisible()
-    await expect(page.getByLabel('Session suggestions').locator('li')).toHaveCount(3)
+    const guidance = page.getByLabel('Session suggestions')
+    await expect(guidance.locator('li')).toHaveCount(3)
     await expect(page.getByTestId('work-portfolio-table')).toBeVisible()
     await expectNoHorizontalOverflow(page)
+
+    const designCommand = '/design design-operations-roadmap'
+    const compactCommand = guidance.getByRole('button', { name: `Copy command ${designCommand}` })
+    const compactCommandLayout = await compactCommand.evaluate((button) => {
+      const code = button.querySelector('code')
+      const icon = button.querySelector('p-icon') as (HTMLElement & { name?: string }) | null
+      if (!code || !icon) return null
+      const buttonBox = button.getBoundingClientRect()
+      const codeBox = code.getBoundingClientRect()
+      const iconBox = icon.getBoundingClientRect()
+      return {
+        iconName: icon.name,
+        firstLineDelta: Math.abs(iconBox.top - codeBox.top),
+        overflow: button.scrollWidth - button.clientWidth,
+        contained: codeBox.right <= buttonBox.right,
+      }
+    })
+    expect(compactCommandLayout).not.toBeNull()
+    expect(compactCommandLayout!.iconName).toBe('copy')
+    expect(compactCommandLayout!.firstLineDelta).toBeLessThanOrEqual(1)
+    expect(compactCommandLayout!.overflow).toBe(0)
+    expect(compactCommandLayout!.contained).toBe(true)
 
     const inspected = await inspect(page, 'Build operator controls')
     await expect(page.getByRole('button', { name: 'Dismiss flyout' })).toBeVisible()

@@ -12,11 +12,10 @@ function countLabel(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`
 }
 
-function Command({ children, suffix }: { children: string; suffix?: string }) {
+function Command({ children }: { children: string }) {
   return (
-    <span className="mx-static-xs inline-flex max-w-full items-baseline">
+    <span className="mx-static-sm inline-flex max-w-full items-center align-middle">
       <CopyCommand command={children} />
-      {suffix ? <span data-command-suffix>{suffix}</span> : null}
     </span>
   )
 }
@@ -26,15 +25,15 @@ function Guidance({ guidance }: { guidance: PortfolioGuidance }) {
     case 'intervene':
       return <>{guidance.work_count === 1 ? 'Review 1 item that needs you.' : `Review ${guidance.work_count} items that need you.`}</>
     case 'resume-design':
-      return <>Continue Design with {guidance.change_ids.map((changeId, index) => <span key={changeId}>{index > 0 ? ' or ' : null}<Command suffix={index === guidance.change_ids.length - 1 ? '.' : undefined}>{designCommand(changeId)}</Command></span>)}</>
+      return <>Continue Design with {guidance.change_ids.map((changeId, index) => <span key={changeId}>{index > 0 ? ' or ' : null}<Command>{designCommand(changeId)}</Command></span>)}</>
     case 'start-orchestration':
-      return <>Process {countLabel(guidance.work_count, 'queued work item')} with <Command suffix=".">/orchestrate</Command></>
+      return <>Process {countLabel(guidance.work_count, 'queued work item')} with <Command>/orchestrate</Command></>
     case 'work-underway':
       return <><Command>/orchestrate</Command> is already working; no new session is needed.</>
     case 'wait':
       return <>No session action needed.</>
     case 'create-change':
-      return <>Start with <Command>/ideate</Command> or <Command suffix=".">/design &lt;change-id&gt;</Command></>
+      return <>Start with <Command>/ideate</Command> or <Command>/design &lt;change-id&gt;</Command></>
   }
 }
 
