@@ -7,7 +7,7 @@ import json
 import subprocess
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Never
@@ -102,6 +102,15 @@ if TYPE_CHECKING:
         DeliveryAuthorityRegistry,
     )
     from owlbear_delivery.work_items import WorkItemDetail, WorkItemProjection
+
+
+def _timestamp(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None:
+        message = "Delivery claim timestamps must include a timezone"
+        raise ValueError(message)
+    return parsed.astimezone(UTC)
+
 
 _COMPLETED_ROOT = ".owlbear/completed"
 
@@ -278,6 +287,13 @@ class DeliveryAcquisitionResult(_ApplicationModel):
     repair_recoveries: tuple[DeliveryIntegrationRepairRecoveryResult, ...] = ()
 
 
+class DeliveryExpiredClaimRecoveries(_ApplicationModel):
+    """Exact recovery results for claims whose execution lease elapsed."""
+
+    recoveries: tuple[DeliveryClaimRecoveryResult, ...] = ()
+    repair_recoveries: tuple[DeliveryIntegrationRepairRecoveryResult, ...] = ()
+
+
 class DeliveryPlanContext(_ApplicationModel):
     """Plan authority and current same-outcome successor context."""
 
@@ -426,6 +442,7 @@ class PortfolioApplicationConfig(_ApplicationModel):
     package_root: Path
     execution_capacity: int = Field(gt=0)
     role_policies: tuple[DeliveryRolePolicy, ...] = Field(min_length=4, max_length=4)
+    claim_ttl_seconds: int = Field(default=30 * 60, gt=0)
 
     @model_validator(mode="after")
     def _validate_roles(self) -> PortfolioApplicationConfig:
@@ -506,6 +523,7 @@ class PortfolioApplication:
         self._integration_verifier = dependencies.integration_verifier
         self._completed_history_catalog = dependencies.completed_history_catalog
         self._execution_capacity = config.execution_capacity
+        self._claim_ttl = timedelta(seconds=config.claim_ttl_seconds)
         self._policies = {policy.worker_role: policy for policy in config.role_policies}
         self._identity_factory = hooks.identity_factory if hooks else lambda: str(uuid.uuid4())
         self._clock = (
@@ -1176,6 +1194,27 @@ class PortfolioApplication:
         """Remove one exact failed claim or retain deterministic Build repair attention."""
         with self._coordinator.acquisition_lock():
             return self._recover_claim(change_id, outcome_id, attempt_id, claim_id)
+
+    def recover_expired_claims(self) -> DeliveryExpiredClaimRecoveries:
+        """Recover claims whose fixed execution lease has elapsed."""
+        with self._coordinator.acquisition_lock():
+            cutoff = _timestamp(self._clock()) - self._claim_ttl
+            recoveries = tuple(
+                self._recover_claim(change_id, outcome_id, claim.attempt_id, claim.claim_id)
+                for change_id, runtime in sorted(self._runtimes.items())
+                for outcome_id, claim in runtime.active_claims()
+                if _timestamp(claim.started_at) <= cutoff
+            )
+            repair_recoveries = tuple(
+                self._recover_integration_repair_claim(change_id, claim.attempt_id, claim.claim_id)
+                for change_id, runtime in sorted(self._runtimes.items())
+                for claim in (runtime.integration_repair_claim(),)
+                if claim is not None and _timestamp(claim.started_at) <= cutoff
+            )
+            return DeliveryExpiredClaimRecoveries(
+                recoveries=recoveries,
+                repair_recoveries=repair_recoveries,
+            )
 
     def recover_integration_repair_claim(
         self,

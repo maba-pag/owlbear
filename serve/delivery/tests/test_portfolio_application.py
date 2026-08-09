@@ -226,13 +226,14 @@ def _repository(tmp_path: Path) -> Path:
     return repository
 
 
-def _portfolio(
+def _portfolio(  # noqa: PLR0913
     tmp_path: Path,
     stages: dict[str, DeliveryStage],
     *,
     writer_capacity: int = 1,
     execution_capacity: int = 3,
     candidate_proof: Callable[[DeliveryIntegrationCandidate, str], tuple[str, ...]] | None = None,
+    clock: Callable[[], str] = lambda: "2026-08-04T00:00:00Z",
 ):
     repository = tmp_path / "repository"
     repository.mkdir()
@@ -297,7 +298,7 @@ def _portfolio(
         ),
         PortfolioApplicationHooks(
             identity_factory=lambda: next(identities),
-            clock=lambda: "2026-08-04T00:00:00Z",
+            clock=clock,
         ),
     )
     return application, runtimes, coordinator, state_root
@@ -1125,6 +1126,39 @@ def test_acquisition_recovers_interrupted_planning_claim_before_relaunch(tmp_pat
     replacement = resumed.launch_packages[0]
     assert replacement.claim.claim_id != interrupted.claim.claim_id
     assert runtimes["change-a"].active_claims() == (("OUT-001", replacement.claim),)
+
+
+def test_expired_claim_recovery_respects_lease_and_releases_writer(tmp_path: Path) -> None:
+    current_time = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+        clock=lambda: current_time[0],
+    )
+    interrupted = application.acquire_frontier_work().launch_packages[0]
+
+    current_time[0] = "2026-08-04T00:29:59Z"
+    assert application.recover_expired_claims().recoveries == ()
+    assert runtimes["change-a"].active_claims() == (("OUT-001", interrupted.claim),)
+
+    current_time[0] = "2026-08-04T00:30:00Z"
+    recovered = application.recover_expired_claims()
+
+    assert recovered.recoveries == (
+        DeliveryClaimRecoveryResult(
+            status=DeliveryClaimRecoveryStatus.RECOVERED,
+            change_id=interrupted.change_id,
+            outcome_id=interrupted.outcome_id,
+            attempt_id=interrupted.claim.attempt_id,
+            claim_id=interrupted.claim.claim_id,
+            preserved_commit=interrupted.last_reviewed_commit,
+            preserved_ref=f"refs/owlbear/attempts/change-a/{interrupted.claim.attempt_id}",
+        ),
+    )
+    assert runtimes["change-a"].active_claims() == ()
+    assert coordinator.show("change-a").writer is None
+    ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
+    assert ledger.change_ids == ()
 
 
 def test_acquisition_retains_dirty_interrupted_build_as_attention(tmp_path: Path) -> None:
@@ -1957,5 +1991,24 @@ def test_integration_revalidates_reviewed_branch_after_candidate_proof(tmp_path:
 
     assert failed.attention is not None
     assert failed.attention.code == DeliveryIntegrationAttentionCode.REVIEWED_BOUNDARY_MISMATCH
+    assert _git(repository, "rev-parse", "main") == target_head
+    assert runtimes["change-a"].change_stage().value == "integration"
+
+
+def test_integration_reports_dirty_reviewed_worktree_separately(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    worktree = coordinator.show("change-a").worktree_path
+    repository = tmp_path / "repository"
+    target_head = _git(repository, "rev-parse", "main")
+    (worktree / "uncommitted.txt").write_text("uncommitted\n", encoding="utf-8")
+
+    failed = application.integrate_ready_change("change-a")
+
+    assert failed.attention is not None
+    assert failed.attention.code == DeliveryIntegrationAttentionCode.REVIEWED_WORKTREE_DIRTY
+    assert failed.attention.diagnostics == ("change worktree is not clean at its reviewed boundary",)
     assert _git(repository, "rev-parse", "main") == target_head
     assert runtimes["change-a"].change_stage().value == "integration"

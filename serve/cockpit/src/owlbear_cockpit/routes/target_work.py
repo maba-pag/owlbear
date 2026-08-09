@@ -156,6 +156,10 @@ class TargetCockpitService:
             )
         )
 
+    def recover_expired_claims(self) -> object:
+        """Recover every Delivery claim whose execution lease elapsed."""
+        return self._invoke(self._application.recover_expired_claims)
+
     def move_backward(self, change_id: str, outcome_id: str, body: BackwardMoveBody) -> object:
         """Apply one server-identified administrative backward move."""
         request = AdministrativeDeliveryMove(
@@ -327,6 +331,10 @@ def _register_queries(router: APIRouter) -> None:
 
 
 def _register_controls(router: APIRouter) -> None:
+    @router.post("/work-items/claims/recover-expired")
+    def recover_expired_claims(service: _TargetService) -> object:
+        return service.recover_expired_claims()
+
     @router.post("/changes/{change_id}/requests/{request_id}/answer")
     def answer_request(
         change_id: str,

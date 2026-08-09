@@ -14,10 +14,14 @@ function visibleText(element: HTMLElement): string {
   return clone.textContent ?? ''
 }
 
-function stubHealth(memory: unknown, ideas: unknown) {
+function stubHealth(
+  memory: unknown,
+  ideas: unknown,
+  delivery: unknown = { recoveries: [], repair_recoveries: [] },
+) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = String(input)
-    const body = url.includes('/health/memory') ? memory : ideas
+    const body = url.includes('/recover-expired') ? delivery : url.includes('/health/memory') ? memory : ideas
     if (body === null) return Promise.reject(new TypeError('Failed to fetch'))
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) })
   })
@@ -65,7 +69,7 @@ it('states healthy persisted-data modules without prose, repair, or a Memory det
   fireEvent.click(screen.getByTestId('workspace-status-recheck'))
   await waitFor(() => expect(trigger).toHaveAttribute('data-status', 'healthy'))
   expect(triggers[1]).toHaveAttribute('data-status', 'healthy')
-  expect(fetchMock).toHaveBeenCalledTimes(2)
+  expect(fetchMock).toHaveBeenCalledTimes(3)
   expect(panel).toHaveAttribute('role', 'dialog')
   expect(panel).toHaveAccessibleName('Workspace health')
   const memoryModule = screen.getByTestId('workspace-status-module-memory')
@@ -76,11 +80,13 @@ it('states healthy persisted-data modules without prose, repair, or a Memory det
   expect(ideasModule).not.toHaveTextContent('readable')
 
   // The green dot carries healthy on screen; the word stays for assistive technology only.
-  for (const module of [memoryModule, ideasModule]) {
+  const deliveryModule = screen.getByTestId('workspace-status-module-delivery')
+  for (const module of [deliveryModule, memoryModule, ideasModule]) {
     expect(module).toHaveTextContent('Healthy')
     expect(visibleText(module)).not.toContain('Healthy')
   }
   expect(visibleText(memoryModule)).toContain('Memory store')
+  expect(visibleText(deliveryModule)).toContain('Delivery claims')
   expect(visibleText(ideasModule)).toContain('Ideas file')
 
   expect(screen.queryByTestId('workspace-status-maintenance')).toBeNull()
@@ -101,7 +107,7 @@ it('presents workspace health, check scope, and checked surfaces in hierarchy or
   const panel = await screen.findByTestId('workspace-status-panel')
 
   // The header names the control and its check scope before the rows name individual surfaces.
-  const heading = visibleText(panel).slice(0, visibleText(panel).indexOf('Memory store'))
+  const heading = visibleText(panel).slice(0, visibleText(panel).indexOf('Delivery claims'))
   expect(heading).toBe('Workspace healthPersisted data integrity')
   expect(panel).toHaveAccessibleName('Workspace health')
   expect(visibleText(panel)).toContain('Ideas file')
@@ -162,6 +168,31 @@ it('ranks the worst module status and lists memory storage findings without clai
   fireEvent.keyDown(screen.getByTestId('workspace-status-panel'), { key: 'Escape' })
   await waitFor(() => expect(screen.queryByTestId('workspace-status-panel')).not.toBeInTheDocument())
   expect(document.activeElement).toBe(trigger)
+})
+
+it('recovers expired Delivery claims during re-check and reports the cleanup', async () => {
+  const fetchMock = stubHealth(
+    { status: 'healthy', findings: [], repairable_count: 0, checked_paths: [] },
+    { status: 'healthy', path: '.owlbear/ideas.md', detail: null },
+    {
+      recoveries: [{
+        status: 'recovered',
+        change_id: 'change-a',
+        outcome_id: 'OUT-001',
+        attempt_id: 'attempt-one',
+        claim_id: 'claim-one',
+      }],
+      repair_recoveries: [],
+    },
+  )
+  render(<WorkspaceStatusHarness />)
+
+  fireEvent.click(screen.getByTestId('workspace-status'))
+  fireEvent.click(screen.getByTestId('workspace-status-recheck'))
+  await waitFor(() => expect(screen.getByTestId('workspace-status')).toHaveAttribute('data-status', 'healthy'))
+
+  expect(screen.getByTestId('workspace-status-module-delivery')).toHaveTextContent('1 expired claim recovered')
+  expect(fetchMock).toHaveBeenCalledWith('/api/work-items/claims/recover-expired', { method: 'POST' })
 })
 
 it('reports an unreachable health check instead of claiming health', async () => {

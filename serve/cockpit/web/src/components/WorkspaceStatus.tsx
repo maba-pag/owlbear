@@ -63,9 +63,8 @@ function StatusDot({
 }
 
 /**
- * Read-only health control for the two persisted-data surfaces the backend reports — the memory
- * store and the ideas file. Nothing here repairs anything: re-running the check is the only action
- * the backend supports.
+ * Health control for persisted workspace surfaces. An explicit re-check also recovers Delivery
+ * claims whose fixed execution lease elapsed.
  */
 export default function WorkspaceStatus({ health }: { health: UseWorkspaceHealthResult }) {
   const { status, modules, isChecking, lastCheckedAt, refresh } = health
