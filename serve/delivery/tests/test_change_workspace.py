@@ -505,9 +505,49 @@ def test_repair_candidate_commits_conflict_paths_and_replays(tmp_path: Path) -> 
     assert _git(repository, "rev-list", "--parents", "-n", "1", candidate.candidate_commit).split() == [
         candidate.candidate_commit,
         source_head,
+        target_head,
     ]
+    assert candidate.merged_tree == _git(repository, "rev-parse", f"{candidate.candidate_commit}^{{tree}}")
     assert _git(coordination.worktree_path, "status", "--porcelain") == ""
     assert _git(repository, "rev-parse", "release") == target_head
+
+
+def test_repair_candidate_combines_same_line_resolution_and_target_content(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.create("repair-combined-line")
+    source_head = _commit_file(coordination.worktree_path, "tools: [old, register]\n", "source tools")
+    manager.record_reviewed(coordination.change_id, source_head)
+    target_worktree = tmp_path / "target-worktree"
+    _git(repository, "worktree", "add", str(target_worktree), "release")
+    (target_worktree / "shared.txt").write_text("tools: [renamed]\n", encoding="utf-8")
+    (target_worktree / "target-only.txt").write_text("target\n", encoding="utf-8")
+    _git(target_worktree, "add", "shared.txt", "target-only.txt")
+    _git(target_worktree, "commit", "-m", "rename tools")
+    target_head = _git(repository, "rev-parse", "release")
+    _git(repository, "worktree", "remove", str(target_worktree))
+    manager.refresh_integration_target(coordination.change_id)
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="repair")
+    coordinator.acquire(coordination.change_id, writer)
+    attention = DeliveryIntegrationAttention(
+        attention_id="e" * 64,
+        code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
+        change_id=coordination.change_id,
+        change_head=source_head,
+        target_head=target_head,
+        integration_target="release",
+        diagnostics=("conflict",),
+        retry_condition="Admit a reviewed repair.",
+    )
+    (coordination.worktree_path / "shared.txt").write_text(
+        "tools: [renamed, register]\n",
+        encoding="utf-8",
+    )
+
+    candidate = manager.create_integration_repair_candidate(attention, writer)
+
+    assert _git(repository, "show", f"{candidate.candidate_commit}:shared.txt") == "tools: [renamed, register]"
+    assert _git(repository, "show", f"{candidate.candidate_commit}:target-only.txt") == "target"
 
 
 @pytest.mark.parametrize("interruption", ["candidate-commit", "branch-cas", "worktree-reset"])

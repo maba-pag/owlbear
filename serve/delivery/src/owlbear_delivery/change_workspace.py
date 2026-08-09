@@ -527,16 +527,26 @@ class ChangeWorkspaceManager:
             self._require_worktree(coordination.worktree_path, coordination.branch, branch_head)
             changed_paths = self._worktree_changed_paths(coordination.worktree_path)
             conflict_paths = self._integration_conflict_paths(attention.target_head, attention.change_head)
-            if not changed_paths or not changed_paths <= conflict_paths:
-                _workspace_failure("Integration repair candidate may change only original conflict paths")
+            if changed_paths != conflict_paths:
+                _workspace_failure(
+                    "Integration repair candidate may change only original conflict paths; all must be resolved"
+                )
             path_arguments = tuple(sorted(os.fsdecode(path) for path in changed_paths))
             self._git("add", "--all", "--", *path_arguments, cwd=coordination.worktree_path)
-            tree = self._git("write-tree", cwd=coordination.worktree_path)
+            resolution_tree = self._git("write-tree", cwd=coordination.worktree_path)
+            tree = self._resolved_integration_repair_tree(
+                attention.target_head,
+                attention.change_head,
+                resolution_tree,
+                conflict_paths,
+            )
             candidate_commit = self._git(
                 "commit-tree",
                 tree,
                 "-p",
                 attention.change_head,
+                "-p",
+                attention.target_head,
                 "-m",
                 f"Repair Integration for {attention.change_id}",
                 cwd=coordination.worktree_path,
@@ -627,27 +637,26 @@ class ChangeWorkspaceManager:
             "1",
             repair.reviewed_repair_commit,
         ).split()
-        if parents != [repair.reviewed_repair_commit, repair.prior_change_head]:
-            _workspace_failure("Integration repair must be the exact single child of the attention change head")
+        if parents != [repair.reviewed_repair_commit, repair.prior_change_head, repair.prior_target_head]:
+            _workspace_failure("Integration repair must have the exact source and target parents")
 
     def _require_additive_conflict_repair(self, repair: DeliveryIntegrationRepair) -> str:
         conflict_paths = self._integration_conflict_paths(
             repair.prior_target_head,
             repair.prior_change_head,
         )
-        changed_paths = self._changed_paths(repair.prior_change_head, repair.reviewed_repair_commit)
         completed_root = b".owlbear/completed"
-        if any(path == completed_root or path.startswith(completed_root + b"/") for path in changed_paths):
+        if any(path == completed_root or path.startswith(completed_root + b"/") for path in conflict_paths):
             _workspace_failure("Integration repair cannot mutate completed history")
-        if not changed_paths or not changed_paths <= conflict_paths:
-            _workspace_failure("Integration repair may change only paths from the original conflict")
-        repaired_tree, diagnostics = self._merge_tree(
+        candidate_tree = self._git("rev-parse", f"{repair.reviewed_repair_commit}^{{tree}}")
+        repaired_tree = self._resolved_integration_repair_tree(
             repair.prior_target_head,
-            repair.reviewed_repair_commit,
+            repair.prior_change_head,
+            candidate_tree,
+            conflict_paths,
         )
-        if repaired_tree is None:
-            detail = diagnostics[0] if diagnostics else "repair retains an Integration conflict"
-            _workspace_failure(detail)
+        if repaired_tree != candidate_tree:
+            _workspace_failure("Integration repair changes paths outside the original conflict")
         return repaired_tree
 
     def _require_integration_repair_candidate(
@@ -660,18 +669,20 @@ class ChangeWorkspaceManager:
         if self._git("status", "--porcelain", cwd=coordination.worktree_path):
             _workspace_failure("Integration repair candidate requires a clean change worktree")
         parents = self._git("rev-list", "--parents", "-n", "1", candidate_commit).split()
-        if parents != [candidate_commit, attention.change_head]:
-            _workspace_failure("Integration repair candidate must be the exact single child of the source head")
+        if parents != [candidate_commit, attention.change_head, attention.target_head]:
+            _workspace_failure("Integration repair candidate must have the exact source and target parents")
         conflict_paths = self._integration_conflict_paths(attention.target_head, attention.change_head)
-        changed_paths = self._changed_paths(attention.change_head, candidate_commit)
-        if not changed_paths or not changed_paths <= conflict_paths:
-            _workspace_failure("Integration repair candidate may change only original conflict paths")
-        merged_tree, diagnostics = self._merge_tree(attention.target_head, candidate_commit)
-        if merged_tree is None:
-            detail = diagnostics[0] if diagnostics else "repair candidate retains an Integration conflict"
-            _workspace_failure(detail)
-        self._require_unchanged_completed_history(attention.target_head, merged_tree)
-        return merged_tree, changed_paths
+        candidate_tree = self._git("rev-parse", f"{candidate_commit}^{{tree}}")
+        repaired_tree = self._resolved_integration_repair_tree(
+            attention.target_head,
+            attention.change_head,
+            candidate_tree,
+            conflict_paths,
+        )
+        if repaired_tree != candidate_tree:
+            _workspace_failure("Integration repair candidate changes paths outside the original conflict")
+        self._require_unchanged_completed_history(attention.target_head, candidate_tree)
+        return candidate_tree, conflict_paths
 
     def _worktree_changed_paths(self, worktree: Path) -> set[bytes]:
         tracked = self._run_git("diff", "--name-only", "-z", "HEAD", cwd=worktree).stdout
@@ -1112,6 +1123,57 @@ class ChangeWorkspaceManager:
         if not paths:
             _workspace_failure("Integration conflict paths could not be identified")
         return paths
+
+    def _resolved_integration_repair_tree(
+        self,
+        target_head: str,
+        change_head: str,
+        resolution_tree: str,
+        conflict_paths: set[bytes],
+    ) -> str:
+        result = self._run_git("merge-tree", "--write-tree", target_head, change_head, check=False)
+        output = result.stdout.decode().splitlines()
+        if result.returncode == 0 or not output:
+            _workspace_failure("Integration repair requires an existing merge conflict")
+        tree = output[0]
+        for path in sorted(conflict_paths):
+            parts = tuple(path.split(b"/"))
+            replacement = self._tree_entry_at_path(resolution_tree, parts)
+            tree = self._replace_tree_entry(tree, parts, replacement)
+        return tree
+
+    def _tree_entry_at_path(self, tree: str, path: tuple[bytes, ...]) -> bytes | None:
+        for part in path[:-1]:
+            existing = self._tree_entries(tree).get(part)
+            if existing is None:
+                return None
+            metadata = existing.split(b"\t", 1)[0].split()
+            if len(metadata) != _TREE_ENTRY_PARTS or metadata[1] != b"tree":
+                return None
+            tree = metadata[2].decode()
+        return self._tree_entries(tree).get(path[-1])
+
+    def _replace_tree_entry(self, tree: str, path: tuple[bytes, ...], replacement: bytes | None) -> str:
+        entries = self._tree_entries(tree)
+        name = path[0]
+        if len(path) == 1:
+            if replacement is None:
+                entries.pop(name, None)
+            else:
+                entries[name] = replacement
+        else:
+            existing = entries.get(name)
+            if existing is None:
+                child = self._git("mktree", input_bytes=b"")
+            else:
+                metadata = existing.split(b"\t", 1)[0].split()
+                if len(metadata) != _TREE_ENTRY_PARTS or metadata[1] != b"tree":
+                    _workspace_failure(f"Integration conflict parent is not a tree: {os.fsdecode(name)}")
+                child = metadata[2].decode()
+            child = self._replace_tree_entry(child, path[1:], replacement)
+            entries[name] = b"040000 tree " + child.encode() + b"\t" + name
+        content = b"\0".join(entries[key] for key in sorted(entries)) + b"\0"
+        return self._git("mktree", "-z", input_bytes=content)
 
     def _changed_paths(self, parent: str, child: str) -> set[bytes]:
         result = self._run_git(

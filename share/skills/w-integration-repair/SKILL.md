@@ -42,10 +42,12 @@ retain a retired source prefix beside its target replacement.
 
 Run focused proof for the affected paths, then call `create_integration_repair_candidate` with the
 launch's exact `change_id`, `claim.attempt_id`, and `claim.claim_id`. This operation exclusively owns
-candidate commit creation and exact merge proof. Require its attention, source head, target head,
+candidate merge-commit creation and exact resolved-tree proof. Require its attention, source head, target head,
 attempt, and claim identities to match the launch; require its changed paths to stay within the
 original conflict paths; and treat its `candidate_commit`, `merged_tree`, and changed paths as the
-repair proof object. Do not call `commit-owned`, `git commit`, or use `SKIP`/`--no-verify` for an
+repair proof object. The candidate must have the exact source head and target head as its two parents,
+in that order, while its tree preserves target content outside the original conflict paths. Do not
+call `commit-owned`, `git commit`, or use `SKIP`/`--no-verify` for an
 Integration repair. A source-checkout failure caused solely by target-owned evolution is
 non-probative and cannot justify authority attention. Require the branch and clean worktree to end
 at the returned candidate commit. If any identity, head, custody, path, ancestry, or cleanliness
@@ -66,8 +68,9 @@ and the Builder owner identity. Require the reviewer to echo the exact commit, r
 finding`, and provide non-empty source-grounded evidence. The reviewer identity must differ from the
 Builder owner identity.
 
-On an implementation finding, preserve the rejected commit, create at most one new single-child
-repair commit inside the same conflict-path boundary, rerun affected proof, and obtain fresh review.
+On an implementation finding, preserve and recover the rejected candidate, reacquire the repair,
+create at most one replacement candidate inside the same conflict-path boundary, rerun affected proof,
+and obtain fresh review.
 Any invalid review or non-implementation finding preserves current Delivery state and performs no
 admission.
 
