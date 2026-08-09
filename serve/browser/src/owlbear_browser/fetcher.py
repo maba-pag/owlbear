@@ -52,6 +52,7 @@ class BrowserContentFetcher:
         return await self.acquire(request)
 
     async def acquire(self, request: AcquisitionRequest) -> AcquisitionResult:  # noqa: C901, PLR0911, PLR0912, PLR0915
+        """Acquire and validate rendered content for a structured browser request."""
         parsed_request_url = urlparse(request.url)
         if parsed_request_url.scheme.lower() not in {"http", "https"} or not parsed_request_url.netloc:
             return AcquisitionFailure(

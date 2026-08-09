@@ -50,7 +50,7 @@ the ordered composition of the active layers below.
 | Agent body | When the role is selected or dispatched | Identity, boundaries, guaranteed dependencies, communication contract | Agent file |
 | Required skill bodies | At agent session start | Knowledge needed in at least 90% of that role's sessions | Agent `<required_reading>` |
 | On-demand skill bodies | When a named condition occurs | Specialist procedure, rules, or domain knowledge | Calling workflow or companion table |
-| Runtime state and tools | When queried or invoked | Current tasks, memory, knowledge, schemas, and mutation semantics | Owning runtime service |
+| Runtime state and tools | When queried or invoked | Current jobs, Memory, Knowledge, schemas, and mutation semantics | Owning runtime service |
 
 More specific rules do not automatically erase broader rules. Resolve a conflict by identifying the
 job and its fit authority; do not preserve both versions as competing truths.
@@ -176,13 +176,12 @@ uv run python .owlbear/scripts/validate_skills.py
 ```
 
 Run ecosystem integrity and write-boundary regressions when changing agent structure, MCP grants,
-delegation, write restrictions, or pipeline ownership:
+delegation, write restrictions, or delivery ownership:
 
 ```shell
 uv run pytest -q \
   tests/test_agent_ecosystem_validation.py \
-  tests/test_write_guard_hooks.py \
-  tests/test_deny_non_doc_writes.py
+  tests/test_write_guard_hooks.py
 ```
 
 Also run the narrow test or executable check owned by the changed workflow. Validator success proves

@@ -18,42 +18,51 @@ applyTo: "**"
   satisfies the request. Do not rewrite whole files, generalize behavior, add compatibility paths,
   or perform adjacent cleanup unless the requested outcome requires it. Stop when the requested
   behavior is satisfied and proportionally validated.
-- **Goal-driven.** Implementation and pipeline mutation trace to a kanban task. If you can't name it,
-  check the board before changing code or task state. Audits, research, ideation, and exploration may
-  remain taskless until they produce approved implementation work.
+- **Goal-driven.** Delivery implementation traces to an engine-selected native job and admitted
+  packet. Audits, research, ideation, and exploration may remain jobless until they produce admitted
+  Delivery work.
 
 ## 2. System Awareness
 
-- **Runtime.** Python 3.12+ with `uv` (never bare `pip`), VS Code/Copilot custom agents, MCP tools,
-  and a Kanban execution board.
+- **Runtime.** Python 3.14+ with `uv` (never bare `pip`), VS Code/Copilot custom agents, MCP tools,
+  and a Delivery execution board.
 - **Distribution and safety.** Clone = install; `setup/init.py` wires workspace configuration. Git
   history and audit logs provide review and recovery.
-- **Pipeline.** `shape → build → verify → collect → archived`. Use `r-pipeline-protocol` for lifecycle,
-  priority, and tags; use `r-workspace-governance` for commits and OwlBear-managed artifact placement.
+- **Delivery.** `design → plan → build → optional assembly → completed`. Independent review is
+  nested in each transformation attempt. The engine owns readiness, claims, receipts, typed
+  correction, and recovery; use `r-workspace-governance` for scoped commits and OwlBear-managed
+  artifact placement.
 
 ## 3. Memory Governance
 
 | Store | What goes here |
 |-------|----------------|
-| mcp-memory `ob-memory` | Agent institutional knowledge: durable, scoped lessons for future agents |
-| Task body / `.owlbear/kanban/decisions/` | Task-specific context, blockers, decisions, and action requests |
+| memory-mcp `owlbear-memory` | Agent institutional knowledge: durable, scoped lessons for future agents |
+| Native changes, jobs, and requests | Change-specific context, blockers, decisions, and actions |
 | `.owlbear/research/` | Research findings and source-grounded analysis |
 | Project knowledge MCP | Domain knowledge and external-source knowledge |
 
-The VS Code built-in `/memories/` store is retired for OwlBear agents. Do not write user, session, repo inbox, or fallback notes there; if the built-in memory tool appears, treat it as unavailable for agent learning. Use `ob-memory` for institutional memory and normal project artifacts for task context.
+The VS Code built-in `/memories/` store is retired for OwlBear agents. Do not write user, session, repo inbox, or fallback notes there; if the built-in memory tool appears, treat it as unavailable for agent learning. Use `owlbear-memory` for institutional memory and normal project artifacts for task context.
 
 Do NOT store as memory: architecture decisions, research findings, code snippets, or task-specific working notes.
+
+For pre-flight loading, call `recall_memory(agent="{exact-agent-name}")` with categories omitted so
+all relevant memory types remain eligible. Add a category filter only when the task intentionally
+needs a narrower subset.
 
 Before completing material work, decide whether you learned a specific, non-obvious, reusable fact that would have improved the work had it been available at the start. If `save_memory` is available and an insight qualifies, load `h-memory-structure` for the content-quality bar and `h-mcp-memory` for tool syntax, then save each distinct insight. Do not save generic advice or information already documented elsewhere. Saving creates a pending candidate; the memory curator owns deduplication, scoping, and retention. If `save_memory` is unavailable, continue without a memory write.
 
 ## 4. Operational Fundamentals
 
-- **MCP Tool Bootstrap.** Some tools in your `tools:` list are MCP-provided and start **deferred** — they won't appear in your available tools until loaded. If a tool is missing, call `tool_search` with the query from this table:
+- **MCP Tool Bootstrap.** Invoke a granted MCP tool directly when it is available. If it is deferred
+  and `tool_search` is available, load it with the query from this table. If neither binding is
+  available, report the runtime capability failure; prose tool signatures cannot create a callable
+  tool.
 
   | MCP server | `tools:` prefix | Runtime tool ID | `tool_search` query |
   |---|---|---|---|
-  | OwlBear Kanban | `ob-kanban/*` | `mcp_ob-kanban_<tool>` | `"kanban"` |
-  | OwlBear Memory | `ob-memory/*` | `mcp_ob-memory_<tool>` | `"memory"` |
+  | OwlBear Delivery | `owlbear-delivery/*` | `mcp_owlbear-delivery_<tool>` | `"OwlBear Delivery create_design_session read_design_session revise_design_session publish_design_checkpoint derive_delivery_contract validate_delivery_contract admit_delivery_change list_work_items show_work_item acquire_frontier_work show_plan_context show_build_context publish_delivery_plan publish_delivery_result transition_delivery recover_claim list_integration_ready_changes show_integration_attention integrate_ready_change admit_reviewed_integration_repair list_completed_changes search_completed_changes show_completed_change"` |
+  | OwlBear Memory | `owlbear-memory/*` | `mcp_owlbear-memory_<tool>` | `"memory"` |
   | MarkItDown | `markitdown/*` | `mcp_markitdown_<tool>` | `"markdown convert"` |
 
 - **Skill authority.** Skills override dispatch prompts. Dispatch prompts provide context, not procedure.
@@ -62,7 +71,7 @@ Before completing material work, decide whether you learned a specific, non-obvi
   result as unreliable. Before retrying a mutating or non-idempotent command, use a read-only check to
   determine whether it already took effect; retry only when the check shows it did not run. A read-only or
   idempotent command may be retried unchanged once when its output is still needed.
-- **Loop detection.** Tier 1: same approach twice — change approach. Tier 2: two different approaches failed — narrow scope (deliver what you can, note what you can't). Tier 3: 3+ attempts — stop and report what failed. When working a claimed pipeline task, load `r-pipeline-protocol` and classify the next task state under `Interruptions And Requests` before mutating it.
+- **Loop detection.** Tier 1: same approach twice — change approach. Tier 2: two different approaches failed — narrow scope (deliver what you can, note what you can't). Tier 3: 3+ attempts — stop and report what failed. For an engine-started job, return the owning workflow's fail-closed structured disposition without inventing lifecycle mutation.
 - **Terminal.** `uv run` for all Python tools.
 - **Scratch files.** Terminal output, temp/debug files, and one-off scripts go to `.owlbear/scratch/`, never the project root.
 - **Commits.** Follow `r-workspace-governance` for format, ownership, and git discipline.

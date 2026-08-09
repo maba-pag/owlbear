@@ -1,12 +1,12 @@
 ---
 name: h-ac-quality
-description: "Handbook: Unified two-tier acceptance-criteria quality schema for shaper drafting and challenger validation"
+description: "Handbook: Two-tier acceptance-scenario quality for native planning and review"
 user-invocable: false
 ---
 
 # AC Quality Schema
 
-Single authority for writing and validating acceptance criteria (AC) lines in the pipeline.
+Single authority for writing and validating acceptance scenarios in native Specification and Delivery.
 
 ## Meta-Rule
 
@@ -67,21 +67,21 @@ that the AC claims works.
 
 ## Tier 2 - Process AC (Workflow Changes)
 
-Use Tier 2 for requirements that change agent behavior, stage transitions, or pipeline policy.
+Use Tier 2 for requirements that change agent behavior, lifecycle transitions, or Delivery policy.
 
 ### P1 - Agent/Stage-Scoped
 
-Each AC line explicitly names the responsible agent, skill, or pipeline stage.
+Each AC line explicitly names the responsible agent, skill, engine operation, or delivery phase.
 
-- Reject: "The task should be advanced with notes."
-- Pass: "Builder appends Builder Notes and advances in-progress -> review."
+- Reject: "The work should be advanced with evidence."
+- Pass: "Given an advisory-reviewed Planning claim, `publish_delivery_plan` returns one claim-bound task-chain candidate."
 
 ### P2 - Observable Artifact or State Change
 
-Each AC line describes a before -> after difference in an inspectable artifact or board state.
+Each AC line describes a before -> after difference in an inspectable artifact or native graph state.
 
-- Artifact examples: task body section, file created, field populated, section header present.
-- State examples: status transition, dependency link created, tag or priority changed.
+- Artifact examples: plan record, receipt, finding, request, file, or populated field.
+- State examples: job transition, dependency readiness, invalidation, or change closure.
 
 ### P3 - Verification Method Stated
 
@@ -90,7 +90,7 @@ Each AC line states how downstream agents verify completion.
 Allowed methods:
 
 - artifact inspection
-- stage-transition audit
+- lifecycle-transition audit
 - field-presence check
 - diff comparison
 - tool or API query
@@ -108,11 +108,11 @@ Run the mechanical pass before semantic review:
 | Mechanical | Numbering | AC numbering is present, stable, and unambiguous. |
 | Semantic | B1 / P1 | The line has one observable boundary or maintained artifact and, for process AC, names its responsible agent, skill, or stage. |
 | Semantic | B2 | Behavior AC states a concrete input and observable output. |
-| Semantic | P2 | Process AC states an inspectable artifact or board-state delta. |
+| Semantic | P2 | Process AC states an inspectable artifact or graph-state delta. |
 | Semantic | P3 | Process AC states an explicit verification method. |
 | Semantic | Meta-rule | The line is independently verifiable, has objective pass/fail evidence, and contains no hidden assumptions requiring author interpretation. |
 | Semantic | B4 | Cross-boundary AC names the normal assembled boundary and replaces only lower dependencies in proof. |
-| Semantic | Literal authority | The strongest applicable authority is cited or recorded; unresolved contradictions block shaping. |
+| Semantic | Literal authority | The strongest applicable authority is cited or recorded; unresolved contradictions block planning or admission. |
 
 A mechanical failure requires rewriting before semantic review. For a semantic failure, clarify the
 scope, input, output, or verification method and give bad -> good rewrite guidance.
@@ -121,13 +121,13 @@ scope, input, output, or verification method and give bad -> good rewrite guidan
 
 | Rule | Bad | Good |
 |------|-----|------|
-| B1 | "System handles archival requests." | "Given an active task, POST /api/tasks/{id}/release records archival_reason in the archived task metadata." |
-| B2 | "When a task is blocked, the API responds with an error." | "Given task_id=42 with blocked=true, GET /api/tasks/42 returns HTTP 423 with error.code='TASK_BLOCKED'." |
-| B3 | "Verifier checks all AC lines correctly." | "Verifier checks AC-1 through AC-4 and records one evidence row per AC line in Verify Notes." |
+| B1 | "System handles planning." | "Given a current Planning claim and complete tasks, `publish_delivery_plan` returns a candidate bound to that claim and task chain." |
+| B2 | "When work is stale, the API responds with an error." | "Given a stale claim ID, `publish_delivery_plan` returns `ERR_DELIVERY_RUNTIME_CONFLICT` and creates no candidate." |
+| B3 | "Reviewer checks every scenario correctly." | "Plan review returns one evidenced row for packet completeness, admitted references, impact closure, dependency order, proof boundary, and material expansion." |
 | B4 | "Given an injected workflow runner, the CLI command returns JSON." | "Given the real CLI application with remote HTTP transport replaced, invoking `alerts prepare` resolves normal configuration, crosses the assembled workflow boundary, and writes one JSON document to stdout." |
-| P1 | "Add validation before moving tasks." | "Shaper validates AC quality in shape before moving task shape -> build." |
-| P2 | "The decomposition output should be prepared." | "Shaper creates one `shape` child task with `parent` set to the aggregate parent and `depends_on` set to prerequisite child task IDs." |
-| P3 | "Collector confirms the handoff is complete." | "Collector verifies aggregate completion by inspecting child status, `## Verify Notes`, and parent/EPIC acceptance criteria." |
+| P1 | "Add validation before Delivery." | "Designer runs deterministic validation and complete source-grounded challenge before requesting admission approval." |
+| P2 | "The plan should be prepared." | "The plan claim returns one bounded task set, explicit dependencies, and maintained-boundary proof for independent review." |
+| P3 | "Review confirms completion." | "Build review compares the exact candidate commit, admitted task claim, complete diff, and focused proof before returning one typed disposition." |
 
 ## Canonical Literal Verification
 
@@ -145,7 +145,7 @@ Use this when AC lines cite concrete literals that must match source-of-truth to
 
 - Bad: "Use standard medium spacing for card gaps."
 - Good: "The result grid uses the project's canonical medium-spacing token, identified in Shape
-  Notes, for its column and row gaps."
+  authority, for its column and row gaps."
 
 3. Command choice
 
@@ -153,17 +153,17 @@ Use this when AC lines cite concrete literals that must match source-of-truth to
 - Good: "`export --format` accepts the parser-declared literals `json | csv`; `xml` exits non-zero
   and names the accepted values."
 
-4. OwlBear board transition
+4. OwlBear native lifecycle transition
 
-- Bad: "Shaper moves the task to the next valid status."
-- Good: "After AC validation passes, Shaper moves the task from `shape` to `build` and verifies the
-  resulting status through the OwlBear Kanban MCP."
+- Bad: "Orchestrator moves work to the next valid phase."
+- Good: "After Planner returns `AdvanceDelivery`, Orchestrator forwards the unchanged transition to
+  `transition_delivery`, then refreshes acquisition."
 
 ### Authority Discovery
 
 Locate the strongest authority available in the target project. Prefer sources in this order:
 
-| Priority | Authority | Suitable claims |
+| Order | Authority | Suitable claims |
 |----------|-----------|-----------------|
 | 1 | Checked-in schema, type, configuration, or public source declaration | Allowed literals, fields, transitions, tokens, defaults |
 | 2 | Generated public inventory, command tree, API schema, or compiled contract | Registered operations and assembled public surface |
@@ -174,16 +174,17 @@ Locate the strongest authority available in the target project. Prefer sources i
 Do not use a test fixture, stale planning document, or paraphrased UI label as canonical when a
 stronger authority exists. A sampled production envelope does not prove unobserved variants.
 
-### Verifier Procedure
+### Review Procedure
 
 1. Identify each literal claim in the AC line: enum value, transition, token, prop, event, flag,
    command choice, field name, or generated operation.
 2. Discover the strongest applicable authority using the priority table.
 3. Confirm spelling, allowed values, version, and relevant constraints through targeted source or
    structured contract inspection.
-4. Record the authority and evidence scope in Shape Notes when it is not already obvious from the AC
-   or task context.
+4. Record the authority and evidence scope in the node plan or review evidence when it is not already
+  obvious from the acceptance scenario.
 5. Compare the AC wording with the authority; treat invented aliases and unsupported values as
    contradictions, not harmless paraphrases.
 6. Rewrite the AC with the verified literals. If two credible authorities disagree, record the
-   contradiction and block shaping until ownership is resolved; do not choose silently.
+  contradiction and return the owning workflow's blocked or Specification re-entry disposition;
+  do not choose silently.

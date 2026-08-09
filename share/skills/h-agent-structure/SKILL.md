@@ -32,8 +32,8 @@ file schemas, required sections, naming grammar, extraction criteria, and anti-p
 
 ### Precedent
 
-`builder-challenger` qualifies through its independent cross-check, distinct model, and deterministic
-auto-fix boundary.
+`build-reviewer` qualifies through its independent exact-commit task-result review, distinct model, and hard
+read-only boundary.
 
 ## Principles
 
@@ -96,8 +96,8 @@ hooks:                         # only if enforcement needed
 ---
 ```
 
-- `user-invocable: false` — hides from the `/` slash-command menu. Use for pipeline-only agents/skills that should only be dispatched by the orchestrator.
-- `disable-model-invocation: true` — prevents autonomous invocation by other models. Use for L1/L2 pipeline agents. **Must be `false` for ND3 agents** (agents that may be called at nesting depth ≥3), because VS Code does not resolve agents with `true` at depth ≥2. See § Nesting Depth & DMI below.
+- `user-invocable: false` — hides from the `/` slash-command menu. Use for internal agents/skills that should only be dispatched by an owning workflow.
+- `disable-model-invocation: true` — prevents autonomous invocation by other models. Use for L1/L2 delivery agents. **Must be `false` for ND3 agents** (agents that may be called at nesting depth ≥3), because VS Code does not resolve agents with `true` at depth ≥2. See § Nesting Depth & DMI below.
 
 ### Required Sections
 
@@ -117,8 +117,7 @@ required skill load its own transitive dependencies.
 <required_reading>
 
 - `{primary_skill}` — primary workflow or domain authority
-- `r-pipeline-protocol` — task-owner lifecycle, communication, and closure
-- `r-challenger-protocol` — advisory decisions and caller routing when this role challenges or invokes a challenger
+- `r-challenger-protocol` — advisory evidence and caller routing when this role challenges or invokes a reviewer
 
 </required_reading>
 ```
@@ -128,26 +127,22 @@ importance; 3-7 is the normal range. Exceed it only when every additional rule i
 agent-specific, and would lose a necessary constraint if combined or moved to shared authority.
 
 - First item: "**Follow the `{primary_skill}` skill** for {1-line summary}."
-- Task-owning pipeline agents reference `r-pipeline-protocol` for lifecycle conventions.
-- Challengers and their callers reference `r-challenger-protocol` for advisory decisions and routing.
+- Challengers and their callers reference `r-challenger-protocol` for advisory evidence and routing.
 - Every remaining rule must be **unique** to this agent. If the same rule would appear in 2+ agents,
   it belongs in a shared skill, protocol, or authority instruction.
 - Each rule must be **actionable** — it can be verified as followed or violated.
 
 **`<output_format>`** — The agent's communication interface.
 
-- Dispatched pipeline agents define **Channel A** verdict tokens and a format string, one row per
-  verdict.
-- A user-facing pipeline agent may define a human summary instead of exposing machine verdicts when
-  its internal route is recorded in task state and the shared protocol declares the exception.
-- **Channel B:** body section name + what to include (brief description). Full template lives in the
-  owning workflow skill.
+- Dispatched native agents define exact structured dispositions that match the owning lifecycle
+  operation or fail-closed route.
+- User-facing agents define their durable authority mutation boundary and concise human summary.
 - The agent defines WHAT the output looks like. The skill defines HOW to construct it (command syntax, full templates).
 
 **`<boundaries>`** — Agent-specific red flags and failure rationalizations.
 
-- Only constraints that apply specifically to THIS agent. Common task-owner red flags live in
-  `r-pipeline-protocol`; common challenger red flags live in `r-challenger-protocol`.
+- Only constraints that apply specifically to THIS agent. Common reviewer red flags live in
+  `r-challenger-protocol`.
 - Optional: failure rationalizations table (common self-deception patterns with correct responses).
 
 **`<examples>`** — Usually 2-3 abstract, principle-based examples. Add more only when each resolves a
@@ -159,15 +154,15 @@ distinct, likely boundary confusion that the existing examples do not cover.
 
 ### Optional Sections
 
-**`<pipeline_position>`** — Pipeline agents (T2) only.
+**`<pipeline_position>`** — Optional for roles whose local threshold is clearer as a transition table.
 
 Compact transition table showing what triggers this agent and what it produces:
 
 ```markdown
 | Trigger | From → To | Condition |
 |---------|-----------|-----------|
-| Done    | build → verify | implementation and focused evidence complete |
-| Reject  | build → shape  | scope, AC, or dependency premise is wrong |
+| Success | Build launch → published result transition | exact-commit advisory review passes |
+| Re-entry | Build launch → Planning or Design | task authority cannot own the finding |
 ```
 
 **`<agents>`** — Only agents that delegate to sub-agents.
@@ -175,7 +170,7 @@ Compact transition table showing what triggers this agent and what it produces:
 ```markdown
 | Agent | When | Example |
 |-------|------|---------|
-| shaper-challenger | AC quality and scope review during shaping | `Challenge Shape: task_id=42, proposed_verdict=APPROVED, reasoning="..."` |
+| planner-challenger | Task-chain review before publication | `Challenge Plan: change=cache, outcome=OUT-004, claim=claim-7` |
 ```
 
 The `<agents>` table must list every agent in the frontmatter `agents:` array and vice versa. This is the **only** source of subagent knowledge at nesting depth ≥2 (VS Code does not inject the agents catalog at that depth). The `validate-agents` pre-commit hook enforces alignment through `.owlbear/scripts/validate_agents.py`.
@@ -186,7 +181,7 @@ Agent files must NOT contain:
 
 - Step-by-step procedures → belongs in the owning workflow skill
 - Commit discipline → belongs in `r-workspace-governance`
-- Command templates (MCP kanban tools, git) → belongs in the skill's output template
+- Command templates (Delivery MCP tools, git) → belongs in the skill's output template
 - Verbatim copies of skill checklist content → reference the skill instead
 - Shared protocols, red flags, or rules → belong in the matching shared skill
 
@@ -196,12 +191,12 @@ Agent files must NOT contain:
 
 1. **ND3 agents** (callable at nesting depth ≥3) must have `disable-model-invocation: false`; VS Code
   cannot resolve them otherwise.
-2. **ND1/ND2 agents** keep `disable-model-invocation: true` (default for pipeline agents).
+2. **ND1/ND2 agents** keep `disable-model-invocation: true` (default for delivery agents).
 3. **Every dispatching agent** must mirror its frontmatter `agents:` array in `<agents>`; the global
   agent catalog is unavailable at depth ≥2.
 4. ND3 agents are tagged with `(ND3)` in their `description` field for identification.
 
-**Current ND3 agents:** shaper-challenger, builder-challenger, verifier-challenger.
+**Current ND3 agents:** build-reviewer, conceptual-design-reviewer, planner-challenger.
 
 Caller inventory is intentionally not duplicated here. The source of truth for caller → subagent relationships is each caller's frontmatter `agents:` array plus its `<agents>` body table; see [share/WIRING.md](../../WIRING.md) for the inverse ecosystem map. When adding a new caller, update the caller's agent file. When adding a new ND3 agent, set `disable-model-invocation: false`, tag the description with `(ND3)`, and add it to this list.
 
@@ -235,7 +230,7 @@ user-invocable: {true|false}
 
 ### Naming Grammar
 
-- **Agent names** are **role nouns** or role compounds (builder, verifier, builder-challenger).
+- **Agent names** are **role nouns** or role compounds (builder, memory-curator, build-reviewer).
 - **Skill names** are **domain-action compounds** — use verbs/actions, not plural nouns. E.g., `test-curation` not `test-curations`, `decision-routing` not `decision-requests`, `task-decomposition` not `task-workflow`.
 - The `w-` prefix replaces the word "workflow" — don't use both (e.g., `w-test-curation` not `w-test-curation-workflow`).
 
@@ -243,8 +238,7 @@ user-invocable: {true|false}
 
 ```markdown
 ## Step 0 — Setup
-Read `r-pipeline-protocol` skill if not already loaded.
-Claim the task (pipeline-protocol → Task Setup → Claiming).
+Validate the supplied authority and immutable execution identity before mutation.
 
 ## Step 1 — {first unique action}
 {Procedure unique to this skill}
@@ -263,15 +257,15 @@ Commit per `r-workspace-governance` → Commit Discipline.
 - {pitfall}: {avoidance}
 ```
 
-**Step 0 applies to:** Task-claiming workflows such as `w-mem-curation` and `w-task-decomposition`.
+**Step 0 applies to:** Workflows that consume an engine-started job or immutable candidate.
 
 **No Step 0:** w-orchestration (own dispatch pattern), w-test-curation (suite-scoped inventory, not task-scoped).
 
 **Workflow skills must NOT contain:**
 
-- Claiming/commit boilerplate (reference `r-pipeline-protocol` and `r-workspace-governance`)
-- MCP kanban tools Commands table (commands appear inline where used)
-- Channel A/B protocol explanation (that's `r-pipeline-protocol`)
+- Commit boilerplate (reference `r-workspace-governance`)
+- Delivery MCP tools Commands table (commands appear inline where used)
+- Generic lifecycle tool syntax (the owning workflow or runtime contract defines it)
 
 ### Rules Skill Structure
 

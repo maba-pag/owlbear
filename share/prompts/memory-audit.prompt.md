@@ -38,8 +38,8 @@ clarity, not for minor wording polish.
 
 MCP tools may be deferred when the prompt starts.
 
-1. If any `ob-memory/*` tool is unavailable, call `vscode/toolSearch` with query `memory` before doing session setup.
-2. If `ob-memory` remains unavailable, do not pretend the queue is empty. Report the tool-loading failure, explain that memory review cannot mutate or read MCP entries without those tools, and ask one continuation decision: retry bootstrap, inspect local docs only, or pause.
+1. If any `owlbear-memory/*` tool is unavailable, call `vscode/toolSearch` with query `memory` before doing session setup.
+2. If `owlbear-memory` remains unavailable, do not pretend the queue is empty. Report the tool-loading failure, explain that memory review cannot mutate or read MCP entries without those tools, and ask one continuation decision: retry bootstrap, inspect local docs only, or pause.
 3. If read/search tools needed for source context are unavailable, continue the memory review only after telling the user which context sources will be missing and lowering context confidence.
 
 ## 1. Authority And Boundaries
@@ -48,7 +48,7 @@ Before reviewing entries, read these files and apply them as the source of truth
 
 1. `../skills/h-memory-structure/SKILL.md` for schema, states, quality bar, confidence calibration, and anti-patterns.
 2. `../skills/h-mcp-memory/SKILL.md` for tool contracts, allowed transitions, and batch-review helper usage.
-3. Workspace `.vscode/mcp.json` to discover the `--project` path used by the `ob-memory` server.
+3. Workspace `.vscode/mcp.json` to discover the `--project` path used by the `owlbear-memory` server.
 
 Boundary rules:
 
@@ -63,7 +63,7 @@ Boundary rules:
 
 ## 2. Session Preflight
 
-1. Call `ob-memory/list_memories` with
+1. Call `owlbear-memory/list_memories` with
    `states: ["pending", "curated", "approved", "contested", "disputed", "stale"]`.
 2. Build internal queues:
    - `approval_queue`: `curated` entries, sorted by oldest `updated_at`, then oldest `created_at`, then ID.
@@ -96,7 +96,7 @@ Do not review entries as isolated yes/no decisions. Work internally in batches o
 
 ### 3.1 Batch Base Read
 
-For the next batch of up to five selected entries, call `ob-memory/read_memory` for each exact entry ID. Capture:
+For the next batch of up to five selected entries, call `owlbear-memory/read_memory` for each exact entry ID. Capture:
 
 - title
 - content
@@ -153,7 +153,9 @@ Only load deeper context when one of these is true:
 
 When deeper context is needed, load only the minimum necessary:
 
-1. Recover source task context from `.owlbear/kanban/tasks/` or `.owlbear/kanban/archive/`.
+1. Recover native source context from the referenced job, receipt, or activity record. For entries
+   created before native cutover, inspect the immutable legacy inventory rather than an active task
+   store.
 2. Read likely overlapping memories before calling something duplicate or conflicting.
 3. Read `share/agents/{source_agent}.agent.md` when the source role matters.
 4. Read scoped agent definitions only when scope is part of the decision.
@@ -191,7 +193,7 @@ Ranking is internal pressure, not a bulk decision. Present entries one at a time
 ### 3.7 Exceptional-State Handoff
 
 When the user selects `Review entries needing resolution`, process `resolution_queue` one item at a
-time. Call `ob-memory/read_memory` for the exact entry ID, then present:
+time. Call `owlbear-memory/read_memory` for the exact entry ID, then present:
 
 ```markdown
 **Entry:** {ref} | {title} | {state}
@@ -268,13 +270,13 @@ After the user answers, perform exactly the selected action for the current entr
 ### Approve
 
 - Valid only when the current state is `curated`.
-- Call `ob-memory/approve_memory` with `entry_id`.
+- Call `owlbear-memory/approve_memory` with `entry_id`.
 - Record the result in the session ledger.
 - Move to the next selected entry unless the user explicitly asks to pause, stop, or end.
 
 ### Edit Before Approval
 
-- If the user provided exact edits, call `ob-memory/curate_memory` with only those fields.
+- If the user provided exact edits, call `owlbear-memory/curate_memory` with only those fields.
 - If the user asked you to propose a rewrite, draft the exact replacement title/content/categories/confidence/scope first, then ask one confirmation decision before mutating.
 - Keep entries single-insight. If the content contains multiple insights, recommend splitting through `memory-curator` instead of stuffing multiple ideas into one entry.
 - After mutation, read or report the returned entry state and ledger it as changed.
@@ -284,7 +286,7 @@ After the user answers, perform exactly the selected action for the current entr
 - Treat this as destructive.
 - Selecting `Reject` or `Reject/retire` in `askQuestions` is explicit confirmation.
 - If the user gives an ambiguous freeform answer that might imply rejection, clarify before mutating.
-- Call `ob-memory/delete_memory` only after confirmation.
+- Call `owlbear-memory/delete_memory` only after confirmation.
 - Record whether the tool reported hard-delete or soft-delete semantics.
 
 ### Skip
@@ -307,10 +309,10 @@ When the selected queue is exhausted, when no approval-ready entries exist, or w
 - Run the review batch helper if mutations occurred.
 - Pause the session.
 
-If mutations occurred and the user chooses to run the helper, derive the command from the `ob-memory` server entry in `.vscode/mcp.json`. Use the `--project` argument configured there. The default shape is:
+If mutations occurred and the user chooses to run the helper, derive the command from the `owlbear-memory` server entry in `.vscode/mcp.json`. Use the `--project` argument configured there. The default shape is:
 
 ```bash
-uv --project ../owlbear run python -m owlbear_mcp_memory.git review
+uv --project ../owlbear run python -m owlbear_memory_mcp.git review
 ```
 
 Run only the state-aware helper. Never broad-add `.owlbear/memory`; pending entries must remain uncommitted until curation.

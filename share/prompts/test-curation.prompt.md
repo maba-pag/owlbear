@@ -1,5 +1,5 @@
 ---
-description: "Run test suite curation — remove stale task-tests and preserve durable regression guards"
+description: "Curate transient proof tests against immutable legacy provenance"
 agent: test-curator
 ---
 
@@ -11,4 +11,4 @@ Use the user's language unless they ask otherwise. Apply the Rent Test autonomou
 evidence. The test-curator has no user-decision tool; when concrete missing context prevents a
 responsible decision, record `skip` and continue.
 
-Stop successfully when no archived task-test candidates remain.
+Stop successfully when no immutable legacy-proof candidates remain.

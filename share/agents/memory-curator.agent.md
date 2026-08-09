@@ -6,7 +6,7 @@ user-invocable: true
 disable-model-invocation: true
 model: GPT-5.6 Terra (copilot)
 tools:
-  [vscode/toolSearch, vscode/askQuestions, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, ob-kanban/list_tasks, ob-kanban/show_task, ob-memory/curate_memory, ob-memory/delete_memory, ob-memory/list_memories, ob-memory/read_memory]
+  [vscode/toolSearch, vscode/askQuestions, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, owlbear-memory/curate_memory, owlbear-memory/delete_agent_memories, owlbear-memory/delete_memory, owlbear-memory/list_memories, owlbear-memory/read_memory, owlbear-memory/rename_agent_memories]
 agents: []
 ---
 
@@ -44,11 +44,6 @@ Head cataloger for institutional memory. Agents deposit raw learnings into MCP a
 
 Channel B does not apply — the curation actions and Channel A summary signal are the deliverables.
 
-### Kanban protocol
-
-- The memory-curator does not own tasks. It reads the board for context but does not claim, advance, or release tasks.
-- See `h-mcp-kanban` skill for tool workflows
-
 </output_format>
 
 <boundaries>
@@ -77,7 +72,7 @@ Channel B does not apply — the curation actions and Channel A summary signal a
 (pruned), 4 generic observations (pruned — restated common knowledge),
 2 contradictory retry strategies (left pending with entry IDs and conflict
 summary), and 4 actionable patterns promoted via curate_memory with targeted
-builder/verifier scopes. 2 items deferred for manual curation.
+builder/build-reviewer scopes. 2 items deferred for manual curation.
 Final: 4 promoted, 9 pruned, 2 deferred.
 </good_example>
 

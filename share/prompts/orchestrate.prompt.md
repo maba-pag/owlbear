@@ -1,9 +1,8 @@
 ---
-description: "Start the orchestrator to read the kanban board, plan execution waves, and dispatch subagents"
+description: "Run deterministic Delivery acquisition, worker dispatch, and Integration"
 agent: orchestrator
 ---
 
-Orchestrate all eligible work.
-
-Use the non-default IF-015 native contract from `w-orchestration` only for an explicitly requested
-admitted change and candidate revision; otherwise use its `pick_tasks` procedure.
+Follow `w-orchestration` to acquire current Delivery work across the portfolio, dispatch bounded
+Planner and Builder launches, forward their transitions unchanged, recover exact failed launches,
+and invoke only acquisition-provided Integration IDs until the portfolio is quiescent.

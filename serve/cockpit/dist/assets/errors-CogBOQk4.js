@@ -1,0 +1,1 @@
+var e=class extends Error{status;constructor(e,t){super(t),this.name=`ApiError`,this.status=e}};export{e as t};

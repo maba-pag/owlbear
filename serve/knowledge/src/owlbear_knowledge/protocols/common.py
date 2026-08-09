@@ -22,7 +22,7 @@ from pydantic import BaseModel, ConfigDict
 # Recursive JSON-safe value type (PEP 695, Python 3.12+)
 # ---------------------------------------------------------------------------
 
-type JsonValue = str | int | float | bool | None | list[JsonValue] | dict[str, JsonValue]
+type JsonValue = str | int | float | bool | list[JsonValue] | dict[str, JsonValue] | None
 
 Metadata = dict[str, JsonValue]
 """Arbitrary key-value metadata constrained to JSON-serialisable values."""

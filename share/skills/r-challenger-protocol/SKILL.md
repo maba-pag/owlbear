@@ -6,14 +6,15 @@ user-invocable: false
 
 # Challenger Protocol
 
-Shared contract for shaper-challenger, builder-challenger, verifier-challenger, and their callers.
-Challengers advise the task-owning caller; they never own pipeline state.
+Shared contract for native design challenge, plan challenge, and committed-packet review.
+Reviewers advise the owning workflow; they never own lifecycle state.
 
 ## Role Boundary
 
-- Inspect only the proposal, changed slice, evidence, and adjacent context needed to judge the claim.
-- Never claim, mutate, advance, release, or block a task; create a request; assess memory; call
-  `end_work`; or commit pipeline state.
+- Inspect only the immutable revision, plan, commit, evidence, and adjacent source needed to judge
+  the supplied claim.
+- Never pick, start, finish, reject, release, or recover a job; create a request; edit authority or
+  implementation; or commit repository state.
 - Do not perform open-ended orientation or invent product direction. Report missing authority or
   planning premises to the caller.
 - Run commands or deterministic auto-fixes only when the challenger agent's own tools and rules
@@ -21,38 +22,21 @@ Challengers advise the task-owning caller; they never own pipeline state.
 
 ## Decision Contract
 
-Return exactly one advisory decision:
-
-| Decision | Use when | Caller obligation |
-|----------|----------|-------------------|
-| `pass` | The proposed route is supported by the supplied claim and evidence | Continue only if the caller's own checks also pass |
-| `fail` | A concrete defect exists within the accepted contract and the caller can correct or route it without changing that contract | Do not continue; correct or route the defect, then re-run the required challenge before success |
-| `reconsider` | The proposed route depends on a missing, contradictory, or newly invented planning premise, authority, interface, owner, dependency, or acceptance meaning | Do not continue or patch around it; the task-owning caller must return to the planning owner or user decision boundary |
-
-`fail` and `reconsider` are advisory decisions, not pipeline Channel A signals. The task-owning
-caller performs any required board mutation and records the challenger result in its own notes.
-
-Use this output shape unless the challenger agent defines an additional required field:
-
-```text
-decision: pass|fail|reconsider
-problem: {one-line reason, required for fail or reconsider}
-root_cause: {why this invalidates the proposed route, optional}
-recommendation: {specific caller action, optional}
-notes: {checks run, auto-fixes applied, or non-blocking observations; optional}
-```
+Each reviewer returns the complete typed mapping defined by its agent contract. Every required
+dimension receives a disposition and discriminating evidence; aggregate approval prose is invalid.
+The owning workflow interprets those rows and returns its own structured disposition. Review output
+never authorizes a lifecycle call by itself.
 
 ## Evidence Rules
 
-- Judge the claim against task intent, named authorities, direct evidence, current follow-up keys,
-  and the caller's stated change or review boundary.
+- Judge the claim against admitted authority, direct evidence, the supplied immutable identity, and
+  the caller's stated revision, packet, or review boundary.
 - Evidence proves only the boundary it exercises. Do not accept aggregate counts, mocks, injected
   dependencies, or local checks as proof of an unexercised command, endpoint, assembled context,
   workflow, or user journey.
-- For repeated-failure or cross-boundary routes, inspect the caller's Repair Closure Map. Confirm
-  that each claimed production boundary exists in current source, each cited artifact contains its
-  claimed responsibility, and the proposed proof would fail if the repaired dataflow or operation
-  were bypassed. Co-occurring inputs and outputs do not prove that one controls the other.
+- For cross-boundary claims, confirm each production boundary exists in current source, each cited
+  artifact owns its claimed responsibility, and proof would fail if the claimed dataflow or
+  operation were bypassed. Co-occurring inputs and outputs do not prove control.
 - When a route requires an executor, tool, agent profile, mutation owner, or downstream capability,
   confirm it is currently available or that the accepted contract defines an observable fail-closed
   state. A mocked or replaced executor may prove behavior below an allowed boundary; it cannot hide
@@ -64,8 +48,8 @@ notes: {checks run, auto-fixes applied, or non-blocking observations; optional}
 
 ### Minimum Change Review
 
-For build and verify challenges, compare the proposed route with the caller's change envelope: the
-expected files or symbols, required behavior, and cheapest falsifying proof.
+For committed-packet review, compare the complete diff with the admitted packet envelope, required
+outputs, impact closure, and cheapest falsifying proof.
 
 - Every added file, helper, abstraction, fallback, compatibility branch, edge case, and durable test
   must be required by accepted scope or an observed defect.
@@ -74,17 +58,34 @@ expected files or symbols, required behavior, and cheapest falsifying proof.
   security-sensitive, data-loss-prone, or cheaper to test than to verify repeatedly.
 - Do not accept file replacement when a targeted edit works, adjacent cleanup, speculative
   hardening, one-test-per-criterion mapping, or scope expansion justified by adding more tests.
-- A verifier patch must remain within its declared local repair budget. New helpers, abstractions,
-  generalized behavior, or durable tests return to the owning stage.
 
 ## Caller Routing
 
-| Challenger | `reconsider` owner and route |
-|------------|------------------------------|
-| shaper-challenger | Shaper resolves the missing planning premise or user-owned decision, rebuilds the complete provisional graph, and re-runs the challenge before approval |
-| builder-challenger | Builder records the planning defect and rejects the task to `shape` |
-| verifier-challenger | Verifier records the planning defect and reshapes the task to `shape` |
+| Reviewer | Caller route |
+|----------|--------------|
+| designer-challenger | Designer repairs candidate authority, reruns deterministic validation and challenge, and seeks fresh user approval before admission |
+| planner-challenger | Planner interprets advisory `pass` or `finding`; only pass permits plan publication and Planner alone selects `advance`, `retry`, `return`, or `block` |
+| build-reviewer | Builder interprets advisory `pass` or `finding`; implementation findings may be repaired, while Planning or Design findings return through Builder-selected transitions without result publication |
 
-Callers may repair a `fail` only within their existing authority and local repair budget. If the
-reported defect instead changes the accepted contract, treat it as `reconsider` regardless of the
-challenger's label and route it to the planning owner.
+Every repaired candidate requires a fresh review against its new immutable identity or commit.
+
+## Memory Candidate Routing
+
+Reviewers may recall memory but remain mutation-free. When a review establishes one specific,
+non-obvious, reusable lesson that meets `h-memory-structure`, return exactly one optional candidate
+inside the advisory mapping:
+
+```yaml
+memory_candidate:
+  source_agent: <reviewer's canonical agent name>
+  title: <concise title>
+  content: <single actionable lesson with exact evidence locator>
+  categories: [<memory categories>]
+  confidence: <0.7-0.9>
+```
+
+Use `memory_candidate: null` when no lesson qualifies. Never include `scope_agents`; the memory
+curator owns relevance scope. The task-owning caller validates the candidate against
+`h-memory-structure` and, when it qualifies, calls `save_memory` with the reviewer-provided
+`source_agent`. The caller must not rewrite provenance, invent a candidate, or let memory handling
+change the primary advisory or lifecycle disposition.

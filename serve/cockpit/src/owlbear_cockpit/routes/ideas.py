@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
 from owlbear_cockpit.deps import get_ideas_path
-from owlbear_kanban.storage_io import atomic_write
+from owlbear_delivery.storage_io import atomic_write
 
 router = APIRouter()
 

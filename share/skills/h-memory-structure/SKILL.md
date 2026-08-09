@@ -8,9 +8,9 @@ user-invocable: false
 
 > **Audience:** Agents writing post-task reflections and the memory-curator agent. **When:** Before calling `save_memory` (entry shape and quality checks) and during curation sessions. **Why:** Ensures entries meet the structural and quality bar for long-lived agent knowledge.
 
-Structural standards for project memory entries in MCP (`ob-memory`) storage. Covers entry shape, tier selection, deduplication, and quality enforcement.
+Structural standards for project memory entries in MCP (`owlbear-memory`) storage. Covers entry shape, tier selection, deduplication, and quality enforcement.
 
-For tool syntax, see `h-mcp-memory`. For curation workflow, see `w-mem-curation`. For pipeline integration (pre-flight, reflection), see `r-pipeline-protocol`.
+For tool syntax, see `h-mcp-memory`. For curation workflow, see `w-mem-curation`.
 
 ## Entry Shape
 
@@ -25,7 +25,7 @@ Memory entries use markdown body + YAML frontmatter. Core fields:
 | `state` | str | One of: `pending`, `curated`, `approved`, `contested`, `disputed`, `stale`, `deleted` |
 | `content` | str | Markdown body |
 | `scope_agents` | list[str] | Scope list (empty list allowed) |
-| `source_agent` | str | Required; immutable provenance marker |
+| `source_agent` | str | Required; immutable historical provenance marker |
 | `created_at` | str | UTC timestamp |
 | `updated_at` | str | UTC timestamp |
 | `approved_at` | str \| null | Approval timestamp (set on approve, cleared on downgrade/delete) |
@@ -36,7 +36,7 @@ Enumerations and ranges used by the schema:
 - `state` values: `pending`, `curated`, `approved`, `contested`, `disputed`, `stale`, `deleted`
 - `confidence` range: inclusive `[0.7, 1.0]`
 
-This schema is validated by `MemoryEntry` in the `mcp-memory` package.
+This schema is validated by `MemoryEntry` in the `memory-mcp` package.
 
 ## Tier-Content Fit
 
@@ -44,9 +44,9 @@ Per `owlbear-system.instructions.md` § Memory Governance (single source of trut
 
 | Content type | Tier | Store |
 |-------------|------|-------|
-| Agent institutional knowledge (queryable) | MCP canonical | `ob-memory` |
-| Task-specific context and working state | Task artifacts | Task body, `.owlbear/scratch/`, or kanban DR/AR files |
-| Architecture decisions | Not memory | `.owlbear/kanban/decisions/` |
+| Agent institutional knowledge (queryable) | MCP canonical | `owlbear-memory` |
+| Job-specific context and working state | Native artifacts | Change/job records or `.owlbear/scratch/` |
+| Architecture decisions | Not memory | Native change decisions and requests |
 | Research findings | Not memory | `.owlbear/research/` |
 | Code snippets, task-specific context | Not memory | Do not record |
 
@@ -64,7 +64,7 @@ MCP memory is canonical.
 | Pre-flight knowledge load | MCP only (`recall_memory(agent="{agent_name}")`) |
 
 The always-loaded `owlbear-system.instructions.md` Memory Governance section triggers post-work
-reflection. Pipeline recall and assessment are defined separately in `r-pipeline-protocol`.
+reflection.
 
 See `share/diagrams/memory-layers.excalidraw` for a visual overview of the tier and state model.
 
@@ -91,10 +91,13 @@ Cockpit. Tool responses include hints describing the transition or deletion bran
 
 ## Candidate Production
 
-`save_memory` creates a pending candidate. Ordinary writers do not need `list_memories` or
-`read_memory` authority and must not attempt store-wide deduplication before saving. Avoid a duplicate
-only when the same insight is already visible in the current context. The memory curator performs
-cross-store comparison, conflict handling, scoping, and pruning through `w-mem-curation`.
+`save_memory` creates an unscoped pending candidate. At creation, `source_agent` must exactly match
+the producing custom agent's active canonical name; generic host labels such as `GitHub Copilot` are
+not accepted for new entries. Stored provenance remains historical when that agent is later retired.
+Ordinary writers do not need `list_memories` or `read_memory` authority and must not attempt
+store-wide deduplication before saving. Avoid a duplicate only when the same insight is already
+visible in the current context. The memory curator performs cross-store comparison, conflict
+handling, relevance scoping, and pruning through `w-mem-curation`.
 
 ## Content-Quality Bar
 
@@ -109,8 +112,8 @@ An entry **fails** if any of the following are true:
 
 - Generic: "always write tests", "use type hints", "be careful with async"
 - No citation: no task ID, file, or tool mentioned
-- Ambiguous scope: the insight only applies to a specific project but `scope_agents` is null
-- Ambiguous scope: the insight only applies to a specific role but `scope_agents` is missing
+- Invalid new provenance: a candidate's `source_agent` is a product label, typo, case variant, or inactive role
+- Invalid curated scope: a promoted entry names no active role and is not universal (`['*']`)
 - Duplicate: substantially the same as an existing approved entry
 
 **Confidence calibration:**
@@ -125,7 +128,8 @@ An entry **fails** if any of the following are true:
 ## Anti-Patterns
 
 1. **Storing research findings as memory entries.** Research belongs in `.owlbear/research/`; memory is for agent behavioral learnings.
-2. **Writing to `/memories/` for agent learnings.** The built-in store is retired. Agent learnings go to `ob-memory` only.
-3. **Recording with `scope_agents=null`.** Global entries flood every agent's pre-flight. Always pass `scope_agents`.
+2. **Writing to `/memories/` for agent learnings.** The built-in store is retired. Agent learnings go to `owlbear-memory` only.
+3. **Writer-assigned scope.** New candidates must remain unscoped. The curator assigns relevance
+ scope during promotion.
 4. **One entry per task regardless of insight count.** Record 0 entries if nothing notable happened. Record N entries for N distinct insights.
 5. **Confidence below 0.7.** The server rejects it. Do not round up to bypass the floor — raise confidence only when evidence justifies it.

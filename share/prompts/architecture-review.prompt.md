@@ -62,6 +62,6 @@ least three parallel design explorations with different goals: minimum interface
 flexibility, and trivial common case. Compare results by depth, locality, seam placement, and
 dependency cost, then recommend one design or a deliberate hybrid.
 
-Finish with the confirmed Refined Idea Summary. Tell the user that `/opsx:propose` turns that
-summary into native OpenSpec artifacts, then `/shape` maps the reviewed change into OwlBear Kanban.
-Do not create a second specification format or Kanban tasks.
+Finish with the confirmed Refined Idea Summary. Tell the user that `/design` resumes or creates the
+native Specification session and carries the reviewed idea through explicit admission. Do not create
+a second specification format or Delivery work manually.

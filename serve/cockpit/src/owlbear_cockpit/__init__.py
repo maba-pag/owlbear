@@ -1,4 +1,4 @@
-"""owlbear_cockpit — Cockpit package for the OwlBear kanban UI."""
+"""owlbear_cockpit — Cockpit package for the OwlBear Delivery UI."""
 
 from __future__ import annotations
 

@@ -6,7 +6,7 @@ user-invocable: false
 
 # Knowledge Base Operations
 
-Tool reference and recipes for the `ob-knowledge` MCP server, registered in `.vscode/mcp.json` as `ob-knowledge`.
+Tool reference and recipes for the `owlbear-knowledge` MCP server, registered in `.vscode/mcp.json` as `owlbear-knowledge`.
 
 ## Tool Reference
 
@@ -224,12 +224,9 @@ Six-step process for adding, updating, and removing knowledge sources. See `.owl
 
 ## Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OWLBEAR_KB_PATH` | `.owlbear/knowledge/local.db` | Path to SQLite knowledge database |
-| `KNOWLEDGE_TOOLS_EXCLUDE` | _(unset)_ | Comma-separated tool names to remove |
-
-`KNOWLEDGE_TOOLS_EXCLUDE` accepts registered tool names such as `knowledge_search`, `knowledge_ingest`, `list_knowledge_sources`, `knowledge_stats`, `refresh_knowledge_source`, `delete_knowledge_source`, `claim_enrichment_batch`, `retry_enrichment`, and `store_enrichment`. Unknown names silently ignored.
+Knowledge storage is fixed to `.owlbear/knowledge/local.db` and
+`.owlbear/knowledge/vectors` under the current initialized workspace. The server exposes its full
+tool set.
 
 ## Known Gotchas
 

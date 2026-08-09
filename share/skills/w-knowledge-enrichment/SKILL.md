@@ -16,7 +16,7 @@ The extraction is agent-driven: the MCP server provides batching and persistence
 
 ## MCP Tools
 
-All enrichment operations use the `ob-knowledge` MCP server tools:
+All enrichment operations use the `owlbear-knowledge` MCP server tools:
 
 | Tool | Purpose |
 |------|---------|

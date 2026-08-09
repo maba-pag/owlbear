@@ -24,41 +24,32 @@ without behavior change).
 
 ### Rules
 
-- One logical commit per agent per task. No micro-commits or multi-task batches.
-- Commit only files owned by the current task. A dirty worktree or mixed index is not a reason to
-  skip a task-owned commit.
+- Commit only files owned by the active task or user-requested change. A dirty worktree or mixed
+  index is not a reason to skip an owned commit.
 - Use the shared scoped helper:
   `uv --project {owlbear-root} run commit-owned -m "type: description (#task-id, agent)" -- path [path...]`.
+- Integration repair candidates are the sole exception: call Delivery's claim-bound
+  `create_integration_repair_candidate` operation. Never use `commit-owned`, `git commit`, `SKIP`,
+  or `--no-verify` to create or repair that candidate.
 - The helper preserves unrelated staged paths and unstages only its own paths if `git commit` fails.
   It rejects owned paths that were already staged because it cannot distinguish user work from agent
   work in the same path.
-- On a same-task retry after a crash or unstructured return, treat uncommitted changes within the
-  shaped change envelope as candidate work from the interrupted attempt. Inspect the complete diff,
-  validate it against the task, and explicitly adopt it in the agent notes before committing. Do not
+- During exact-claim recovery after a crash or unstructured worker return, treat uncommitted changes
+  within the task-maintained surfaces as candidate work from the interrupted claim. Inspect the
+  complete diff, validate it against the task, and explicitly adopt it before committing. Do not
   infer an ownership conflict from a dirty path, file timestamp, or invocation boundary alone. If a
   concrete hunk conflicts with the task or cannot be safely attributed, name that path and hunk in the
   containment reason instead of describing the whole task-owned diff as mixed.
-- Pipeline agents call `end_work` first so the final note, status, and archive move exist, then
-  immediately commit the role-owned durable changes defined by `r-pipeline-protocol` plus the final
-  task record before returning a success verdict.
-- Pass explicit file paths to `commit-owned`; never pass `.`, `.owlbear/kanban/`, or another broad
-  directory. Include the active task path for ordinary transitions. For archival transitions,
-  include both the former `.owlbear/kanban/tasks/{slug}.md` path and the resulting
-  `.owlbear/kanban/archive/{slug}.md` path so Git records the move.
-- `end_work` success is not agent completion. Do not return `DONE`, `PASS`, or `ARCHIVED` until the
-  scoped commit succeeds. If it fails, repair or retry the same scoped commit without mutating
-  another task.
-- If the scoped commit still cannot succeed and the task remains on-board, immediately call
-  `edit_task(id={task-id}, block_reason="COMMIT_FAILED: {concise error and recovery command}")`.
-  Return `COMMIT_FAILED`, never a success verdict. The filesystem block prevents orchestrator
-  redispatch even though the block itself is not yet committed. An archived task is already
-  off-board; return `COMMIT_FAILED` with the same recovery command and do not claim success.
-- Recover a `COMMIT_FAILED` task by completing the original explicit-path commit first. If the
-  owned path is already staged, use `commit-owned --staged` to commit exactly its staged snapshot
-  while preserving unrelated staged paths and any newer unstaged layer. For an
-  on-board task, then clear the block with `edit_task(id={task-id}, block_reason="")` and make a
-  task-record-only recovery commit. These two recovery commits are the explicit exception to the
-  one-commit rule because the first restores durable ownership and the second restores dispatch.
+- Pass explicit file paths to `commit-owned`; never pass `.`, a Delivery authority/state root, or
+  another broad directory. The task's maintained surfaces bound eligible implementation paths.
+- Builder calls `publish_delivery_result` only after the scoped commit exists, its path set equals
+  the task-owned set, no task-owned change remains outside it, and fresh read-only review passes
+  that exact commit.
+- If the scoped commit cannot be created or verified, publish no result and report fail-closed
+  evidence for Orchestrator recovery. Retry, return, and block are invalid until the writer-owned
+  head is exact and clean.
+- A permitted local `implementation` finding repair uses another explicit scoped commit, reruns
+  affected proof, and requires fresh review of the cumulative task result.
 - Never push. The user pushes manually.
 
 ### VS Code Auto-Staging Trap
@@ -75,7 +66,7 @@ reverting them.
 | Approved external repository clones | `.owlbear/scratch/research/{repo-name}/` | Inspect only; delete before task closure. |
 | Durable research findings | `.owlbear/research/{slug}.md` | Tracked; include the task reference. |
 | External source attribution | `.owlbear/sources/overview.md` | Tracked; use the Attribution schema below. |
-| Decision and action requests | `.owlbear/kanban/decisions/` | Create through Kanban tools; do not hand-author alternate locations. |
+| Decision and action requests | `.owlbear/target/delivery/changes/{change-id}/frontier.json` | Create through Delivery request tools; requests are embedded in outcome bindings, so do not hand-author the frontier. |
 | Generated navigation indexes | `.owlbear/doc-index.md`, `.owlbear/py-index.md`, `.owlbear/ts-index.md` | Regenerate with `uv run --project {owlbear-root} indexes {project-root}`. |
 
 Project-owned source, test, documentation, and benchmark locations come from the local project map,

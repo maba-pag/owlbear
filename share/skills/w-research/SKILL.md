@@ -89,7 +89,7 @@ conversation. Keep it focused and source-grounded:
 ## 4. Recommendation, Confidence, And Limits
 ```
 
-Keep it at most 200 lines. Log materially used external sources in `.owlbear/sources/overview.md` per
+Log materially used external sources in `.owlbear/sources/overview.md` per
 `r-workspace-governance`. Delete approved clones from `.owlbear/scratch/research/` before returning.
 
 ## Step 7 — Return Evidence To The Caller
@@ -106,6 +106,6 @@ Return a compact evidence package:
 - Durable artifact: {.owlbear/research/{slug}.md, or none}
 ```
 
-Do not create or edit Kanban tasks, invoke `shaper-challenger`, request approval, or advance the board.
+Do not edit native authority, invoke admission challenge, request approval, or create Delivery work.
 The selected shaping workflow incorporates the evidence, resolves material decisions, challenges the
 complete graph when applicable, and owns all task history and routing.

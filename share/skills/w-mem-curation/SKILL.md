@@ -75,11 +75,14 @@ Every promoted entry needs non-empty `scope_agents`.
 
 | Scope | Use when |
 |-------|----------|
-| `['builder']`, `['verifier']`, etc. | The learning applies to one or a few roles |
-| `['builder', 'verifier']` | A shared handoff or quality pattern spans roles |
+| `['builder']`, `['build-reviewer']`, etc. | The learning applies to one or a few roles |
+| `['builder', 'build-reviewer']` | A shared handoff or quality pattern spans roles |
 | `['*']` | The learning applies to nearly every agent |
 
 Prefer targeted scopes. Use `['*']` only for broadly reusable process/tool guidance. Never promote with an empty scope.
+Every named scope must exactly match an active custom-agent name. When an agent is renamed or
+deleted, use `rename_agent_memories` or `delete_agent_memories`; never retain an alias in relevance
+scope. A deleted agent may remain in immutable historical provenance.
 
 ## Step 4 — Act On MCP Entries
 
@@ -101,10 +104,10 @@ Do not inspect, create, migrate, or defer notes in `/memories/` paths. If old fi
 Before returning, commit reviewed MCP memory mutations with the state-aware helper:
 
 ```bash
-uv --project ../owlbear run python -m owlbear_mcp_memory.git curation
+uv --project ../owlbear run python -m owlbear_memory_mcp.git curation
 ```
 
-The `--project` path must point to the OwlBear installation root. Find the correct value from the `ob-memory` server entry in `.vscode/mcp.json` (look for the `--project` argument in the `args` array). The helper stages only non-pending `.owlbear/memory/*.md` entries; do not broad-add `.owlbear/memory`.
+The `--project` path must point to the OwlBear installation root. Find the correct value from the `owlbear-memory` server entry in `.vscode/mcp.json` (look for the `--project` argument in the `args` array). The helper stages only non-pending `.owlbear/memory/*.md` entries; do not broad-add `.owlbear/memory`.
 
 ## Step 7 — Return Channel A Signal
 
@@ -116,6 +119,7 @@ Return the verdict:
 ## Verification Checklist
 
 - [ ] Every promoted MCP entry has non-empty `scope_agents`
+- [ ] Every named scope resolves to an active custom-agent definition
 - [ ] Duplicate checks compared against existing curated/approved MCP entries
 - [ ] Noise removals are truly low-signal, not merely unfamiliar
 - [ ] Conflicts were deferred in periodic mode or resolved with user input in manual mode
@@ -129,3 +133,5 @@ Return the verdict:
 - **Global scope by habit:** `['*']` floods all agents. Prefer named role scopes unless the learning is truly universal.
 - **Auto-resolving conflicts:** conflicting lessons must be deferred in periodic mode or resolved with the user in manual mode.
 - **Broad memory commits:** use the state-aware helper so pending entries stay uncommitted.
+- **Manual lifecycle rewrites:** use the agent lifecycle tools when definitions are renamed or
+ deleted so provenance and relevance cannot drift.

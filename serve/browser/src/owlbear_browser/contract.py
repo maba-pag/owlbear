@@ -21,6 +21,8 @@ from lxml import html
 
 
 class AcquisitionStatus(StrEnum):
+    """Enumerate successful and terminal browser acquisition outcomes."""
+
     SUCCESS = "success"
     AUTHENTICATION_REQUIRED = "authentication_required"
     CONTENT_NOT_READY = "content_not_ready"
@@ -72,6 +74,8 @@ class AcquisitionRequest:
 
 @dataclass(frozen=True, slots=True)
 class Diagnostics:
+    """Hold redacted diagnostics for one browser acquisition stage."""
+
     stage: str
     details: dict[str, Any] = field(default_factory=dict)
     html: str | None = None
@@ -88,6 +92,8 @@ class Diagnostics:
 
 @dataclass(frozen=True, slots=True)
 class AcquisitionSuccess:
+    """Describe successfully acquired, normalized rendered-page content."""
+
     status: AcquisitionStatus
     requested_url: str
     canonical_url: str
@@ -108,6 +114,8 @@ class AcquisitionSuccess:
 
 @dataclass(frozen=True, slots=True)
 class AcquisitionFailure:
+    """Describe a failed browser acquisition and its redacted diagnostics."""
+
     status: AcquisitionStatus
     diagnostics: Diagnostics
 
@@ -128,6 +136,7 @@ def normalize_markdown(markdown: str) -> str:
 
 
 def content_hash(markdown: str) -> str:
+    """Return a SHA-256 identity for normalized Markdown content."""
     return hashlib.sha256(normalize_markdown(markdown).encode("utf-8")).hexdigest()
 
 

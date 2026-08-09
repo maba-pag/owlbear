@@ -43,14 +43,14 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 
 | Agent | Model | Required reading | Delegates | Hooks |
 |-------|-------|------------------|-----------|-------|
-| orchestrator | GPT-5.6 Terra | `w-orchestration` | builder, verifier, collector, memory-curator, Explore | None; legacy `pick_tasks` plus non-default IF-015 `pick_jobs`, `start_job`, finish, release, and recovery tools |
-| shaper | GPT-5.6 Sol | `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance` | shaper-challenger, Explore | `PreToolUse`: deny non-document writes |
-| builder | GPT-5.6 Terra | `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance`, `h-codebase-orientation` | builder-challenger | `SessionStart`: task context; `PostToolUse`: lint changed files |
-| verifier | GPT-5.6 Terra | `r-pipeline-protocol`, `r-challenger-protocol`, `r-workspace-governance`, `h-codebase-orientation` | verifier-challenger | `SessionStart`: task context; `PostToolUse`: lint changed files |
-| collector | GPT-5.6 Terra | `r-pipeline-protocol`, `r-workspace-governance`, `h-mcp-kanban` | Explore | `PreToolUse`: deny writes except scratch |
-| shaper-challenger | Claude Sonnet 5 | `h-ac-quality`, `h-module-design`, `r-challenger-protocol` | None | `PreToolUse`: deny writes except scratch |
-| builder-challenger | MAI-Code-1-Flash | `r-challenger-protocol` | None | `PostToolUse`: lint changed files |
-| verifier-challenger | GPT-5.6 Luna | `r-challenger-protocol` | None | `PreToolUse`: deny writes except scratch |
+| designer | GPT-5.6 Sol | `w-design-session` | conceptual-design-reviewer, designer-challenger, Explore | `PreToolUse`: allow only scratch/research edits and read-only terminal commands; target publication uses the admission tool surface |
+| conceptual-design-reviewer | Claude Opus 5 | `r-challenger-protocol`, `h-module-design`, `h-frontend-design` | None | `PreToolUse`: deny writes except scratch |
+| designer-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
+| planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch and terminal mutation; publishes advisory-reviewed task chains and returns worker-owned transitions |
+| planner-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
+| orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, memory-curator, Explore | Reports and acquires portfolio work, dispatches task and repair claims, recovers exact failed claims, forwards task transitions, and integrates ready changes; no repository write tools |
+| builder | GPT-5.6 Terra | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; task Build returns a lifecycle transition; claimed Integration repair creates its candidate through Delivery's claim-bound operation and returns admission, authority attention, or exact dispatch failure; `SessionStart`: repository context; `PostToolUse`: lint changed files |
+| build-reviewer | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or Integration-repair review with read-only Git; `PreToolUse`: deny writes except scratch and terminal mutation |
 | test-curator | GPT-5.6 Terra | `w-test-curation` | None | `PreToolUse`: deny source writes |
 | memory-curator | GPT-5.6 Terra | `w-mem-curation` | None | None |
 | knowledge-ingestor | GPT-5.6 Luna | `h-knowledge-ops` | None | None |
@@ -62,12 +62,12 @@ Tool allowlists remain in agent frontmatter; they are not duplicated here.
 
 | Prompt | Entry route | Initial loading behavior |
 |--------|-------------|--------------------------|
-| `shape` | `prompt` -> shaper | Shaper selects `w-spec-shaping` or `w-task-repair` after classifying the input |
+| `ideate` | `prompt` -> designer in discovery mode | Agent required-reading loads `w-design-session`; selects or creates one target Design session |
+| `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same target Design session |
 | `orchestrate` | `prompt` -> orchestrator | Agent required-reading loads `w-orchestration` |
 | `test-curation` | `prompt` -> test-curator | Agent required-reading loads `w-test-curation` |
 | `kb-ingest` | `prompt` -> knowledge-ingestor | Agent required-reading loads `h-knowledge-ops` |
 | `kb-enrich` | `prompt` -> knowledge-enricher | Agent required-reading loads `w-knowledge-enrichment` and `h-knowledge-ops` |
-| `ideate` | Current agent directed by prompt | Loads `w-idea-refinement` |
 | `architecture-review` | Current agent directed by prompt | Loads module-design, orientation, visual-output, and idea-refinement skills |
 | `arch-audit` | Current agent directed by prompt | Loads `h-module-design` |
 | `frontend-audit` | Current agent directed by prompt | Loads frontend design and conventions; loads frontend proof guidance only for that toolchain |
@@ -83,14 +83,10 @@ The named caller owns each on-demand condition and timing.
 
 | Caller or trigger | Conditional skill | Load condition |
 |-------------------|-------------------|----------------|
-| shaper prompt | `w-spec-shaping` | Input is an OpenSpec implementation plan |
-| shaper prompt | `w-task-repair` | Input is existing work rejected to shape |
-| shaping workflows | `w-task-decomposition` | Approved scope must become atomic tasks and dependencies |
-| shaping workflows | `w-research` | Local evidence cannot resolve a material claim |
-| shaping workflows | `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | Source ownership, architecture, or AC drafting requires the specialist boundary |
-| pipeline protocol | `h-mcp-kanban` | A role needs Kanban tool syntax or lifecycle semantics and does not already require it |
-| pipeline protocol | `h-decision-requests` | A role creates or consumes a Decision or Action Request |
-| pipeline protocol | `h-mcp-memory` | `recall_memory` returned entries that must be assessed |
+| Planner or Builder context | `h-decision-requests` | Fresh context contains a request, or routing identifies an authority-compatible stakeholder choice or external action |
+| Builder via repair launch | `w-integration-repair` | Orchestrator dispatches one acquired `DeliveryIntegrationRepairLaunchPackage` |
+| native design/planning | `w-research` | Local evidence cannot resolve a material claim and the owning workflow permits research |
+| native design/planning | `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | Source ownership, architecture, packet boundaries, or acceptance drafting requires the specialist boundary |
 | universal memory governance | `h-memory-structure`, `h-mcp-memory` | A save-capable role has a qualifying reusable insight |
 | Python instruction | `h-python-conventions` | The active file matches the Python instruction scope |
 | frontend instruction | `h-frontend-conventions` | The active file matches the frontend instruction scope |
@@ -102,13 +98,15 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 
 | Skill | Required by |
 |-------|-------------|
-| `r-pipeline-protocol` | shaper, builder, verifier, collector |
-| `r-challenger-protocol` | shaper, builder, verifier, shaper-challenger, builder-challenger, verifier-challenger |
-| `r-workspace-governance` | shaper, builder, verifier, collector |
-| `h-codebase-orientation` | builder, verifier |
-| `h-mcp-kanban` | collector |
-| `h-ac-quality` | shaper-challenger |
-| `h-module-design` | shaper-challenger |
+| `w-design-session` | designer |
+| `w-frontier-planning` | planner |
+| `w-packet-building` | builder |
+| `r-challenger-protocol` | conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer |
+| `h-codebase-orientation` | designer-challenger, planner-challenger, builder, build-reviewer |
+| `h-module-design` | designer-challenger, planner-challenger |
+| `h-frontend-design` | conceptual-design-reviewer |
+| `r-workspace-governance` | builder |
+| `h-ac-quality` | planner-challenger |
 | `w-orchestration` | orchestrator |
 | `w-test-curation` | test-curator |
 | `w-mem-curation` | memory-curator |
@@ -119,14 +117,14 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 
 | Delegate | Caller | Runtime consequence if unavailable |
 |----------|--------|------------------------------------|
-| builder | orchestrator | Build tasks cannot be dispatched |
-| verifier | orchestrator | Verify tasks cannot be dispatched |
-| collector | orchestrator | Collect tasks cannot be dispatched |
+| conceptual-design-reviewer | designer | A consequential product, workflow, or interaction concept proceeds without independent conceptual challenge |
+| designer-challenger | designer | Native admission lacks required repository-grounded entity challenge evidence |
+| planner | orchestrator | An acquired Planning launch cannot produce a published task chain and worker-owned transition |
+| planner-challenger | planner | A proposed Delivery task chain cannot receive independent advisory evidence |
+| builder | orchestrator | An acquired Build or Integration repair launch cannot produce its exact-commit result; a dispatch failure instead triggers the matching exact claim recovery |
+| build-reviewer | builder | An exact-commit task result or Integration repair cannot receive advisory pass or finding evidence |
 | memory-curator | orchestrator | Periodic memory housekeeping is skipped |
-| shaper-challenger | shaper | Shape approval loses the required adversarial cross-check |
-| builder-challenger | builder | Build completion loses its required proof and scope cross-check |
-| verifier-challenger | verifier | Verification completion loses its required final cross-check |
-| Explore | orchestrator, shaper, collector | Broad read-only orientation must be performed by the caller or omitted |
+| Explore | designer, planner, orchestrator | Broad read-only orientation must be performed by the caller or omitted |
 
 The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignment; see
 `h-agent-structure` for the nesting rules.
@@ -136,11 +134,10 @@ The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignmen
 | Control | Attached roles | Enforcement job |
 |---------|----------------|-----------------|
 | Agent `tools:` allowlist | Every agent | Limits runtime capabilities exposed to the role |
-| `deny-non-doc-writes.py` | shaper | Allows documentation and diagram writes, rejects code writes |
-| `deny-writes.py` | collector and read-only challengers | Rejects durable writes outside scratch |
+| `deny-writes.py` | designer, planner, conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer | Rejects writes outside the configured scratch/research boundary; designer, planner, and build-reviewer also enable terminal read-only mode |
 | `deny-src-writes.py` | test-curator | Restricts writes to tests and scratch |
-| `session-context.py` | builder, verifier | Adds task-aware context at session start |
-| `lint-changed.py` | builder, verifier, builder-challenger | Runs changed-file checks after tool use |
+| `session-context.py` | builder | Adds repository context at session start |
+| `lint-changed.py` | builder | Runs changed-file checks after tool use |
 | MCP schemas and stores | Tool-capable roles | Validate arguments, transitions, and persisted state |
 | `validate_agents.py` | Repository validation | Checks frontmatter, required sections, tools, delegation, and nesting-depth metadata |
 | `validate_skills.py` | Repository validation | Checks skill metadata and structure |

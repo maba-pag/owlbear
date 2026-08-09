@@ -228,14 +228,14 @@ jobs:
           uv run ruff format --check .
 
       - name: Run Python behavior tests
-        run: uv run pytest tests serve -m "not api and not e2e and not browser"
+        run: uv run pytest tests serve -m "not api and not e2e and not browser and not cockpit"
 
   proof-cockpit:
-    name: Prove Cockpit dependency update
+    name: Prove Cockpit production compatibility
     needs:
       - classify
       - prepare-fixes
-    if: needs.classify.outputs.node == 'true'
+    if: needs.classify.outputs.applicable == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     defaults:
@@ -465,7 +465,7 @@ jobs:
         env:
           APPLICABLE: ${{ needs.classify.outputs.applicable }}
           COCKPIT: ${{ needs.proof-cockpit.result }}
-          COCKPIT_EXPECTED: ${{ needs.classify.outputs.node }}
+          COCKPIT_EXPECTED: ${{ needs.classify.outputs.applicable }}
           COMPATIBILITY: ${{ needs.compatibility.result }}
           COMPATIBILITY_EXPECTED: ${{ needs.classify.outputs.compatibility }}
           DIAGRAMS: ${{ needs.proof-diagrams.result }}

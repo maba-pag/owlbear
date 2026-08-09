@@ -6,11 +6,8 @@ import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import RLock
-from typing import Any, TypedDict
+from typing import TypedDict
 from uuid import uuid4
-
-from ruamel.yaml import YAML
-from ruamel.yaml.error import YAMLError
 
 from owlbear_memory import storage
 from owlbear_memory.errors import ConcurrencyError, NotFoundError, TransitionError, ValidationError
@@ -28,9 +25,6 @@ _LOGGER = logging.getLogger(__name__)
 OUTSTANDING_BOOST = 0.1
 UNREMARKABLE_PENALTY = 0.01
 STALE_THRESHOLD = 50
-_FRONTMATTER_PARTS = 3
-_MIGRATION_KEYS = ("score", "outstanding_count", "unremarkable_count", "didnt_use_count")
-_YAML = YAML(typ="safe")
 
 
 def compute_score(confidence: float, outstanding_count: int, unremarkable_count: int) -> float:
@@ -52,6 +46,21 @@ class EditPayload(TypedDict, total=False):
     categories: list[MemoryCategory]
     confidence: float
     scope_agents: list[str]
+
+
+class AgentRenameResult(TypedDict):
+    """Counts from rewriting one agent identity."""
+
+    entries_updated: int
+    sources_updated: int
+    scopes_updated: int
+
+
+class AgentDeleteResult(TypedDict):
+    """Counts from deleting one agent's memory references."""
+
+    entries_deleted: int
+    scopes_updated: int
 
 
 class MtimeScanCache:
@@ -302,6 +311,77 @@ class MemoryEngine:
             updated = entry.model_copy(update={"state": MemoryState.DELETED, "updated_at": self._now_iso()})
             return self._write_updated_entry(updated)
 
+    def rename_agent(self, old_name: str, new_name: str) -> AgentRenameResult:
+        """Rewrite an agent identity in provenance and relevance scopes."""
+        if not old_name.strip() or not new_name.strip() or old_name == new_name:
+            msg = "old_name and new_name must be distinct non-empty agent names"
+            raise ValidationError(msg)
+
+        with self._lock:
+            originals = self.get_entries()
+            updated_entries: list[MemoryEntry] = []
+            sources_updated = 0
+            scopes_updated = 0
+            for entry in originals:
+                source_agent = new_name if entry.source_agent == old_name else entry.source_agent
+                scope_agents = list(
+                    dict.fromkeys(new_name if name == old_name else name for name in entry.scope_agents)
+                )
+                if source_agent == entry.source_agent and scope_agents == entry.scope_agents:
+                    continue
+                sources_updated += source_agent != entry.source_agent
+                scopes_updated += scope_agents != entry.scope_agents
+                updated_entries.append(
+                    MemoryEntry.model_validate(
+                        {
+                            **entry.model_dump(),
+                            "source_agent": source_agent,
+                            "scope_agents": scope_agents,
+                            "updated_at": self._now_iso(),
+                        }
+                    )
+                )
+
+            self._write_agent_lifecycle_changes(originals, updated_entries, [])
+            return AgentRenameResult(
+                entries_updated=len(updated_entries),
+                sources_updated=sources_updated,
+                scopes_updated=scopes_updated,
+            )
+
+    def delete_agent(self, agent: str) -> AgentDeleteResult:
+        """Remove an agent from scopes while preserving historical provenance."""
+        if not agent.strip():
+            msg = "agent must not be empty"
+            raise ValidationError(msg)
+
+        with self._lock:
+            originals = self.get_entries()
+            updated_entries: list[MemoryEntry] = []
+            deleted_entries: list[MemoryEntry] = []
+            for entry in originals:
+                if agent not in entry.scope_agents:
+                    continue
+                scope_agents = [name for name in entry.scope_agents if name != agent]
+                if not scope_agents:
+                    deleted_entries.append(entry)
+                    continue
+                updated_entries.append(
+                    MemoryEntry.model_validate(
+                        {
+                            **entry.model_dump(),
+                            "scope_agents": scope_agents,
+                            "updated_at": self._now_iso(),
+                        }
+                    )
+                )
+
+            self._write_agent_lifecycle_changes(originals, updated_entries, deleted_entries)
+            return AgentDeleteResult(
+                entries_deleted=len(deleted_entries),
+                scopes_updated=len(updated_entries),
+            )
+
     def record_factually_wrong(
         self,
         entry_id: str,
@@ -395,6 +475,7 @@ class MemoryEngine:
 
     def save(  # noqa: PLR0913
         self,
+        *,
         title: str,
         content: str,
         categories: list[MemoryCategory],
@@ -423,48 +504,6 @@ class MemoryEngine:
                 approved_at=None,
             )
             return self._write_updated_entry(entry)
-
-    def migrate_scores(self, *, dry_run: bool = False) -> int:
-        """Backfill score and counter fields on legacy entries.
-
-        Returns the count of entries that were migrated or would be migrated when
-        ``dry_run`` is enabled.
-        """
-        with self._lock:
-            return self._migrate_scores(dry_run=dry_run)
-
-    def _migrate_scores(self, *, dry_run: bool) -> int:
-        migrated = 0
-
-        for file_path in sorted(self._memory_dir.glob("*.md")):
-            entry = storage.read_entry(file_path)
-            if entry is None:
-                continue
-
-            frontmatter = self._read_frontmatter_raw(file_path)
-            if frontmatter is None:
-                continue
-
-            if all(key in frontmatter for key in _MIGRATION_KEYS):
-                continue
-
-            migrated += 1
-            if dry_run:
-                continue
-
-            updated = entry.model_copy(
-                update={
-                    "score": entry.confidence,
-                    "outstanding_count": 0,
-                    "unremarkable_count": 0,
-                    "didnt_use_count": 0,
-                }
-            )
-            storage.write_entry(file_path, updated, memory_dir=self._memory_dir)
-
-        if not dry_run:
-            self.load()
-        return migrated
 
     def _validate_occ(self, entry: MemoryEntry, expected_updated_at: str) -> None:
         if entry.updated_at != expected_updated_at:
@@ -502,6 +541,25 @@ class MemoryEngine:
         self._upsert_cache(entry)
         return entry
 
+    def _write_agent_lifecycle_changes(
+        self,
+        originals: list[MemoryEntry],
+        updated_entries: list[MemoryEntry],
+        deleted_entries: list[MemoryEntry],
+    ) -> None:
+        """Apply a multi-entry lifecycle change and restore originals on failure."""
+        original_paths = {entry.id: self._id_to_path[entry.id] for entry in originals}
+        try:
+            for entry in updated_entries:
+                storage.write_entry(original_paths[entry.id], entry, memory_dir=self._memory_dir)
+            for entry in deleted_entries:
+                storage.delete_entry(original_paths[entry.id], memory_dir=self._memory_dir)
+        except Exception:
+            for entry in originals:
+                storage.write_entry(original_paths[entry.id], entry, memory_dir=self._memory_dir)
+            raise
+        self._entries = self._load()
+
     def _upsert_cache(self, entry: MemoryEntry) -> None:
         for index, current in enumerate(self._entries):
             if current.id == entry.id:
@@ -514,17 +572,3 @@ class MemoryEngine:
 
     def _parse_iso_datetime(self, value: str) -> datetime:
         return datetime.fromisoformat(value)
-
-    def _read_frontmatter_raw(self, path: Path) -> dict[str, Any] | None:
-        try:
-            raw = path.read_text(encoding="utf-8-sig")
-            parts = raw.split("---", 2)
-            if len(parts) < _FRONTMATTER_PARTS:
-                return None
-            data = _YAML.load(parts[1])
-        except (OSError, UnicodeDecodeError, YAMLError):
-            return None
-
-        if not isinstance(data, dict):
-            return None
-        return data

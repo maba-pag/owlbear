@@ -1,9 +1,9 @@
 # owlbear-cockpit — Steering Cockpit Package
 
 Cockpit combines a FastAPI backend (`src/owlbear_cockpit/`) with a React frontend (`web/`),
-served as built static assets from `dist/`. The backend wraps `KanbanEngine` with read and
-mutation APIs, and the frontend provides the steering viewport used to view, edit, move,
-archive, inspect activity, and resolve decisions.
+served as built static assets from `dist/`. The backend verifies the target cutover receipt and
+projects admitted semantic work items, requests, evidence, Memory, and Ideas without becoming
+delivery authority.
 
 → Parent: [README.md](../../README.md)
 
@@ -48,9 +48,9 @@ uv run --project ../owlbear cockpit
 
 `uv run cockpit` serves `serve/cockpit/dist/`, starts on `127.0.0.1:8420` by default,
 and opens a browser unless disabled with `COCKPIT_NO_OPEN=1`. Cockpit reads
-`.owlbear/kanban/` and `.owlbear/memory/` relative to the process working directory, so
-consumer launches must set the working directory to the target project or override
-`KANBAN_DIR` and `MEMORY_DIR`.
+`.owlbear/target-cutover-request.json`, its immutable receipt, and `.owlbear/memory/` relative
+to the workspace root. Consumer launches must use the target project as their working directory
+or pass it to `uv --directory`.
 
 ## Frontend Surface
 
@@ -60,21 +60,28 @@ repository.
 | Attribute | Value |
 |-----------|-------|
 | Node requirement | `>=24.16.0` (`web/package.json`) |
-| Stack | React `^19.2.6`, Vite `^8.0.14`, TypeScript `^6.0.3`, React Router `^8.0.0`, Porsche Design System React `^4.1.0`, React Compiler (`babel-plugin-react-compiler` `^1.0.0`), Tailwind CSS `^4.3.0` (`@tailwindcss/vite` + `tailwindcss`) |
-| Test runner | Vitest `^4.1.7` (`npm test`) |
-| E2E runner | Playwright `^1.60.0` (`npm run test:e2e`) |
+| Stack | React `^19.2.7`, Vite `^8.1.5`, TypeScript `^6.0.3`, React Router `^8.2.0`, Porsche Design System React `^4.5.0`, React Compiler (`babel-plugin-react-compiler` `^1.0.0`), Tailwind CSS `^4.3.3` (`@tailwindcss/vite` + `tailwindcss`) |
+| Test runner | Vitest `^4.1.10` (`npm test`) |
+| E2E runner | Playwright `^1.61.1` (`npm run test:e2e`) |
 | CSS/HTML lint | Stylelint `^17.12.0` (`npm run lint:css`), HTMLHint `^1.9.2` (`npm run lint:html`) |
 | Build output | `serve/cockpit/dist/` via `npm run build` |
 
-## Audit Trail
+## Delivery Evidence
 
-Activity events use a `source` field for attribution:
+Cockpit projects current Delivery state and user-owned controls without becoming authority:
 
-| Source | Meaning |
-|--------|---------|
-| `source="cockpit"` | UI-initiated mutation (user action in the Cockpit frontend) |
-| `source="agent"` | agent-initiated mutation (pipeline agent via MCP) |
-| `source="engine"` | internal engine operation (lifecycle, migration) |
+| Surface | Authority |
+|---------|-----------|
+| Outcome portfolio | Admitted outcomes, dependencies, Planning/Build stages, and task progress from `PortfolioApplication` |
+| Actionable attention | Typed requests, requestless blocks, long-idle claims, revision attention, and Integration attention |
+| User controls | Answer request, clear block, recover a confirmed-dead exact claim, move backward, and retry Integration |
+| Completed history | Bounded list, semantic search, and exact completed-change lookup |
+| Cockpit activation authority | `.owlbear/target-cutover-request.json` and its immutable receipt |
+
+Cockpit calls the same transport-free application owners used by the MCP adapter but exposes the
+answer-bearing and administrative controls reserved for users. It does not schedule work, choose
+worker transitions, interpret reviewer evidence, repair source, or update the Integration target on
+its own.
 
 ## Configuration
 
@@ -82,8 +89,9 @@ Activity events use a `source` field for attribution:
 |----------|---------|---------|
 | `COCKPIT_PORT` | `8420` | Override listen port (1-65535) |
 | `COCKPIT_NO_OPEN` | unset | Set to `1` to suppress browser auto-open |
-| `KANBAN_DIR` | `$PWD/.owlbear/kanban/` | Override kanban directory path |
-| `MEMORY_DIR` | `$PWD/.owlbear/memory/` | Override memory directory path used by `MemoryEngine` |
+
+Cockpit always reads target authority and memory state from the current workspace and serves the
+package's bundled `dist/` directory.
 
 ## Delivery Packaging
 
@@ -100,8 +108,5 @@ Activity events use a `source` field for attribution:
 | `fastapi` | HTTP framework |
 | `uvicorn` | ASGI server |
 | `pydantic` | Request/response model validation |
-| `sse-starlette` | SSE streaming for the `GET /api/events` invalidation endpoint |
-| `watchfiles` | File-system watcher used by the events endpoint |
-| `owlbear-kanban` | Kanban engine (workspace package) |
+| `owlbear-delivery` | Target authority, runtime, admission, and receipt verification |
 | `owlbear-memory` | Memory engine (workspace package) |
-| `ruamel.yaml` | Round-trip YAML parsing for the Decisions API |
