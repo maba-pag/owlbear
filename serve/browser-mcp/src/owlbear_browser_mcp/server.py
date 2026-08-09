@@ -158,14 +158,15 @@ def _serialize_acquisition(result: AcquisitionSuccess | AcquisitionFailure) -> d
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
-async def acquire(  # noqa: PLR0913, PLR0917
+async def acquire(  # noqa: PLR0913
     ctx: Context,
     url: str,
+    *,
     readiness_selector: str | None = None,
     content_selector: str | None = None,
     navigation_timeout_ms: int = 30_000,
     readiness_timeout_ms: int = 10_000,
-    include_diagnostic_html: bool = False,  # noqa: FBT001, FBT002
+    include_diagnostic_html: bool = False,
 ) -> dict[str, Any]:
     """Acquire one rendered page through the shared browser acquisition contract."""
     app_ctx = ctx.request_context.lifespan_context
