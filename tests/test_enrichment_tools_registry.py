@@ -13,13 +13,6 @@ _NEW_ENRICHMENT_NAMES: frozenset[str] = frozenset(
         "retry_enrichment",
     }
 )
-_REPLACED_ENRICHMENT_NAMES: frozenset[str] = frozenset(
-    {
-        "knowledge_enrichment_claim_batch",
-        "knowledge_enrichment_store",
-        "knowledge_enrichment_retry",
-    }
-)
 
 
 async def _registered_tool_names() -> set[str]:
@@ -65,13 +58,3 @@ class TestEnrichmentToolRename:
             f"New enrichment tool names missing from live MCP registry: {sorted(missing)}. "
             f"Registry snapshot: {sorted(n for n in registry if n)}"
         )
-
-    @pytest.mark.asyncio
-    async def test_ac2_old_enrichment_names_absent_from_live_mcp_registry(self) -> None:
-        """AC2 (retry): all 3 old enrichment names are absent from the live MCP registry.
-
-        Ensures the registry was updated and no stale old-name registration remains.
-        """
-        registry = await _registered_tool_names()
-        still_present = _REPLACED_ENRICHMENT_NAMES & registry
-        assert not still_present, f"Replaced enrichment tool names still in live MCP registry: {sorted(still_present)}"

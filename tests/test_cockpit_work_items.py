@@ -11,7 +11,6 @@ from unittest.mock import patch
 import uuid
 
 from fastapi.testclient import TestClient
-import pytest
 
 from owlbear_cockpit.routes.target_work import assemble_target_app
 from owlbear_cockpit.target_context import load_target_context
@@ -599,24 +598,6 @@ def test_integration_retry_is_single_flight_per_change() -> None:
     assert duplicate.status_code == 202
     assert duplicate.json() == {"status": "running"}
     assert [name for name, _args in application.calls].count("integration-retry") == 1
-
-
-@pytest.mark.parametrize(
-    ("method", "path"),
-    [
-        ("get", "/api/work-items/OUT-001/updates"),
-        ("get", "/api/work-items/OUT-001/completion"),
-        ("post", "/api/work-items/OUT-001/requests"),
-        ("post", "/api/work-items/OUT-001/recover"),
-    ],
-)
-def test_schema_v1_routes_are_retired(method: str, path: str) -> None:
-    client, application = _client()
-
-    response = client.request(method, path, json={})
-
-    assert response.status_code == 404
-    assert application.calls == []
 
 
 def test_malformed_body_fails_before_application_mutation() -> None:

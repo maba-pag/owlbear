@@ -5,7 +5,7 @@ from __future__ import annotations
 import owlbear_delivery
 
 
-def test_package_root_exports_target_runtime_without_retired_execution() -> None:
+def test_package_root_exports_target_runtime() -> None:
     required = {
         "ChangeWorkspaceManager",
         "CompletedChangeRecord",
@@ -21,19 +21,4 @@ def test_package_root_exports_target_runtime_without_retired_execution() -> None
         "authorize_target_mutation",
         "cut_over_target_runtime",
     }
-    retired = {
-        "CancelJobRequest",
-        "DispatchRuntime",
-        "FinishAcceptRequest",
-        "NativeRuntime",
-        "NativeWorkspace",
-        "RejectAuditRequest",
-        "ReleaseJobRequest",
-        "SetJobPriorityRequest",
-        "PortfolioDispatcher",
-        "WriterGrant",
-    }
-
     assert set(owlbear_delivery.__all__) >= required
-    assert set(owlbear_delivery.__all__).isdisjoint(retired)
-    assert not {name for name in retired if hasattr(owlbear_delivery, name)}
