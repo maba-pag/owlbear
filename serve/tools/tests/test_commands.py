@@ -86,9 +86,14 @@ def test_help_and_footer_stay_plain_when_color_is_disabled(monkeypatch: object) 
 def test_help_stacks_descriptions_on_narrow_terminals(monkeypatch: object) -> None:
     output = _TerminalBuffer()
     terminal_size = type("TerminalSize", (), {"columns": 80})()
+
+    def get_terminal_size(fallback: tuple[int, int] = (80, 24)) -> object:
+        assert fallback in {(80, 24), (120, 24)}
+        return terminal_size
+
     monkeypatch.setattr(sys, "argv", ["help", "lint"])
     monkeypatch.setattr(sys, "stdout", output)
-    monkeypatch.setattr("owlbear_tools.commands.shutil.get_terminal_size", lambda _fallback=None: terminal_size)
+    monkeypatch.setattr("owlbear_tools.commands.shutil.get_terminal_size", get_terminal_size)
 
     help_main()
 
