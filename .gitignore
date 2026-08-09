@@ -17,7 +17,7 @@ var/
 
 # Build artifacts
 build/
-_cache
+_cache/
 dist/
 sdist/
 wheels/
@@ -37,8 +37,8 @@ artifacts/
 .coverage.*
 coverage.json
 coverage.xml
+coverage/
 htmlcov/
-.hypothesis/
 .benchmarks/
 megalinter-reports/
 test-results/
@@ -48,8 +48,6 @@ playwright-report/
 .vscode/*
 !.vscode/mcp.json
 !.vscode/settings.json
-.claude/
-.serena/
 
 # OS artifacts
 .DS_Store
@@ -73,7 +71,6 @@ playwright-report/
 .owlbear/briefs/draft-new/
 
 # Agent scratch/tmp output (quality-runner, coverage runs)
-serve/.tmp-*
 serve/cockpit/web/.owlbear-scratch-*
 serve/cockpit/web/.owlbear/
 
