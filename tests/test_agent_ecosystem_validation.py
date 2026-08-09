@@ -75,6 +75,7 @@ _TARGET_ROLE_TOOLS = {
     "builder": {
         "show_build_context",
         "show_integration_repair_context",
+        "create_integration_repair_candidate",
         "publish_delivery_result",
         "admit_reviewed_integration_repair",
     },
@@ -374,7 +375,9 @@ def test_integration_repair_guidance_closes_observed_failure_routes() -> None:
 
     assert "Attribute each side's conflict-path delta from the merge base" in repair
     assert "target rename or platform migration is not competing product authority" in repair
-    assert "treat that merged tree and its conflict-path blobs as the repair proof object" in repair
+    assert "every platform identifier must use the target namespace" in repair
+    assert "create_integration_repair_candidate" in repair
+    assert "Do not call `commit-owned`, `git commit`, or use `SKIP`/`--no-verify`" in repair
     assert "stale source expectations" in repair
     assert "attention publication operation is unavailable or rejects" in orchestration
     assert "recover_integration_repair_claim" in orchestration

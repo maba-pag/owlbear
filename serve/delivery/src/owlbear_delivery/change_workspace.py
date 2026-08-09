@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Never
@@ -11,6 +12,7 @@ from typing import TYPE_CHECKING, Literal, Never
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from owlbear_delivery.delivery_runtime import (
+    DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationCandidate,
     DeliveryIntegrationRepair,
@@ -126,6 +128,20 @@ class IntegrationResult(_WorkspaceModel):
             msg = "integration requires either a merge commit or a finding"
             raise ValueError(msg)
         return self
+
+
+class IntegrationRepairCandidate(_WorkspaceModel):
+    """Exact claim-bound commit and merge proof for one Integration repair."""
+
+    change_id: ChangeId
+    attention_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    source_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    candidate_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    merged_tree: str = Field(pattern=r"^[0-9a-f]{40}$")
+    changed_paths: tuple[str, ...] = Field(min_length=1)
 
 
 class AtomicIntegrationResult(_WorkspaceModel):
@@ -488,6 +504,70 @@ class ChangeWorkspaceManager:
         updated = coordination.model_copy(update={"last_reviewed_commit": repair.reviewed_repair_commit})
         return self._coordinator.integration_repair_replacements(coordination, updated, claim_id)
 
+    def create_integration_repair_candidate(
+        self,
+        attention: DeliveryIntegrationAttention,
+        writer: ChangeWriter,
+    ) -> IntegrationRepairCandidate:
+        """Commit and prove one conflict-path repair under exact writer custody."""
+        coordination = self._coordinator.show(attention.change_id)
+        if coordination.writer != writer or writer.kind != "repair":
+            _coordination_conflict("Integration repair candidate requires exact repair writer custody")
+        if (
+            attention.code != DeliveryIntegrationAttentionCode.MERGE_CONFLICT
+            or coordination.integration_target != attention.integration_target
+            or coordination.target_head != attention.target_head
+            or coordination.last_reviewed_commit != attention.change_head
+            or self._resolve(coordination.integration_target) != attention.target_head
+        ):
+            _workspace_failure("Integration repair candidate does not match current attention")
+
+        branch_head = self._resolve(coordination.branch)
+        if branch_head == attention.change_head:
+            self._require_worktree(coordination.worktree_path, coordination.branch, branch_head)
+            changed_paths = self._worktree_changed_paths(coordination.worktree_path)
+            conflict_paths = self._integration_conflict_paths(attention.target_head, attention.change_head)
+            if not changed_paths or not changed_paths <= conflict_paths:
+                _workspace_failure("Integration repair candidate may change only original conflict paths")
+            path_arguments = tuple(sorted(os.fsdecode(path) for path in changed_paths))
+            self._git("add", "--all", "--", *path_arguments, cwd=coordination.worktree_path)
+            tree = self._git("write-tree", cwd=coordination.worktree_path)
+            candidate_commit = self._git(
+                "commit-tree",
+                tree,
+                "-p",
+                attention.change_head,
+                "-m",
+                f"Repair Integration for {attention.change_id}",
+                cwd=coordination.worktree_path,
+            )
+            self._git(
+                "update-ref",
+                f"refs/heads/{coordination.branch}",
+                candidate_commit,
+                attention.change_head,
+            )
+            self._git("reset", "--hard", candidate_commit, cwd=coordination.worktree_path)
+        else:
+            candidate_commit = branch_head
+
+        merged_tree, changed_paths = self._require_integration_repair_candidate(
+            coordination,
+            attention,
+            candidate_commit,
+        )
+        return IntegrationRepairCandidate(
+            change_id=coordination.change_id,
+            attention_id=attention.attention_id,
+            attempt_id=writer.attempt_id,
+            claim_id=writer.claim_id,
+            source_head=attention.change_head,
+            target_head=attention.target_head,
+            candidate_commit=candidate_commit,
+            merged_tree=merged_tree,
+            changed_paths=tuple(sorted(os.fsdecode(path) for path in changed_paths)),
+        )
+
     def integration_repair_authority_replacements(
         self,
         request: DeliveryIntegrationRepairAuthorityAttention,
@@ -569,6 +649,34 @@ class ChangeWorkspaceManager:
             detail = diagnostics[0] if diagnostics else "repair retains an Integration conflict"
             _workspace_failure(detail)
         return repaired_tree
+
+    def _require_integration_repair_candidate(
+        self,
+        coordination: ChangeCoordination,
+        attention: DeliveryIntegrationAttention,
+        candidate_commit: str,
+    ) -> tuple[str, set[bytes]]:
+        self._require_worktree(coordination.worktree_path, coordination.branch, candidate_commit)
+        if self._git("status", "--porcelain", cwd=coordination.worktree_path):
+            _workspace_failure("Integration repair candidate requires a clean change worktree")
+        parents = self._git("rev-list", "--parents", "-n", "1", candidate_commit).split()
+        if parents != [candidate_commit, attention.change_head]:
+            _workspace_failure("Integration repair candidate must be the exact single child of the source head")
+        conflict_paths = self._integration_conflict_paths(attention.target_head, attention.change_head)
+        changed_paths = self._changed_paths(attention.change_head, candidate_commit)
+        if not changed_paths or not changed_paths <= conflict_paths:
+            _workspace_failure("Integration repair candidate may change only original conflict paths")
+        merged_tree, diagnostics = self._merge_tree(attention.target_head, candidate_commit)
+        if merged_tree is None:
+            detail = diagnostics[0] if diagnostics else "repair candidate retains an Integration conflict"
+            _workspace_failure(detail)
+        self._require_unchanged_completed_history(attention.target_head, merged_tree)
+        return merged_tree, changed_paths
+
+    def _worktree_changed_paths(self, worktree: Path) -> set[bytes]:
+        tracked = self._run_git("diff", "--name-only", "-z", "HEAD", cwd=worktree).stdout
+        untracked = self._run_git("ls-files", "--others", "--exclude-standard", "-z", cwd=worktree).stdout
+        return {path for path in (*tracked.split(b"\0"), *untracked.split(b"\0")) if path}
 
     def _require_unchanged_completed_history(self, target_head: str, repaired_tree: str) -> None:
         target_tree = self._git("rev-parse", f"{target_head}^{{tree}}")

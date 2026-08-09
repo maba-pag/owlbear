@@ -28,6 +28,9 @@ without behavior change).
   index is not a reason to skip an owned commit.
 - Use the shared scoped helper:
   `uv --project {owlbear-root} run commit-owned -m "type: description (#task-id, agent)" -- path [path...]`.
+- Integration repair candidates are the sole exception: call Delivery's claim-bound
+  `create_integration_repair_candidate` operation. Never use `commit-owned`, `git commit`, `SKIP`,
+  or `--no-verify` to create or repair that candidate.
 - The helper preserves unrelated staged paths and unstages only its own paths if `git commit` fails.
   It rejects owned paths that were already staged because it cannot distinguish user work from agent
   work in the same path.

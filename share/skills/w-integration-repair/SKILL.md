@@ -35,14 +35,22 @@ paths in the existing change worktree. The repair must preserve completed histor
 conflict when merged with the exact attention target head, and introduce no unrelated behavior or
 cleanup.
 
-Run focused proof for the affected paths. Create one explicit commit whose sole parent is
-`attention.change_head`; do not amend, rebase, merge, squash, cherry-pick, or create another
-worktree. Require `git merge-tree --write-tree` for the exact target head and repair commit to
-succeed, and treat that merged tree and its conflict-path blobs as the repair proof object. A
-source-checkout failure caused solely by target-owned evolution is non-probative and cannot justify
-authority attention. Require the branch and clean worktree to end at that exact repair commit. If
-any identity, head, custody, path, ancestry, or cleanliness check changes, stop without admission or
-target mutation and report that the current attention must be reloaded.
+When a conflict path declares platform identities such as MCP server names or tool prefixes, derive
+the complete identifier set from the attention target version. The repaired path may add admitted
+source operations or semantics, but every platform identifier must use the target namespace. Never
+retain a retired source prefix beside its target replacement.
+
+Run focused proof for the affected paths, then call `create_integration_repair_candidate` with the
+launch's exact `change_id`, `claim.attempt_id`, and `claim.claim_id`. This operation exclusively owns
+candidate commit creation and exact merge proof. Require its attention, source head, target head,
+attempt, and claim identities to match the launch; require its changed paths to stay within the
+original conflict paths; and treat its `candidate_commit`, `merged_tree`, and changed paths as the
+repair proof object. Do not call `commit-owned`, `git commit`, or use `SKIP`/`--no-verify` for an
+Integration repair. A source-checkout failure caused solely by target-owned evolution is
+non-probative and cannot justify authority attention. Require the branch and clean worktree to end
+at the returned candidate commit. If any identity, head, custody, path, ancestry, or cleanliness
+check changes, stop without admission or target mutation and report that the current attention must
+be reloaded.
 
 If proof or commit validation fails after edits but before a valid repair commit exists, restore only
 the edits made by this repair attempt to the exact launch source head and verify the assigned

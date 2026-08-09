@@ -151,6 +151,7 @@ def _requests() -> dict[str, dict[str, object]]:
         "show_plan_context": claim,
         "show_build_context": claim,
         "show_integration_repair_context": repair_claim,
+        "create_integration_repair_candidate": repair_claim,
         "publish_delivery_plan": {
             **change,
             "request": {"outcome_id": "OUT-001", "claim_id": "claim", "tasks": [_task()]},

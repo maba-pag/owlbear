@@ -818,9 +818,12 @@ def _prepare_reviewed_integration_repair(tmp_path: Path):
     launch = acquired.repair_launch_packages[0]
     worktree = coordinator.show("change-a").worktree_path
     (worktree / "product.txt").write_text("target side\n", encoding="utf-8")
-    _git(worktree, "add", "product.txt")
-    _git(worktree, "commit", "-m", "resolve Integration conflict")
-    repair_commit = _git(worktree, "rev-parse", "HEAD")
+    candidate = application.create_integration_repair_candidate(
+        "change-a",
+        launch.claim.attempt_id,
+        launch.claim.claim_id,
+    )
+    repair_commit = candidate.candidate_commit
     repair = DeliveryIntegrationRepair(
         attention_id=failed.attention.attention_id,
         change_id="change-a",
@@ -866,6 +869,19 @@ def test_repair_recovery_preserves_worktree_for_next_claim(tmp_path: Path) -> No
         assert context.launch == second_launch
     finally:
         os.close(directory_fd)
+
+
+def test_repair_candidate_rejects_mismatched_claim(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, _state_root, repair, claim = _prepare_reviewed_integration_repair(tmp_path)
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="execution identity"):
+        application.create_integration_repair_candidate(
+            "change-a",
+            claim.attempt_id,
+            "another-claim",
+        )
+
+    assert _git(coordinator.show("change-a").worktree_path, "rev-parse", "HEAD") == repair.reviewed_repair_commit
 
 
 def _with_reviewed_commit(repair: DeliveryIntegrationRepair, commit: str) -> DeliveryIntegrationRepair:

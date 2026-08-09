@@ -54,6 +54,7 @@ DELIVERY_TOOLS = {
     "show_plan_context",
     "show_build_context",
     "show_integration_repair_context",
+    "create_integration_repair_candidate",
     "publish_delivery_plan",
     "publish_delivery_result",
     "transition_delivery",

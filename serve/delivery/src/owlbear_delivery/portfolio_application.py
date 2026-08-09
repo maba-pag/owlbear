@@ -21,6 +21,7 @@ from owlbear_delivery.change_workspace import (
     ChangeWriter,
     CoordinationConflictError,
     IntegrationContext,
+    IntegrationRepairCandidate,
     PortfolioCoordinator,
     WorkspaceRecoverySnapshot,
 )
@@ -1136,6 +1137,34 @@ class PortfolioApplication:
         runtime = self._runtime(change_id)
         claim = runtime.require_integration_repair_claim(attempt_id, claim_id)
         return DeliveryIntegrationRepairContext(launch=self._current_repair_launch(change_id, runtime, claim))
+
+    def create_integration_repair_candidate(
+        self,
+        change_id: str,
+        attempt_id: str,
+        claim_id: str,
+    ) -> IntegrationRepairCandidate:
+        """Create and prove one exact candidate under active repair custody."""
+        with self._coordinator.integration_lock():
+            runtime = self._runtime(change_id)
+            claim = runtime.require_integration_repair_claim(attempt_id, claim_id)
+            attention = runtime.integration_attention()
+            coordination = self._coordinator.show(change_id)
+            writer = coordination.writer
+            if attention is None:
+                self._fail("repair claim has no current Integration attention")
+            if writer is None or (
+                writer.kind != "repair"
+                or writer.attempt_id != claim.attempt_id
+                or writer.claim_id != claim.claim_id
+                or writer.actor_id != claim.owner_id
+                or writer.process_id != claim.process_id
+            ):
+                self._fail("repair candidate requires exact active writer custody")
+            return self._workspace_manager.create_integration_repair_candidate(
+                attention,
+                writer,
+            )
 
     def recover_claim(
         self,

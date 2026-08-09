@@ -86,6 +86,7 @@ DELIVERY_OPERATION_NAMES = (
     "show_plan_context",
     "show_build_context",
     "show_integration_repair_context",
+    "create_integration_repair_candidate",
     "publish_delivery_plan",
     "publish_delivery_result",
     "transition_delivery",
@@ -240,6 +241,17 @@ class TargetMCPAdapter:
         return self._call(
             params,
             lambda: self._application.show_integration_repair_context(**params.model_dump()),
+        )
+
+    async def create_integration_repair_candidate(
+        self,
+        request: RepairClaimContextRequest,
+    ) -> dict[str, object]:
+        """Create and prove one exact claim-bound Integration repair candidate."""
+        params = self._validate(RepairClaimContextParams, request)
+        return self._call(
+            params,
+            lambda: self._application.create_integration_repair_candidate(**params.model_dump()),
         )
 
     async def publish_delivery_plan(self, request: PublishDeliveryPlanRequest) -> DeliveryPlanPublication:

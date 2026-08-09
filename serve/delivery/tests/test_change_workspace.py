@@ -17,6 +17,7 @@ from owlbear_delivery.change_workspace import (
     PortfolioCoordinator,
     WriterIdentity,
 )
+from owlbear_delivery.delivery_runtime import DeliveryIntegrationAttention, DeliveryIntegrationAttentionCode
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
 from owlbear_delivery.target_authority import Outcome, PlanScopeKind, TargetAuthority, TaskPlanScope
 from owlbear_delivery.target_runtime import TargetJob, TargetRuntime
@@ -469,3 +470,120 @@ def test_integration_conflict_emits_finding_without_advancing_target(tmp_path: P
     )
 
     assert runtime.list_frontier()[0].kind == "assembly"
+
+
+def test_repair_candidate_commits_conflict_paths_and_replays(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.create("repair-candidate")
+    source_head = _commit_file(coordination.worktree_path, "change\n", "change side")
+    manager.record_reviewed(coordination.change_id, source_head)
+    target_worktree = tmp_path / "target-worktree"
+    _git(repository, "worktree", "add", str(target_worktree), "release")
+    target_head = _commit_file(target_worktree, "target\n", "target side")
+    _git(repository, "worktree", "remove", str(target_worktree))
+    manager.refresh_integration_target(coordination.change_id)
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="repair")
+    coordinator.acquire(coordination.change_id, writer)
+    attention = DeliveryIntegrationAttention(
+        attention_id="a" * 64,
+        code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
+        change_id=coordination.change_id,
+        change_head=source_head,
+        target_head=target_head,
+        integration_target="release",
+        diagnostics=("conflict",),
+        retry_condition="Admit a reviewed repair.",
+    )
+    (coordination.worktree_path / "shared.txt").write_text("target\n", encoding="utf-8")
+
+    candidate = manager.create_integration_repair_candidate(attention, writer)
+    replayed = manager.create_integration_repair_candidate(attention, writer)
+
+    assert candidate == replayed
+    assert candidate.changed_paths == ("shared.txt",)
+    assert _git(repository, "rev-list", "--parents", "-n", "1", candidate.candidate_commit).split() == [
+        candidate.candidate_commit,
+        source_head,
+    ]
+    assert _git(coordination.worktree_path, "status", "--porcelain") == ""
+    assert _git(repository, "rev-parse", "release") == target_head
+
+
+@pytest.mark.parametrize("interruption", ["candidate-commit", "branch-cas", "worktree-reset"])
+def test_repair_candidate_replays_after_git_interruption(tmp_path: Path, interruption: str) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.create(f"repair-candidate-{interruption}")
+    source_head = _commit_file(coordination.worktree_path, "change\n", "change side")
+    manager.record_reviewed(coordination.change_id, source_head)
+    target_worktree = tmp_path / "target-worktree"
+    _git(repository, "worktree", "add", str(target_worktree), "release")
+    target_head = _commit_file(target_worktree, "target\n", "target side")
+    _git(repository, "worktree", "remove", str(target_worktree))
+    manager.refresh_integration_target(coordination.change_id)
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="repair")
+    coordinator.acquire(coordination.change_id, writer)
+    attention = DeliveryIntegrationAttention(
+        attention_id="c" * 64,
+        code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
+        change_id=coordination.change_id,
+        change_head=source_head,
+        target_head=target_head,
+        integration_target="release",
+        diagnostics=("conflict",),
+        retry_condition="Admit a reviewed repair.",
+    )
+    (coordination.worktree_path / "shared.txt").write_text("target\n", encoding="utf-8")
+    original_git = manager._git
+
+    def interrupt_after_git(*arguments: str, **kwargs) -> str:
+        result = original_git(*arguments, **kwargs)
+        checks = {
+            "candidate-commit": arguments[:1] == ("commit-tree",),
+            "branch-cas": arguments[:2] == ("update-ref", f"refs/heads/{coordination.branch}"),
+            "worktree-reset": arguments[:2] == ("reset", "--hard"),
+        }
+        if checks[interruption]:
+            message = "injected"
+            raise RuntimeError(message)
+        return result
+
+    with patch.object(manager, "_git", side_effect=interrupt_after_git), pytest.raises(RuntimeError, match="injected"):
+        manager.create_integration_repair_candidate(attention, writer)
+
+    candidate = manager.create_integration_repair_candidate(attention, writer)
+
+    assert _git(repository, "rev-parse", coordination.branch) == candidate.candidate_commit
+    assert _git(coordination.worktree_path, "status", "--porcelain") == ""
+
+
+def test_repair_candidate_rejects_changes_outside_conflict_paths(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.create("repair-candidate-scope")
+    source_head = _commit_file(coordination.worktree_path, "change\n", "change side")
+    manager.record_reviewed(coordination.change_id, source_head)
+    target_worktree = tmp_path / "target-worktree"
+    _git(repository, "worktree", "add", str(target_worktree), "release")
+    target_head = _commit_file(target_worktree, "target\n", "target side")
+    _git(repository, "worktree", "remove", str(target_worktree))
+    manager.refresh_integration_target(coordination.change_id)
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="repair")
+    coordinator.acquire(coordination.change_id, writer)
+    attention = DeliveryIntegrationAttention(
+        attention_id="b" * 64,
+        code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
+        change_id=coordination.change_id,
+        change_head=source_head,
+        target_head=target_head,
+        integration_target="release",
+        diagnostics=("conflict",),
+        retry_condition="Admit a reviewed repair.",
+    )
+    (coordination.worktree_path / "outside.txt").write_text("outside\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="only original conflict paths"):
+        manager.create_integration_repair_candidate(attention, writer)
+
+    assert _git(repository, "rev-parse", coordination.branch) == source_head
