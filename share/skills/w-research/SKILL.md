@@ -89,7 +89,7 @@ conversation. Keep it focused and source-grounded:
 ## 4. Recommendation, Confidence, And Limits
 ```
 
-Keep it at most 200 lines. Log materially used external sources in `.owlbear/sources/overview.md` per
+Log materially used external sources in `.owlbear/sources/overview.md` per
 `r-workspace-governance`. Delete approved clones from `.owlbear/scratch/research/` before returning.
 
 ## Step 7 — Return Evidence To The Caller

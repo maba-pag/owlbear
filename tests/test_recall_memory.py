@@ -12,7 +12,7 @@ AC coverage:
   AC8 (td:0): all tests fail — RED state
 
 Interface strategy:
-  recall_memory does not exist in owlbear_mcp_memory.tools yet.
+  recall_memory does not exist in owlbear_memory_mcp.tools yet.
   The module-level import causes ImportError, guaranteeing RED for every test.
   Expected signature: recall_memory(ctx, *, agent, categories=None, limit=None) -> str
     Return: concatenated "## {title}\\nEntry ID: `{id}`\\n{content}" blocks.
@@ -35,7 +35,7 @@ async def _recall(*args: object, **kwargs: object) -> str:
     This deferred import pattern avoids a collection error while ensuring every
     test that calls _recall fails with ImportError in RED phase.
     """
-    from owlbear_mcp_memory.tools import recall_memory  # noqa: PLC0415
+    from owlbear_memory_mcp.tools import recall_memory  # noqa: PLC0415
 
     return await recall_memory(*args, **kwargs)  # type: ignore[arg-type]
 
@@ -292,7 +292,7 @@ class TestFromAC_WildcardAgentBlock:
     @pytest.mark.asyncio
     async def test_wildcard_agent_raises_tool_error(self, tmp_path: Path) -> None:
         """recall_memory(agent="*") is rejected with ToolError."""
-        from mcp.server.fastmcp.exceptions import ToolError
+        from mcp.server.mcpserver.exceptions import ToolError
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine)

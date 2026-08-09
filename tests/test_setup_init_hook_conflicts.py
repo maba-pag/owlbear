@@ -72,6 +72,7 @@ def test_interactive_replace_overwrites_existing_hook(
     target_dir = tmp_path / "project"
     _make_seed_hook(owlbear_dir, "seed-version")
     existing = _make_existing_hook(target_dir, "local-version")
+    monkeypatch.setattr(init_module, "_select_integration_target", lambda *_args, **_kwargs: "main")
     monkeypatch.setattr("builtins.input", lambda _prompt: "replace")
 
     init_module.init(target_dir, owlbear_dir, interactive=True)
@@ -88,6 +89,7 @@ def test_interactive_skip_keeps_existing_hook(
     target_dir = tmp_path / "project"
     _make_seed_hook(owlbear_dir, "seed-version")
     existing = _make_existing_hook(target_dir, "local-version")
+    monkeypatch.setattr(init_module, "_select_integration_target", lambda *_args, **_kwargs: "main")
     monkeypatch.setattr("builtins.input", lambda _prompt: "skip")
 
     init_module.init(target_dir, owlbear_dir, interactive=True)
@@ -104,6 +106,7 @@ def test_interactive_cancel_raises(
     target_dir = tmp_path / "project"
     _make_seed_hook(owlbear_dir, "seed-version")
     existing = _make_existing_hook(target_dir, "local-version")
+    monkeypatch.setattr(init_module, "_select_integration_target", lambda *_args, **_kwargs: "main")
     monkeypatch.setattr("builtins.input", lambda _prompt: "cancel")
 
     with pytest.raises(RuntimeError, match="Hook seeding cancelled"):

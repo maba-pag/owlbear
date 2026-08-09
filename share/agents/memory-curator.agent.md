@@ -6,7 +6,7 @@ user-invocable: true
 disable-model-invocation: true
 model: GPT-5.6 Terra (copilot)
 tools:
-  [vscode/toolSearch, vscode/askQuestions, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, ob-memory/curate_memory, ob-memory/delete_memory, ob-memory/list_memories, ob-memory/read_memory]
+  [vscode/toolSearch, vscode/askQuestions, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, owlbear-memory/curate_memory, owlbear-memory/delete_agent_memories, owlbear-memory/delete_memory, owlbear-memory/list_memories, owlbear-memory/read_memory, owlbear-memory/rename_agent_memories]
 agents: []
 ---
 

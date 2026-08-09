@@ -6,10 +6,10 @@ import { spawn } from 'node:child_process'
 
 const root = resolve(import.meta.dirname, '../../../../..')
 const fixture = await mkdtemp(join(tmpdir(), 'owlbear-memory-lifecycle-'))
-const memoryDir = join(fixture, 'memory')
+const memoryDir = join(fixture, '.owlbear/memory')
 const fixtureManifest = resolve(import.meta.dirname, '../../test-results/memory-lifecycle-fixture.json')
 const mcpProof = resolve(import.meta.dirname, '../../test-results/memory-lifecycle-mcp.json')
-await mkdir(memoryDir)
+await mkdir(memoryDir, { recursive: true })
 
 const entries = [
   ['11111111-1111-4111-8111-111111111111', 'Approved memory', 'approved', 0.95, null],
@@ -89,12 +89,9 @@ if (mcpProbeExit !== 0) {
 }
 
 const server = spawn('uv', ['run', '--project', root, '--package', 'owlbear-cockpit', 'cockpit'], {
-  cwd: root,
+  cwd: fixture,
   env: {
     ...process.env,
-    OWLBEAR_WORKSPACE_ROOT: fixture,
-    OWLBEAR_DELIVERY_CONFIG: join(fixture, 'delivery-config.json'),
-    MEMORY_DIR: memoryDir,
     COCKPIT_PORT: '8422',
     COCKPIT_NO_OPEN: '1',
   },

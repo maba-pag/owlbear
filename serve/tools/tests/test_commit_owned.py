@@ -47,7 +47,7 @@ def test_commits_owned_path_without_including_unrelated_staged_path(git_repo: Pa
 
 def test_commits_advanced_task_with_all_unrelated_dirt_preserved(git_repo: Path) -> None:
     """An ordinary pipeline commit includes final task state and excludes unrelated dirt."""
-    task_path = git_repo / ".owlbear/kanban/tasks/1-task.md"
+    task_path = git_repo / ".owlbear/scratch/tasks/1-task.md"
     task_path.parent.mkdir(parents=True)
     task_path.write_text("status: build\n", encoding="utf-8")
     _git(git_repo, "add", task_path.relative_to(git_repo).as_posix())
@@ -67,7 +67,7 @@ def test_commits_advanced_task_with_all_unrelated_dirt_preserved(git_repo: Path)
     )
 
     assert _git(git_repo, "show", "--format=", "--name-only", "HEAD").stdout.splitlines() == [
-        ".owlbear/kanban/tasks/1-task.md",
+        ".owlbear/scratch/tasks/1-task.md",
         "owned.txt",
     ]
     assert _git(git_repo, "diff", "--name-only").stdout.splitlines() == ["baseline.txt"]
@@ -77,8 +77,8 @@ def test_commits_advanced_task_with_all_unrelated_dirt_preserved(git_repo: Path)
 
 def test_commits_archive_move_without_including_unrelated_dirt(git_repo: Path) -> None:
     """A collector can commit both sides of an archive move in a dirty worktree."""
-    task_path = git_repo / ".owlbear/kanban/tasks/1-task.md"
-    archive_path = git_repo / ".owlbear/kanban/archive/1-task.md"
+    task_path = git_repo / ".owlbear/scratch/tasks/1-task.md"
+    archive_path = git_repo / ".owlbear/scratch/archive/1-task.md"
     task_path.parent.mkdir(parents=True)
     archive_path.parent.mkdir(parents=True)
     task_path.write_text("status: collect\n", encoding="utf-8")
@@ -100,7 +100,7 @@ def test_commits_archive_move_without_including_unrelated_dirt(git_repo: Path) -
     )
 
     committed = _git(git_repo, "diff-tree", "--no-commit-id", "--name-status", "-r", "-M", "HEAD").stdout
-    assert committed.splitlines() == ["R100\t.owlbear/kanban/tasks/1-task.md\t.owlbear/kanban/archive/1-task.md"]
+    assert committed.splitlines() == ["R100\t.owlbear/scratch/tasks/1-task.md\t.owlbear/scratch/archive/1-task.md"]
     assert _git(git_repo, "diff", "--cached", "--name-only").stdout.splitlines() == ["unrelated-staged.txt"]
     assert (git_repo / "unrelated-untracked.txt").exists()
 

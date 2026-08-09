@@ -10,12 +10,14 @@ import pytest
 
 
 def _configure_run(base: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from owlbear_cockpit import main
+
     dist = base / "dist"
     (dist / "assets").mkdir(parents=True)
     (dist / "index.html").write_text("<!doctype html><html></html>\n", encoding="utf-8")
     (dist / "theme-bootstrap.js").write_text("document.documentElement.dataset.theme = 'auto';\n", encoding="utf-8")
-    monkeypatch.setenv("OWLBEAR_WORKSPACE_ROOT", str(base))
-    monkeypatch.setenv("COCKPIT_DIST_DIR", str(dist))
+    monkeypatch.chdir(base)
+    monkeypatch.setattr(main, "_DIST_DIR", dist)
     monkeypatch.setenv("COCKPIT_NO_OPEN", "1")
 
 

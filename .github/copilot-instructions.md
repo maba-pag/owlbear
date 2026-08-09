@@ -2,7 +2,7 @@
 
 ## 1. Project Identity
 
-OwlBear is a laptop-resident AI development system built around VS Code and GitHub Copilot agents. It plans work via kanban, executes through agent workflows, and delivers through shared workspace artifacts. VS Code is the IDE; the filesystem is the integration point.
+OwlBear is a laptop-resident AI development system built around VS Code and GitHub Copilot agents. It plans and executes work through Delivery workflows and shared workspace artifacts. VS Code is the IDE; the filesystem is the integration point.
 
 ## 2. Repository Branches
 
@@ -26,7 +26,7 @@ so never commit directly to `main`. The workflow builds the Cockpit SPA bundle
 | `share/skills/` | Agent skills (`SKILL.md` — `w-`, `r-`, `h-` prefixed) |
 | `share/instructions/` | Instruction stubs (`.instructions.md` — pointers to skills) |
 | `share/prompts/` | Prompt files (`.prompt.md` — user-facing one-shot commands) |
-| `.owlbear/` | Project ops data: kanban board, decisions, research, sources, scratch, scripts, hooks |
+| `.owlbear/` | Project ops data: Delivery authority, research, sources, scratch, scripts, hooks |
 | `store/` | Knowledge and memory data |
 | `seed/` | Template files copied to new projects by `setup/init.py` |
 | `setup/` | Workspace initialiser (`init.py`), setup guide, sharing guide |
@@ -56,7 +56,7 @@ All other `serve/` packages are Python — use `uv run` for those.
 |-----------|-------|
 | Stack | FastAPI + Pydantic v2 |
 | Endpoints | REST API under `/api/` — see `owlbear_cockpit/routes/` for current routes |
-| Launch | `uv run cockpit` — starts uvicorn on `127.0.0.1:8420` (default) and auto-opens browser; `COCKPIT_PORT` overrides port; `COCKPIT_NO_OPEN=1` suppresses browser; `OWLBEAR_WORK_ROOT` overrides `.owlbear/kanban/`; requires built `dist/` |
+| Launch | `uv run cockpit` — starts uvicorn on `127.0.0.1:8420` (default) and auto-opens browser; `COCKPIT_PORT` overrides port; `COCKPIT_NO_OPEN=1` suppresses browser; requires built `dist/` |
 | Package manager | `uv` (standard for all `serve/` Python packages) |
 
 ## 5. Test Domain Mapping
@@ -67,12 +67,12 @@ Maps source paths to the test scope that covers them. Used by quality-runner `mo
 |---------------|-----------|-----------|
 | `serve/cockpit/web/` | `npm test` in `serve/cockpit/web/` | vitest |
 | `serve/cockpit/` (Python, not `web/`) | `tests/test_cockpit_*` | pytest |
-| `serve/kanban/` | `serve/kanban/tests/` `tests/test_engine_*` `tests/test_kanban_*` | pytest |
+| `serve/delivery/` | `serve/delivery/tests/` `tests/test_engine_*` `tests/test_delivery_*` | pytest |
 | `serve/knowledge/` | `serve/knowledge/tests/` `tests/test_knowledge_*` `tests/test_enrichment_*` | pytest |
-| `serve/mcp-kanban/` | `serve/mcp-kanban/tests/` | pytest |
-| `serve/mcp-knowledge/` | `serve/mcp-knowledge/tests/` | pytest |
-| `serve/mcp-memory/` | `serve/mcp-memory/tests/` | pytest |
-| `serve/mcp-browser/` | `serve/mcp-browser/tests/` | pytest |
+| `serve/delivery-mcp/` | `serve/delivery-mcp/tests/` | pytest |
+| `serve/knowledge-mcp/` | `serve/knowledge-mcp/tests/` | pytest |
+| `serve/memory-mcp/` | `serve/memory-mcp/tests/` | pytest |
+| `serve/browser-mcp/` | `serve/browser-mcp/tests/` | pytest |
 | `serve/tools/` | `serve/tools/tests/` | pytest |
 | `share/` `.owlbear/` `setup/` | skip (docs/config only) | — |
 | (no prefix match) | `tests/ serve/ -m "not api"` | pytest |

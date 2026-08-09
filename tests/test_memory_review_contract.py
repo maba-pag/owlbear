@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from owlbear_mcp_memory.models import MemoryState
+from owlbear_memory_mcp.models import MemoryState
 
 _REPO_ROOT = Path(__file__).parent.parent
 _PROMPT = _REPO_ROOT / "share/prompts/memory-audit.prompt.md"

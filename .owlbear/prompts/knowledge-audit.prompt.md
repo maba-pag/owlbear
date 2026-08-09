@@ -3,7 +3,7 @@ name: knowledge-audit
 description: audit the knowledge module
 ---
 
-lets do an audit of the knowledge module (serve/knowledge/ and serve/mcp-knowledge/ primarily). this is the central knowledge database including a knowledge graph that is used via mcp and powered by manually run agents. this manual part is intentional for now.
+lets do an audit of the knowledge module (serve/knowledge/ and serve/knowledge-mcp/ primarily). this is the central knowledge database including a knowledge graph that is used via mcp and powered by manually run agents. this manual part is intentional for now.
 
 ## What This Module Does
 

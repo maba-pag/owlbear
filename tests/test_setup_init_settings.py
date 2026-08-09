@@ -10,7 +10,7 @@ import types
 from unittest.mock import patch
 
 import pytest
-from owlbear_kanban import DeliveryStartupConfig, TargetCutoverRequest, authorize_target_mutation
+from owlbear_delivery import DeliveryStartupConfig, TargetCutoverRequest, authorize_target_mutation
 
 _REPO_ROOT = Path(__file__).parent.parent
 _INIT_PATH = _REPO_ROOT / "setup" / "init.py"
@@ -43,6 +43,7 @@ def test_init_writes_settings_without_hook_locations_and_with_local_hints(
     owlbear_rel_path = Path(os.path.relpath(_REPO_ROOT, target_dir)).as_posix()
 
     assert "chat.hookFilesLocations" not in data
+    assert data["chat.agentHost.copilot.toolSearch.enabled"] is True
     assert data["chat.agentFilesLocations"] == {
         f"{owlbear_rel_path}/share/agents": True,
         ".owlbear/agents": True,
@@ -102,22 +103,19 @@ def test_init_creates_only_empty_target_control_plane_stores(
     seed_hooks = {path.name for path in (_REPO_ROOT / "seed/.owlbear/hooks").glob("*.py")}
     assert installed_hooks == seed_hooks
     mcp = json.loads((target_dir / ".vscode/mcp.json").read_text(encoding="utf-8"))
-    assert set(mcp["servers"]) == {"ob-kanban", "ob-knowledge", "ob-memory", "ob-browser", "markitdown"}
-    delivery_config_path = target_dir / ".owlbear/delivery-config.json"
-    assert mcp["servers"]["ob-kanban"]["env"] == {
-        "OWLBEAR_DELIVERY_CONFIG": str(delivery_config_path.resolve()),
-        "OWLBEAR_WORKSPACE_ROOT": str(target_dir.resolve()),
+    assert set(mcp["servers"]) == {
+        "owlbear-delivery",
+        "owlbear-knowledge",
+        "owlbear-memory",
+        "owlbear-browser",
+        "markitdown",
     }
+    delivery_config_path = target_dir / ".owlbear/delivery/config.json"
+    assert "env" not in mcp["servers"]["owlbear-delivery"]
     delivery_config = DeliveryStartupConfig.model_validate_json(delivery_config_path.read_bytes())
-    assert delivery_config.package_root == (target_dir / ".owlbear/delivery/packages").resolve()
-    assert delivery_config.target_root == (target_dir / ".owlbear/target").resolve()
-    assert delivery_config.repository_root == target_dir.resolve()
-    assert delivery_config.worktree_root == (target_dir / ".owlbear/worktrees").resolve()
-    assert delivery_config.role_policies.planner.worker_agent == "planner"
-    assert delivery_config.role_policies.builder.worker_agent == "builder"
-    assert delivery_config.role_policies.assembly_reviewer.worker_agent == "build-reviewer"
-    assert (_REPO_ROOT / "serve/cockpit/dist/index.html").is_file()
-    assert (_REPO_ROOT / "serve/cockpit/dist/assets").is_dir()
+    assert delivery_config.schema_version == 1
+    assert delivery_config.integration_target == "main"
+    assert "/.owlbear/delivery/config.json" not in (target_dir / ".gitignore").read_text(encoding="utf-8")
     installed_text = "\n".join(
         path.read_text(encoding="utf-8")
         for path in target_dir.rglob("*")
@@ -142,9 +140,9 @@ def test_init_rerun_preserves_user_settings_and_target_records(
     settings["example.userSetting"] = "preserved"
     settings["chat.tools.terminal.autoApprove"]["example-command"] = False
     settings_path.write_text(json.dumps(settings), encoding="utf-8")
-    delivery_config_path = target_dir / ".owlbear/delivery-config.json"
+    delivery_config_path = target_dir / ".owlbear/delivery/config.json"
     delivery_config = json.loads(delivery_config_path.read_text(encoding="utf-8"))
-    delivery_config["writer_capacity"] = 3
+    delivery_config["integration_target"] = "release"
     delivery_config_path.write_text(json.dumps(delivery_config), encoding="utf-8")
 
     records = {
@@ -164,9 +162,100 @@ def test_init_rerun_preserves_user_settings_and_target_records(
     merged_settings = json.loads(settings_path.read_text(encoding="utf-8"))
     assert merged_settings["example.userSetting"] == "preserved"
     assert merged_settings["chat.tools.terminal.autoApprove"]["example-command"] is False
-    assert json.loads(delivery_config_path.read_text(encoding="utf-8"))["writer_capacity"] == 3
+    assert json.loads(delivery_config_path.read_text(encoding="utf-8"))["integration_target"] == "release"
     assert all((target_dir / path).read_bytes() == content for path, content in records.items())
     assert second_rerun == first_rerun
+
+
+def test_init_uses_requested_existing_integration_target(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target_dir = tmp_path / "project"
+    target_dir.mkdir()
+    monkeypatch.setattr(init_module, "_branch_exists", lambda _target, branch: branch == "release")
+
+    init_module.init(
+        target_dir,
+        _REPO_ROOT,
+        interactive=False,
+        integration_target="release",
+    )
+
+    config = json.loads((target_dir / ".owlbear/delivery/config.json").read_text(encoding="utf-8"))
+    assert config["integration_target"] == "release"
+
+
+def test_init_interactive_target_defaults_to_checked_out_branch(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target_dir = tmp_path / "project"
+    target_dir.mkdir()
+    monkeypatch.setattr(init_module, "_current_branch", lambda _target: "develop")
+    monkeypatch.setattr(init_module, "_branch_exists", lambda _target, branch: branch == "develop")
+    monkeypatch.setattr("builtins.input", lambda _prompt: "")
+
+    init_module.init(target_dir, _REPO_ROOT, interactive=True)
+
+    config = json.loads((target_dir / ".owlbear/delivery/config.json").read_text(encoding="utf-8"))
+    assert config["integration_target"] == "develop"
+
+
+def test_init_scaffolds_and_preserves_detected_verification_profile(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+) -> None:
+    target_dir = tmp_path / "project"
+    (target_dir / "tests").mkdir(parents=True)
+    (target_dir / "pyproject.toml").write_text("[project]\nname = 'example'\n", encoding="utf-8")
+    (target_dir / "package.json").write_text('{"scripts":{"test":"vitest run"}}\n', encoding="utf-8")
+    (target_dir / "package-lock.json").write_text("{}\n", encoding="utf-8")
+
+    init_module.init(target_dir, _REPO_ROOT, interactive=False)
+
+    profile_path = target_dir / ".owlbear/delivery/verification.json"
+    profile = json.loads(profile_path.read_text(encoding="utf-8"))
+    assert [step["step_id"] for step in profile["steps"]] == [
+        "python-tests",
+        "node-install",
+        "node-tests",
+    ]
+    assert profile["steps"][0]["argv"] == ["uv", "run", "--locked", "pytest"]
+    profile["steps"][0]["timeout_seconds"] = 42
+    profile_path.write_text(json.dumps(profile), encoding="utf-8")
+
+    init_module.init(target_dir, _REPO_ROOT, interactive=False)
+
+    preserved = json.loads(profile_path.read_text(encoding="utf-8"))
+    assert preserved["steps"][0]["timeout_seconds"] == 42
+
+
+def test_init_removes_retired_delivery_config_ignore_rule(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+) -> None:
+    target_dir = tmp_path / "project"
+    target_dir.mkdir()
+    gitignore = target_dir / ".gitignore"
+    gitignore.write_text(
+        "user-rule\n\n"
+        "# --- OwlBear managed paths ---\n"
+        "# Host-local Delivery startup configuration\n"
+        "/.owlbear/delivery/config.json\n"
+        "/.owlbear/worktrees/\n",
+        encoding="utf-8",
+    )
+
+    init_module.init(target_dir, _REPO_ROOT, interactive=False)
+
+    content = gitignore.read_text(encoding="utf-8")
+    assert "/.owlbear/delivery/config.json" not in content
+    assert "Host-local Delivery startup configuration" not in content
+    assert "user-rule" in content
+    assert "/.owlbear/worktrees/" in content
 
 
 def test_init_preserves_pre_cutover_store_without_creating_target(

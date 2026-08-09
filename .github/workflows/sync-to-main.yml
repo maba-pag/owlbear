@@ -13,19 +13,19 @@ name: Sync dev to main
         type: boolean
         default: true
       sync_browser:
-        description: "serve/browser/ + serve/mcp-browser/"
+        description: "serve/browser/ + serve/browser-mcp/"
         type: boolean
         default: true
-      sync_kanban:
-        description: "serve/kanban/ + serve/mcp-kanban/"
+      sync_delivery:
+        description: "serve/delivery/ + serve/delivery-mcp/"
         type: boolean
         default: true
       sync_knowledge:
-        description: "serve/knowledge/ + serve/mcp-knowledge/"
+        description: "serve/knowledge/ + serve/knowledge-mcp/"
         type: boolean
         default: true
       sync_memory:
-        description: "serve/memory/ + serve/mcp-memory/"
+        description: "serve/memory/ + serve/memory-mcp/"
         type: boolean
         default: true
       sync_cockpit:
@@ -65,7 +65,7 @@ jobs:
     env:
       SYNC_SHARE: ${{ inputs.sync_share }}
       SYNC_BROWSER: ${{ inputs.sync_browser }}
-      SYNC_KANBAN: ${{ inputs.sync_kanban }}
+      SYNC_DELIVERY: ${{ inputs.sync_delivery }}
       SYNC_KNOWLEDGE: ${{ inputs.sync_knowledge }}
       SYNC_COCKPIT: ${{ inputs.sync_cockpit }}
       SYNC_TOOLS: ${{ inputs.sync_tools }}
@@ -84,7 +84,7 @@ jobs:
           # Collect serve sub-scopes
           serve_scopes=""
           if [[ "$SYNC_BROWSER" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}browser"; fi
-          if [[ "$SYNC_KANBAN" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}kanban"; fi
+          if [[ "$SYNC_DELIVERY" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}delivery"; fi
           if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}knowledge"; fi
           if [[ "$SYNC_COCKPIT" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}cockpit"; fi
           if [[ "$SYNC_TOOLS" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}tools"; fi
@@ -92,7 +92,7 @@ jobs:
 
           if [[ -n "$serve_scopes" ]]; then
             # If all serve sub-scopes are selected, collapse to "serve"
-            if [[ "$serve_scopes" == "browser,kanban,knowledge,cockpit,tools,memory" ]]; then
+            if [[ "$serve_scopes" == "browser,delivery,knowledge,cockpit,tools,memory" ]]; then
               scopes="${scopes:+$scopes,}serve"
             else
               scopes="${scopes:+$scopes,}$serve_scopes"
@@ -114,7 +114,7 @@ jobs:
           any_serve="false"
           all_serve="false"
           if [[ -n "$serve_scopes" ]]; then any_serve="true"; fi
-          if [[ "$serve_scopes" == "browser,kanban,knowledge,cockpit,tools,memory" ]]; then all_serve="true"; fi
+          if [[ "$serve_scopes" == "browser,delivery,knowledge,cockpit,tools,memory" ]]; then all_serve="true"; fi
 
           {
             echo "SCOPES=$scopes"
@@ -143,17 +143,18 @@ jobs:
           # Build path list from selected sync scopes
           paths=""
           if [[ "$SYNC_SHARE" == "true" ]]; then paths="$paths share"; fi
-          if [[ "$SYNC_BROWSER" == "true" ]]; then paths="$paths serve/browser serve/mcp-browser"; fi
-          if [[ "$SYNC_KANBAN" == "true" ]]; then paths="$paths serve/kanban serve/mcp-kanban"; fi
-          if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then paths="$paths serve/knowledge serve/mcp-knowledge"; fi
+          if [[ "$SYNC_BROWSER" == "true" ]]; then paths="$paths serve/browser serve/browser-mcp"; fi
+          if [[ "$SYNC_DELIVERY" == "true" ]]; then paths="$paths serve/delivery serve/delivery-mcp"; fi
+          if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then paths="$paths serve/knowledge serve/knowledge-mcp"; fi
           if [[ "$SYNC_COCKPIT" == "true" ]]; then paths="$paths serve/cockpit"; fi
           if [[ "$SYNC_TOOLS" == "true" ]]; then paths="$paths serve/tools"; fi
-          if [[ "$SYNC_MEMORY" == "true" ]]; then paths="$paths serve/memory serve/mcp-memory"; fi
+          if [[ "$SYNC_MEMORY" == "true" ]]; then paths="$paths serve/memory serve/memory-mcp"; fi
           if [[ "$SYNC_SETUP" == "true" ]]; then paths="$paths setup seed"; fi
           if [[ "$SYNC_INFRA" == "true" ]]; then
-            paths="$paths .github .vscode .editorconfig .gitattributes .gitignore"
+            paths="$paths .github/workflows .github/renovate.json"
+            paths="$paths .vscode .editorconfig .gitattributes .gitignore"
             paths="$paths .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore"
-            paths="$paths .mega-linter.yml .pre-commit-config.yaml .python-version"
+            paths="$paths .mega-linter.yml .python-version"
             paths="$paths .yamllint.yml pyproject.toml SECURITY.md uv.lock"
             paths="$paths README-consumer.md"
           fi
@@ -164,9 +165,8 @@ jobs:
           fi
 
           # shellcheck disable=SC2086
-          todo_hits=$(grep -rHnI '> \*\*TODO:\*\*' $paths 2>/dev/null \
+          todo_hits=$(grep -rHnI '^> \*\*TODO:\*\*' $paths 2>/dev/null \
             | grep -v -e '^share/skills/w-doc-update/SKILL\.md:' \
-                      -e '^\.github/workflows/sync-to-main\.yml:' \
             || true)
 
           if [[ -z "$todo_hits" ]]; then
@@ -192,13 +192,13 @@ jobs:
             paths="$paths share"
           fi
           if [[ "$SYNC_BROWSER" == "true" ]]; then
-            paths="$paths serve/browser serve/mcp-browser"
+            paths="$paths serve/browser serve/browser-mcp"
           fi
-          if [[ "$SYNC_KANBAN" == "true" ]]; then
-            paths="$paths serve/kanban serve/mcp-kanban"
+          if [[ "$SYNC_DELIVERY" == "true" ]]; then
+            paths="$paths serve/delivery serve/delivery-mcp"
           fi
           if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then
-            paths="$paths serve/knowledge serve/mcp-knowledge"
+            paths="$paths serve/knowledge serve/knowledge-mcp"
           fi
           if [[ "$SYNC_COCKPIT" == "true" ]]; then
             paths="$paths serve/cockpit"
@@ -207,15 +207,16 @@ jobs:
             paths="$paths serve/tools"
           fi
           if [[ "$SYNC_MEMORY" == "true" ]]; then
-            paths="$paths serve/memory serve/mcp-memory"
+            paths="$paths serve/memory serve/memory-mcp"
           fi
           if [[ "$SYNC_SETUP" == "true" ]]; then
             paths="$paths setup seed"
           fi
           if [[ "$SYNC_INFRA" == "true" ]]; then
-            paths="$paths .github .vscode .editorconfig .gitattributes .gitignore"
+            paths="$paths .github/workflows .github/renovate.json"
+            paths="$paths .vscode .editorconfig .gitattributes .gitignore"
             paths="$paths .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore"
-            paths="$paths .mega-linter.yml .pre-commit-config.yaml .python-version"
+            paths="$paths .mega-linter.yml .python-version"
             paths="$paths .yamllint.yml pyproject.toml SECURITY.md uv.lock"
             paths="$paths README-consumer.md"
           fi
@@ -234,11 +235,11 @@ jobs:
           echo "All selected paths present on dev."
 
       - name: Install uv for MCP dev-source gate
-        if: ${{ env.SYNC_KANBAN == 'true' }}
+        if: ${{ env.SYNC_DELIVERY == 'true' }}
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
 
       - name: Install Python (uv managed)
-        if: ${{ env.SYNC_KANBAN == 'true' }}
+        if: ${{ env.SYNC_DELIVERY == 'true' }}
         run: uv python install
 
       - name: Configure git identity
@@ -273,9 +274,10 @@ jobs:
             git rm -rf . --quiet || true
             git checkout dev -- \
               share serve setup seed \
-              .github .vscode .editorconfig .gitattributes .gitignore \
+              .github/workflows .github/renovate.json \
+              .vscode .editorconfig .gitattributes .gitignore \
               .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore \
-              .mega-linter.yml .pre-commit-config.yaml .python-version \
+              .mega-linter.yml .python-version \
               .yamllint.yml pyproject.toml SECURITY.md uv.lock \
               README-consumer.md
             git mv -f README-consumer.md README.md
@@ -295,21 +297,21 @@ jobs:
               git checkout dev -- serve
             else
               if [[ "$SYNC_BROWSER" == "true" ]]; then
-                echo "--- serve/browser + serve/mcp-browser"
-                git rm -rf serve/browser serve/mcp-browser --quiet 2>/dev/null || true
-                git checkout dev -- serve/browser serve/mcp-browser
+                echo "--- serve/browser + serve/browser-mcp"
+                git rm -rf serve/browser serve/browser-mcp --quiet 2>/dev/null || true
+                git checkout dev -- serve/browser serve/browser-mcp
               fi
 
-              if [[ "$SYNC_KANBAN" == "true" ]]; then
-                echo "--- serve/kanban + serve/mcp-kanban"
-                git rm -rf serve/kanban serve/mcp-kanban --quiet 2>/dev/null || true
-                git checkout dev -- serve/kanban serve/mcp-kanban
+              if [[ "$SYNC_DELIVERY" == "true" ]]; then
+                echo "--- serve/delivery + serve/delivery-mcp"
+                git rm -rf serve/delivery serve/delivery-mcp --quiet 2>/dev/null || true
+                git checkout dev -- serve/delivery serve/delivery-mcp
               fi
 
               if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then
-                echo "--- serve/knowledge + serve/mcp-knowledge"
-                git rm -rf serve/knowledge serve/mcp-knowledge --quiet 2>/dev/null || true
-                git checkout dev -- serve/knowledge serve/mcp-knowledge
+                echo "--- serve/knowledge + serve/knowledge-mcp"
+                git rm -rf serve/knowledge serve/knowledge-mcp --quiet 2>/dev/null || true
+                git checkout dev -- serve/knowledge serve/knowledge-mcp
               fi
 
               if [[ "$SYNC_COCKPIT" == "true" ]]; then
@@ -325,9 +327,9 @@ jobs:
               fi
 
               if [[ "$SYNC_MEMORY" == "true" ]]; then
-                echo "--- serve/memory + serve/mcp-memory"
-                git rm -rf serve/memory serve/mcp-memory --quiet 2>/dev/null || true
-                git checkout dev -- serve/memory serve/mcp-memory
+                echo "--- serve/memory + serve/memory-mcp"
+                git rm -rf serve/memory serve/memory-mcp --quiet 2>/dev/null || true
+                git checkout dev -- serve/memory serve/memory-mcp
               fi
             fi
 
@@ -341,9 +343,10 @@ jobs:
               echo "--- infra (CI, linters, root configs)"
               git rm -rf .github .vscode --quiet 2>/dev/null || true
               git checkout dev -- \
-                .github .vscode .editorconfig .gitattributes .gitignore \
+                .github/workflows .github/renovate.json \
+                .vscode .editorconfig .gitattributes .gitignore \
                 .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore \
-                .mega-linter.yml .pre-commit-config.yaml .python-version \
+                .mega-linter.yml .python-version \
                 .yamllint.yml pyproject.toml SECURITY.md uv.lock \
                 README-consumer.md
               git mv -f README-consumer.md README.md
@@ -405,9 +408,6 @@ jobs:
           # .vscode/ — consumers get theirs from seed/.vscode/ via init.py
           git rm -rf .vscode --quiet 2>/dev/null || true
 
-          # .github/copilot-instructions.md — describes owlbear-dev internals
-          git rm -f .github/copilot-instructions.md --quiet 2>/dev/null || true
-
           # Package test suites validate dev; consumers only execute package sources.
           find serve -mindepth 2 -maxdepth 2 -type d -name tests -print0 \
             | xargs -0 -r git rm -rf --quiet --
@@ -426,15 +426,15 @@ jobs:
           declare -A scope_map=(
             ["share/"]="$SYNC_SHARE"
             ["serve/browser/"]="$SYNC_BROWSER"
-            ["serve/mcp-browser/"]="$SYNC_BROWSER"
-            ["serve/kanban/"]="$SYNC_KANBAN"
-            ["serve/mcp-kanban/"]="$SYNC_KANBAN"
+            ["serve/browser-mcp/"]="$SYNC_BROWSER"
+            ["serve/delivery/"]="$SYNC_DELIVERY"
+            ["serve/delivery-mcp/"]="$SYNC_DELIVERY"
             ["serve/knowledge/"]="$SYNC_KNOWLEDGE"
-            ["serve/mcp-knowledge/"]="$SYNC_KNOWLEDGE"
+            ["serve/knowledge-mcp/"]="$SYNC_KNOWLEDGE"
             ["serve/cockpit/"]="$SYNC_COCKPIT"
             ["serve/tools/"]="$SYNC_TOOLS"
             ["serve/memory/"]="$SYNC_MEMORY"
-            ["serve/mcp-memory/"]="$SYNC_MEMORY"
+            ["serve/memory-mcp/"]="$SYNC_MEMORY"
             ["setup/"]="$SYNC_SETUP"
             ["seed/"]="$SYNC_SETUP"
             [".github/"]="$SYNC_INFRA"

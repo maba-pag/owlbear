@@ -1,88 +1,28 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
-interface Rectangle {
-  left: number
-  right: number
-  top: number
-  bottom: number
+async function visibleRows(page: Page): Promise<Locator> {
+  return page.locator('[data-work-item]').filter({ visible: true })
 }
 
-function overlap(first: Rectangle, second: Rectangle): boolean {
-  return first.left < second.right && first.right > second.left && first.top < second.bottom && first.bottom > second.top
-}
-
-async function expectNoOverlap(locator: Locator): Promise<void> {
-  const rectangles = await locator.evaluateAll((nodes) => nodes.map((node) => {
-    const rectangle = node.getBoundingClientRect()
-    return { left: rectangle.left, right: rectangle.right, top: rectangle.top, bottom: rectangle.bottom }
-  }))
-  for (let first = 0; first < rectangles.length; first += 1) {
-    for (let second = first + 1; second < rectangles.length; second += 1) {
-      expect(overlap(rectangles[first], rectangles[second])).toBe(false)
-    }
-  }
-}
-
-/**
- * Stage headings scroll with their column, so no board content may intersect a heading box and no
- * visible content may be covered by another element at its first visible row.
- */
-async function expectNoStageHeadingOcclusion(page: Page): Promise<void> {
-  const defects = await page.evaluate(() => {
-    const surface = document.querySelector('[data-testid="work-scroll-surface"]')
-    if (!surface) return ['missing scroll surface']
-    const port = surface.getBoundingClientRect()
-    const label = (node: Element) => `${node.textContent?.trim().slice(0, 48) ?? ''}`
-    const headings = [...document.querySelectorAll('[data-stage-heading]')]
-    const contents = [...document.querySelectorAll('[data-work-item], [data-stage-empty]')]
-    const visible = (rect: DOMRect) => rect.height > 0 && rect.bottom > port.top + 1 && rect.top < port.bottom - 1
-    const found: string[] = []
-
-    for (const heading of headings) {
-      const headingRect = heading.getBoundingClientRect()
-      if (!visible(headingRect)) continue
-      for (const node of contents) {
-        const rect = node.getBoundingClientRect()
-        if (!visible(rect)) continue
-        const intersects = rect.left < headingRect.right - 1 && rect.right > headingRect.left + 1
-          && rect.top < headingRect.bottom - 1 && rect.bottom > headingRect.top + 1
-        if (intersects) found.push(`content "${label(node)}" overlaps heading "${label(heading)}"`)
-      }
-    }
-
-    for (const node of contents) {
-      const rect = node.getBoundingClientRect()
-      if (!visible(rect)) continue
-      const probeY = Math.max(rect.top, port.top) + 3
-      const probeX = rect.left + Math.min(rect.width / 2, 40)
-      if (probeY >= Math.min(rect.bottom, port.bottom) - 1) continue
-      const topmost = document.elementFromPoint(probeX, probeY)
-      if (topmost && !node.contains(topmost) && !topmost.contains(node)) {
-        found.push(`content "${label(node)}" is occluded by "${label(topmost)}"`)
-      }
-    }
-    return found
-  })
-  expect(defects, defects.join('\n')).toEqual([])
-}
-
-async function inspect(page: Page, title: string): Promise<Locator> {
-  const card = page.locator('[data-work-item]').filter({ hasText: title })
-  await card.getByText('View details', { exact: true }).click()
+async function inspect(page: Page, title: string, detailTitle = title): Promise<{ detail: Locator; trigger: Locator }> {
+  const row = (await visibleRows(page)).filter({ hasText: title })
+  const trigger = row.getByRole('link', { name: new RegExp(`^${title}`) })
+  await trigger.click()
   const detail = page.getByTestId('work-item-detail')
-  await expect(detail.getByRole('heading', { name: title })).toBeVisible()
-  return detail
+  await expect(detail.getByRole('heading', { name: detailTitle, exact: true })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Work Item detail' })).toBeVisible()
+  await expect(page.getByTestId('work-portfolio-table')).toBeVisible()
+  await expect(page).toHaveURL(/\/delivery\/[^/]+\/[^/]+$/)
+  return { detail, trigger }
 }
 
-async function dismissOutcomeDetail(page: Page): Promise<void> {
-  const flyout = page.locator('#work-item-flyout')
-  const motionHidden = flyout.evaluate((element) => new Promise<void>((resolve) => {
-    element.addEventListener('motionHiddenEnd', () => resolve(), { once: true })
-  }))
+async function returnToPortfolio(page: Page, trigger: Locator): Promise<void> {
   await page.getByRole('button', { name: 'Dismiss flyout' }).click()
-  await motionHidden
   await expect(page.getByTestId('work-item-detail')).not.toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Work Item detail' })).not.toBeVisible()
+  await expect(page).toHaveURL(/\/delivery$/)
+  await expect(trigger).toBeFocused()
 }
 
 async function selectValue(locator: Locator, value: string): Promise<void> {
@@ -99,250 +39,441 @@ async function inputValue(locator: Locator, value: string): Promise<void> {
   }, value)
 }
 
-async function openCompletedHistory(page: Page): Promise<void> {
-  const completedChanges = page.getByRole('button', { name: 'Completed history' })
-  await expect(completedChanges).toBeVisible()
-  await completedChanges.focus()
-  await expect(completedChanges).toBeFocused()
-  await completedChanges.click()
-  await expect(page.getByTestId('completed-history-workspace')).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Completed changes' })).toBeVisible()
+async function expectNoHorizontalOverflow(page: Page): Promise<void> {
+  const overflow = await page.evaluate(() => ({
+    document: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    tables: [...document.querySelectorAll<HTMLElement>('[data-testid="work-table-scroll"]')]
+      .filter((table) => table.getBoundingClientRect().height > 0)
+      .map((table) => table.scrollWidth - table.clientWidth),
+  }))
+  expect(overflow.document).toBeLessThanOrEqual(0)
+  expect(overflow.tables.every((value) => value <= 1)).toBe(true)
 }
 
-/** Both Delivery views share one content-header row, so switching must not resize it. */
-async function viewHeaderHeight(page: Page, heading: string): Promise<number> {
-  const box = await page.getByRole('heading', { name: heading }).locator('xpath=../..').boundingBox()
-  return box!.height
-}
-
-async function expectCenteredDesktopNavigation(page: Page): Promise<void> {
-  const navRail = page.getByTestId('desktop-product-navigation')
-  await expect(navRail).toBeVisible()
-  const railBox = await navRail.boundingBox()
-  expect(railBox).not.toBeNull()
-  expect(railBox!.width).toBe(64)
-
-  const identity = navRail.getByTestId('rail-identity')
-  await expect(identity).toHaveAccessibleName('OwlBear Cockpit')
-  const identityBox = await identity.boundingBox()
-  expect(identityBox).not.toBeNull()
-  expect(identityBox!.width).toBeLessThanOrEqual(railBox!.width)
-
-  const navigationItems = navRail.getByRole('link')
-  await expect(navigationItems).toHaveCount(3)
-  for (const navigationItem of await navigationItems.all()) {
-    const itemBox = await navigationItem.boundingBox()
-    const iconBox = await navigationItem.locator('p-icon').boundingBox()
-    expect(itemBox).not.toBeNull()
-    expect(iconBox).not.toBeNull()
-    expect(itemBox!.width).toBe(40)
-    expect(itemBox!.height).toBe(40)
-    const railCenter = railBox!.x + railBox!.width / 2
-    const iconCenter = iconBox!.x + iconBox!.width / 2
-    expect(Math.abs(iconCenter - railCenter)).toBeLessThanOrEqual(0.5)
-  }
+async function flyoutPanelBox(page: Page): Promise<{ x: number; y: number; width: number; height: number } | null> {
+  return page.locator('p-flyout').last().evaluate((element) => {
+    const panel = element.shadowRoot?.querySelector('.flyout')
+    if (!panel) return null
+    const box = panel.getBoundingClientRect()
+    return { x: box.x, y: box.y, width: box.width, height: box.height }
+  })
 }
 
 function formatViolations(violations: Array<{ id: string; impact?: string | null; help: string }>): string {
   return violations.map((item) => `[${item.impact ?? 'unknown'} ${item.id}] ${item.help}`).join('\n')
 }
 
-test.describe('assembled Work portfolio', () => {
+test.describe('assembled Delivery portfolio', () => {
   test.describe.configure({ mode: 'serial' })
 
-  test('desktop runs bounded controls and completed semantic history', async ({ page }, testInfo) => {
+  test('wide workspace explains operating state and provides routed detail', async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1440, height: 1000 })
     await page.goto('/work')
     await expect(page).toHaveURL(/\/delivery$/)
 
-    await expect(page.getByTestId('cockpit-shell')).toBeVisible()
-    await expectCenteredDesktopNavigation(page)
-    await expect(page.locator('[data-work-item]')).toHaveCount(6)
-    for (const label of ['Design', 'Planning', 'Implementation', 'Assembly', 'Done']) {
-      await expect(page.getByText(label, { exact: true })).toBeVisible()
+    const table = page.getByTestId('work-portfolio-table')
+    await expect(table).toBeVisible()
+    await expect(await visibleRows(page)).toHaveCount(8)
+    await expect(table).toContainText('Work portfolio E2E')
+    for (const column of ['Work', 'Progress', 'Status']) {
+      await expect(table.getByRole('columnheader', { name: column })).toHaveCount(2)
+      await expect(table.getByRole('columnheader', { name: column }).first()).toBeVisible()
     }
+    await expect(table).toContainText('Decision required')
+    await expect(table).toContainText('Integration repairer working')
+    await expect(table).toContainText('Waiting on OUT-002')
+    await expect(table).toContainText('Done')
+    await expect(table).not.toContainText('Reviewed')
+
     const summary = page.getByLabel('Delivery portfolio status')
-    await expect(summary).toContainText('6work items')
-    await expect(summary).toContainText('1need you')
-    await expect(summary).toContainText('3with agents')
-    await expect(summary).toContainText('1waiting')
-    await expect(summary).toContainText('1no action needed')
-    await expect(summary).not.toContainText('outcome')
-    await expect(page.getByRole('heading', { name: 'Delivery stages' })).toBeVisible()
-    await expect(page.getByTestId('work-shown-count')).toBeEmpty()
-    await expect(page.getByTestId('work-portfolio-board')).toContainText('Waiting on dependencies')
-    await expect(page.getByTestId('work-portfolio-board')).toContainText('No action needed')
-    await expect(page.getByTestId('work-filters-panel')).toHaveCount(0)
-    await page.getByTestId('work-filters-toggle').click()
-    await expect(page.getByTestId('work-filters-panel')).toBeVisible()
-    await page.getByTestId('work-filters-toggle').click()
-    await expect(page.getByTestId('work-filters-panel')).toHaveCount(0)
+    await expect(summary).toContainText('3Changes')
+    await expect(summary).toContainText('2Design')
+    await expect(summary).toContainText('1Delivery')
+    await expect(summary).toContainText('1Running')
+    await expect(summary).toContainText('2Needs you')
 
-    const workspaceStatus = page.getByTestId('workspace-status').first()
-    await expect(workspaceStatus).toBeVisible()
-    await workspaceStatus.click()
-    const statusPanel = page.getByTestId('workspace-status-panel')
-    await expect(statusPanel).toBeVisible()
-    await expect(page.getByTestId('workspace-status-module-memory')).toBeVisible()
-    await expect(page.getByTestId('workspace-status-module-ideas')).toBeVisible()
-    await page.screenshot({ path: testInfo.outputPath('workspace-status-panel.png') })
-    await page.keyboard.press('Escape')
-    await expect(statusPanel).toHaveCount(0)
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
-    await expectNoOverlap(page.locator('[data-work-item]').filter({ visible: true }))
-    await page.screenshot({ path: testInfo.outputPath('work-desktop-current.png') })
+    const needsYou = summary.getByRole('button', { name: 'Filter to 2 work items: Needs you' })
+    await needsYou.click()
+    await expect(needsYou).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByTestId('work-filter-chip-needs')).toBeVisible()
+    await needsYou.click()
+    await expect(needsYou).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.getByTestId('work-filter-chip-needs')).not.toBeVisible()
+    await expect(await visibleRows(page)).toHaveCount(8)
+
+    const guidance = page.getByLabel('Session suggestions')
+    await expect(guidance).toContainText('Review 2 items that need you')
+    await expect(guidance).toContainText('/orchestrate is already working')
+    await expect(guidance.getByText('/orchestrate', { exact: true })).toHaveCSS('font-family', /mono/i)
+    await expect(guidance.getByText('/design design-operations-roadmap', { exact: true })).toBeVisible()
+    const tableBox = await table.boundingBox()
+    const guidanceBox = await guidance.boundingBox()
+    expect(tableBox).not.toBeNull()
+    expect(guidanceBox).not.toBeNull()
+    expect(guidanceBox!.y).toBeGreaterThanOrEqual(tableBox!.y + tableBox!.height)
+
+    const integrationRow = (await visibleRows(page)).filter({ hasText: 'Integration' })
+    await expect(integrationRow).toContainText('Integration')
+    await expect(integrationRow).toContainText('Change: Repair release')
+    await expect(integrationRow).toContainText('Repair in progress')
+    await expect(integrationRow).toContainText('Integration repairer working')
+    await expect(integrationRow).not.toContainText('Manual option:')
+    await expect(integrationRow.locator('dt')).toHaveText(['Work', 'Progress', 'Status'])
+    await expect(integrationRow.locator('dd')).toHaveCount(3)
+
+    const normalOutcome = (await visibleRows(page)).filter({ hasText: 'Publish operator guide' }).locator('td').first()
+    await expect(normalOutcome).toHaveCSS('border-left-width', '4px')
+    await expect(normalOutcome).toHaveCSS('border-top-width', '1px')
+    await expect(normalOutcome).toHaveCSS('border-top-left-radius', '8px')
+    const interventionOutcome = (await visibleRows(page)).filter({ hasText: 'Choose release mode' }).locator('td').first()
+    await expect(interventionOutcome).toHaveCSS('border-left-width', '4px')
+    await expect(integrationRow).toHaveCSS('border-left-width', '4px')
+
+    const integrationTrigger = integrationRow.getByRole('link', { name: 'Integration', exact: true })
+    const integrationStatusBox = await integrationRow.getByText('Integration repairer working', { exact: true }).boundingBox()
+    expect(integrationStatusBox).not.toBeNull()
+    const integrationHitTarget = await page.evaluate(({ x, y }) => {
+      const element = document.elementFromPoint(x, y)
+      const link = element?.closest('a')
+      return {
+        cursor: element ? getComputedStyle(element).cursor : null,
+        href: link?.getAttribute('href') ?? null,
+      }
+    }, {
+      x: integrationStatusBox!.x + integrationStatusBox!.width / 2,
+      y: integrationStatusBox!.y + integrationStatusBox!.height / 2,
+    })
+    expect(integrationHitTarget.cursor).toBe('pointer')
+    expect(integrationHitTarget.href).toBe('/delivery/repair-e2e/integration')
+    await page.mouse.click(
+      integrationStatusBox!.x + integrationStatusBox!.width / 2,
+      integrationStatusBox!.y + integrationStatusBox!.height / 2,
+    )
+    await expect(page.getByTestId('work-item-detail').getByRole('heading', { name: 'Integration', exact: true })).toBeVisible()
+    const integrationFlyoutBox = await flyoutPanelBox(page)
+    expect(integrationFlyoutBox).not.toBeNull()
+    await page.mouse.click(integrationFlyoutBox!.x / 2, integrationFlyoutBox!.y + integrationFlyoutBox!.height / 2)
+    await expect(page.getByTestId('work-item-detail')).not.toBeVisible()
+    await expect(integrationTrigger).toBeFocused()
+    await expect.poll(() => integrationTrigger.evaluate((element) => element.matches(':focus-visible'))).toBe(false)
+
+    await integrationTrigger.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByTestId('work-item-detail').getByRole('heading', { name: 'Integration', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Dismiss flyout' }).focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByTestId('work-item-detail')).not.toBeVisible()
+    await expect(integrationTrigger).toBeFocused()
+    await expect.poll(() => integrationTrigger.evaluate((element) => element.matches(':focus-visible'))).toBe(true)
+
+    const designSection = page.getByTestId('design-work-section')
+    await expect(designSection).toContainText('Design Operations Roadmap')
+    await expect(designSection).toContainText('Not admitted to Delivery')
+    await expect(designSection.getByRole('heading', { name: 'Design work' })).toHaveCSS('border-bottom-width', '1px')
+    const designRow = designSection.locator('[data-design-work]')
+    await expect(designRow).toHaveCSS('border-left-width', '4px')
+    await expect(designRow).toHaveCSS('border-top-left-radius', '8px')
+    await expect(designRow.locator('dt')).toHaveText(['Work', 'Progress', 'Status'])
+    await expect(designRow.locator('dd')).toHaveCount(3)
+    const firstChange = table.locator(':scope > section').first()
+    const [changeHeadingBox, changeLabelsBox, changeRowBox, designBox, designHeadingBox, designLabelsBox, designRowBox] = await Promise.all([
+      firstChange.getByRole('heading').first().boundingBox(),
+      firstChange.locator('thead').boundingBox(),
+      firstChange.locator('tbody tr').first().boundingBox(),
+      designSection.boundingBox(),
+      designSection.getByRole('heading', { name: 'Design work' }).boundingBox(),
+      designSection.locator(':scope > div[aria-hidden="true"]').boundingBox(),
+      designRow.boundingBox(),
+    ])
+    expect(changeHeadingBox).not.toBeNull()
+    expect(changeLabelsBox).not.toBeNull()
+    expect(changeRowBox).not.toBeNull()
+    expect(designBox).not.toBeNull()
+    expect(designHeadingBox).not.toBeNull()
+    expect(designLabelsBox).not.toBeNull()
+    expect(designRowBox).not.toBeNull()
+    expect(changeLabelsBox!.y - (changeHeadingBox!.y + changeHeadingBox!.height)).toBeCloseTo(8, 0)
+    expect(changeRowBox!.y - (changeLabelsBox!.y + changeLabelsBox!.height)).toBeCloseTo(8, 0)
+    expect(designLabelsBox!.y - (designHeadingBox!.y + designHeadingBox!.height)).toBeCloseTo(8, 0)
+    expect(designRowBox!.y - (designLabelsBox!.y + designLabelsBox!.height)).toBeCloseTo(8, 0)
+    expect(designBox!.y - (tableBox!.y + tableBox!.height)).toBeCloseTo(32, 0)
+    expect(guidanceBox!.y - (designBox!.y + designBox!.height)).toBeCloseTo(32, 0)
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+    const designCommand = '/design design-operations-roadmap'
+    const designCommandButton = designRow.getByRole('button', { name: `Copy command ${designCommand}` })
+    await guidance.scrollIntoViewIfNeeded()
+    const guidanceCommand = guidance.getByRole('button', { name: `Copy command ${designCommand}` })
+    for (const commandButton of [designCommandButton, guidanceCommand]) {
+      const visualContract = await commandButton.evaluate((button) => {
+        const code = button.querySelector('code')
+        const icon = button.querySelector('p-icon')
+        if (!code || !icon) return null
+        const buttonStyle = getComputedStyle(button)
+        const codeBox = code.getBoundingClientRect()
+        const iconBox = icon.getBoundingClientRect()
+        return {
+          fontSize: buttonStyle.fontSize,
+          color: buttonStyle.color,
+          iconName: (icon as HTMLElement & { name?: string }).name,
+          centerDelta: Math.abs((iconBox.top + iconBox.height / 2) - (codeBox.top + codeBox.height / 2)),
+          codeInsideButton: button.contains(code),
+        }
+      })
+      expect(visualContract).not.toBeNull()
+      expect(visualContract!.fontSize).toBe('13px')
+      expect(visualContract!.color).toBe('rgba(17, 17, 19, 0.6)')
+      expect(visualContract!.iconName).toBe('copy')
+      expect(visualContract!.centerDelta).toBeLessThanOrEqual(1)
+      expect(visualContract!.codeInsideButton).toBe(true)
+    }
+    const guidanceSpacing = await guidanceCommand.evaluate((button) => {
+      const wrapper = button.parentElement
+      const item = button.closest('li')
+      if (!wrapper || !item) return null
+      const prose = [...item.childNodes].find((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim())
+      if (!prose) return null
+      const proseRange = document.createRange()
+      proseRange.selectNodeContents(prose)
+      return wrapper.getBoundingClientRect().left - proseRange.getBoundingClientRect().right
+    })
+    expect(guidanceSpacing).not.toBeNull()
+    expect(guidanceSpacing!).toBeGreaterThanOrEqual(8)
+    await page.screenshot({ path: testInfo.outputPath('delivery-command-alignment.png') })
+    await designCommandButton.locator('code').click()
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(designCommand)
+    await expect(page).toHaveURL(/\/delivery$/)
+    await guidanceCommand.locator('code').click()
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(designCommand)
+    await expect(page).toHaveURL(/\/delivery$/)
+    const designTrigger = designSection.getByRole('link', { name: 'Design Operations Roadmap' })
+    await designTrigger.click()
+    const designDetail = page.getByTestId('design-work-detail')
+    await expect(designDetail).toContainText('Coordinate the next focused Delivery change.')
+    await expect(designDetail.getByText('/design design-operations-roadmap', { exact: true })).toBeVisible()
+    await page.reload()
+    await expect(designDetail.locator('h1').first()).toHaveText('Design Operations Roadmap')
+    await page.getByRole('button', { name: 'Dismiss flyout' }).click()
+    await expect(designDetail).not.toBeVisible()
+    await expect(page).toHaveURL(/\/delivery$/)
+
     await page.getByTestId('work-filters-toggle').click()
-    await expect(page.getByTestId('work-filters-panel')).toBeVisible()
-    await page.screenshot({ path: testInfo.outputPath('work-desktop-filters-open.png') })
-    await selectValue(page.locator('p-select[name="work-attention-filter"]'), 'agent')
-    await expect(page.getByTestId('work-shown-count')).toContainText('3 of 6')
+    await selectValue(page.locator('p-select[name="work-needs-filter"]'), 'you')
+    await expect(page.getByTestId('work-shown-count')).toContainText('3 of 9')
+    await expect(page.getByTestId('design-work-section')).toBeVisible()
+    await selectValue(page.locator('p-select[name="work-needs-filter"]'), 'dependency')
+    await expect(page.getByTestId('work-shown-count')).toContainText('1 of 9')
+    await expect(page.getByTestId('design-work-section')).not.toBeVisible()
+    await expect(await visibleRows(page)).toHaveCount(1)
     await page.getByTestId('work-filters-reset').click()
-    await expect(page.getByTestId('work-shown-count')).toBeEmpty()
+    await expect(await visibleRows(page)).toHaveCount(8)
     await page.getByTestId('work-filters-toggle').click()
-    const currentHeaderHeight = await viewHeaderHeight(page, 'Delivery stages')
 
-    let detail = await inspect(page, 'Choose release mode')
-    await selectValue(detail.locator('p-select[name="request-request-release-mode-option"]'), 'safe')
+    const returnedRow = (await visibleRows(page)).filter({ hasText: 'Plan release notes' })
+    const returnedTrigger = returnedRow.getByRole('link', { name: /^Plan release notes/ })
+    const progressCell = returnedRow.locator('td').nth(1)
+    const progressBox = await progressCell.boundingBox()
+    expect(progressBox).not.toBeNull()
+    await page.mouse.click(progressBox!.x + progressBox!.width / 2, progressBox!.y + progressBox!.height / 2)
+    const returnedDetail = page.getByTestId('work-item-detail')
+    await expect(returnedDetail.getByRole('heading', { name: 'Plan release notes' })).toBeVisible()
+    await expect(returnedDetail).toContainText('Returned to Design')
+    await expect(returnedDetail).toContainText('Evidence: request:release-notes-authority')
+    await expect(returnedDetail).toContainText('Source boundary: design:release-notes-v2')
+    await returnToPortfolio(page, returnedTrigger)
+
+    const requestRow = (await visibleRows(page)).filter({ hasText: 'Choose release mode' })
+    const requestTrigger = requestRow.getByRole('link', { name: /^Choose release mode/ })
+    const requestAction = requestRow.locator('p-link-pure', { hasText: 'Answer request' })
+    await expect(requestAction).toHaveJSProperty('href', '/delivery/work-e2e/outcome%3AOUT-001')
+    await requestAction.click()
+    let inspected = { detail: page.getByTestId('work-item-detail'), trigger: requestTrigger }
+    await expect(inspected.detail.getByRole('heading', { name: 'Choose release mode' })).toBeVisible()
+    await expect(page.getByTestId('work-portfolio-table')).toBeVisible()
+    await expect(inspected.detail).toContainText('Resolve the bounded release decision.')
+    await expect(inspected.detail).toContainText('Observe Choose release mode.')
+    await expectNoHorizontalOverflow(page)
+    await selectValue(inspected.detail.locator('p-select[name="request-request-release-mode-option"]'), 'safe')
     const answerResponse = page.waitForResponse((response) =>
       response.request().method() === 'POST' && response.url().includes('/requests/request-release-mode/answer'))
-    await detail.getByText('Submit answer', { exact: true }).click()
+    await inspected.detail.getByText('Submit answer', { exact: true }).click()
     expect((await answerResponse).status()).toBe(200)
-    await expect(detail.getByRole('region', { name: 'Requests' }).locator('article p')).toHaveText('Safe rollout')
-    await dismissOutcomeDetail(page)
+    await expect(inspected.detail).toContainText('Safe rollout')
+    await returnToPortfolio(page, inspected.trigger)
 
-    detail = await inspect(page, 'Build operator controls')
-    await detail.getByText('Recover confirmed-lost claim', { exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Confirm lost claim' })).toBeVisible()
-    await page.getByText('Cancel', { exact: true }).click()
-    const rejectedRecovery = await page.request.post('/api/changes/work-e2e/outcomes/OUT-002/claims/recover', {
-      data: {
-        confirmed_lost: false,
-        attempt_id: 'attempt-work-e2e',
-        claim_id: 'claim-work-e2e',
-      },
-    })
-    expect(rejectedRecovery.status()).toBe(422)
-    await expect(detail.getByText('Recover confirmed-lost claim', { exact: true })).toBeVisible()
-    await dismissOutcomeDetail(page)
+    inspected = await inspect(page, 'Integration')
+    await expect(inspected.detail).toContainText('Repair in progress')
+    await expect(inspected.detail).toContainText('A reviewed Integration repair is currently in progress.')
+    await expect(inspected.detail).toContainText('Conflicting files')
+    await expect(inspected.detail).toContainText('product.txt')
+    await expect(inspected.detail).not.toContainText('Admit the independently reviewed repair.')
+    await expect(inspected.detail).not.toContainText('Complete')
+    await page.screenshot({ path: testInfo.outputPath('delivery-wide-repair-detail.png'), fullPage: true })
+    await returnToPortfolio(page, inspected.trigger)
 
-    detail = await inspect(page, 'Assemble release')
-    const retryResponse = page.waitForResponse((response) =>
-      response.request().method() === 'POST' && response.url().endsWith('/api/changes/work-e2e/integration/retry'))
-    await detail.getByText('Retry Integration', { exact: true }).click()
-    expect((await retryResponse).status()).toBe(409)
-    await expect(detail.locator('p[role="alert"]')).toContainText('change is not ready for Integration')
+    inspected = await inspect(page, 'Build operator controls')
+    await expect(inspected.detail).toContainText('Build OUT-002')
+    await returnToPortfolio(page, inspected.trigger)
 
-    await selectValue(detail.locator('p-select[name="backward-stage"]'), 'planning')
-    await inputValue(detail.locator('p-input-text[name="backward-reason"]'), 'Authority changed')
-    await detail.getByText('Review backward move', { exact: true }).click()
+    inspected = await inspect(page, 'Assemble release')
+    const parentScrollHeight = await page.getByTestId('work-scroll-surface').evaluate((element) => element.scrollHeight)
+    await inspected.detail.getByText('Administrative actions', { exact: true }).click()
+    await expect.poll(() => page.getByTestId('work-scroll-surface').evaluate((element) => element.scrollHeight))
+      .toBe(parentScrollHeight)
+    const nestedScrollers = await inspected.detail.locator('*').evaluateAll((elements) => elements.filter((element) => {
+      const style = getComputedStyle(element)
+      return ['auto', 'scroll'].includes(style.overflowY) && element.scrollHeight > element.clientHeight
+    }).length)
+    expect(nestedScrollers).toBe(0)
+    await selectValue(inspected.detail.locator('p-select[name="backward-stage"]'), 'planning')
+    await inputValue(inspected.detail.locator('p-input-text[name="backward-reason"]'), 'Authority changed')
+    const previewResponse = page.waitForResponse((response) =>
+      response.request().method() === 'POST' && response.url().endsWith('/move-backward/preview'))
+    await inspected.detail.getByText('Review backward move', { exact: true }).click()
+    expect((await previewResponse).status()).toBe(200)
+    const modal = page.locator('p-modal').filter({ hasText: 'The following Outcomes will be reset:' })
+    await expect(modal).toContainText('OUT-003')
     const moveResponse = page.waitForResponse((response) =>
-      response.request().method() === 'POST' && response.url().endsWith('/api/changes/work-e2e/outcomes/OUT-003/move-backward'))
-    await page.getByText('Confirm backward move', { exact: true }).click()
+      response.request().method() === 'POST' && response.url().endsWith('/outcomes/OUT-003/move-backward'))
+    await modal.getByText('Confirm backward move', { exact: true }).click()
     expect((await moveResponse).status()).toBe(200)
-    await expect(detail.locator('p[role="status"]')).toContainText('Moved backward. Reset: OUT-003.')
-    await dismissOutcomeDetail(page)
+    await expect(inspected.detail).toContainText('Moved backward. Reset: OUT-003.')
+    await returnToPortfolio(page, inspected.trigger)
 
-    const listResponsePromise = page.waitForResponse((response) =>
-      response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/work-items/completed')
-    await openCompletedHistory(page)
-    expect((await listResponsePromise).status()).toBe(200)
-    expect(Math.abs(await viewHeaderHeight(page, 'Completed changes') - currentHeaderHeight)).toBeLessThanOrEqual(1)
-    await expect(page.getByTestId('completed-change-record')).toHaveCount(2)
-    await page.screenshot({ path: testInfo.outputPath('work-desktop-history-list.png'), fullPage: true })
-    // Without an open detail the record rules must reach the view-header rule, not stop short of it.
-    const headerRule = (await page.getByRole('heading', { name: 'Completed changes' }).locator('xpath=../..').boundingBox())!
-    const recordBox = (await page.getByTestId('completed-change-record').first().boundingBox())!
-    expect(Math.abs(recordBox.x - headerRule.x)).toBeLessThanOrEqual(1)
-    expect(Math.abs(recordBox.width - headerRule.width)).toBeLessThanOrEqual(1)
-    const searchResponsePromise = page.waitForResponse((response) =>
-      response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/work-items/completed/search')
-    await inputValue(page.locator('p-input-search[name="completed-history-search"]'), 'Beta')
-    expect((await searchResponsePromise).status()).toBe(200)
-    await expect(page.getByTestId('completed-change-record')).toHaveCount(1)
-    await expect(page.getByText('Beta search', { exact: true })).toBeVisible()
-    const showResponse = page.waitForResponse((response) =>
-      response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/work-items/completed/completed-beta')
-    await page.getByText('Inspect', { exact: true }).click()
-    expect((await showResponse).status()).toBe(200)
-    await expect(page.getByTestId('completed-change-detail')).toContainText('Beta search | Ship Beta search')
-
+    await expectNoHorizontalOverflow(page)
     const accessibility = await new AxeBuilder({ page }).analyze()
     const blocking = accessibility.violations.filter((violation) =>
       violation.impact === 'serious' || violation.impact === 'critical')
     expect(blocking, formatViolations(blocking)).toEqual([])
-    await page.screenshot({ path: testInfo.outputPath('work-desktop-history.png'), fullPage: true })
-
-    // Last, because it leaves the rail dot in its non-healthy state for the rest of the page life.
-    await page.route('**/health/memory', (route) => route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        status: 'attention',
-        findings: [{ path: 'store/memory/entry.md', code: 'missing-scope', detail: 'scope is absent' }],
-        repairable_count: 0,
-        checked_paths: ['store/memory/entry.md'],
-      }),
-    }))
-    await page.getByTestId('workspace-status').first().click()
-    await expect(page.getByTestId('workspace-status-module-memory')).toContainText('Needs attention')
-    await expect(page.getByTestId('workspace-status').first()).toHaveAttribute('data-status', 'attention')
-    await page.screenshot({ path: testInfo.outputPath('workspace-status-panel-attention.png') })
+    await page.screenshot({ path: testInfo.outputPath('delivery-wide-table.png'), fullPage: true })
   })
 
-  test('compact desktop keeps current and completed work reachable without overlap', async ({ page }, testInfo) => {
-    await page.setViewportSize({ width: 1100, height: 800 })
+  test('compact workspace uses a fullscreen flyout and restores row focus', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 })
     await page.goto('/delivery')
 
-    await expectCenteredDesktopNavigation(page)
-    await expect(page.locator('[data-work-item]')).toHaveCount(6)
-    const metrics = page.getByTestId('workspace-header-summary').getByTestId('workspace-header-metric')
-    await expect(metrics).toHaveCount(5)
-    await expect(metrics.last()).toContainText('no action needed')
-    const metricBoxes = await metrics.evaluateAll((nodes) => nodes.map((node) => ({
-      top: Math.round(node.getBoundingClientRect().top),
-      clipped: node.scrollWidth > node.clientWidth,
-    })))
-    expect(new Set(metricBoxes.map((box) => box.top)).size, 'header metrics must stay on one line').toBe(1)
-    expect(metricBoxes.filter((box) => box.clipped)).toEqual([])
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
-    await expectNoOverlap(page.locator('[data-work-item]').filter({ visible: true }))
-    await page.screenshot({ path: testInfo.outputPath('work-compact-desktop-current.png') })
-    const detail = await inspect(page, 'Build operator controls')
-    await expect(detail.getByText('Recover confirmed-lost claim', { exact: true })).toBeVisible()
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
-    await page.screenshot({ path: testInfo.outputPath('work-compact-desktop-detail.png'), fullPage: true })
+    await expect(await visibleRows(page)).toHaveCount(8)
+    await expect(page.getByTestId('design-work-section')).toBeVisible()
+    const guidance = page.getByLabel('Session suggestions')
+    await expect(guidance.locator('li')).toHaveCount(3)
+    await expect(page.getByTestId('work-portfolio-table')).toBeVisible()
+    await expectNoHorizontalOverflow(page)
 
-    await dismissOutcomeDetail(page)
-    await openCompletedHistory(page)
-    await expect(page.getByTestId('completed-change-record')).toHaveCount(2)
-    await expectNoOverlap(page.getByTestId('completed-change-record'))
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
-    await page.screenshot({ path: testInfo.outputPath('work-compact-desktop-history.png'), fullPage: true })  })
+    const designCommand = '/design design-operations-roadmap'
+    const compactCommand = guidance.getByRole('button', { name: `Copy command ${designCommand}` })
+    const compactCommandLayout = await compactCommand.evaluate((button) => {
+      const code = button.querySelector('code')
+      const icon = button.querySelector('p-icon') as (HTMLElement & { name?: string }) | null
+      if (!code || !icon) return null
+      const buttonBox = button.getBoundingClientRect()
+      const codeBox = code.getBoundingClientRect()
+      const iconBox = icon.getBoundingClientRect()
+      return {
+        iconName: icon.name,
+        firstLineDelta: Math.abs(iconBox.top - codeBox.top),
+        overflow: button.scrollWidth - button.clientWidth,
+        contained: codeBox.right <= buttonBox.right,
+      }
+    })
+    expect(compactCommandLayout).not.toBeNull()
+    expect(compactCommandLayout!.iconName).toBe('copy')
+    expect(compactCommandLayout!.firstLineDelta).toBeLessThanOrEqual(1)
+    expect(compactCommandLayout!.overflow).toBe(0)
+    expect(compactCommandLayout!.contained).toBe(true)
 
-  test('short desktop scrolls stage headings with their columns without slicing content', async ({ page }, testInfo) => {
-    await page.setViewportSize({ width: 1440, height: 640 })
+    const inspected = await inspect(page, 'Build operator controls')
+    await expect(page.getByRole('button', { name: 'Dismiss flyout' })).toBeVisible()
+    await expect(inspected.detail).toContainText('Build OUT-002')
+    const flyoutBox = await flyoutPanelBox(page)
+    expect(flyoutBox).not.toBeNull()
+    expect(flyoutBox!.width).toBeGreaterThan(380)
+    await page.screenshot({ path: testInfo.outputPath('delivery-compact-flyout.png') })
+    await returnToPortfolio(page, inspected.trigger)
+
+    await expectNoHorizontalOverflow(page)
+  })
+
+  test('mobile rows preserve field semantics without overflow', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 })
     await page.goto('/delivery')
-    await expect(page.locator('[data-work-item]')).toHaveCount(6)
 
-    const surface = page.getByTestId('work-scroll-surface')
-    await surface.evaluate((node) => node.scrollBy(0, 140))
-    await expect.poll(() => surface.evaluate((node) => node.scrollTop)).toBeGreaterThan(0)
-
-    const surfaceBox = (await surface.boundingBox())!
-    const selectorBox = (await page.getByTestId('work-view-selector').boundingBox())!
-    expect(selectorBox.y + selectorBox.height).toBeLessThanOrEqual(surfaceBox.y + 0.5)
-
-    await expectNoStageHeadingOcclusion(page)
-    await page.screenshot({ path: testInfo.outputPath('work-short-desktop-scrolled.png') })
-
-    // Sweep every intermediate offset: slicing only appears while content passes a heading band.
-    const maxScroll = await surface.evaluate((node) => node.scrollHeight - node.clientHeight)
-    for (let offset = 0; offset <= maxScroll; offset += 20) {
-      await surface.evaluate((node, top) => node.scrollTo(0, top), offset)
-      await expectNoStageHeadingOcclusion(page)
+    const rows = await visibleRows(page)
+    await expect(rows).toHaveCount(8)
+    const integrationRow = rows.filter({ hasText: 'Integration' })
+    for (const field of ['Progress', 'Status']) {
+      await expect(integrationRow.getByText(field, { exact: true })).toBeVisible()
     }
+    await expect(integrationRow).toHaveAttribute('aria-label', 'Change Integration for Repair release')
+    await expectNoHorizontalOverflow(page)
+    const accessibility = await new AxeBuilder({ page }).analyze()
+    const blocking = accessibility.violations.filter((violation) =>
+      violation.impact === 'serious' || violation.impact === 'critical')
+    expect(blocking, formatViolations(blocking)).toEqual([])
+    await page.screenshot({ path: testInfo.outputPath('delivery-mobile-rows.png'), fullPage: true })
+  })
 
-    await surface.evaluate((node, top) => node.scrollTo(0, top), Math.round(maxScroll / 2))
-    await page.screenshot({ path: testInfo.outputPath('work-short-desktop-scrolled-mid.png') })
+  test('desktop workspaces keep columns and overview context beside detail', async ({ page }) => {
+    for (const width of [1024, 1280]) {
+      await page.setViewportSize({ width, height: 800 })
+      await page.goto('/delivery')
+
+      const table = page.getByTestId('work-table-scroll').first()
+      await expect(table).toBeVisible()
+      await expect(table.getByRole('columnheader', { name: 'Work' })).toBeVisible()
+      const inspected = await inspect(page, 'Build operator controls')
+      await expect(inspected.detail).toContainText('Build OUT-002')
+      const flyoutBox = await flyoutPanelBox(page)
+      expect(flyoutBox).not.toBeNull()
+      expect(flyoutBox!.width).toBeLessThan(width)
+      await expect(page.getByTestId('work-portfolio-table')).toBeVisible()
+      await expectNoHorizontalOverflow(page)
+      await returnToPortfolio(page, inspected.trigger)
+    }
+  })
+
+  test('wide detail flyout preserves overview context without horizontal scrolling', async ({ page }) => {
+    await page.setViewportSize({ width: 1408, height: 800 })
+    await page.goto('/delivery')
+
+    const inspected = await inspect(page, 'Build operator controls')
+    await expect(inspected.detail).toContainText('Build OUT-002')
+    const [surfaceBox, flyoutBox] = await Promise.all([
+      page.getByTestId('work-scroll-surface').boundingBox(),
+      flyoutPanelBox(page),
+    ])
+    expect(surfaceBox).not.toBeNull()
+    expect(flyoutBox).not.toBeNull()
+    expect(flyoutBox!.width).toBeGreaterThan(surfaceBox!.width * 0.55)
+    expect(flyoutBox!.width).toBeLessThan(surfaceBox!.width * 0.75)
+    await expectNoHorizontalOverflow(page)
+  })
+
+  test('routed detail survives reload and completed history remains reachable', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1440, height: 760 })
+    await page.goto('/delivery/work-e2e/outcome%3AOUT-005')
+
+    const detail = page.getByTestId('work-item-detail')
+    await expect(detail.getByRole('heading', { name: 'Publish operator guide' })).toBeVisible()
+    await expect(detail).toContainText('Delivery task evidence')
+    await page.reload()
+    await expect(detail.getByRole('heading', { name: 'Publish operator guide' })).toBeVisible()
+    await expect(page.getByTestId('desktop-product-navigation').getByLabel('Delivery')).toHaveAttribute('aria-current', 'page')
+
+    await page.getByRole('button', { name: 'Dismiss flyout' }).click()
+    const historyResponse = page.waitForResponse((response) =>
+      response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/work-items/completed')
+    await page.getByRole('button', { name: 'Completed history' }).click()
+    expect((await historyResponse).status()).toBe(200)
+    await expect(page.getByTestId('completed-change-record')).toHaveCount(2)
+    await expect(page.getByText('Alpha delivery', { exact: true })).toBeVisible()
+    await page.screenshot({ path: testInfo.outputPath('delivery-completed-history.png'), fullPage: true })
+  })
+
+  test('unknown paths render the global Not Found view', async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1280, height: 720 })
+    await page.goto('/delivery/work-e2e')
+
+    await expect(page.getByTestId('not-found-view')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+    await page.screenshot({ path: testInfo.outputPath('cockpit-not-found.png'), fullPage: true })
   })
 })

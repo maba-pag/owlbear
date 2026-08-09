@@ -2,20 +2,30 @@
 # Pre-commit config — aligned with CI (MegaLinter v9.6.0)
 #
 # Commands:
-#   uv run lint [FILE ...]
+#   uv run lint [--no-fix | --unsafe-fixes] [FILE ...]
 #                     Explicit files, or staged files when omitted (= git commit)
-#   uv run lint-all   All files, default hooks
-#   uv run megalint   Full CI parity (MegaLinter + typecheck, all files)
-#   uv run eslint-fix ESLint --fix on Cockpit frontend
+#   uv run lint --all [--no-fix | --unsafe-fixes]
+#                     All files, default hooks
+#   uv run typecheck  Frontend TypeScript only
+#   uv run megalint [--no-fix | --unsafe-fixes]
+#                     MegaLinter only
+#   uv run lint-full [--no-fix | --unsafe-fixes]
+#                     All local and full-project lint checks
+#   uv run eslint-fix [--no-fix]
+#                     ESLint on Cockpit frontend (fixes by default)
 #
-# Auto-fix on commit: ruff (lint + format), trailing-whitespace,
-# end-of-file-fixer, markdownlint. Everything else is check-only.
+# Auto-fix on commit: ruff (safe lint fixes + format), ESLint,
+# trailing-whitespace, end-of-file-fixer, and markdownlint.
 
 # Exclude paths matching MegaLinter FILTER_REGEX_EXCLUDE + ADDITIONAL_EXCLUDED_DIRECTORIES.
 # Keep aligned with .mega-linter.yml.
 exclude: |
   (?x)^(
-    \.owlbear/(briefs|doc-index\.md|kanban/(archive|decisions|tasks)|legacy|memory|research|sources|target)/
+    \.owlbear/doc-index\.md$
+    |\.owlbear/briefs/
+    |\.owlbear/delivery/packages/
+    |\.owlbear/kanban/(archive|decisions|tasks)/
+    |\.owlbear/(legacy|memory|research|sources|target)/
     |store/
     |\.egg-info/
     |coverage/
@@ -28,8 +38,10 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
+        alias: trailing-whitespace-fix
         exclude: ^serve/cockpit/web/public/porsche-design-system/
       - id: end-of-file-fixer
+        alias: end-of-file-fix
         exclude: ^serve/cockpit/web/public/porsche-design-system/
       - id: check-yaml
       - id: check-merge-conflict
@@ -40,7 +52,24 @@ repos:
     rev: v0.16.0
     hooks:
       - id: ruff
+        alias: ruff-fix
+        args: [--fix]
       - id: ruff-format
+        alias: ruff-format-fix
+      - id: ruff
+        alias: ruff-check
+        name: ruff check (no fix)
+        stages: [manual]
+      - id: ruff-format
+        alias: ruff-format-check
+        name: ruff format check (no fix)
+        args: [--check]
+        stages: [manual]
+      - id: ruff
+        alias: ruff-unsafe-fix
+        name: ruff check (unsafe fixes)
+        args: [--fix, --unsafe-fixes]
+        stages: [manual]
 
   # ── YAML (matches CI: YAML_YAMLLINT) ────────────────────
   - repo: https://github.com/adrienverge/yamllint
@@ -66,7 +95,12 @@ repos:
     rev: v0.23.1
     hooks:
       - id: markdownlint-cli2
+        alias: markdownlint-fix
         args: [--fix]
+      - id: markdownlint-cli2
+        alias: markdownlint-check
+        name: markdownlint-cli2 (no fix)
+        stages: [manual]
 
   # ── EditorConfig (matches CI: EDITORCONFIG_EDITORCONFIG_CHECKER) ──
   - repo: https://github.com/editorconfig-checker/editorconfig-checker.python
@@ -81,11 +115,50 @@ repos:
     hooks:
       # Frontend — matches CI: TYPESCRIPT_ES
       - id: eslint-frontend
+        alias: eslint-frontend-fix
         name: ESLint (Cockpit frontend)
         language: system
-        entry: npx --prefix serve/cockpit/web eslint serve/cockpit/web/src/ serve/cockpit/web/e2e/ --max-warnings 0
+        entry: >-
+          npx --prefix serve/cockpit/web eslint serve/cockpit/web/src/
+          serve/cockpit/web/e2e/ --fix --max-warnings 0
         files: ^serve/cockpit/web/(src|e2e)/.*\.(ts|tsx)$
         pass_filenames: false
+      - id: eslint-frontend-check
+        name: ESLint (Cockpit frontend, no fix)
+        language: system
+        entry: >-
+          npx --prefix serve/cockpit/web eslint serve/cockpit/web/src/
+          serve/cockpit/web/e2e/ --max-warnings 0
+        files: ^serve/cockpit/web/(src|e2e)/.*\.(ts|tsx)$
+        pass_filenames: false
+        stages: [manual]
+      - id: stylelint-frontend-fix
+        name: Stylelint (Cockpit frontend)
+        language: system
+        entry: npm --prefix serve/cockpit/web run lint:css -- --fix=strict
+        files: ^serve/cockpit/web/src/.*\.css$
+        pass_filenames: false
+      - id: stylelint-frontend-check
+        name: Stylelint (Cockpit frontend, no fix)
+        language: system
+        entry: npm --prefix serve/cockpit/web run lint:css
+        files: ^serve/cockpit/web/src/.*\.css$
+        pass_filenames: false
+        stages: [manual]
+      - id: stylelint-frontend-lax
+        name: Stylelint (Cockpit frontend, lax fixes)
+        language: system
+        entry: npm --prefix serve/cockpit/web run lint:css -- --fix=lax
+        files: ^serve/cockpit/web/src/.*\.css$
+        pass_filenames: false
+        stages: [manual]
+      - id: text-hygiene-check
+        name: Trailing whitespace and final newline (no fix)
+        language: system
+        entry: uv run --frozen text-hygiene-check
+        types: [text]
+        exclude: ^serve/cockpit/web/public/porsche-design-system/
+        stages: [manual]
       # Frontend — extra (no CI equivalent, catches type errors early)
       # Manual stage: tsc --noEmit is a whole-project check — can't scope to
       # staged files. Run explicitly: uv run pre-commit run typecheck-frontend --all-files --hook-stage manual
@@ -109,6 +182,12 @@ repos:
         entry: uv run --frozen python .owlbear/scripts/validate_agents.py
         files: ^share/agents/.*\.agent\.md$
         pass_filenames: true
+      - id: validate-memory-agents
+        name: Validate Memory Agent References
+        language: system
+        entry: uv run --frozen python .owlbear/scripts/validate_memory_agents.py
+        files: ^(share/agents/|\.github/agents/|\.owlbear/agents/|\.owlbear/memory/)
+        pass_filenames: false
       # TODO marker scan — warning only (always exit 0, output always shown)
       - id: todo-check
         name: TODO marker scan
@@ -118,15 +197,14 @@ repos:
         always_run: true
         verbose: true
 
-  # ── MegaLinter (manual-only, full CI parity) ────────────
+  # ── MegaLinter (manual-only) ────────────────────────────
   # Usage: uv run pre-commit run megalinter --all-files --hook-stage manual
   - repo: local
     hooks:
       - id: megalinter
-        name: MegaLinter (full CI parity)
-        language: python
-        additional_dependencies: []
-        entry: python -c "import subprocess,os;subprocess.run(['docker','run','--rm','--platform','linux/amd64','-v',os.getcwd()+':/tmp/lint','-e','APPLY_FIXES=none','-e','UPDATED_SOURCES_REPORTER=false','-e','LOG_LEVEL=INFO','-e','VALIDATE_ALL_CODEBASE=true','ghcr.io/oxsecurity/megalinter-cupcake:v9.6.0'],check=True)"  # editorconfig-checker-disable-line
+        name: MegaLinter
+        language: system
+        entry: uv run --frozen megalint-hook
         pass_filenames: false
         always_run: true
         stages: [manual]

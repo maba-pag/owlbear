@@ -1,16 +1,18 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
+  DELIVERY_EXPIRED_CLAIMS_URL,
   IDEAS_HEALTH_URL,
   MEMORY_HEALTH_URL,
+  type DeliveryExpiredClaimRecoveryResponse,
   type IdeasHealthResponse,
   type MemoryHealthResponse,
 } from '../api/health'
-import { usePollingFetch } from './usePollingFetch'
+import { getResponseErrorMessage } from '../api/errorMessage'
 
-export type WorkspaceHealthStatus = 'healthy' | 'attention' | 'unhealthy' | 'unavailable' | 'checking'
+export type WorkspaceHealthStatus = 'healthy' | 'attention' | 'unhealthy' | 'unavailable' | 'checking' | 'unknown'
 
 export interface WorkspaceHealthModule {
-  id: 'memory' | 'ideas'
+  id: 'delivery' | 'memory' | 'ideas'
   label: string
   status: WorkspaceHealthStatus
   /** Empty while healthy: the green status already carries that answer. */
@@ -33,14 +35,15 @@ export const WORKSPACE_HEALTH_LABELS: Record<WorkspaceHealthStatus, string> = {
   unhealthy: 'Unhealthy',
   unavailable: 'Cannot be checked',
   checking: 'Checking',
+  unknown: 'Not checked',
 }
 
-const HEALTH_INTERVAL_MS = 60_000
 const SEVERITY: Record<WorkspaceHealthStatus, number> = {
-  unhealthy: 4,
-  attention: 3,
-  unavailable: 2,
-  checking: 1,
+  unhealthy: 5,
+  attention: 4,
+  unavailable: 3,
+  checking: 2,
+  unknown: 1,
   healthy: 0,
 }
 
@@ -52,6 +55,14 @@ function toStatus(reported: string): WorkspaceHealthStatus {
 
 function findingLine(finding: { path?: string; code?: string; detail?: string }): string {
   return [finding.path, finding.code, finding.detail].filter(Boolean).join(' — ')
+}
+
+async function fetchHealth<TPayload>(url: string, init?: RequestInit): Promise<TPayload> {
+  const response = await fetch(url, init)
+  if (!response.ok) {
+    throw new Error(await getResponseErrorMessage(response, `Health check failed with status ${response.status}`))
+  }
+  return await response.json() as TPayload
 }
 
 /**
@@ -73,66 +84,114 @@ function memoryModule(state: { status: WorkspaceHealthStatus; findings: string[]
   }
 }
 
+function deliveryModule(state: {
+  status: WorkspaceHealthStatus
+  recoveredCount: number
+  findings: string[]
+}): WorkspaceHealthModule {
+  return {
+    id: 'delivery',
+    label: 'Delivery claims',
+    status: state.status,
+    summary: state.status === 'unavailable'
+      ? 'Lease recovery did not complete'
+      : state.findings.length > 0
+        ? `${state.findings.length} expired ${state.findings.length === 1 ? 'claim needs' : 'claims need'} attention`
+        : state.recoveredCount > 0
+          ? `${state.recoveredCount} expired ${state.recoveredCount === 1 ? 'claim' : 'claims'} recovered`
+          : '',
+    findings: state.findings,
+  }
+}
+
 /**
- * Poll the two health projections the backend still serves and rank them into one operator signal.
+ * Check the two health projections on explicit operator request and rank them into one signal.
  * A failed request means the check could not run, which is reported rather than hidden.
  */
 export function useWorkspaceHealth(): UseWorkspaceHealthResult {
+  const [delivery, setDelivery] = useState<{
+    status: WorkspaceHealthStatus
+    recoveredCount: number
+    findings: string[]
+  }>({ status: 'unknown', recoveredCount: 0, findings: [] })
   const [memory, setMemory] = useState<{ status: WorkspaceHealthStatus; findings: string[] }>({
-    status: 'checking',
+    status: 'unknown',
     findings: [],
   })
   const [ideas, setIdeas] = useState<{ status: WorkspaceHealthStatus; summary: string }>({
-    status: 'checking',
+    status: 'unknown',
     summary: '',
   })
+  const [isChecking, setIsChecking] = useState(false)
   const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null)
-
-  const { isFetching: memoryChecking, refetch: refetchMemory } = usePollingFetch<MemoryHealthResponse>(MEMORY_HEALTH_URL, {
-    intervalMs: HEALTH_INTERVAL_MS,
-    onSuccess: async (payload) => {
-      setMemory({
-        status: toStatus(payload.status),
-        findings: (payload.findings ?? []).map(findingLine).filter(Boolean),
-      })
-      setLastCheckedAt(Date.now())
-    },
-    onError: async (caught) => {
-      setMemory({ status: 'unavailable', findings: [caught.message] })
-      setLastCheckedAt(Date.now())
-    },
-  })
-
-  const { isFetching: ideasChecking, refetch: refetchIdeas } = usePollingFetch<IdeasHealthResponse>(IDEAS_HEALTH_URL, {
-    intervalMs: HEALTH_INTERVAL_MS,
-    onSuccess: async (payload) => {
-      const status = toStatus(payload.status)
-      setIdeas({
-        status,
-        summary: status === 'healthy' ? '' : payload.detail ?? `${payload.path} cannot be read`,
-      })
-      setLastCheckedAt(Date.now())
-    },
-    onError: async (caught) => {
-      setIdeas({ status: 'unavailable', summary: caught.message })
-      setLastCheckedAt(Date.now())
-    },
-  })
+  const checkingRef = useRef(false)
 
   const modules = useMemo<WorkspaceHealthModule[]>(() => [
+    deliveryModule(delivery),
     memoryModule(memory),
     { id: 'ideas', label: 'Ideas file', status: ideas.status, summary: ideas.summary, findings: [] },
-  ], [ideas.status, ideas.summary, memory])
+  ], [delivery, ideas.status, ideas.summary, memory])
 
   const refresh = useCallback(() => {
-    refetchMemory()
-    refetchIdeas()
-  }, [refetchIdeas, refetchMemory])
+    if (checkingRef.current) return
+    checkingRef.current = true
+    setIsChecking(true)
+    setDelivery({ status: 'checking', recoveredCount: 0, findings: [] })
+    setMemory({ status: 'checking', findings: [] })
+    setIdeas({ status: 'checking', summary: '' })
+
+    void Promise.allSettled([
+      fetchHealth<DeliveryExpiredClaimRecoveryResponse>(DELIVERY_EXPIRED_CLAIMS_URL, { method: 'POST' }),
+      fetchHealth<MemoryHealthResponse>(MEMORY_HEALTH_URL),
+      fetchHealth<IdeasHealthResponse>(IDEAS_HEALTH_URL),
+    ]).then(([deliveryResult, memoryResult, ideasResult]) => {
+      if (deliveryResult.status === 'fulfilled') {
+        const attention = deliveryResult.value.recoveries.filter((result) => result.status === 'attention')
+        setDelivery({
+          status: attention.length > 0 ? 'attention' : 'healthy',
+          recoveredCount: deliveryResult.value.recoveries.length - attention.length
+            + deliveryResult.value.repair_recoveries.length,
+          findings: attention.map((result) => [
+            `${result.change_id} / ${result.outcome_id}`,
+            result.attention?.reason,
+            result.attention?.retry_condition,
+          ].filter(Boolean).join(' — ')),
+        })
+      } else {
+        setDelivery({
+          status: 'unavailable',
+          recoveredCount: 0,
+          findings: [deliveryResult.reason instanceof Error ? deliveryResult.reason.message : 'Lease recovery failed'],
+        })
+      }
+      if (memoryResult.status === 'fulfilled') {
+        setMemory({
+          status: toStatus(memoryResult.value.status),
+          findings: (memoryResult.value.findings ?? []).map(findingLine).filter(Boolean),
+        })
+      } else {
+        setMemory({ status: 'unavailable', findings: [memoryResult.reason instanceof Error ? memoryResult.reason.message : 'Health check failed'] })
+      }
+      if (ideasResult.status === 'fulfilled') {
+        const status = toStatus(ideasResult.value.status)
+        setIdeas({
+          status,
+          summary: status === 'healthy' ? '' : ideasResult.value.detail ?? `${ideasResult.value.path} cannot be read`,
+        })
+      } else {
+        setIdeas({ status: 'unavailable', summary: ideasResult.reason instanceof Error ? ideasResult.reason.message : 'Health check failed' })
+      }
+      setLastCheckedAt(Date.now())
+    }).finally(() => {
+      checkingRef.current = false
+      setIsChecking(false)
+    })
+  }, [])
 
   const status = modules.reduce<WorkspaceHealthStatus>(
     (worst, module) => (SEVERITY[module.status] > SEVERITY[worst] ? module.status : worst),
     'healthy',
   )
 
-  return { status, modules, isChecking: memoryChecking || ideasChecking, lastCheckedAt, refresh }
+  return { status, modules, isChecking, lastCheckedAt, refresh }
 }

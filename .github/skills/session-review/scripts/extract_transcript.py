@@ -32,6 +32,7 @@ class ToolEvent:
     name: str
     tool_call_id: str
     timestamp: str
+    started: bool = False
     success: bool | None = None
     arguments: object | None = None
 
@@ -43,6 +44,7 @@ class Turn:
     index: int
     timestamp: str
     user: str
+    nested_users: list[str] = field(default_factory=list)
     assistant: list[str] = field(default_factory=list)
     tools: list[ToolEvent] = field(default_factory=list)
 
@@ -136,37 +138,96 @@ def extract_turns(
     *,
     retain_last: int | None = None,
 ) -> tuple[dict[str, object], list[Turn]]:
-    """Stream *path* and return session metadata plus bounded user-led turns."""
+    """Stream *path* and return session metadata plus bounded top-level turns."""
     metadata: dict[str, object] = {"transcript": str(path)}
     retained: list[Turn] | deque[Turn] = deque(maxlen=retain_last) if retain_last is not None else []
     current: Turn | None = None
     tools: dict[str, ToolEvent] = {}
+    event_context: dict[str, tuple[str, Turn | None]] = {}
     turn_count = 0
+    synthetic_turn_count = 0
+    last_event_type = ""
+    last_event_timestamp = ""
 
     for event in _event_lines(path):
-        event_type = event.get("type")
-        timestamp = str(event.get("timestamp", ""))
-        data = event.get("data")
-        if not isinstance(data, dict):
-            data = {}
+        event_type, event_id, parent_id, timestamp, data = _event_fields(event)
+        last_event_type = event_type
+        last_event_timestamp = timestamp
 
         if event_type == "session.start":
             _update_metadata(metadata, data)
+            _record_event_context(event_context, event_id, event_type, None)
             continue
 
+        parent_context = event_context.get(parent_id)
+        parent_turn = parent_context[1] if parent_context is not None else None
         if event_type == "user.message":
-            turn_count += 1
-            current = _new_turn(turn_count, timestamp, data, config)
-            retained.append(current)
-            tools = {}
+            if parent_context is not None and parent_context[0] == "tool.execution_start" and parent_turn is not None:
+                parent_turn.nested_users.append(_bounded_text(data.get("content", ""), config.max_content_chars))
+                event_turn = parent_turn
+            else:
+                event_context.clear()
+                turn_count += 1
+                current = _new_turn(turn_count, timestamp, data, config)
+                retained.append(current)
+                event_turn = current
+            _record_event_context(event_context, event_id, event_type, event_turn)
             continue
 
-        if current is None:
-            continue
-        _apply_turn_event(event, timestamp, current, tools, config)
+        event_turn = parent_turn or current
+        if event_turn is None and event_type in {
+            "assistant.message",
+            "tool.execution_start",
+            "tool.execution_complete",
+        }:
+            turn_count += 1
+            synthetic_turn_count += 1
+            event_turn = Turn(
+                index=turn_count,
+                timestamp=timestamp,
+                user="<session input unavailable in raw transcript>",
+            )
+            current = event_turn
+            retained.append(event_turn)
+        if event_turn is not None:
+            _apply_turn_event(event, timestamp, event_turn, tools, config)
+        _record_event_context(event_context, event_id, event_type, event_turn)
 
     metadata["turn_count"] = turn_count
+    metadata["synthetic_turn_count"] = synthetic_turn_count
+    metadata["last_event_type"] = last_event_type
+    metadata["last_event_timestamp"] = last_event_timestamp
+    metadata["incomplete_tool_calls"] = [
+        {
+            "name": tool.name,
+            "tool_call_id": tool.tool_call_id,
+            "state": "started" if tool.started else "requested",
+        }
+        for tool in tools.values()
+        if tool.success is None
+    ]
     return metadata, list(retained)
+
+
+def _event_fields(event: Mapping[str, object]) -> tuple[str, str, str, str, dict[str, object]]:
+    data = event.get("data")
+    return (
+        str(event.get("type", "")),
+        str(event.get("id", "")),
+        str(event.get("parentId", "")),
+        str(event.get("timestamp", "")),
+        data if isinstance(data, dict) else {},
+    )
+
+
+def _record_event_context(
+    event_context: dict[str, tuple[str, Turn | None]],
+    event_id: str,
+    event_type: str,
+    turn: Turn | None,
+) -> None:
+    if event_id:
+        event_context[event_id] = (event_type, turn)
 
 
 def _update_metadata(metadata: dict[str, object], data: Mapping[str, object]) -> None:
@@ -196,9 +257,9 @@ def _apply_turn_event(
         return
     if event_type == "assistant.message":
         _append_assistant_message(turn, tools, data, timestamp, config)
-    elif event_type == "tool.execution_start" and config.include_tools:
-        _append_tool(turn, tools, data, timestamp, config)
-    elif event_type == "tool.execution_complete" and config.include_tools:
+    elif event_type == "tool.execution_start":
+        _append_tool(turn, tools, data, config, observation=(timestamp, True))
+    elif event_type == "tool.execution_complete":
         _complete_tool(tools, data)
 
 
@@ -212,18 +273,16 @@ def _append_assistant_message(
     content = data.get("content")
     if isinstance(content, str) and content:
         turn.assistant.append(_bounded_text(content, config.max_content_chars))
-    if not config.include_tools:
-        return
     requests = data.get("toolRequests")
     if isinstance(requests, list):
         for request in requests:
             if isinstance(request, dict):
-                _append_tool(turn, tools, request, timestamp, config)
+                _append_tool(turn, tools, request, config, observation=(timestamp, False))
 
 
-def _complete_tool(tools: Mapping[str, ToolEvent], data: Mapping[str, object]) -> None:
+def _complete_tool(tools: dict[str, ToolEvent], data: Mapping[str, object]) -> None:
     tool_call_id = str(data.get("toolCallId", ""))
-    tool = tools.get(tool_call_id)
+    tool = tools.pop(tool_call_id, None)
     if tool is None:
         return
     success = data.get("success")
@@ -234,19 +293,25 @@ def _append_tool(
     turn: Turn,
     tools: dict[str, ToolEvent],
     data: Mapping[str, object],
-    timestamp: str,
     config: ExtractConfig,
+    *,
+    observation: tuple[str, bool],
 ) -> None:
+    timestamp, started = observation
     tool_call_id = str(data.get("toolCallId", ""))
-    if not tool_call_id or tool_call_id in tools:
+    if not tool_call_id:
+        return
+    if tool_call_id in tools:
+        tools[tool_call_id].started = tools[tool_call_id].started or started
         return
     name = str(data.get("toolName") or data.get("name") or "unknown")
     arguments = (
         _decode_arguments(data.get("arguments"), config.max_content_chars) if config.include_tool_arguments else None
     )
-    tool = ToolEvent(name=name, tool_call_id=tool_call_id, timestamp=timestamp, arguments=arguments)
+    tool = ToolEvent(name=name, tool_call_id=tool_call_id, timestamp=timestamp, started=started, arguments=arguments)
     tools[tool_call_id] = tool
-    turn.tools.append(tool)
+    if config.include_tools:
+        turn.tools.append(tool)
 
 
 def select_turns(turns: Sequence[Turn], selection: TurnSelection) -> list[Turn]:
@@ -273,19 +338,46 @@ def select_turns(turns: Sequence[Turn], selection: TurnSelection) -> list[Turn]:
     return selected
 
 
+def select_events(turns: Sequence[Turn], around_event: str | None) -> list[Turn]:
+    """Select matching messages, nested prompts, and tool calls inside turns."""
+    if around_event is None:
+        return list(turns)
+    needle = around_event.casefold()
+    selected: list[Turn] = []
+    for turn in turns:
+        user_matches = needle in turn.user.casefold()
+        nested_users = [message for message in turn.nested_users if needle in message.casefold()]
+        assistant = [message for message in turn.assistant if needle in message.casefold()]
+        tools = [tool for tool in turn.tools if needle in _searchable_tool(tool).casefold()]
+        if user_matches or nested_users or assistant or tools:
+            selected.append(
+                Turn(
+                    index=turn.index,
+                    timestamp=turn.timestamp,
+                    user=turn.user if user_matches else "<not selected by --around-event>",
+                    nested_users=nested_users,
+                    assistant=assistant,
+                    tools=tools,
+                )
+            )
+    return selected
+
+
 def _searchable_turn(turn: Turn) -> str:
-    tool_content = " ".join(
-        f"{tool.name} {json.dumps(tool.arguments, ensure_ascii=True) if tool.arguments is not None else ''}"
-        for tool in turn.tools
-    )
+    tool_content = " ".join(_searchable_tool(tool) for tool in turn.tools)
     return " ".join((turn.user, *turn.assistant, tool_content))
+
+
+def _searchable_tool(tool: ToolEvent) -> str:
+    arguments = json.dumps(tool.arguments, ensure_ascii=True) if tool.arguments is not None else ""
+    return f"{tool.name} {tool.tool_call_id} {arguments}"
 
 
 def render_json(metadata: Mapping[str, object], turns: Iterable[Turn]) -> str:
     """Render extracted evidence as structured JSON."""
     payload = {
         "session": dict(metadata),
-        "evidence_limit": "Tool completion records expose success but not result bodies.",
+        "evidence_limit": _evidence_limit(metadata),
         "turns": [asdict(turn) for turn in turns],
     }
     return json.dumps(payload, ensure_ascii=True, indent=2)
@@ -299,10 +391,12 @@ def render_markdown(metadata: Mapping[str, object], turns: Iterable[Turn]) -> st
         f"- Session: {metadata.get('sessionId', 'unknown')}",
         f"- Transcript: {metadata['transcript']}",
         f"- Total turns: {metadata['turn_count']}",
-        "- Evidence limit: Tool completion records expose success but not result bodies.",
+        f"- Evidence limit: {_evidence_limit(metadata)}",
     ]
     for turn in turns:
         lines.extend(("", f"## Turn {turn.index}", "", f"**User ({turn.timestamp})**", "", turn.user))
+        for nested_user in turn.nested_users:
+            lines.extend(("", "**Nested agent prompt**", "", nested_user))
         for message in turn.assistant:
             lines.extend(("", "**Assistant**", "", message))
         if turn.tools:
@@ -314,6 +408,17 @@ def render_markdown(metadata: Mapping[str, object], turns: Iterable[Turn]) -> st
                     rendered = json.dumps(tool.arguments, ensure_ascii=True, sort_keys=True)
                     lines.append(f"  Arguments: `{rendered}`")
     return "\n".join(lines)
+
+
+def _evidence_limit(metadata: Mapping[str, object]) -> str:
+    limit = "Tool completion records expose tool-layer completion, not result bodies or command/domain success."
+    incomplete = metadata.get("incomplete_tool_calls")
+    count = len(incomplete) if isinstance(incomplete, list) else 0
+    if count:
+        noun = "tool call" if count == 1 else "tool calls"
+        verb = "lacks" if count == 1 else "lack"
+        limit = f"{limit} {count} {noun} {verb} a completion record in the raw transcript."
+    return limit
 
 
 def transcript_roots() -> tuple[Path, ...]:
@@ -381,6 +486,10 @@ def parser() -> argparse.ArgumentParser:
     command.add_argument("--from-turn", type=_positive, help="First one-based turn to include")
     command.add_argument("--to-turn", type=_positive, help="Last one-based turn to include")
     command.add_argument("--around", help="Select turns containing this case-insensitive text")
+    command.add_argument(
+        "--around-event",
+        help="Within selected turns, keep only messages, nested prompts, and tools containing this text",
+    )
     command.add_argument("--context-turns", type=_nonnegative, default=1, help="Turns around each text match")
     command.add_argument("--include-tools", action="store_true", help="Include tool names and completion status")
     command.add_argument(
@@ -408,7 +517,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         retain_last = (
             args.last_turns
-            if args.last_turns is not None and args.from_turn is None and args.to_turn is None and args.around is None
+            if args.last_turns is not None
+            and args.from_turn is None
+            and args.to_turn is None
+            and args.around is None
+            and args.around_event is None
             else None
         )
         metadata, turns = extract_turns(path, config, retain_last=retain_last)
@@ -420,6 +533,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             context_turns=args.context_turns,
         )
         selected = select_turns(turns, selection)
+        selected = select_events(selected, args.around_event)
     except (FileNotFoundError, OSError, ValueError) as exc:
         sys.stderr.write(f"extract-transcript: {exc}\n")
         return 1

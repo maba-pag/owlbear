@@ -6,9 +6,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from owlbear_kanban.snapshot import LegacyDisposition, inventory_legacy_source
-from owlbear_kanban.target_authority import TargetAuthority
-from owlbear_kanban.target_cutover import (
+from owlbear_delivery.snapshot import LegacyDisposition, inventory_legacy_source
+from owlbear_delivery.target_authority import TargetAuthority
+from owlbear_delivery.target_cutover import (
     TargetAdapterRef,
     TargetCutoverClassification,
     TargetCutoverReadiness,

@@ -17,8 +17,8 @@ implemented on parent task #1266 (tests_mcp_memory_1266.py) and would pass
 
 from pathlib import Path
 
-from owlbear_mcp_memory.engine import MemoryEngine
-from owlbear_mcp_memory.models import MemoryEntry
+from owlbear_memory_mcp.engine import MemoryEngine
+from owlbear_memory_mcp.models import MemoryEntry
 
 _VALID_UUID = "b3c2c30f-1e2f-4a3b-97d6-1234567890ab"
 _TS_1271 = "2026-05-02T10:00:00+00:00"
@@ -60,8 +60,8 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_mcp_memory.engine import MemoryEngine
-from owlbear_mcp_memory.models import MemoryEntry
+from owlbear_memory_mcp.engine import MemoryEngine
+from owlbear_memory_mcp.models import MemoryEntry
 
 _TS = "2026-05-02T10:00:00+00:00"
 

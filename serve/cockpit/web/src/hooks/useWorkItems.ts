@@ -3,25 +3,28 @@ import {
   answerWorkItemRequest,
   clearWorkItemBlock,
   listCompletedChanges,
-  listWorkItems,
   moveWorkItemBackward,
+  previewWorkItemBackward,
   recoverWorkItemClaim,
   retryWorkItemIntegration,
   searchCompletedChanges,
+  showDesignWork,
   showCompletedChange,
-  showWorkItem,
+  workItemDetailUrl,
   type CompletedChangePage,
   type CompletedChangeRecord,
   type DeliveryRequestResolution,
+  type DesignWorkDetailResponse,
   type WorkItemDetailResponse,
   type WorkItemPortfolioResponse,
-  type WorkItemProjection,
+  type WorkItemCardView,
   type WorkItemStage,
 } from '../api/workItems'
+import { usePollingFetch } from './usePollingFetch'
 
 export interface WorkItemIdentity {
   changeId: string
-  workItemId: string
+  itemKey: string
 }
 
 interface AsyncResource<T> {
@@ -31,45 +34,76 @@ interface AsyncResource<T> {
 }
 
 const EMPTY_PORTFOLIO: WorkItemPortfolioResponse = {
-  items: [],
-  attention_counts: { user: 0, agent: 0, waiting: 0, none: 0 },
+  groups: [],
+  totals: {
+    total: 0,
+    complete: 0,
+    needs: { you: 0, dependency: 0, none: 0 },
+    activity: { idle: 0, ready: 0, working: 0, repairing: 0 },
+  },
+  operating: {
+    unfinished_change_count: 0,
+    completed_change_count: 0,
+    draft_design_change_ids: [],
+    design_required_change_ids: [],
+    claimed: [],
+    queued_for_orchestration: [],
+    interventions: [],
+    dependency_waits: [],
+    guidance: [{ kind: 'create-change', change_ids: [], work_count: 0 }],
+  },
 }
 
 const EMPTY_HISTORY: CompletedChangePage = { records: [], next_cursor: null }
 
 export function useWorkPortfolio() {
-  const [resource, setResource] = useState<AsyncResource<WorkItemPortfolioResponse>>({
+  const [portfolio, setPortfolio] = useState<WorkItemPortfolioResponse | null>(null)
+  const [error, setError] = useState<Error | null>(null)
+  const polling = usePollingFetch<WorkItemPortfolioResponse>('/api/work-items', {
+    intervalMs: 3_000,
+    onSuccess: (data) => {
+      setPortfolio(data)
+      setError(null)
+    },
+    onError: setError,
+  })
+
+  return {
+    portfolio: portfolio ?? EMPTY_PORTFOLIO,
+    hasData: portfolio !== null,
+    error,
+    isLoading: polling.isFetching && portfolio === null,
+    retry: polling.refetch,
+  }
+}
+
+export function useDesignWorkDetail(changeId: string) {
+  const [retryNonce, setRetryNonce] = useState(0)
+  const [resource, setResource] = useState<AsyncResource<DesignWorkDetailResponse>>({
     data: null,
     error: null,
     isLoading: true,
   })
-  const [retryNonce, setRetryNonce] = useState(0)
 
   useEffect(() => {
     let active = true
-    setResource((current) => ({ ...current, isLoading: true, error: null }))
-    void listWorkItems()
+    setResource({ data: null, error: null, isLoading: true })
+    void showDesignWork(changeId)
       .then((data) => active && setResource({ data, error: null, isLoading: false }))
       .catch((caught: unknown) => {
         if (!active) return
         setResource({
           data: null,
-          error: caught instanceof Error ? caught : new Error('Work portfolio is unavailable'),
+          error: caught instanceof Error ? caught : new Error('Design work is unavailable'),
           isLoading: false,
         })
       })
     return () => {
       active = false
     }
-  }, [retryNonce])
+  }, [changeId, retryNonce])
 
-  return {
-    portfolio: resource.data ?? EMPTY_PORTFOLIO,
-    hasData: resource.data !== null,
-    error: resource.error,
-    isLoading: resource.isLoading,
-    retry: () => setRetryNonce((value) => value + 1),
-  }
+  return { ...resource, retry: () => setRetryNonce((value) => value + 1) }
 }
 
 export function useCompletedHistory(query: string) {
@@ -176,53 +210,32 @@ export function useCompletedChange(identity: { changeId: string; completionId: s
   return resource
 }
 
-export function useWorkItemDetail(identity: WorkItemIdentity | null, onChanged: () => void) {
-  const [detail, setDetail] = useState<AsyncResource<WorkItemDetailResponse>>({
-    data: null,
-    error: null,
-    isLoading: false,
-  })
-  const [retryNonce, setRetryNonce] = useState(0)
+export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => void) {
+  const [data, setData] = useState<WorkItemDetailResponse | null>(null)
+  const [detailError, setDetailError] = useState<Error | null>(null)
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [actionError, setActionError] = useState<Error | null>(null)
   const [actionResult, setActionResult] = useState<string | null>(null)
-
-  useEffect(() => {
-    let active = true
-    setActionError(null)
-    setActionResult(null)
-    if (!identity) {
-      setDetail({ data: null, error: null, isLoading: false })
-      return () => {
-        active = false
-      }
-    }
-    setDetail((current) => ({ ...current, isLoading: true, error: null }))
-    void showWorkItem(identity.changeId, identity.workItemId)
-      .then((data) => active && setDetail({ data, error: null, isLoading: false }))
-      .catch((caught: unknown) => {
-        if (!active) return
-        setDetail({
-          data: null,
-          error: caught instanceof Error ? caught : new Error('Work item detail is unavailable'),
-          isLoading: false,
-        })
-      })
-    return () => {
-      active = false
-    }
-  }, [identity?.changeId, identity?.workItemId, retryNonce])
+  const polling = usePollingFetch<WorkItemDetailResponse>(
+    workItemDetailUrl(identity.changeId, identity.itemKey),
+    {
+      intervalMs: 3_000,
+      onSuccess: (next) => {
+        setData(next)
+        setDetailError(null)
+      },
+      onError: setDetailError,
+    },
+  )
 
   const mutate = async (action: string, operation: () => Promise<unknown>, result: string) => {
-    if (!identity) return
     setPendingAction(action)
     setActionError(null)
     setActionResult(null)
     try {
       await operation()
-      const nextDetail = await showWorkItem(identity.changeId, identity.workItemId)
-      setDetail({ data: nextDetail, error: null, isLoading: false })
       setActionResult(result)
+      polling.refetch()
       onChanged()
     } catch (caught: unknown) {
       setActionError(caught instanceof Error ? caught : new Error('Delivery control failed'))
@@ -232,36 +245,56 @@ export function useWorkItemDetail(identity: WorkItemIdentity | null, onChanged: 
   }
 
   return {
-    detail,
+    detail: {
+      data,
+      error: detailError,
+      isLoading: polling.isFetching && data === null,
+    },
     pendingAction,
     actionError,
     actionResult,
     answerRequest: (requestId: string, resolution: DeliveryRequestResolution) => mutate(
       'answer',
-      () => answerWorkItemRequest(identity!.changeId, requestId, resolution),
+      () => answerWorkItemRequest(identity.changeId, requestId, resolution),
       'Request answered.',
     ),
     clearBlock: (blockId: string, note: string, locators: string[]) => mutate(
       'clear',
-      () => clearWorkItemBlock(identity!.changeId, identity!.workItemId, blockId, note, locators),
+      () => clearWorkItemBlock(identity.changeId, data!.item.card.work_item_id, blockId, note, locators),
       'Block cleared.',
     ),
     recoverClaim: (attemptId: string, claimId: string) => mutate(
       'recover',
-      () => recoverWorkItemClaim(identity!.changeId, identity!.workItemId, attemptId, claimId),
+      () => recoverWorkItemClaim(identity.changeId, data!.item.card.work_item_id, attemptId, claimId),
       'Claim recovered.',
     ),
-    moveBackward: async (target: WorkItemStage, reason: string) => {
-      if (!identity) return
+    previewBackward: async (target: WorkItemStage) => {
+      setPendingAction('preview')
+      setActionError(null)
+      try {
+        return await previewWorkItemBackward(identity.changeId, data!.item.card.work_item_id, target)
+      } catch (caught: unknown) {
+        setActionError(caught instanceof Error ? caught : new Error('Backward move preview failed'))
+        return null
+      } finally {
+        setPendingAction(null)
+      }
+    },
+    moveBackward: async (target: WorkItemStage, reason: string, snapshotVersion: string) => {
       setPendingAction('move')
       setActionError(null)
       setActionResult(null)
       try {
-        const moved = await moveWorkItemBackward(identity.changeId, identity.workItemId, target, reason)
-        const nextDetail = await showWorkItem(identity.changeId, identity.workItemId)
-        setDetail({ data: nextDetail, error: null, isLoading: false })
+        const moved = await moveWorkItemBackward(
+          identity.changeId,
+          data!.item.card.work_item_id,
+          target,
+          reason,
+          snapshotVersion,
+        )
         const invalidated = moved.invalidated_outcome_ids.join(', ')
         setActionResult(invalidated ? `Moved backward. Reset: ${invalidated}.` : 'Moved backward.')
+        polling.refetch()
         onChanged()
       } catch (caught: unknown) {
         setActionError(caught instanceof Error ? caught : new Error('Backward move failed'))
@@ -271,13 +304,13 @@ export function useWorkItemDetail(identity: WorkItemIdentity | null, onChanged: 
     },
     retryIntegration: () => mutate(
       'integration',
-      () => retryWorkItemIntegration(identity!.changeId),
-      'Integration retried.',
+      () => retryWorkItemIntegration(identity.changeId),
+      'Integration verification started.',
     ),
-    retry: () => setRetryNonce((value) => value + 1),
+    retry: polling.refetch,
   }
 }
 
-export function workItemIdentity(item: WorkItemProjection): string {
-  return `${item.change_id}:${item.work_item_id}`
+export function workItemIdentity(item: WorkItemCardView): string {
+  return `${item.change_id}:${item.item_key}`
 }

@@ -2,19 +2,19 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent }
 import { createPortal } from 'react-dom'
 import { PButtonPure } from '@porsche-design-system/components-react'
 import {
-  useWorkspaceHealth,
   WORKSPACE_HEALTH_LABELS,
+  type UseWorkspaceHealthResult,
   type WorkspaceHealthStatus,
 } from '../hooks/useWorkspaceHealth'
 import { getRailPanelPosition } from './railPanelPosition'
 
 const PANEL_WIDTH = 320
 const ESTIMATED_PANEL_HEIGHT = 250
-const CONTROL_NAME = 'Memory and Ideas health'
-/** The heading names the property checked; the rows name the surfaces; neither repeats the other. */
-const PANEL_TITLE = 'Persisted data integrity'
+const CONTROL_NAME = 'Workspace health'
+const PANEL_TITLE = 'Workspace health'
+const PANEL_SCOPE = 'Persisted data integrity'
 /** Freshness is wall-clock wording, so it is re-rendered on its own cadence and never refetched. */
-const FRESHNESS_TICK_MS = 30_000
+const FRESHNESS_TICK_MS = 10_000
 
 const DOT_CLASSES: Record<WorkspaceHealthStatus, string> = {
   healthy: 'bg-success',
@@ -22,6 +22,7 @@ const DOT_CLASSES: Record<WorkspaceHealthStatus, string> = {
   unhealthy: 'bg-error',
   unavailable: 'bg-contrast-medium',
   checking: 'bg-contrast-medium',
+  unknown: 'bg-contrast-medium',
 }
 
 const STATUS_TEXT_CLASSES: Record<WorkspaceHealthStatus, string> = {
@@ -30,13 +31,16 @@ const STATUS_TEXT_CLASSES: Record<WorkspaceHealthStatus, string> = {
   unhealthy: 'text-error',
   unavailable: 'text-contrast-medium',
   checking: 'text-contrast-medium',
+  unknown: 'text-contrast-medium',
 }
 
 /** Elapsed wording for the last settled check; the panel never claims freshness it cannot show. */
 function checkAge(checkedAt: number | null, now: number): string {
   if (checkedAt === null) return 'Not checked yet'
-  const elapsedMinutes = Math.floor(Math.max(0, now - checkedAt) / 60_000)
-  if (elapsedMinutes < 1) return 'Checked just now'
+  const elapsedSeconds = Math.floor(Math.max(0, now - checkedAt) / 1_000)
+  if (elapsedSeconds < 10) return 'Checked just now'
+  if (elapsedSeconds < 60) return `Checked ${elapsedSeconds}s ago`
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60)
   if (elapsedMinutes < 60) return `Checked ${elapsedMinutes}m ago`
   return `Checked ${Math.floor(elapsedMinutes / 60)}h ago`
 }
@@ -59,12 +63,11 @@ function StatusDot({
 }
 
 /**
- * Read-only health control for the two persisted-data surfaces the backend reports — the memory
- * store and the ideas file. Nothing here repairs anything: re-running the check is the only action
- * the backend supports.
+ * Health control for persisted workspace surfaces. An explicit re-check also recovers Delivery
+ * claims whose fixed execution lease elapsed.
  */
-export default function WorkspaceStatus() {
-  const { status, modules, isChecking, lastCheckedAt, refresh } = useWorkspaceHealth()
+export default function WorkspaceStatus({ health }: { health: UseWorkspaceHealthResult }) {
+  const { status, modules, isChecking, lastCheckedAt, refresh } = health
   const [isOpen, setIsOpen] = useState(false)
   const [position, setPosition] = useState({ top: '0px', left: '0px' })
   const [now, setNow] = useState(() => Date.now())
@@ -129,7 +132,6 @@ export default function WorkspaceStatus() {
     if (triggerRef.current) {
       setPosition(getRailPanelPosition(triggerRef.current, PANEL_WIDTH, ESTIMATED_PANEL_HEIGHT))
     }
-    refresh()
     setIsOpen(true)
   }
 
@@ -146,15 +148,17 @@ export default function WorkspaceStatus() {
       style={position}
       onKeyDown={handlePanelKeyDown}
     >
-      {/* Every module is always listed, so an overall status word here would only repeat the rows. */}
-      <strong className="min-w-0 truncate text-sm leading-tight">{PANEL_TITLE}</strong>
+      <header className="grid min-w-0 gap-1">
+        <strong className="truncate text-base leading-tight">{PANEL_TITLE}</strong>
+        <span className="text-xs text-contrast-medium">{PANEL_SCOPE}</span>
+      </header>
 
       <ul className="m-0 grid list-none gap-0 divide-y divide-contrast-low border-y border-contrast-low p-0">
         {modules.map((module) => (
           <li key={module.id} className="grid min-w-0 gap-1 py-static-sm" data-testid={`workspace-status-module-${module.id}`}>
             <span className="flex min-w-0 items-center gap-static-xs text-sm">
               <StatusDot status={module.status} />
-              <span className="min-w-0 flex-1 truncate font-semibold">{module.label}</span>
+              <span className="min-w-0 flex-1 truncate font-medium">{module.label}</span>
               {/* Only healthy is dropped from view: the green dot already says it. Every problem
                   state keeps visible text, because colour must never carry it alone. */}
               <span
@@ -188,6 +192,7 @@ export default function WorkspaceStatus() {
           type="button"
           icon="refresh"
           size="small"
+          disabled={isChecking}
           data-testid="workspace-status-recheck"
           onClick={() => refresh()}
         >

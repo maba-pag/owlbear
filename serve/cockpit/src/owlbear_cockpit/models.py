@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -35,3 +37,12 @@ class WorkspaceHealth(BaseModel):
 
     status: str
     modules: dict[str, HealthModule | IdeasHealth]
+
+
+class CockpitInstance(BaseModel):
+    """Identity recorded for one locally running Cockpit process."""
+
+    pid: int = Field(gt=0)
+    port: int = Field(ge=1, le=65535)
+    workspace: str = Field(min_length=1)
+    started_at: datetime

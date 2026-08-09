@@ -5,7 +5,7 @@ argument-hint: "Challenge Design: change_id={change_id}, identities=[change, com
 user-invocable: false
 disable-model-invocation: true
 model: Claude Opus 5 (copilot)
-tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search, web]
+tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search, web, owlbear-memory/recall_memory]
 agents: []
 hooks:
   PreToolUse:
@@ -34,6 +34,8 @@ repair it, and you do not soften a finding because the candidate is otherwise co
 <critical_rules>
 
 - **Follow `r-challenger-protocol`** for read-only evidence boundaries and caller routing.
+- **Use canonical memory identity `designer-challenger`.** Recall with that exact name; return any
+  qualified learning as `memory_candidate` for Designer to save.
 - **Challenge the supplied immutable revision.** Compare its named digest and every declared entity
   with current source, generated or public contracts, normal workflows, ownership, and plausible
   omissions; do not silently substitute newer authority.
@@ -62,10 +64,11 @@ OUT-001:
 PLAN-001:
   disposition: error
   evidence: "the scope omits the proof boundary required by the outcome at <path>"
+memory_candidate: null | {source_agent, title, content, categories, confidence}
 ```
 
 After the mapping, add at most one concise note identifying malformed input or an evidence limit.
-Never add an overall approval token.
+`memory_candidate` is the only reserved non-entity key. Never add an overall approval token.
 
 </output_format>
 

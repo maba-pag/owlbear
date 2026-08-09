@@ -135,6 +135,21 @@ def test_indexes_are_deterministic_and_skip_non_product_paths(tmp_path: Path, ge
     assert "generated/pkg/skip.py" not in first
 
 
+@pytest.mark.parametrize("generator", [generate_py_index, generate_ts_index])
+@pytest.mark.parametrize("state_root", ["delivery", "legacy", "target", "worktrees"])
+def test_indexes_skip_owlbear_runtime_and_secondary_trees(tmp_path: Path, generator, state_root: str) -> None:
+    _write(tmp_path, "src/keep.py", "def keep():\n    pass\n")
+    _write(tmp_path, "src/keep.ts", "export const keep = true;\n")
+    hidden = _write(tmp_path, f".owlbear/{state_root}/nested/hidden.py", "def hidden():\n    pass\n")
+    generate_path = tmp_path / ".owlbear" / ("py-index.md" if generator is generate_py_index else "ts-index.md")
+
+    generator(tmp_path)
+
+    content = generate_path.read_text()
+    assert hidden.as_posix() not in content
+    assert ".owlbear/" + state_root not in content
+
+
 def test_ts_index_skips_tests_and_generated_public_bundles(tmp_path: Path) -> None:
     _write(tmp_path, "src/keep.ts", "export const keep = true;\n")
     _write(tmp_path, "src/__tests__/skip.ts", "export const skip = true;\n")

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 import subprocess
 
-from owlbear_mcp_memory.git import commit_batch
+from owlbear_memory_mcp.git import commit_batch
 
 
 def _git(repository: Path, *args: str) -> str:
@@ -30,4 +30,4 @@ def test_review_batch_commit_uses_memory_reviewer_actor(tmp_path: Path) -> None:
     commit_sha = commit_batch(memory_dir, session_type="review")
 
     assert commit_sha == _git(tmp_path, "rev-parse", "HEAD")
-    assert _git(tmp_path, "log", "-1", "--format=%s") == "chore: memory review batch (mcp-memory, memory-reviewer)"
+    assert _git(tmp_path, "log", "-1", "--format=%s") == "chore: memory review batch (memory-mcp, memory-reviewer)"

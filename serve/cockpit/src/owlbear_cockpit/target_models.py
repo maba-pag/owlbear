@@ -6,55 +6,62 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from owlbear_kanban.delivery_runtime import DeliveryStage
-from owlbear_kanban.portfolio_application import DeliveryOperatorContext
-from owlbear_kanban.work_items import WorkItemProjection
+from owlbear_delivery.delivery_runtime import DeliveryStage
+from owlbear_delivery.portfolio_operating import PortfolioOperatingView
+from owlbear_delivery.work_items import ChangeGroupView, WorkItemDetailView
 
 
 class _TargetHTTPModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
-class AttentionCounts(_TargetHTTPModel):
-    """Count portfolio cards by orthogonal attention state."""
+class NeedsCounts(_TargetHTTPModel):
+    """Count portfolio rows by their mutually exclusive Needs state."""
 
-    user: int = Field(ge=0)
-    agent: int = Field(ge=0)
-    waiting: int = Field(ge=0)
+    you: int = Field(ge=0)
+    dependency: int = Field(ge=0)
     none: int = Field(ge=0)
 
 
+class ActivityCounts(_TargetHTTPModel):
+    """Count portfolio rows by current execution activity."""
+
+    idle: int = Field(ge=0)
+    ready: int = Field(ge=0)
+    working: int = Field(ge=0)
+    repairing: int = Field(ge=0)
+
+
+class WorkItemPortfolioTotals(_TargetHTTPModel):
+    """Independent portfolio totals for rows, lifecycle, Needs, and Activity."""
+
+    total: int = Field(ge=0)
+    complete: int = Field(ge=0)
+    needs: NeedsCounts
+    activity: ActivityCounts
+
+
 class WorkItemPortfolioResponse(_TargetHTTPModel):
-    """Return mixed-change cards and portfolio attention totals."""
+    """Return Change-grouped current Work Items and independent totals."""
 
-    items: tuple[WorkItemSummaryResponse, ...]
-    attention_counts: AttentionCounts
-
-
-class WorkItemLinks(_TargetHTTPModel):
-    """Typed control and attention resources for one outcome."""
-
-    self: str
-    answer_request: str
-    clear_block: str
-    recover_claim: str
-    move_backward: str
-    integration_attention: str
-    integration_retry: str
-
-
-class WorkItemSummaryResponse(_TargetHTTPModel):
-    """One bounded current card with typed Delivery resources."""
-
-    card: WorkItemProjection
-    links: WorkItemLinks
+    groups: tuple[ChangeGroupView, ...]
+    totals: WorkItemPortfolioTotals
+    operating: PortfolioOperatingView
 
 
 class WorkItemDetailResponse(_TargetHTTPModel):
-    """Bounded current operator state for one exact outcome."""
+    """Semantic and operator detail from one exact snapshot."""
 
-    operator: DeliveryOperatorContext
-    links: WorkItemLinks
+    item: WorkItemDetailView
+
+
+class DesignWorkDetailResponse(_TargetHTTPModel):
+    """Verified authored Design sources for one pre-admission package."""
+
+    change_id: str = Field(min_length=1)
+    package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    intent_markdown: str
+    design_markdown: str
 
 
 class AnswerRequestBody(_TargetHTTPModel):
@@ -91,6 +98,19 @@ class BackwardMoveBody(_TargetHTTPModel):
 
     target: str = Field(min_length=1)
     reason: str = Field(min_length=1)
+    snapshot_version: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("target")
+    @classmethod
+    def _validate_target(cls, value: str) -> str:
+        DeliveryStage(value)
+        return value
+
+
+class BackwardMovePreviewBody(_TargetHTTPModel):
+    """Earlier stage selected for exact invalidation preview."""
+
+    target: str = Field(min_length=1)
 
     @field_validator("target")
     @classmethod
@@ -100,13 +120,15 @@ class BackwardMoveBody(_TargetHTTPModel):
 
 
 __all__ = [
+    "ActivityCounts",
     "AnswerRequestBody",
-    "AttentionCounts",
     "BackwardMoveBody",
+    "BackwardMovePreviewBody",
     "ClearBlockBody",
     "ConfirmLostClaimBody",
+    "DesignWorkDetailResponse",
+    "NeedsCounts",
     "WorkItemDetailResponse",
-    "WorkItemLinks",
     "WorkItemPortfolioResponse",
-    "WorkItemSummaryResponse",
+    "WorkItemPortfolioTotals",
 ]

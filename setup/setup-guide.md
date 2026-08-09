@@ -56,8 +56,9 @@ Running `init.py` writes the following files into your project directory:
 | File / Directory | Purpose | Idempotency |
 |------------------|---------|-------------|
 | `.vscode/settings.json` | Points VS Code at owlbear agents, skills, and instructions; enables `mermaid-chat.enabled` for Mermaid diagram rendering in chat | Merged (owlbear keys as defaults; your existing keys are preserved) |
-| `.vscode/mcp.json` | Registers 5 MCP servers (4 owlbear stdio, including browser access, + markitdown) and points `ob-kanban` at the Delivery startup configuration | Merged (owlbear servers as defaults; your existing servers are preserved) |
-| `.owlbear/delivery-config.json` | Declares absolute Delivery roots, capacities, Integration target, and worker/reviewer identities for `ob-kanban` | Seeded once, ignored by Git, and preserved on rerun so local policy changes remain intact |
+| `.vscode/mcp.json` | Registers 5 MCP servers (4 owlbear stdio, including browser access, + markitdown) | Merged (owlbear servers as defaults; your existing servers are preserved) |
+| `.owlbear/delivery/config.json` | Declares the project Delivery integration branch; roots, single-worker capacities, agent routing, and models come from workspace conventions and agent definitions | Seeded once, tracked in Git, and preserved on rerun so project policy changes remain intact |
+| `.owlbear/delivery/verification.json` | Declares ordered commands that must pass against each exact merged candidate | Detected once from root Python tests and the root npm `test` script; tracked in Git and preserved on rerun |
 | `.owlbear/target/changes/` | Admitted semantic authority and per-change runtime evidence | Fresh setup activates an empty store; reruns preserve target records |
 | `.owlbear/target-cutover-request.json` | Exact activation request loaded by target MCP and Cockpit startup | Published for a fresh workspace; preserved on rerun |
 | `.owlbear/target-cutover.json` | Immutable receipt authorizing target mutation | Published only after snapshot, staging, and smoke verification succeed |
@@ -73,7 +74,7 @@ Running `init.py` writes the following files into your project directory:
 | `.github/copilot-instructions.md` | Consumer scaffold for project-specific Copilot instructions — placeholder sections for Project Identity, Directory Structure, Tech Stack, and Resources | Skipped if file already exists |
 | `.editorconfig` | Editor formatting rules | Skipped if file already exists |
 | `.gitattributes` | Git line-ending and diff rules | Skipped if file already exists |
-| `.gitignore` | Gitignore rules; owlbear section appended if marker absent | Appended if owlbear marker absent; idempotent once present |
+| `.gitignore` | Gitignore rules; OwlBear section appended if marker absent | Preserves user content and removes retired rules from the OwlBear-managed section on rerun |
 | `.markdownlint-cli2.jsonc` | Markdown linting configuration | Skipped if file already exists |
 | `.markdownlint.json` | Markdown linting rules | Skipped if file already exists |
 | `.markdownlintignore` | Markdown lint exclusion patterns | Skipped if file already exists |
@@ -83,29 +84,20 @@ For a fresh workspace, `init.py` activates only the empty target authority store
 retired task, decision, board, accept, or audit stores, and reruns do not overwrite target records.
 If `.owlbear/kanban/` already exists, setup preserves it and publishes no target store or receipt.
 
-### Existing Pre-Cutover Workspaces
+Commit `.owlbear/delivery/verification.json` after reviewing its generated commands. Setup adds
+`uv run --locked pytest` when a root `pyproject.toml` and `tests/` directory are present. It adds `npm ci`
+when a root lockfile exists and `npm test` when the root package declares that script. If setup
+detects neither surface, it warns and leaves the profile absent; create the file before Integration.
+Each command runs without a shell, from its declared candidate-relative directory, with only the
+listed environment variables. A change that edits its own verification profile is rejected; land
+policy changes on the Integration target before they govern later candidates.
 
-1. Run `init.py` with the command above.
+Verification is not a security sandbox. Commands run with the current user's filesystem permissions,
+so review the profile and project test code before enabling Integration for untrusted repositories.
 
-  Expected outcome: copied setup files are refreshed, while `.owlbear/kanban/` remains unchanged
-  and target mutation remains blocked.
-
-2. Place the reviewed migration request at `.owlbear/target-cutover-request.json`. The request must
-  contain current source digests, explicit classifications, target authority, code revision, and
-  activation approval; do not hand-create a receipt.
-
-  Expected outcome: the request names every source and unfinished semantic identity that must be
-  preserved or reintroduced.
-
-3. Invoke the cutover service directly from the project root:
-
-  ```shell
-  uv run --project ../owlbear python ../owlbear/setup/finalize.py \
-    --workspace . --request .owlbear/target-cutover-request.json
-  ```
-
-  Expected outcome: the command returns `"ok": true`, snapshots and retires the source stores,
-  smoke-checks target authority/runtime, and only then publishes `.owlbear/target-cutover.json`.
+For an existing OwlBear workspace, rerun setup, review the generated profile, and commit it directly
+to the Integration target before retrying Delivery Integration. This one-time bootstrap is required
+because a candidate is never allowed to introduce or rewrite the policy that authorizes itself.
 
 ## Shared vs Copied
 
@@ -118,7 +110,7 @@ This split is why `git pull` updates shared agents and skills immediately, while
 runtime files may need a later `init.py` run to refresh.
 
 MCP memory entries are stored as markdown files under `.owlbear/memory/`. The
-`ob-memory` server creates that directory when it starts or writes the first
+`owlbear-memory` server creates that directory when it starts or writes the first
 entry, so setup does not seed a separate memory store.
 
 ---
@@ -126,7 +118,7 @@ entry, so setup does not seed a separate memory store.
 ## Target Delivery Workflow
 
 This section is the canonical operator procedure. The
-[Kanban MCP reference](../serve/mcp-kanban/README.md) lists the exact public tools and startup
+[Delivery MCP reference](../serve/delivery-mcp/README.md) lists the exact public tools and startup
 configuration, [WIRING.md](../share/WIRING.md) maps agent authority and loading, and the
 [Cockpit package guide](../serve/cockpit/README.md) covers launch and configuration for the human
 control surface.
@@ -228,7 +220,7 @@ After opening the project in VS Code, use the **Diagnostics view** to confirm ev
 | OwlBear agents loaded | Chat Customizations shows agents from `../owlbear/share/agents/` |
 | OwlBear skills loaded | Chat Customizations shows skills from `../owlbear/share/skills/` |
 | Instructions loaded | Chat Customizations shows `*.instructions.md` files from `../owlbear/share/instructions/` |
-| MCP servers running | Run `MCP: List Servers` from the Command Palette — `ob-kanban`, `ob-memory`, and `ob-knowledge` should show `running` |
+| MCP servers running | Run `MCP: List Servers` from the Command Palette — `owlbear-delivery`, `owlbear-memory`, and `owlbear-knowledge` should show `running` |
 
 For runtime debugging, use **"Show Agent Debug Logs"** (Chat view ellipsis `…` menu) —
 this shows chronological tool calls, LLM requests, and prompt discovery events.
@@ -309,7 +301,7 @@ Edit `.vscode/mcp.json` to add additional servers alongside the owlbear defaults
 ```json
 {
   "servers": {
-    "ob-kanban": { ... },
+    "owlbear-delivery": { ... },
     "myProjectServer": {
       "type": "stdio",
       "command": "uv",
@@ -323,31 +315,11 @@ Edit `.vscode/mcp.json` to add additional servers alongside the owlbear defaults
 > as defaults and your existing entries are preserved. Edit it manually to add new server
 > entries or customize existing ones.
 
-### Configuring the knowledge MCP server
+### Knowledge MCP storage
 
-The `ob-knowledge` server supports environment variables to customise its behaviour.
-Set these in `.vscode/mcp.json` under the server's `env` key:
-
-```json
-{
-  "servers": {
-    "ob-knowledge": {
-      "type": "stdio",
-      "command": "uv",
-      "args": ["run", "--project", "../owlbear", "-m", "owlbear_mcp_knowledge"],
-      "env": {
-        "OWLBEAR_KB_PATH": "/path/to/knowledge.db",
-        "KNOWLEDGE_TOOLS_EXCLUDE": "knowledge_ingest"
-      }
-    }
-  }
-}
-```
-
-| Variable | Description |
-|----------|-------------|
-| `OWLBEAR_KB_PATH` | Override the path to the SQLite knowledge database |
-| `KNOWLEDGE_TOOLS_EXCLUDE` | Comma-separated tool names to hide (e.g. for query-only access) |
+The `owlbear-knowledge` server stores its SQLite database and vectors under
+`.owlbear/knowledge/` in the current workspace. Launch it from the project root; it has no storage
+override or tool-exclusion environment settings.
 
 ---
 
@@ -359,10 +331,10 @@ Set these in `.vscode/mcp.json` under the server's `env` key:
 | Skills not auto-loading | `chat.agentSkillsLocations` missing or path wrong | Check `.vscode/settings.json`; re-run `init.py` if the key is absent |
 | Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
-| `ob-kanban` reports `ERR_DELIVERY_STARTUP_UNCONFIGURED` | `.owlbear/delivery-config.json` is absent or `ob-kanban.env` was customized without its path | Re-run `init.py`; for an existing custom `ob-kanban` entry, preserve the generated `OWLBEAR_DELIVERY_CONFIG` and `OWLBEAR_WORKSPACE_ROOT` values |
+| `owlbear-delivery` reports `ERR_DELIVERY_STARTUP_UNCONFIGURED` | `.owlbear/delivery/config.json` is absent from the project root | Re-run `init.py`; setup recreates the file only when it is missing |
 | `uv run cockpit` says the command is missing | Command was run from the consumer project without `--project` | Use `uv run --project ../owlbear cockpit` from the project root |
-| Target MCP or Cockpit refuses to start after an update | A pre-cutover store has no valid target request and receipt | Prepare the reviewed request and invoke `setup/finalize.py` directly as described above |
-| Cockpit shows the wrong workspace or cannot find `.owlbear/target` | Cockpit was launched from the wrong working directory | Run from the project root, add `--directory /path/to/project`, or set `OWLBEAR_WORKSPACE_ROOT` explicitly |
+| Existing `.owlbear/kanban/` prevents target activation | Setup preserves legacy stores but does not convert them | Start from a fresh initialized workspace and reintroduce unfinished semantic work through the current Design workflow |
+| Cockpit shows the wrong workspace or cannot find `.owlbear/target` | Cockpit was launched from the wrong working directory | Run from the project root or add `--directory /path/to/project` |
 | `ValueError` on setup | Cross-drive path resolution | Place owlbear and your project on the same Windows drive |
 | Hook file not refreshed on rerun | Existing local `.owlbear/hooks/` file differs from seed | Re-run `init.py --replace-hooks` to overwrite, or choose `replace` when prompted interactively |
 | Agent name conflict | Same-name agent in both owlbear and project locations | Give project agents unique names (see Customization section above) |

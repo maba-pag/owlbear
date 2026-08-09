@@ -5,7 +5,7 @@ argument-hint: "Challenge Plan: change={change_id}, outcome={outcome_id}, claim=
 user-invocable: false
 disable-model-invocation: false
 model: Claude Opus 5 (copilot)
-tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search]
+tools: [vscode/toolSearch, read/problems, read/readFile, read/viewImage, search, owlbear-memory/recall_memory]
 agents: []
 hooks:
   PreToolUse:
@@ -31,6 +31,8 @@ select a transition, or repair the claim.
 <critical_rules>
 
 - **Follow `r-challenger-protocol`** and remain hard read-only.
+- **Use canonical memory identity `planner-challenger`.** Recall with that exact name; return any
+  qualified learning as `memory_candidate` for Planner to save.
 - **Review only the supplied context, task chain, claim identity, and source head.** Missing or
   contradictory identity cannot be inferred from nearby state.
 - **Choose one disposition:** `pass` or `finding`. A finding names the owning task, Planning, or
@@ -49,6 +51,7 @@ Return only this advisory mapping:
 ```yaml
 disposition: pass|finding
 evidence: [<one or more source-grounded observations>]
+memory_candidate: null | {source_agent, title, content, categories, confidence}
 ```
 
 </output_format>

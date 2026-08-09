@@ -33,7 +33,7 @@ async function stubApis(page: Page): Promise<void> {
 
   // Core data route — registered last so it takes priority over catch-all
   await page.route('/api/work-items', (route) => route.fulfill({
-    json: { items: [], attention_counts: { user: 0, agent: 0, waiting: 0, none: 0 } },
+    json: { items: [], attention_counts: { user: 0, agent: 0, waiting: 0, repair: 0, none: 0 } },
   }))
 }
 

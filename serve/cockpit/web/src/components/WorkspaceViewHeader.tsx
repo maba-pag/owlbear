@@ -33,12 +33,13 @@ export default function WorkspaceViewHeader({
   )
 }
 
-/** Same count treatment the board's stage labels use, so every Delivery count reads alike. */
 export function WorkspaceViewCount({ value, unit }: { value: ReactNode; unit: string }) {
+  const filteredCount = typeof value === 'string' ? value.match(/^(\d+) of (\d+)$/) : null
   return (
-    <span className="inline-flex min-w-5 shrink-0 justify-center whitespace-nowrap bg-surface px-1 text-2xs font-semibold text-contrast-high">
-      {value}
-      <span className="sr-only"> {unit}</span>
+    <span className="inline-flex items-baseline gap-1 whitespace-nowrap text-xs">
+      <strong className="font-semibold text-primary">{filteredCount?.[1] ?? value}</strong>
+      {filteredCount ? <> <span className="text-contrast-medium">of {filteredCount[2]} shown</span></> : null}
+      <span className="sr-only"> {filteredCount ? unit.replace(/ shown$/, '') : unit}</span>
     </span>
   )
 }

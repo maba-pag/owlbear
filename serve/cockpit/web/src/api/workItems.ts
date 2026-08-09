@@ -1,49 +1,150 @@
 export type WorkItemStage = 'design' | 'planning' | 'implementation' | 'assembly' | 'completed'
-export type WorkItemAttention = 'user' | 'agent' | 'waiting' | 'none'
-export type DeliveryWorkerRole = 'planner' | 'builder' | 'assembly-reviewer'
+export type WorkItemScope = 'outcome' | 'change-integration'
+export type WorkItemNeed = 'you' | 'dependency' | 'none'
+export type WorkItemNextActor = 'you' | 'agent' | 'dependency' | 'none'
+export type WorkItemActivityState = 'idle' | 'ready' | 'working' | 'repairing'
+export type WorkItemActionKind =
+  | 'none'
+  | 'answer-request'
+  | 'clear-block'
+  | 'recover-claim'
+  | 'integrate-change'
+  | 'retry-integration'
+  | 'start-orchestration'
+export type WorkItemProgressKind = 'tasks' | 'assembly' | 'design-return' | 'plan' | 'integration'
+export type WorkItemChangeLifecycle = 'in-delivery' | 'integration'
+export type DeliveryWorkerRole = 'planner' | 'builder' | 'assembly-reviewer' | 'integration-repairer'
+export type DeliveryIntegrationAttentionDisposition = 'retryable' | 'repair-required' | 'operator-required'
+export type DeliveryIntegrationAttentionCode =
+  | 'revision-pending'
+  | 'target-identity-mismatch'
+  | 'package-mutated'
+  | 'completed-history-mutated'
+  | 'reviewed-boundary-mismatch'
+  | 'reviewed-worktree-dirty'
+  | 'merge-conflict'
+  | 'repair-authority'
+  | 'candidate-proof-failed'
+  | 'target-cas-lost'
 
-export interface WorkItemProjection {
+export interface WorkItemActivity {
+  state: WorkItemActivityState
+  worker_role: DeliveryWorkerRole | null
+  started_at: string | null
+  task_id: string | null
+}
+
+export interface WorkItemAction {
+  kind: WorkItemActionKind
+  label: string | null
+  command: string | null
+}
+
+export interface WorkItemProgress {
+  kind: WorkItemProgressKind
+  label: string
+  done: number | null
+  total: number | null
+}
+
+export interface WorkItemIntegrationAttentionRef {
+  attention_id: string
+  code: DeliveryIntegrationAttentionCode
+  disposition: DeliveryIntegrationAttentionDisposition
+  superseded: boolean
+}
+
+export interface WorkItemCardView {
+  item_key: string
   work_item_id: string
   change_id: string
-  scope: string
+  scope: WorkItemScope
   title: string
-  promise: string
-  stage: WorkItemStage
-  attention: WorkItemAttention
-  dependency_ready: boolean
-  commitment_ids: string[]
-  dependency_ids: string[]
-  replacement_ids: string[]
-  task_count: number
-  reviewed_task_count: number
-  next_action: string
+  stage: WorkItemStage | null
+  needs: WorkItemNeed
+  needs_headline: string | null
+  next_actor: WorkItemNextActor
+  next_step: string
+  activity: WorkItemActivity
+  progress: WorkItemProgress
+  action: WorkItemAction
+  integration_attention: WorkItemIntegrationAttentionRef | null
 }
 
-export interface WorkItemLinks {
-  self: string
-  answer_request: string
-  clear_block: string
-  recover_claim: string
-  move_backward: string
-  integration_attention: string
-  integration_retry: string
+export interface ChangeGroupView {
+  change_id: string
+  title: string
+  snapshot_version: string
+  lifecycle: WorkItemChangeLifecycle
+  outcome_total: number
+  outcome_completed: number
+  items: WorkItemCardView[]
 }
 
-export interface WorkItemSummaryResponse {
-  card: WorkItemProjection
-  links: WorkItemLinks
-}
-
-export interface AttentionCounts {
-  user: number
-  agent: number
-  waiting: number
+export interface NeedsCounts {
+  you: number
+  dependency: number
   none: number
 }
 
+export interface ActivityCounts {
+  idle: number
+  ready: number
+  working: number
+  repairing: number
+}
+
+export interface WorkItemPortfolioTotals {
+  total: number
+  complete: number
+  needs: NeedsCounts
+  activity: ActivityCounts
+}
+
+export type PortfolioWorkScope = 'outcome' | 'integration'
+export type PortfolioGuidanceKind =
+  | 'resume-design'
+  | 'start-orchestration'
+  | 'work-underway'
+  | 'intervene'
+  | 'wait'
+  | 'create-change'
+
+export interface PortfolioWorkReference {
+  change_id: string
+  item_key: string
+  scope: PortfolioWorkScope
+}
+
+export interface PortfolioGuidance {
+  kind: PortfolioGuidanceKind
+  change_ids: string[]
+  work_count: number
+}
+
+export interface PortfolioOperatingView {
+  unfinished_change_count: number
+  completed_change_count: number
+  draft_design_change_ids: string[]
+  design_required_change_ids: string[]
+  claimed: PortfolioWorkReference[]
+  queued_for_orchestration: PortfolioWorkReference[]
+  interventions: PortfolioWorkReference[]
+  dependency_waits: PortfolioWorkReference[]
+  guidance: PortfolioGuidance[]
+}
+
 export interface WorkItemPortfolioResponse {
-  items: WorkItemSummaryResponse[]
-  attention_counts: AttentionCounts
+  groups: ChangeGroupView[]
+  totals: WorkItemPortfolioTotals
+  operating: PortfolioOperatingView
+}
+
+export interface DesignWorkDetailResponse {
+  change_id: string
+  package_id: string
+  intent_markdown: string
+  design_markdown: string
 }
 
 export interface DeliveryRequestResolution {
@@ -72,10 +173,51 @@ export interface DeliveryBlock {
   resume_commit: string | null
 }
 
-export interface DeliveryOperatorContext {
-  change_id: string
+export interface WorkItemCommitment {
+  commitment_id: string
+  commitment_class: string
+  provenance: string
+  statement: string
+}
+
+export interface WorkItemDependency {
   outcome_id: string
+  title: string
   stage: WorkItemStage
+}
+
+export interface WorkItemTaskEvidence {
+  task_id: string
+  title: string
+  result: string
+  status: 'pending' | 'active' | 'reviewed'
+  completed_commit: string | null
+  acceptance_observations: string[]
+  proof_boundaries: string[]
+}
+
+export interface WorkItemIntegrationView {
+  attention_id: string | null
+  code: DeliveryIntegrationAttentionCode | null
+  disposition: DeliveryIntegrationAttentionDisposition | null
+  headline: string
+  explanation: string
+  conflicted_paths: string[]
+  diagnostics: string[]
+  retry_condition: string | null
+  superseded: boolean
+  repair_active: boolean
+}
+
+export interface WorkItemDetailView {
+  snapshot_version: string
+  change_title: string
+  card: WorkItemCardView
+  promise: string
+  acceptance: string[]
+  commitments: WorkItemCommitment[]
+  dependencies: WorkItemDependency[]
+  tasks: WorkItemTaskEvidence[]
   block: DeliveryBlock | null
   requests: DeliveryRequest[]
   active_claim: {
@@ -89,7 +231,16 @@ export interface DeliveryOperatorContext {
     target: WorkItemStage
     reason: string
     locators: string[]
+    source_boundary: string | null
+    preserved_commit: string | null
   } | null
+  operator_moves: Array<{
+    move_id: string
+    outcome_id: string
+    destination: WorkItemStage
+    reason: string
+    invalidated_outcome_ids: string[]
+  }>
   recovery_attention: {
     attempt_id: string
     claim_id: string
@@ -97,16 +248,11 @@ export interface DeliveryOperatorContext {
     custody_retained: boolean
     retry_condition: string
   } | null
-  integration_attention: {
-    code: string
-    diagnostics: string[]
-    retry_condition: string
-  } | null
+  integration: WorkItemIntegrationView | null
 }
 
 export interface WorkItemDetailResponse {
-  operator: DeliveryOperatorContext
-  links: WorkItemLinks
+  item: WorkItemDetailView
 }
 
 export interface BackwardMoveResult {
@@ -117,6 +263,13 @@ export interface BackwardMoveResult {
     reason: string
     invalidated_outcome_ids: string[]
   }
+  invalidated_outcome_ids: string[]
+}
+
+export interface BackwardMovePreview {
+  outcome_id: string
+  target: WorkItemStage
+  snapshot_version: string
   invalidated_outcome_ids: string[]
 }
 
@@ -207,10 +360,21 @@ export function showCompletedChange(changeId: string, completionId: string): Pro
   )
 }
 
-export function showWorkItem(changeId: string, outcomeId: string): Promise<WorkItemDetailResponse> {
+export function workItemDetailUrl(changeId: string, itemKey: string): string {
+  return `/api/changes/${encodeURIComponent(changeId)}/work-items/${encodeURIComponent(itemKey)}`
+}
+
+export function showWorkItem(changeId: string, itemKey: string): Promise<WorkItemDetailResponse> {
   return workItemRequest(
-    `/api/changes/${encodeURIComponent(changeId)}/outcomes/${encodeURIComponent(outcomeId)}`,
+    workItemDetailUrl(changeId, itemKey),
     { fallbackCode: 'ERR_WORK_ITEM_DETAIL' },
+  )
+}
+
+export function showDesignWork(changeId: string): Promise<DesignWorkDetailResponse> {
+  return workItemRequest(
+    `/api/design-work/${encodeURIComponent(changeId)}`,
+    { fallbackCode: 'ERR_DESIGN_WORK_DETAIL' },
   )
 }
 
@@ -258,11 +422,24 @@ export function moveWorkItemBackward(
   outcomeId: string,
   target: WorkItemStage,
   reason: string,
+  snapshotVersion: string,
 ): Promise<BackwardMoveResult> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/outcomes/${encodeURIComponent(outcomeId)}/move-backward`,
     'ERR_WORK_ITEM_BACKWARD_MOVE',
-    { target, reason },
+    { target, reason, snapshot_version: snapshotVersion },
+  )
+}
+
+export function previewWorkItemBackward(
+  changeId: string,
+  outcomeId: string,
+  target: WorkItemStage,
+): Promise<BackwardMovePreview> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/outcomes/${encodeURIComponent(outcomeId)}/move-backward/preview`,
+    'ERR_WORK_ITEM_BACKWARD_PREVIEW',
+    { target },
   )
 }
 

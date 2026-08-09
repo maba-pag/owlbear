@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import types
 
+import pytest
 import yaml
 
 _REPO_ROOT = Path(__file__).parent.parent
@@ -42,7 +43,7 @@ _RETIRED_AGENTS = {
     "verifier-challenger",
 }
 _RETIRED_SKILLS = {
-    "h-mcp-kanban",
+    "h-mcp-delivery",
     "r-pipeline-protocol",
     "w-spec-shaping",
     "w-task-decomposition",
@@ -51,14 +52,14 @@ _RETIRED_SKILLS = {
     "w-whole-change-audit",
 }
 _GENERIC_TASK_TOOLS = {
-    "ob-kanban/create_task",
-    "ob-kanban/edit_task",
-    "ob-kanban/end_work",
-    "ob-kanban/list_tasks",
-    "ob-kanban/move_task",
-    "ob-kanban/pick_tasks",
-    "ob-kanban/show_task",
-    "ob-kanban/start_work",
+    "owlbear-delivery/create_task",
+    "owlbear-delivery/edit_task",
+    "owlbear-delivery/end_work",
+    "owlbear-delivery/list_tasks",
+    "owlbear-delivery/move_task",
+    "owlbear-delivery/pick_tasks",
+    "owlbear-delivery/show_task",
+    "owlbear-delivery/start_work",
 }
 _TARGET_ROLE_TOOLS = {
     "designer": {
@@ -73,8 +74,9 @@ _TARGET_ROLE_TOOLS = {
     "planner": {"show_plan_context", "publish_delivery_plan"},
     "builder": {
         "show_build_context",
+        "show_integration_repair_context",
+        "create_integration_repair_candidate",
         "publish_delivery_result",
-        "show_integration_attention",
         "admit_reviewed_integration_repair",
     },
     "orchestrator": {
@@ -82,6 +84,8 @@ _TARGET_ROLE_TOOLS = {
         "acquire_frontier_work",
         "transition_delivery",
         "recover_claim",
+        "recover_integration_repair_claim",
+        "publish_integration_repair_authority_attention",
         "integrate_ready_change",
     },
 }
@@ -174,7 +178,7 @@ class _TargetApplicationDouble:
 
 
 def test_agent_validator_accepts_valid_structure_and_known_mcp_server(tmp_path: Path) -> None:
-    path = _write_agent(tmp_path, "reader", _agent_text("reader", tools="[ob-browser/acquire]"))
+    path = _write_agent(tmp_path, "reader", _agent_text("reader", tools="[owlbear-browser/acquire]"))
 
     assert _AGENT_VALIDATOR.validate_agent(path) == []
 
@@ -272,21 +276,22 @@ user-invocable: false
     assert _SKILL_VALIDATOR.validate_skill(invalid_dir)
 
 
-def test_declared_owlbear_mcp_tools_exist_in_live_registries() -> None:
-    from owlbear_mcp_browser.server import mcp_app as browser_mcp
-    from owlbear_mcp_kanban.server import mcp as kanban_mcp
-    from owlbear_mcp_kanban.target_server import DELIVERY_OPERATION_NAMES, assemble_target_server
-    from owlbear_mcp_knowledge.server import mcp as knowledge_mcp
-    from owlbear_mcp_memory.server import mcp as memory_mcp
+@pytest.mark.asyncio
+async def test_declared_mcp_tools_exist_in_live_registries() -> None:
+    from owlbear_browser_mcp.server import mcp as browser_mcp
+    from owlbear_delivery_mcp.server import mcp as delivery_mcp
+    from owlbear_delivery_mcp.target_server import DELIVERY_OPERATION_NAMES, assemble_target_server
+    from owlbear_knowledge_mcp.server import mcp as knowledge_mcp
+    from owlbear_memory_mcp.server import mcp as memory_mcp
 
     target_mcp = assemble_target_server(_TargetApplicationDouble())  # type: ignore[arg-type]
     registries = {
-        "ob-browser": {tool.name for tool in browser_mcp.list_tools()},
-        "ob-kanban": {tool.name for tool in kanban_mcp._tool_manager.list_tools()},  # noqa: SLF001
-        "ob-knowledge": {tool.name for tool in knowledge_mcp._tool_manager.list_tools()},  # noqa: SLF001
-        "ob-memory": {tool.name for tool in memory_mcp._tool_manager.list_tools()},  # noqa: SLF001
+        "owlbear-browser": {tool.name for tool in await browser_mcp.list_tools()},
+        "owlbear-delivery": {tool.name for tool in await delivery_mcp.list_tools()},
+        "owlbear-knowledge": {tool.name for tool in await knowledge_mcp.list_tools()},
+        "owlbear-memory": {tool.name for tool in await memory_mcp.list_tools()},
     }
-    target_registry = {tool.name for tool in target_mcp._tool_manager.list_tools()}  # noqa: SLF001
+    target_registry = {tool.name for tool in await target_mcp.list_tools()}
     assert target_registry == set(DELIVERY_OPERATION_NAMES)
     assert target_registry.isdisjoint(_RETIRED_DELIVERY_TOOLS)
 
@@ -301,7 +306,9 @@ def test_declared_owlbear_mcp_tools_exist_in_live_registries() -> None:
                 if isinstance(tool, str) and tool.startswith(f"{server}/") and not tool.endswith("/*")
             }
             available = (
-                target_registry if server == "ob-kanban" and metadata["name"] in _TARGET_ROLE_TOOLS else registered
+                target_registry
+                if server == "owlbear-delivery" and metadata["name"] in _TARGET_ROLE_TOOLS
+                else registered
             )
             missing = declared - available
             assert not missing, f"{agent_path.name} has unavailable {server} tools: {sorted(missing)}"
@@ -309,7 +316,9 @@ def test_declared_owlbear_mcp_tools_exist_in_live_registries() -> None:
     metadata = {path.stem.removesuffix(".agent"): _frontmatter(path) for path in _AGENTS_ROOT.glob("*.agent.md")}
     for role, expected in _TARGET_ROLE_TOOLS.items():
         declared = {
-            tool.removeprefix("ob-kanban/") for tool in metadata[role]["tools"] if tool.startswith("ob-kanban/")
+            tool.removeprefix("owlbear-delivery/")
+            for tool in metadata[role]["tools"]
+            if tool.startswith("owlbear-delivery/")
         }
         assert declared == expected
 
@@ -322,9 +331,9 @@ def test_installed_delivery_ecosystem_is_native_only() -> None:
     metadata = {path.stem.removesuffix(".agent"): _frontmatter(path) for path in _AGENTS_ROOT.glob("*.agent.md")}
     orchestrator = metadata["orchestrator"]
     assert orchestrator["agents"] == ["planner", "builder", "memory-curator", "Explore"]
-    assert {tool.removeprefix("ob-kanban/") for tool in orchestrator["tools"] if tool.startswith("ob-kanban/")} == (
-        _TARGET_ROLE_TOOLS["orchestrator"]
-    )
+    assert {
+        tool.removeprefix("owlbear-delivery/") for tool in orchestrator["tools"] if tool.startswith("owlbear-delivery/")
+    } == (_TARGET_ROLE_TOOLS["orchestrator"])
     assert metadata["builder"]["agents"] == ["build-reviewer"]
     assert metadata["designer"]["agents"] == ["conceptual-design-reviewer", "designer-challenger", "Explore"]
 
@@ -336,7 +345,7 @@ def test_installed_delivery_ecosystem_is_native_only() -> None:
     assert prompts["ideate"]["agent"] == "designer"
     assert prompts["design"]["agent"] == "designer"
     assert prompts["orchestrate"]["agent"] == "orchestrator"
-    assert prompts["integration-repair"]["agent"] == "builder"
+    assert "integration-repair" not in prompts
     assert {prompt.get("agent") for prompt in prompts.values()}.isdisjoint(_RETIRED_AGENTS)
 
     skills = {path.parent.name for path in _SKILLS_ROOT.glob("*/SKILL.md")}
@@ -360,6 +369,41 @@ def test_installed_delivery_ecosystem_is_native_only() -> None:
     }
 
 
+def test_integration_repair_guidance_closes_observed_failure_routes() -> None:
+    repair = (_SKILLS_ROOT / "w-integration-repair/SKILL.md").read_text(encoding="utf-8")
+    orchestration = (_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8")
+
+    assert "Attribute each side's conflict-path delta from the merge base" in repair
+    assert "target rename or platform migration is not competing product authority" in repair
+    assert "every platform identifier must use the target namespace" in repair
+    assert "create_integration_repair_candidate" in repair
+    assert "Do not call `commit-owned`, `git commit`, or use `SKIP`/`--no-verify`" in repair
+    assert "stale source expectations" in repair
+    assert "attention publication operation is unavailable or rejects" in orchestration
+    assert "recover_integration_repair_claim" in orchestration
+    assert "end the session after the current acquired batch" in orchestration
+
+
+def test_orchestration_recovery_bootstrap_matches_tool_search_configuration() -> None:
+    metadata = _frontmatter(_AGENTS_ROOT / "orchestrator.agent.md")
+    orchestration = (_SKILLS_ROOT / "w-orchestration/SKILL.md").read_text(encoding="utf-8")
+    enabled_setting = '"chat.agentHost.copilot.toolSearch.enabled": true'
+
+    assert enabled_setting in (_REPO_ROOT / ".vscode/settings.json").read_text(encoding="utf-8")
+    assert enabled_setting in (_REPO_ROOT / "seed/.vscode/settings.json").read_text(encoding="utf-8")
+    assert "vscode/toolSearch" in metadata["tools"]
+    for operation in ("transition_delivery", "recover_claim", "recover_integration_repair_claim"):
+        assert f"owlbear-delivery/{operation}" in metadata["tools"]
+    assert "require callable bindings for `transition_delivery`," in orchestration
+    assert "Run one focused `tool_search` for each" in orchestration
+    assert "end the session without acquisition" in orchestration
+    assert "Immediately before forwarding, if the `transition_delivery` binding is unavailable" in orchestration
+    assert "another agent to echo, relay, reconstruct, or apply a transition" in orchestration
+    assert orchestration.index("Before calling `acquire_frontier_work`") < orchestration.index(
+        "Call `acquire_frontier_work` once"
+    )
+
+
 def test_target_role_write_and_lifecycle_guards_are_preserved() -> None:
     metadata = {path.stem.removesuffix(".agent"): _frontmatter(path) for path in _AGENTS_ROOT.glob("*.agent.md")}
 
@@ -368,7 +412,7 @@ def test_target_role_write_and_lifecycle_guards_are_preserved() -> None:
         "SessionStart": [{"type": "command", "command": "uv run python .owlbear/hooks/session-context.py"}],
         "PostToolUse": [{"type": "command", "command": "uv run python .owlbear/hooks/lint-changed.py"}],
     }
-    assert not any(tool.startswith("ob-kanban/finish_") for tool in builder["tools"])
+    assert not any(tool.startswith("owlbear-delivery/finish_") for tool in builder["tools"])
 
     assert metadata["planner"]["hooks"] == {
         "PreToolUse": [
@@ -391,9 +435,18 @@ def test_target_role_write_and_lifecycle_guards_are_preserved() -> None:
     assert not any(tool.startswith("edit/") for tool in orchestrator_tools)
     assert not any(tool.startswith("execute/") for tool in orchestrator_tools)
     assert metadata["build-reviewer"]["hooks"] == {
+        "PreToolUse": [
+            {
+                "type": "command",
+                "command": "uv run python .owlbear/hooks/deny-writes.py --terminal-read-only",
+            }
+        ]
+    }
+    assert "execute/runInTerminal" in metadata["build-reviewer"]["tools"]
+    assert "execute/runInTerminal" not in metadata["planner-challenger"]["tools"]
+    assert metadata["planner-challenger"]["hooks"] == {
         "PreToolUse": [{"type": "command", "command": "uv run python .owlbear/hooks/deny-writes.py"}]
     }
-    assert metadata["planner-challenger"]["hooks"] == metadata["build-reviewer"]["hooks"]
 
 
 def test_design_entries_preserve_gate_order_and_warning_policy() -> None:
@@ -420,6 +473,22 @@ def test_planning_quality_reaches_author_and_independent_reviewer() -> None:
     assert "`h-ac-quality` - boundary-valid proof quality" in challenger
 
 
+def test_decision_request_guidance_reaches_primary_workers() -> None:
+    planning = (_SKILLS_ROOT / "w-frontier-planning" / "SKILL.md").read_text(encoding="utf-8")
+    building = (_SKILLS_ROOT / "w-packet-building" / "SKILL.md").read_text(encoding="utf-8")
+    handbook = (_SKILLS_ROOT / "h-decision-requests" / "SKILL.md").read_text(encoding="utf-8")
+
+    for workflow in (planning, building):
+        assert "If context contains a request or a request may be needed" in workflow
+        assert "load `h-decision-requests`" in workflow
+        assert "authority-equivalent" in workflow
+    assert "Planner may choose decomposition" in planning
+    assert "Builder may choose internal implementation details" in building
+    assert "options: [{option_id:" in building
+    assert "one concrete recommended proposal is valid" in handbook
+    assert "Never invent a meaningless second option" in handbook
+
+
 def test_target_delivery_workflows_enforce_review_and_remove_obsolete_controls() -> None:
     delivery_paths = (
         _AGENTS_ROOT / "orchestrator.agent.md",
@@ -443,7 +512,15 @@ def test_target_delivery_workflows_enforce_review_and_remove_obsolete_controls()
         assert operation in content
     assert "deliverylaunchpackage" in content.lower()
     assert "deliverytransition" in content.lower()
+    assert "kind: dispatch_failure" in content.lower()
+    assert "failed_operation: show_build_context" in content.lower()
+    assert "never forward this result to `transition_delivery`" in content.lower()
+    assert "use that same exact `recover_claim` request" in content.lower()
     assert "byte-for-structure unchanged" in content.lower()
+    assert "deliverybuildcontext.task_digest" in content.lower()
+    assert "unblock_condition" in content
+    assert "expected_evidence" in content
+    assert "rejected `transition_delivery`" in content
     assert not {operation for operation in _RETIRED_DELIVERY_TOOLS if operation in content}
 
     obsolete = (

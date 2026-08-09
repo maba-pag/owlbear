@@ -1,9 +1,10 @@
 import { Suspense, useState } from 'react'
-import { PButtonPure, PFlyout, PIcon, PLinkPure } from '@porsche-design-system/components-react'
+import { PButtonPure, PFlyout, PHeading, PIcon, PLinkPure } from '@porsche-design-system/components-react'
 import { useLocation, useNavigate } from 'react-router'
-import { routeConfig } from './routes'
+import { routeConfig, routeForPath } from './routes'
 import ThemeToggle from './components/ThemeToggle'
 import WorkspaceStatus from './components/WorkspaceStatus'
+import { useWorkspaceHealth } from './hooks/useWorkspaceHealth'
 
 const ICONS = {
   work: 'grid',
@@ -66,8 +67,9 @@ export default function CockpitShell() {
   const location = useLocation()
   const navigate = useNavigate()
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
-  const activeRoute = routeConfig.find((route) => route.path === location.pathname) ?? routeConfig[0]
-  const ActivePage = activeRoute.component
+  const workspaceHealth = useWorkspaceHealth()
+  const activeRoute = routeForPath(location.pathname)
+  const ActivePage = activeRoute?.component
 
   const goTo = (path: string) => {
     setMobileNavigationOpen(false)
@@ -89,10 +91,10 @@ export default function CockpitShell() {
           <span aria-hidden="true" className="text-[0.5625rem] uppercase tracking-[0.14em] text-contrast-medium">Cockpit</span>
         </div>
         <div className="mt-static-lg flex w-full flex-1 items-start justify-center">
-          <ProductNavigation activePath={activeRoute.path} compact onNavigate={goTo} />
+          <ProductNavigation activePath={activeRoute?.path ?? ''} compact onNavigate={goTo} />
         </div>
         <div className="grid justify-items-center gap-1.5">
-          <WorkspaceStatus />
+          <WorkspaceStatus health={workspaceHealth} />
           <ThemeToggle compact />
         </div>
       </aside>
@@ -104,7 +106,7 @@ export default function CockpitShell() {
             <span className="block text-xs text-contrast-medium">Cockpit</span>
           </div>
           <div className="flex items-center gap-static-md">
-            <WorkspaceStatus />
+            <WorkspaceStatus health={workspaceHealth} />
             <ThemeToggle compact />
             <PButtonPure
               type="button"
@@ -130,14 +132,22 @@ export default function CockpitShell() {
               <strong className="block text-lg">OwlBear</strong>
               <span className="text-sm text-contrast-medium">Cockpit</span>
             </div>
-            <ProductNavigation activePath={activeRoute.path} onNavigate={goTo} />
+            <ProductNavigation activePath={activeRoute?.path ?? ''} onNavigate={goTo} />
           </div>
         </PFlyout>
 
         {/* Auto row stretches a short page to full height and grows a long one so the workspace column scrolls. */}
         <div className="grid min-h-0 flex-1 grid-cols-1">
           <Suspense fallback={<p className="p-static-lg" role="status">Preparing workspace...</p>}>
-            <ActivePage />
+            {ActivePage ? <ActivePage /> : (
+              <main className="grid min-h-full place-items-center p-static-xl" data-testid="not-found-view">
+                <section className="grid max-w-lg gap-static-sm text-center">
+                  <PHeading tag="h1" size="xl">Page not found</PHeading>
+                  <p className="text-sm text-contrast-medium">This Cockpit address does not match an available workspace.</p>
+                  <PLinkPure href="/delivery" onClick={(event) => { event.preventDefault(); goTo('/delivery') }}>Go to Delivery portfolio</PLinkPure>
+                </section>
+              </main>
+            )}
           </Suspense>
         </div>
       </div>

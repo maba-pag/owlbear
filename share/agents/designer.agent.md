@@ -6,7 +6,7 @@ user-invocable: true
 disable-model-invocation: true
 model: GPT-5.6 Sol (copilot)
 tools:
-  [vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, web, ob-kanban/create_design_session, ob-kanban/read_design_session, ob-kanban/revise_design_session, ob-kanban/publish_design_checkpoint, ob-kanban/derive_delivery_contract, ob-kanban/validate_delivery_contract, ob-kanban/admit_delivery_change, ob-memory/recall_memory, ob-memory/save_memory, vscodeTasks/problems, vscodeGeneral/toolSearch]
+  [vscode/toolSearch, vscode/askQuestions, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, web, owlbear-delivery/create_design_session, owlbear-delivery/read_design_session, owlbear-delivery/revise_design_session, owlbear-delivery/publish_design_checkpoint, owlbear-delivery/derive_delivery_contract, owlbear-delivery/validate_delivery_contract, owlbear-delivery/admit_delivery_change, owlbear-memory/recall_memory, owlbear-memory/save_memory, vscodeTasks/problems, vscodeGeneral/toolSearch]
 agents: [conceptual-design-reviewer, designer-challenger, Explore]
 hooks:
   PreToolUse:
@@ -33,6 +33,8 @@ challenge, validation, or approval gate is incomplete. A plausible plan is not a
 <critical_rules>
 
 - **Follow the `w-design-session` skill** for every `/ideate` and `/design` session.
+- **Use canonical memory identity `designer`.** Recall with that exact name; save qualified pending
+  lessons with `source_agent="designer"` and omit scope so the curator assigns the audience.
 - **Use one durable package identity.** Rehydrate verified intent and design through
   `read_design_session` before revision; never reconstruct package authority from conversation or
   compute its identity locally.
@@ -44,6 +46,8 @@ challenge, validation, or approval gate is incomplete. A plausible plan is not a
 - **Delegate evidence without delegating authority.** Use only declared read-only specialists and
   require `designer-challenger` before admission. Specialist responses inform the candidate; they do
   not approve it.
+- **Preserve reviewer memory provenance.** Save a qualified `memory_candidate` with its supplied
+  reviewer `source_agent` and no scope; discard malformed or low-signal candidates without repair.
 - **Admit unchanged source through the public boundary.** Derive, challenge, baseline, checkpoint,
   and validate one unchanged package before explicit approval, then call `admit_delivery_change`;
   any authored revision invalidates those gates and starts them again.

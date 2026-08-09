@@ -41,7 +41,7 @@ _WORKFLOW_PATHS = {
     "conftest.py",
     "pyproject.toml",
     "serve/knowledge/**",
-    "serve/mcp-knowledge/**",
+    "serve/knowledge-mcp/**",
     "share/agents/knowledge-ingestor.agent.md",
     "share/prompts/kb-ingest.prompt.md",
     "share/skills/h-knowledge-ops/SKILL.md",
@@ -85,7 +85,7 @@ def test_shipped_role_and_prompt_declare_source_lifecycle_contract() -> None:
     frontmatter = _frontmatter(_AGENT_PATH)
     tools = frontmatter["tools"]
     assert isinstance(tools, list)
-    assert {"ob-knowledge/register_knowledge_source", "ob-knowledge/delete_knowledge_source"} <= set(tools)
+    assert {"owlbear-knowledge/register_knowledge_source", "owlbear-knowledge/delete_knowledge_source"} <= set(tools)
 
     agent = _AGENT_PATH.read_text(encoding="utf-8")
     for field in ("id", "name", "state", "kind", "scope"):
@@ -98,12 +98,30 @@ def test_shipped_role_and_prompt_declare_source_lifecycle_contract() -> None:
         assert declaration in prompt
 
 
+def test_knowledge_ingestor_uses_canonical_platform_identities() -> None:
+    tools = _frontmatter(_AGENT_PATH)["tools"]
+    assert isinstance(tools, list)
+    assert {
+        "owlbear-browser/acquire",
+        "owlbear-memory/recall_memory",
+        "owlbear-memory/save_memory",
+    } <= set(tools)
+    assert all(not tool.startswith("ob-") for tool in tools)
+
+
+def test_handbook_documents_current_server_and_storage_contract() -> None:
+    handbook = _HANDBOOK_PATH.read_text(encoding="utf-8")
+    assert "`owlbear-knowledge` MCP server" in handbook
+    assert "`.owlbear/knowledge/local.db`" in handbook
+    assert "`.owlbear/knowledge/vectors`" in handbook
+    assert "KNOWLEDGE_TOOLS_EXCLUDE" not in handbook
+
+
 def test_handbook_documents_current_source_contract_and_valid_payloads() -> None:
     handbook = _HANDBOOK_PATH.read_text(encoding="utf-8")
     for declaration in (
         "### register_knowledge_source",
         "### delete_knowledge_source",
-        "KNOWLEDGE_TOOLS_EXCLUDE",
         "Agent tool allowlists own callability",
         "purge summary with `status`, `completed_steps`, `failed_step`, `error`, `source`, `content`, `enrichment`, and `graph`",
     ):
@@ -176,7 +194,7 @@ def test_store_rejects_outer_and_config_kind_mismatch() -> None:
 
 @pytest.mark.asyncio
 async def test_live_mcp_registry_exposes_source_lifecycle_tools() -> None:
-    from owlbear_mcp_knowledge.server import mcp
+    from owlbear_knowledge_mcp.server import mcp
 
     names = {tool.name for tool in await mcp.list_tools()}
     assert names >= {"register_knowledge_source", "delete_knowledge_source"}

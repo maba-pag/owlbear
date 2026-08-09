@@ -6,7 +6,7 @@ user-invocable: false
 
 # Decision And Action Requests
 
-Use this handbook when an acquired Delivery worker identifies one user-owned choice or action that
+Use this handbook when an acquired Delivery worker identifies one authority-compatible choice or action that
 blocks its active outcome. A request is a durable graph dependency, not a general error report.
 
 ## Choose The Request Kind
@@ -29,7 +29,9 @@ The active Planner or Builder owns one `BlockDelivery` transition. Populate its 
 - `kind` — `decision` or `action`;
 - `outcome_id` — the active outcome;
 - `summary` — the exact bounded choice or action;
-- `options` — two or more unique `{option_id, label}` entries for a decision, empty for an action;
+- `options` — unique `{option_id, label}` entries for a decision, empty for an action. Prefer two or
+   more genuine alternatives; one concrete recommended proposal is valid when free text can reject,
+   modify, or replace it. Never invent a meaningless second option;
 - `resolution` — absent on creation.
 
 The enclosing block supplies:

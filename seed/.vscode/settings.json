@@ -5,6 +5,7 @@
     ".owlbear/agents": true,
     "{{owlbear_rel_path}}/share/agents": true
   },
+  "chat.agentHost.copilot.toolSearch.enabled": true,
   "chat.agentSkillsLocations": {
     ".owlbear/skills": true,
     "{{owlbear_rel_path}}/share/skills": true
@@ -29,8 +30,10 @@
     "Test-Path": true,
     "uv run coverage": true,
     "uv run eslint-fix": true,
+    "uv run help": true,
     "uv run lint": true,
-    "uv run lint-all": true,
+    "uv run lint --all": true,
+    "uv run lint-full": true,
     "uv run megalint": true,
     "uv run pytest": true,
     "uv run python": true,

@@ -10,22 +10,19 @@ const INDEX_MJS_PATH = join(
   "index.mjs",
 );
 
+const OUTPUT_DIR = globalThis.process.env.PDS_OUTPUT_DIR
+  ?? join(globalThis.process.cwd(), "public", "porsche-design-system");
+
 const COMPONENTS_DIR = join(
-  globalThis.process.cwd(),
-  "public",
-  "porsche-design-system",
+  OUTPUT_DIR,
   "components",
 );
 const ICONS_DIR = join(
-  globalThis.process.cwd(),
-  "public",
-  "porsche-design-system",
+  OUTPUT_DIR,
   "icons",
 );
 const CREST_DIR = join(
-  globalThis.process.cwd(),
-  "public",
-  "porsche-design-system",
+  OUTPUT_DIR,
   "crest",
 );
 

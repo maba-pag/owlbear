@@ -181,7 +181,7 @@ Agent files must NOT contain:
 
 - Step-by-step procedures → belongs in the owning workflow skill
 - Commit discipline → belongs in `r-workspace-governance`
-- Command templates (MCP kanban tools, git) → belongs in the skill's output template
+- Command templates (Delivery MCP tools, git) → belongs in the skill's output template
 - Verbatim copies of skill checklist content → reference the skill instead
 - Shared protocols, red flags, or rules → belong in the matching shared skill
 
@@ -264,7 +264,7 @@ Commit per `r-workspace-governance` → Commit Discipline.
 **Workflow skills must NOT contain:**
 
 - Commit boilerplate (reference `r-workspace-governance`)
-- MCP kanban tools Commands table (commands appear inline where used)
+- Delivery MCP tools Commands table (commands appear inline where used)
 - Generic lifecycle tool syntax (the owning workflow or runtime contract defines it)
 
 ### Rules Skill Structure

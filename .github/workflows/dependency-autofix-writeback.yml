@@ -1,0 +1,213 @@
+---
+name: Dependency autofix writeback
+
+"on":
+  workflow_run:
+    workflows:
+      - Dependency verification
+    types:
+      - completed
+
+concurrency:
+  group: dependency-autofix-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inspect:
+    name: Inspect autofix candidate
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      eligible: ${{ steps.inspect.outputs.eligible }}
+    steps:
+      - name: Verify source jobs and artifact
+        id: inspect
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          echo "eligible=false" >> "$GITHUB_OUTPUT"
+          jobs="$(gh api "repos/$REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100")"
+
+          bad_jobs="$(
+            jq '[.jobs[]
+              | select(.name != "Verify dependency update")
+              | select(.conclusion != "success" and .conclusion != "skipped")] | length' <<< "$jobs"
+          )"
+          [ "$bad_jobs" -eq 0 ] || exit 0
+
+          gate="$(
+            jq '[.jobs[]
+              | select(.name == "Verify dependency update" and .conclusion == "failure")] | length' <<< "$jobs"
+          )"
+          [ "$gate" -eq 1 ] || exit 0
+
+          native_check="$(
+            jq '[.jobs[] | select(.name == "Prepare autofix candidate") | .steps[]
+              | select(.name == "Check native fixed tree" and .conclusion == "success")] | length' <<< "$jobs"
+          )"
+          megalinter_check="$(
+            jq '[.jobs[] | select(.name == "Prepare autofix candidate") | .steps[]
+              | select(.name == "Apply MegaLinter fixes and checks" and .conclusion == "success")] | length' <<< "$jobs"
+          )"
+          [ "$native_check" -eq 1 ] || exit 0
+          [ "$megalinter_check" -eq 1 ] || exit 0
+
+          artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100")"
+          candidates="$(
+            jq '[.artifacts[]
+              | select(.name == "dependency-autofix-candidate" and .expired == false)] | length' <<< "$artifacts"
+          )"
+          [ "$candidates" -eq 1 ] || exit 0
+          echo "eligible=true" >> "$GITHUB_OUTPUT"
+
+  writeback:
+    name: Write verified dependency fixes
+    needs: inspect
+    if: needs.inspect.outputs.eligible == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Download verified autofix candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: dependency-autofix-candidate
+          path: ${{ runner.temp }}/autofix
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate candidate identity
+        env:
+          EXPECTED_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+          EXPECTED_RUN_ID: ${{ github.event.workflow_run.id }}
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "autofix"
+          manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+          patch_digest = hashlib.sha256((root / "autofix.patch").read_bytes()).hexdigest()
+          expected = {
+              "head_branch": os.environ["EXPECTED_BRANCH"],
+              "head_repository": os.environ["EXPECTED_REPOSITORY"],
+              "head_sha": os.environ["EXPECTED_SHA"],
+              "run_id": int(os.environ["EXPECTED_RUN_ID"]),
+          }
+          for key, value in expected.items():
+              if manifest.get(key) != value:
+                  raise SystemExit(f"candidate {key} does not match source run")
+          if manifest.get("patch_sha256") != patch_digest:
+              raise SystemExit("candidate patch digest does not match manifest")
+          if manifest.get("fix_mode") not in {"safe", "unsafe"}:
+              raise SystemExit("candidate fix mode is invalid")
+
+          env_file = Path(os.environ["GITHUB_ENV"])
+          with env_file.open("a", encoding="utf-8") as output:
+              output.write(f"FIX_MODE={manifest['fix_mode']}\n")
+              output.write(f"HEAD_BRANCH={manifest['head_branch']}\n")
+              output.write(f"HEAD_SHA={manifest['head_sha']}\n")
+              output.write(f"PR_NUMBER={manifest['pr_number']}\n")
+          PY
+
+      - name: Confirm pull request still authorizes writeback
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          pr="$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER")"
+          [ "$(jq -r .state <<< "$pr")" = open ]
+          [ "$(jq -r .head.sha <<< "$pr")" = "$HEAD_SHA" ]
+          [ "$(jq -r .head.ref <<< "$pr")" = "$HEAD_BRANCH" ]
+          [ "$(jq -r .head.repo.full_name <<< "$pr")" = "$REPOSITORY" ]
+          jq -e '.labels | any(.name == "dependencies")' <<< "$pr" >/dev/null
+          if [ "$FIX_MODE" = unsafe ]; then
+            jq -e '.labels | any(.name == "autofix-unsafe")' <<< "$pr" >/dev/null
+          else
+            jq -e '.labels | any(.name == "autofix")' <<< "$pr" >/dev/null
+          fi
+
+      - name: Checkout exact pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          fetch-depth: 0
+
+      - name: Apply candidate patch
+        run: |
+          git apply --check --binary "$RUNNER_TEMP/autofix/autofix.patch"
+          git apply --binary "$RUNNER_TEMP/autofix/autofix.patch"
+
+      - name: Enforce writeback path and mode policy
+        run: |
+          python3 - <<'PY'
+          import subprocess
+
+          raw = subprocess.check_output(["git", "diff", "--raw", "-z", "--no-renames"])
+          fields = raw.split(b"\0")
+          if fields and fields[-1] == b"":
+              fields.pop()
+          if not fields or len(fields) % 2:
+              raise SystemExit("candidate produced an invalid or empty diff")
+
+          for index in range(0, len(fields), 2):
+              metadata = fields[index].decode("ascii").split()
+              path = fields[index + 1].decode("utf-8")
+              if len(metadata) != 5:
+                raise SystemExit(f"writeback contains malformed Git metadata: {path}")
+              old_mode = metadata[0].removeprefix(":")
+              new_mode = metadata[1]
+              status = metadata[4]
+              generated = path.startswith("serve/cockpit/web/public/porsche-design-system/")
+
+              if path == ".gitmodules" or path.startswith(".github/workflows/"):
+                  raise SystemExit(f"writeback cannot modify protected path: {path}")
+              if old_mode != new_mode and not (old_mode == "000000" and new_mode == "100644"):
+                  raise SystemExit(f"writeback cannot change file mode: {path}")
+              if new_mode in {"120000", "160000"} or old_mode in {"120000", "160000"}:
+                  raise SystemExit(f"writeback cannot contain links or submodules: {path}")
+              if status in {"A", "D"} and not generated:
+                  raise SystemExit(f"writeback cannot add or delete non-generated path: {path}")
+              if status not in {"A", "D", "M"}:
+                  raise SystemExit(f"writeback contains unsupported status {status}: {path}")
+          PY
+
+      - name: Commit and push verified fixes
+        env:
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          SOURCE_RUN_URL="$SERVER_URL/$REPOSITORY/actions/runs/$RUN_ID"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config core.hooksPath /dev/null
+          git add --all
+          git commit -m "chore: apply dependency autofixes" -m "Verified by $SOURCE_RUN_URL"
+          git push origin "HEAD:$HEAD_BRANCH"
+
+      - name: Explain follow-up verification
+        run: |
+          {
+            echo "## Dependency autofix written back"
+            echo
+            echo "A new pull-request verification run was requested for the committed SHA."
+            echo "GitHub may require a maintainer to approve that run because this push used GITHUB_TOKEN."
+          } >> "$GITHUB_STEP_SUMMARY"

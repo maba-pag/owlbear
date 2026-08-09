@@ -62,6 +62,7 @@ def package_json_data() -> dict[str, object]:
 
 
 @pytest.mark.slow
+@pytest.mark.cockpit
 @pytest.mark.timeout(540)
 @pytest.mark.xdist_group("npm_subprocess")
 class TestFromAC_CockpitPdsV4BuildCompatibility:
@@ -77,6 +78,7 @@ class TestFromAC_CockpitPdsV4BuildCompatibility:
 
 
 @pytest.mark.slow
+@pytest.mark.cockpit
 @pytest.mark.timeout(540)
 @pytest.mark.xdist_group("npm_subprocess")
 class TestFromAC_PdsV4TypeContracts:
@@ -109,6 +111,7 @@ class TestFromAC_PdsV4TypeContracts:
 
 
 @pytest.mark.slow
+@pytest.mark.cockpit
 @pytest.mark.timeout(540)
 @pytest.mark.xdist_group("npm_subprocess")
 class TestFromAC_PendingDrResolveModalBodyContract:

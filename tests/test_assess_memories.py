@@ -100,25 +100,23 @@ class TestToolRegistration:
     """AC1: assess_memories is importable and validates assessments/task_id/bucket."""
 
     def test_assess_memories_importable_from_tools(self) -> None:
-        """assess_memories can be imported from owlbear_mcp_memory.tools."""
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        """assess_memories can be imported from owlbear_memory_mcp.tools."""
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         assert callable(assess_memories)
 
-    def test_assess_memories_registered_on_mcp_server(self) -> None:
+    @pytest.mark.asyncio
+    async def test_assess_memories_registered_on_mcp_server(self) -> None:
         """assess_memories must appear in the MCP server tool registry.
 
         Directly importing from tools.py is insufficient — removing the @mcp.tool
         decorator in server.py would leave tool-import tests green. This test
-        introspects owlbear_mcp_memory.server.mcp to confirm the server-side
+        introspects owlbear_memory_mcp.server.mcp to confirm the server-side
         registration is present.
         """
-        from owlbear_mcp_memory.server import mcp  # noqa: PLC0415
+        from owlbear_memory_mcp.server import mcp  # noqa: PLC0415
 
-        registered_names = [
-            getattr(t, "name", None)
-            for t in mcp._tool_manager.list_tools()  # noqa: SLF001
-        ]
+        registered_names = [tool.name for tool in await mcp.list_tools()]
         assert "assess_memories" in registered_names, (
             f"assess_memories not found in MCP server tool registry; registered: {registered_names}"
         )
@@ -126,8 +124,8 @@ class TestToolRegistration:
     @pytest.mark.asyncio
     async def test_empty_assessments_list_raises_tool_error(self, tmp_path: Path) -> None:
         """Empty assessments list raises ToolError immediately (before any engine call)."""
-        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine)
@@ -138,8 +136,8 @@ class TestToolRegistration:
     @pytest.mark.asyncio
     async def test_empty_task_id_raises_tool_error(self, tmp_path: Path) -> None:
         """Empty string task_id raises ToolError."""
-        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(_ID_APPROVED, "approved")
@@ -157,8 +155,8 @@ class TestToolRegistration:
     @pytest.mark.asyncio
     async def test_whitespace_only_task_id_raises_tool_error(self, tmp_path: Path) -> None:
         """Whitespace-only task_id raises ToolError."""
-        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(_ID_APPROVED, "approved")
@@ -176,8 +174,8 @@ class TestToolRegistration:
     @pytest.mark.asyncio
     async def test_invalid_bucket_raises_tool_error(self, tmp_path: Path) -> None:
         """Invalid bucket value raises ToolError, not a per-item failure."""
-        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine)
@@ -192,8 +190,8 @@ class TestToolRegistration:
     @pytest.mark.asyncio
     async def test_invalid_bucket_error_includes_allowed_values(self, tmp_path: Path) -> None:
         """ToolError from invalid bucket includes allowed values in the message."""
-        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine)
@@ -212,8 +210,8 @@ class TestToolRegistration:
     @pytest.mark.asyncio
     async def test_invalid_bucket_aborts_entire_batch_not_per_item(self, tmp_path: Path) -> None:
         """Invalid bucket aborts the entire batch; valid items before it are not processed."""
-        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(_ID_APPROVED, "approved", outstanding_count=0)
@@ -240,8 +238,8 @@ class TestToolRegistration:
     @pytest.mark.asyncio
     async def test_non_dict_item_in_assessments_raises_tool_error(self, tmp_path: Path) -> None:
         """Non-dict item in assessments list raises ToolError (batch aborts, not per-entry failure)."""
-        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine)
@@ -256,8 +254,8 @@ class TestToolRegistration:
     @pytest.mark.asyncio
     async def test_item_missing_bucket_key_raises_tool_error(self, tmp_path: Path) -> None:
         """Dict item missing 'bucket' key raises ToolError (batch aborts, not per-entry failure)."""
-        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine)
@@ -272,8 +270,8 @@ class TestToolRegistration:
     @pytest.mark.asyncio
     async def test_item_missing_entry_id_key_raises_tool_error(self, tmp_path: Path) -> None:
         """Dict item missing 'entry_id' key raises ToolError (batch aborts, not per-entry failure)."""
-        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine)
@@ -288,7 +286,7 @@ class TestToolRegistration:
     @pytest.mark.asyncio
     async def test_all_four_valid_bucket_values_accepted(self, tmp_path: Path) -> None:
         """All four valid bucket values complete without ToolError on a valid approved entry."""
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine)
@@ -533,7 +531,7 @@ class TestFactuallyWrongPath:
     @pytest.mark.asyncio
     async def test_factually_wrong_transitions_approved_to_contested(self, tmp_path: Path) -> None:
         """factually_wrong assessment on an approved entry transitions state to contested."""
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(_ID_APPROVED, "approved")
@@ -553,7 +551,7 @@ class TestFactuallyWrongPath:
     @pytest.mark.asyncio
     async def test_factually_wrong_does_not_increment_any_counter(self, tmp_path: Path) -> None:
         """factually_wrong does not change outstanding/unremarkable/didnt_use counters."""
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(
@@ -581,7 +579,7 @@ class TestFactuallyWrongPath:
     @pytest.mark.asyncio
     async def test_factually_wrong_does_not_change_score(self, tmp_path: Path) -> None:
         """factually_wrong does not recompute or change the score field."""
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         initial_score = 0.95
@@ -602,7 +600,7 @@ class TestFactuallyWrongPath:
     @pytest.mark.asyncio
     async def test_factually_wrong_delegates_to_record_factually_wrong_with_task_id(self, tmp_path: Path) -> None:
         """assess_memories calls record_factually_wrong with the supplied task_id."""
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(_ID_APPROVED, "approved")
@@ -624,7 +622,7 @@ class TestFactuallyWrongPath:
     @pytest.mark.asyncio
     async def test_factually_wrong_passes_entry_updated_at_as_expected_updated_at(self, tmp_path: Path) -> None:
         """assess_memories passes entry.updated_at as expected_updated_at to record_factually_wrong."""
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(_ID_APPROVED, "approved", updated_at=_TS)
@@ -645,7 +643,7 @@ class TestFactuallyWrongPath:
     @pytest.mark.asyncio
     async def test_factually_wrong_non_voteable_produces_per_item_failure(self, tmp_path: Path) -> None:
         """factually_wrong on non-voteable (pending) produces failure; other items in batch continue."""
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         pending_entry = _make_entry(_ID_PENDING, "pending")
@@ -683,7 +681,7 @@ class TestBatchSemantics:
     @pytest.mark.asyncio
     async def test_return_value_has_results_key(self, tmp_path: Path) -> None:
         """Return value is a dict containing a 'results' key."""
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(_ID_APPROVED, "approved")
@@ -703,7 +701,7 @@ class TestBatchSemantics:
     @pytest.mark.asyncio
     async def test_success_result_has_entry_id_and_success_true(self, tmp_path: Path) -> None:
         """Successful result contains entry_id and success=True."""
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(_ID_APPROVED, "approved")
@@ -725,7 +723,7 @@ class TestBatchSemantics:
     @pytest.mark.asyncio
     async def test_results_list_length_equals_assessments_count(self, tmp_path: Path) -> None:
         """results list has exactly one element per assessment input item."""
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry1 = _make_entry(_ID_APPROVED, "approved")
@@ -749,7 +747,7 @@ class TestBatchSemantics:
     @pytest.mark.asyncio
     async def test_nonexistent_entry_produces_failure_with_error_message(self, tmp_path: Path) -> None:
         """Non-existent entry_id produces failure result with success=False and non-empty error."""
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine)
@@ -770,7 +768,7 @@ class TestBatchSemantics:
     @pytest.mark.asyncio
     async def test_non_voteable_state_produces_per_item_failure(self, tmp_path: Path) -> None:
         """Non-voteable state (pending) produces failure result with success=False."""
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(_ID_PENDING, "pending")
@@ -792,7 +790,7 @@ class TestBatchSemantics:
     @pytest.mark.asyncio
     async def test_concurrency_error_produces_per_item_failure(self, tmp_path: Path) -> None:
         """ConcurrencyError on one item produces failure; other items in batch continue."""
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         approved = _make_entry(_ID_APPROVED, "approved")
@@ -831,7 +829,7 @@ class TestBatchSemantics:
     @pytest.mark.asyncio
     async def test_one_per_item_failure_does_not_abort_remaining_assessments(self, tmp_path: Path) -> None:
         """A missing entry failure does not abort processing of subsequent valid entries."""
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(_ID_APPROVED, "approved")
@@ -860,7 +858,7 @@ class TestBatchSemantics:
     @pytest.mark.asyncio
     async def test_successful_assessment_persisted_to_disk(self, tmp_path: Path) -> None:
         """Successful counter increment is durable: visible via a fresh engine instance."""
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(_ID_APPROVED, "approved", outstanding_count=0)
@@ -881,7 +879,7 @@ class TestBatchSemantics:
     @pytest.mark.asyncio
     async def test_failed_entry_leaves_disk_state_unchanged(self, tmp_path: Path) -> None:
         """Per-item failure (non-voteable) leaves disk entry unmodified."""
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         entry = _make_entry(_ID_PENDING, "pending", outstanding_count=0)
@@ -903,7 +901,7 @@ class TestBatchSemantics:
     @pytest.mark.asyncio
     async def test_mixed_batch_partial_success_all_results_returned(self, tmp_path: Path) -> None:
         """Mixed batch (one missing, one valid) returns results for both entries."""
-        from owlbear_mcp_memory.tools import assess_memories  # noqa: PLC0415
+        from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
         approved = _make_entry(_ID_APPROVED, "approved")

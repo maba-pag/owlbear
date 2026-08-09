@@ -168,7 +168,7 @@ class TestIdeasPut:
         assert ideas_file.read_text(encoding="utf-8") == "First write."
 
     def test_put_uses_atomic_write(self, client: TestClient, ideas_file: Path) -> None:
-        """AC2: PUT delegates file write to atomic_write from owlbear_kanban.storage_io."""
+        """AC2: PUT delegates file write to atomic_write from owlbear_delivery.storage_io."""
         with patch("owlbear_cockpit.routes.ideas.atomic_write") as mock_aw:
             response = client.put("/api/ideas", json={"content": "atomic content"})
         assert response.status_code == 204

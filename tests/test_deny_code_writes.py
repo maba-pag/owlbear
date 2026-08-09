@@ -1,4 +1,4 @@
-"""Guardrail tests that keep Kanban storage test writes scoped to tmp_path.
+"""Guardrail tests that keep Delivery storage test writes scoped to tmp_path.
 
 These checks are static and intentionally conservative: write targets must be
 provably derived from tmp_path-like roots and must not escape via parent hops.
@@ -10,7 +10,7 @@ import ast
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).parent.parent
-_KANBAN_TESTS = _REPO_ROOT / "serve" / "kanban" / "tests"
+_DELIVERY_TESTS = _REPO_ROOT / "serve" / "delivery" / "tests"
 _TARGET_PATTERNS = (
     "test_runtime_transaction.py",
     "test_snapshot.py",
@@ -24,7 +24,7 @@ _WRITE_METHODS = {"write_text", "write_bytes", "touch", "mkdir", "rmdir", "unlin
 def _target_files() -> list[Path]:
     files: set[Path] = set()
     for pattern in _TARGET_PATTERNS:
-        files.update(_KANBAN_TESTS.glob(pattern))
+        files.update(_DELIVERY_TESTS.glob(pattern))
     return sorted(files)
 
 
@@ -32,7 +32,7 @@ def _name_is_tmp_root(name: str) -> bool:
     return name in {
         "tmp_path",
         "base_dir",
-        "kanban_dir",
+        "delivery_dir",
         "tasks_dir",
         "archive_dir",
         "quarantine_dir",
@@ -131,7 +131,7 @@ def _collect_safe_names(tree: ast.AST) -> set[str]:  # noqa: C901
     safe_names = {
         "tmp_path",
         "base_dir",
-        "kanban_dir",
+        "delivery_dir",
         "tasks_dir",
         "archive_dir",
         "quarantine_dir",
@@ -181,11 +181,11 @@ def _extract_write_target(node: ast.Call) -> ast.AST | None:
 
 
 class TestDenyCodeWrites:
-    def test_kanban_storage_test_files_exist(self) -> None:
+    def test_delivery_storage_test_files_exist(self) -> None:
         files = _target_files()
-        assert files, "Expected storage tests under serve/kanban/tests/"
+        assert files, "Expected storage tests under serve/delivery/tests/"
 
-    def test_kanban_storage_tests_write_only_to_tmp_path_derived_targets(self) -> None:  # noqa: C901
+    def test_delivery_storage_tests_write_only_to_tmp_path_derived_targets(self) -> None:  # noqa: C901
         violations: list[str] = []
 
         for path in _target_files():
@@ -209,7 +209,7 @@ class TestDenyCodeWrites:
                     violations.append(f"{rel}:{node.lineno} -> not tmp_path-derived: {target_src}")
 
         assert not violations, (
-            "Kanban storage tests must not write outside tmp_path; "
+            "Delivery storage tests must not write outside tmp_path; "
             "found non-compliant write targets:\n" + "\n".join(violations)
         )
 

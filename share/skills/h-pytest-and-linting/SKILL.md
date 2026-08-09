@@ -104,14 +104,21 @@ Apply these only when the target is the OwlBear repository or matching configura
 
 | Command | Scope |
 |---------|-------|
-| `uv run lint [FILE ...]` | Default hooks on explicit files, or staged files when omitted |
-| `uv run lint-all` | Default hooks on all files |
-| `uv run megalint` | Full CI parity: all files through MegaLinter plus frontend type checking |
+| `uv run lint [FILE ...]` | Default hooks on explicit files, or staged files when omitted; safe fixes enabled |
+| `uv run lint --all` | Default hooks on all files with safe fixes |
+| `uv run typecheck` | Cockpit frontend TypeScript check |
+| `uv run megalint` | MegaLinter only, with safe fixes enabled |
+| `uv run lint-full` | Default hooks, CSS, HTML, TypeScript, and MegaLinter, with safe fixes enabled |
 
 Use these workspace entry points instead of invoking individual linters manually. `lint` and
-`lint-all` may auto-fix files through Ruff, markdownlint, and general file hooks; inspect the diff
-afterward. Agents should pass their changed paths explicitly to `lint`; no-argument `lint`, `lint-all`,
-and `megalint` are broad user workflows rather than focused agent validation commands.
+`lint --all` may auto-fix files through Ruff, markdownlint, and general file hooks; inspect the diff
+afterward. Agents should pass their changed paths explicitly to `lint`; no-argument `lint`, `lint --all`,
+`megalint`, and `lint-full` are broad user workflows rather than focused agent validation commands.
+
+`lint`, `megalint`, and `lint-full` accept one optional fix-policy flag. `--no-fix`
+replaces mutating hooks with check-only equivalents. `--unsafe-fixes` enables Ruff unsafe fixes and
+Stylelint lax fixes in addition to the default deterministic fixes. The two flags are mutually
+exclusive; review the resulting diff whenever unsafe fixes are enabled.
 
 | Marker | Local meaning |
 |--------|---------------|

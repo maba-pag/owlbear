@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   PButton,
+  PButtonPure,
   PHeading,
   PIcon,
   PInputText,
@@ -11,13 +12,22 @@ import {
 } from '@porsche-design-system/components-react'
 import {
   WorkItemApiError,
+  type BackwardMovePreview,
   type DeliveryRequest,
   type DeliveryRequestResolution,
+  type WorkItemCardView,
   type WorkItemDetailResponse,
-  type WorkItemProjection,
   type WorkItemStage,
+  type DeliveryWorkerRole,
 } from '../api/workItems'
-import { ATTENTION_LABELS } from '../attentionVocabulary'
+import CopyCommand from './CopyCommand'
+import {
+  canHandOffIntegration,
+  hasOptionalManualAction,
+  integrationHandoffPrompt,
+  PROGRESS_STAGE_LABELS,
+  workItemStatusLabel,
+} from './workItemPresentation'
 
 type FieldValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }
 
@@ -28,27 +38,49 @@ function fieldValue(event: FieldValueEvent): string {
 
 interface WorkItemDetailProps {
   detail: WorkItemDetailResponse
-  projection: WorkItemProjection
   pendingAction: string | null
   actionError: Error | null
   actionResult: string | null
   onAnswerRequest: (requestId: string, resolution: DeliveryRequestResolution) => Promise<void>
   onClearBlock: (blockId: string, note: string, locators: string[]) => Promise<void>
   onRecoverClaim: (attemptId: string, claimId: string) => Promise<void>
-  onMoveBackward: (target: WorkItemStage, reason: string) => Promise<void>
+  onPreviewBackward: (target: WorkItemStage) => Promise<BackwardMovePreview | null>
+  onMoveBackward: (target: WorkItemStage, reason: string, snapshotVersion: string) => Promise<void>
   onRetryIntegration: () => Promise<void>
 }
 
-function DetailHeader({ detail, projection }: Pick<WorkItemDetailProps, 'detail' | 'projection'>) {
+const WORKER_ROLE_LABELS: Record<DeliveryWorkerRole, string> = {
+  planner: 'Planner',
+  builder: 'Builder',
+  'assembly-reviewer': 'Assembly reviewer',
+  'integration-repairer': 'Integration repairer',
+}
+
+const REQUEST_KIND_LABELS: Record<DeliveryRequest['kind'], string> = {
+  decision: 'Decision',
+  action: 'Action',
+}
+
+const TASK_STATUS_LABELS: Record<WorkItemDetailResponse['item']['tasks'][number]['status'], string> = {
+  pending: 'Pending',
+  active: 'Active',
+  reviewed: 'Reviewed',
+}
+
+function DetailHeader({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
+  const { card } = detail.item
   return (
     <div className="flex min-w-0 flex-wrap items-start justify-between gap-static-sm">
       <div className="min-w-0">
-        <span className="text-xs font-semibold text-contrast-medium">{projection.change_id}</span>
-        <PHeading id="work-detail-heading" tag="h2" size="lg">{projection.title}</PHeading>
+        <span className="text-xs text-contrast-medium">
+          <strong className="text-primary">{detail.item.change_title}</strong>
+          {' / '}
+          {card.scope === 'outcome' ? <code>{card.work_item_id}</code> : 'Change Integration'}
+        </span>
+        <PHeading id="work-detail-heading" tag="h2" size="lg">{card.scope === 'outcome' ? card.title : 'Integration'}</PHeading>
       </div>
       <div className="flex flex-wrap gap-static-xs">
-        <PTag compact>{detail.operator.stage}</PTag>
-        <PTag compact>{ATTENTION_LABELS[projection.attention]}</PTag>
+        <PTag compact>{workItemStatusLabel(card)}</PTag>
       </div>
     </div>
   )
@@ -75,22 +107,22 @@ function RequestControl({ request, pending, onAnswer }: {
   return (
     <div className="mt-static-sm grid gap-static-sm">
       {request.kind === 'decision' ? (
-        <label className="grid gap-static-xs text-sm font-semibold">
-          Decision
-          <PSelect
-            name={`request-${request.request_id}-option`}
-            value={selectedOptionId}
-            disabled={pending}
-            onChange={(event) => setSelectedOptionId(fieldValue(event as FieldValueEvent))}
-          >
-            <PSelectOption value="">Select an option</PSelectOption>
-            {request.options.map((option) => (
-              <PSelectOption key={option.option_id} value={option.option_id}>{option.label}</PSelectOption>
-            ))}
-          </PSelect>
-        </label>
+        <PSelect
+          compact
+          label="Decision"
+          name={`request-${request.request_id}-option`}
+          value={selectedOptionId}
+          disabled={pending}
+          onChange={(event) => setSelectedOptionId(fieldValue(event as FieldValueEvent))}
+        >
+          <PSelectOption value="">Select an option</PSelectOption>
+          {request.options.map((option) => (
+            <PSelectOption key={option.option_id} value={option.option_id}>{option.label}</PSelectOption>
+          ))}
+        </PSelect>
       ) : null}
       <PInputText
+        compact
         name={`request-${request.request_id}-answer`}
         label={request.kind === 'decision' ? 'Additional response' : 'Action response'}
         value={responseText}
@@ -98,7 +130,7 @@ function RequestControl({ request, pending, onAnswer }: {
         onChange={(event) => setResponseText(fieldValue(event as FieldValueEvent))}
         onInput={(event) => setResponseText(fieldValue(event as FieldValueEvent))}
       />
-      <PButton type="button" compact disabled={!canSubmit} onClick={() => void answer()}>
+      <PButton className="w-fit" type="button" compact disabled={!canSubmit} onClick={() => void answer()}>
         {pending ? 'Submitting...' : 'Submit answer'}
       </PButton>
     </div>
@@ -106,28 +138,29 @@ function RequestControl({ request, pending, onAnswer }: {
 }
 
 function RequestsSection({ detail, pendingAction, onAnswerRequest }: WorkItemDetailProps) {
-  const requests = detail.operator.requests
+  if (detail.item.card.scope !== 'outcome') return null
+  const requests = detail.item.requests
+  if (requests.length === 0) return null
   return (
-    <section className="border-t border-contrast-low pt-static-md" aria-labelledby="work-requests-heading">
+    <section aria-labelledby="work-requests-heading">
       <PHeading id="work-requests-heading" tag="h3" size="md">Requests</PHeading>
       <div className="mt-static-sm grid gap-static-md">
         {requests.map((request) => (
           <article key={request.request_id} className="border-l-2 border-info pl-static-sm">
             <div className="flex flex-wrap items-center justify-between gap-static-xs">
               <strong className="text-sm">{request.summary}</strong>
-              <PTag compact>{request.kind}</PTag>
+              <PTag compact>{REQUEST_KIND_LABELS[request.kind]}</PTag>
             </div>
             <RequestControl request={request} pending={pendingAction !== null} onAnswer={onAnswerRequest} />
           </article>
         ))}
-        {requests.length === 0 ? <p className="text-sm text-contrast-medium">No pending requests.</p> : null}
       </div>
     </section>
   )
 }
 
 function BlockSection({ detail, pendingAction, onClearBlock }: WorkItemDetailProps) {
-  const block = detail.operator.block
+  const block = detail.item.block
   const [note, setNote] = useState('')
   const [locator, setLocator] = useState('')
   if (!block) return null
@@ -140,9 +173,9 @@ function BlockSection({ detail, pendingAction, onClearBlock }: WorkItemDetailPro
       <p className="mt-static-xs text-sm text-contrast-medium">Clear when: {block.unblock_condition}</p>
       {requestless && !block.resolution_note ? (
         <div className="mt-static-md grid gap-static-sm">
-          <PInputText name="block-note" label="Operator note" value={note} disabled={pendingAction !== null} onChange={(event) => setNote(fieldValue(event as FieldValueEvent))} onInput={(event) => setNote(fieldValue(event as FieldValueEvent))} />
-          <PInputText name="block-locator" label="Evidence locator" value={locator} disabled={pendingAction !== null} onChange={(event) => setLocator(fieldValue(event as FieldValueEvent))} onInput={(event) => setLocator(fieldValue(event as FieldValueEvent))} />
-          <PButton type="button" compact disabled={!canClear} onClick={() => void onClearBlock(block.block_id, note.trim(), [locator.trim()])}>
+          <PInputText compact name="block-note" label="Operator note" value={note} disabled={pendingAction !== null} onChange={(event) => setNote(fieldValue(event as FieldValueEvent))} onInput={(event) => setNote(fieldValue(event as FieldValueEvent))} />
+          <PInputText compact name="block-locator" label="Evidence locator" value={locator} disabled={pendingAction !== null} onChange={(event) => setLocator(fieldValue(event as FieldValueEvent))} onInput={(event) => setLocator(fieldValue(event as FieldValueEvent))} />
+          <PButton className="w-fit" type="button" compact disabled={!canClear} onClick={() => void onClearBlock(block.block_id, note.trim(), [locator.trim()])}>
             {pendingAction === 'clear' ? 'Clearing...' : 'Clear block'}
           </PButton>
         </div>
@@ -160,7 +193,7 @@ function elapsedAge(startedAt: string): string {
 }
 
 function ClaimSection({ detail, pendingAction, onRecoverClaim }: WorkItemDetailProps) {
-  const claim = detail.operator.active_claim
+  const claim = detail.item.active_claim
   const [confirmOpen, setConfirmOpen] = useState(false)
   if (!claim) return null
   const recover = async () => {
@@ -168,10 +201,10 @@ function ClaimSection({ detail, pendingAction, onRecoverClaim }: WorkItemDetailP
     setConfirmOpen(false)
   }
   return (
-    <section className="border-t border-contrast-low pt-static-md" aria-labelledby="work-claim-heading">
+    <section aria-labelledby="work-claim-heading">
       <PHeading id="work-claim-heading" tag="h3" size="md">Active claim</PHeading>
       <dl className="mt-static-sm grid gap-static-xs text-sm">
-        <div className="flex justify-between gap-static-sm"><dt>Role</dt><dd>{claim.worker_role}</dd></div>
+        <div className="flex justify-between gap-static-sm"><dt>Role</dt><dd>{WORKER_ROLE_LABELS[claim.worker_role]}</dd></div>
         <div className="flex justify-between gap-static-sm"><dt>Started</dt><dd>{elapsedAge(claim.started_at)} ago</dd></div>
         {claim.task_id ? <div className="flex justify-between gap-static-sm"><dt>Task</dt><dd>{claim.task_id}</dd></div> : null}
       </dl>
@@ -195,58 +228,217 @@ function ClaimSection({ detail, pendingAction, onRecoverClaim }: WorkItemDetailP
   )
 }
 
-function AttentionSection({ detail, pendingAction, onRetryIntegration }: WorkItemDetailProps) {
-  const { return_context: returned, recovery_attention: recovery, integration_attention: integration } = detail.operator
-  if (!returned && !recovery && !integration) return null
+function ExceptionalStateSection({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
+  const { return_context: returned, recovery_attention: recovery } = detail.item
+  if (!returned && !recovery) return null
   return (
-    <section className="border-t border-contrast-low pt-static-md" aria-labelledby="work-attention-heading">
-      <PHeading id="work-attention-heading" tag="h3" size="md">Delivery attention</PHeading>
+    <section aria-labelledby="work-attention-heading">
+      <PHeading id="work-attention-heading" tag="h3" size="md">Current exception</PHeading>
       <div className="mt-static-sm grid gap-static-md text-sm">
-        {returned ? <AttentionItem label={`Returned to ${returned.target}`} reason={returned.reason} retry={returned.locators.join(', ')} /> : null}
-        {recovery ? <AttentionItem label="Recovery attention" reason={recovery.reason} retry={recovery.retry_condition} /> : null}
-        {integration ? (
-          <div className="border-l-2 border-warning pl-static-sm">
-            <AttentionItem label={`Integration: ${integration.code}`} reason={integration.diagnostics.join(' ')} retry={integration.retry_condition} />
-            <PButton className="mt-static-sm" type="button" compact disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
-              {pendingAction === 'integration' ? 'Retrying...' : 'Retry Integration'}
-            </PButton>
-          </div>
+        {returned ? (
+          <AttentionItem
+            label={`Returned to ${PROGRESS_STAGE_LABELS[returned.target]}`}
+            reason={returned.reason}
+            retry={returned.target === 'design' ? `Resume /design ${detail.item.card.change_id}.` : undefined}
+            evidence={returned.locators.join(', ')}
+            sourceBoundary={returned.source_boundary}
+          />
         ) : null}
+        {recovery ? <AttentionItem label="Recovery attention" reason={recovery.reason} retry={recovery.retry_condition} /> : null}
       </div>
     </section>
   )
 }
 
-function AttentionItem({ label, reason, retry }: { label: string; reason: string; retry: string }) {
-  return <div><strong>{label}</strong><p>{reason}</p><p className="text-contrast-medium">Next: {retry}</p></div>
+function CourseChangesSection({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
+  const moves = detail.item.operator_moves
+  if (moves.length === 0) return null
+  return (
+    <section aria-labelledby="work-course-changes-heading">
+      <h3 id="work-course-changes-heading" className="text-xs font-semibold uppercase text-contrast-medium">Recorded Change course changes</h3>
+      <ol className="mt-static-sm grid list-decimal gap-static-md pl-static-lg text-sm">
+        {moves.map((move) => (
+          <li key={move.move_id}>
+            <strong>{move.outcome_id} moved back to {PROGRESS_STAGE_LABELS[move.destination]}</strong>
+            <p className="mt-static-xs">{move.reason}</p>
+            <p className="mt-static-xs text-contrast-medium">Reset: {move.invalidated_outcome_ids.join(', ')}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
+}
+
+function AttentionItem({ label, reason, retry, evidence, sourceBoundary }: {
+  label: string
+  reason: string
+  retry?: string
+  evidence?: string
+  sourceBoundary?: string | null
+}) {
+  return <div><strong>{label}</strong><p>{reason}</p>{retry ? <p className="text-contrast-medium">Next: {retry}</p> : null}{evidence ? <p className="text-contrast-medium">Evidence: {evidence}</p> : null}{sourceBoundary ? <p className="text-contrast-medium">Source boundary: {sourceBoundary}</p> : null}</div>
 }
 
 const STAGES: WorkItemStage[] = ['design', 'planning', 'implementation', 'assembly', 'completed']
 
-function BackwardMoveSection({ detail, pendingAction, onMoveBackward }: WorkItemDetailProps) {
-  const available = STAGES.slice(0, STAGES.indexOf(detail.operator.stage))
+function BackwardMoveSection({ detail, pendingAction, onPreviewBackward, onMoveBackward }: WorkItemDetailProps) {
+  const currentStage = detail.item.card.stage
+  const available = currentStage ? STAGES.slice(0, STAGES.indexOf(currentStage)) : []
   const [target, setTarget] = useState<WorkItemStage | ''>('')
   const [reason, setReason] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [preview, setPreview] = useState<BackwardMovePreview | null>(null)
   const canMove = Boolean(target && reason.trim()) && pendingAction === null
-  if (available.length === 0) return null
+  if (detail.item.card.scope !== 'outcome' || available.length === 0) return null
   const move = async () => {
-    if (!target) return
-    await onMoveBackward(target, reason.trim())
+    if (!target || !preview) return
+    await onMoveBackward(target, reason.trim(), preview.snapshot_version)
     setConfirmOpen(false)
   }
+  const review = async () => {
+    if (!target) return
+    const next = await onPreviewBackward(target)
+    if (!next) return
+    setPreview(next)
+    setConfirmOpen(true)
+  }
   return (
-    <section className="border-t border-contrast-low pt-static-md" aria-labelledby="work-move-heading">
-      <PHeading id="work-move-heading" tag="h3" size="md">Move backward</PHeading>
-      <div className="mt-static-sm grid gap-static-sm">
-        <label className="grid gap-static-xs text-sm font-semibold">Earlier stage<PSelect name="backward-stage" value={target} disabled={pendingAction !== null} onChange={(event) => setTarget(fieldValue(event as FieldValueEvent) as WorkItemStage | '')}><PSelectOption value="">Select a stage</PSelectOption>{available.map((stage) => <PSelectOption key={stage} value={stage}>{stage}</PSelectOption>)}</PSelect></label>
-        <PInputText name="backward-reason" label="Reason" value={reason} disabled={pendingAction !== null} onChange={(event) => setReason(fieldValue(event as FieldValueEvent))} onInput={(event) => setReason(fieldValue(event as FieldValueEvent))} />
-        <PButton type="button" compact variant="secondary" disabled={!canMove} onClick={() => setConfirmOpen(true)}>Review backward move</PButton>
+    <details>
+      <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Administrative actions</summary>
+      <div className="mt-static-md">
+      <div className="mt-static-sm flex flex-wrap items-end gap-static-sm">
+        <PSelect compact className="w-48" label="Earlier stage" name="backward-stage" value={target} disabled={pendingAction !== null} onChange={(event) => { setTarget(fieldValue(event as FieldValueEvent) as WorkItemStage | ''); setPreview(null) }}><PSelectOption value="">Select a stage</PSelectOption>{available.map((stage) => <PSelectOption key={stage} value={stage}>{PROGRESS_STAGE_LABELS[stage]}</PSelectOption>)}</PSelect>
+        <PInputText compact className="min-w-48 flex-1" name="backward-reason" label="Reason" value={reason} disabled={pendingAction !== null} onChange={(event) => setReason(fieldValue(event as FieldValueEvent))} onInput={(event) => setReason(fieldValue(event as FieldValueEvent))} />
+        <PButton className="w-fit" type="button" compact variant="secondary" disabled={!canMove} onClick={() => void review()}>{pendingAction === 'preview' ? 'Preparing preview...' : 'Review backward move'}</PButton>
       </div>
       {confirmOpen ? (
         <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm backward move' }}>
-          <div className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary"><PHeading tag="h2" size="lg">Move to {target}</PHeading><p className="text-sm">This resets dependent completed outcomes. {reason.trim()}</p><div className="flex flex-wrap justify-end gap-static-xs"><PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton><PButton type="button" disabled={pendingAction !== null} onClick={() => void move()}>{pendingAction === 'move' ? 'Moving...' : 'Confirm backward move'}</PButton></div></div>
+          <div className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary"><PHeading tag="h2" size="lg">Move to {target ? PROGRESS_STAGE_LABELS[target] : ''}</PHeading><p className="text-sm">The following Outcomes will be reset:</p><ul className="grid list-disc gap-static-xs pl-static-lg text-sm">{preview?.invalidated_outcome_ids.map((outcomeId) => <li key={outcomeId}>{outcomeId}</li>)}</ul><p className="text-sm text-contrast-medium">Reason: {reason.trim()}</p><div className="flex flex-wrap justify-end gap-static-xs"><PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton><PButton type="button" disabled={pendingAction !== null} onClick={() => void move()}>{pendingAction === 'move' ? 'Moving...' : 'Confirm backward move'}</PButton></div></div>
         </PModal>
+      ) : null}
+      </div>
+    </details>
+  )
+}
+
+function SemanticDetail({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
+  const item = detail.item
+  if (item.card.scope !== 'outcome') return null
+  return (
+    <>
+      {item.acceptance.length > 0 ? (
+        <details>
+          <summary id="work-acceptance-heading" className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Acceptance ({item.acceptance.length})</summary>
+          <ol className="mt-static-sm grid list-decimal gap-static-sm pl-static-lg text-sm text-primary">
+            {item.acceptance.map((observation) => <li key={observation}>{observation}</li>)}
+          </ol>
+        </details>
+      ) : null}
+      {item.tasks.length > 0 ? (
+        <details>
+          <summary id="work-evidence-heading" className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Delivery task evidence ({item.tasks.length})</summary>
+          <div className="mt-static-sm grid gap-static-md">
+            {item.tasks.map((task) => (
+              <article key={task.task_id} className="border-l-2 border-contrast-low pl-static-sm text-sm text-primary">
+                <div className="flex flex-wrap items-start justify-between gap-static-xs"><strong>{task.title}</strong><PTag compact>{TASK_STATUS_LABELS[task.status]}</PTag></div>
+                <p className="mt-static-xs">{task.result}</p>
+                {task.completed_commit ? <code className="mt-static-xs inline-block bg-canvas px-static-xs py-1 text-xs text-contrast-medium" title={task.completed_commit}>{task.completed_commit.slice(0, 12)}</code> : null}
+              </article>
+            ))}
+          </div>
+        </details>
+      ) : null}
+      {item.dependencies.length > 0 || item.commitments.length > 0 ? (
+        <details>
+          <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">References</summary>
+          <ol className="mt-static-sm grid list-decimal gap-static-md pl-static-lg text-sm text-primary">
+            {item.dependencies.map((dependency) => <li key={dependency.outcome_id}><strong className="block text-xs">{dependency.outcome_id}</strong>{dependency.title} · {PROGRESS_STAGE_LABELS[dependency.stage]}</li>)}
+            {item.commitments.map((commitment) => <li key={commitment.commitment_id}><strong className="block text-xs">{commitment.commitment_id}</strong>{commitment.statement}</li>)}
+          </ol>
+        </details>
+      ) : null}
+      <details>
+        <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Technical identity</summary>
+        <code className="mt-static-sm block break-all text-xs text-contrast-medium">{item.card.change_id} / {item.card.item_key}</code>
+      </details>
+    </>
+  )
+}
+
+function ConflictedPaths({ paths }: { paths: string[] }) {
+  return <ul className="mt-static-xs grid list-disc gap-static-xs pl-static-lg font-mono text-xs text-contrast-medium">{paths.map((path) => <li key={path}>{path}</li>)}</ul>
+}
+
+function Diagnostics({ lines }: { lines: string[] }) {
+  return (
+    <div className="mt-static-sm min-w-0 max-w-full overflow-x-auto rounded-sm bg-canvas p-static-sm" data-testid="integration-diagnostics-scroll">
+      <pre className="m-0 w-max min-w-full whitespace-pre text-xs text-contrast-medium">{lines.join('\n')}</pre>
+    </div>
+  )
+}
+
+function IntegrationAgentHandoff({ card }: { card: WorkItemCardView }) {
+  const command = integrationHandoffPrompt(card)
+  return (
+    <div className="mt-static-md min-w-0 border-t border-contrast-low pt-static-md">
+      <h4 className="text-xs font-semibold uppercase text-contrast-medium">Copilot resolver</h4>
+      <p className="mt-static-xs max-w-[72ch] text-sm leading-relaxed">Copy this command into a new Copilot chat.</p>
+      <CopyCommand command={command} className="mt-static-sm" />
+    </div>
+  )
+}
+
+function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkItemDetailProps) {
+  const integration = detail.item.integration
+  if (!integration) return null
+  const action = detail.item.card.action
+  const canIntegrate = action.kind === 'integrate-change' || action.kind === 'retry-integration'
+  const operatorRequired = integration.disposition === 'operator-required' && !integration.superseded
+  const agentHandoff = canHandOffIntegration(detail.item.card) && !integration.repair_active
+  const manualOption = hasOptionalManualAction(detail.item.card)
+  return (
+    <section className={operatorRequired ? 'min-w-0 border-l-4 border-warning bg-surface p-static-md' : 'min-w-0 border-l border-contrast-low bg-surface p-static-md'} aria-labelledby="work-integration-heading">
+      <PHeading id="work-integration-heading" tag="h3" size="md">{integration.repair_active ? 'Integration repair' : operatorRequired ? 'Integration requires your attention' : integration.headline}</PHeading>
+      <p className="mt-static-xs text-sm leading-relaxed">{integration.repair_active ? 'A reviewed Integration repair is currently in progress.' : integration.explanation}</p>
+      {!integration.superseded && integration.conflicted_paths.length > 0 ? (
+        <div className="mt-static-sm">
+          <p className="text-xs font-semibold">Conflicting files</p>
+          <ConflictedPaths paths={integration.conflicted_paths} />
+        </div>
+      ) : null}
+      {action.command && !agentHandoff ? (
+        <div className="mt-static-sm flex min-w-0 flex-wrap items-baseline gap-static-xs text-xs text-contrast-medium">
+          <span>Next:</span>
+          <CopyCommand command={action.command} />
+        </div>
+      ) : null}
+      {agentHandoff ? <IntegrationAgentHandoff card={detail.item.card} /> : null}
+      {canIntegrate && manualOption ? (
+        <div className="mt-static-md flex flex-wrap items-center gap-x-static-md gap-y-static-xs">
+          <p className="text-sm">Start it now, or leave it for the next Orchestration session.</p>
+          <PButtonPure type="button" size="xs" color="contrast-medium" icon={action.kind === 'retry-integration' ? 'refresh' : undefined} disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
+            {pendingAction === 'integration' ? 'Working...' : action.kind === 'retry-integration' ? 'Retry now' : 'Integrate now'}
+          </PButtonPure>
+        </div>
+      ) : canIntegrate ? (
+        <PButton className="mt-static-md" type="button" compact icon={action.kind === 'retry-integration' ? 'refresh' : undefined} disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
+          {pendingAction === 'integration' ? 'Working...' : action.label}
+        </PButton>
+      ) : null}
+      {!canIntegrate && !action.command && !integration.repair_active && !agentHandoff && integration.retry_condition ? <p className="mt-static-sm text-xs text-contrast-medium">Next: {integration.retry_condition}</p> : null}
+      {integration.superseded && integration.diagnostics.length > 0 ? (
+        <details className="mt-static-md min-w-0 max-w-full">
+          <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Previous attempt (stale)</summary>
+          <p className="mt-static-sm text-xs text-primary">The previous target produced this evidence. It is retained for context but no longer describes the current Integration attempt.</p>
+          {integration.conflicted_paths.length > 0 ? <ConflictedPaths paths={integration.conflicted_paths} /> : null}
+          <Diagnostics lines={integration.diagnostics} />
+        </details>
+      ) : !integration.superseded && integration.diagnostics.length > 0 ? (
+        <details className="mt-static-md min-w-0 max-w-full">
+          <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Technical evidence</summary>
+          {agentHandoff && integration.retry_condition ? <p className="mt-static-sm text-xs text-primary">Engine resume condition: {integration.retry_condition}</p> : null}
+          <Diagnostics lines={integration.diagnostics} />
+        </details>
       ) : null}
     </section>
   )
@@ -261,17 +453,27 @@ function ActionFeedback({ error, result }: { error: Error | null; result: string
 }
 
 export default function WorkItemDetail(props: WorkItemDetailProps) {
+  const { card } = props.detail.item
   return (
-    <aside className="min-w-0 p-static-lg" aria-labelledby="work-detail-heading" data-testid="work-item-detail">
+    <div className="min-w-0" aria-labelledby="work-detail-heading" data-testid="work-item-detail">
       <div className="grid gap-static-lg">
-        <div><DetailHeader detail={props.detail} projection={props.projection} /><p className="mt-static-sm text-sm leading-relaxed text-contrast-medium">{props.projection.promise}</p></div>
+        <div>
+          <DetailHeader detail={props.detail} />
+          <p className="mt-static-md max-w-[72ch] text-base leading-relaxed">{props.detail.item.promise}</p>
+          <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md py-static-xs text-sm">
+            <dt className="text-contrast-medium">Progress</dt><dd>{card.progress.label}</dd>
+          </dl>
+        </div>
         <ActionFeedback error={props.actionError} result={props.actionResult} />
         <BlockSection {...props} />
         <RequestsSection {...props} />
+        <IntegrationSection {...props} />
+        <CourseChangesSection detail={props.detail} />
+        <SemanticDetail detail={props.detail} />
         <ClaimSection {...props} />
-        <AttentionSection {...props} />
+        <ExceptionalStateSection detail={props.detail} />
         <BackwardMoveSection {...props} />
       </div>
-    </aside>
+    </div>
   )
 }

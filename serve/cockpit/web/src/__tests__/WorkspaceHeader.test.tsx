@@ -28,14 +28,14 @@ describe('WorkspaceHeader', () => {
   it('can render a secondary heading and route actions', () => {
     const { container } = render(
       <WorkspaceHeader
-        title="Kanban"
-        titleId="kanban-board-title"
+        title="Delivery"
+        titleId="delivery-board-title"
         headingLevel={2}
         actions={<button type="button">Filters</button>}
       />,
     )
 
-    expect(container.querySelector('h2#kanban-board-title')?.textContent).toBe('Kanban')
+    expect(container.querySelector('h2#delivery-board-title')?.textContent).toBe('Delivery')
     expect(container.querySelector('[data-testid="workspace-header-actions"]')?.textContent).toContain('Filters')
   })
 

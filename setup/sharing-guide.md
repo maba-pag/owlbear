@@ -152,8 +152,8 @@ organization agent registry as a complement to the local installation.
 | `ValueError` during `init.py` | Ensure owlbear and project are on the same Windows drive |
 | Agents missing after setup | Run `init.py` again; check that `.vscode/settings.json` was created and contains `chat.agentFilesLocations` pointing to the owlbear installation |
 | Cockpit command not found in project | Run `uv run --project ../owlbear cockpit` from the project root instead of plain `uv run cockpit` |
-| Target MCP or Cockpit reports a missing receipt | For an existing pre-cutover project, complete the direct `setup/finalize.py` procedure in the setup guide |
-| Cockpit opens the wrong workspace | Launch from the project root or set `OWLBEAR_WORKSPACE_ROOT` to the intended project directory |
+| Target MCP or Cockpit reports a missing receipt | Re-run `init.py` in a current workspace; legacy `.owlbear/kanban/` stores are preserved but not converted |
+| Cockpit opens the wrong workspace | Launch from the project root or pass the intended project directory to `uv --directory` |
 | Hook updates not taking effect after `git pull` | Re-run `init.py`; use `--replace-hooks` if local hook files differ and you want the seeded versions restored |
 | `uv` not found | Install uv globally: `pip install uv` or see [uv docs](https://docs.astral.sh/uv/) |
 | Different owlbear versions between teammates | Pin owlbear to a tag or commit SHA in team onboarding docs; `git pull` + re-run `init.py` to update |

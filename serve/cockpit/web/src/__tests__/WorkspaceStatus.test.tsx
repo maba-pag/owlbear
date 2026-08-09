@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import WorkspaceStatus from '../components/WorkspaceStatus'
+import { useWorkspaceHealth } from '../hooks/useWorkspaceHealth'
 
 vi.mock('../hooks/EventSourceProvider', () => ({
   useSSEEvent: vi.fn(() => ({ mtime: null, status: 'closed' as const })),
@@ -13,15 +14,29 @@ function visibleText(element: HTMLElement): string {
   return clone.textContent ?? ''
 }
 
-function stubHealth(memory: unknown, ideas: unknown) {
+function stubHealth(
+  memory: unknown,
+  ideas: unknown,
+  delivery: unknown = { recoveries: [], repair_recoveries: [] },
+) {
   const fetchMock = vi.fn((input: RequestInfo | URL) => {
     const url = String(input)
-    const body = url.includes('/health/memory') ? memory : ideas
+    const body = url.includes('/recover-expired') ? delivery : url.includes('/health/memory') ? memory : ideas
     if (body === null) return Promise.reject(new TypeError('Failed to fetch'))
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) })
   })
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
+}
+
+function WorkspaceStatusHarness() {
+  const health = useWorkspaceHealth()
+  return <WorkspaceStatus health={health} />
+}
+
+function SharedWorkspaceStatusHarness() {
+  const health = useWorkspaceHealth()
+  return <><WorkspaceStatus health={health} /><WorkspaceStatus health={health} /></>
 }
 
 beforeEach(() => {
@@ -35,21 +50,28 @@ afterEach(() => {
 })
 
 it('states healthy persisted-data modules without prose, repair, or a Memory detour', async () => {
-  stubHealth(
+  const fetchMock = stubHealth(
     { status: 'healthy', findings: [], repairable_count: 0, checked_paths: [] },
     { status: 'healthy', path: '.owlbear/ideas.md', detail: null },
   )
-  render(<WorkspaceStatus />)
+  render(<SharedWorkspaceStatusHarness />)
 
-  const trigger = screen.getByTestId('workspace-status')
-  await waitFor(() => expect(trigger).toHaveAttribute('data-status', 'healthy'))
+  const triggers = screen.getAllByTestId('workspace-status')
+  const trigger = triggers[0]
+  expect(trigger).toHaveAttribute('data-status', 'unknown')
   expect(trigger).toHaveAttribute('aria-haspopup', 'dialog')
-  expect(trigger).toHaveAccessibleName('Memory and Ideas health: Healthy; open health details')
+  expect(trigger).toHaveAccessibleName('Workspace health: Not checked; open health details')
+  expect(fetchMock).not.toHaveBeenCalled()
 
   fireEvent.click(trigger)
   const panel = await screen.findByTestId('workspace-status-panel')
+  expect(fetchMock).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByTestId('workspace-status-recheck'))
+  await waitFor(() => expect(trigger).toHaveAttribute('data-status', 'healthy'))
+  expect(triggers[1]).toHaveAttribute('data-status', 'healthy')
+  expect(fetchMock).toHaveBeenCalledTimes(3)
   expect(panel).toHaveAttribute('role', 'dialog')
-  expect(panel).toHaveAccessibleName('Memory and Ideas health')
+  expect(panel).toHaveAccessibleName('Workspace health')
   const memoryModule = screen.getByTestId('workspace-status-module-memory')
   expect(memoryModule).toHaveTextContent('Memory store')
   expect(memoryModule).not.toHaveTextContent('No storage issues found')
@@ -58,11 +80,13 @@ it('states healthy persisted-data modules without prose, repair, or a Memory det
   expect(ideasModule).not.toHaveTextContent('readable')
 
   // The green dot carries healthy on screen; the word stays for assistive technology only.
-  for (const module of [memoryModule, ideasModule]) {
+  const deliveryModule = screen.getByTestId('workspace-status-module-delivery')
+  for (const module of [deliveryModule, memoryModule, ideasModule]) {
     expect(module).toHaveTextContent('Healthy')
     expect(visibleText(module)).not.toContain('Healthy')
   }
   expect(visibleText(memoryModule)).toContain('Memory store')
+  expect(visibleText(deliveryModule)).toContain('Delivery claims')
   expect(visibleText(ideasModule)).toContain('Ideas file')
 
   expect(screen.queryByTestId('workspace-status-maintenance')).toBeNull()
@@ -72,21 +96,20 @@ it('states healthy persisted-data modules without prose, repair, or a Memory det
   expect(screen.getByTestId('workspace-status-recheck')).toHaveTextContent('Re-check')
 })
 
-it('names the checked property once and the checked surfaces once', async () => {
+it('presents workspace health, check scope, and checked surfaces in hierarchy order', async () => {
   stubHealth(
     { status: 'healthy', findings: [], repairable_count: 0, checked_paths: [] },
     { status: 'healthy', path: '.owlbear/ideas.md', detail: null },
   )
-  render(<WorkspaceStatus />)
+  render(<WorkspaceStatusHarness />)
 
   fireEvent.click(screen.getByTestId('workspace-status'))
   const panel = await screen.findByTestId('workspace-status-panel')
 
-  // The heading states what is checked about the data and nothing else; only the rows name surfaces.
-  const heading = visibleText(panel).slice(0, visibleText(panel).indexOf('Memory store'))
-  expect(heading).toBe('Persisted data integrity')
-  // Scope stays in the row names and the dialog name, never in a defensive sentence.
-  expect(panel).toHaveAccessibleName('Memory and Ideas health')
+  // The header names the control and its check scope before the rows name individual surfaces.
+  const heading = visibleText(panel).slice(0, visibleText(panel).indexOf('Delivery claims'))
+  expect(heading).toBe('Workspace healthPersisted data integrity')
+  expect(panel).toHaveAccessibleName('Workspace health')
   expect(visibleText(panel)).toContain('Ideas file')
 })
 
@@ -96,25 +119,25 @@ it('advances the freshness label as time passes without issuing another health c
     { status: 'healthy', findings: [], repairable_count: 0, checked_paths: [] },
     { status: 'healthy', path: '.owlbear/ideas.md', detail: null },
   )
-  // Fake timers stall the library's polling helpers, so settle work by flushing microtasks instead.
+  // Fake timers stall async testing helpers, so settle the manual requests through microtasks.
   const settle = async () => { await act(async () => { await Promise.resolve() }) }
 
-  render(<WorkspaceStatus />)
+  render(<WorkspaceStatusHarness />)
   await settle()
   fireEvent.click(screen.getByTestId('workspace-status'))
+  fireEvent.click(screen.getByTestId('workspace-status-recheck'))
   await settle()
 
   const freshness = screen.getByTestId('workspace-status-freshness')
   expect(freshness).toHaveTextContent('Checked just now')
   const checksSoFar = fetchMock.mock.calls.length
 
-  // Wall-clock time moves on; only the display tick fires, staying below the 60s poll interval.
+  // Wall-clock time moves on; only the display tick fires and health remains manual.
   act(() => {
-    vi.setSystemTime(Date.now() + 3 * 60_000)
-    vi.advanceTimersByTime(30_000)
+    vi.advanceTimersByTime(20 * 60_000)
   })
 
-  expect(freshness).toHaveTextContent('Checked 3m ago')
+  expect(freshness).toHaveTextContent('Checked 20m ago')
   expect(fetchMock.mock.calls.length).toBe(checksSoFar)
 })
 
@@ -128,12 +151,13 @@ it('ranks the worst module status and lists memory storage findings without clai
     },
     { status: 'healthy', path: '.owlbear/ideas.md', detail: null },
   )
-  render(<WorkspaceStatus />)
+  render(<WorkspaceStatusHarness />)
 
   const trigger = screen.getByTestId('workspace-status')
+  fireEvent.click(trigger)
+  fireEvent.click(screen.getByTestId('workspace-status-recheck'))
   await waitFor(() => expect(trigger).toHaveAttribute('data-status', 'attention'))
 
-  fireEvent.click(trigger)
   const memoryModule = await screen.findByTestId('workspace-status-module-memory')
   // A problem state is never left to colour alone: the word stays on screen.
   expect(visibleText(memoryModule)).toContain('Needs attention')
@@ -146,15 +170,41 @@ it('ranks the worst module status and lists memory storage findings without clai
   expect(document.activeElement).toBe(trigger)
 })
 
+it('recovers expired Delivery claims during re-check and reports the cleanup', async () => {
+  const fetchMock = stubHealth(
+    { status: 'healthy', findings: [], repairable_count: 0, checked_paths: [] },
+    { status: 'healthy', path: '.owlbear/ideas.md', detail: null },
+    {
+      recoveries: [{
+        status: 'recovered',
+        change_id: 'change-a',
+        outcome_id: 'OUT-001',
+        attempt_id: 'attempt-one',
+        claim_id: 'claim-one',
+      }],
+      repair_recoveries: [],
+    },
+  )
+  render(<WorkspaceStatusHarness />)
+
+  fireEvent.click(screen.getByTestId('workspace-status'))
+  fireEvent.click(screen.getByTestId('workspace-status-recheck'))
+  await waitFor(() => expect(screen.getByTestId('workspace-status')).toHaveAttribute('data-status', 'healthy'))
+
+  expect(screen.getByTestId('workspace-status-module-delivery')).toHaveTextContent('1 expired claim recovered')
+  expect(fetchMock).toHaveBeenCalledWith('/api/work-items/claims/recover-expired', { method: 'POST' })
+})
+
 it('reports an unreachable health check instead of claiming health', async () => {
   stubHealth(null, null)
-  render(<WorkspaceStatus />)
+  render(<WorkspaceStatusHarness />)
 
   const trigger = screen.getByTestId('workspace-status')
-  await waitFor(() => expect(trigger).toHaveAttribute('data-status', 'unavailable'))
-  expect(trigger).toHaveAccessibleName('Memory and Ideas health: Cannot be checked; open health details')
-
   fireEvent.click(trigger)
+  fireEvent.click(screen.getByTestId('workspace-status-recheck'))
+  await waitFor(() => expect(trigger).toHaveAttribute('data-status', 'unavailable'))
+  expect(trigger).toHaveAccessibleName('Workspace health: Cannot be checked; open health details')
+
   const memoryModule = await screen.findByTestId('workspace-status-module-memory')
   expect(memoryModule).toHaveTextContent('Failed to fetch')
   expect(visibleText(memoryModule)).toContain('Cannot be checked')

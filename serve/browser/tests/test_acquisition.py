@@ -7,6 +7,9 @@ import pytest
 from owlbear_browser import AcquisitionRequest, AcquisitionStatus, AcquisitionSuccess, BrowserContentFetcher
 
 
+pytestmark = pytest.mark.browser
+
+
 class _FixtureHandler(BaseHTTPRequestHandler):
     requests: ClassVar[list[str]] = []
 

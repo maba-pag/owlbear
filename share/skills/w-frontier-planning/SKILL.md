@@ -38,13 +38,23 @@ or public boundaries.
 Do not alter outcome, commitment, plan-scope, architecture, or Design meaning. A local task-chain
 defect is Planner-owned. A missing or contradictory Design premise is not.
 
+Planner may choose decomposition, order, dependencies, maintained surfaces, and proof only while
+preserving the supplied Design meaning and observable outcome authority.
+
 ### Requests And Resumed Context
+
+If context contains a request or a request may be needed, load `h-decision-requests` before consuming
+or constructing it.
 
 Consume a resolved `DeliveryRequest` only from `DeliveryPlanContext.requests`. Use its structured
 `resolution.selected_option_id` or `resolution.response_text`; never reconstruct a response from
 conversation or request summary.
 
-When one bounded user-owned decision or action blocks planning, create no side record. Return a
+Before routing a blocker: choose among authority-equivalent planning alternatives; use a request for
+an expressly stakeholder-selectable choice or external action; use `return` for missing,
+contradictory, or observably ambiguous Design authority; use `retry` for local or transient failure.
+
+When one bounded request blocks planning, create no side record. Return a
 `BlockDelivery` containing reason, unblock condition, expected evidence, locators, and one embedded
 `DeliveryRequest` with `request_id`, `kind`, matching outcome ID, summary, bounded options for a
 decision, and no resolution. Orchestration forwards that block to `transition_delivery`; Cockpit or
@@ -54,12 +64,12 @@ the user resolves it, and a later acquisition supplies fresh context.
 
 Construct one candidate claim containing the unchanged launch identity, supplied plan context,
 complete task definitions, dependency order, required outputs, proof, repository evidence, and exact
-source head. Dispatch only `launch.policy.reviewer_agent` to `planner-challenger` using the configured
-reviewer model.
+source head. Dispatch only `launch.policy.reviewer_agent` to `planner-challenger`; the reviewer
+agent's frontmatter owns its model.
 
 Require exactly one advisory mapping with disposition `pass | finding` and non-empty evidence. The
 review is scoped to the supplied immutable candidate; it never chooses a transition or calls a
-Kanban tool.
+Delivery tool.
 
 Repair a bounded local task-chain finding and obtain fresh review for that distinct candidate. A
 Design-authority finding, user-owned blocker, invalid review mapping, or local defect that cannot be

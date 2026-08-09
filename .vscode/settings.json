@@ -24,25 +24,26 @@
   "accessibility.chat.showCheckmarks": true,
   "chat.agent.maxRequests": 99999,
   "chat.agentFilesLocations": {
-    "../owlbear/share/agents": true,
-    ".owlbear/agents": true
+    ".owlbear/agents": true,
+    "share/agents": true
   },
+  "chat.agentHost.copilot.toolSearch.enabled": true,
   "chat.agentSkillsLocations": {
-    "../owlbear/share/skills": true,
-    ".owlbear/skills": true
+    ".owlbear/skills": true,
+    "share/skills": true
   },
   "chat.checkpoints.showFileChanges": true,
   "chat.generalPurposeAgent.enabled": true,
   "chat.instructionsFilesLocations": {
-    "../owlbear/share/instructions": true,
-    ".owlbear/instructions": true
+    ".owlbear/instructions": true,
+    "share/instructions": true
   },
   "chat.mcp.gallery.enabled": true,
   "chat.notifyWindowOnConfirmation": "always",
   "chat.notifyWindowOnResponseReceived": "always",
   "chat.promptFilesLocations": {
-    "../owlbear/share/prompts": true,
-    ".owlbear/prompts": true
+    ".owlbear/prompts": true,
+    "share/prompts": true
   },
   "chat.subagents.allowInvocationsFromSubagents": true,
   "chat.tools.compressOutput.enabled": true,
@@ -51,8 +52,10 @@
     "Test-Path": true,
     "uv run coverage": true,
     "uv run eslint-fix": true,
+    "uv run help": true,
     "uv run lint": true,
-    "uv run lint-all": true,
+    "uv run lint --all": true,
+    "uv run lint-full": true,
     "uv run megalint": true,
     "uv run pytest": true,
     "uv run python": true,
@@ -111,8 +114,6 @@
     "plaintext": false,
     "scminput": true
   },
-  "github.copilot.nextEditSuggestions.enabled": true,
-  "github.copilot.nextEditSuggestions.extendedRange": true,
   "json.maxItemsComputed": 5000,
   "MS-CST-E.vscode-devskim.rules.enableBestPracticeSeverityRules": true,
   "MS-CST-E.vscode-devskim.rules.enableManualReviewSeverityRules": true,
@@ -168,6 +169,5 @@
     }
   },
   "terminal.integrated.wordSeparators": "",
-  "workbench.settings.alwaysShowAdvancedSettings": true,
-  "workbench.startupEditor": "none"
+  "workbench.settings.alwaysShowAdvancedSettings": true
 }

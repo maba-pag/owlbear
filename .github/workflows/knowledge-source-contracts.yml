@@ -11,7 +11,7 @@ name: Knowledge source contracts
       - conftest.py
       - pyproject.toml
       - serve/knowledge/**
-      - serve/mcp-knowledge/**
+      - serve/knowledge-mcp/**
       - share/agents/knowledge-ingestor.agent.md
       - share/prompts/kb-ingest.prompt.md
       - share/skills/h-knowledge-ops/SKILL.md
@@ -26,7 +26,7 @@ name: Knowledge source contracts
       - conftest.py
       - pyproject.toml
       - serve/knowledge/**
-      - serve/mcp-knowledge/**
+      - serve/knowledge-mcp/**
       - share/agents/knowledge-ingestor.agent.md
       - share/prompts/kb-ingest.prompt.md
       - share/skills/h-knowledge-ops/SKILL.md
