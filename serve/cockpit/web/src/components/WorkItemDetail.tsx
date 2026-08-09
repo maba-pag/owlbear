@@ -414,14 +414,11 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
       ) : null}
       {agentHandoff ? <IntegrationAgentHandoff card={detail.item.card} /> : null}
       {canIntegrate && manualOption ? (
-        <div className="mt-static-md grid gap-static-sm">
-          <p className="text-sm"><strong>Waiting for Orchestration.</strong> Orchestration will {action.kind === 'retry-integration' ? 'retry against the current target' : 'integrate this Change'}.</p>
-          <div className="flex flex-wrap items-center gap-static-sm">
-            <span className="text-xs text-contrast-medium">Optional now</span>
-            <PButtonPure type="button" size="xs" color="contrast-medium" icon={action.kind === 'retry-integration' ? 'refresh' : undefined} disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
-              {pendingAction === 'integration' ? 'Working...' : action.kind === 'retry-integration' ? 'Retry now' : 'Integrate now'}
-            </PButtonPure>
-          </div>
+        <div className="mt-static-md flex flex-wrap items-center gap-x-static-md gap-y-static-xs">
+          <p className="text-sm">Orchestration will {action.kind === 'retry-integration' ? 'retry' : 'integrate'} automatically.</p>
+          <PButtonPure type="button" size="xs" color="contrast-medium" icon={action.kind === 'retry-integration' ? 'refresh' : undefined} disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
+            {pendingAction === 'integration' ? 'Working...' : action.kind === 'retry-integration' ? 'Retry now' : 'Integrate now'}
+          </PButtonPure>
         </div>
       ) : canIntegrate ? (
         <PButton className="mt-static-md" type="button" compact icon={action.kind === 'retry-integration' ? 'refresh' : undefined} disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>

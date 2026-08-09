@@ -660,7 +660,9 @@ it('separates current Integration retry guidance from stale attempt evidence', a
 
   const inspector = await screen.findByTestId('work-item-detail')
   expect(inspector).toHaveTextContent('The Integration target moved since this attempt; retry against the current target.')
-  expect(inspector).toHaveTextContent('Waiting for Orchestration. Orchestration will retry against the current target.')
+  expect(inspector).toHaveTextContent('Orchestration will retry automatically.')
+  expect(inspector).not.toHaveTextContent('Waiting for Orchestration.')
+  expect(inspector).not.toHaveTextContent('Optional now')
   const retryControl = within(inspector).getByText('Retry now').closest('p-button-pure') as HTMLElement & { color: string; icon: string; size: string }
   expect(retryControl.color).toBe('contrast-medium')
   expect(retryControl.icon).toBe('refresh')
