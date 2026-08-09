@@ -58,7 +58,7 @@ export default function DesignWorkSection({ changeIds, selectedChangeId, onSelec
                   <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high md:sr-only">Status</dt>
                   <dd>
                     <span className="block font-medium text-primary">Continue Design</span>
-                    <CopyCommand command={designCommand(changeId)} className="mt-1 text-2xs" />
+                    <CopyCommand command={designCommand(changeId)} className="mt-1" />
                   </dd>
                 </div>
               </dl>

@@ -55,7 +55,7 @@ function ActionLink({ item, onSelect, subdued = false }: { item: WorkItemCardVie
   const navigate = useNavigate()
   if (item.action.kind === 'none' || !item.action.label) return null
   if (item.action.command) {
-    return <CopyCommand command={item.action.command} className={subdued ? 'text-contrast-medium' : 'text-primary'} />
+    return <CopyCommand command={item.action.command} />
   }
   const identity = { changeId: item.change_id, itemKey: item.item_key }
   const path = workItemPath(item)
@@ -95,7 +95,7 @@ function IntegrationHandoff({ item }: { item: WorkItemCardView }) {
   const command = integrationHandoffPrompt(item)
   return (
     <span className="mt-0.5 block">
-      <CopyCommand command={command} className="text-xs" />
+      <CopyCommand command={command} />
     </span>
   )
 }

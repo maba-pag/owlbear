@@ -383,7 +383,7 @@ function IntegrationAgentHandoff({ card }: { card: WorkItemCardView }) {
     <div className="mt-static-md min-w-0 border-t border-contrast-low pt-static-md">
       <h4 className="text-xs font-semibold uppercase text-contrast-medium">Copilot resolver</h4>
       <p className="mt-static-xs max-w-[72ch] text-sm leading-relaxed">Copy this command into a new Copilot chat.</p>
-      <CopyCommand command={command} className="mt-static-sm text-xs" />
+      <CopyCommand command={command} className="mt-static-sm" />
     </div>
   )
 }

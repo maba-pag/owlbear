@@ -5,7 +5,7 @@ import type {
   WorkItemNeed,
   WorkItemPortfolioTotals,
 } from '../api/workItems'
-import { useCopyToClipboard } from './CopyCommand'
+import CopyCommand from './CopyCommand'
 import { designCommand } from './designWorkPresentation'
 
 function countLabel(count: number, singular: string, plural = `${singular}s`) {
@@ -13,35 +13,11 @@ function countLabel(count: number, singular: string, plural = `${singular}s`) {
 }
 
 function Command({ children, suffix }: { children: string; suffix?: string }) {
-  const { copyState, copy } = useCopyToClipboard()
-  const icon = copyState === 'copied' ? 'check' : copyState === 'failed' ? 'error' : 'ai-code'
-  const title = copyState === 'copied' ? `Copied ${children}` : copyState === 'failed' ? `Could not copy ${children}` : `Copy ${children}`
   return (
-    <>
-      <code className="break-all text-[0.9em] text-inherit">{children}</code>
-      <span className="whitespace-nowrap">
-        <button
-          type="button"
-          className={[
-            'relative z-[1] -my-1 ml-1 inline-flex min-h-6 min-w-6 cursor-copy items-center justify-center border-0 bg-transparent p-0 align-middle text-[0.9em] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
-            copyState === 'copied' ? 'text-success' : copyState === 'failed' ? 'text-error' : 'text-contrast-medium hover:text-primary',
-          ].join(' ')}
-          aria-label={`Copy command ${children}`}
-          title={title}
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            void copy(children, {
-              success: `Copied ${children}`,
-              failure: `Could not copy ${children}`,
-            })
-          }}
-        >
-          <PIcon name={icon} size="inherit" color="inherit" aria-hidden="true" />
-        </button>
-        {suffix ? <span data-command-suffix>{suffix}</span> : null}
-      </span>
-    </>
+    <span className="mx-static-xs inline-flex max-w-full items-baseline">
+      <CopyCommand command={children} />
+      {suffix ? <span data-command-suffix>{suffix}</span> : null}
+    </span>
   )
 }
 

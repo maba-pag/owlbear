@@ -201,50 +201,36 @@ test.describe('assembled Delivery portfolio', () => {
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
     const designCommand = '/design design-operations-roadmap'
     const designCommandButton = designRow.getByRole('button', { name: `Copy command ${designCommand}` })
-    const [blockCommandIconBox, blockCommandTextBox] = await Promise.all([
-      designCommandButton.locator('p-icon').boundingBox(),
-      designCommandButton.locator('code').boundingBox(),
-    ])
-    expect(blockCommandIconBox).not.toBeNull()
-    expect(blockCommandTextBox).not.toBeNull()
-    expect(blockCommandIconBox!.y + blockCommandIconBox!.height / 2).toBeCloseTo(
-      blockCommandTextBox!.y + blockCommandTextBox!.height / 2,
-      0,
-    )
     await guidance.scrollIntoViewIfNeeded()
     const guidanceCommand = guidance.getByRole('button', { name: `Copy command ${designCommand}` })
-    const proseAlignment = await guidanceCommand.evaluate((button) => {
-      const item = button.closest('li')
-      const code = button.parentElement?.previousElementSibling
-      if (!item || !code) return null
-      const textNode = [...item.childNodes].find((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim())
-      if (!textNode) return null
-      const textRange = document.createRange()
-      textRange.selectNodeContents(textNode)
-      const proseBox = textRange.getBoundingClientRect()
-      const codeBox = code.getBoundingClientRect()
-      const punctuation = item.querySelector('[data-command-suffix]')
-      const punctuationBox = punctuation?.getBoundingClientRect() ?? null
-      const punctuationButtonBox = punctuation?.previousElementSibling?.getBoundingClientRect() ?? null
-      return {
-        centerDelta: Math.abs((proseBox.top + proseBox.height / 2) - (codeBox.top + codeBox.height / 2)),
-        copyTargetLargeEnough: punctuationButtonBox
-          ? punctuationButtonBox.width >= 24 && punctuationButtonBox.height >= 24
-          : false,
-        suffixAdjacent: punctuationBox && punctuationButtonBox
-          ? Math.abs(punctuationBox.left - punctuationButtonBox.right) <= 1
-          : false,
-      }
-    })
-    expect(proseAlignment).not.toBeNull()
-    expect(proseAlignment!.centerDelta).toBeLessThanOrEqual(1)
-    expect(proseAlignment!.copyTargetLargeEnough).toBe(true)
-    expect(proseAlignment!.suffixAdjacent).toBe(true)
+    for (const commandButton of [designCommandButton, guidanceCommand]) {
+      const visualContract = await commandButton.evaluate((button) => {
+        const code = button.querySelector('code')
+        const icon = button.querySelector('p-icon')
+        if (!code || !icon) return null
+        const buttonStyle = getComputedStyle(button)
+        const codeBox = code.getBoundingClientRect()
+        const iconBox = icon.getBoundingClientRect()
+        return {
+          fontSize: buttonStyle.fontSize,
+          color: buttonStyle.color,
+          centerDelta: Math.abs((iconBox.top + iconBox.height / 2) - (codeBox.top + codeBox.height / 2)),
+          codeInsideButton: button.contains(code),
+        }
+      })
+      expect(visualContract).not.toBeNull()
+      expect(visualContract!.fontSize).toBe('13px')
+      expect(visualContract!.color).toBe('rgba(17, 17, 19, 0.6)')
+      expect(visualContract!.centerDelta).toBeLessThanOrEqual(1)
+      expect(visualContract!.codeInsideButton).toBe(true)
+    }
     await page.screenshot({ path: testInfo.outputPath('delivery-command-alignment.png') })
-    await designCommandButton.click()
+    await designCommandButton.locator('code').click()
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(designCommand)
     await expect(page).toHaveURL(/\/delivery$/)
-    await expect(guidance.getByRole('button', { name: `Copy command ${designCommand}` })).toBeVisible()
+    await guidanceCommand.locator('code').click()
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(designCommand)
+    await expect(page).toHaveURL(/\/delivery$/)
     const designTrigger = designSection.getByRole('link', { name: 'Design Operations Roadmap' })
     await designTrigger.click()
     const designDetail = page.getByTestId('design-work-detail')
