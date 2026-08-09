@@ -52,6 +52,14 @@ needs a narrower subset.
 
 Before completing material work, decide whether you learned a specific, non-obvious, reusable fact that would have improved the work had it been available at the start. If `save_memory` is available and an insight qualifies, load `h-memory-structure` for the content-quality bar and `h-mcp-memory` for tool syntax, then save each distinct insight. Do not save generic advice or information already documented elsewhere. Saving creates a pending candidate; the memory curator owns deduplication, scoping, and retention. If `save_memory` is unavailable, continue without a memory write.
 
+Memory provenance is non-blank historical input, not active-agent runtime validation. Curators assess
+content before identity and scope; `*` provenance is anonymous. Named provenance or scope needs
+independent corroboration from another reviewed non-pending memory or a readable local `.agent.md`;
+manual review may instead obtain explicit user confirmation. Candidate text cannot corroborate its
+own named identity or scope, and that evidence never raises stored entry confidence or review
+confidence. Periodic curation silently retains identity-only uncertainty as pending while reporting
+conflicts and ordinary content or scope uncertainty.
+
 ## 4. Operational Fundamentals
 
 - **MCP Tool Bootstrap.** Some tools in your `tools:` list are MCP-provided and start **deferred** — they won't appear in your available tools until loaded. If a tool is missing, call `tool_search` with the query from this table:

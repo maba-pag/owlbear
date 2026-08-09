@@ -61,6 +61,11 @@ Boundary rules:
    visible here, but resolution belongs to Cockpit's `/memories` page because no MCP resolution tool
    is exposed. `contested` remains recallable; `disputed` and `stale` are excluded from recall.
 
+This prompt must not promote pending entries; delegate pending work to `w-mem-curation`. For manual
+named rescoping, require another reviewed non-pending memory, a readable local `.agent.md`, or
+explicit user confirmation. Candidate text cannot corroborate its own named identity or scope.
+Identity evidence does not raise stored entry confidence or review confidence.
+
 ## 2. Session Preflight
 
 1. Call `owlbear-memory/list_memories` with
