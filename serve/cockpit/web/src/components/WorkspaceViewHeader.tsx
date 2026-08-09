@@ -1,3 +1,4 @@
+import { PTag } from '@porsche-design-system/components-react'
 import type { ReactNode } from 'react'
 
 interface WorkspaceViewHeaderProps {
@@ -36,9 +37,9 @@ export default function WorkspaceViewHeader({
 /** Same count treatment the board's stage labels use, so every Delivery count reads alike. */
 export function WorkspaceViewCount({ value, unit }: { value: ReactNode; unit: string }) {
   return (
-    <span className="inline-flex min-w-5 shrink-0 justify-center whitespace-nowrap bg-surface px-1 text-2xs font-semibold text-contrast-high">
+    <PTag compact variant="secondary">
       {value}
       <span className="sr-only"> {unit}</span>
-    </span>
+    </PTag>
   )
 }
