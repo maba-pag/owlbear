@@ -54,7 +54,10 @@ Before completing material work, decide whether you learned a specific, non-obvi
 
 ## 4. Operational Fundamentals
 
-- **MCP Tool Bootstrap.** Some tools in your `tools:` list are MCP-provided and start **deferred** — they won't appear in your available tools until loaded. If a tool is missing, call `tool_search` with the query from this table:
+- **MCP Tool Bootstrap.** Invoke a granted MCP tool directly when it is available. If it is deferred
+  and `tool_search` is available, load it with the query from this table. If neither binding is
+  available, report the runtime capability failure; prose tool signatures cannot create a callable
+  tool.
 
   | MCP server | `tools:` prefix | Runtime tool ID | `tool_search` query |
   |---|---|---|---|

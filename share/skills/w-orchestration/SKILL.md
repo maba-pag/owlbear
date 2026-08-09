@@ -16,11 +16,12 @@ If target tools are deferred, load them once with `tool_search` using:
 
 `OwlBear Delivery target portfolio list_work_items acquire_frontier_work transition_delivery recover_claim recover_integration_repair_claim publish_integration_repair_authority_attention integrate_ready_change`
 
-Before calling `acquire_frontier_work`, require callable bindings for both `recover_claim` and
-`recover_integration_repair_claim`. Run one focused `tool_search` for each missing recovery
-operation. If either binding remains unavailable or its focused search returns a tool error, report
-the exact missing operation and end the session without acquisition. Recovery is required dispatch
-safety authority, not an optional operation to discover after a claim has been acquired.
+Before calling `acquire_frontier_work`, require callable bindings for `transition_delivery`,
+`recover_claim`, and `recover_integration_repair_claim`. Run one focused `tool_search` for each
+missing operation. If any binding remains unavailable or its focused search returns a tool error,
+report the exact missing operation and end the session without acquisition. Transition and recovery
+are required dispatch safety authority, not optional operations to discover after a claim has been
+acquired.
 
 Call `list_work_items` only for bounded portfolio reporting. Call `acquire_frontier_work` once for the
 current cycle. Its `DeliveryAcquisitionResult` is the sole source of task and repair launch order,
@@ -78,6 +79,12 @@ Do not select, rewrite, enrich, or reconstruct action, output, result, request, 
 commit fields. Call `transition_delivery` with outer `change_id=launch.change_id` and the returned
 transition as `request` byte-for-structure unchanged. A worker-owned `block`, `retry`, or `return`
 is forwarded normally and must not be recovered.
+
+Immediately before forwarding, if the `transition_delivery` binding is unavailable, run one focused
+`tool_search` for that exact operation. If it remains unavailable or the search returns a tool
+error, call `recover_claim` with the launch's exact change, outcome, attempt, and claim IDs, report
+the routing failure and recovery result, and end the session after the current acquired batch. Do
+not redispatch Planner, Builder, or another agent to echo, relay, reconstruct, or apply a transition.
 
 An identity mismatch or malformed result is a failed dispatch result: publish no substitute and use
 the exact Step 2 recovery route for the still-active claim. A rejected `transition_delivery` call

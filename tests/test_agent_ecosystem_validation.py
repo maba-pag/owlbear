@@ -392,11 +392,13 @@ def test_orchestration_recovery_bootstrap_matches_tool_search_configuration() ->
     assert enabled_setting in (_REPO_ROOT / ".vscode/settings.json").read_text(encoding="utf-8")
     assert enabled_setting in (_REPO_ROOT / "seed/.vscode/settings.json").read_text(encoding="utf-8")
     assert "vscode/toolSearch" in metadata["tools"]
-    for operation in ("recover_claim", "recover_integration_repair_claim"):
+    for operation in ("transition_delivery", "recover_claim", "recover_integration_repair_claim"):
         assert f"owlbear-delivery/{operation}" in metadata["tools"]
-    assert "require callable bindings for both `recover_claim` and" in orchestration
-    assert "Run one focused `tool_search` for each missing recovery" in orchestration
+    assert "require callable bindings for `transition_delivery`," in orchestration
+    assert "Run one focused `tool_search` for each" in orchestration
     assert "end the session without acquisition" in orchestration
+    assert "Immediately before forwarding, if the `transition_delivery` binding is unavailable" in orchestration
+    assert "another agent to echo, relay, reconstruct, or apply a transition" in orchestration
     assert orchestration.index("Before calling `acquire_frontier_work`") < orchestration.index(
         "Call `acquire_frontier_work` once"
     )
