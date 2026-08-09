@@ -78,28 +78,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 _WORKSPACE_MARKER = Path(".owlbear")
 
-
-class _LegacyCompatibleEventLoopPolicy(asyncio.DefaultEventLoopPolicy):
-    """Backfill pre-3.12 get_event_loop behavior for sync callers."""
-
-    def get_event_loop(self) -> asyncio.AbstractEventLoop:
-        try:
-            return super().get_event_loop()
-        except RuntimeError:
-            loop = self.new_event_loop()
-            self.set_event_loop(loop)
-            return loop
-
-
-def _install_legacy_event_loop_policy() -> None:
-    """Install an event-loop policy that recreates loops on demand."""
-    if isinstance(asyncio.get_event_loop_policy(), _LegacyCompatibleEventLoopPolicy):
-        return
-    asyncio.set_event_loop_policy(_LegacyCompatibleEventLoopPolicy())
-
-
-_install_legacy_event_loop_policy()
-
 # Backward-compatible patch target used by legacy tests; the guard is no longer wired.
 globals()["ContentInjectionGuard"] = object
 
