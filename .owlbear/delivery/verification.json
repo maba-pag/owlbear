@@ -10,6 +10,15 @@
   ],
   "steps": [
     {
+      "step_id": "cockpit-install",
+      "argv": [
+        "npm",
+        "ci"
+      ],
+      "cwd": "serve/cockpit/web",
+      "timeout_seconds": 1800
+    },
+    {
       "step_id": "python-tests",
       "argv": [
         "uv",
@@ -18,15 +27,6 @@
         "pytest"
       ],
       "cwd": ".",
-      "timeout_seconds": 1800
-    },
-    {
-      "step_id": "cockpit-install",
-      "argv": [
-        "npm",
-        "ci"
-      ],
-      "cwd": "serve/cockpit/web",
       "timeout_seconds": 1800
     },
     {
