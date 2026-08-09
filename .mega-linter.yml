@@ -43,7 +43,7 @@ SARIF_REPORTER: true
 # Exclude paths that are generated, archived, or third-party.
 # PRIMARY GATE: paths excluded here are never seen by any linter in CI.
 # Keep .markdownlint-cli2.jsonc ignores aligned for local runs.
-FILTER_REGEX_EXCLUDE: '(\.owlbear/(briefs|doc-index\.md$|kanban/archive|legacy|memory|research|sources|target)|\.egg-info/)'
+FILTER_REGEX_EXCLUDE: '(\.owlbear/(briefs|delivery/packages|doc-index\.md$|kanban/archive|legacy|memory|research|sources|target)|\.egg-info/)'
 
 # Directory-level pre-filter (faster than regex, excluded at any depth)
 ADDITIONAL_EXCLUDED_DIRECTORIES:

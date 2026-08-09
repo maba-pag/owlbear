@@ -21,7 +21,11 @@
 # Keep aligned with .mega-linter.yml.
 exclude: |
   (?x)^(
-    \.owlbear/(briefs|doc-index\.md|kanban/(archive|decisions|tasks)|legacy|memory|research|sources|target)/
+    \.owlbear/doc-index\.md$
+    |\.owlbear/briefs/
+    |\.owlbear/delivery/packages/
+    |\.owlbear/kanban/(archive|decisions|tasks)/
+    |\.owlbear/(legacy|memory|research|sources|target)/
     |store/
     |\.egg-info/
     |coverage/
