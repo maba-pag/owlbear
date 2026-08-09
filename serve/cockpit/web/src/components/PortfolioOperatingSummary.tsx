@@ -5,15 +5,44 @@ import type {
   WorkItemNeed,
   WorkItemPortfolioTotals,
 } from '../api/workItems'
-import CopyCommand from './CopyCommand'
+import { useCopyToClipboard } from './CopyCommand'
 import { designCommand } from './designWorkPresentation'
 
 function countLabel(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`
 }
 
-function Command({ children }: { children: string }) {
-  return <span className="mx-static-xs inline-flex max-w-full"><CopyCommand command={children} className="text-[0.8125rem]" /></span>
+function Command({ children, suffix }: { children: string; suffix?: string }) {
+  const { copyState, copy } = useCopyToClipboard()
+  const icon = copyState === 'copied' ? 'check' : copyState === 'failed' ? 'error' : 'ai-code'
+  const title = copyState === 'copied' ? `Copied ${children}` : copyState === 'failed' ? `Could not copy ${children}` : `Copy ${children}`
+  return (
+    <>
+      <code className="break-all text-[0.9em] text-inherit">{children}</code>
+      <span className="whitespace-nowrap">
+        <button
+          type="button"
+          className={[
+            'relative z-[1] -my-1 ml-1 inline-flex min-h-6 min-w-6 cursor-copy items-center justify-center border-0 bg-transparent p-0 align-middle text-[0.9em] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+            copyState === 'copied' ? 'text-success' : copyState === 'failed' ? 'text-error' : 'text-contrast-medium hover:text-primary',
+          ].join(' ')}
+          aria-label={`Copy command ${children}`}
+          title={title}
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            void copy(children, {
+              success: `Copied ${children}`,
+              failure: `Could not copy ${children}`,
+            })
+          }}
+        >
+          <PIcon name={icon} size="inherit" color="inherit" aria-hidden="true" />
+        </button>
+        {suffix ? <span data-command-suffix>{suffix}</span> : null}
+      </span>
+    </>
+  )
 }
 
 function Guidance({ guidance }: { guidance: PortfolioGuidance }) {
@@ -21,15 +50,15 @@ function Guidance({ guidance }: { guidance: PortfolioGuidance }) {
     case 'intervene':
       return <>{guidance.work_count === 1 ? 'Review 1 item that needs you.' : `Review ${guidance.work_count} items that need you.`}</>
     case 'resume-design':
-      return <>Continue Design with {guidance.change_ids.map((changeId, index) => <span key={changeId}>{index > 0 ? ' or ' : null}<Command>{designCommand(changeId)}</Command></span>)}.</>
+      return <>Continue Design with {guidance.change_ids.map((changeId, index) => <span key={changeId}>{index > 0 ? ' or ' : null}<Command suffix={index === guidance.change_ids.length - 1 ? '.' : undefined}>{designCommand(changeId)}</Command></span>)}</>
     case 'start-orchestration':
-      return <>Process {countLabel(guidance.work_count, 'queued work item')} with <Command>/orchestrate</Command>.</>
+      return <>Process {countLabel(guidance.work_count, 'queued work item')} with <Command suffix=".">/orchestrate</Command></>
     case 'work-underway':
       return <><Command>/orchestrate</Command> is already working; no new session is needed.</>
     case 'wait':
       return <>No session action needed.</>
     case 'create-change':
-      return <>Start with <Command>/ideate</Command> or <Command>/design &lt;change-id&gt;</Command>.</>
+      return <>Start with <Command>/ideate</Command> or <Command suffix=".">/design &lt;change-id&gt;</Command></>
   }
 }
 
@@ -156,7 +185,7 @@ export default function PortfolioOperatingSummary({ operating }: { operating: Po
   return (
     <aside className="grid min-w-0 gap-static-xs px-static-sm text-sm leading-relaxed text-contrast-medium sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start sm:gap-static-md" aria-label="Session suggestions">
       <strong className="text-primary">Session suggestions</strong>
-      <ul className="m-0 flex min-w-0 list-none flex-wrap gap-x-static-lg gap-y-static-xs p-0">
+      <ul className="m-0 grid min-w-0 list-none gap-static-xs p-0 lg:grid-cols-2 lg:gap-x-static-lg">
         {operating.guidance.map((guidance) => <li key={guidance.kind}><Guidance guidance={guidance} /></li>)}
       </ul>
     </aside>

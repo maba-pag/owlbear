@@ -67,6 +67,7 @@ function ActionLink({ item, onSelect, subdued = false }: { item: WorkItemCardVie
       size="xs"
       className="relative z-[1]"
       onClick={(event) => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
         event.preventDefault()
         onSelect(identity, event.currentTarget as HTMLElement)
         navigate(path)
@@ -183,7 +184,6 @@ function CompactRows({ group, selected, onSelect }: GroupTableProps) {
 }
 
 function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
-  const navigate = useNavigate()
   const item = group.items.find((candidate) => candidate.scope === 'change-integration')
   if (!item) return null
   const isSelected = selected?.changeId === item.change_id && selected.itemKey === item.item_key
@@ -198,12 +198,6 @@ function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
       ].join(' ')}
       aria-label={`Change Integration for ${group.title}`}
       data-work-item={workItemIdentity(item)}
-      onClick={(event) => {
-        if ((event.target as HTMLElement).closest('a, button, p-link-pure')) return
-        const trigger = event.currentTarget.querySelector<HTMLElement>('[data-work-item-primary-trigger]')
-        if (trigger) onSelect(identity, trigger)
-        navigate(path)
-      }}
     >
       <dl className="grid gap-static-sm md:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] md:items-start md:gap-0">
         <div className="min-w-0 md:px-static-sm md:py-static-sm">
@@ -213,7 +207,7 @@ function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
               to={path}
               data-work-item-primary-trigger
               data-work-item-identity={`${item.change_id}:${item.item_key}`}
-              className="block font-semibold text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+              className="block font-semibold text-primary after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
               aria-current={isSelected ? 'location' : undefined}
               onClick={(event) => onSelect(identity, event.currentTarget)}
             >

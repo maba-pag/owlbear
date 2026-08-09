@@ -50,12 +50,12 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   expect(overflow.tables.every((value) => value <= 1)).toBe(true)
 }
 
-async function flyoutPanelBox(page: Page): Promise<{ width: number; height: number } | null> {
+async function flyoutPanelBox(page: Page): Promise<{ x: number; y: number; width: number; height: number } | null> {
   return page.locator('p-flyout').last().evaluate((element) => {
     const panel = element.shadowRoot?.querySelector('.flyout')
     if (!panel) return null
     const box = panel.getBoundingClientRect()
-    return { width: box.width, height: box.height }
+    return { x: box.x, y: box.y, width: box.width, height: box.height }
   })
 }
 
@@ -132,12 +132,39 @@ test.describe('assembled Delivery portfolio', () => {
     const integrationTrigger = integrationRow.getByRole('link', { name: 'Integration', exact: true })
     const integrationStatusBox = await integrationRow.getByText('Integration repairer working', { exact: true }).boundingBox()
     expect(integrationStatusBox).not.toBeNull()
+    const integrationHitTarget = await page.evaluate(({ x, y }) => {
+      const element = document.elementFromPoint(x, y)
+      const link = element?.closest('a')
+      return {
+        cursor: element ? getComputedStyle(element).cursor : null,
+        href: link?.getAttribute('href') ?? null,
+      }
+    }, {
+      x: integrationStatusBox!.x + integrationStatusBox!.width / 2,
+      y: integrationStatusBox!.y + integrationStatusBox!.height / 2,
+    })
+    expect(integrationHitTarget.cursor).toBe('pointer')
+    expect(integrationHitTarget.href).toBe('/delivery/repair-e2e/integration')
     await page.mouse.click(
       integrationStatusBox!.x + integrationStatusBox!.width / 2,
       integrationStatusBox!.y + integrationStatusBox!.height / 2,
     )
     await expect(page.getByTestId('work-item-detail').getByRole('heading', { name: 'Integration', exact: true })).toBeVisible()
-    await returnToPortfolio(page, integrationTrigger)
+    const integrationFlyoutBox = await flyoutPanelBox(page)
+    expect(integrationFlyoutBox).not.toBeNull()
+    await page.mouse.click(integrationFlyoutBox!.x / 2, integrationFlyoutBox!.y + integrationFlyoutBox!.height / 2)
+    await expect(page.getByTestId('work-item-detail')).not.toBeVisible()
+    await expect(integrationTrigger).toBeFocused()
+    await expect.poll(() => integrationTrigger.evaluate((element) => element.matches(':focus-visible'))).toBe(false)
+
+    await integrationTrigger.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByTestId('work-item-detail').getByRole('heading', { name: 'Integration', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Dismiss flyout' }).focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByTestId('work-item-detail')).not.toBeVisible()
+    await expect(integrationTrigger).toBeFocused()
+    await expect.poll(() => integrationTrigger.evaluate((element) => element.matches(':focus-visible'))).toBe(true)
 
     const designSection = page.getByTestId('design-work-section')
     await expect(designSection).toContainText('Design Operations Roadmap')
@@ -174,17 +201,45 @@ test.describe('assembled Delivery portfolio', () => {
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
     const designCommand = '/design design-operations-roadmap'
     const designCommandButton = designRow.getByRole('button', { name: `Copy command ${designCommand}` })
-    const [commandIconBox, commandTextBox] = await Promise.all([
-      designCommandButton.locator('p-icon').first().boundingBox(),
+    const [blockCommandIconBox, blockCommandTextBox] = await Promise.all([
+      designCommandButton.locator('p-icon').boundingBox(),
       designCommandButton.locator('code').boundingBox(),
     ])
-    expect(commandIconBox).not.toBeNull()
-    expect(commandTextBox).not.toBeNull()
-    expect(commandIconBox!.y + commandIconBox!.height / 2).toBeCloseTo(
-      commandTextBox!.y + commandTextBox!.height / 2,
+    expect(blockCommandIconBox).not.toBeNull()
+    expect(blockCommandTextBox).not.toBeNull()
+    expect(blockCommandIconBox!.y + blockCommandIconBox!.height / 2).toBeCloseTo(
+      blockCommandTextBox!.y + blockCommandTextBox!.height / 2,
       0,
     )
     await guidance.scrollIntoViewIfNeeded()
+    const guidanceCommand = guidance.getByRole('button', { name: `Copy command ${designCommand}` })
+    const proseAlignment = await guidanceCommand.evaluate((button) => {
+      const item = button.closest('li')
+      const code = button.parentElement?.previousElementSibling
+      if (!item || !code) return null
+      const textNode = [...item.childNodes].find((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim())
+      if (!textNode) return null
+      const textRange = document.createRange()
+      textRange.selectNodeContents(textNode)
+      const proseBox = textRange.getBoundingClientRect()
+      const codeBox = code.getBoundingClientRect()
+      const punctuation = item.querySelector('[data-command-suffix]')
+      const punctuationBox = punctuation?.getBoundingClientRect() ?? null
+      const punctuationButtonBox = punctuation?.previousElementSibling?.getBoundingClientRect() ?? null
+      return {
+        centerDelta: Math.abs((proseBox.top + proseBox.height / 2) - (codeBox.top + codeBox.height / 2)),
+        copyTargetLargeEnough: punctuationButtonBox
+          ? punctuationButtonBox.width >= 24 && punctuationButtonBox.height >= 24
+          : false,
+        suffixAdjacent: punctuationBox && punctuationButtonBox
+          ? Math.abs(punctuationBox.left - punctuationButtonBox.right) <= 1
+          : false,
+      }
+    })
+    expect(proseAlignment).not.toBeNull()
+    expect(proseAlignment!.centerDelta).toBeLessThanOrEqual(1)
+    expect(proseAlignment!.copyTargetLargeEnough).toBe(true)
+    expect(proseAlignment!.suffixAdjacent).toBe(true)
     await page.screenshot({ path: testInfo.outputPath('delivery-command-alignment.png') })
     await designCommandButton.click()
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(designCommand)
