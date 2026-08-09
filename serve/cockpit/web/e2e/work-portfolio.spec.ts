@@ -173,7 +173,20 @@ test.describe('assembled Delivery portfolio', () => {
     expect(guidanceBox!.y - (designBox!.y + designBox!.height)).toBeCloseTo(32, 0)
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
     const designCommand = '/design design-operations-roadmap'
-    await designRow.getByRole('button', { name: `Copy command ${designCommand}` }).click()
+    const designCommandButton = designRow.getByRole('button', { name: `Copy command ${designCommand}` })
+    const [commandIconBox, commandTextBox] = await Promise.all([
+      designCommandButton.locator('p-icon').first().boundingBox(),
+      designCommandButton.locator('code').boundingBox(),
+    ])
+    expect(commandIconBox).not.toBeNull()
+    expect(commandTextBox).not.toBeNull()
+    expect(commandIconBox!.y + commandIconBox!.height / 2).toBeCloseTo(
+      commandTextBox!.y + commandTextBox!.height / 2,
+      0,
+    )
+    await guidance.scrollIntoViewIfNeeded()
+    await page.screenshot({ path: testInfo.outputPath('delivery-command-alignment.png') })
+    await designCommandButton.click()
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(designCommand)
     await expect(page).toHaveURL(/\/delivery$/)
     await expect(guidance.getByRole('button', { name: `Copy command ${designCommand}` })).toBeVisible()
