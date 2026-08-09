@@ -65,6 +65,7 @@ Tool allowlists remain in agent frontmatter; they are not duplicated here.
 | `ideate` | `prompt` -> designer in discovery mode | Agent required-reading loads `w-design-session`; selects or creates one target Design session |
 | `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same target Design session |
 | `orchestrate` | `prompt` -> orchestrator | Agent required-reading loads `w-orchestration` |
+| `resolve-delivery-attention` | Current agent directed by prompt | Loads `w-delivery-attention-resolution`; binds one exact Integration attention before interactive diagnosis |
 | `test-curation` | `prompt` -> test-curator | Agent required-reading loads `w-test-curation` |
 | `kb-ingest` | `prompt` -> knowledge-ingestor | Agent required-reading loads `h-knowledge-ops` |
 | `kb-enrich` | `prompt` -> knowledge-enricher | Agent required-reading loads `w-knowledge-enrichment` and `h-knowledge-ops` |
@@ -91,6 +92,7 @@ The named caller owns each on-demand condition and timing.
 | Python instruction | `h-python-conventions` | The active file matches the Python instruction scope |
 | frontend instruction | `h-frontend-conventions` | The active file matches the frontend instruction scope |
 | proof selection | `h-pytest-and-linting` or `h-vitest-and-linting` | The changed domain uses that test and lint toolchain |
+| `resolve-delivery-attention` prompt | `w-delivery-attention-resolution` | One exact operator-required Integration attention needs interactive diagnosis or a user-selected remedy |
 
 ## Required Skill Consumers
 
