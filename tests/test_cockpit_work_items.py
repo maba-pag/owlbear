@@ -20,6 +20,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
+    DeliveryWorkerRole,
 )
 from owlbear_delivery.portfolio_operating import (
     PortfolioGuidance,
@@ -31,6 +32,7 @@ from owlbear_delivery.portfolio_operating import (
 from owlbear_delivery.work_items import (
     ChangeGroupView,
     WorkItemAction,
+    WorkItemActionKind,
     WorkItemActivity,
     WorkItemActivityState,
     WorkItemCardView,
@@ -188,14 +190,26 @@ class _DeliveryApplicationFake:
                 scope=WorkItemScope.CHANGE_INTEGRATION,
                 title="Integration",
                 stage=None,
-                needs=WorkItemNeed.REPAIR if self.integration_attention else WorkItemNeed.NONE,
-                next_actor=WorkItemNextActor.REPAIR if self.integration_attention else WorkItemNextActor.AGENT,
+                needs=WorkItemNeed.NONE,
+                next_actor=WorkItemNextActor.AGENT,
                 next_step="Run a reviewed Integration repair"
                 if self.integration_attention
                 else "Integrate the reviewed Change",
-                activity=WorkItemActivity(state=WorkItemActivityState.IDLE),
-                progress=WorkItemProgress(kind=WorkItemProgressKind.INTEGRATION, label="Attempt failed"),
-                action=WorkItemAction(),
+                activity=WorkItemActivity(
+                    state=WorkItemActivityState.READY,
+                    worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER if self.integration_attention else None,
+                ),
+                progress=WorkItemProgress(
+                    kind=WorkItemProgressKind.INTEGRATION,
+                    label="Merge conflict" if self.integration_attention else "Not attempted",
+                ),
+                action=WorkItemAction(
+                    kind=WorkItemActionKind.START_ORCHESTRATION,
+                    label="Run Orchestration",
+                    command="/orchestrate",
+                )
+                if self.integration_attention
+                else WorkItemAction(),
             )
             return WorkItemDetailView(
                 snapshot_version="a" * 64,
@@ -363,7 +377,7 @@ def test_list_and_detail_expose_current_bounded_delivery_state() -> None:
     assert portfolio.json()["totals"] == {
         "total": 3,
         "complete": 1,
-        "needs": {"you": 1, "dependency": 0, "repair": 0, "none": 2},
+        "needs": {"you": 1, "dependency": 0, "none": 2},
         "activity": {"idle": 1, "ready": 2, "working": 0, "repairing": 0},
     }
     assert portfolio.json()["operating"] == {

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { PorscheDesignSystemProvider, PToast } from '@porsche-design-system/components-react'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type {
@@ -27,6 +28,7 @@ function card(overrides: Partial<WorkItemCardView> = {}): WorkItemCardView {
     activity: { state: 'working', worker_role: 'builder', started_at: '2026-08-08T10:00:00Z', task_id: 'TASK-001' },
     progress: { kind: 'tasks', label: '1 of 2 Delivery tasks reviewed', done: 1, total: 2 },
     action: { kind: 'none', label: null, command: null },
+    integration_attention: null,
     ...overrides,
   }
 }
@@ -67,7 +69,7 @@ function portfolio(groups: ChangeGroupView[] = [group()]): WorkItemPortfolioResp
     scope: item.scope === 'change-integration' ? 'integration' as const : 'outcome' as const,
   })
   const claimed = items.filter((item) => ['working', 'repairing'].includes(item.activity.state)).map(reference)
-  const queued = items.filter((item) => item.activity.state === 'ready' || item.needs === 'repair').map(reference)
+  const queued = items.filter((item) => item.activity.state === 'ready').map(reference)
   const interventions = items.filter((item) => item.needs === 'you').map(reference)
   const dependencyWaits = items.filter((item) => item.needs === 'dependency').map(reference)
   const guidance: WorkItemPortfolioResponse['operating']['guidance'] = []
@@ -84,7 +86,6 @@ function portfolio(groups: ChangeGroupView[] = [group()]): WorkItemPortfolioResp
       needs: {
         you: items.filter((item) => item.needs === 'you').length,
         dependency: items.filter((item) => item.needs === 'dependency').length,
-        repair: items.filter((item) => item.needs === 'repair').length,
         none: items.filter((item) => item.needs === 'none').length,
       },
       activity: {
@@ -254,7 +255,12 @@ function namedPdsHost(container: HTMLElement, tagName: 'p-input-text' | 'p-selec
 }
 
 function renderPage(path = '/delivery') {
-  return render(<MemoryRouter initialEntries={[path]}><WorkPortfolioPage /></MemoryRouter>)
+  return render(
+    <PorscheDesignSystemProvider>
+      <MemoryRouter initialEntries={[path]}><WorkPortfolioPage /></MemoryRouter>
+      <PToast />
+    </PorscheDesignSystemProvider>,
+  )
 }
 
 beforeEach(() => {
@@ -284,7 +290,7 @@ it('summarizes all current Change phases and nonzero operating states', () => {
   const totals: WorkItemPortfolioResponse['totals'] = {
     total: 4,
     complete: 0,
-    needs: { you: 1, dependency: 1, repair: 1, none: 1 },
+    needs: { you: 1, dependency: 1, none: 2 },
     activity: { idle: 1, ready: 1, working: 1, repairing: 1 },
   }
   const onNeedsFilter = vi.fn()
@@ -292,7 +298,7 @@ it('summarizes all current Change phases and nonzero operating states', () => {
   render(<PortfolioHeaderSummary operating={operating} totals={totals} needsFilter="you" onNeedsFilter={onNeedsFilter} />)
 
   expect(screen.getByRole('group', { name: 'Portfolio inventory' })).toHaveTextContent('4Changes2Design·2Delivery')
-  expect(screen.getByRole('group', { name: 'Attention' })).toHaveTextContent('1Needs you1Blocked1Repair')
+  expect(screen.getByRole('group', { name: 'Attention' })).toHaveTextContent('1Needs you1Blocked')
   expect(screen.getByRole('group', { name: 'Activity' })).toHaveTextContent('2Running1Ready')
 
   const needsYou = screen.getByRole('button', { name: 'Filter to 1 work item: Needs you' })
@@ -324,6 +330,19 @@ it('presents Change-grouped Outcomes by work, progress, and status', async () =>
   expect(guidance).not.toHaveTextContent('Start /orchestrate')
   expect(table.compareDocumentPosition(guidance) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect(screen.queryByText('Reviewed', { exact: true })).not.toBeInTheDocument()
+})
+
+it('copies empty-portfolio session commands with the shared compact control', async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+  currentPortfolio = portfolio([])
+  renderPage()
+
+  const guidance = await screen.findByLabelText('Session suggestions')
+  const ideateCommand = within(guidance).getByRole('button', { name: 'Copy command /ideate' })
+  fireEvent.click(ideateCommand)
+
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith('/ideate'))
 })
 
 it('shows unadmitted Design work on the board and opens its verified sources', async () => {
@@ -545,19 +564,21 @@ it('keeps claim recovery and backward movement explicit and confirmable', async 
 })
 
 it('routes Integration repair through Orchestration while keeping raw diagnostics collapsed', async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
   const integrationCard = card({
     item_key: 'integration',
     work_item_id: 'change-alpha',
     scope: 'change-integration',
     title: 'Integration',
     stage: null,
-    needs: 'repair',
-    needs_headline: 'Merge conflict',
-    next_actor: 'repair',
+    needs: 'none',
+    needs_headline: null,
+    next_actor: 'agent',
     next_step: 'Run a reviewed Integration repair',
-    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
-    progress: { kind: 'integration', label: 'Integration repair required', done: null, total: null },
-    action: { kind: 'none', label: null, command: null },
+    activity: { state: 'ready', worker_role: 'integration-repairer', started_at: null, task_id: null },
+    progress: { kind: 'integration', label: 'Merge conflict', done: null, total: null },
+    action: { kind: 'start-orchestration', label: 'Run Orchestration', command: '/orchestrate' },
   })
   currentDetail = detail({
     card: integrationCard,
@@ -566,6 +587,7 @@ it('routes Integration repair through Orchestration while keeping raw diagnostic
     commitments: [],
     tasks: [],
     integration: {
+      attention_id: null,
       code: 'merge-conflict',
       disposition: 'repair-required',
       headline: 'Merge conflict',
@@ -587,7 +609,13 @@ it('routes Integration repair through Orchestration while keeping raw diagnostic
   expect(inspector).toHaveTextContent('Merge conflict')
   expect(inspector).toHaveTextContent('Conflicting files')
   expect(inspector).toHaveTextContent('serve/delivery/work_items.py')
-  expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('1Repair')
+  expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('1Ready')
+  expect(integrationRow).toHaveTextContent('Ready for Integration repair')
+  const orchestrationCommand = within(integrationRow).getByRole('button', { name: 'Copy command /orchestrate' })
+  fireEvent.click(orchestrationCommand)
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith('/orchestrate'))
+  expect(within(inspector).getByRole('button', { name: 'Copy command /orchestrate' })).toBeInTheDocument()
+  expect(inspector).not.toHaveTextContent('Admit a reviewed repair.')
   expect(inspector).not.toHaveTextContent('/integration-repair')
   expect(screen.getByText('Technical evidence').closest('details')).not.toHaveAttribute('open')
   expect(screen.queryByText('Retry Integration')).not.toBeInTheDocument()
@@ -616,6 +644,7 @@ it('separates current Integration retry guidance from stale attempt evidence', a
     commitments: [],
     tasks: [],
     integration: {
+      attention_id: null,
       code: 'merge-conflict',
       disposition: 'repair-required',
       headline: 'Integration target moved',
@@ -641,6 +670,7 @@ it('separates current Integration retry guidance from stale attempt evidence', a
   expect(staleEvidence).toHaveTextContent('serve/delivery/work_items.py')
   expect(screen.getByTestId('integration-diagnostics-scroll')).toHaveClass('min-w-0', 'max-w-full', 'overflow-x-auto')
   expect(inspector).not.toHaveTextContent('Next: Retry Integration')
+  expect(inspector).not.toHaveTextContent('Resolve with an agent session')
 })
 
 it('states operator-required Integration status once', async () => {
@@ -657,6 +687,12 @@ it('states operator-required Integration status once', async () => {
     activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
     progress: { kind: 'integration', label: 'Attempt failed', done: null, total: null },
     action: { kind: 'none', label: null, command: null },
+    integration_attention: {
+      attention_id: 'b'.repeat(64),
+      code: 'revision-pending',
+      disposition: 'operator-required',
+      superseded: false,
+    },
   })
   currentDetail = detail({
     card: integrationCard,
@@ -665,6 +701,7 @@ it('states operator-required Integration status once', async () => {
     commitments: [],
     tasks: [],
     integration: {
+      attention_id: 'b'.repeat(64),
       code: 'revision-pending',
       disposition: 'operator-required',
       headline: 'Revision pending',
@@ -681,6 +718,98 @@ it('states operator-required Integration status once', async () => {
   const inspector = await screen.findByTestId('work-item-detail')
   expect(within(inspector).getAllByText('Revision pending')).toHaveLength(1)
   expect(within(inspector).getByRole('region', { name: 'Integration requires your attention' })).toBeInTheDocument()
+})
+
+it('copies exact operator-required Integration resolution command from the overview', async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+  const attentionId = 'c'.repeat(64)
+  const integrationCard = card({
+    item_key: 'integration',
+    work_item_id: 'change-alpha',
+    scope: 'change-integration',
+    title: 'Integration',
+    stage: null,
+    needs: 'you',
+    needs_headline: 'Reviewed worktree is dirty',
+    next_actor: 'you',
+    next_step: 'Reviewed worktree is dirty',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'integration', label: 'Attempt failed', done: null, total: null },
+    action: { kind: 'none', label: null, command: null },
+    integration_attention: {
+      attention_id: attentionId,
+      code: 'reviewed-worktree-dirty',
+      disposition: 'operator-required',
+      superseded: false,
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'integration', outcome_completed: 2, items: [integrationCard] })])
+  renderPage()
+
+  const command = `/resolve-delivery-attention change-alpha ${attentionId}`
+  fireEvent.click(await screen.findByRole('button', { name: `Copy command ${command}` }))
+
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith(command))
+  expect(screen.queryByTestId('work-item-detail')).not.toBeInTheDocument()
+})
+
+it('hands operator-required Integration to the same exact agent resolution command', async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+  const attentionId = 'c'.repeat(64)
+  const integrationCard = card({
+    item_key: 'integration',
+    work_item_id: 'change-alpha',
+    scope: 'change-integration',
+    title: 'Integration',
+    stage: null,
+    needs: 'you',
+    needs_headline: 'Reviewed worktree is dirty',
+    next_actor: 'you',
+    next_step: 'Reviewed worktree is dirty',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'integration', label: 'Attempt failed', done: null, total: null },
+    action: { kind: 'none', label: null, command: null },
+    integration_attention: {
+      attention_id: attentionId,
+      code: 'reviewed-worktree-dirty',
+      disposition: 'operator-required',
+      superseded: false,
+    },
+  })
+  currentDetail = detail({
+    card: integrationCard,
+    promise: 'Publish the reviewed Change.',
+    acceptance: [],
+    commitments: [],
+    tasks: [],
+    integration: {
+      attention_id: attentionId,
+      code: 'reviewed-worktree-dirty',
+      disposition: 'operator-required',
+      headline: 'Reviewed worktree is dirty',
+      explanation: 'Integration stopped because the reviewed boundary no longer matches the worktree.',
+      conflicted_paths: [],
+      diagnostics: ['change worktree is not clean at its reviewed boundary'],
+      retry_condition: 'Restore the reviewed boundary, then let Orchestration integrate again.',
+      superseded: false,
+      repair_active: false,
+    },
+  })
+  renderPage('/delivery/change-alpha/integration')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(inspector).toHaveTextContent('Copy this command into a new Copilot chat')
+  expect(inspector).not.toHaveTextContent('Next: Restore the reviewed boundary')
+  expect(inspector).not.toHaveTextContent('Resolved when:')
+
+  fireEvent.click(within(inspector).getByRole('button', { name: `Copy command /resolve-delivery-attention change-alpha ${attentionId}` }))
+
+  await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
+  const prompt = writeText.mock.calls[0][0] as string
+  expect(prompt).toBe(`/resolve-delivery-attention change-alpha ${attentionId}`)
+  expect(within(inspector).getByText('Engine resume condition: Restore the reviewed boundary, then let Orchestration integrate again.')).toBeInTheDocument()
 })
 
 it('uses the Done status tag without leaking the internal Stage field', async () => {
@@ -820,6 +949,7 @@ it('shows active Integration repair state without instructing a duplicate repair
     commitments: [],
     tasks: [],
     integration: {
+      attention_id: null,
       code: 'merge-conflict',
       disposition: 'repair-required',
       headline: 'Merge conflict',
@@ -861,6 +991,7 @@ it('moves a completed selected Change into completed history instead of leaving 
     commitments: [],
     tasks: [],
     integration: {
+      attention_id: null,
       code: null,
       disposition: null,
       headline: 'Ready to integrate',
@@ -900,6 +1031,7 @@ it('keeps current delivery open when only the selected Integration card disappea
     commitments: [],
     tasks: [],
     integration: {
+      attention_id: null,
       code: null,
       disposition: null,
       headline: 'Ready to integrate',

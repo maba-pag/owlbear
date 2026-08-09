@@ -129,6 +129,16 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(interventionOutcome).toHaveCSS('border-left-width', '4px')
     await expect(integrationRow).toHaveCSS('border-left-width', '4px')
 
+    const integrationTrigger = integrationRow.getByRole('link', { name: 'Integration', exact: true })
+    const integrationStatusBox = await integrationRow.getByText('Integration repairer working', { exact: true }).boundingBox()
+    expect(integrationStatusBox).not.toBeNull()
+    await page.mouse.click(
+      integrationStatusBox!.x + integrationStatusBox!.width / 2,
+      integrationStatusBox!.y + integrationStatusBox!.height / 2,
+    )
+    await expect(page.getByTestId('work-item-detail').getByRole('heading', { name: 'Integration', exact: true })).toBeVisible()
+    await returnToPortfolio(page, integrationTrigger)
+
     const designSection = page.getByTestId('design-work-section')
     await expect(designSection).toContainText('Design Operations Roadmap')
     await expect(designSection).toContainText('Not admitted to Delivery')
@@ -145,7 +155,7 @@ test.describe('assembled Delivery portfolio', () => {
       firstChange.locator('tbody tr').first().boundingBox(),
       designSection.boundingBox(),
       designSection.getByRole('heading', { name: 'Design work' }).boundingBox(),
-      designSection.locator('[aria-hidden="true"]').boundingBox(),
+      designSection.locator(':scope > div[aria-hidden="true"]').boundingBox(),
       designRow.boundingBox(),
     ])
     expect(changeHeadingBox).not.toBeNull()

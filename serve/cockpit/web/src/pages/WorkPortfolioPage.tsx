@@ -75,7 +75,7 @@ function PortfolioFilterTools(props: FilterProps) {
       {props.needsFilter ? (
         <PTagDismissible
           compact
-          label={`Attention: ${props.needsFilter === 'you' ? 'Needs you' : props.needsFilter === 'dependency' ? 'Waiting on dependency' : props.needsFilter === 'repair' ? 'Repair required' : 'No intervention'}`}
+          label={`Attention: ${props.needsFilter === 'you' ? 'Needs you' : props.needsFilter === 'dependency' ? 'Waiting on dependency' : 'No intervention'}`}
           data-testid="work-filter-chip-needs"
           aria={{ 'aria-label': 'Remove Attention filter' }}
           onClick={() => props.onNeedsFilter('')}
@@ -125,7 +125,6 @@ function PortfolioFilterPanel(props: FilterProps) {
         <PSelectOption value="">Any attention state</PSelectOption>
         <PSelectOption value="you">Needs you</PSelectOption>
         <PSelectOption value="dependency">Waiting on dependency</PSelectOption>
-        <PSelectOption value="repair">Repair required</PSelectOption>
         <PSelectOption value="none">No intervention</PSelectOption>
       </PSelect>
       <PButtonPure

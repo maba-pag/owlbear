@@ -1,7 +1,7 @@
 export type WorkItemStage = 'design' | 'planning' | 'implementation' | 'assembly' | 'completed'
 export type WorkItemScope = 'outcome' | 'change-integration'
-export type WorkItemNeed = 'you' | 'dependency' | 'repair' | 'none'
-export type WorkItemNextActor = 'you' | 'agent' | 'dependency' | 'repair' | 'none'
+export type WorkItemNeed = 'you' | 'dependency' | 'none'
+export type WorkItemNextActor = 'you' | 'agent' | 'dependency' | 'none'
 export type WorkItemActivityState = 'idle' | 'ready' | 'working' | 'repairing'
 export type WorkItemActionKind =
   | 'none'
@@ -10,6 +10,7 @@ export type WorkItemActionKind =
   | 'recover-claim'
   | 'integrate-change'
   | 'retry-integration'
+  | 'start-orchestration'
 export type WorkItemProgressKind = 'tasks' | 'assembly' | 'design-return' | 'plan' | 'integration'
 export type WorkItemChangeLifecycle = 'in-delivery' | 'integration'
 export type DeliveryWorkerRole = 'planner' | 'builder' | 'assembly-reviewer' | 'integration-repairer'
@@ -46,6 +47,13 @@ export interface WorkItemProgress {
   total: number | null
 }
 
+export interface WorkItemIntegrationAttentionRef {
+  attention_id: string
+  code: DeliveryIntegrationAttentionCode
+  disposition: DeliveryIntegrationAttentionDisposition
+  superseded: boolean
+}
+
 export interface WorkItemCardView {
   item_key: string
   work_item_id: string
@@ -60,6 +68,7 @@ export interface WorkItemCardView {
   activity: WorkItemActivity
   progress: WorkItemProgress
   action: WorkItemAction
+  integration_attention: WorkItemIntegrationAttentionRef | null
 }
 
 export interface ChangeGroupView {
@@ -75,7 +84,6 @@ export interface ChangeGroupView {
 export interface NeedsCounts {
   you: number
   dependency: number
-  repair: number
   none: number
 }
 
@@ -189,6 +197,7 @@ export interface WorkItemTaskEvidence {
 }
 
 export interface WorkItemIntegrationView {
+  attention_id: string | null
   code: DeliveryIntegrationAttentionCode | null
   disposition: DeliveryIntegrationAttentionDisposition | null
   headline: string

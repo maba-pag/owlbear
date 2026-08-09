@@ -5,7 +5,8 @@ import type {
   WorkItemCardView,
 } from '../api/workItems'
 import { workItemIdentity, type WorkItemIdentity } from '../hooks/useWorkItems'
-import { hasOptionalManualAction, PROGRESS_STAGE_LABELS, workItemStatusLabel } from './workItemPresentation'
+import CopyCommand from './CopyCommand'
+import { canHandOffIntegration, hasOptionalManualAction, integrationHandoffPrompt, PROGRESS_STAGE_LABELS, workItemStatusLabel } from './workItemPresentation'
 
 interface WorkPortfolioTableProps {
   groups: ChangeGroupView[]
@@ -18,7 +19,7 @@ type GroupTableProps = Pick<WorkPortfolioTableProps, 'selected' | 'onSelect'> & 
 
 function attentionBorder(item: WorkItemCardView): string {
   if (item.needs === 'you') return 'border-l-4 border-l-error'
-  if (item.needs === 'repair' || item.activity.state === 'repairing') return 'border-l-4 border-l-warning'
+  if (item.activity.worker_role === 'integration-repairer') return 'border-l-4 border-l-warning'
   return 'border-l-4 border-l-contrast-low'
 }
 
@@ -53,6 +54,9 @@ function ItemLink({
 function ActionLink({ item, onSelect, subdued = false }: { item: WorkItemCardView; onSelect: WorkPortfolioTableProps['onSelect']; subdued?: boolean }) {
   const navigate = useNavigate()
   if (item.action.kind === 'none' || !item.action.label) return null
+  if (item.action.command) {
+    return <CopyCommand command={item.action.command} className={subdued ? 'text-contrast-medium' : 'text-primary'} />
+  }
   const identity = { changeId: item.change_id, itemKey: item.item_key }
   const path = workItemPath(item)
   return (
@@ -84,6 +88,16 @@ function ProgressState({ item }: { item: WorkItemCardView }) {
   )
 }
 
+function IntegrationHandoff({ item }: { item: WorkItemCardView }) {
+  if (!canHandOffIntegration(item)) return null
+  const command = integrationHandoffPrompt(item)
+  return (
+    <span className="mt-0.5 block">
+      <CopyCommand command={command} className="text-xs" />
+    </span>
+  )
+}
+
 function CurrentState({ item, onSelect }: { item: WorkItemCardView; onSelect: WorkPortfolioTableProps['onSelect'] }) {
   const state = workItemStatusLabel(item)
   const urgent = item.needs === 'you'
@@ -92,6 +106,7 @@ function CurrentState({ item, onSelect }: { item: WorkItemCardView; onSelect: Wo
     <span>
       <span className={urgent ? 'block font-semibold text-error' : 'block font-medium text-primary'}>{state}</span>
       {item.activity.task_id ? <span className="mt-0.5 block text-xs text-contrast-medium">Task {item.activity.task_id}</span> : null}
+      <IntegrationHandoff item={item} />
       {item.action.kind !== 'none' ? <span className={manualOption ? 'mt-0.5 block text-xs text-contrast-medium' : 'mt-0.5 block'}>{manualOption ? 'Optional now: ' : null}<ActionLink item={item} onSelect={onSelect} subdued={manualOption} /></span> : null}
     </span>
   )
@@ -166,9 +181,12 @@ function CompactRows({ group, selected, onSelect }: GroupTableProps) {
 }
 
 function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
+  const navigate = useNavigate()
   const item = group.items.find((candidate) => candidate.scope === 'change-integration')
   if (!item) return null
   const isSelected = selected?.changeId === item.change_id && selected.itemKey === item.item_key
+  const identity = { changeId: item.change_id, itemKey: item.item_key }
+  const path = workItemPath(item)
   return (
     <section
       className={[
@@ -178,18 +196,24 @@ function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
       ].join(' ')}
       aria-label={`Change Integration for ${group.title}`}
       data-work-item={workItemIdentity(item)}
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest('a, button, p-link-pure')) return
+        const trigger = event.currentTarget.querySelector<HTMLElement>('[data-work-item-primary-trigger]')
+        if (trigger) onSelect(identity, trigger)
+        navigate(path)
+      }}
     >
       <dl className="grid gap-static-sm md:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] md:items-start md:gap-0">
         <div className="min-w-0 md:px-static-sm md:py-static-sm">
           <dt className="sr-only">Work</dt>
           <dd>
             <Link
-              to={workItemPath(item)}
+              to={path}
               data-work-item-primary-trigger
               data-work-item-identity={`${item.change_id}:${item.item_key}`}
-              className="block font-semibold text-primary after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+              className="block font-semibold text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
               aria-current={isSelected ? 'location' : undefined}
-              onClick={(event) => onSelect({ changeId: item.change_id, itemKey: item.item_key }, event.currentTarget)}
+              onClick={(event) => onSelect(identity, event.currentTarget)}
             >
               Integration
             </Link>
@@ -200,7 +224,7 @@ function IntegrationGate({ group, selected, onSelect }: GroupTableProps) {
           <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high md:sr-only">Progress</dt>
           <dd><ProgressState item={item} /></dd>
         </div>
-        <div className="relative z-[1] md:px-static-sm md:py-static-sm">
+        <div className="md:px-static-sm md:py-static-sm">
           <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high md:sr-only">Status</dt>
           <dd><CurrentState item={item} onSelect={onSelect} /></dd>
         </div>

@@ -141,7 +141,6 @@ export function PortfolioHeaderSummary({ operating, totals, needsFilter, onNeeds
         <div className="flex flex-wrap items-center gap-static-xs" role="group" aria-label="Attention">
           <AttentionMetric count={totals.needs.you} filter="you" icon="warning" label="Needs you" selected={needsFilter === 'you'} onSelect={onNeedsFilter} />
           <AttentionMetric count={totals.needs.dependency} filter="dependency" icon="clock" label="Blocked" selected={needsFilter === 'dependency'} onSelect={onNeedsFilter} />
-          <AttentionMetric count={totals.needs.repair} filter="repair" icon="wrench" label="Repair" selected={needsFilter === 'repair'} onSelect={onNeedsFilter} />
         </div>
         <div className="flex items-center gap-static-md" role="group" aria-label="Activity">
           <ActivityMetric count={runningCount} icon="play" label="Running" />

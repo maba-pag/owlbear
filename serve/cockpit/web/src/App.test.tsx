@@ -8,7 +8,8 @@ vi.mock('./CockpitShell', () => ({
 
 describe('App target shell integration', () => {
   it('renders the target product shell', () => {
-    const { getByTestId } = render(<App />)
+    const { container, getByTestId } = render(<App />)
     expect(getByTestId('cockpit-shell')).toBeInTheDocument()
+    expect(container.querySelector('p-toast')).toBeInTheDocument()
   })
 })

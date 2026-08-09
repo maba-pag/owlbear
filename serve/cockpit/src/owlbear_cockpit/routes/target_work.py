@@ -410,7 +410,6 @@ def _portfolio_totals(groups: tuple[ChangeGroupView, ...]) -> WorkItemPortfolioT
         needs=NeedsCounts(
             you=needs.count(WorkItemNeed.YOU),
             dependency=needs.count(WorkItemNeed.DEPENDENCY),
-            repair=needs.count(WorkItemNeed.REPAIR),
             none=needs.count(WorkItemNeed.NONE),
         ),
         activity=ActivityCounts(

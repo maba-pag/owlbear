@@ -15,11 +15,19 @@ import {
   type BackwardMovePreview,
   type DeliveryRequest,
   type DeliveryRequestResolution,
+  type WorkItemCardView,
   type WorkItemDetailResponse,
   type WorkItemStage,
   type DeliveryWorkerRole,
 } from '../api/workItems'
-import { hasOptionalManualAction, PROGRESS_STAGE_LABELS, workItemStatusLabel } from './workItemPresentation'
+import CopyCommand from './CopyCommand'
+import {
+  canHandOffIntegration,
+  hasOptionalManualAction,
+  integrationHandoffPrompt,
+  PROGRESS_STAGE_LABELS,
+  workItemStatusLabel,
+} from './workItemPresentation'
 
 type FieldValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }
 
@@ -369,12 +377,24 @@ function Diagnostics({ lines }: { lines: string[] }) {
   )
 }
 
+function IntegrationAgentHandoff({ card }: { card: WorkItemCardView }) {
+  const command = integrationHandoffPrompt(card)
+  return (
+    <div className="mt-static-md min-w-0 border-t border-contrast-low pt-static-md">
+      <h4 className="text-xs font-semibold uppercase text-contrast-medium">Copilot resolver</h4>
+      <p className="mt-static-xs max-w-[72ch] text-sm leading-relaxed">Copy this command into a new Copilot chat.</p>
+      <CopyCommand command={command} className="mt-static-sm text-xs" />
+    </div>
+  )
+}
+
 function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkItemDetailProps) {
   const integration = detail.item.integration
   if (!integration) return null
   const action = detail.item.card.action
   const canIntegrate = action.kind === 'integrate-change' || action.kind === 'retry-integration'
   const operatorRequired = integration.disposition === 'operator-required'
+  const agentHandoff = canHandOffIntegration(detail.item.card) && !integration.repair_active
   const manualOption = hasOptionalManualAction(detail.item.card)
   return (
     <section className={operatorRequired ? 'min-w-0 border-l-4 border-warning bg-surface p-static-md' : 'min-w-0 border-l border-contrast-low bg-surface p-static-md'} aria-labelledby="work-integration-heading">
@@ -386,7 +406,13 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
           <ConflictedPaths paths={integration.conflicted_paths} />
         </div>
       ) : null}
-      {action.command ? <code className="mt-static-sm block break-all bg-canvas p-static-sm text-xs text-contrast-medium">{action.command}</code> : null}
+      {action.command && !agentHandoff ? (
+        <div className="mt-static-sm flex min-w-0 flex-wrap items-baseline gap-static-xs text-xs text-contrast-medium">
+          <span>Next:</span>
+          <CopyCommand command={action.command} />
+        </div>
+      ) : null}
+      {agentHandoff ? <IntegrationAgentHandoff card={detail.item.card} /> : null}
       {canIntegrate && manualOption ? (
         <div className="mt-static-md grid gap-static-sm">
           <p className="text-sm"><strong>Waiting for Orchestration.</strong> Orchestration will {action.kind === 'retry-integration' ? 'retry against the current target' : 'integrate this Change'}.</p>
@@ -402,7 +428,7 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
           {pendingAction === 'integration' ? 'Working...' : action.label}
         </PButton>
       ) : null}
-      {!canIntegrate && !integration.repair_active && integration.retry_condition ? <p className="mt-static-sm text-xs text-contrast-medium">Next: {integration.retry_condition}</p> : null}
+      {!canIntegrate && !action.command && !integration.repair_active && !agentHandoff && integration.retry_condition ? <p className="mt-static-sm text-xs text-contrast-medium">Next: {integration.retry_condition}</p> : null}
       {integration.superseded && integration.diagnostics.length > 0 ? (
         <details className="mt-static-md min-w-0 max-w-full">
           <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Previous attempt (stale)</summary>
@@ -413,6 +439,7 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
       ) : !integration.superseded && integration.diagnostics.length > 0 ? (
         <details className="mt-static-md min-w-0 max-w-full">
           <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Technical evidence</summary>
+          {agentHandoff && integration.retry_condition ? <p className="mt-static-sm text-xs text-primary">Engine resume condition: {integration.retry_condition}</p> : null}
           <Diagnostics lines={integration.diagnostics} />
         </details>
       ) : null}

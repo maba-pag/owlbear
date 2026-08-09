@@ -1600,7 +1600,7 @@ def test_integration_merge_conflict_retains_clean_heads_and_typed_attention(tmp_
     operator = application.show_operator_context("change-a", "change-a")
     assert (integration_card.scope, integration_card.attention.value, integration_card.next_action) == (
         "change-integration",
-        "repair",
+        "agent",
         "Repair in progress",
     )
     assert operator.integration_attention is not None

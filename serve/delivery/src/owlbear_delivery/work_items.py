@@ -41,7 +41,6 @@ class WorkItemAttention(StrEnum):
     USER = "user"
     AGENT = "agent"
     WAITING = "waiting"
-    REPAIR = "repair"
     NONE = "none"
 
 
@@ -57,7 +56,6 @@ class WorkItemNeed(StrEnum):
 
     YOU = "you"
     DEPENDENCY = "dependency"
-    REPAIR = "repair"
     NONE = "none"
 
 
@@ -67,7 +65,6 @@ class WorkItemNextActor(StrEnum):
     YOU = "you"
     AGENT = "agent"
     DEPENDENCY = "dependency"
-    REPAIR = "repair"
     NONE = "none"
 
 
@@ -89,6 +86,7 @@ class WorkItemActionKind(StrEnum):
     RECOVER_CLAIM = "recover-claim"
     INTEGRATE_CHANGE = "integrate-change"
     RETRY_INTEGRATION = "retry-integration"
+    START_ORCHESTRATION = "start-orchestration"
 
 
 class WorkItemProgressKind(StrEnum):
@@ -207,6 +205,15 @@ class WorkItemProgress(_ProjectionModel):
     total: int | None = Field(default=None, ge=0)
 
 
+class WorkItemIntegrationAttentionRef(_ProjectionModel):
+    """Bounded identity and route for one retained Integration attention."""
+
+    attention_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    code: DeliveryIntegrationAttentionCode
+    disposition: DeliveryIntegrationAttentionDisposition
+    superseded: bool
+
+
 class WorkItemCardView(_ProjectionModel):
     """One dense portfolio row derived from a Delivery snapshot."""
 
@@ -223,6 +230,7 @@ class WorkItemCardView(_ProjectionModel):
     activity: WorkItemActivity
     progress: WorkItemProgress
     action: WorkItemAction
+    integration_attention: WorkItemIntegrationAttentionRef | None = None
 
 
 class ChangeGroupView(_ProjectionModel):
@@ -280,6 +288,7 @@ class WorkItemTaskEvidence(_ProjectionModel):
 class WorkItemIntegrationView(_ProjectionModel):
     """Human-legible Integration state with retained exact diagnostics."""
 
+    attention_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     code: DeliveryIntegrationAttentionCode | None = None
     disposition: DeliveryIntegrationAttentionDisposition | None = None
     headline: str = Field(min_length=1)
@@ -518,6 +527,7 @@ class WorkItemProjector:
 
     def _integration_card(self) -> WorkItemCardView:
         attention = self._snapshot.frontier.integration_attention
+        superseded = self._snapshot.integration_attention_superseded
         repair_active = self._snapshot.frontier.integration_repair_claim is not None
         if repair_active:
             needs, headline = WorkItemNeed.NONE, None
@@ -530,7 +540,7 @@ class WorkItemProjector:
             )
             action = WorkItemAction()
             progress = "Repair in progress"
-        elif self._snapshot.integration_attention_superseded:
+        elif superseded:
             needs, headline = WorkItemNeed.NONE, "Integration target moved"
             next_actor = WorkItemNextActor.AGENT
             next_step = "Retry against the current target"
@@ -547,12 +557,19 @@ class WorkItemProjector:
         else:
             disposition = integration_attention_disposition(attention.code)
             if disposition == DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED:
-                needs, headline = WorkItemNeed.REPAIR, "Merge conflict"
-                next_actor = WorkItemNextActor.REPAIR
+                needs, headline = WorkItemNeed.NONE, None
+                next_actor = WorkItemNextActor.AGENT
                 next_step = "Run a reviewed Integration repair"
-                activity = WorkItemActivity(state=WorkItemActivityState.IDLE)
-                action = WorkItemAction()
-                progress = "Integration repair required"
+                activity = WorkItemActivity(
+                    state=WorkItemActivityState.READY,
+                    worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER,
+                )
+                action = WorkItemAction(
+                    kind=WorkItemActionKind.START_ORCHESTRATION,
+                    label="Run Orchestration",
+                    command="/orchestrate",
+                )
+                progress = "Merge conflict"
             elif disposition == DeliveryIntegrationAttentionDisposition.RETRYABLE:
                 needs, headline = WorkItemNeed.NONE, "Integration retry available"
                 next_actor = WorkItemNextActor.AGENT
@@ -581,6 +598,16 @@ class WorkItemProjector:
             activity=activity,
             progress=WorkItemProgress(kind=WorkItemProgressKind.INTEGRATION, label=progress),
             action=action,
+            integration_attention=(
+                WorkItemIntegrationAttentionRef(
+                    attention_id=attention.attention_id,
+                    code=attention.code,
+                    disposition=integration_attention_disposition(attention.code),
+                    superseded=superseded,
+                )
+                if attention is not None
+                else None
+            ),
         )
 
     def _compatibility_projection(self, card: WorkItemCardView) -> WorkItemProjection:
@@ -589,13 +616,15 @@ class WorkItemProjector:
         attention = {
             WorkItemNeed.YOU: WorkItemAttention.USER,
             WorkItemNeed.DEPENDENCY: WorkItemAttention.WAITING,
-            WorkItemNeed.REPAIR: WorkItemAttention.REPAIR,
             WorkItemNeed.NONE: WorkItemAttention.AGENT
-            if card.activity.state in {WorkItemActivityState.READY, WorkItemActivityState.WORKING}
+            if card.activity.state
+            in {
+                WorkItemActivityState.READY,
+                WorkItemActivityState.WORKING,
+                WorkItemActivityState.REPAIRING,
+            }
             else WorkItemAttention.NONE,
         }[card.needs]
-        if card.scope == WorkItemScope.CHANGE_INTEGRATION and card.activity.state == WorkItemActivityState.REPAIRING:
-            attention = WorkItemAttention.REPAIR
         return WorkItemProjection(
             work_item_id=card.work_item_id,
             change_id=card.change_id,
@@ -691,6 +720,7 @@ class WorkItemProjector:
             )
         )
         return WorkItemIntegrationView(
+            attention_id=attention.attention_id,
             code=attention.code,
             disposition=disposition,
             headline=headline,

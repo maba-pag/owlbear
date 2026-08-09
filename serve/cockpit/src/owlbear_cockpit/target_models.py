@@ -20,7 +20,6 @@ class NeedsCounts(_TargetHTTPModel):
 
     you: int = Field(ge=0)
     dependency: int = Field(ge=0)
-    repair: int = Field(ge=0)
     none: int = Field(ge=0)
 
 

@@ -8,6 +8,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryFrontier,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
+    DeliveryIntegrationAttentionDisposition,
     DeliveryOperatorMove,
     DeliveryRequest,
     DeliveryRequestKind,
@@ -350,6 +351,10 @@ def test_target_movement_supersedes_attention_and_offers_retry() -> None:
         "Retry against the current target",
     )
     assert detail.integration is not None
+    assert card.integration_attention is not None
+    assert card.integration_attention.attention_id == attention.attention_id
+    assert card.integration_attention.superseded
+    assert detail.integration.attention_id == attention.attention_id
     assert detail.integration.superseded
     assert detail.integration.conflicted_paths == ("file.py",)
     assert detail.integration.retry_condition == (
@@ -440,7 +445,7 @@ def test_repair_activity_and_conflict_paths_use_retained_evidence() -> None:
     assert integration_conflict_paths(("CONFLICT (content): Merge conflict in docs/a in b.md",)) == ("docs/a in b.md",)
 
 
-def test_merge_conflict_waits_for_orchestrated_repair_without_user_command() -> None:
+def test_merge_conflict_is_ready_for_orchestrated_repair() -> None:
     attention = DeliveryIntegrationAttention(
         attention_id="a" * 64,
         code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
@@ -463,10 +468,13 @@ def test_merge_conflict_waits_for_orchestrated_repair_without_user_command() -> 
 
     card = projector.group_view().items[-1]
 
-    assert card.needs == WorkItemNeed.REPAIR
-    assert card.next_actor == WorkItemNextActor.REPAIR
-    assert card.action.kind == WorkItemActionKind.NONE
-    assert card.action.command is None
+    assert card.needs == WorkItemNeed.NONE
+    assert card.next_actor == WorkItemNextActor.AGENT
+    assert card.activity.state == WorkItemActivityState.READY
+    assert card.activity.worker_role == DeliveryWorkerRole.INTEGRATION_REPAIRER
+    assert card.progress.label == "Merge conflict"
+    assert card.action.kind == WorkItemActionKind.START_ORCHESTRATION
+    assert card.action.command == "/orchestrate"
 
 
 def test_candidate_proof_failure_requires_operator_correction() -> None:
@@ -495,3 +503,8 @@ def test_candidate_proof_failure_requires_operator_correction() -> None:
     assert card.needs == WorkItemNeed.YOU
     assert card.needs_headline == "Candidate verification failed"
     assert card.action.kind == WorkItemActionKind.NONE
+    assert card.integration_attention is not None
+    assert card.integration_attention.attention_id == attention.attention_id
+    assert card.integration_attention.code == DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED
+    assert card.integration_attention.disposition == DeliveryIntegrationAttentionDisposition.OPERATOR_REQUIRED
+    assert not card.integration_attention.superseded
