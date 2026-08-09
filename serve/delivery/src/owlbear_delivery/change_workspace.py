@@ -905,8 +905,13 @@ class ChangeWorkspaceManager:
             )
         reviewed_diagnostics = self._reviewed_preparation_diagnostics(coordination, preparation.change_head)
         if reviewed_diagnostics:
+            code = (
+                DeliveryIntegrationAttentionCode.REVIEWED_WORKTREE_DIRTY
+                if reviewed_diagnostics == ("warm change worktree became dirty after candidate validation",)
+                else DeliveryIntegrationAttentionCode.REVIEWED_BOUNDARY_MISMATCH
+            )
             return AtomicIntegrationResult(
-                code=DeliveryIntegrationAttentionCode.REVIEWED_BOUNDARY_MISMATCH,
+                code=code,
                 diagnostics=reviewed_diagnostics,
             )
         return self._cas_integration(coordination, preparation.candidate_commit, preparation.target_head)
@@ -979,7 +984,7 @@ class ChangeWorkspaceManager:
         self._require_worktree(coordination.worktree_path, coordination.branch, change_head)
         if self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
             return AtomicIntegrationResult(
-                code=DeliveryIntegrationAttentionCode.REVIEWED_BOUNDARY_MISMATCH,
+                code=DeliveryIntegrationAttentionCode.REVIEWED_WORKTREE_DIRTY,
                 diagnostics=("change worktree is not clean at its reviewed boundary",),
             )
         return coordination, change_head, target_head

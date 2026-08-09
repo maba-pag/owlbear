@@ -717,5 +717,6 @@ def _integration_headline(code: DeliveryIntegrationAttentionCode) -> str:
         DeliveryIntegrationAttentionCode.PACKAGE_MUTATED: "Delivery package changed",
         DeliveryIntegrationAttentionCode.COMPLETED_HISTORY_MUTATED: "Completed history changed",
         DeliveryIntegrationAttentionCode.REVIEWED_BOUNDARY_MISMATCH: "Reviewed boundary changed",
+        DeliveryIntegrationAttentionCode.REVIEWED_WORKTREE_DIRTY: "Reviewed worktree has uncommitted changes",
         DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED: "Candidate verification failed",
     }[code]

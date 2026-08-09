@@ -273,6 +273,7 @@ class DeliveryIntegrationAttentionCode(StrEnum):
     PACKAGE_MUTATED = "package-mutated"
     COMPLETED_HISTORY_MUTATED = "completed-history-mutated"
     REVIEWED_BOUNDARY_MISMATCH = "reviewed-boundary-mismatch"
+    REVIEWED_WORKTREE_DIRTY = "reviewed-worktree-dirty"
     MERGE_CONFLICT = "merge-conflict"
     REPAIR_AUTHORITY = "repair-authority"
     CANDIDATE_PROOF_FAILED = "candidate-proof-failed"
