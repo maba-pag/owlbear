@@ -50,11 +50,11 @@ export default function CopyCommand({ command, className = '' }: CopyCommandProp
   }
 
   return (
-    <span className="inline-flex max-w-full">
+    <span className="inline-flex max-w-full align-middle leading-none">
       <button
         type="button"
         className={[
-          'relative z-[1] inline-flex max-w-full cursor-copy items-center gap-1 border-0 bg-transparent p-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+          'relative z-[1] inline-flex max-w-full cursor-copy items-center gap-1 border-0 bg-transparent p-0 text-left leading-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
           copyState === 'copied' ? 'text-success' : copyState === 'failed' ? 'text-error' : 'text-contrast-medium hover:text-primary',
           className,
         ].join(' ')}
@@ -62,9 +62,9 @@ export default function CopyCommand({ command, className = '' }: CopyCommandProp
         title={copyState === 'copied' ? `Copied ${command}` : copyState === 'failed' ? `Could not copy ${command}` : `Copy ${command}`}
         onClick={(event) => void copyCommand(event)}
       >
-        <PIcon name="ai-code" size="2xs" color="inherit" aria-hidden="true" />
-        <code className="max-w-full break-all text-inherit">{command}</code>
-        {stateIcon ? <PIcon name={stateIcon} size="2xs" color="inherit" aria-hidden="true" /> : null}
+        <PIcon className="shrink-0" name="ai-code" size="2xs" color="inherit" aria-hidden="true" />
+        <code className="max-w-full break-all text-inherit leading-none">{command}</code>
+        {stateIcon ? <PIcon className="shrink-0" name={stateIcon} size="2xs" color="inherit" aria-hidden="true" /> : null}
       </button>
     </span>
   )
