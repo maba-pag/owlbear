@@ -132,7 +132,7 @@ function PortfolioFilterPanel(props: FilterProps) {
         type="button"
         icon="reset"
         size="small"
-        className="mb-2"
+        className="mb-1"
         data-testid="work-filters-reset"
         disabled={activeCount === 0}
         onClick={() => {
