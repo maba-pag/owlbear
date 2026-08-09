@@ -1,18 +1,6 @@
 {
     "servers": {
-        "ob-kanban": {
-            "type": "stdio",
-            "command": "uv",
-            "args": [
-                "--project",
-                "../owlbear",
-                "run",
-                "python",
-                "-m",
-                "owlbear_mcp_kanban"
-            ]
-        },
-        "ob-knowledge": {
+        "owlbear-delivery": {
             "type": "stdio",
             "command": "uv",
             "args": [
@@ -21,31 +9,43 @@
                 "run",
                 "python",
                 "-m",
-                "owlbear_mcp_knowledge"
+                "owlbear_delivery_mcp"
             ]
         },
-        "ob-memory": {
+        "owlbear-knowledge": {
             "type": "stdio",
             "command": "uv",
             "args": [
                 "--project",
-                "../owlbear",
+                "../owlbear-dev",
                 "run",
                 "python",
                 "-m",
-                "owlbear_mcp_memory"
+                "owlbear_knowledge_mcp"
             ]
         },
-        "ob-browser": {
+        "owlbear-memory": {
             "type": "stdio",
             "command": "uv",
             "args": [
                 "--project",
-                "../owlbear",
+                "../owlbear-dev",
                 "run",
                 "python",
                 "-m",
-                "owlbear_mcp_browser"
+                "owlbear_memory_mcp"
+            ]
+        },
+        "owlbear-browser": {
+            "type": "stdio",
+            "command": "uv",
+            "args": [
+                "--project",
+                "../owlbear-dev",
+                "run",
+                "python",
+                "-m",
+                "owlbear_browser_mcp"
             ]
         },
         "markitdown": {
