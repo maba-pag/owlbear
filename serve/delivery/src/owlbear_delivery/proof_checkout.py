@@ -123,11 +123,11 @@ class ProofCheckoutManager:
             self._make_tracked_files_read_only(checkout)
             self._write_manifest(
                 manifest,
-                job,
-                resolved_commit,
-                authority_digest,
-                environment or {},
-                replacements,
+                job=job,
+                commit=resolved_commit,
+                authority_digest=authority_digest,
+                environment=environment or {},
+                replacements=replacements,
             )
         except OSError, subprocess.CalledProcessError, ValueError:
             if root_created:
@@ -379,8 +379,9 @@ class ProofCheckoutManager:
         return digest.hexdigest()
 
     @staticmethod
-    def _write_manifest(  # noqa: PLR0913, PLR0917
+    def _write_manifest(  # noqa: PLR0913
         path: Path,
+        *,
         job: TargetJob,
         commit: str,
         authority_digest: str,
