@@ -57,6 +57,7 @@ from owlbear_delivery import (
     PortfolioApplication,
     PortfolioApplicationConfig,
     PortfolioApplicationDependencies,
+    PortfolioApplicationError,
     PortfolioApplicationHooks,
     PortfolioCoordinator,
     PublishDeliveryPlan,
@@ -882,6 +883,26 @@ def test_repair_candidate_rejects_mismatched_claim(tmp_path: Path) -> None:
         )
 
     assert _git(coordinator.show("change-a").worktree_path, "rev-parse", "HEAD") == repair.reviewed_repair_commit
+
+
+def test_repair_candidate_rejects_mismatched_writer_custody(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, _state_root, repair, claim = _prepare_reviewed_integration_repair(tmp_path)
+    coordination = coordinator.show("change-a")
+    assert coordination.writer is not None
+    coordinator.release("change-a", claim.claim_id)
+    coordinator.acquire(
+        "change-a",
+        coordination.writer.model_copy(update={"actor_id": "another-builder"}),
+    )
+
+    with pytest.raises(PortfolioApplicationError, match="exact active writer custody"):
+        application.create_integration_repair_candidate(
+            "change-a",
+            claim.attempt_id,
+            claim.claim_id,
+        )
+
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == repair.reviewed_repair_commit
 
 
 def _with_reviewed_commit(repair: DeliveryIntegrationRepair, commit: str) -> DeliveryIntegrationRepair:

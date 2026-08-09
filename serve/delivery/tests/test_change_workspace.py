@@ -587,3 +587,41 @@ def test_repair_candidate_rejects_changes_outside_conflict_paths(tmp_path: Path)
         manager.create_integration_repair_candidate(attention, writer)
 
     assert _git(repository, "rev-parse", coordination.branch) == source_head
+
+
+@pytest.mark.parametrize("guard", ["writer", "attention"])
+def test_repair_candidate_rejects_stale_authority_before_git_mutation(tmp_path: Path, guard: str) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.create(f"repair-candidate-{guard}")
+    source_head = _commit_file(coordination.worktree_path, "change\n", "change side")
+    manager.record_reviewed(coordination.change_id, source_head)
+    target_worktree = tmp_path / "target-worktree"
+    _git(repository, "worktree", "add", str(target_worktree), "release")
+    target_head = _commit_file(target_worktree, "target\n", "target side")
+    _git(repository, "worktree", "remove", str(target_worktree))
+    manager.refresh_integration_target(coordination.change_id)
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="repair")
+    coordinator.acquire(coordination.change_id, writer)
+    attention = DeliveryIntegrationAttention(
+        attention_id="d" * 64,
+        code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
+        change_id=coordination.change_id,
+        change_head=source_head,
+        target_head=target_head,
+        integration_target="release",
+        diagnostics=("conflict",),
+        retry_condition="Admit a reviewed repair.",
+    )
+    (coordination.worktree_path / "shared.txt").write_text("target\n", encoding="utf-8")
+    supplied_writer = writer.model_copy(update={"actor_id": "another-builder"}) if guard == "writer" else writer
+    supplied_attention = (
+        attention.model_copy(update={"target_head": source_head}) if guard == "attention" else attention
+    )
+    expected = "exact repair writer custody" if guard == "writer" else "current attention"
+
+    with pytest.raises(RuntimeError, match=expected):
+        manager.create_integration_repair_candidate(supplied_attention, supplied_writer)
+
+    assert _git(repository, "rev-parse", coordination.branch) == source_head
+    assert _git(coordination.worktree_path, "status", "--porcelain") == "M shared.txt"
