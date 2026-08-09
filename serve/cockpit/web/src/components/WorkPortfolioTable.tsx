@@ -59,7 +59,7 @@ function ActionLink({ item, onSelect, subdued = false }: { item: WorkItemCardVie
   }
   const identity = { changeId: item.change_id, itemKey: item.item_key }
   const path = workItemPath(item)
-  const label = item.action.kind === 'retry-integration' ? 'Open Integration' : item.action.label
+  const label = item.action.kind === 'retry-integration' ? 'Review retry' : item.action.label
   return (
     <PLinkPure
       href={path}
@@ -103,12 +103,13 @@ function CurrentState({ item, onSelect }: { item: WorkItemCardView; onSelect: Wo
   const state = workItemStatusLabel(item)
   const urgent = item.needs === 'you'
   const manualOption = hasOptionalManualAction(item)
+  const actionPrefix = manualOption && item.action.kind !== 'retry-integration' ? 'Optional now: ' : null
   return (
     <span>
       <span className={urgent ? 'block font-semibold text-error' : 'block font-medium text-primary'}>{state}</span>
       {item.activity.task_id ? <span className="mt-0.5 block text-xs text-contrast-medium">Task {item.activity.task_id}</span> : null}
       <IntegrationHandoff item={item} />
-      {item.action.kind !== 'none' ? <span className={manualOption ? 'mt-0.5 block text-xs text-contrast-medium' : 'mt-0.5 block'}>{manualOption ? 'Optional now: ' : null}<ActionLink item={item} onSelect={onSelect} subdued={manualOption} /></span> : null}
+      {item.action.kind !== 'none' ? <span className={manualOption ? 'mt-0.5 block text-xs text-contrast-medium' : 'mt-0.5 block'}>{actionPrefix}<ActionLink item={item} onSelect={onSelect} subdued={manualOption} /></span> : null}
     </span>
   )
 }

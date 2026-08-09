@@ -659,8 +659,11 @@ it('separates current Integration retry guidance from stale attempt evidence', a
   renderPage('/delivery/change-alpha/integration')
 
   const inspector = await screen.findByTestId('work-item-detail')
+  expect(within(inspector).getByRole('region', { name: 'Integration target moved' })).toBeInTheDocument()
+  expect(inspector).not.toHaveTextContent('Integration requires your attention')
   expect(inspector).toHaveTextContent('The Integration target moved since this attempt; retry against the current target.')
-  expect(inspector).toHaveTextContent('Orchestration will retry automatically.')
+  expect(inspector).toHaveTextContent('Start it now, or leave it for the next Orchestration session.')
+  expect(inspector).not.toHaveTextContent('automatically')
   expect(inspector).not.toHaveTextContent('Waiting for Orchestration.')
   expect(inspector).not.toHaveTextContent('Optional now')
   const retryControl = within(inspector).getByText('Retry now').closest('p-button-pure') as HTMLElement & { color: string; icon: string; size: string }
@@ -853,10 +856,11 @@ it('presents Integration retry as an optional alternative to Orchestration', asy
 
   const table = await screen.findByTestId('work-portfolio-table')
   expect(table).toHaveTextContent('Change: Portfolio redesign')
-  expect(table).toHaveTextContent('Waiting for Orchestration')
-  expect(table).toHaveTextContent('Optional now: Open Integration')
+  expect(table).toHaveTextContent('Ready for Integration retry')
+  expect(table).toHaveTextContent('Review retry')
+  expect(table).not.toHaveTextContent('Optional now')
   expect(table).not.toHaveTextContent('Optional now: Retry Integration')
-  const retryLink = within(table).getByText('Open Integration').closest('p-link-pure') as HTMLElement & { href: string; color: string; size: string }
+  const retryLink = within(table).getByText('Review retry').closest('p-link-pure') as HTMLElement & { href: string; color: string; size: string }
   expect(retryLink.href).toBe('/delivery/change-alpha/integration')
   expect(retryLink.color).toBe('contrast-medium')
   expect(retryLink.size).toBe('xs')

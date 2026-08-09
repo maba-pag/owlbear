@@ -22,6 +22,7 @@ export function workItemStatusLabel(item: WorkItemCardView): string {
     return item.activity.worker_role ? WORKER_STATUS_LABELS[item.activity.worker_role] : 'Agent working'
   }
   if (item.activity.state === 'ready') {
+    if (item.action.kind === 'retry-integration') return 'Ready for Integration retry'
     return item.activity.worker_role === 'integration-repairer'
       ? 'Ready for Integration repair'
       : 'Waiting for Orchestration'

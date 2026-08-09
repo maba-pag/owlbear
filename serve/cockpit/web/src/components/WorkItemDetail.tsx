@@ -393,7 +393,7 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
   if (!integration) return null
   const action = detail.item.card.action
   const canIntegrate = action.kind === 'integrate-change' || action.kind === 'retry-integration'
-  const operatorRequired = integration.disposition === 'operator-required'
+  const operatorRequired = integration.disposition === 'operator-required' && !integration.superseded
   const agentHandoff = canHandOffIntegration(detail.item.card) && !integration.repair_active
   const manualOption = hasOptionalManualAction(detail.item.card)
   return (
@@ -415,7 +415,7 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
       {agentHandoff ? <IntegrationAgentHandoff card={detail.item.card} /> : null}
       {canIntegrate && manualOption ? (
         <div className="mt-static-md flex flex-wrap items-center gap-x-static-md gap-y-static-xs">
-          <p className="text-sm">Orchestration will {action.kind === 'retry-integration' ? 'retry' : 'integrate'} automatically.</p>
+          <p className="text-sm">Start it now, or leave it for the next Orchestration session.</p>
           <PButtonPure type="button" size="xs" color="contrast-medium" icon={action.kind === 'retry-integration' ? 'refresh' : undefined} disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
             {pendingAction === 'integration' ? 'Working...' : action.kind === 'retry-integration' ? 'Retry now' : 'Integrate now'}
           </PButtonPure>
