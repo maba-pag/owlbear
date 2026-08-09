@@ -20,6 +20,7 @@ export type DeliveryIntegrationAttentionCode =
   | 'package-mutated'
   | 'completed-history-mutated'
   | 'reviewed-boundary-mismatch'
+  | 'reviewed-worktree-dirty'
   | 'merge-conflict'
   | 'repair-authority'
   | 'candidate-proof-failed'

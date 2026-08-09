@@ -320,7 +320,14 @@ export default function WorkPortfolioPage() {
         title="Delivery portfolio"
         titleId="delivery-portfolio-heading"
         summaryLabel="Delivery portfolio status"
-        summary={workspace === 'current' && hasData ? <PortfolioHeaderSummary operating={portfolio.operating} /> : undefined}
+        summary={workspace === 'current' && hasData ? (
+          <PortfolioHeaderSummary
+            operating={portfolio.operating}
+            totals={portfolio.totals}
+            needsFilter={needsFilter}
+            onNeedsFilter={setNeedsFilter}
+          />
+        ) : undefined}
       />
 
       <PortfolioViewSwitch workspace={workspace} onChange={setWorkspace} />

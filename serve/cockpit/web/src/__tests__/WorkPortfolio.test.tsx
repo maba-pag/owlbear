@@ -248,6 +248,11 @@ function inputValue(element: Element, value: string) {
   fireEvent(host, new CustomEvent('input', { detail: { value }, bubbles: true }))
 }
 
+function namedPdsHost(container: HTMLElement, tagName: 'p-input-text' | 'p-select', name: string): Element | null {
+  return Array.from(container.querySelectorAll<HTMLElement & { name?: string }>(tagName))
+    .find((element) => element.name === name || element.getAttribute('name') === name) ?? null
+}
+
 function renderPage(path = '/delivery') {
   return render(<MemoryRouter initialEntries={[path]}><WorkPortfolioPage /></MemoryRouter>)
 }
@@ -276,18 +281,24 @@ it('summarizes all current Change phases and nonzero operating states', () => {
     dependency_waits: [integration],
     guidance: [],
   }
+  const totals: WorkItemPortfolioResponse['totals'] = {
+    total: 4,
+    complete: 0,
+    needs: { you: 1, dependency: 1, repair: 1, none: 1 },
+    activity: { idle: 1, ready: 1, working: 1, repairing: 1 },
+  }
+  const onNeedsFilter = vi.fn()
 
-  render(<PortfolioHeaderSummary operating={operating} />)
+  render(<PortfolioHeaderSummary operating={operating} totals={totals} needsFilter="you" onNeedsFilter={onNeedsFilter} />)
 
-  expect(screen.getAllByTestId('workspace-header-metric').map((metric) => metric.textContent)).toEqual([
-    '4current Changes',
-    '2in Design',
-    '2in Delivery',
-    '1work item active',
-    '1work item queued',
-    '1work item needs you',
-    '1work item waiting',
-  ])
+  expect(screen.getByRole('group', { name: 'Portfolio inventory' })).toHaveTextContent('4Changes2Design·2Delivery')
+  expect(screen.getByRole('group', { name: 'Attention' })).toHaveTextContent('1Needs you1Blocked1Repair')
+  expect(screen.getByRole('group', { name: 'Activity' })).toHaveTextContent('2Running1Ready')
+
+  const needsYou = screen.getByRole('button', { name: 'Filter to 1 work item: Needs you' })
+  expect(needsYou).toHaveAttribute('aria-pressed', 'true')
+  fireEvent.click(needsYou)
+  expect(onNeedsFilter).toHaveBeenCalledWith('')
 })
 
 it('presents Change-grouped Outcomes by work, progress, and status', async () => {
@@ -304,7 +315,7 @@ it('presents Change-grouped Outcomes by work, progress, and status', async () =>
   expect(table).toHaveTextContent('Outcome: OUT-001')
   expect(within(table).getAllByText('OUT-001', { selector: 'code' }).length).toBeGreaterThan(0)
   expect(within(table).getAllByText('Portfolio redesign')).toHaveLength(1)
-  expect(await screen.findByLabelText('Delivery portfolio status')).toHaveTextContent('1work item active')
+  expect(await screen.findByLabelText('Delivery portfolio status')).toHaveTextContent('1Running')
   const guidance = screen.getByLabelText('Session suggestions')
   expect(guidance).toHaveTextContent('Review 1 item that needs you')
   expect(guidance).toHaveTextContent('/orchestrate is already working')
@@ -334,9 +345,9 @@ it('shows unadmitted Design work on the board and opens its verified sources', a
   expect(within(designWork).getAllByRole('term').map((term) => term.textContent)).toEqual(['Work', 'Progress', 'Status'])
   expect(within(designWork).getAllByRole('definition')).toHaveLength(3)
   const status = screen.getByLabelText('Delivery portfolio status')
-  expect(status).toHaveTextContent('2current Changes')
-  expect(status).toHaveTextContent('1in Design')
-  expect(status).toHaveTextContent('1in Delivery')
+  expect(status).toHaveTextContent('2Changes')
+  expect(status).toHaveTextContent('1Design')
+  expect(status).toHaveTextContent('1Delivery')
 
   const detailView = await screen.findByTestId('design-work-detail')
   expect(detailView).toHaveTextContent('Shape a coherent operator workflow.')
@@ -372,6 +383,14 @@ it('filters grouped rows by Change and Needs without conflating Activity', async
   }
   const { container } = renderPage()
   await screen.findByTestId('work-portfolio-table')
+
+  const needsYou = screen.getByRole('button', { name: 'Filter to 1 work item: Needs you' })
+  fireEvent.click(needsYou)
+  await waitFor(() => expect(needsYou).toHaveAttribute('aria-pressed', 'true'))
+  expect(screen.getByTestId('work-shown-count')).toHaveTextContent('2 of 4')
+  fireEvent.click(needsYou)
+  await waitFor(() => expect(needsYou).toHaveAttribute('aria-pressed', 'false'))
+  expect(screen.queryByTestId('work-shown-count')).not.toBeInTheDocument()
 
   fireEvent.click(screen.getByTestId('work-filters-toggle'))
   const selects = container.querySelectorAll('p-select')
@@ -432,10 +451,13 @@ it('answers a decision request and refetches its resolved state', async () => {
   await screen.findByText('Choose the retained contract')
 
   const submit = screen.getByText('Submit answer') as HTMLElement & { disabled: boolean }
-  await waitFor(() => {
-    selectValue(container.querySelector('p-select[name="request-REQ-001-option"]')!, 'keep')
-    expect(submit.disabled).toBe(false)
+  const option = await waitFor(() => {
+    const element = namedPdsHost(container, 'p-select', 'request-REQ-001-option')
+    expect(element).not.toBeNull()
+    return element!
   })
+  selectValue(option, 'keep')
+  await waitFor(() => expect(submit.disabled).toBe(false))
   fireEvent.click(submit)
 
   await waitFor(() => expect(requests).toContainEqual({
@@ -464,11 +486,17 @@ it('requires evidence before clearing a requestless block', async () => {
   const clear = await screen.findByText('Clear block') as HTMLElement & { disabled: boolean }
   expect(clear.disabled).toBe(true)
 
-  await waitFor(() => {
-    inputValue(container.querySelector('p-input-text[name="block-note"]')!, 'Verified externally')
-    inputValue(container.querySelector('p-input-text[name="block-locator"]')!, 'request:REQ-001')
-    expect(clear.disabled).toBe(false)
+  const [note, locator] = await waitFor(() => {
+    const elements = [
+      namedPdsHost(container, 'p-input-text', 'block-note'),
+      namedPdsHost(container, 'p-input-text', 'block-locator'),
+    ]
+    expect(elements.every(Boolean)).toBe(true)
+    return elements as [Element, Element]
   })
+  inputValue(note, 'Verified externally')
+  inputValue(locator, 'request:REQ-001')
+  await waitFor(() => expect(clear.disabled).toBe(false))
   fireEvent.click(clear)
 
   await waitFor(() => expect(requests.some(({ url, method }) => method === 'POST' && url.includes('/blocks/BLOCK-001/clear'))).toBe(true))
@@ -493,8 +521,16 @@ it('keeps claim recovery and backward movement explicit and confirmable', async 
   await waitFor(() => expect(requests.some(({ url, method }) => method === 'POST' && url.endsWith('/claims/recover'))).toBe(true))
 
   fireEvent.click(screen.getByText('Administrative actions'))
-  selectValue(container.querySelector('p-select[name="backward-stage"]')!, 'planning')
-  inputValue(container.querySelector('p-input-text[name="backward-reason"]')!, 'Authority changed')
+  const [stage, reason] = await waitFor(() => {
+    const elements = [
+      namedPdsHost(container, 'p-select', 'backward-stage'),
+      namedPdsHost(container, 'p-input-text', 'backward-reason'),
+    ]
+    expect(elements.every(Boolean)).toBe(true)
+    return elements as [Element, Element]
+  })
+  selectValue(stage, 'planning')
+  inputValue(reason, 'Authority changed')
   fireEvent.click(screen.getByText('Review backward move'))
   const previewMessage = await screen.findByText('The following Outcomes will be reset:')
   const previewModal = previewMessage.closest('p-modal')!
@@ -551,7 +587,7 @@ it('routes Integration repair through Orchestration while keeping raw diagnostic
   expect(inspector).toHaveTextContent('Merge conflict')
   expect(inspector).toHaveTextContent('Conflicting files')
   expect(inspector).toHaveTextContent('serve/delivery/work_items.py')
-  expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('1work item queued')
+  expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('1Repair')
   expect(inspector).not.toHaveTextContent('/integration-repair')
   expect(screen.getByText('Technical evidence').closest('details')).not.toHaveAttribute('open')
   expect(screen.queryByText('Retry Integration')).not.toBeInTheDocument()
@@ -798,7 +834,7 @@ it('shows active Integration repair state without instructing a duplicate repair
   currentPortfolio = portfolio([group({ lifecycle: 'integration', outcome_completed: 2, items: [integrationCard] })])
   renderPage('/delivery/change-alpha/integration')
 
-  expect(await screen.findByLabelText('Delivery portfolio status')).toHaveTextContent('1work item active')
+  expect(await screen.findByLabelText('Delivery portfolio status')).toHaveTextContent('1Running')
   const detailView = await screen.findByTestId('work-item-detail')
   expect(detailView).toHaveTextContent('Repair in progress')
   expect(detailView).toHaveTextContent('A reviewed Integration repair is currently in progress.')
