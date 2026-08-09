@@ -46,9 +46,9 @@ candidate merge-commit creation and exact resolved-tree proof. Require its atten
 attempt, and claim identities to match the launch; require its changed paths to stay within the
 original conflict paths; and treat its `candidate_commit`, `merged_tree`, and changed paths as the
 repair proof object. The candidate must have the exact source head and target head as its two parents,
-in that order, while its tree preserves target content outside the original conflict paths. Do not
-call `commit-owned`, `git commit`, or use `SKIP`/`--no-verify` for an
-Integration repair. A source-checkout failure caused solely by target-owned evolution is
+in that order, while its tree preserves target content outside the original conflict paths.
+Do not call `commit-owned`, `git commit`, or use `SKIP`/`--no-verify` for an Integration repair. A
+source-checkout failure caused solely by target-owned evolution is
 non-probative and cannot justify authority attention. Require the branch and clean worktree to end
 at the returned candidate commit. If any identity, head, custody, path, ancestry, or cleanliness
 check changes, stop without admission or target mutation and report that the current attention must
