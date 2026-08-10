@@ -212,7 +212,7 @@ Each module is tested in isolation with mocked dependencies. Tests verify:
 
 ### End-to-end scenario tests (Brief demand scenarios — R50)
 
-Linked to Brief demand scenarios in `.owlbear/briefs/draft-knowledge-modularization/brief.md`:
+Linked to Brief demand scenarios in `.owlbear/legacy/briefs/draft-knowledge-modularization/brief.md`:
 
 1. **ISMS compliance chain** — Standards → Controls → Approvals (ingest + enrich + traverse)
 2. **Access rights lookup** — User → Tool → Required permissions (search + entity lookup)
