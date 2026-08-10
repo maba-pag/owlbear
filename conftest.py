@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 _FOCUSED_WORKERS = 4
 _FULL_SUITE_WORKERS = 10
@@ -14,6 +18,17 @@ _FULL_SUITE_WORKERS = 10
 def project_root() -> Path:
     """Return the repository root as a Path."""
     return Path(__file__).parent
+
+
+@pytest.fixture
+def run_init_without_test_surface() -> Callable[..., None]:
+    """Run setup initialization while requiring its missing-test-surface warning."""
+
+    def run(initializer: Callable[..., object], /, *args: object, **kwargs: object) -> None:
+        with pytest.warns(UserWarning, match="No supported test surface was detected"):
+            initializer(*args, **kwargs)
+
+    return run
 
 
 def pytest_configure(config: pytest.Config) -> None:

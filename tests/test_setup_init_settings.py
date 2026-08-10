@@ -5,8 +5,9 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
-from pathlib import Path
 import types
+from collections.abc import Callable
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -31,12 +32,14 @@ def init_module() -> types.ModuleType:
 
 
 def test_init_writes_settings_without_hook_locations_and_with_local_hints(
-    tmp_path: Path, init_module: types.ModuleType
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    run_init_without_test_surface: Callable[..., None],
 ) -> None:
     target_dir = tmp_path / "project"
     target_dir.mkdir()
 
-    init_module.init(target_dir, _REPO_ROOT, interactive=False)
+    run_init_without_test_surface(init_module.init, target_dir, _REPO_ROOT, interactive=False)
 
     settings_path = target_dir / ".vscode" / "settings.json"
     data = json.loads(settings_path.read_text(encoding="utf-8"))
@@ -68,12 +71,13 @@ def test_init_writes_settings_without_hook_locations_and_with_local_hints(
 def test_init_creates_only_empty_target_control_plane_stores(
     tmp_path: Path,
     init_module: types.ModuleType,
+    run_init_without_test_surface: Callable[..., None],
 ) -> None:
     target_dir = tmp_path / "project"
     target_dir.mkdir()
 
     with patch("subprocess.run") as package_install:
-        init_module.init(target_dir, _REPO_ROOT, interactive=False)
+        run_init_without_test_surface(init_module.init, target_dir, _REPO_ROOT, interactive=False)
 
     assert (target_dir / ".owlbear/target/changes").is_dir()
     request_path = target_dir / ".owlbear/target-cutover-request.json"
@@ -130,10 +134,11 @@ def test_init_creates_only_empty_target_control_plane_stores(
 def test_init_rerun_preserves_user_settings_and_target_records(
     tmp_path: Path,
     init_module: types.ModuleType,
+    run_init_without_test_surface: Callable[..., None],
 ) -> None:
     target_dir = tmp_path / "project"
     target_dir.mkdir()
-    init_module.init(target_dir, _REPO_ROOT, interactive=False)
+    run_init_without_test_surface(init_module.init, target_dir, _REPO_ROOT, interactive=False)
 
     settings_path = target_dir / ".vscode/settings.json"
     settings = json.loads(settings_path.read_text(encoding="utf-8"))
@@ -154,9 +159,9 @@ def test_init_rerun_preserves_user_settings_and_target_records(
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
 
-    init_module.init(target_dir, _REPO_ROOT, interactive=False)
+    run_init_without_test_surface(init_module.init, target_dir, _REPO_ROOT, interactive=False)
     first_rerun = {path.relative_to(target_dir): path.read_bytes() for path in target_dir.rglob("*") if path.is_file()}
-    init_module.init(target_dir, _REPO_ROOT, interactive=False)
+    run_init_without_test_surface(init_module.init, target_dir, _REPO_ROOT, interactive=False)
     second_rerun = {path.relative_to(target_dir): path.read_bytes() for path in target_dir.rglob("*") if path.is_file()}
 
     merged_settings = json.loads(settings_path.read_text(encoding="utf-8"))
@@ -171,12 +176,14 @@ def test_init_uses_requested_existing_integration_target(
     tmp_path: Path,
     init_module: types.ModuleType,
     monkeypatch: pytest.MonkeyPatch,
+    run_init_without_test_surface: Callable[..., None],
 ) -> None:
     target_dir = tmp_path / "project"
     target_dir.mkdir()
     monkeypatch.setattr(init_module, "_branch_exists", lambda _target, branch: branch == "release")
 
-    init_module.init(
+    run_init_without_test_surface(
+        init_module.init,
         target_dir,
         _REPO_ROOT,
         interactive=False,
@@ -191,6 +198,7 @@ def test_init_interactive_target_defaults_to_checked_out_branch(
     tmp_path: Path,
     init_module: types.ModuleType,
     monkeypatch: pytest.MonkeyPatch,
+    run_init_without_test_surface: Callable[..., None],
 ) -> None:
     target_dir = tmp_path / "project"
     target_dir.mkdir()
@@ -198,7 +206,7 @@ def test_init_interactive_target_defaults_to_checked_out_branch(
     monkeypatch.setattr(init_module, "_branch_exists", lambda _target, branch: branch == "develop")
     monkeypatch.setattr("builtins.input", lambda _prompt: "")
 
-    init_module.init(target_dir, _REPO_ROOT, interactive=True)
+    run_init_without_test_surface(init_module.init, target_dir, _REPO_ROOT, interactive=True)
 
     config = json.loads((target_dir / ".owlbear/delivery/config.json").read_text(encoding="utf-8"))
     assert config["integration_target"] == "develop"

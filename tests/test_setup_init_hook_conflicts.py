@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
-from pathlib import Path
 import types
+from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 
@@ -40,25 +41,39 @@ def _make_existing_hook(target_dir: Path, content: str) -> Path:
     return hook_path
 
 
-def test_noninteractive_conflict_skips_without_replace_flag(tmp_path: Path, init_module: types.ModuleType) -> None:
+def test_noninteractive_conflict_skips_without_replace_flag(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    run_init_without_test_surface: Callable[..., None],
+) -> None:
     owlbear_dir = tmp_path / "owlbear"
     target_dir = tmp_path / "project"
     _make_seed_hook(owlbear_dir, "seed-version")
     existing = _make_existing_hook(target_dir, "local-version")
 
     with pytest.warns(UserWarning, match="Existing hook file differs"):
-        init_module.init(target_dir, owlbear_dir, interactive=False)
+        run_init_without_test_surface(init_module.init, target_dir, owlbear_dir, interactive=False)
 
     assert existing.read_text(encoding="utf-8") == "local-version"
 
 
-def test_replace_hooks_flag_overwrites_existing_hook(tmp_path: Path, init_module: types.ModuleType) -> None:
+def test_replace_hooks_flag_overwrites_existing_hook(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    run_init_without_test_surface: Callable[..., None],
+) -> None:
     owlbear_dir = tmp_path / "owlbear"
     target_dir = tmp_path / "project"
     _make_seed_hook(owlbear_dir, "seed-version")
     existing = _make_existing_hook(target_dir, "local-version")
 
-    init_module.init(target_dir, owlbear_dir, interactive=False, replace_hooks=True)
+    run_init_without_test_surface(
+        init_module.init,
+        target_dir,
+        owlbear_dir,
+        interactive=False,
+        replace_hooks=True,
+    )
 
     assert existing.read_text(encoding="utf-8") == "seed-version"
 
@@ -67,6 +82,7 @@ def test_interactive_replace_overwrites_existing_hook(
     tmp_path: Path,
     init_module: types.ModuleType,
     monkeypatch: pytest.MonkeyPatch,
+    run_init_without_test_surface: Callable[..., None],
 ) -> None:
     owlbear_dir = tmp_path / "owlbear"
     target_dir = tmp_path / "project"
@@ -75,7 +91,7 @@ def test_interactive_replace_overwrites_existing_hook(
     monkeypatch.setattr(init_module, "_select_integration_target", lambda *_args, **_kwargs: "main")
     monkeypatch.setattr("builtins.input", lambda _prompt: "replace")
 
-    init_module.init(target_dir, owlbear_dir, interactive=True)
+    run_init_without_test_surface(init_module.init, target_dir, owlbear_dir, interactive=True)
 
     assert existing.read_text(encoding="utf-8") == "seed-version"
 
@@ -84,6 +100,7 @@ def test_interactive_skip_keeps_existing_hook(
     tmp_path: Path,
     init_module: types.ModuleType,
     monkeypatch: pytest.MonkeyPatch,
+    run_init_without_test_surface: Callable[..., None],
 ) -> None:
     owlbear_dir = tmp_path / "owlbear"
     target_dir = tmp_path / "project"
@@ -92,7 +109,7 @@ def test_interactive_skip_keeps_existing_hook(
     monkeypatch.setattr(init_module, "_select_integration_target", lambda *_args, **_kwargs: "main")
     monkeypatch.setattr("builtins.input", lambda _prompt: "skip")
 
-    init_module.init(target_dir, owlbear_dir, interactive=True)
+    run_init_without_test_surface(init_module.init, target_dir, owlbear_dir, interactive=True)
 
     assert existing.read_text(encoding="utf-8") == "local-version"
 
