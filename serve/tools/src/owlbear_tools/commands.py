@@ -6,7 +6,7 @@ import argparse
 import os
 import shutil
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TextIO
 
@@ -223,6 +223,12 @@ def help_main() -> None:
         if (selected == command.group or (selected is None and not command.topic_only))
         and (development or not command.development_only)
     ]
+    if selected is None:
+        topics = "setup (s), maintenance (m), internal (i)" if development else "setup (s)"
+        visible_commands = [
+            replace(command, summary=f"Show commands; topics: {topics}.") if command.name == "help" else command
+            for command in visible_commands
+        ]
     usage_width = max(len(command.usage) for command in visible_commands)
     terminal_width = shutil.get_terminal_size(fallback=(120, 24)).columns
     stacked = any(2 + usage_width + 1 + len(command.summary) > terminal_width for command in visible_commands)
@@ -245,11 +251,3 @@ def help_main() -> None:
             usage = _style(f"{command.usage:<{usage_width}}", _GREEN, stream=stream)
             print(f"  {usage} {command.summary}")  # noqa: T201
         print()  # noqa: T201
-    if selected is None:
-        topics = ["setup"]
-        if development:
-            topics.extend(("maintenance", "internal"))
-        print("Additional topics:")  # noqa: T201
-        for topic in topics:
-            command = _style(f"uv run help {topic}", _GREEN, stream=stream)
-            print(f"  {command}")  # noqa: T201

@@ -27,9 +27,8 @@ def test_default_help_focuses_on_workspace_quality_and_tests(monkeypatch: object
     assert "Setup:" not in output
     assert "Maintenance:" not in output
     assert "Internal:" not in output
-    assert "uv run help setup" in output
-    assert "uv run help maintenance" in output
-    assert "uv run help internal" in output
+    assert "topics: setup (s), maintenance (m), internal (i)" in output
+    assert "Additional topics:" not in output
 
 
 def test_help_topic_limits_output_to_selected_group(monkeypatch: object, capsys: object) -> None:
@@ -65,8 +64,10 @@ def test_consumer_help_hides_development_commands(tmp_path: object, monkeypatch:
     assert "Tests:" not in output
     assert "uv run megalint" not in output
     assert "uv run deps-sync" not in output
-    assert "uv run help setup" in output
-    assert "uv run help maintenance" not in output
+    assert "topics: setup (s)." in output
+    assert "maintenance (m)" not in output
+    assert "internal (i)" not in output
+    assert "Additional topics:" not in output
 
 
 def test_help_styles_semantic_anchors_for_terminal_output(monkeypatch: object) -> None:
