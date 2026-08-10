@@ -26,6 +26,7 @@ export type DeliveryIntegrationAttentionCode =
   | 'repair-authority'
   | 'candidate-proof-failed'
   | 'target-cas-lost'
+  | 'external-acceptance-required'
 
 export interface WorkItemActivity {
   state: WorkItemActivityState

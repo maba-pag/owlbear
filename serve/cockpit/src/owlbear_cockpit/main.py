@@ -51,7 +51,6 @@ _MEMORY_DIR = Path(".owlbear/memory")
 _NO_OPEN_ENV = "COCKPIT_NO_OPEN"
 _PORT_ENV = "COCKPIT_PORT"
 _REGISTRY_ENV = "OWLBEAR_COCKPIT_REGISTRY"
-_TARGET_CUTOVER_REQUEST = Path(".owlbear/target-cutover-request.json")
 
 app = FastAPI(title="OwlBear Cockpit")
 app.add_exception_handler(HTTPException, handle_target_http_error)
@@ -291,9 +290,8 @@ def list_instances() -> None:
 
 def _load_target_runtime() -> tuple[Path, object]:
     workspace_root = Path.cwd().resolve()
-    request_path = workspace_root / _TARGET_CUTOVER_REQUEST
     try:
-        target_context = load_target_context(workspace_root, request_path.resolve())
+        target_context = load_target_context(workspace_root)
     except RuntimeError as exc:
         sys.stderr.write(f"Error: {exc}\n")
         sys.exit(1)

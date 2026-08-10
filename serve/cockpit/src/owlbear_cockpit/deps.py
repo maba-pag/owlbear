@@ -32,7 +32,7 @@ def get_memory_engine() -> MemoryEngine:
 
 
 def get_target_context() -> object:
-    """Return the receipt-authorized target Cockpit context."""
+    """Return the canonical Delivery Cockpit context."""
     import owlbear_cockpit.main as _main  # noqa: PLC0415
 
     return _main.app.state.target_context

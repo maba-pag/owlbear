@@ -35,22 +35,6 @@ await mkdir(resolve(fixtureManifest, '..'), { recursive: true })
 await writeFile(fixtureManifest, JSON.stringify({ memoryDir }))
 await rm(mcpProof, { force: true })
 
-const cutoverSeed = spawn('uv', [
-  'run',
-  '--project',
-  root,
-  'python',
-  resolve(import.meta.dirname, 'seed-target-cockpit-workspace.py'),
-  '--workspace',
-  fixture,
-], { cwd: root, stdio: 'inherit' })
-const cutoverSeedExit = (await once(cutoverSeed, 'exit'))[0]
-if (cutoverSeedExit !== 0) {
-  await rm(fixtureManifest, { force: true })
-  await rm(fixture, { recursive: true, force: true })
-  process.exit(cutoverSeedExit ?? 1)
-}
-
 // The cockpit backend refuses to boot without a Delivery config, even for Memory-only runs.
 const deliverySeed = spawn('uv', [
   'run',

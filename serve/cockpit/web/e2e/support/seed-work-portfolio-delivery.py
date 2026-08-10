@@ -192,7 +192,7 @@ def _current_bindings(contract: DeliveryContract, head: str) -> tuple[OutcomeAut
     )
 
 
-def _write_current_delivery(target_root: Path, head: str) -> None:
+def _write_current_delivery(runtime_root: Path, head: str) -> None:
     outcomes = (
         _outcome("OUT-001", "Choose release mode", "Resolve the bounded release decision."),
         _outcome("OUT-002", "Build operator controls", "Ship exact Delivery controls."),
@@ -205,13 +205,13 @@ def _write_current_delivery(target_root: Path, head: str) -> None:
     frontier = DeliveryFrontier(
         bindings=_current_bindings(contract, head),
     )
-    change_root = target_root / "delivery/changes" / contract.change_id
+    change_root = runtime_root / "changes" / contract.change_id
     change_root.mkdir(parents=True, exist_ok=True)
     (change_root / "contract.json").write_bytes(_canonical(contract))
     (change_root / "frontier.json").write_bytes(_canonical(frontier))
 
 
-def _write_repair_delivery(target_root: Path, head: str) -> None:
+def _write_repair_delivery(runtime_root: Path, head: str) -> None:
     contract = _contract(
         "repair-e2e",
         "Repair release",
@@ -252,7 +252,7 @@ def _write_repair_delivery(target_root: Path, head: str) -> None:
             worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER,
         ),
     )
-    change_root = target_root / "delivery/changes" / contract.change_id
+    change_root = runtime_root / "changes" / contract.change_id
     change_root.mkdir(parents=True, exist_ok=True)
     (change_root / "contract.json").write_bytes(_canonical(contract))
     (change_root / "frontier.json").write_bytes(_canonical(frontier))
@@ -333,17 +333,17 @@ def _write_config(workspace: Path) -> None:
 def seed_delivery(workspace: Path) -> None:
     """Seed canonical current and completed Delivery data below the real application."""
     repository = workspace
-    target_root = workspace / ".owlbear/target"
-    worktrees = workspace / ".owlbear/worktrees"
+    runtime_root = workspace / ".owlbear/delivery/runtime"
+    worktrees = workspace / ".owlbear/delivery/worktrees"
     head = _seed_repository(repository)
     DesignPackageStore(workspace / ".owlbear/delivery/packages", repository).create(
         "design-operations-roadmap",
         b"# Design Operations Roadmap\n\nCoordinate the next focused Delivery change.\n",
         b"# Design\n\nKeep roadmap authority separate from admitted Changes.\n",
     )
-    _write_current_delivery(target_root, head)
-    _write_repair_delivery(target_root, head)
-    coordinator = PortfolioCoordinator(target_root, capacity=2)
+    _write_current_delivery(runtime_root, head)
+    _write_repair_delivery(runtime_root, head)
+    coordinator = PortfolioCoordinator(runtime_root, capacity=2)
     workspace_manager = ChangeWorkspaceManager(repository, worktrees, coordinator, "main")
     workspace_manager.create("work-e2e")
     workspace_manager.create("repair-e2e")

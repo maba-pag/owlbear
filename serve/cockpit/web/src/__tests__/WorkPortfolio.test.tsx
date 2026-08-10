@@ -679,7 +679,7 @@ it('separates current Integration retry guidance from stale attempt evidence', a
   expect(inspector).not.toHaveTextContent('Resolve with an agent session')
 })
 
-it('states operator-required Integration status once', async () => {
+it('states the specific operator-required Integration headline with its instruction', async () => {
   const integrationCard = card({
     item_key: 'integration',
     work_item_id: 'change-alpha',
@@ -722,8 +722,9 @@ it('states operator-required Integration status once', async () => {
   renderPage('/delivery/change-alpha/integration')
 
   const inspector = await screen.findByTestId('work-item-detail')
-  expect(within(inspector).getAllByText('Revision pending')).toHaveLength(1)
-  expect(within(inspector).getByRole('region', { name: 'Integration requires your attention' })).toBeInTheDocument()
+  expect(within(inspector).getByRole('region', { name: 'Revision pending' })).toBeInTheDocument()
+  expect(within(inspector).getAllByText('Integration requires your attention')).toHaveLength(1)
+  expect(inspector).toHaveTextContent('Next: Publish a corrected revision.')
 })
 
 it('copies exact operator-required Integration resolution command from the overview', async () => {
@@ -807,7 +808,7 @@ it('hands operator-required Integration to the same exact agent resolution comma
 
   const inspector = await screen.findByTestId('work-item-detail')
   expect(inspector).toHaveTextContent('Copy this command into a new Copilot chat')
-  expect(inspector).not.toHaveTextContent('Next: Restore the reviewed boundary')
+  expect(inspector).toHaveTextContent('Next: Restore the reviewed boundary, then let Orchestration integrate again.')
   expect(inspector).not.toHaveTextContent('Resolved when:')
 
   fireEvent.click(within(inspector).getByRole('button', { name: `Copy command /resolve-delivery-attention change-alpha ${attentionId}` }))
@@ -815,7 +816,61 @@ it('hands operator-required Integration to the same exact agent resolution comma
   await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
   const prompt = writeText.mock.calls[0][0] as string
   expect(prompt).toBe(`/resolve-delivery-attention change-alpha ${attentionId}`)
-  expect(within(inspector).getByText('Engine resume condition: Restore the reviewed boundary, then let Orchestration integrate again.')).toBeInTheDocument()
+  expect(inspector).not.toHaveTextContent('Engine resume condition:')
+})
+
+it('presents external acceptance as operator-required Integration attention', async () => {
+  const attentionId = 'd'.repeat(64)
+  const integrationCard = card({
+    item_key: 'integration',
+    work_item_id: 'change-alpha',
+    scope: 'change-integration',
+    title: 'Integration',
+    stage: null,
+    needs: 'you',
+    needs_headline: 'External acceptance required',
+    next_actor: 'you',
+    next_step: 'External acceptance required',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'integration', label: 'Awaiting external acceptance', done: null, total: null },
+    action: { kind: 'none', label: null, command: null },
+    integration_attention: {
+      attention_id: attentionId,
+      code: 'external-acceptance-required',
+      disposition: 'operator-required',
+      superseded: false,
+    },
+  })
+  currentDetail = detail({
+    card: integrationCard,
+    promise: 'Publish the reviewed Change.',
+    acceptance: [],
+    commitments: [],
+    tasks: [],
+    integration: {
+      attention_id: attentionId,
+      code: 'external-acceptance-required',
+      disposition: 'operator-required',
+      headline: 'External acceptance required',
+      explanation: 'Local target publication is disabled; completion requires externally observed acceptance.',
+      conflicted_paths: [],
+      diagnostics: ['local target publication is disabled; completion requires externally observed acceptance'],
+      retry_condition: 'Publish the reviewed Change through the provider and observe external acceptance.',
+      superseded: false,
+      repair_active: false,
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'integration', outcome_completed: 2, items: [integrationCard] })])
+  renderPage('/delivery/change-alpha/integration')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(within(inspector).getByRole('region', { name: 'External acceptance required' })).toBeInTheDocument()
+  expect(inspector).toHaveTextContent('Local target publication is disabled; completion requires externally observed acceptance.')
+  expect(inspector).toHaveTextContent('Next: Publish the reviewed Change through the provider and observe external acceptance.')
+  expect(inspector).toHaveTextContent('ProgressAwaiting external acceptance')
+  expect(within(inspector).getByRole('button', { name: `Copy command /resolve-delivery-attention change-alpha ${attentionId}` })).toBeInTheDocument()
+  expect(within(inspector).queryByText('Retry now')).not.toBeInTheDocument()
+  expect(inspector).not.toHaveTextContent('Engine resume condition:')
 })
 
 it('uses the Done status tag without leaking the internal Stage field', async () => {

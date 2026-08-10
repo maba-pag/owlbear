@@ -18,13 +18,6 @@ try {
     'run',
     '--project', root,
     'python',
-    resolve(import.meta.dirname, 'seed-target-cockpit-workspace.py'),
-    '--workspace', fixture,
-  ])
-  await run('uv', [
-    'run',
-    '--project', root,
-    'python',
     resolve(import.meta.dirname, 'seed-work-portfolio-delivery.py'),
     '--workspace', fixture,
   ])

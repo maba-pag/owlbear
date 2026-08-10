@@ -1,9 +1,9 @@
 # owlbear-cockpit — Steering Cockpit Package
 
 Cockpit combines a FastAPI backend (`src/owlbear_cockpit/`) with a React frontend (`web/`),
-served as built static assets from `dist/`. The backend verifies the target cutover receipt and
-projects admitted semantic work items, requests, evidence, Memory, and Ideas without becoming
-delivery authority.
+served as built static assets from `dist/`. The backend loads the canonical Delivery application
+and projects admitted semantic work items, requests, evidence, Memory, and Ideas without becoming
+Delivery authority.
 
 → Parent: [README.md](../../README.md)
 
@@ -48,9 +48,9 @@ uv run --project ../owlbear cockpit
 
 `uv run cockpit` serves `serve/cockpit/dist/`, starts on `127.0.0.1:8420` by default,
 and opens a browser unless disabled with `COCKPIT_NO_OPEN=1`. Cockpit reads
-`.owlbear/target-cutover-request.json`, its immutable receipt, and `.owlbear/memory/` relative
-to the workspace root. Consumer launches must use the target project as their working directory
-or pass it to `uv --directory`.
+`.owlbear/delivery/config.json`, canonical Delivery state, and `.owlbear/memory/` relative to the
+workspace root. Consumer launches must use the target project as their working directory or pass
+it to `uv --directory`.
 
 ## Frontend Surface
 
@@ -76,7 +76,7 @@ Cockpit projects current Delivery state and user-owned controls without becoming
 | Actionable attention | Typed requests, requestless blocks, long-idle claims, revision attention, and Integration attention |
 | User controls | Answer request, clear block, recover a confirmed-dead exact claim, move backward, and retry Integration |
 | Completed history | Bounded list, semantic search, and exact completed-change lookup |
-| Cockpit activation authority | `.owlbear/target-cutover-request.json` and its immutable receipt |
+| Startup authority | Tracked `.owlbear/delivery/config.json` and validated canonical Delivery roots |
 
 Cockpit calls the same transport-free application owners used by the MCP adapter but exposes the
 answer-bearing and administrative controls reserved for users. It does not schedule work, choose
@@ -90,7 +90,7 @@ its own.
 | `COCKPIT_PORT` | `8420` | Override listen port (1-65535) |
 | `COCKPIT_NO_OPEN` | unset | Set to `1` to suppress browser auto-open |
 
-Cockpit always reads target authority and memory state from the current workspace and serves the
+Cockpit always reads Delivery authority and memory state from the current workspace and serves the
 package's bundled `dist/` directory.
 
 ## Delivery Packaging
@@ -108,5 +108,5 @@ package's bundled `dist/` directory.
 | `fastapi` | HTTP framework |
 | `uvicorn` | ASGI server |
 | `pydantic` | Request/response model validation |
-| `owlbear-delivery` | Target authority, runtime, admission, and receipt verification |
+| `owlbear-delivery` | Design authority, Delivery runtime, admission, Integration, and completed history |
 | `owlbear-memory` | Memory engine (workspace package) |

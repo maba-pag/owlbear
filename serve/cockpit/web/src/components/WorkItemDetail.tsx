@@ -398,13 +398,19 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
   const manualOption = hasOptionalManualAction(detail.item.card)
   return (
     <section className={operatorRequired ? 'min-w-0 border-l-4 border-warning bg-surface p-static-md' : 'min-w-0 border-l border-contrast-low bg-surface p-static-md'} aria-labelledby="work-integration-heading">
-      <PHeading id="work-integration-heading" tag="h3" size="md">{integration.repair_active ? 'Integration repair' : operatorRequired ? 'Integration requires your attention' : integration.headline}</PHeading>
+      {operatorRequired && !integration.repair_active ? (
+        <p className="text-xs font-semibold uppercase text-contrast-medium">Integration requires your attention</p>
+      ) : null}
+      <PHeading id="work-integration-heading" tag="h3" size="md">{integration.repair_active ? 'Integration repair' : integration.headline}</PHeading>
       <p className="mt-static-xs text-sm leading-relaxed">{integration.repair_active ? 'A reviewed Integration repair is currently in progress.' : integration.explanation}</p>
       {!integration.superseded && integration.conflicted_paths.length > 0 ? (
         <div className="mt-static-sm">
           <p className="text-xs font-semibold">Conflicting files</p>
           <ConflictedPaths paths={integration.conflicted_paths} />
         </div>
+      ) : null}
+      {!canIntegrate && !integration.repair_active && integration.retry_condition && (!action.command || agentHandoff) ? (
+        <p className="mt-static-sm text-sm leading-relaxed">Next: {integration.retry_condition}</p>
       ) : null}
       {action.command && !agentHandoff ? (
         <div className="mt-static-sm flex min-w-0 flex-wrap items-baseline gap-static-xs text-xs text-contrast-medium">
@@ -425,7 +431,6 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
           {pendingAction === 'integration' ? 'Working...' : action.label}
         </PButton>
       ) : null}
-      {!canIntegrate && !action.command && !integration.repair_active && !agentHandoff && integration.retry_condition ? <p className="mt-static-sm text-xs text-contrast-medium">Next: {integration.retry_condition}</p> : null}
       {integration.superseded && integration.diagnostics.length > 0 ? (
         <details className="mt-static-md min-w-0 max-w-full">
           <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Previous attempt (stale)</summary>
@@ -436,7 +441,6 @@ function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkI
       ) : !integration.superseded && integration.diagnostics.length > 0 ? (
         <details className="mt-static-md min-w-0 max-w-full">
           <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Technical evidence</summary>
-          {agentHandoff && integration.retry_condition ? <p className="mt-static-sm text-xs text-primary">Engine resume condition: {integration.retry_condition}</p> : null}
           <Diagnostics lines={integration.diagnostics} />
         </details>
       ) : null}

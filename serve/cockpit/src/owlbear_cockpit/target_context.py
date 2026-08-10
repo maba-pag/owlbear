@@ -1,4 +1,4 @@
-"""Receipt-authorized Delivery application assembly for Cockpit."""
+"""Canonical Delivery application assembly for Cockpit."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from owlbear_delivery.delivery_application_loader import (
     DeliveryStartupConfig,
     load_delivery_application,
 )
-from owlbear_delivery.target_cutover import TargetCutoverError, TargetCutoverRequest, authorize_target_mutation
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -19,21 +18,20 @@ if TYPE_CHECKING:
     from owlbear_delivery.portfolio_application import PortfolioApplication
 
 
-def load_target_context(workspace_root: Path, request_path: Path) -> PortfolioApplication:
-    """Load one validated Delivery application after Cockpit cutover authorization."""
+def load_target_context(workspace_root: Path) -> PortfolioApplication:
+    """Load one validated Delivery application from the canonical workspace root."""
     try:
-        request = TargetCutoverRequest.model_validate_json(request_path.read_bytes())
-        authorize_target_mutation(workspace_root, request)
         config_path = workspace_root / ".owlbear/delivery/config.json"
         config = DeliveryStartupConfig.model_validate_json(config_path.read_bytes())
-        authorized_target_root = (workspace_root / request.target_path).resolve()
         return load_delivery_application(
             config,
             workspace_root=workspace_root,
-            authorized_target_root=authorized_target_root,
         )
-    except (OSError, ValidationError, TargetCutoverError, DeliveryApplicationLoadError) as exc:
-        message = "Cockpit startup requires valid target cutover authority and Delivery configuration"
+    except DeliveryApplicationLoadError as exc:
+        message = f"Cockpit Delivery startup failed for {exc.field}: {exc.detail}"
+        raise RuntimeError(message) from exc
+    except (OSError, ValidationError) as exc:
+        message = "Cockpit startup requires valid Delivery configuration"
         raise RuntimeError(message) from exc
 
 

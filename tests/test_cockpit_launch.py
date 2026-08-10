@@ -1,4 +1,4 @@
-"""Cockpit launch contracts for receipt-authorized target startup."""
+"""Cockpit launch contracts for canonical Delivery startup."""
 
 from __future__ import annotations
 
@@ -35,12 +35,10 @@ def test_run_binds_target_context_before_uvicorn(tmp_path: Path, monkeypatch: py
 
     workspace_root = tmp_path / "workspace"
     workspace_root.mkdir()
-    request_path = workspace_root / ".owlbear/target-cutover-request.json"
     context = object()
     monkeypatch.chdir(workspace_root)
     monkeypatch.setattr(main, "_DIST_DIR", _dist(tmp_path))
     monkeypatch.setenv("OWLBEAR_WORKSPACE_ROOT", str(tmp_path / "ignored-workspace"))
-    monkeypatch.setenv("OWLBEAR_TARGET_CUTOVER_REQUEST", str(tmp_path / "ignored-request.json"))
     monkeypatch.setenv("COCKPIT_DIST_DIR", str(tmp_path / "ignored-dist"))
     monkeypatch.setenv("COCKPIT_NO_OPEN", "1")
     present: list[bool] = []
@@ -56,7 +54,7 @@ def test_run_binds_target_context_before_uvicorn(tmp_path: Path, monkeypatch: py
 
     assert present == [True]
     assert main.app.state.workspace_root == workspace_root.resolve()
-    load.assert_called_once_with(workspace_root.resolve(), request_path.resolve())
+    load.assert_called_once_with(workspace_root.resolve())
 
 
 def test_run_rejects_missing_target_receipt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -68,7 +66,7 @@ def test_run_rejects_missing_target_receipt(tmp_path: Path, monkeypatch: pytest.
     with (
         patch(
             "owlbear_cockpit.main.load_target_context",
-            side_effect=RuntimeError("Cockpit startup requires a valid target cutover request and receipt"),
+            side_effect=RuntimeError("Cockpit startup requires valid Delivery configuration"),
         ),
         pytest.raises(SystemExit),
     ):
