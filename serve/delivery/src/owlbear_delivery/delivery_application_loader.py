@@ -134,7 +134,12 @@ def _validate_git_config(config: DeliveryStartupConfig, paths: _DeliveryPaths) -
             capture_output=True,
         )
         if completed.returncode != 0:
-            error = _load_error(field, "configured repository or integration target is invalid")
+            detail = {
+                "repository_root": "configured Git repository is invalid",
+                "remote": "configured Git remote is invalid",
+                "target_branch": "configured target branch or remote-tracking target is invalid",
+            }[field]
+            error = _load_error(field, detail)
             raise error
     remote_url = subprocess.run(  # noqa: S603 - fixed executable and argument vector.
         (git_executable, "-C", str(paths.repository_root), "remote", "get-url", config.remote),

@@ -109,7 +109,7 @@ def _delivery_config_status(root: Path) -> tuple[list[str], str | None]:
     target = config.get("target_branch")
     github_repository = config.get("github_repository")
     if schema_version != _DELIVERY_CONFIG_SCHEMA_VERSION:
-        failures.append(f"unsupported Delivery config schema: {schema_version}")
+        return [f"unsupported Delivery config schema: {schema_version}"], None
     valid_target = isinstance(remote, str) and isinstance(target, str) and _remote_target_exists(root, remote, target)
     if not valid_target:
         failures.append(f"configured remote-tracking target is unavailable: {remote}/{target}")
