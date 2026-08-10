@@ -84,6 +84,57 @@
 - ### `Status quo`
 - ### `Proposal`
 
+## .owlbear/completed/knowledge-source-contract-alignment/design.md
+- # `Knowledge Source Contract Alignment Design`
+- ## `Ownership And Evidence`
+- ## `Architecture`
+- ## `Proof`
+- ## `Known Limits`
+- ## `Delivery Shape`
+- ## `Unresolved Gates`
+
+## .owlbear/completed/knowledge-source-contract-alignment/intent.md
+- # `Knowledge Source Contract Alignment`
+- ## `Problem`
+- ## `Product Promise`
+- ## `Scope`
+- ## `Accepted Exclusions`
+- ## `Preserved Behavior`
+- ## `Success`
+- ## `Grounding And Decisions`
+- ## `Technically Done But Wrong`
+- ## `Delivery Contract`
+
+## .owlbear/completed/memory-universal-recall-and-review-clarity/design.md
+- # `Design: Memory Universal Recall and Review Clarity`
+- ## `Current Ownership`
+- ## `Architecture`
+- ### `Memory-derived identity`
+- ### `Intake and curation`
+- ### `Scope and lifecycle`
+- ### `Authority ownership`
+- ### `Cockpit`
+- ## `Changed Interfaces`
+- ## `Planning Scopes`
+- ## `Migration And Failure Semantics`
+- ## `Tradeoffs And Known Limits`
+- ## `Delivery Proof`
+- ## `Pre-Implementation Baselines`
+- ## `Review Resolution`
+
+## .owlbear/completed/memory-universal-recall-and-review-clarity/intent.md
+- # `Memory Universal Recall and Review Clarity`
+- ## `Problem`
+- ## `Product Promise`
+- ## `Workflows`
+- ## `Preserved Behavior`
+- ## `Accepted Exclusions And Risks`
+- ## `Success Evidence`
+- ## `Technically Done But Wrong`
+- ## `Confirmed Decisions`
+- ## `Superseded Decisions`
+- ## `Delivery Contract`
+
 ## .owlbear/instructions/architecture.instructions.md
 - ## `Architecture Overview`
 - ## `Dependency Rules`
@@ -1216,6 +1267,8 @@
 
 ## share/prompts/orchestrate.prompt.md
 
+## share/prompts/resolve-delivery-attention.prompt.md
+
 ## share/prompts/test-curation.prompt.md
 - ## `Execution Contract`
 
@@ -1387,6 +1440,7 @@
 - ### `knowledge_ingest`
 - ### `list_knowledge_sources`
 - ### `refresh_knowledge_source`
+- ### `register_knowledge_source`
 - ### `delete_knowledge_source`
 - ### `knowledge_stats`
 - ### `claim_enrichment_batch`
@@ -1395,6 +1449,7 @@
 - ## `Decision Tree`
 - ## `Scope Conventions`
 - ## `Domain Reference`
+- ## `Registration Payload Examples`
 - ## `Ingest Recipes`
 - ### `Check-then-ingest (avoid duplicates)`
 - ### `Delta checking`
@@ -1527,6 +1582,15 @@
 - ## `OwlBear-Managed Artifact Placement`
 - ## `Attribution`
 
+## share/skills/w-delivery-attention-resolution/SKILL.md
+- # `Delivery Attention Resolution`
+- ## `Step 0 - Bind The Exact Current Attention`
+- ## `Step 1 - Diagnose Current State Read-Only`
+- ## `Step 2 - Present One Decision`
+- ## `Step 3 - Apply Only Existing Authority`
+- ## `Step 4 - Verify And Close`
+- ## `Known Pitfalls`
+
 ## share/skills/w-design-session/SKILL.md
 - # `Target Design Session`
 - ## `Companion Skills`
@@ -1652,3 +1716,9 @@
 - ## `Output`
 - ## `Known Pitfalls`
 - ## `Companion Skills`
+
+## test-results/serve-cockpit-web-e2e-memo-cfc43-isible-rows-and-shown-count/error-context.md
+- # `Instructions`
+- # `Test info`
+- # `Error details`
+- # `Test source`
