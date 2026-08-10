@@ -5,15 +5,14 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context  # noqa: TC002 - MCPServer evaluates tool annotations at registration.
 from mcp.types import ToolAnnotations
 from owlbear_memory import MemoryCategory, MemoryEngine, MemoryState
-from pydantic import Field
+from pydantic import Field, StrictStr
 
-from owlbear_memory_mcp.agents import AgentCatalog
 from owlbear_memory_mcp.tools import (
     approve_memory as approve_memory_impl,
 )
@@ -70,6 +69,7 @@ _Title = Annotated[str, Field(min_length=1)]
 _Content = Annotated[str, Field(max_length=1024)]
 _Confidence = Annotated[float, Field(ge=0.7, le=1.0)]
 _Agent = Annotated[str, Field(min_length=1)]
+_RecallAgent = Annotated[StrictStr | Literal[0] | None, Field(default=None)]
 _Limit = Annotated[int, Field(ge=0)]
 _Categories = Annotated[list[MemoryCategory], Field(min_length=1)]
 
@@ -79,7 +79,6 @@ class AppContext:
     """Runtime context passed through MCP lifespan to all tools."""
 
     engine: MemoryEngine
-    agents: AgentCatalog
 
 
 @asynccontextmanager
@@ -93,7 +92,6 @@ async def app_lifespan(
         raise RuntimeError(message)
     yield AppContext(
         engine=MemoryEngine(memory_dir=workspace_root / _DEFAULT_MEMORY_DIR),
-        agents=AgentCatalog(workspace_root),
     )
 
 
@@ -142,7 +140,7 @@ async def list_memories(
 async def recall_memory(
     ctx: Context,
     *,
-    agent: _Agent,
+    agent: _RecallAgent = None,
     categories: list[MemoryCategory] | None = None,
     limit: _Limit | None = None,
 ) -> str:  # pragma: no cover
