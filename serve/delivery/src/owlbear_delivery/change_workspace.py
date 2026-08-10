@@ -910,12 +910,12 @@ class ChangeWorkspaceManager:
         target_head = preflight
         try:
             target_tree = self._git("rev-parse", f"{target_head}^{{tree}}")
-            self._require_unchanged_completed_siblings(target_tree, target_head, candidate.change_id)
             proposal_tree = self._replace_tree_path(
                 target_tree,
                 tuple(candidate.completion_path.split("/")),
                 candidate.package_tree,
             )
+            self._require_unchanged_completed_siblings(proposal_tree, target_head, candidate.change_id)
         except ValueError as exc:
             return AtomicIntegrationResult(
                 code=DeliveryIntegrationAttentionCode.COMPLETED_HISTORY_MUTATED,
@@ -923,8 +923,15 @@ class ChangeWorkspaceManager:
             )
         proposal_ref = f"refs/owlbear/external-completion-proposals/{candidate.change_id}"
         current = self._resolve(proposal_ref, missing_ok=True)
-        proposal_commit = self._write_external_completion_proposal(candidate, proposal_tree, target_head)
-        if current != proposal_commit:
+        if current is not None and self._external_completion_proposal_matches(
+            current,
+            candidate,
+            proposal_tree,
+            target_head,
+        ):
+            proposal_commit = current
+        else:
+            proposal_commit = self._write_external_completion_proposal(candidate, proposal_tree, target_head)
             self._git("update-ref", proposal_ref, proposal_commit, current or "0" * 40)
         return ExternalCompletionProposal(
             change_id=candidate.change_id,
@@ -1379,6 +1386,21 @@ class ChangeWorkspaceManager:
             target_head,
             "-m",
             f"Complete externally integrated {candidate.change_id} ({candidate.candidate_id})",
+        )
+
+    def _external_completion_proposal_matches(
+        self,
+        commit: str,
+        candidate: DeliveryIntegrationCandidate,
+        tree: str,
+        target_head: str,
+    ) -> bool:
+        parents = self._git("rev-list", "--parents", "-n", "1", commit).split()
+        return (
+            self._git("rev-parse", f"{commit}^{{tree}}") == tree
+            and parents == [commit, target_head]
+            and self._git("show", "-s", "--format=%B", commit).strip()
+            == f"Complete externally integrated {candidate.change_id} ({candidate.candidate_id})"
         )
 
     def _integration_commit_matches(

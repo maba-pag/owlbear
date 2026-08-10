@@ -171,7 +171,9 @@ def test_external_completion_proposal_preserves_dirty_checked_out_target(tmp_pat
     )
 
     proposal = manager.prepare_external_completion_proposal(candidate)
+    replayed = manager.prepare_external_completion_proposal(candidate)
 
+    assert replayed == proposal
     assert proposal.proposal_commit != target_head
     assert _git(repository, "rev-list", "--parents", "-n", "1", proposal.proposal_commit).split() == [
         proposal.proposal_commit,
