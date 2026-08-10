@@ -186,7 +186,6 @@ identity before admission:
   agreed paths, and implementation discretion;
 - user-facing outcomes with promises, observable acceptance, commitment links, and dependency IDs;
 - exactly one outcome task-plan scope for every active outcome;
-- a change-assembly scope only when accepted composition authority is already required;
 - persisted Design re-entry briefings, semantic updates, and completion summaries only when they
   already exist as durable authority.
 

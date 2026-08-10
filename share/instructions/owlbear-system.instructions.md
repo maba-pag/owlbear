@@ -28,7 +28,7 @@ applyTo: "**"
   and a Delivery execution board.
 - **Distribution and safety.** Clone = install; `setup/init.py` wires workspace configuration. Git
   history and audit logs provide review and recovery.
-- **Delivery.** `design → plan → build → optional assembly → completed`. Independent review is
+- **Delivery.** `design → plan → sequential build → completed`. Independent review is
   nested in each transformation attempt. The engine owns readiness, claims, receipts, typed
   correction, and recovery; use `r-workspace-governance` for scoped commits and OwlBear-managed
   artifact placement.

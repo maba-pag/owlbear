@@ -49,12 +49,6 @@ Process `launch_packages` in returned order. For worker role `planner` or `build
 agent's frontmatter owns its model. Do not substitute a role, agent, reviewer, worktree, branch, or
 source head.
 
-The current public surface has no Assembly context or publication operation. For worker role
-`assembly-reviewer`, call `recover_claim` immediately with the launch's exact `change_id`,
-`outcome_id`, `claim.attempt_id`, and `claim.claim_id`. Report the returned recovery status or
-attention and stop processing that affected change. Do not dispatch Build Reviewer, inspect
-composition, construct a transition, or leave the unsupported claim silently active.
-
 If Builder returns `kind: dispatch_failure`, require its change, outcome, attempt, and claim IDs to
 equal the launch and require non-empty `failed_operation` and `reason`. Use that same exact
 `recover_claim` request. Never forward this result to `transition_delivery` or translate it into a
@@ -125,6 +119,4 @@ results into invented completion or scheduling state.
 - **Local scheduling:** acquisition already owns stable readiness and capacity.
 - **Identity generation:** launch claims and role policies are runtime output, not Orchestrator input.
 - **Transition interpretation:** worker action and payload remain unchanged.
-- **Fake Assembly support:** unsupported Assembly claims are recovered exactly, never sent to Builder
-  or Build Reviewer.
 - **Integration discovery:** only acquisition-provided IDs authorize the Integration call.
