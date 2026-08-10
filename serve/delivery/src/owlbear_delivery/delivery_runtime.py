@@ -472,7 +472,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 class DeliveryFrontier(_DeliveryModel):
     """Canonical schema-v2 outcome state persisted beside Delivery authority."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     bindings: tuple[OutcomeAuthorityBinding, ...]
     operator_moves: tuple[DeliveryOperatorMove, ...] = ()
     integration_result_id: str | None = None
@@ -667,6 +667,7 @@ _STAGE_ORDER = {
     DeliveryStage.IMPLEMENTATION: 2,
     DeliveryStage.COMPLETED: 3,
 }
+_FRONTIER_SCHEMA_VERSION = 2
 _RETURN_TARGETS = {
     DeliveryStage.PLANNING: {DeliveryStage.DESIGN},
     DeliveryStage.IMPLEMENTATION: {DeliveryStage.PLANNING, DeliveryStage.DESIGN},
@@ -1440,13 +1441,20 @@ class DeliveryRuntime:
         RuntimeTransaction.recover_all(self._target_root)
         try:
             content = self._frontier_path.read_bytes()
-            return DeliveryFrontier.model_validate_json(content), content
-        except (OSError, ValueError) as exc:
+            frontier, canonical = parse_delivery_frontier(content)
+            if canonical != content:
+                self._replace_content(content, canonical)
+        except (OSError, TypeError, ValueError) as exc:
             message = f"Delivery frontier is missing or invalid: {self._contract.change_id}"
             raise DeliveryRuntimeReferenceError(message) from exc
+        else:
+            return frontier, canonical
 
     def _replace(self, previous: bytes, frontier: DeliveryFrontier) -> None:
-        replacement = _model_content(frontier)
+        self._replace_content(previous, _model_content(frontier))
+
+    def _replace_content(self, previous: bytes, replacement: bytes) -> None:
+        """Transactionally replace exact frontier bytes."""
         participant = ReplacementTransactionParticipant(
             self._target_root,
             self._frontier_path.relative_to(self._target_root),
@@ -1468,6 +1476,31 @@ def _find_binding(frontier: DeliveryFrontier, outcome_id: str) -> OutcomeAuthori
         return next(binding for binding in frontier.bindings if binding.outcome_id == outcome_id)
     except StopIteration as exc:
         _reference(f"Delivery outcome is absent: {outcome_id}", exc)
+
+
+def parse_delivery_frontier(content: bytes) -> tuple[DeliveryFrontier, bytes]:
+    """Parse canonical frontier bytes and reduce safe pre-Assembly-removal state."""
+    payload = json.loads(content)
+    if not isinstance(payload, dict):
+        raise TypeError
+    schema_version = payload.get("schema_version")
+    if schema_version == 1:
+        bindings = payload.get("bindings")
+        if not isinstance(bindings, list):
+            raise ValueError
+        for binding in bindings:
+            if not isinstance(binding, dict) or binding.get("stage") == "assembly":
+                raise ValueError
+            assembly_required = binding.pop("assembly_required", False)
+            if assembly_required is not False:
+                raise ValueError
+        payload["schema_version"] = _FRONTIER_SCHEMA_VERSION
+    elif schema_version != _FRONTIER_SCHEMA_VERSION:
+        raise ValueError
+    frontier = DeliveryFrontier.model_validate_json(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")),
+    )
+    return frontier, _model_content(frontier)
 
 
 def _find_request(frontier: DeliveryFrontier, request_id: str) -> tuple[OutcomeAuthorityBinding, DeliveryRequest]:

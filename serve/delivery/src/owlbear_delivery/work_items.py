@@ -21,6 +21,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryWorkerRole,
     OutcomeAuthorityBinding,
     integration_attention_disposition,
+    parse_delivery_frontier,
 )
 from owlbear_delivery.target_contract import DeliveryCommitment, DeliveryContract, DeliveryOutcome
 
@@ -155,7 +156,7 @@ class DeliveryPortfolioSnapshot(_ProjectionModel):
         """Validate one frontier read and bind its exact content digest."""
         return cls(
             contract=contract,
-            frontier=DeliveryFrontier.model_validate_json(frontier_bytes),
+            frontier=parse_delivery_frontier(frontier_bytes)[0],
             version=hashlib.sha256(frontier_bytes).hexdigest(),
             integration_target=integration_target,
             target_head=target_head,

@@ -287,6 +287,47 @@ def test_plan_publication_is_idempotent_and_promotes_dependency_order(tmp_path: 
     assert runtime.claimable_task_ids("OUT-001") == ("TASK-001",)
 
 
+def test_runtime_migrates_reducible_assembly_metadata_transactionally(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    path = tmp_path / "changes/delivery-runtime/frontier.json"
+    payload = json.loads(runtime.frontier_bytes())
+    payload["schema_version"] = 1
+    for binding in payload["bindings"]:
+        binding["assembly_required"] = False
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    migrated = DeliveryRuntime(tmp_path, _contract())
+    canonical = json.loads(migrated.frontier_bytes())
+
+    assert canonical["schema_version"] == 2
+    assert all("assembly_required" not in binding for binding in canonical["bindings"])
+    assert json.loads(path.read_bytes()) == canonical
+
+
+@pytest.mark.parametrize(
+    ("stage", "assembly_required_value"),
+    [("planning", "true"), ("assembly", "false")],
+)
+def test_runtime_rejects_irreducible_assembly_authority(
+    tmp_path: Path,
+    stage: str,
+    assembly_required_value: str,
+) -> None:
+    runtime = _runtime(tmp_path)
+    path = tmp_path / "changes/delivery-runtime/frontier.json"
+    payload = json.loads(runtime.frontier_bytes())
+    payload["schema_version"] = 1
+    payload["bindings"][0]["stage"] = stage
+    payload["bindings"][0]["assembly_required"] = assembly_required_value == "true"
+    original = json.dumps(payload).encode()
+    path.write_bytes(original)
+
+    with pytest.raises(DeliveryRuntimeReferenceError, match="missing or invalid"):
+        DeliveryRuntime(tmp_path, _contract())
+
+    assert path.read_bytes() == original
+
+
 def test_plan_publication_rejects_unresolved_or_cyclic_graph_without_mutation(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path)
     _activate(runtime, "OUT-001", "claim-001")

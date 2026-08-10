@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from owlbear_delivery.delivery_runtime import DeliveryFrontier, OutcomeAuthorityBinding
+from owlbear_delivery.delivery_runtime import DeliveryFrontier, OutcomeAuthorityBinding, parse_delivery_frontier
 from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
     RuntimeTransaction,
@@ -353,7 +353,7 @@ class DeliveryAuthorityRegistry:
             return _CurrentDelivery(
                 contract=DeliveryContract.model_validate_json(contract_bytes),
                 contract_bytes=contract_bytes,
-                frontier=DeliveryFrontier.model_validate_json(frontier_bytes),
+                frontier=parse_delivery_frontier(frontier_bytes)[0],
                 frontier_bytes=frontier_bytes,
                 receipt=DeliveryAdmissionReceipt.model_validate_json(receipt_bytes),
                 receipt_bytes=receipt_bytes,

@@ -13,7 +13,12 @@ from typing import TYPE_CHECKING, Never
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
-from owlbear_delivery.delivery_runtime import DeliveryFrontier, DeliveryStage, DeliveryTaskResult
+from owlbear_delivery.delivery_runtime import (
+    DeliveryFrontier,
+    DeliveryStage,
+    DeliveryTaskResult,
+    parse_delivery_frontier,
+)
 from owlbear_delivery.design_package import (
     CompletionPackageManifest,
     CompletionPackageSnapshot,
@@ -275,7 +280,7 @@ class CompletedHistoryCatalog:
         results_bytes = self._blob(commit, path, "results.json")
         self._require_capture_digests(snapshot, runtime_bytes, results_bytes)
         try:
-            frontier = DeliveryFrontier.model_validate_json(runtime_bytes)
+            frontier = parse_delivery_frontier(runtime_bytes)[0]
             results = _RESULT_HISTORY.validate_json(results_bytes)
         except (ValidationError, ValueError) as exc:
             self._malformed("completed runtime capture is malformed", snapshot.manifest.change_id, cause=exc)
