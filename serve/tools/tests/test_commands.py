@@ -5,6 +5,8 @@ from __future__ import annotations
 import io
 import sys
 
+import pytest
+
 from owlbear_tools.commands import command_footer, help_main
 
 
@@ -13,17 +15,21 @@ class _TerminalBuffer(io.StringIO):
         return True
 
 
-def test_help_always_lists_setup_and_maintenance_commands(monkeypatch: object, capsys: object) -> None:
+def test_default_help_focuses_on_workspace_quality_and_tests(monkeypatch: object, capsys: object) -> None:
     monkeypatch.setattr(sys, "argv", ["help"])
 
     help_main()
 
     output = capsys.readouterr().out
-    assert "Setup:" in output
-    assert "uv run setup-project" in output
-    assert "uv run integration-target" in output
-    assert "Maintenance:" in output
-    assert "uv run megalint-clean" in output
+    assert "Workspace:" in output
+    assert "Quality:" in output
+    assert "Tests:" in output
+    assert "Setup:" not in output
+    assert "Maintenance:" not in output
+    assert "Internal:" not in output
+    assert "uv run help setup" in output
+    assert "uv run help maintenance" in output
+    assert "uv run help internal" in output
 
 
 def test_help_topic_limits_output_to_selected_group(monkeypatch: object, capsys: object) -> None:
@@ -33,8 +39,18 @@ def test_help_topic_limits_output_to_selected_group(monkeypatch: object, capsys:
 
     output = capsys.readouterr().out
     assert "Setup:" in output
-    assert "Everyday:" not in output
+    assert "Workspace:" not in output
+    assert "Quality:" not in output
     assert "Maintenance:" not in output
+
+
+@pytest.mark.parametrize(("topic", "heading"), [("s", "Setup:"), ("m", "Maintenance:"), ("i", "Internal:")])
+def test_help_accepts_topic_shorthands(topic: str, heading: str, monkeypatch: object, capsys: object) -> None:
+    monkeypatch.setattr(sys, "argv", ["help", topic])
+
+    help_main()
+
+    assert heading in capsys.readouterr().out
 
 
 def test_consumer_help_hides_development_commands(tmp_path: object, monkeypatch: object, capsys: object) -> None:
@@ -46,8 +62,11 @@ def test_consumer_help_hides_development_commands(tmp_path: object, monkeypatch:
     output = capsys.readouterr().out
     assert "uv run lint [" in output
     assert "uv run lint-full" not in output
+    assert "Tests:" not in output
     assert "uv run megalint" not in output
     assert "uv run deps-sync" not in output
+    assert "uv run help setup" in output
+    assert "uv run help maintenance" not in output
 
 
 def test_help_styles_semantic_anchors_for_terminal_output(monkeypatch: object) -> None:
@@ -61,9 +80,9 @@ def test_help_styles_semantic_anchors_for_terminal_output(monkeypatch: object) -
 
     rendered = output.getvalue()
     assert "\033[1m\033[35m\N{INFORMATION SOURCE} OwlBear commands\033[0m" in rendered
-    assert "\033[1m\033[36mEveryday:\033[0m" in rendered
-    assert "\033[1m\033[34mSetup:\033[0m" in rendered
-    assert "\033[1m\033[33mMaintenance:\033[0m" in rendered
+    assert "\033[1m\033[36mWorkspace:\033[0m" in rendered
+    assert "\033[1m\033[32mQuality:\033[0m" in rendered
+    assert "\033[1m\033[35mTests:\033[0m" in rendered
     assert "\033[32muv run lint" in rendered
     assert "lint --all plus frontend and MegaLinter checks" in rendered
     footer = command_footer(output)
