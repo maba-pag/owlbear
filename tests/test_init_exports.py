@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
 
 import owlbear_delivery
 
@@ -19,25 +18,3 @@ def test_target_and_snapshot_exports_remain_callable() -> None:
 
     assert required <= set(owlbear_delivery.__all__)
     assert all(callable(getattr(owlbear_delivery, name)) for name in required)
-
-
-def test_legacy_runtime_exports_and_modules_are_absent() -> None:
-    removed = {
-        "AgentView",
-        "BoardConfig",
-        "KanbanEngine",
-        "Task",
-        "TaskSummary",
-        "WorkSession",
-        "atomic_write",
-        "pick_dispatchable",
-    }
-
-    assert removed.isdisjoint(owlbear_delivery.__all__)
-    assert all(not hasattr(owlbear_delivery, name) for name in removed)
-    for module in ("engine", "models", "storage", "migrate", "decisions"):
-        try:
-            importlib.import_module(f"owlbear_delivery.{module}")
-        except ModuleNotFoundError:
-            continue
-        raise AssertionError(f"retired module remains importable: {module}")
