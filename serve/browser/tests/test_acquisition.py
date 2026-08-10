@@ -133,7 +133,7 @@ async def test_authentication_page_stays_open_and_retry_reuses_it() -> None:
     try:
         from owlbear_browser.playwright_launcher import PlaywrightLauncher
 
-        async with PlaywrightLauncher() as launcher:
+        async with PlaywrightLauncher(headless=True) as launcher:
             auth_url = f"http://127.0.0.1:{server.server_port}/auth"
             result = await launcher.acquire(AcquisitionRequest(auth_url))
             assert result.status is AcquisitionStatus.AUTHENTICATION_REQUIRED
