@@ -4,6 +4,7 @@ import hashlib
 import itertools
 import json
 import os
+import shutil
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -33,6 +34,7 @@ from owlbear_delivery import (
     DeliveryFrontier,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationCandidate,
+    DeliveryIntegrationCompletion,
     DeliveryIntegrationRepair,
     DeliveryIntegrationRepairAuthorityAttention,
     DeliveryIntegrationRepairReview,
@@ -176,7 +178,7 @@ def _runtime(
             ),
         )
     )
-    path = state_root / "delivery" / "changes" / contract.change_id / "frontier.json"
+    path = state_root / "changes" / contract.change_id / "frontier.json"
     path.parent.mkdir(parents=True)
     path.write_bytes(_canonical(frontier))
     return DeliveryRuntime(state_root, contract, workspace_manager=manager)
@@ -366,46 +368,134 @@ def test_portfolio_claim_suppresses_second_orchestration_recommendation(tmp_path
 
 def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
-    target_root = repository / ".owlbear/target"
+    runtime_root = repository / ".owlbear/delivery/runtime"
     application = load_delivery_application(
         _startup_config(),
         workspace_root=repository,
-        authorized_target_root=target_root,
     )
     assert application.list_work_items() == ()
     assert isinstance(application._integration_verifier, IntegrationVerifier)  # noqa: SLF001
-    assert (target_root / "target-runtime/capacity.json").is_file()
+    assert (runtime_root / "capacity.json").is_file()
+    assert not (repository / ".owlbear/target").exists()
+    assert not (repository / ".owlbear/worktrees").exists()
 
 
-def test_delivery_loader_rejects_unauthorized_root_before_owner_mutation(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("legacy_path", "field"),
+    [
+        (".owlbear/target/delivery/changes/change-a/frontier.json", "runtime_root"),
+        (".owlbear/worktrees/change-a/.git", "worktree_root"),
+    ],
+)
+def test_delivery_loader_rejects_unmigrated_owned_state_before_owner_mutation(
+    tmp_path: Path,
+    legacy_path: str,
+    field: str,
+) -> None:
     repository = _repository(tmp_path)
-    target_root = repository / ".owlbear/target"
+    path = repository / legacy_path
+    path.parent.mkdir(parents=True)
+    path.write_text("unmigrated\n", encoding="utf-8")
+
     with pytest.raises(DeliveryApplicationLoadError) as exc_info:
         load_delivery_application(
             _startup_config(),
             workspace_root=repository,
-            authorized_target_root=tmp_path / "other-target",
         )
-    assert exc_info.value.field == "target_root"
-    assert not target_root.exists()
+
+    assert exc_info.value.field == field
+    assert not (repository / ".owlbear/delivery/runtime").exists()
+
+
+@pytest.mark.parametrize("symlinked_parent", [".owlbear", ".owlbear/delivery"])
+def test_delivery_loader_rejects_symlinked_canonical_state_parent(
+    tmp_path: Path,
+    symlinked_parent: str,
+) -> None:
+    repository = _repository(tmp_path / "repository")
+    external = tmp_path / "external"
+    external.mkdir()
+    parent = repository / symlinked_parent
+    if symlinked_parent == ".owlbear/delivery":
+        parent.parent.mkdir()
+    parent.symlink_to(external, target_is_directory=True)
+
+    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
+        load_delivery_application(
+            _startup_config(),
+            workspace_root=repository,
+        )
+
+    assert exc_info.value.field == "workspace_root"
+    assert "symlink" in exc_info.value.detail
+    assert not (external / "runtime").exists()
+
+
+def test_delivery_loader_rejects_stale_legacy_git_worktree_registration(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    worktree = repository / ".owlbear/worktrees/change-a"
+    _git(repository, "worktree", "add", "--detach", str(worktree), "HEAD")
+    shutil.rmtree(worktree)
+
+    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
+        load_delivery_application(
+            _startup_config(),
+            workspace_root=repository,
+        )
+
+    assert exc_info.value.field == "worktree_root"
+    assert "Git worktree registrations" in exc_info.value.detail
+    assert not (repository / ".owlbear/delivery/runtime").exists()
+
+
+def test_delivery_loader_rejects_interrupted_migration_journal(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    journal = repository / ".owlbear/delivery/migration.json"
+    journal.parent.mkdir(parents=True)
+    journal.write_text("{}\n", encoding="utf-8")
+
+    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
+        load_delivery_application(
+            _startup_config(),
+            workspace_root=repository,
+        )
+
+    assert exc_info.value.field == "runtime_root"
+    assert exc_info.value.detail == "interrupted Delivery migration must be recovered before startup"
+    assert not (repository / ".owlbear/delivery/runtime").exists()
+
+
+def test_delivery_loader_rejects_startup_from_linked_worktree(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    linked_worktree = tmp_path / "linked-worktree"
+    _git(repository, "worktree", "add", "--detach", str(linked_worktree), "HEAD")
+
+    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
+        load_delivery_application(
+            _startup_config(),
+            workspace_root=linked_worktree,
+        )
+
+    assert exc_info.value.field == "workspace_root"
+    assert exc_info.value.detail == "Delivery must start from the primary Git worktree"
+    assert not (linked_worktree / ".owlbear/delivery/runtime").exists()
 
 
 def test_delivery_loader_rejects_git_and_state_identity_before_composition(tmp_path: Path) -> None:
     non_repository = tmp_path / "not-a-repository"
     non_repository.mkdir()
-    target_root = non_repository / ".owlbear/target"
+    runtime_root = non_repository / ".owlbear/delivery/runtime"
     with pytest.raises(DeliveryApplicationLoadError) as git_error:
         load_delivery_application(
             _startup_config(),
             workspace_root=non_repository,
-            authorized_target_root=target_root,
         )
     assert git_error.value.field == "repository_root"
-    assert not target_root.exists()
+    assert not runtime_root.exists()
 
     repository = _repository(tmp_path / "valid")
-    state_root = repository / ".owlbear/target"
-    change_root = state_root / "delivery/changes/change-a"
+    state_root = repository / ".owlbear/delivery/runtime"
+    change_root = state_root / "changes/change-a"
     change_root.mkdir(parents=True)
     contract = _contract("change-b", b"intent\n", b"design\n")
     (change_root / "contract.json").write_bytes(_canonical(contract))
@@ -413,14 +503,13 @@ def test_delivery_loader_rejects_git_and_state_identity_before_composition(tmp_p
         load_delivery_application(
             _startup_config(),
             workspace_root=repository,
-            authorized_target_root=state_root,
         )
-    assert state_error.value.field == "target_root"
-    assert not (state_root / "target-runtime").exists()
+    assert state_error.value.field == "runtime_root"
+    assert not (state_root / "capacity.json").exists()
 
     runtime_repository = _repository(tmp_path / "invalid-runtime")
-    runtime_root = runtime_repository / ".owlbear/target"
-    runtime_change = runtime_root / "delivery/changes/change-a"
+    runtime_root = runtime_repository / ".owlbear/delivery/runtime"
+    runtime_change = runtime_root / "changes/change-a"
     runtime_change.mkdir(parents=True)
     valid_contract = _contract("change-a", b"intent\n", b"design\n")
     (runtime_change / "contract.json").write_bytes(_canonical(valid_contract))
@@ -429,10 +518,9 @@ def test_delivery_loader_rejects_git_and_state_identity_before_composition(tmp_p
         load_delivery_application(
             _startup_config(),
             workspace_root=runtime_repository,
-            authorized_target_root=runtime_root,
         )
-    assert runtime_error.value.field == "target_root"
-    assert not (runtime_root / "target-runtime").exists()
+    assert runtime_error.value.field == "runtime_root"
+    assert not (runtime_root / "capacity.json").exists()
 
 
 def test_design_session_read_and_revision_delegate_to_package_store(tmp_path: Path) -> None:
@@ -492,7 +580,7 @@ dependencies: []
     assert _file_bytes(tmp_path / "packages/composed-delivery") == package_bytes
     assert validated == derived
     assert derived.contract is not None
-    assert not (state_root / "delivery/changes/composed-delivery").exists()
+    assert not (state_root / "changes/composed-delivery").exists()
 
     product_head = _git(tmp_path / "repository", "rev-parse", "main")
     request = DeliveryAdmissionRequest(change_id="composed-delivery", active_claim_ids=())
@@ -514,7 +602,7 @@ dependencies: []
     assert launch.outcome_id == "OUT-001"
     assert launch.claim.worker_role == DeliveryWorkerRole.PLANNER
 
-    delivery_root = state_root / "delivery/changes/composed-delivery"
+    delivery_root = state_root / "changes/composed-delivery"
     admitted_bytes = _file_bytes(delivery_root)
     changed_intent = intent.replace(b"Preserve source ownership.", b"Preserve revised source ownership.")
     package_root = tmp_path / "packages/composed-delivery"
@@ -801,6 +889,49 @@ def _review_product_change(coordinator: PortfolioCoordinator, change_id: str, co
     return target_head, reviewed
 
 
+def _seed_legacy_completed_history(
+    application: PortfolioApplication,
+    runtimes: dict[str, DeliveryRuntime],
+    coordinator: PortfolioCoordinator,
+    change_id: str,
+) -> DeliveryIntegrationCompletion:
+    coordination = coordinator.show(change_id)
+    current_target = _git(coordination.worktree_path, "rev-parse", coordination.integration_target)
+    reviewed = coordination.last_reviewed_commit
+    if _git_ref_exists(coordination.worktree_path, reviewed):
+        ancestor = (
+            subprocess.run(
+                ("git", "-C", str(coordination.worktree_path), "merge-base", "--is-ancestor", reviewed, current_target),
+                check=False,
+                capture_output=True,
+            ).returncode
+            == 0
+        )
+        if not ancestor:
+            _git(coordination.worktree_path, "update-ref", f"refs/heads/{coordination.integration_target}", reviewed)
+    attempted = application.integrate_ready_change(change_id)
+    assert attempted.candidate is not None
+    prepared = application.prepare_external_completion(change_id)
+    assert prepared.proposal is not None
+    proposal = prepared.proposal
+    _git(
+        coordination.worktree_path,
+        "update-ref",
+        f"refs/heads/{coordination.integration_target}",
+        proposal.proposal_commit,
+        proposal.target_head,
+    )
+    completion = DeliveryIntegrationCompletion(
+        completion_id=proposal.completion_id,
+        candidate_id=attempted.candidate.candidate_id,
+        package_id=attempted.candidate.package_id,
+        target_commit=proposal.proposal_commit,
+        completion_path=proposal.completion_path,
+    )
+    runtimes[change_id].publish_integration_completion(completion)
+    return completion
+
+
 def _prepare_reviewed_integration_repair(tmp_path: Path):
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
@@ -997,7 +1128,7 @@ def test_acquisition_returns_bounded_stage_packages_and_unclaimed_integration(tm
     assert coordinator.show("change-a").writer is None
     assert coordinator.show("change-b").writer is not None
     assert coordinator.show("change-c").writer is None
-    ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
+    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
     assert ledger.change_ids == ("change-b",)
 
     plan_package, build_package, assembly_package = acquired.launch_packages
@@ -1059,7 +1190,7 @@ def test_writer_failure_leaves_started_exact_claim_without_false_launch(tmp_path
     )
     assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
     assert runtimes["change-a"].active_claims() == ()
-    ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
+    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
     assert ledger.change_ids == ()
 
 
@@ -1080,7 +1211,7 @@ def test_writer_capacity_skips_blocked_build_but_launches_read_only_work(tmp_pat
     assert acquired.failures == ()
     assert runtimes["change-b"].active_claims() == ()
     assert coordinator.show("change-b").writer is None
-    ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
+    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
     assert ledger.change_ids == ("change-a",)
 
 
@@ -1100,7 +1231,7 @@ def test_read_only_claim_recovery_removes_only_exact_runtime_claim(tmp_path: Pat
     assert recovered.preserved_commit is None
     assert runtimes["change-a"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
-    ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
+    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
     assert ledger.change_ids == ()
 
 
@@ -1157,7 +1288,7 @@ def test_expired_claim_recovery_respects_lease_and_releases_writer(tmp_path: Pat
     )
     assert runtimes["change-a"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
-    ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
+    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
     assert ledger.change_ids == ()
 
 
@@ -1180,7 +1311,7 @@ def test_acquisition_retains_dirty_interrupted_build_as_attention(tmp_path: Path
     assert recovery.attention.custody_retained
     assert runtimes["change-a"].active_claims() == (("OUT-001", interrupted.claim),)
     assert coordinator.show("change-a").writer == interrupted.writer
-    ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
+    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
     assert ledger.change_ids == ("change-a",)
 
 
@@ -1228,7 +1359,7 @@ def test_clean_build_recovery_replays_after_workspace_reset(tmp_path: Path) -> N
     assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
     assert recovered.preserved_commit == attempt_commit
     assert runtimes["change-a"].active_claims() == ()
-    ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
+    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
     assert ledger.change_ids == ()
     with pytest.raises(DeliveryRuntimeConflictError, match="active claim"):
         runtimes["change-a"].transition(RetryDelivery(outcome_id="OUT-001", claim_id=package.claim.claim_id))
@@ -1284,7 +1415,7 @@ def test_clean_build_recovery_replays_each_workspace_interruption(tmp_path: Path
     assert _git(package.worktree_path, "rev-parse", "HEAD") == package.last_reviewed_commit
     assert runtimes["change-a"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
-    ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
+    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
     assert ledger.change_ids == ()
 
 
@@ -1313,7 +1444,7 @@ def test_dirty_build_recovery_retains_bytes_claim_custody_and_attention(tmp_path
     assert runtimes["change-a"].active_claims()[0][1] == package.claim
     assert runtimes["change-a"].show_binding("OUT-001").recovery_attention == retained.attention
     assert coordinator.show("change-a").writer == package.writer
-    ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
+    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
     assert ledger.change_ids == ("change-a",)
 
 
@@ -1347,11 +1478,11 @@ def test_mismatched_build_custody_retains_current_writer_and_attention(tmp_path:
     assert retained.attention.writer_claim_id == mismatched.claim_id
     assert runtimes["change-a"].active_claims()[0][1] == package.claim
     assert coordinator.show("change-a").writer == mismatched
-    ledger = CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes())
+    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
     assert ledger.change_ids == ("change-a",)
 
 
-def test_integration_publishes_product_and_package_once_then_replays_cleanup(tmp_path: Path) -> None:
+def test_integration_requires_external_acceptance_without_target_mutation(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
@@ -1359,56 +1490,24 @@ def test_integration_publishes_product_and_package_once_then_replays_cleanup(tmp
     )
     target_before, reviewed = _review_product_change(coordinator, "change-a", "reviewed product\n")
     active_root = tmp_path / "packages/change-a"
-    active_bytes = {path.name: path.read_bytes() for path in active_root.iterdir()}
     worktree_path = coordinator.show("change-a").worktree_path
 
-    published = application.integrate_ready_change("change-a")
+    result = application.integrate_ready_change("change-a")
 
-    assert published.completion is not None
-    target_commit = published.completion.target_commit
-    assert _git(tmp_path / "repository", "rev-parse", "main") == target_commit
-    assert _git(tmp_path / "repository", "show", f"{target_commit}:product.txt") == "reviewed product"
-    assert _git(tmp_path / "repository", "rev-list", "--parents", "-n", "1", target_commit).split() == [
-        target_commit,
-        target_before,
-        reviewed,
-    ]
-    completion_root = ".owlbear/completed/change-a"
-    completed_names = _git(
-        tmp_path / "repository",
-        "ls-tree",
-        "--name-only",
-        f"{target_commit}:{completion_root}",
-    ).split()
-    assert set(completed_names) == {
-        "authority.json",
-        "completion.json",
-        "design.md",
-        "intent.md",
-        "manifest.json",
-        "results.json",
-        "runtime.json",
-    }
-    assert runtimes["change-a"].change_stage().value == "completed"
+    assert result.completion is None
+    assert result.attention is not None
+    assert result.attention.code == DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED
+    assert result.candidate is not None
+    assert result.candidate.reviewed_change_head == reviewed
+    assert _git(tmp_path / "repository", "rev-parse", "main") == target_before
+    assert _git(tmp_path / "repository", "rev-parse", coordinator.show("change-a").branch) == reviewed
+    assert runtimes["change-a"].change_stage().value == "integration"
     assert not _git_ref_exists(tmp_path / "repository", "refs/owlbear/integration-candidates/change-a")
-    assert not (tmp_path / "packages/change-a").exists()
-    assert not coordinator.show("change-a").worktree_path.exists()
-
-    active_root.mkdir()
-    for name, content in active_bytes.items():
-        (active_root / name).write_bytes(content)
-    _git(tmp_path / "repository", "worktree", "add", str(worktree_path), coordinator.show("change-a").branch)
-
-    replayed = application.integrate_ready_change("change-a")
-
-    assert replayed.replayed
-    assert replayed.completion == published.completion
-    assert _git(tmp_path / "repository", "rev-parse", "main") == target_commit
-    assert not active_root.exists()
-    assert not worktree_path.exists()
+    assert active_root.is_dir()
+    assert worktree_path.is_dir()
 
 
-def test_external_completion_proposal_acknowledges_merged_history_and_cleans_up(tmp_path: Path) -> None:
+def test_external_completion_proposal_never_treats_local_ref_move_as_acceptance(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
@@ -1435,45 +1534,46 @@ def test_external_completion_proposal_acknowledges_merged_history_and_cleans_up(
     assert worktree_path.exists()
 
     _git(repository, "update-ref", "refs/heads/main", proposal.proposal_commit, reviewed)
-    acknowledged = application.prepare_external_completion("change-a")
+    waiting = application.prepare_external_completion("change-a")
 
-    assert acknowledged.completion is not None
-    assert acknowledged.completion.target_commit == proposal.proposal_commit
-    assert acknowledged.completion.completion_id == proposal.completion_id
-    assert runtimes["change-a"].integration_completion() == acknowledged.completion
-    assert application.show_completed_change("change-a").completion_id == proposal.completion_id
-    assert not _git_ref_exists(repository, proposal.proposal_ref)
-    assert not active_root.exists()
-    assert not worktree_path.exists()
+    assert waiting.completion is None
+    assert waiting.attention is not None
+    assert waiting.attention.code == DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED
+    assert "not provider acceptance evidence" in waiting.attention.diagnostics[0]
+    assert runtimes["change-a"].integration_completion() is None
+    assert _git_ref_exists(repository, proposal.proposal_ref)
+    assert active_root.exists()
+    assert worktree_path.exists()
 
 
-def test_integration_replay_cleans_candidate_ref_after_runtime_publication_crash(tmp_path: Path) -> None:
+def test_integration_retry_never_treats_local_ref_move_as_acceptance(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
         candidate_proof=lambda _candidate, _commit: (),
     )
-    _review_product_change(coordinator, "change-a", "reviewed product\n")
+    _target_before, reviewed = _review_product_change(coordinator, "change-a", "reviewed product\n")
     repository = tmp_path / "repository"
-    reference = "refs/owlbear/integration-candidates/change-a"
+    _git(repository, "update-ref", "refs/heads/main", reviewed)
 
-    with (
-        patch.object(
-            runtimes["change-a"],
-            "publish_integration_completion",
-            side_effect=DeliveryRuntimeConflictError("injected runtime publication crash"),
-        ),
-        pytest.raises(DeliveryRuntimeConflictError, match="injected runtime publication crash"),
-    ):
-        application.integrate_ready_change("change-a")
+    attempted = application.integrate_ready_change("change-a")
+    prepared = application.prepare_external_completion("change-a")
 
-    assert _git_ref_exists(repository, reference)
+    assert attempted.attention is not None
+    assert attempted.attention.code == DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED
+    assert prepared.proposal is not None
+    proposal = prepared.proposal
+    _git(repository, "update-ref", "refs/heads/main", proposal.proposal_commit, proposal.target_head)
 
-    replayed = application.integrate_ready_change("change-a")
+    waiting = application.integrate_ready_change("change-a")
 
-    assert replayed.replayed
-    assert replayed.completion is not None
-    assert not _git_ref_exists(repository, reference)
+    assert waiting.completion is None
+    assert waiting.attention is not None
+    assert waiting.attention.code == DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED
+    assert "not provider acceptance evidence" in waiting.attention.diagnostics[0]
+    assert runtimes["change-a"].integration_completion() is None
+    assert _git_ref_exists(repository, proposal.proposal_ref)
+    assert coordinator.show("change-a").worktree_path.exists()
 
 
 def test_integration_proof_failure_retains_heads_and_publishes_attention(tmp_path: Path) -> None:
@@ -1522,37 +1622,15 @@ def test_integration_target_identity_mismatch_is_typed_attention(tmp_path: Path)
     assert runtimes["change-a"].change_stage().value == "integration"
 
 
-def test_semantic_only_integration_preserves_product_and_sibling_completed_tree(tmp_path: Path) -> None:
-    application, _runtimes, _coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED, "change-b": DeliveryStage.COMPLETED},
-        candidate_proof=lambda _candidate, _commit: (),
-    )
-    repository = tmp_path / "repository"
-    first = application.integrate_ready_change("change-a")
-    assert first.completion is not None
-    first_commit = first.completion.target_commit
-    product_blob = _git(repository, "rev-parse", f"{first_commit}:product.txt")
-    sibling_tree = _git(repository, "rev-parse", f"{first_commit}:.owlbear/completed/change-a")
-
-    second = application.integrate_ready_change("change-b")
-
-    assert second.completion is not None
-    second_commit = second.completion.target_commit
-    assert _git(repository, "rev-parse", f"{second_commit}:product.txt") == product_blob
-    assert _git(repository, "rev-parse", f"{second_commit}:.owlbear/completed/change-a") == sibling_tree
-    assert _git(repository, "rev-parse", f"{second_commit}:.owlbear/completed/change-b")
-
-
 def test_completed_history_queries_are_bounded_and_separate_from_active_projections(tmp_path: Path) -> None:
-    application, _runtimes, _coordinator, _state_root = _portfolio(
+    application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED, "change-b": DeliveryStage.COMPLETED},
         candidate_proof=lambda _candidate, _commit: (),
     )
     repository = tmp_path / "repository"
-    application.integrate_ready_change("change-a")
-    application.integrate_ready_change("change-b")
+    _seed_legacy_completed_history(application, runtimes, coordinator, "change-a")
+    _seed_legacy_completed_history(application, runtimes, coordinator, "change-b")
     target_before = _git(repository, "rev-parse", "main")
 
     first = application.search_completed_changes("delivery", limit=1)
@@ -1575,9 +1653,8 @@ def test_integration_rejects_reviewed_sibling_completed_history_mutation(tmp_pat
         candidate_proof=lambda _candidate, _commit: (),
     )
     repository = tmp_path / "repository"
-    sibling = application.integrate_ready_change("change-b")
-    assert sibling.completion is not None
-    target_head = sibling.completion.target_commit
+    sibling = _seed_legacy_completed_history(application, runtimes, coordinator, "change-b")
+    target_head = sibling.target_commit
     coordination = coordinator.show("change-a")
     _git(coordination.worktree_path, "reset", "--hard", target_head)
     sibling_completion = coordination.worktree_path / ".owlbear/completed/change-b/completion.json"
@@ -1713,8 +1790,9 @@ def test_reviewed_integration_repair_advances_boundary_and_retries_publication(t
 
     retried = application.integrate_ready_change("change-a")
 
-    assert retried.completion is not None
-    assert _git(repository, "show", f"{retried.completion.target_commit}:product.txt") == "target side"
+    assert retried.attention is not None
+    assert retried.attention.code == DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED
+    assert _git(repository, "rev-parse", "main") == target_head
 
 
 def test_repair_authority_attention_releases_claim_and_is_not_reacquired(tmp_path: Path) -> None:
@@ -1748,9 +1826,7 @@ def test_repair_authority_attention_releases_claim_and_is_not_reacquired(tmp_pat
     assert attention.change_head == reviewed
     assert runtimes["change-a"].integration_repair_claim() is None
     assert coordinator.show("change-a").writer is None
-    assert (
-        CapacityLedger.model_validate_json((state_root / "target-runtime/capacity.json").read_bytes()).change_ids == ()
-    )
+    assert CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes()).change_ids == ()
     refreshed = application.acquire_frontier_work()
     assert refreshed.repair_launch_packages == ()
     assert refreshed.integration_ready_change_ids == ()
@@ -1817,8 +1893,8 @@ def test_reviewed_integration_repair_rejection_preserves_all_state(
     repository = tmp_path / "repository"
     repair = _invalid_integration_repair(invalid_case, repair, worktree)
 
-    coordination_path = state_root / "target-runtime/coordination/change-a.json"
-    frontier_path = state_root / "delivery/changes/change-a/frontier.json"
+    coordination_path = state_root / "claims/changes/change-a.json"
+    frontier_path = state_root / "changes/change-a/frontier.json"
     package_root = tmp_path / "packages/change-a"
     persisted_before = (coordination_path.read_bytes(), frontier_path.read_bytes())
     refs_before = (
@@ -1904,7 +1980,8 @@ def test_interrupted_integration_repair_admission_converges_before_retry(tmp_pat
 
     retried = application.integrate_ready_change("change-a")
 
-    assert retried.completion is not None
+    assert retried.attention is not None
+    assert retried.attention.code == DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED
 
 
 def test_integration_target_cas_loss_publishes_attention_without_own_commit(tmp_path: Path) -> None:

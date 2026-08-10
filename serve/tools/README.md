@@ -20,9 +20,17 @@ uv run py-index
 
 # Regenerate .owlbear/ts-index.md (TypeScript, TSX, JavaScript, and JSX)
 uv run ts-index
+
+# Preview retired Delivery live-state migration from the project root
+uv run migrate-delivery-state .
+
+# Apply or recover and retry the one-way migration
+uv run migrate-delivery-state . --apply
 ```
 
 Each command regenerates its complete index on every invocation. Generated indexes are advisory navigation aids; source files remain authoritative.
+
+`migrate-delivery-state` validates retired authority without mutation unless `--apply` is present. Apply moves registered Change worktrees through Git, preserves unrelated registered worktrees under ignored scratch storage, archives retired state under `.owlbear/legacy/delivery-state-migration/`, and resumes safely from an interrupted attempt.
 
 ### Public API
 
@@ -52,7 +60,7 @@ The documentation index excludes workspace state, generated indexes, caches, ext
 
 ## Configuration
 
-No environment variables or output options. Each command writes its fixed artifact under `.owlbear/`.
+No environment variables. Index commands write fixed artifacts under `.owlbear/`; `migrate-delivery-state` accepts an optional repository path and the `--apply` flag.
 
 ## Dependencies
 

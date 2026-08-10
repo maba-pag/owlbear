@@ -155,6 +155,11 @@ COMMANDS = (
     _internal_command("doc-index", "uv run doc-index [PATH]", "Regenerate the documentation index."),
     _internal_command("py-index", "uv run py-index [PATH]", "Regenerate the Python source index."),
     _internal_command("ts-index", "uv run ts-index [PATH]", "Regenerate the TypeScript source index."),
+    _internal_command(
+        "migrate-delivery-state",
+        "uv run migrate-delivery-state [PATH] [--apply]",
+        "Preview or apply the one-way Delivery live-state migration.",
+    ),
     _internal_command("semble", "uv run semble [OPTIONS]", "Run the assembly utility."),
     _internal_command("eslint-fix", "uv run eslint-fix [OPTIONS]", "Run the Cockpit ESLint hook."),
     _internal_command("megalint-hook", "uv run megalint-hook", "Run the MegaLinter hook implementation."),
