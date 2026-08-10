@@ -104,6 +104,9 @@ Apply these only when the target is the OwlBear repository or matching configura
 
 | Command | Scope |
 |---------|-------|
+| `uv run test [PATH ...]` | Tests for staged or explicit paths; routes to pytest and/or Vitest |
+| `uv run test --all` | Complete Python and Cockpit frontend unit-test suites |
+| `uv run test-e2e [SPEC ...]` | Cockpit maintained fast Playwright gate |
 | `uv run lint [FILE ...]` | Default hooks on explicit files, or staged files when omitted; safe fixes enabled |
 | `uv run lint --all` | Default hooks on all files with safe fixes |
 | `uv run typecheck` | Cockpit frontend TypeScript check |
@@ -128,6 +131,8 @@ exclusive; review the resulting diff whenever unsafe fixes are enabled.
 | `e2e` | Excluded by default through `addopts`; include explicitly with `-m e2e` |
 
 - **Runner.** Use `uv run`; bare system Python does not resolve OwlBear workspace dependencies.
+- **Direct runner debugging.** Raw `uv run pytest` and package-owned npm scripts remain valid when
+  debugging runner-specific behavior or passing options not modeled by the maintained wrappers.
 - **Coverage.** Bare `--cov` reads `source_pkgs` from `pyproject.toml`. Locally observed explicit
   module/path forms can conflict with Pydantic instrumentation or report misleading zero coverage.
 - **Timeouts.** `pytest-timeout` uses the values configured in OwlBear's `pyproject.toml`; inspect the

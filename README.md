@@ -46,12 +46,15 @@ uv sync --all-extras
 code .
 ```
 
-Run Python checks with `uv`:
+Run the maintained development checks with `uv`:
 
 ```shell
-uv run pytest tests/ serve/ -m "not api" -q --tb=short
-uv run ruff check serve/ tests/
+uv run test --all
+uv run lint --all --no-fix
 ```
+
+Use `uv run help`, `uv run help tests`, or the shorthand `uv run help t` for focused command
+guidance. Direct pytest and npm commands remain available for runner-specific debugging.
 
 For consumer installation, configuration, Cockpit launch, and troubleshooting, use
 [README-consumer.md](README-consumer.md) and [setup/setup-guide.md](setup/setup-guide.md). The setup

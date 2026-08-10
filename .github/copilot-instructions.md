@@ -78,3 +78,7 @@ Maps source paths to the test scope that covers them. Used by quality-runner `mo
 | (no prefix match) | `tests/ serve/ -m "not api"` | pytest |
 
 When a task changes files in multiple domains, run ALL matched test scopes. The last row is the fallback — use it when changed files don't match any specific prefix, or when `changed_paths` is not provided.
+
+For local development, prefer `uv run test [PATH ...]` to apply this routing table, `uv run test --all`
+for the complete Python and frontend suites, and `uv run test-e2e` for Cockpit's maintained fast E2E
+gate. Direct pytest and npm commands remain valid when runner-specific flags or diagnostics are needed.
