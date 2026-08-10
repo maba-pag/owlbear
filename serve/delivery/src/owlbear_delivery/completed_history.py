@@ -282,7 +282,7 @@ class CompletedHistoryCatalog:
         try:
             frontier = parse_delivery_frontier(runtime_bytes)[0]
             results = _RESULT_HISTORY.validate_json(results_bytes)
-        except (ValidationError, ValueError) as exc:
+        except (TypeError, ValidationError, ValueError) as exc:
             self._malformed("completed runtime capture is malformed", snapshot.manifest.change_id, cause=exc)
         self._require_capture_shape(snapshot, contract, frontier, results)
         if runtime_bytes != _canonical_model(frontier) or results_bytes != _canonical_results(results):
