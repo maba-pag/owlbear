@@ -1,0 +1,57 @@
+{
+  "request_id": "006ad51036de7aad096efdb5b5860aac68298cda6e032b8cc78e4d542d94c23a",
+  "change_id": "memory-universal-recall-and-review-clarity",
+  "candidate_id": "3b6dc1f7de22918d3c6ea41a695c1d30f6284953315a22be7329c5afd8ca3005",
+  "candidate_commit": "01c15903a3920f473269719b227e56cd43bffdc8",
+  "candidate_ref": "refs/owlbear/integration-candidates/memory-universal-recall-and-review-clarity",
+  "target_head": "cf1599bd9f4feb379b102a5fd7df9cdaccd1f22f",
+  "change_head": "78c11a806219c993b5beab2749c3d0b53a2e0040",
+  "package_id": "06f954c606e9690ad51947165be407c8fa721b35ebf5a0c5a7cd146069da4eec",
+  "completion_id": "fcedc5a48610be13035b71acae319dd93b76cb0695eb24603df099f65ea7df46",
+  "profile_digest": "cc4df743f1be3837d692028dd3ae3992295dfeeb552d84c2eee17ce039955f8e",
+  "candidate_profile_digest": "cc4df743f1be3837d692028dd3ae3992295dfeeb552d84c2eee17ce039955f8e",
+  "profile_state": "configured",
+  "profile": {
+    "schema_version": 1,
+    "pass_environment": [
+      "PATH",
+      "HOME",
+      "TMPDIR",
+      "UV_CACHE_DIR",
+      "NPM_CONFIG_CACHE",
+      "CI"
+    ],
+    "steps": [
+      {
+        "step_id": "python-tests",
+        "argv": [
+          "uv",
+          "run",
+          "--locked",
+          "pytest"
+        ],
+        "cwd": ".",
+        "timeout_seconds": 1800
+      },
+      {
+        "step_id": "cockpit-install",
+        "argv": [
+          "npm",
+          "ci"
+        ],
+        "cwd": "serve/cockpit/web",
+        "timeout_seconds": 1800
+      },
+      {
+        "step_id": "cockpit-tests",
+        "argv": [
+          "npm",
+          "test"
+        ],
+        "cwd": ".",
+        "timeout_seconds": 1800
+      }
+    ]
+  },
+  "profile_diagnostic": null
+}

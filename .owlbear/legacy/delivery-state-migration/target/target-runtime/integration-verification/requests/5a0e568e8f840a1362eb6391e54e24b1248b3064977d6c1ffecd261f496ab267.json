@@ -1,0 +1,57 @@
+{
+  "request_id": "5a0e568e8f840a1362eb6391e54e24b1248b3064977d6c1ffecd261f496ab267",
+  "change_id": "knowledge-source-contract-alignment",
+  "candidate_id": "4cdb3ae9be515511dbb7015bba0e1a34121e1b667b70ee7490d9298f27f460d6",
+  "candidate_commit": "f709749d1cfcc8de10b68ac288b9c007b601f1bb",
+  "candidate_ref": "refs/owlbear/integration-candidates/knowledge-source-contract-alignment",
+  "target_head": "2eb4c65cf8b19e7fcbc593c0875ec89529105762",
+  "change_head": "91984634fa43dd2528bfc55e358dcea0bcaba903",
+  "package_id": "dfa128a73b3ec500cc4991e271f38cb06754004930fa541d157b6026cdb38321",
+  "completion_id": "3542bc0e4258e1e343d7265f4d57a25fa62c5ca19693b3d7c7d2b51e3fedf4d1",
+  "profile_digest": "cc4df743f1be3837d692028dd3ae3992295dfeeb552d84c2eee17ce039955f8e",
+  "candidate_profile_digest": "cc4df743f1be3837d692028dd3ae3992295dfeeb552d84c2eee17ce039955f8e",
+  "profile_state": "configured",
+  "profile": {
+    "schema_version": 1,
+    "pass_environment": [
+      "PATH",
+      "HOME",
+      "TMPDIR",
+      "UV_CACHE_DIR",
+      "NPM_CONFIG_CACHE",
+      "CI"
+    ],
+    "steps": [
+      {
+        "step_id": "python-tests",
+        "argv": [
+          "uv",
+          "run",
+          "--locked",
+          "pytest"
+        ],
+        "cwd": ".",
+        "timeout_seconds": 1800
+      },
+      {
+        "step_id": "cockpit-install",
+        "argv": [
+          "npm",
+          "ci"
+        ],
+        "cwd": "serve/cockpit/web",
+        "timeout_seconds": 1800
+      },
+      {
+        "step_id": "cockpit-tests",
+        "argv": [
+          "npm",
+          "test"
+        ],
+        "cwd": ".",
+        "timeout_seconds": 1800
+      }
+    ]
+  },
+  "profile_diagnostic": null
+}
