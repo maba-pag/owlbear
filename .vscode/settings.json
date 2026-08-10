@@ -105,6 +105,12 @@
   "github.copilot.chat.cli.sessionController.enabled": true,
   "github.copilot.chat.executionSubagent.enabled": true,
   "github.copilot.chat.executionSubagent.toolCallLimit": 50,
+  "github.copilot.chat.githubMcpServer.enabled": true,
+  "github.copilot.chat.githubMcpServer.toolsets": [
+    "actions",
+    "issues",
+    "pull_requests"
+  ],
   "github.copilot.chat.newWorkspaceCreation.enabled": false,
   "github.copilot.chat.searchSubagent.enabled": true,
   "github.copilot.chat.searchSubagent.toolCallLimit": 50,
