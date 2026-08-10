@@ -75,11 +75,11 @@ Use only an existing operation whose contract owns the selected result:
 
 - retryable or superseded Integration: `integrate_ready_change(change_id)` only when current Delivery
   state authorizes retry;
-- product already integrated externally: call `prepare_external_completion(change_id)` once to
-  create a detached completion-only proposal, require human review and merge of that exact proposal
-  commit into the named Integration target, then call the operation again to record completed
-  history and run guarded cleanup. Never merge the proposal or advance the target inside this
-  workflow;
+- external acceptance required: call `prepare_external_completion(change_id)` at most once to
+  create or re-read the detached proposal. Report `authority-gap` until Delivery can read provider
+  evidence for one merged pull request bound to that exact proposal, repository, base, and accepted
+  target commit. Local target ancestry, a raw Git ref move, or user confirmation alone cannot record
+  completion. Never merge the proposal or advance the target inside this workflow;
 - Design or admitted-authority revision: hand off with `/design <change_id>` and explain the exact
   revision required;
 - reviewed merge conflict: hand off with `/orchestrate`; the claimed Integration repair workflow

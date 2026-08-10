@@ -10,10 +10,12 @@ from types import SimpleNamespace
 from unittest.mock import patch
 import uuid
 
+import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_cockpit.routes.target_work import assemble_target_app
 from owlbear_cockpit.target_context import load_target_context
+from owlbear_delivery.delivery_application_loader import DeliveryApplicationLoadError
 from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
     DeliveryIntegrationAttention,
@@ -304,7 +306,7 @@ def _client() -> tuple[TestClient, _DeliveryApplicationFake]:
     return TestClient(assemble_target_app(application)), application  # type: ignore[arg-type]
 
 
-def test_startup_authorizes_shared_delivery_configuration(
+def test_startup_loads_shared_delivery_configuration(
     tmp_path: Path,
 ) -> None:
     workspace_root = tmp_path / "workspace"
@@ -312,27 +314,18 @@ def test_startup_authorizes_shared_delivery_configuration(
     config_path = workspace_root / ".owlbear/delivery/config.json"
     config_path.parent.mkdir(parents=True)
     config_path.write_text(config.model_dump_json(by_alias=True), encoding="utf-8")
-    request_path = workspace_root / ".owlbear/target-cutover-request.json"
-    request_path.write_text("{}\n", encoding="utf-8")
-    request = SimpleNamespace(target_path=".owlbear/target")
     application = object()
 
-    with (
-        patch(
-            "owlbear_cockpit.target_context.TargetCutoverRequest.model_validate_json",
-            return_value=request,
-        ),
-        patch("owlbear_cockpit.target_context.authorize_target_mutation") as authorize,
-        patch("owlbear_cockpit.target_context.load_delivery_application", return_value=application) as load,
-    ):
-        result = load_target_context(workspace_root, request_path)
+    with patch(
+        "owlbear_cockpit.target_context.load_delivery_application",
+        return_value=application,
+    ) as load:
+        result = load_target_context(workspace_root)
 
     assert result is application
-    authorize.assert_called_once_with(workspace_root, request)
     load.assert_called_once_with(
         config,
         workspace_root=workspace_root,
-        authorized_target_root=workspace_root / ".owlbear/target",
     )
 
 
@@ -344,26 +337,36 @@ def test_startup_discovers_workspace_delivery_configuration(
     config_path = workspace_root / ".owlbear/delivery/config.json"
     config_path.parent.mkdir(parents=True)
     config_path.write_text(config.model_dump_json(by_alias=True), encoding="utf-8")
-    request_path = workspace_root / ".owlbear/target-cutover-request.json"
-    request_path.write_text("{}\n", encoding="utf-8")
-    request = SimpleNamespace(target_path=".owlbear/target")
     application = object()
-    with (
-        patch(
-            "owlbear_cockpit.target_context.TargetCutoverRequest.model_validate_json",
-            return_value=request,
-        ),
-        patch("owlbear_cockpit.target_context.authorize_target_mutation"),
-        patch("owlbear_cockpit.target_context.load_delivery_application", return_value=application) as load,
-    ):
-        result = load_target_context(workspace_root, request_path)
+    with patch(
+        "owlbear_cockpit.target_context.load_delivery_application",
+        return_value=application,
+    ) as load:
+        result = load_target_context(workspace_root)
 
     assert result is application
     load.assert_called_once_with(
         config,
         workspace_root=workspace_root,
-        authorized_target_root=workspace_root / ".owlbear/target",
     )
+
+
+def test_startup_reports_delivery_migration_blocker(tmp_path: Path) -> None:
+    workspace_root = tmp_path / "workspace"
+    config = DeliveryStartupConfig(schema_version=1, integration_target="dev")
+    config_path = workspace_root / ".owlbear/delivery/config.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(config.model_dump_json(by_alias=True), encoding="utf-8")
+    load_error = DeliveryApplicationLoadError("runtime_root", "legacy runtime state requires migration")
+
+    with (
+        patch("owlbear_cockpit.target_context.load_delivery_application", side_effect=load_error),
+        pytest.raises(
+            RuntimeError,
+            match="Cockpit Delivery startup failed for runtime_root: legacy runtime state requires migration",
+        ),
+    ):
+        load_target_context(workspace_root)
 
 
 def test_list_and_detail_expose_current_bounded_delivery_state() -> None:
