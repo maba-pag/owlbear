@@ -193,7 +193,7 @@ def _write_config(path: Path, content: dict[str, object]) -> None:
     path.write_text(json.dumps(content), encoding="utf-8")
 
 
-def _write_delivery_state(target_root: Path, repository: Path) -> None:
+def _write_delivery_state(runtime_root: Path, repository: Path) -> None:
     digest = hashlib.sha256(b"source").hexdigest()
     contract = DeliveryContract(
         change_id="change-a",
@@ -231,7 +231,7 @@ def _write_delivery_state(target_root: Path, repository: Path) -> None:
             ),
         ),
     )
-    change_root = target_root / "delivery/changes/change-a"
+    change_root = runtime_root / "changes/change-a"
     change_root.mkdir(parents=True)
     change_root.joinpath("contract.json").write_text(contract.model_dump_json(), encoding="utf-8")
     change_root.joinpath("frontier.json").write_text(frontier.model_dump_json(), encoding="utf-8")
@@ -241,7 +241,7 @@ def _write_delivery_state(target_root: Path, repository: Path) -> None:
         capture_output=True,
         text=True,
     ).stdout.strip()
-    coordination_root = target_root / "target-runtime/coordination"
+    coordination_root = runtime_root / "claims/changes"
     coordination_root.mkdir(parents=True)
     coordination_root.joinpath("change-a.json").write_text(
         ChangeCoordination(
@@ -451,7 +451,6 @@ def test_malformed_json_fails_invalid_without_exposing_content(tmp_path: Path) -
 
 def test_invalid_integration_target_fails_before_owner_state_mutation(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repository = _repository(tmp_path)
     content = _config()
@@ -459,12 +458,6 @@ def test_invalid_integration_target_fails_before_owner_state_mutation(
     path = tmp_path / "delivery.json"
     _write_config(path, content)
     config = load_delivery_config(path)
-    monkeypatch.setattr(
-        live_server,
-        "_authorize_configured_target",
-        lambda workspace_root: workspace_root / ".owlbear/target",
-    )
-
     with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
         load_delivery_application(config, repository)
 
@@ -483,17 +476,11 @@ async def test_complete_config_constructs_application_before_lifespan_yield(
     path.parent.mkdir(parents=True)
     _write_config(path, _config())
     monkeypatch.chdir(repository)
-    monkeypatch.setattr(
-        live_server,
-        "_authorize_configured_target",
-        lambda workspace_root: workspace_root / ".owlbear/target",
-    )
-
     async with app_lifespan(mcp) as context:
         tools = {tool.name: tool for tool in await mcp.list_tools()}
         assert isinstance(context.application, PortfolioApplication)
         assert set(tools) == DELIVERY_TOOLS
-        assert (repository / ".owlbear/target/target-runtime/capacity.json").is_file()
+        assert (repository / ".owlbear/delivery/runtime/capacity.json").is_file()
 
     with pytest.raises(RuntimeError, match="outside server lifespan"):
         live_server._live_application()
@@ -508,32 +495,28 @@ def test_mcp_startup_delegates_owner_construction_to_delivery(
     _write_config(path, _config())
     config = load_delivery_config(path)
     application = object()
-    calls: list[tuple[object, Path, Path]] = []
+    calls: list[tuple[object, Path]] = []
 
-    def load_core(candidate: object, *, workspace_root: Path, authorized_target_root: Path) -> object:
-        calls.append((candidate, workspace_root, authorized_target_root))
+    def load_core(candidate: object, *, workspace_root: Path) -> object:
+        calls.append((candidate, workspace_root))
         return application
 
-    target_root = repository / ".owlbear/target"
-    monkeypatch.setattr(live_server, "_authorize_configured_target", lambda _workspace_root: target_root)
     monkeypatch.setattr(live_server, "load_core_delivery_application", load_core)
 
     assert load_delivery_application(config, repository) is application
-    assert calls == [(config, repository, target_root)]
+    assert calls == [(config, repository)]
 
 
 @pytest.mark.asyncio
 async def test_assembled_work_item_tools_observe_runtime_transition(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repository = _repository(tmp_path)
-    target_root = repository / ".owlbear/target"
-    _write_delivery_state(target_root, repository)
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    _write_delivery_state(runtime_root, repository)
     path = tmp_path / "delivery.json"
     _write_config(path, _config())
     config = load_delivery_config(path)
-    monkeypatch.setattr(live_server, "_authorize_configured_target", lambda _workspace_root: target_root)
     application = load_delivery_application(config, repository)
     server = assemble_target_server(application)
     async with Client(server) as client:

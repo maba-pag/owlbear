@@ -18,7 +18,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 ### Tools
 
-The server exposes 27 tools:
+The server exposes 28 tools:
 
 | Area | Tools |
 |------|-------|
@@ -42,10 +42,10 @@ directory, so no Delivery environment variable is required.
 ```
 
 The workspace root determines the repository and the canonical `.owlbear/delivery/packages`,
-`.owlbear/target`, and `.owlbear/worktrees` locations. Delivery admits one active claim and one Build
-writer at a time. Agent frontmatter owns model selection; Delivery owns the fixed Planner, Builder,
-and reviewer routing. `integration_target` names the branch from which change worktrees start and
-into which reviewed changes are integrated.
+`.owlbear/delivery/runtime`, and `.owlbear/delivery/worktrees` locations. Delivery admits one active
+claim and one Build writer at a time. Agent frontmatter owns model selection; Delivery owns the fixed
+Planner, Builder, and reviewer routing. `integration_target` names the branch from which change
+worktrees start and against which reviewed changes are prepared for external acceptance.
 
 The tracked `.owlbear/delivery/verification.json` profile declares ordered argv, working directory,
 timeout, and environment-name allowlist for exact-candidate verification. `integrate_ready_change`
@@ -56,13 +56,13 @@ interruption. Missing, invalid, changed, timed-out, or failing verification is r
 Integration attention without moving the target. See [setup-guide.md](../../setup/setup-guide.md) for
 profile scaffolding and ownership.
 
-Delivery has no environment configuration. The canonical `.owlbear/target` path must match the
-receipt-authorized target path, and the server must be launched with the consuming workspace as
-its current directory.
+Delivery has no environment configuration. The server must be launched with the consuming workspace
+as its current directory. Startup fails closed when nonempty retired `.owlbear/target` or
+`.owlbear/worktrees` roots remain, so live state cannot be silently orphaned before migration.
 
 ## Dependencies
 
 | Package | Purpose |
 |---------|---------|
 | `mcp[cli]` | MCPServer framework and CLI |
-| `owlbear-delivery` | Target authority, execution, evidence, and cutover engine |
+| `owlbear-delivery` | Design authority, execution, Integration evidence, and completed history |

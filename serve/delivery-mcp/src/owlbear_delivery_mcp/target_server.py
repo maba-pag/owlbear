@@ -316,7 +316,7 @@ class TargetMCPAdapter:
         )
 
     async def prepare_external_completion(self, request: ChangeRequest) -> dict[str, object]:
-        """Prepare or acknowledge completion after reviewed product merged externally."""
+        """Prepare a completion proposal or retain provider-acceptance attention."""
         params = self._validate(ChangeParams, request)
         return self._call(params, lambda: self._application.prepare_external_completion(params.change_id))
 
