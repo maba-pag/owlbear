@@ -131,8 +131,8 @@ Apply this profile only when the target package uses Cockpit's scripts and Porsc
 
 - The package root is discovered from `serve/cockpit/web/package.json`; repository-root proxy scripts
   are also valid.
-- In the OwlBear development checkout, `uv run test [PATH ...]` is the preferred path-aware unit-test
-  entry point and `uv run test --all` includes this frontend suite.
+- In the OwlBear development checkout, `uv run test` includes this frontend suite and
+  `uv run test [PATH ...]` is the preferred path-aware unit-test entry point.
 - `npm test` supplies `NODE_OPTIONS=--max-old-space-size=2048`, `vitest run`, and `--silent=true`.
   Preserve those flags for normal runs; direct `npx vitest run` is useful when debugging console
   output.

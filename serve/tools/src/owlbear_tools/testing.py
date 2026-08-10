@@ -37,14 +37,6 @@ def _require_development_checkout() -> None:
         raise RuntimeError(msg)
 
 
-def _staged_paths() -> list[str]:
-    output = subprocess.check_output(
-        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"],  # noqa: S607
-        cwd=_REPOSITORY_ROOT,
-    )
-    return [value.decode("utf-8") for value in output.split(b"\0") if value]
-
-
 def _existing_paths(paths: Iterable[Path]) -> list[str]:
     return [str(path.relative_to(_REPOSITORY_ROOT)) for path in paths if path.exists()]
 
@@ -119,7 +111,7 @@ def _run_commands(commands: list[tuple[list[str], Path]]) -> int:
 
 
 def test_main() -> None:
-    """Run tests selected from staged or explicit repository paths."""
+    """Run all maintained tests or suites selected by explicit paths."""
     _require_development_checkout()
     parser = argparse.ArgumentParser(prog="test")
     parser.add_argument("-a", "--all", action="store_true", dest="all_tests")
@@ -132,10 +124,10 @@ def test_main() -> None:
     if args.all_tests and args.paths:
         parser.error("--all cannot be combined with paths")
 
-    paths = args.paths or ([] if args.all_tests else _staged_paths())
+    all_tests = args.all_tests or not args.paths
     commands = _commands_for_paths(
-        paths,
-        all_tests=args.all_tests,
+        args.paths,
+        all_tests=all_tests,
         python_only=args.python_only,
         web_only=args.web_only,
         coverage=args.coverage,

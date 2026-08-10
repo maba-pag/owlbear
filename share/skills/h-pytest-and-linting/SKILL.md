@@ -104,8 +104,8 @@ Apply these only when the target is the OwlBear repository or matching configura
 
 | Command | Scope |
 |---------|-------|
-| `uv run test [PATH ...]` | Tests for staged or explicit paths; routes to pytest and/or Vitest |
-| `uv run test --all` | Complete Python and Cockpit frontend unit-test suites |
+| `uv run test` or `uv run test --all` | Complete Python and Cockpit frontend unit-test suites |
+| `uv run test [PATH ...]` | Tests owning the explicit paths; routes to pytest and/or Vitest |
 | `uv run test-e2e [SPEC ...]` | Cockpit maintained fast Playwright gate |
 | `uv run lint [FILE ...]` | Default hooks on explicit files, or staged files when omitted; safe fixes enabled |
 | `uv run lint --all` | Default hooks on all files with safe fixes |

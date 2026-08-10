@@ -70,7 +70,7 @@ COMMANDS = (
     Command(
         "test",
         "uv run test [OPTIONS] [PATH ...]",
-        "Run tests for staged or explicit paths; --all runs every suite.",
+        "Run every suite by default; explicit paths select owning tests.",
         development_only=True,
         group="Tests",
     ),

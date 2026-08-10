@@ -80,16 +80,19 @@ def test_docs_only_paths_exit_without_running_tests(capsys: pytest.CaptureFixtur
     assert "No test scope matched" in capsys.readouterr().out
 
 
-def test_no_paths_uses_staged_files() -> None:
+def test_no_paths_runs_all_suites() -> None:
     with (
         patch.object(sys, "argv", ["test"]),
-        patch("owlbear_tools.testing._staged_paths", return_value=["serve/tools/src/owlbear_tools/testing.py"]),
-        patch("owlbear_tools.testing.subprocess.call", return_value=0) as call,
+        patch("owlbear_tools.testing.subprocess.call", side_effect=[0, 0]) as call,
         pytest.raises(SystemExit, match="0"),
     ):
         run_test()
 
-    call.assert_called_once_with(["uv", "run", "pytest", "serve/tools/tests"], cwd=_ROOT)
+    assert [item.args for item in call.call_args_list] == [
+        (["uv", "run", "pytest", "tests", "serve"],),
+        (["npm", "test"],),
+    ]
+    assert [item.kwargs for item in call.call_args_list] == [{"cwd": _ROOT}, {"cwd": _WEB}]
 
 
 def test_failures_are_aggregated_across_all_suites() -> None:
