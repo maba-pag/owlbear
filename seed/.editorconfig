@@ -30,6 +30,10 @@ max_line_length = unset
 [.owlbear/delivery/packages/**]
 max_line_length = unset
 
+# Completed Delivery history is canonical machine-managed state; do not reformat it
+[.owlbear/completed/**]
+max_line_length = unset
+
 # Keep data files minified — do not reformat
 [store/**]
 indent_size = unset
