@@ -184,6 +184,7 @@ def _requests() -> dict[str, dict[str, object]]:
         "list_integration_ready_changes": {},
         "show_integration_attention": change,
         "integrate_ready_change": change,
+        "prepare_external_completion": change,
         "admit_reviewed_integration_repair": {**repair_claim, "repair": _repair()},
         "publish_integration_repair_authority_attention": {
             **repair_claim,

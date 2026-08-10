@@ -1408,6 +1408,45 @@ def test_integration_publishes_product_and_package_once_then_replays_cleanup(tmp
     assert not worktree_path.exists()
 
 
+def test_external_completion_proposal_acknowledges_merged_history_and_cleans_up(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+        candidate_proof=lambda _candidate, _commit: (),
+    )
+    _target_before, reviewed = _review_product_change(coordinator, "change-a", "reviewed product\n")
+    repository = tmp_path / "repository"
+    _git(repository, "update-ref", "refs/heads/main", reviewed)
+    active_root = tmp_path / "packages/change-a"
+    worktree_path = coordinator.show("change-a").worktree_path
+
+    prepared = application.prepare_external_completion("change-a")
+
+    assert prepared.proposal is not None
+    proposal = prepared.proposal
+    assert not _git_ref_exists(repository, "refs/owlbear/integration-candidates/change-a")
+    assert _git_ref_exists(repository, proposal.proposal_ref)
+    assert _git(repository, "rev-parse", "main") == reviewed
+    assert _git(repository, "rev-list", "--parents", "-n", "1", proposal.proposal_commit).split() == [
+        proposal.proposal_commit,
+        reviewed,
+    ]
+    assert active_root.exists()
+    assert worktree_path.exists()
+
+    _git(repository, "update-ref", "refs/heads/main", proposal.proposal_commit, reviewed)
+    acknowledged = application.prepare_external_completion("change-a")
+
+    assert acknowledged.completion is not None
+    assert acknowledged.completion.target_commit == proposal.proposal_commit
+    assert acknowledged.completion.completion_id == proposal.completion_id
+    assert runtimes["change-a"].integration_completion() == acknowledged.completion
+    assert application.show_completed_change("change-a").completion_id == proposal.completion_id
+    assert not _git_ref_exists(repository, proposal.proposal_ref)
+    assert not active_root.exists()
+    assert not worktree_path.exists()
+
+
 def test_integration_replay_cleans_candidate_ref_after_runtime_publication_crash(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,

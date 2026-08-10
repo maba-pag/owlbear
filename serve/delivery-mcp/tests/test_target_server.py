@@ -63,6 +63,7 @@ DELIVERY_TOOLS = {
     "list_integration_ready_changes",
     "show_integration_attention",
     "integrate_ready_change",
+    "prepare_external_completion",
     "admit_reviewed_integration_repair",
     "publish_integration_repair_authority_attention",
     "list_completed_changes",

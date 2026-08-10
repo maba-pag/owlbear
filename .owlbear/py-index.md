@@ -9,10 +9,12 @@ Root conftest.py — shared fixtures and marker registrations for v2 tests.
 - `__future__`
 - `pathlib`
 - `pytest`
+- `typing`
 
 ### Interfaces
 
 - `def project_root() -> Path`
+- `def run_init_without_test_surface() -> Callable[..., None]`
 - `def pytest_configure(config: pytest.Config) -> None`
 - `def pytest_xdist_auto_num_workers(config: pytest.Config) -> int`
 
@@ -581,7 +583,7 @@ Playwright-based browser launcher with Microsoft SSO extension support.
 - `def find_sso_extension() -> Path`
 - `def build_playwright_args(sso_ext_path: Path) -> list[str]`
 - `class PlaywrightLauncher`
-  - `def __init__(self, sso_ext_path: Path | None = None, user_data_dir: str = '', max_pending_pages: int = 1) -> None`
+  - `def __init__(self, sso_ext_path: Path | None = None, user_data_dir: str = '', max_pending_pages: int = 1, *, headless: bool = False) -> None`
   - `def capabilities(self) -> AuthenticationCapabilities`
   - `async def launch(self) -> None`
   - `async def acquire(self, request: AcquisitionRequest) -> AcquisitionResult`
@@ -656,7 +658,7 @@ OwlBear MCP browser server — browser-control tools with domain allowlist.
 - `class AppContext`
 - `async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]`
 - `def _serialize_acquisition(result: AcquisitionSuccess | AcquisitionFailure) -> dict[str, Any]`
-- `async def acquire(ctx: Context, url: str, readiness_selector: str | None = None, content_selector: str | None = None, navigation_timeout_ms: int = 30000, readiness_timeout_ms: int = 10000, include_diagnostic_html: bool = False) -> dict[str, Any]`
+- `async def acquire(ctx: Context, url: str, *, readiness_selector: str | None = None, content_selector: str | None = None, navigation_timeout_ms: int = 30000, readiness_timeout_ms: int = 10000, include_diagnostic_html: bool = False) -> dict[str, Any]`
 - `async def navigate(ctx: Context, url: str) -> str`
 - `async def click(ctx: Context, selector: str) -> str`
 - `async def type_input(ctx: Context, selector: str, text: str) -> str`
@@ -915,6 +917,7 @@ Delivery work-item and operator HTTP adapter.
   - `def answer_request(self, change_id: str, request_id: str, body: AnswerRequestBody) -> object`
   - `def clear_block(self, change_id: str, outcome_id: str, block_id: str, body: ClearBlockBody) -> object`
   - `def recover_claim(self, change_id: str, outcome_id: str, body: ConfirmLostClaimBody) -> object`
+  - `def recover_expired_claims(self) -> object`
   - `def move_backward(self, change_id: str, outcome_id: str, body: BackwardMoveBody) -> object`
   - `def preview_backward_move(self, change_id: str, outcome_id: str, body: BackwardMovePreviewBody) -> object`
   - `def show_integration_attention(self, change_id: str) -> object`
@@ -1100,6 +1103,7 @@ Per-change writer coordination and Git workspace management.
 - `__future__`
 - `hashlib`
 - `json`
+- `os`
 - `owlbear_delivery.delivery_runtime`
 - `owlbear_delivery.git_executable`
 - `owlbear_delivery.identities`
@@ -1122,10 +1126,12 @@ Per-change writer coordination and Git workspace management.
 - `class IntegrationFinding(_WorkspaceModel)`
 - `class IntegrationResult(_WorkspaceModel)`
   - `def _require_one_result(self) -> IntegrationResult`
+- `class IntegrationRepairCandidate(_WorkspaceModel)`
 - `class AtomicIntegrationResult(_WorkspaceModel)`
   - `def _require_one_result(self) -> AtomicIntegrationResult`
 - `class AtomicIntegrationPreparation(_WorkspaceModel)`
   - `def _validate_preparation(self) -> AtomicIntegrationPreparation`
+- `class ExternalCompletionProposal(_WorkspaceModel)`
 - `class IntegrationContext(_WorkspaceModel)`
 - `class CoordinationConflictError(RuntimeError)`
 - `class PortfolioCoordinator`
@@ -1152,10 +1158,13 @@ Per-change writer coordination and Git workspace management.
   - `def refresh_integration_target(self, change_id: str) -> ChangeCoordination`
   - `def integration_context(self, change_id: str) -> IntegrationContext`
   - `def integration_repair_replacement(self, repair: DeliveryIntegrationRepair, claim_id: str) -> tuple[ReplacementTransactionParticipant, ReplacementTransactionParticipant]`
+  - `def create_integration_repair_candidate(self, attention: DeliveryIntegrationAttention, writer: ChangeWriter) -> IntegrationRepairCandidate`
   - `def integration_repair_authority_replacements(self, request: DeliveryIntegrationRepairAuthorityAttention, claim_id: str) -> tuple[ReplacementTransactionParticipant, ReplacementTransactionParticipant]`
   - `def _require_integration_repair_identities(self, coordination: ChangeCoordination, repair: DeliveryIntegrationRepair, claim_id: str) -> None`
   - `def _require_integration_repair_worktree(self, coordination: ChangeCoordination, repair: DeliveryIntegrationRepair) -> None`
   - `def _require_additive_conflict_repair(self, repair: DeliveryIntegrationRepair) -> str`
+  - `def _require_integration_repair_candidate(self, coordination: ChangeCoordination, attention: DeliveryIntegrationAttention, candidate_commit: str) -> tuple[str, set[bytes]]`
+  - `def _worktree_changed_paths(self, worktree: Path) -> set[bytes]`
   - `def _require_unchanged_completed_history(self, target_head: str, repaired_tree: str) -> None`
   - `def reviewed_source_head(self, change_id: str) -> str`
   - `def recovery_snapshot(self, change_id: str, attempt_id: str) -> WorkspaceRecoverySnapshot`
@@ -1166,8 +1175,11 @@ Per-change writer coordination and Git workspace management.
   - `def _validate_released_restart(self, coordination: ChangeCoordination, rejected_head: str, branch_head: str, preserved: str | None) -> ChangeCoordination`
   - `def _prepare_active_restart(self, coordination: ChangeCoordination, attempt_id: str, rejected_head: str) -> None`
   - `def prepare_integration_candidate(self, candidate: DeliveryIntegrationCandidate) -> AtomicIntegrationPreparation`
+  - `def prepare_external_completion_proposal(self, candidate: DeliveryIntegrationCandidate) -> ExternalCompletionProposal | AtomicIntegrationResult`
+  - `def _preflight_external_completion(self, candidate: DeliveryIntegrationCandidate) -> str | AtomicIntegrationResult`
   - `def publish_prepared_integration(self, preparation: AtomicIntegrationPreparation) -> AtomicIntegrationResult`
   - `def discard_integration_candidate(self, preparation: AtomicIntegrationPreparation) -> None`
+  - `def discard_external_completion_proposal(self, candidate: DeliveryIntegrationCandidate, target_commit: str) -> None`
   - `def discard_stale_integration_candidate(self, change_id: str) -> None`
   - `def _reviewed_preparation_diagnostics(self, coordination: ChangeCoordination, expected_head: str) -> tuple[str, ...]`
   - `def _preflight_integration(self, candidate: DeliveryIntegrationCandidate) -> AtomicIntegrationResult | tuple[ChangeCoordination, str, str]`
@@ -1178,12 +1190,16 @@ Per-change writer coordination and Git workspace management.
   - `def _integration_identity_diagnostics(self, coordination: ChangeCoordination, candidate: DeliveryIntegrationCandidate) -> tuple[str, ...]`
   - `def _merge_tree(self, target_head: str, change_head: str) -> tuple[str | None, tuple[str, ...]]`
   - `def _integration_conflict_paths(self, target_head: str, change_head: str) -> set[bytes]`
+  - `def _resolved_integration_repair_tree(self, target_head: str, change_head: str, resolution_tree: str, conflict_paths: set[bytes]) -> str`
+  - `def _tree_entry_at_path(self, tree: str, path: tuple[bytes, ...]) -> bytes | None`
+  - `def _replace_tree_entry(self, tree: str, path: tuple[bytes, ...], replacement: bytes | None) -> str`
   - `def _changed_paths(self, parent: str, child: str) -> set[bytes]`
   - `def _replace_tree_path(self, tree: str, path: tuple[str, ...], replacement_tree: str) -> str`
   - `def _tree_entries(self, tree: str) -> dict[bytes, bytes]`
   - `def _tree_entries_at_path(self, tree: str, path: tuple[bytes, ...]) -> dict[bytes, bytes]`
   - `def _write_integration_commit(self, candidate: DeliveryIntegrationCandidate, tree: str, target_head: str, change_head: str) -> str`
   - `def _anchored_integration_commit(self, candidate: DeliveryIntegrationCandidate, tree: str, target_head: str, change_head: str, reference: str) -> str`
+  - `def _write_external_completion_proposal(self, candidate: DeliveryIntegrationCandidate, tree: str, target_head: str) -> str`
   - `def _integration_commit_matches(self, commit: str, candidate: DeliveryIntegrationCandidate, tree: str, target_head: str, change_head: str) -> bool`
   - `def _integration_candidate_ref(change_id: str) -> str`
   - `def _published_completion_commit(self, candidate: DeliveryIntegrationCandidate) -> str | None`
@@ -1625,6 +1641,7 @@ Deterministic portfolio acquisition and bounded worker context.
 
 ### Interfaces
 
+- `def _timestamp(value: str) -> datetime`
 - `def _operating_scope(scope: WorkItemScope) -> PortfolioWorkScope`
 - `def _operator_claim(claim: DeliveryActiveClaim | None) -> DeliveryOperatorClaim | None`
 - `def _operator_recovery_attention(attention: DeliveryRecoveryAttention | None) -> DeliveryOperatorRecoveryAttention | None`
@@ -1639,6 +1656,7 @@ Deterministic portfolio acquisition and bounded worker context.
 - `class DeliveryIntegrationRepairAcquisitionFailure(_ApplicationModel)`
 - `class DeliveryIntegrationAttentionStatus(_ApplicationModel)`
 - `class DeliveryAcquisitionResult(_ApplicationModel)`
+- `class DeliveryExpiredClaimRecoveries(_ApplicationModel)`
 - `class DeliveryPlanContext(_ApplicationModel)`
 - `class DeliveryBuildContext(_ApplicationModel)`
 - `class DeliveryIntegrationRepairContext(_ApplicationModel)`
@@ -1652,6 +1670,8 @@ Deterministic portfolio acquisition and bounded worker context.
 - `class DeliveryIntegrationRepairRecoveryResult(_ApplicationModel)`
 - `class DeliveryIntegrationResult(_ApplicationModel)`
   - `def _validate_disposition(self) -> DeliveryIntegrationResult`
+- `class ExternalCompletionResult(_ApplicationModel)`
+  - `def _validate_disposition(self) -> ExternalCompletionResult`
 - `class PortfolioApplicationError(RuntimeError)`
 - `class PortfolioReadView(_ApplicationModel)`
 - `class PortfolioApplicationConfig(_ApplicationModel)`
@@ -1708,13 +1728,16 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def show_plan_context(self, change_id: str, outcome_id: str, attempt_id: str, claim_id: str) -> DeliveryPlanContext`
   - `def show_build_context(self, change_id: str, outcome_id: str, attempt_id: str, claim_id: str) -> DeliveryBuildContext`
   - `def show_integration_repair_context(self, change_id: str, attempt_id: str, claim_id: str) -> DeliveryIntegrationRepairContext`
+  - `def create_integration_repair_candidate(self, change_id: str, attempt_id: str, claim_id: str) -> IntegrationRepairCandidate`
   - `def recover_claim(self, change_id: str, outcome_id: str, attempt_id: str, claim_id: str) -> DeliveryClaimRecoveryResult`
+  - `def recover_expired_claims(self) -> DeliveryExpiredClaimRecoveries`
   - `def recover_integration_repair_claim(self, change_id: str, attempt_id: str, claim_id: str) -> DeliveryIntegrationRepairRecoveryResult`
   - `def _recover_active_claims(self) -> tuple[DeliveryClaimRecoveryResult, ...]`
   - `def _recover_active_repair_claims(self) -> tuple[DeliveryIntegrationRepairRecoveryResult, ...]`
   - `def _recover_integration_repair_claim(self, change_id: str, attempt_id: str, claim_id: str) -> DeliveryIntegrationRepairRecoveryResult`
   - `def _recover_claim(self, change_id: str, outcome_id: str, attempt_id: str, claim_id: str) -> DeliveryClaimRecoveryResult`
   - `def integrate_ready_change(self, change_id: str) -> DeliveryIntegrationResult`
+  - `def prepare_external_completion(self, change_id: str) -> ExternalCompletionResult`
   - `def admit_reviewed_integration_repair(self, attempt_id: str, claim_id: str, repair: DeliveryIntegrationRepair) -> DeliveryIntegrationRepair`
   - `def publish_integration_repair_authority_attention(self, attempt_id: str, claim_id: str, request: DeliveryIntegrationRepairAuthorityAttention) -> DeliveryIntegrationAttention`
   - `def _capture_ready_integration(self, change_id: str, runtime: DeliveryRuntime, context: IntegrationContext) -> DeliveryIntegrationResult | _PreparedIntegration`
@@ -1819,7 +1842,7 @@ Contained exact-commit checkouts for independent target review.
   - `def _make_tracked_files_read_only(self, checkout: Path) -> None`
   - `def _make_tree_read_only(root: Path) -> None`
   - `def _tree_digest(root: Path) -> str`
-  - `def _write_manifest(path: Path, job: TargetJob, commit: str, authority_digest: str, environment: Mapping[str, str], replacements: Sequence[str]) -> None`
+  - `def _write_manifest(path: Path, *, job: TargetJob, commit: str, authority_digest: str, environment: Mapping[str, str], replacements: Sequence[str]) -> None`
   - `def _remove(self, root: Path, checkout: Path) -> None`
   - `def _diagnostic(code: ProofCheckoutDiagnosticCode, detail: str) -> ProofCheckoutResult`
 
@@ -2397,6 +2420,7 @@ Pure Work Item projections over one immutable schema-v2 Delivery snapshot.
 - `class WorkItemActivity(_ProjectionModel)`
 - `class WorkItemAction(_ProjectionModel)`
 - `class WorkItemProgress(_ProjectionModel)`
+- `class WorkItemIntegrationAttentionRef(_ProjectionModel)`
 - `class WorkItemCardView(_ProjectionModel)`
 - `class ChangeGroupView(_ProjectionModel)`
 - `class WorkItemClaimView(_ProjectionModel)`
@@ -2578,6 +2602,7 @@ Strict MCPServer adapter for the Delivery portfolio application.
   - `async def show_plan_context(self, request: ClaimContextRequest) -> dict[str, object]`
   - `async def show_build_context(self, request: ClaimContextRequest) -> dict[str, object]`
   - `async def show_integration_repair_context(self, request: RepairClaimContextRequest) -> dict[str, object]`
+  - `async def create_integration_repair_candidate(self, request: RepairClaimContextRequest) -> dict[str, object]`
   - `async def publish_delivery_plan(self, request: PublishDeliveryPlanRequest) -> DeliveryPlanPublication`
   - `async def publish_delivery_result(self, request: PublishDeliveryResultRequest) -> DeliveryResultPublication`
   - `async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]`
@@ -2586,6 +2611,7 @@ Strict MCPServer adapter for the Delivery portfolio application.
   - `async def list_integration_ready_changes(self, request: EmptyRequest) -> list[object]`
   - `async def show_integration_attention(self, request: ChangeRequest) -> dict[str, object] | None`
   - `async def integrate_ready_change(self, request: ChangeRequest) -> dict[str, object]`
+  - `async def prepare_external_completion(self, request: ChangeRequest) -> dict[str, object]`
   - `async def admit_reviewed_integration_repair(self, request: IntegrationRepairRequest) -> dict[str, object]`
   - `async def publish_integration_repair_authority_attention(self, request: IntegrationRepairAuthorityAttentionRequest) -> dict[str, object]`
   - `async def list_completed_changes(self, request: CompletedPageRequest) -> dict[str, object]`
@@ -3458,9 +3484,6 @@ MCPServer application for knowledge ingestion and search tools.
 
 ### Interfaces
 
-- `class _LegacyCompatibleEventLoopPolicy(asyncio.DefaultEventLoopPolicy)`
-  - `def get_event_loop(self) -> asyncio.AbstractEventLoop`
-- `def _install_legacy_event_loop_policy() -> None`
 - `async def claim_enrichment_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]`
 - `async def store_enrichment(ctx: Context, chunk_id: str | None = None, entities: list[dict[str, Any]] | None = None, edges: list[dict[str, Any]] | None = None, claim_token: str | None = None) -> None`
 - `def _parse_extracted_entity(entity: dict[str, Any]) -> ExtractedEntity`
@@ -3813,6 +3836,7 @@ Central registry and help renderer for OwlBear workspace commands.
 ### Interfaces
 
 - `class Command`
+- `def _internal_command(name: str, usage: str, summary: str) -> Command`
 - `def _supports_color(stream: TextIO) -> bool`
 - `def _style(text: str, *codes: str, stream: TextIO) -> str`
 - `def command_footer(stream: TextIO | None = None) -> str`
@@ -4071,6 +4095,30 @@ Shared filesystem and rendering helpers for source indexes.
 - `def _is_excluded_dir(path: Path, root: Path) -> bool`
 - `def collect_sources(root: Path, suffixes: Collection[str]) -> list[Path]`
 - `def clean_line(text: str) -> str`
+
+## serve/tools/src/owlbear_tools/testing.py
+
+Maintained test commands for the OwlBear development checkout.
+
+### Imports
+
+- `__future__`
+- `argparse`
+- `pathlib`
+- `subprocess`
+- `typing`
+
+### Interfaces
+
+- `def _require_development_checkout() -> None`
+- `def _existing_paths(paths: Iterable[Path]) -> list[str]`
+- `def _matching_root_tests(*patterns: str) -> list[str]`
+- `def _python_scope(path: str) -> list[str] | None`
+- `def _is_web_path(path: str) -> bool`
+- `def _commands_for_paths(paths: list[str], *, all_tests: bool, python_only: bool, web_only: bool, coverage: bool) -> list[tuple[list[str], Path]]`
+- `def _run_commands(commands: list[tuple[list[str], Path]]) -> int`
+- `def test_main() -> None`
+- `def test_e2e_main() -> None`
 
 ## serve/tools/src/owlbear_tools/ts_index.py
 
