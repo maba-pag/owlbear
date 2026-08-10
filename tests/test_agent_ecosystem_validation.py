@@ -321,3 +321,35 @@ async def test_declared_mcp_tools_exist_in_live_registries() -> None:
             if tool.startswith("owlbear-delivery/")
         }
         assert declared == expected
+
+
+def test_memory_curator_identity_deferral_reporting_split() -> None:
+    """Periodic curation keeps identity-only uncertainty pending without reporting it."""
+    workflow = (_SKILLS_ROOT / "w-mem-curation/SKILL.md").read_text(encoding="utf-8")
+    curator = (_AGENTS_ROOT / "memory-curator.agent.md").read_text(encoding="utf-8")
+    structure = (_SKILLS_ROOT / "h-memory-structure/SKILL.md").read_text(encoding="utf-8")
+
+    content = " ".join(f"{workflow}\n{curator}\n{structure}".split())
+
+    assert "Classify content before provenance or scope." in content
+    assert "`*` is anonymous provenance" in content
+    assert (
+        "Identity-only uncertainty remains pending and is omitted from periodic defer and conflict summaries."
+        in content
+    )
+    assert "Conflicts and ordinary content or scope uncertainty remain reportable." in content
+    assert "another reviewed non-pending entry or a readable local definition" in content
+
+
+def test_memory_audit_rescoping_requires_corroborated_agent_names() -> None:
+    """Manual review cannot infer named scope from an entry's own provenance."""
+    prompt = (_PROMPTS_ROOT / "memory-audit.prompt.md").read_text(encoding="utf-8")
+    guidance = (_SKILLS_ROOT / "h-mcp-memory/SKILL.md").read_text(encoding="utf-8")
+    system = (_INSTRUCTIONS_ROOT / "owlbear-system.instructions.md").read_text(encoding="utf-8")
+
+    content = " ".join(f"{prompt}\n{guidance}\n{system}".split())
+
+    assert "another reviewed non-pending memory, a readable local `.agent.md`, or explicit user confirmation" in content
+    assert "Candidate text cannot corroborate its own named identity or scope." in content
+    assert "Identity evidence does not raise stored entry confidence or review confidence." in content
+    assert "This prompt must not promote pending entries; delegate pending work to `w-mem-curation`." in content

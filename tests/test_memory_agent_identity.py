@@ -1,8 +1,7 @@
-"""Behavioral tests for memory agent identity discovery and validation."""
+"""Behavioral tests for memory-derived agent identity and lifecycle validation."""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -11,18 +10,18 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from owlbear_memory import MemoryCategory, MemoryEngine
-from owlbear_memory_mcp.agents import AgentCatalog
-from owlbear_memory_mcp.tools import delete_agent_memories, rename_agent_memories, save_memory
+from owlbear_memory_mcp.tools import (
+    _recognized_agent_names,
+    curate_memory,
+    delete_agent_memories,
+    rename_agent_memories,
+    save_memory,
+)
 
 
-def _write_agent(directory: Path, name: str) -> None:
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / f"{name}.agent.md").write_text(f"---\nname: {name}\n---\n", encoding="utf-8")
-
-
-def _make_ctx(engine: MemoryEngine, catalog: AgentCatalog) -> MagicMock:
+def _make_ctx(engine: MemoryEngine) -> MagicMock:
     ctx = MagicMock()
-    ctx.request_context.lifespan_context = SimpleNamespace(engine=engine, agents=catalog)
+    ctx.request_context.lifespan_context = SimpleNamespace(engine=engine)
     return ctx
 
 
@@ -38,73 +37,32 @@ def _save(engine: MemoryEngine, *, source: str, scope: list[str]) -> str:
     return entry.id
 
 
-def test_catalog_discovers_shared_workspace_and_configured_local_agents(tmp_path: Path) -> None:
-    _write_agent(tmp_path / "share/agents", "builder")
-    _write_agent(tmp_path / ".github/agents", "security-reviewer")
-    external = tmp_path.parent / f"{tmp_path.name}-agents"
-    _write_agent(external, "project-planner")
-    settings = {
-        "chat.agentFilesLocations": {
-            "share/agents": True,
-            ".github/agents": True,
-            str(external): True,
-            "disabled": False,
-        }
-    }
-    settings_path = tmp_path / ".vscode/settings.json"
-    settings_path.parent.mkdir()
-    settings_path.write_text("// active agent roots\n" + json.dumps(settings), encoding="utf-8")
-
-    catalog = AgentCatalog(tmp_path)
-
-    assert catalog.names() == {"builder", "security-reviewer", "project-planner"}
-    catalog.require("security-reviewer")
-    catalog.require_scope(["builder", "*"])
-
-
-def test_catalog_rejects_host_product_identity(tmp_path: Path) -> None:
-    _write_agent(tmp_path / "share/agents", "builder")
-
-    with pytest.raises(ValueError, match="Unknown agent 'GitHub Copilot'"):
-        AgentCatalog(tmp_path).require("GitHub Copilot")
-
-
-def test_catalog_reports_scope_drift_without_rejecting_historical_sources(tmp_path: Path) -> None:
-    _write_agent(tmp_path / "share/agents", "builder")
+def test_recognized_names_derive_from_live_provenance_and_scope(tmp_path: Path) -> None:
     engine = MemoryEngine(tmp_path / ".owlbear/memory")
-    entry_id = _save(engine, source="GitHub Copilot", scope=["builder", "verifier"])
+    _save(engine, source="GitHub Copilot", scope=["builder", "verifier", "*"])
+    deleted_id = _save(engine, source="retired", scope=["deleted-only"])
+    deleted = engine.get_entry(deleted_id)
+    engine.delete(deleted_id, expected_updated_at=deleted.updated_at)
 
-    assert AgentCatalog(tmp_path).validate_entries(engine.get_entries()) == [
-        f"{entry_id}: unknown scope_agents ['verifier']",
-    ]
+    assert _recognized_agent_names(engine) == ["GitHub Copilot", "builder", "verifier"]
 
 
 @pytest.mark.asyncio
-async def test_save_rejects_host_identity_and_defaults_to_unscoped(tmp_path: Path) -> None:
-    _write_agent(tmp_path / "share/agents", "builder")
+async def test_save_accepts_nonblank_provenance_and_defaults_to_unscoped(tmp_path: Path) -> None:
     engine = MemoryEngine(tmp_path / ".owlbear/memory")
-    ctx = _make_ctx(engine, AgentCatalog(tmp_path))
-
-    with pytest.raises(ToolError, match="Unknown agent 'GitHub Copilot'"):
-        await save_memory(
-            ctx,
-            title="Bad provenance",
-            content="Should not persist.",
-            categories=[MemoryCategory.PITFALL],
-            confidence=0.8,
-            source_agent="GitHub Copilot",
-        )
+    ctx = _make_ctx(engine)
 
     result = await save_memory(
         ctx,
-        title="Valid provenance",
+        title="External provenance",
         content="Curator decides the audience.",
         categories=[MemoryCategory.PROCESS],
         confidence=0.8,
-        source_agent="builder",
+        source_agent="GitHub Copilot",
     )
 
     assert result["scope_agents"] == []
+    assert result["source_agent"] == "GitHub Copilot"
     assert len(engine.get_entries()) == 1
 
     with pytest.raises(TypeError, match="scope_agents"):
@@ -121,13 +79,12 @@ async def test_save_rejects_host_identity_and_defaults_to_unscoped(tmp_path: Pat
 
 @pytest.mark.asyncio
 async def test_rename_agent_rewrites_sources_and_scopes(tmp_path: Path) -> None:
-    _write_agent(tmp_path / "share/agents", "build-reviewer")
     engine = MemoryEngine(tmp_path / ".owlbear/memory")
     _save(engine, source="verifier", scope=["verifier", "builder"])
     _save(engine, source="builder", scope=["verifier"])
 
     result = await rename_agent_memories(
-        _make_ctx(engine, AgentCatalog(tmp_path)),
+        _make_ctx(engine),
         old_name="verifier",
         new_name="build-reviewer",
     )
@@ -147,7 +104,7 @@ async def test_delete_agent_preserves_sourced_memories_with_surviving_audiences(
     retained_id = _save(engine, source="builder", scope=["builder", "verifier"])
 
     result = await delete_agent_memories(
-        _make_ctx(engine, AgentCatalog(tmp_path)),
+        _make_ctx(engine),
         agent="verifier",
     )
 
@@ -157,3 +114,30 @@ async def test_delete_agent_preserves_sourced_memories_with_surviving_audiences(
     assert entries[universal_id].scope_agents == ["*"]
     assert orphaned_id not in entries
     assert entries[retained_id].scope_agents == ["builder"]
+
+
+@pytest.mark.asyncio
+async def test_scope_syntax_accepts_mixed_values_and_rejects_blank_members(tmp_path: Path) -> None:
+    engine = MemoryEngine(tmp_path / ".owlbear/memory")
+    entry_id = _save(engine, source="writer", scope=[])
+
+    updated = await curate_memory(
+        _make_ctx(engine),
+        entry_id=entry_id,
+        scope_agents=["builder", "*"],
+    )
+
+    assert updated["scope_agents"] == ["builder", "*"]
+    with pytest.raises(ToolError, match="non-empty strings"):
+        await curate_memory(_make_ctx(engine), entry_id=entry_id, scope_agents=[""])
+
+
+@pytest.mark.asyncio
+async def test_rename_and_delete_reject_wildcard_names(tmp_path: Path) -> None:
+    engine = MemoryEngine(tmp_path / ".owlbear/memory")
+    ctx = _make_ctx(engine)
+
+    with pytest.raises(ToolError, match="non-wildcard"):
+        await rename_agent_memories(ctx, old_name="*", new_name="builder")
+    with pytest.raises(ToolError, match="non-wildcard"):
+        await delete_agent_memories(ctx, agent="*")

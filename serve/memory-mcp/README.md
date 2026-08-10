@@ -86,7 +86,7 @@ All mutating tools return a `hint` field describing the transition or action tak
 | `unremarkable_count` | int | Default `0`; incremented by assessment tool when entry was unremarkable |
 | `didnt_use_count` | int | Default `0`; incremented by assessment tool when entry was skipped |
 | `score` | float | Default `0.0`; initialized to `confidence` on creation |
-| `source_agent` | str | Active custom-agent name required at creation; immutable historical provenance except through an explicit lifecycle rename |
+| `source_agent` | str | Non-blank provenance label required at creation; immutable historical provenance except through an explicit lifecycle rename |
 | `scope_agents` | list[str] | Curator-assigned relevance scope; new pending entries default to `[]` |
 | `created_at` | str | UTC timestamp |
 | `updated_at` | str | UTC timestamp |
@@ -95,10 +95,15 @@ All mutating tools return a `hint` field describing the transition or action tak
 
 ## Agent Identity
 
-The server discovers exact frontmatter names from `.github/agents`, `.owlbear/agents`, `share/agents`,
-and enabled `chat.agentFilesLocations` in workspace settings. Identity is self-reported by the
-caller and validated as vocabulary, not authenticated as an authorization boundary. Scope controls
-relevance filtering only.
+The server accepts every non-blank provenance label at intake. Local `.agent.md` definitions are
+readable corroboration for a named identity or scope, not an active-agent runtime validation gate.
+Identity is self-reported and immutable historical provenance; scope controls relevance filtering
+only. `*` provenance is anonymous and requires no source corroboration, but it does not establish
+the scope of an entry.
+
+Curators classify content before provenance or scope. A candidate cannot corroborate its own named
+identity or scope: named provenance needs another reviewed non-pending entry or a readable local
+definition, and named scope needs that evidence or explicit user confirmation during manual review.
 
 Rename memory references with `rename_agent_memories`. When deleting an agent,
 `delete_agent_memories` preserves immutable source provenance, removes the retired identity from

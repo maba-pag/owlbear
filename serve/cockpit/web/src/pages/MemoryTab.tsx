@@ -34,15 +34,27 @@ import { useMemoryPurgeFlow } from '../hooks/useCleanupFlow'
 import { MEMORY_PENDING_COUNT_EVENT } from '../hooks/usePendingMemoryCount'
 import { usePollingFetch } from '../hooks/usePollingFetch'
 
+type AgentFilter =
+  | { mode: 'any' }
+  | { mode: 'all' }
+  | { mode: 'unscoped' }
+  | { mode: 'named'; agent: string }
+
 interface MemoryFilterState {
   states: MemoryState[]
   categories: string[]
-  agent: string
+  agent: AgentFilter
   text: string
 }
 
 const DEFAULT_STATES: MemoryState[] = ['pending', 'curated', 'approved', 'contested', 'disputed', 'stale']
 const ALL_AGENTS_SCOPE = '*'
+const AGENT_FILTER_VALUES = {
+  any: 'mode:any',
+  all: 'mode:all',
+  unscoped: 'mode:unscoped',
+  namedPrefix: 'agent:',
+} as const
 const STATE_PRIORITY: Record<MemoryState, number> = {
   pending: 0,
   curated: 1,
@@ -65,7 +77,7 @@ const STATE_BORDERS: Record<MemoryState, string> = {
 const INITIAL_FILTER: MemoryFilterState = {
   states: [...DEFAULT_STATES],
   categories: [],
-  agent: '',
+  agent: { mode: 'any' },
   text: '',
 }
 
@@ -174,23 +186,58 @@ function includesText(entry: MemoryEntry, loweredSearch: string): boolean {
   )
 }
 
-function isAllAgentsScope(scopeAgents: string[]): boolean {
-  return scopeAgents.length === 0 || scopeAgents.includes(ALL_AGENTS_SCOPE)
+function formatScopeAgents(scopeAgents: string[]): string {
+  if (scopeAgents.length === 0) {
+    return 'Unscoped'
+  }
+  if (scopeAgents.includes(ALL_AGENTS_SCOPE)) {
+    return 'All agents'
+  }
+  return scopeAgents.join(', ')
 }
 
-function formatScopeAgents(scopeAgents: string[]): string {
-  return isAllAgentsScope(scopeAgents) ? 'All agents' : scopeAgents.join(', ')
+function agentFilterValue(filter: AgentFilter): string {
+  if (filter.mode === 'named') {
+    return `${AGENT_FILTER_VALUES.namedPrefix}${encodeURIComponent(filter.agent)}`
+  }
+  return AGENT_FILTER_VALUES[filter.mode]
+}
+
+function parseAgentFilterValue(value: string): AgentFilter {
+  if (value === AGENT_FILTER_VALUES.any) {
+    return { mode: 'any' }
+  }
+  if (value === AGENT_FILTER_VALUES.all) {
+    return { mode: 'all' }
+  }
+  if (value === AGENT_FILTER_VALUES.unscoped) {
+    return { mode: 'unscoped' }
+  }
+  if (value.startsWith(AGENT_FILTER_VALUES.namedPrefix)) {
+    try {
+      return { mode: 'named', agent: decodeURIComponent(value.slice(AGENT_FILTER_VALUES.namedPrefix.length)) }
+    } catch {
+      return { mode: 'any' }
+    }
+  }
+  return { mode: 'any' }
 }
 
 function toFilterableScopeAgents(scopeAgents: string[]): string[] {
   return scopeAgents.filter((agent) => agent !== ALL_AGENTS_SCOPE)
 }
 
-function matchesAgent(entry: MemoryEntry, selectedAgent: string): boolean {
-  if (!selectedAgent || isAllAgentsScope(entry.scope_agents)) {
+function matchesAgent(entry: MemoryEntry, filter: AgentFilter): boolean {
+  if (filter.mode === 'any') {
     return true
   }
-  return entry.scope_agents.includes(selectedAgent)
+  if (filter.mode === 'all') {
+    return entry.scope_agents.includes(ALL_AGENTS_SCOPE)
+  }
+  if (filter.mode === 'unscoped') {
+    return entry.scope_agents.length === 0
+  }
+  return entry.scope_agents.includes(ALL_AGENTS_SCOPE) || entry.scope_agents.includes(filter.agent)
 }
 
 function toDistinctSortedValues(values: string[]): string[] {
@@ -337,7 +384,7 @@ function MemoryTab() {
     }
 
     const onUpdate = (event: Event) => {
-      setFilter((previous) => ({ ...previous, agent: readStringValue(event) }))
+      setFilter((previous) => ({ ...previous, agent: parseAgentFilterValue(readStringValue(event)) }))
     }
 
     element.addEventListener('update', onUpdate)
@@ -745,14 +792,16 @@ function MemoryTab() {
           label="Agent"
           compact
           className="block w-full min-w-0 max-w-full"
-          value={filter.agent}
+          value={agentFilterValue(filter.agent)}
           ref={(element) => {
             agentFilterRef.current = element as unknown as HTMLElement | null
           }}
         >
-          <PSelectOption value="">All agents</PSelectOption>
+          <PSelectOption value={AGENT_FILTER_VALUES.any}>Any agent</PSelectOption>
+          <PSelectOption value={AGENT_FILTER_VALUES.all}>All agents</PSelectOption>
+          <PSelectOption value={AGENT_FILTER_VALUES.unscoped}>Unscoped</PSelectOption>
           {agentOptions.map((agent) => (
-            <PSelectOption key={agent} value={agent}>
+            <PSelectOption key={agent} value={agentFilterValue({ mode: 'named', agent })}>
               {agent}
             </PSelectOption>
           ))}

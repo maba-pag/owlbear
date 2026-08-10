@@ -21,7 +21,8 @@ For curation workflow, see `w-mem-curation`.
 | Read-only reviewers | build-reviewer, planner-challenger, designer-challenger, conceptual-design-reviewer | `recall_memory`; return candidates to their parent |
 | Memory curator | memory-curator | `list_memories`, `read_memory`, `curate_memory`, `delete_memory`, agent lifecycle tools |
 
-These profiles are intentionally asymmetric. Producers save unscoped pending candidates; the curator
+These profiles are intentionally asymmetric. Producers save unscoped pending candidates with any
+non-blank provenance label; the curator
 later deduplicates and assigns relevance scope. Reviewers remain mutation-free and return qualified
 `memory_candidate` values to their task-owning parent.
 
@@ -88,12 +89,11 @@ Creates a new `pending` entry in `.owlbear/memory/*.md`.
 | `content` | str | (required) | Markdown body content |
 | `categories` | list[str] | (required) | One or more category values |
 | `confidence` | float | (required) | Must be within `[0.7, 1.0]` |
-| `source_agent` | str | (required) | Exact active custom-agent name recorded as provenance |
+| `source_agent` | str | (required) | Non-blank immutable provenance label |
 | `scope_agents` | list[str] \| null | `[]` | Initial relevance scope; omit it so curation owns assignment |
 
-Agent names are discovered from active `.agent.md` locations, including enabled
-`chat.agentFilesLocations`, `.github/agents`, `.owlbear/agents`, and `share/agents`. Product labels,
-case variants, and names without an active agent definition are rejected.
+Named provenance is accepted at intake without active-agent runtime validation. A readable local
+`.agent.md` is corroboration the curator may use later; it is not an authorization boundary.
 
 Returns: the unscoped pending entry and a guidance hint indicating next-step curation.
 
@@ -143,7 +143,7 @@ Behavior:
 - formats each block as `## {title}`, `Entry ID:`{id}``, and the body on consecutive lines
 - omits all other entry metadata
 - rejects blank or wildcard agent names
-- rejects names without an active custom-agent definition
+- accepts named and universal recall guidance according to the memory service's recognition rules
 
 ## assess_memories
 
@@ -210,7 +210,9 @@ Returns: updated entry object.
 
 ## Agent Lifecycle
 
-Agent files and memory references change together; compatibility aliases are not retained.
+Agent files and memory references change together; compatibility aliases are not retained. Named
+scope is syntax-only at the tool boundary; curation requires independent corroboration before using
+it, while `*` is anonymous provenance rather than a named identity.
 
 - After renaming an agent definition, call
     `rename_agent_memories(old_name="old", new_name="new")`. The new name must already resolve from
@@ -338,6 +340,6 @@ All tools raise `ToolError` (surfaced as MCP error responses) for invalid operat
 | Deleted entry access | Reading a soft-deleted entry | `read_memory` on `state=deleted` |
 | Validation failure | Bad confidence, empty title, invalid category | `save_memory(confidence=0.5, ...)` |
 | Blank agent | Empty or whitespace-only agent name | `recall_memory(agent="")` |
-| Unknown agent | Name does not match an active `.agent.md` definition | `save_memory(source_agent="GitHub Copilot", ...)` |
+| Unknown agent | Recall identity has no recognized memory-derived guidance | `recall_memory(agent="unknown-role")` |
 
 Tool responses include a `hint` field with human-readable guidance about what happened and suggested next steps.

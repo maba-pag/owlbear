@@ -5,7 +5,7 @@ AC coverage:
   AC1 (td:2): recall returns entries where agent name is in scope_agents
   AC2 (td:2): recall includes entries where scope_agents=["*"] (universal)
   AC3 (td:2): recall excludes entries where scope_agents=[] (unscoped)
-  AC4 (td:1): recall with agent="*" is code-blocked (raises ToolError)
+AC4 (td:1): recall with agent="*" receives guided universal-only fallback
     AC5 (td:2): return format has title, entry ID, and content, but no other metadata
   AC6 (td:2): ordering — approved entries first, then curated entries fill remaining slots
   AC7 (td:1): limit parameter works (default 20)
@@ -282,23 +282,25 @@ class TestFromAC_UnscopedExclusion:
 
 
 # ---------------------------------------------------------------------------
-# AC4 (td:1): recall with agent="*" is code-blocked (raises ToolError)
+# AC4 (td:1): recall with agent="*" receives guided universal-only fallback
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_WildcardAgentBlock:
-    """AC4: passing agent="*" raises ToolError (wildcard callers are disallowed)."""
+class TestFromAC_WildcardAgentFallback:
+    """AC4: wildcard callers receive only universal memories and guidance."""
 
     @pytest.mark.asyncio
-    async def test_wildcard_agent_raises_tool_error(self, tmp_path: Path) -> None:
-        """recall_memory(agent="*") is rejected with ToolError."""
-        from mcp.server.mcpserver.exceptions import ToolError
-
+    async def test_wildcard_agent_receives_guidance(self, tmp_path: Path) -> None:
+        """recall_memory(agent="*") returns fallback guidance."""
         engine = MemoryEngine(memory_dir=tmp_path)
         ctx = _make_ctx(engine)
 
-        with pytest.raises(ToolError):
-            await _recall(ctx, agent="*")
+        result = await _recall(ctx, agent="*")
+
+        assert result == (
+            "This recall_memory caller is not a known agent. Known agents: none discovered. "
+            "This caller is read-only and must not write memories. It therefore receives only memories scoped to all agents (*)."
+        )
 
 
 # ---------------------------------------------------------------------------
