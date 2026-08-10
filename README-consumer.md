@@ -47,9 +47,10 @@ code .
 ```
 
 Setup creates merged VS Code settings/MCP config, copied runtime files such as `.owlbear/hooks/`,
-and a receipt-authorized empty target store under `.owlbear/target/`. Agents, skills, instructions,
-and prompts still load live from the owlbear clone via relative paths, so the same owlbear repo can
-be shared across multiple projects on your machine.
+and tracked Delivery policy under `.owlbear/delivery/`. Mutable runtime and per-Change worktrees are
+created lazily under ignored `.owlbear/delivery/runtime/` and `.owlbear/delivery/worktrees/` paths.
+Agents, skills, instructions, and prompts still load live from the owlbear clone via relative paths,
+so the same owlbear repo can be shared across multiple projects on your machine.
 
 For more detail on what each file does and how to customise see
 [setup/setup-guide.md](setup/setup-guide.md).
@@ -76,7 +77,7 @@ run Cockpit.
 
 Run Cockpit from the consumer project root, not from the owlbear clone. `--project`
 points uv at the shared owlbear installation; the current directory keeps Cockpit scoped
-to the project so `.owlbear/target/` and `.owlbear/memory/` resolve correctly.
+to the project so `.owlbear/delivery/` and `.owlbear/memory/` resolve correctly.
 
 macOS / Linux:
 
@@ -108,9 +109,10 @@ use `uv run --project ../owlbear --directory /path/to/project cockpit`.
 
 Use `/ideate` to refine a rough idea, then `/design` to create or resume one durable change under
 the target design session. The designer validates the exact semantic revision and asks for explicit
-approval before admission to `.owlbear/target/changes/`. Run `/orchestrate <change-id>` only after
-admission. The engine then acquires bounded Planning and Build work, workers select typed
-transitions, and independent reviewers return advisory evidence.
+approval before admission from tracked `.owlbear/delivery/packages/` into host-local Delivery
+runtime. Run `/orchestrate <change-id>` only after admission. The engine then acquires bounded
+Planning and Build work, workers select typed transitions, and independent reviewers return
+advisory evidence.
 
 The canonical Specification, Delivery, Correction, Integration, and recovery procedure is
 [Target Delivery Workflow](setup/setup-guide.md#target-delivery-workflow). Cockpit exposes current

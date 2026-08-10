@@ -10,7 +10,6 @@ the location of this script.
 from __future__ import annotations
 
 import difflib
-import hashlib
 import json
 import os
 import re
@@ -20,17 +19,6 @@ import sys
 import warnings
 from contextlib import suppress
 from pathlib import Path
-
-from owlbear_delivery import (
-    TargetAdapterRef,
-    TargetAuthorityRegistry,
-    TargetCutoverReadiness,
-    TargetCutoverRequest,
-    TargetCutoverSource,
-    cut_over_target_runtime,
-    inventory_legacy_source,
-    target_authority_digest,
-)
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -75,13 +63,13 @@ _SKIP_IF_EXISTS_REL = frozenset(
 _OWLBEAR_GITIGNORE_MARKER = "# --- OwlBear managed paths ---"
 _RETIRED_OWLBEAR_GITIGNORE_LINES = frozenset(
     {
+        "# Brief drafts (transient template directory)",
         "# Host-local Delivery startup configuration",
         "/.owlbear/delivery/config.json",
+        ".owlbear/briefs/draft-new/",
     }
 )
 _HOOKS_REL_PREFIX = ".owlbear/hooks/"
-_TARGET_REQUEST_PATH = Path(".owlbear/target-cutover-request.json")
-_TARGET_RECEIPT_PATH = Path(".owlbear/target-cutover.json")
 _DELIVERY_CONFIG_PATH = Path(".owlbear/delivery/config.json")
 _VERIFICATION_PROFILE_PATH = Path(".owlbear/delivery/verification.json")
 
@@ -138,7 +126,7 @@ def _write_gitignore(src: Path, dest: Path) -> None:
 
     If the destination file does not exist, copies the full seed .gitignore.
     If it exists but has no owlbear marker, appends the owlbear-managed section.
-    If the marker is already present, removes only retired OwlBear-managed rules.
+    If the marker is already present, removes retired rules and adds missing current rules.
     """
     seed_content = src.read_text(encoding="utf-8")
 
@@ -149,10 +137,20 @@ def _write_gitignore(src: Path, dest: Path) -> None:
     existing = dest.read_text(encoding="utf-8")
     if _OWLBEAR_GITIGNORE_MARKER in existing:
         prefix, marker, managed = existing.partition(_OWLBEAR_GITIGNORE_MARKER)
-        retained = [
-            line for line in managed.splitlines(keepends=True) if line.strip() not in _RETIRED_OWLBEAR_GITIGNORE_LINES
+        retained = [line for line in managed.splitlines() if line.strip() not in _RETIRED_OWLBEAR_GITIGNORE_LINES]
+        while retained and not retained[0].strip():
+            retained.pop(0)
+        seed_managed = seed_content.partition(_OWLBEAR_GITIGNORE_MARKER)[2].splitlines()
+        retained_values = {line.strip() for line in retained}
+        additions = [
+            line
+            for line in seed_managed
+            if line.strip()
+            and line.strip() not in retained_values
+            and line.strip() not in _RETIRED_OWLBEAR_GITIGNORE_LINES
         ]
-        updated = prefix + marker + "".join(retained)
+        merged = "\n".join((*retained, *additions)).rstrip()
+        updated = prefix + marker + ("\n" + merged + "\n" if merged else "\n")
         if updated != existing:
             dest.write_text(updated, encoding="utf-8")
         return
@@ -171,7 +169,8 @@ def _write_gitignore(src: Path, dest: Path) -> None:
 def _write_settings(src: Path, dest: Path, replacements: dict[str, str]) -> None:
     """Write .vscode/settings.json, merging with existing file if present (AC12)."""
     template = src.read_text(encoding="utf-8")
-    template = _replace_placeholders(template, replacements)
+    json_replacements = {key: json.dumps(value)[1:-1] for key, value in replacements.items()}
+    template = _replace_placeholders(template, json_replacements)
     owlbear_settings: dict = json.loads(template)
 
     existing: dict = {}
@@ -357,83 +356,6 @@ def _write_verification_profile(target_dir: Path) -> None:
     path.write_text(json.dumps(content, indent=2) + "\n", encoding="utf-8")
 
 
-def _target_code_revision(owlbear_dir: Path) -> str:
-    """Identify the installed target runtime and agent distribution."""
-    serve_root = owlbear_dir / "serve"
-    package_sources = (
-        tuple(path / "src" for path in sorted(serve_root.iterdir()) if path.is_dir()) if serve_root.exists() else ()
-    )
-    roots = (
-        owlbear_dir / "seed",
-        owlbear_dir / "setup",
-        owlbear_dir / "share" / "agents",
-        owlbear_dir / "share" / "instructions",
-        owlbear_dir / "share" / "prompts",
-        owlbear_dir / "share" / "skills",
-        owlbear_dir / "serve" / "cockpit" / "dist",
-        *package_sources,
-    )
-    files = [path for name in ("pyproject.toml", "uv.lock") if (path := owlbear_dir / name).is_file()]
-    files.extend(path for root in roots if root.exists() for path in root.rglob("*") if path.is_file())
-    digest = hashlib.sha256()
-    for path in sorted(files):
-        relative = path.relative_to(owlbear_dir).as_posix().encode()
-        digest.update(len(relative).to_bytes(8, "big"))
-        digest.update(relative)
-        content = path.read_bytes()
-        digest.update(len(content).to_bytes(8, "big"))
-        digest.update(content)
-    return digest.hexdigest()
-
-
-def _activate_fresh_target(target_dir: Path, owlbear_dir: Path) -> None:
-    """Publish a receipt-authorized empty target runtime for a fresh workspace."""
-    request_path = target_dir / _TARGET_REQUEST_PATH
-    if (target_dir / _TARGET_RECEIPT_PATH).exists():
-        return
-    if (target_dir / ".owlbear/target").exists():
-        message = "target store exists without its activation receipt"
-        raise RuntimeError(message)
-
-    if request_path.exists():
-        request = TargetCutoverRequest.model_validate_json(request_path.read_bytes())
-    else:
-        source = target_dir / ".owlbear/bootstrap/target-runtime"
-        source.mkdir(parents=True)
-        revision = _target_code_revision(owlbear_dir)
-        (source / "distribution-revision").write_text(revision + "\n", encoding="utf-8")
-        source_digest = inventory_legacy_source(source, (), {}).source_digest
-        request = TargetCutoverRequest(
-            sources=(
-                TargetCutoverSource(
-                    source_path=".owlbear/bootstrap/target-runtime",
-                    snapshot_name="bootstrap",
-                    expected_source_digest=source_digest,
-                ),
-            ),
-            snapshot_path=".owlbear/legacy/target-cutover",
-            target_path=".owlbear/target",
-            receipt_path=_TARGET_RECEIPT_PATH.as_posix(),
-            adapter_refs=(TargetAdapterRef(relative_path=".owlbear/adapters/delivery", target="target"),),
-            authorities=(),
-            classifications=(),
-            expected_authority_digest=target_authority_digest(()),
-            actual_code_revision=revision,
-            expected_code_revision=revision,
-            readiness=TargetCutoverReadiness(),
-            approval="ACTIVATE_TARGET_RUNTIME",
-        )
-        request_path.write_text(request.model_dump_json(indent=2) + "\n", encoding="utf-8")
-
-    def smoke(workspace: Path, cutover_request: TargetCutoverRequest) -> None:
-        authorities = TargetAuthorityRegistry(workspace / cutover_request.target_path).list_authorities()
-        if authorities:
-            message = "fresh target runtime contains unexpected authority"
-            raise RuntimeError(message)
-
-    cut_over_target_runtime(target_dir, request, smoke=smoke)
-
-
 def _hook_files_match(src: Path, dest: Path) -> bool:
     """Return True when the existing hook file already matches the seed file."""
     return dest.exists() and src.read_bytes() == dest.read_bytes()
@@ -610,9 +532,6 @@ def init(  # noqa: C901
         interactive=interactive_mode,
     )
     _write_verification_profile(target_dir)
-    ops_root = target_dir / ".owlbear"
-    if not (ops_root / "kanban").exists():
-        _activate_fresh_target(target_dir, owlbear_dir)
 
 
 # ---------------------------------------------------------------------------

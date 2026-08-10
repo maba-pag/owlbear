@@ -1,7 +1,6 @@
 {
   "ignores": [
     ".owlbear/doc-index.md",
-    ".owlbear/briefs/**",
     ".owlbear/delivery/packages/**",
     ".owlbear/hooks/**",
     ".owlbear/legacy/**",

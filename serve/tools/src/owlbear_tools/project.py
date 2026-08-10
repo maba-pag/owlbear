@@ -17,8 +17,11 @@ from owlbear_tools.megalinter import load_megalinter_image
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 _DELIVERY_CONFIG = Path(".owlbear/delivery/config.json")
-_FRONTIER_GLOB = ".owlbear/target/delivery/changes/*/frontier.json"
-_COORDINATION_GLOB = ".owlbear/target/target-runtime/coordination/*.json"
+_CHANGE_GLOB = ".owlbear/delivery/runtime/changes/*"
+_FRONTIER_GLOB = ".owlbear/delivery/runtime/changes/*/frontier.json"
+_COORDINATION_GLOB = ".owlbear/delivery/runtime/claims/changes/*.json"
+_PACKAGE_GLOB = ".owlbear/delivery/packages/*"
+_LEGACY_DELIVERY_ROOTS = (Path(".owlbear/target"), Path(".owlbear/worktrees"))
 
 
 def _run(command: list[str], *, cwd: Path | None = None) -> int:
@@ -67,8 +70,26 @@ def _git_branch_exists(root: Path, branch: str) -> bool:
     return syntax == 0 and exists == 0
 
 
-def _delivery_blockers(root: Path) -> list[str]:
+def _legacy_delivery_blockers(root: Path) -> list[str]:
     blockers: list[str] = []
+    if (root / ".owlbear").is_symlink() or (root / ".owlbear/delivery").is_symlink():
+        blockers.append("Delivery state parents must not be symlinks")
+    for relative in _LEGACY_DELIVERY_ROOTS:
+        legacy_root = root / relative
+        try:
+            has_legacy_state = legacy_root.exists() and any(legacy_root.iterdir())
+        except OSError:
+            has_legacy_state = True
+        if has_legacy_state:
+            blockers.append(f"unmigrated Delivery state: {relative}")
+    return blockers
+
+
+def _delivery_blockers(root: Path) -> list[str]:
+    blockers = _legacy_delivery_blockers(root)
+    for path in sorted(root.glob(_CHANGE_GLOB)):
+        if not (path / "frontier.json").is_file():
+            blockers.append(f"incomplete Delivery change: {path.name}")
     for path in sorted(root.glob(_FRONTIER_GLOB)):
         try:
             frontier = _load_json(path)
@@ -84,12 +105,13 @@ def _delivery_blockers(root: Path) -> list[str]:
             blockers.append(f"unfinished Delivery change: {path.parent.name}")
     for path in sorted(root.glob(_COORDINATION_GLOB)):
         try:
-            coordination = _load_json(path)
+            _load_json(path)
         except OSError, TypeError, json.JSONDecodeError:
             blockers.append(f"unreadable Delivery coordination: {path.relative_to(root)}")
             continue
-        if coordination.get("writer") is not None:
-            blockers.append(f"active Delivery writer: {path.stem}")
+        blockers.append(f"unfinished Delivery coordination: {path.stem}")
+    for path in sorted(root.glob(_PACKAGE_GLOB)):
+        blockers.append(f"unfinished Delivery package: {path.name}")
     return blockers
 
 
@@ -148,7 +170,8 @@ def doctor() -> None:
             print(f"PASS  Delivery target is {target}")  # noqa: T201
     except (OSError, TypeError, json.JSONDecodeError) as exc:
         failures.append(f"Delivery config is unavailable: {exc}")
-    for relative in (Path(".vscode/mcp.json"), Path(".owlbear/target-cutover.json")):
+    failures.extend(_legacy_delivery_blockers(root))
+    for relative in (Path(".vscode/mcp.json"),):
         if (root / relative).is_file():
             print(f"PASS  {relative}")  # noqa: T201
         else:

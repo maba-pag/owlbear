@@ -27,8 +27,9 @@ must not be edited directly. Immutable records from the retired workflow may rem
 | `share/prompts/` | User-facing workflow entry points |
 | `seed/` | Project-local templates copied by `setup/init.py` |
 | `setup/` | Workspace initializer and installer documentation |
-| `.owlbear/target/` | Receipt-authorized semantic authority, runtime evidence, and immutable receipts |
-| `.owlbear/target-cutover-request.json` | Exact activation request required by the target runtime |
+| `.owlbear/delivery/packages/` | Tracked authored Design packages and admitted contract authority |
+| `.owlbear/delivery/runtime/` | Ignored host-local Delivery state, claims, transactions, and publications |
+| `.owlbear/delivery/worktrees/` | Ignored Git worktrees owned per nonterminal Change |
 | `.owlbear/legacy/` | Optional immutable legacy inventory, never executable state |
 | `store/` | Knowledge and Memory data |
 | `tests/` | Workspace regression and integration tests |

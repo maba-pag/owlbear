@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from owlbear_delivery import DeliveryStartupConfig, TargetCutoverRequest, authorize_target_mutation
+from owlbear_delivery import DeliveryStartupConfig
 
 _REPO_ROOT = Path(__file__).parent.parent
 _INIT_PATH = _REPO_ROOT / "setup" / "init.py"
@@ -68,7 +68,24 @@ def test_init_writes_settings_without_hook_locations_and_with_local_hints(
     ]
 
 
-def test_init_creates_only_empty_target_control_plane_stores(
+def test_settings_template_escapes_windows_paths(tmp_path: Path, init_module: types.ModuleType) -> None:
+    settings_path = tmp_path / "settings.json"
+
+    init_module._write_settings(
+        _REPO_ROOT / "seed/.vscode/settings.json",
+        settings_path,
+        {
+            "owlbear_rel_path": "../owlbear",
+            "owlbear_abs_path": r"C:\Dev\owlbear",
+            "target_abs_path": r"C:\Dev\project",
+        },
+    )
+
+    settings = json.loads(settings_path.read_text(encoding="utf-8"))
+    assert settings["github.copilot.chat.additionalReadAccessPaths"] == [r"C:\Dev\owlbear"]
+
+
+def test_init_creates_delivery_policy_without_runtime_selection_artifacts(
     tmp_path: Path,
     init_module: types.ModuleType,
     run_init_without_test_surface: Callable[..., None],
@@ -79,12 +96,18 @@ def test_init_creates_only_empty_target_control_plane_stores(
     with patch("subprocess.run") as package_install:
         run_init_without_test_surface(init_module.init, target_dir, _REPO_ROOT, interactive=False)
 
-    assert (target_dir / ".owlbear/target/changes").is_dir()
-    request_path = target_dir / ".owlbear/target-cutover-request.json"
-    request = TargetCutoverRequest.model_validate_json(request_path.read_bytes())
-    assert request.receipt_path == ".owlbear/target-cutover.json"
-    activation = authorize_target_mutation(target_dir, request)
-    assert activation.authorities == ()
+    config = DeliveryStartupConfig.model_validate_json((target_dir / ".owlbear/delivery/config.json").read_bytes())
+    assert config.integration_target
+    for retired_path in (
+        ".owlbear/target",
+        ".owlbear/worktrees",
+        ".owlbear/adapters",
+        ".owlbear/target-cutover-request.json",
+        ".owlbear/target-cutover.json",
+        ".owlbear/delivery/runtime",
+        ".owlbear/delivery/worktrees",
+    ):
+        assert not (target_dir / retired_path).exists()
     assert not (target_dir / ".owlbear/changes").exists()
     assert not (target_dir / ".owlbear/kanban").exists()
     assert not (target_dir / "openspec").exists()
@@ -149,6 +172,19 @@ def test_init_rerun_preserves_user_settings_and_target_records(
     delivery_config = json.loads(delivery_config_path.read_text(encoding="utf-8"))
     delivery_config["integration_target"] = "release"
     delivery_config_path.write_text(json.dumps(delivery_config), encoding="utf-8")
+    gitignore_path = target_dir / ".gitignore"
+    gitignore_path.write_text(
+        gitignore_path.read_text(encoding="utf-8")
+        + "\n# Host-local Delivery worktrees and mutable capacity ledger\n"
+        + "/.owlbear/worktrees/\n"
+        + "/.owlbear/target/target-runtime/capacity.json\n"
+        + "/.owlbear/target/target-runtime/integration-verification/\n"
+        + ".owlbear/target/**/.storage.lock\n"
+        + ".owlbear/target-cutover.pending\n"
+        + "# Brief drafts (transient template directory)\n"
+        + ".owlbear/briefs/draft-new/\n",
+        encoding="utf-8",
+    )
 
     records = {
         ".owlbear/target/changes/example/authority.json": b'{"authority":"preserved"}\n',
@@ -169,6 +205,19 @@ def test_init_rerun_preserves_user_settings_and_target_records(
     assert merged_settings["chat.tools.terminal.autoApprove"]["example-command"] is False
     assert json.loads(delivery_config_path.read_text(encoding="utf-8"))["integration_target"] == "release"
     assert all((target_dir / path).read_bytes() == content for path, content in records.items())
+    gitignore = gitignore_path.read_text(encoding="utf-8")
+    for retired in (".owlbear/briefs/draft-new/",):
+        assert retired not in gitignore
+    for preserved_legacy_rule in (
+        "/.owlbear/worktrees/",
+        "/.owlbear/target/target-runtime/capacity.json",
+        "/.owlbear/target/target-runtime/integration-verification/",
+        ".owlbear/target/**/.storage.lock",
+        ".owlbear/target-cutover.pending",
+    ):
+        assert preserved_legacy_rule in gitignore
+    assert "/.owlbear/delivery/runtime/" in gitignore
+    assert "/.owlbear/delivery/worktrees/" in gitignore
     assert second_rerun == first_rerun
 
 

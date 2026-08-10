@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from owlbear_tools.megalinter import MegaLinterImage, load_megalinter_image
-from owlbear_tools.project import deps_status, deps_sync, integration_target, megalint_clean
+from owlbear_tools.project import deps_status, deps_sync, doctor, integration_target, megalint_clean
 
 
 def _git_result(command: list[str], *, cwd: Path | None = None) -> int:  # noqa: ARG001
@@ -69,7 +69,7 @@ def test_integration_target_rejects_unfinished_delivery_work(
     config = tmp_path / ".owlbear/delivery/config.json"
     config.parent.mkdir(parents=True)
     config.write_text('{"schema_version": 1, "integration_target": "dev"}\n', encoding="utf-8")
-    frontier = tmp_path / ".owlbear/target/delivery/changes/example/frontier.json"
+    frontier = tmp_path / ".owlbear/delivery/runtime/changes/example/frontier.json"
     frontier.parent.mkdir(parents=True)
     frontier.write_text('{"bindings": [], "integration_completion": null}\n', encoding="utf-8")
     monkeypatch.chdir(tmp_path)
@@ -79,6 +79,123 @@ def test_integration_target_rejects_unfinished_delivery_work(
         integration_target()
 
     assert json.loads(config.read_text(encoding="utf-8"))["integration_target"] == "dev"
+
+
+def test_integration_target_rejects_idle_change_coordination_without_frontier(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = tmp_path / ".owlbear/delivery/config.json"
+    config.parent.mkdir(parents=True)
+    config.write_text('{"schema_version": 1, "integration_target": "dev"}\n', encoding="utf-8")
+    coordination = tmp_path / ".owlbear/delivery/runtime/claims/changes/example.json"
+    coordination.parent.mkdir(parents=True)
+    coordination.write_text('{"writer": null}\n', encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["integration-target", "release"])
+
+    with patch("owlbear_tools.project._run", side_effect=_git_result), pytest.raises(SystemExit, match="2"):
+        integration_target()
+
+    assert json.loads(config.read_text(encoding="utf-8"))["integration_target"] == "dev"
+
+
+@pytest.mark.parametrize(
+    "unfinished_path",
+    [
+        ".owlbear/delivery/runtime/changes/example/contract.json",
+        ".owlbear/delivery/packages/example/manifest.json",
+    ],
+)
+def test_integration_target_rejects_partial_change_authority(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    unfinished_path: str,
+) -> None:
+    config = tmp_path / ".owlbear/delivery/config.json"
+    config.parent.mkdir(parents=True)
+    config.write_text('{"schema_version": 1, "integration_target": "dev"}\n', encoding="utf-8")
+    authority = tmp_path / unfinished_path
+    authority.parent.mkdir(parents=True)
+    authority.write_text("{}\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["integration-target", "release"])
+
+    with patch("owlbear_tools.project._run", side_effect=_git_result), pytest.raises(SystemExit, match="2"):
+        integration_target()
+
+    assert json.loads(config.read_text(encoding="utf-8"))["integration_target"] == "dev"
+
+
+@pytest.mark.parametrize("legacy_root", [".owlbear/target", ".owlbear/worktrees"])
+def test_integration_target_rejects_unmigrated_delivery_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    legacy_root: str,
+) -> None:
+    config = tmp_path / ".owlbear/delivery/config.json"
+    config.parent.mkdir(parents=True)
+    config.write_text('{"schema_version": 1, "integration_target": "dev"}\n', encoding="utf-8")
+    state = tmp_path / legacy_root / "state"
+    state.parent.mkdir(parents=True)
+    state.write_text("unmigrated\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["integration-target", "release"])
+
+    with patch("owlbear_tools.project._run", side_effect=_git_result), pytest.raises(SystemExit, match="2"):
+        integration_target()
+
+    assert json.loads(config.read_text(encoding="utf-8"))["integration_target"] == "dev"
+
+
+def test_doctor_accepts_canonical_workspace_without_cutover_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: object,
+) -> None:
+    config = tmp_path / ".owlbear/delivery/config.json"
+    config.parent.mkdir(parents=True)
+    config.write_text('{"schema_version": 1, "integration_target": "dev"}\n', encoding="utf-8")
+    mcp = tmp_path / ".vscode/mcp.json"
+    mcp.parent.mkdir(parents=True)
+    mcp.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["doctor", str(tmp_path)])
+
+    with (
+        patch("owlbear_tools.project.shutil.which", return_value="/usr/bin/tool"),
+        patch("owlbear_tools.project._git_branch_exists", return_value=True),
+        pytest.raises(SystemExit, match="0"),
+    ):
+        doctor()
+
+    output = capsys.readouterr().out
+    assert "target-cutover" not in output
+
+
+def test_doctor_rejects_unmigrated_delivery_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: object,
+) -> None:
+    config = tmp_path / ".owlbear/delivery/config.json"
+    config.parent.mkdir(parents=True)
+    config.write_text('{"schema_version": 1, "integration_target": "dev"}\n', encoding="utf-8")
+    legacy = tmp_path / ".owlbear/target/runtime.json"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text("{}\n", encoding="utf-8")
+    mcp = tmp_path / ".vscode/mcp.json"
+    mcp.parent.mkdir(parents=True)
+    mcp.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["doctor", str(tmp_path)])
+
+    with (
+        patch("owlbear_tools.project.shutil.which", return_value="/usr/bin/tool"),
+        patch("owlbear_tools.project._git_branch_exists", return_value=True),
+        pytest.raises(SystemExit, match="1"),
+    ):
+        doctor()
+
+    assert "FAIL  unmigrated Delivery state: .owlbear/target" in capsys.readouterr().out
 
 
 def test_deps_status_distinguishes_available_updates_from_sync(tmp_path, monkeypatch, capsys) -> None:

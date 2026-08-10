@@ -59,10 +59,6 @@ Running `init.py` writes the following files into your project directory:
 | `.vscode/mcp.json` | Registers 5 MCP servers (4 owlbear stdio, including browser access, + markitdown) | Merged (owlbear servers as defaults; your existing servers are preserved) |
 | `.owlbear/delivery/config.json` | Declares the project Delivery integration branch; roots, single-worker capacities, agent routing, and models come from workspace conventions and agent definitions | Seeded once, tracked in Git, and preserved on rerun so project policy changes remain intact |
 | `.owlbear/delivery/verification.json` | Declares ordered commands that must pass against each exact merged candidate | Detected once from root Python tests and the root npm `test` script; tracked in Git and preserved on rerun |
-| `.owlbear/target/changes/` | Admitted semantic authority and per-change runtime evidence | Fresh setup activates an empty store; reruns preserve target records |
-| `.owlbear/target-cutover-request.json` | Exact activation request loaded by target MCP and Cockpit startup | Published for a fresh workspace; preserved on rerun |
-| `.owlbear/target-cutover.json` | Immutable receipt authorizing target mutation | Published only after snapshot, staging, and smoke verification succeed |
-| `.owlbear/legacy/target-cutover/` | Hash-verified snapshot of the retired bootstrap source | Created during activation; never runtime authority |
 | `.owlbear/hooks/allow-stances-only.py` | Restricts ideation agents to approved stance outputs | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-src-writes.py` | Constrains test-only roles to `tests/`, `__tests__/`, and scratch surfaces | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-writes.py` | Constrains read-only roles to scratch workspace writes only | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
@@ -80,9 +76,9 @@ Running `init.py` writes the following files into your project directory:
 | `.markdownlintignore` | Markdown lint exclusion patterns | Skipped if file already exists |
 | `.yamllint.yml` | YAML linting configuration | Always written |
 
-For a fresh workspace, `init.py` activates only the empty target authority store. It does not create
-retired task, decision, board, accept, or audit stores, and reruns do not overwrite target records.
-If `.owlbear/kanban/` already exists, setup preserves it and publishes no target store or receipt.
+For a fresh workspace, `init.py` writes tracked Delivery policy and verification configuration. It
+does not create mutable Delivery runtime, worktrees, or retired task, decision, board, accept, or
+audit stores. Existing legacy state is preserved unchanged.
 
 Commit `.owlbear/delivery/verification.json` after reviewing its generated commands. Setup adds
 `uv run --locked pytest` when a root `pyproject.toml` and `tests/` directory are present. It adds `npm ci`
@@ -231,7 +227,7 @@ this shows chronological tool calls, LLM requests, and prompt discovery events.
 
 Cockpit is the browser UI for target work items, requests, typed attention, recovery controls,
 completed history, Memory, Ideas, and immutable legacy inventory. Launch it from the project root
-so it reads this project's target request/receipt, `.owlbear/target/`, and `.owlbear/memory/`.
+so it reads this project's `.owlbear/delivery/config.json`, Delivery state, and `.owlbear/memory/`.
 
 1. Open a terminal in the project directory.
 
@@ -333,8 +329,8 @@ override or tool-exclusion environment settings.
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
 | `owlbear-delivery` reports `ERR_DELIVERY_STARTUP_UNCONFIGURED` | `.owlbear/delivery/config.json` is absent from the project root | Re-run `init.py`; setup recreates the file only when it is missing |
 | `uv run cockpit` says the command is missing | Command was run from the consumer project without `--project` | Use `uv run --project ../owlbear cockpit` from the project root |
-| Existing `.owlbear/kanban/` prevents target activation | Setup preserves legacy stores but does not convert them | Start from a fresh initialized workspace and reintroduce unfinished semantic work through the current Design workflow |
-| Cockpit shows the wrong workspace or cannot find `.owlbear/target` | Cockpit was launched from the wrong working directory | Run from the project root or add `--directory /path/to/project` |
+| Delivery or Cockpit reports that `.owlbear/target` or `.owlbear/worktrees` requires migration | A retired live-state root is still nonempty | Preserve the root unchanged. From the project root, preview with `uv run --project /path/to/owlbear migrate-delivery-state .`, then apply with the same command plus `--apply`. Re-running `--apply` recovers an interrupted attempt before retrying. |
+| Cockpit shows the wrong workspace or cannot find `.owlbear/delivery/config.json` | Cockpit was launched from the wrong working directory | Run from the project root or add `--directory /path/to/project` |
 | `ValueError` on setup | Cross-drive path resolution | Place owlbear and your project on the same Windows drive |
 | Hook file not refreshed on rerun | Existing local `.owlbear/hooks/` file differs from seed | Re-run `init.py --replace-hooks` to overwrite, or choose `replace` when prompted interactively |
 | Agent name conflict | Same-name agent in both owlbear and project locations | Give project agents unique names (see Customization section above) |

@@ -92,8 +92,8 @@ No platform-specific configuration is required:
 | Prompts (`*.prompt.md`) | `../owlbear/share/prompts/` | Yes — shared baseline |
 | MCP server code | `../owlbear/serve/` | Yes — started from owlbear via `uv run --project` |
 | Hook runtime files | `.owlbear/hooks/` in project | No — copied from `seed/` into each project |
-| Target authority and runtime | `.owlbear/target/changes/` in project | No — per-project |
-| Target activation request and receipt | `.owlbear/target-cutover-*.json` in project | No — per-project |
+| Delivery package authority | `.owlbear/delivery/packages/` in project | No — tracked per-project |
+| Delivery runtime and worktrees | `.owlbear/delivery/runtime/` and `.owlbear/delivery/worktrees/` in project | No — ignored and host-local |
 | Immutable legacy inventory | `.owlbear/legacy/` in project, when present | No — read-only history |
 | `.github/copilot-instructions.md` | project root | No — per-project (override layer) |
 | `.owlbear/knowledge/` | project root | No — per-project |
@@ -152,7 +152,7 @@ organization agent registry as a complement to the local installation.
 | `ValueError` during `init.py` | Ensure owlbear and project are on the same Windows drive |
 | Agents missing after setup | Run `init.py` again; check that `.vscode/settings.json` was created and contains `chat.agentFilesLocations` pointing to the owlbear installation |
 | Cockpit command not found in project | Run `uv run --project ../owlbear cockpit` from the project root instead of plain `uv run cockpit` |
-| Target MCP or Cockpit reports a missing receipt | Re-run `init.py` in a current workspace; legacy `.owlbear/kanban/` stores are preserved but not converted |
+| Delivery MCP or Cockpit reports that a legacy root requires migration | Preserve the reported state unchanged and complete the dedicated Delivery migration before restarting |
 | Cockpit opens the wrong workspace | Launch from the project root or pass the intended project directory to `uv --directory` |
 | Hook updates not taking effect after `git pull` | Re-run `init.py`; use `--replace-hooks` if local hook files differ and you want the seeded versions restored |
 | `uv` not found | Install uv globally: `pip install uv` or see [uv docs](https://docs.astral.sh/uv/) |

@@ -22,15 +22,15 @@ max_line_length = unset
 [*.excalidraw]
 max_line_length = unset
 
-# Target authority and evidence are machine-managed structured records
-[.owlbear/target/**]
+# Delivery runtime is machine-managed structured state
+[.owlbear/delivery/runtime/**]
 max_line_length = unset
 
 # Design packages are Delivery-managed canonical records; do not reformat them
 [.owlbear/delivery/packages/**]
 max_line_length = unset
 
-# Completed Delivery history is canonical machine-managed state; do not reformat it
+# Completed Delivery history is canonical machine-managed evidence; do not reformat it
 [.owlbear/completed/**]
 max_line_length = unset
 
