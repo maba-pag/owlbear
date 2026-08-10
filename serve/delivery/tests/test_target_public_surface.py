@@ -16,9 +16,6 @@ def test_package_root_exports_target_runtime() -> None:
         "TargetAuthorityRegistry",
         "TargetAuthority",
         "TargetRuntime",
-        "TargetCutoverResult",
         "WorkItemProjector",
-        "authorize_target_mutation",
-        "cut_over_target_runtime",
     }
     assert set(owlbear_delivery.__all__) >= required

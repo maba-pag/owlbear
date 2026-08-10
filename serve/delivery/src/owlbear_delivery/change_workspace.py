@@ -31,7 +31,6 @@ from owlbear_delivery.storage_io import locked_roots
 if TYPE_CHECKING:
     from contextlib import AbstractContextManager
 
-_MERGE_RECORD_PARTS = 3
 _TREE_ENTRY_PARTS = 3
 _OCC_RETRY_LIMIT = 8
 
@@ -222,8 +221,8 @@ class PortfolioCoordinator:
 
     def __init__(self, state_root: Path, capacity: int) -> None:
         self._state_root = state_root
-        self._coordination_root = state_root / "target-runtime" / "coordination"
-        self._ledger_path = state_root / "target-runtime" / "capacity.json"
+        self._coordination_root = state_root / "claims" / "changes"
+        self._ledger_path = state_root / "capacity.json"
         self._capacity = capacity
         state_root.mkdir(parents=True, exist_ok=True)
         RuntimeTransaction.recover_all(state_root)
@@ -231,12 +230,12 @@ class PortfolioCoordinator:
 
     def integration_lock(self) -> AbstractContextManager[None]:
         """Serialize shared integration-target mutations across portfolio writers."""
-        lock_root = self._state_root / "target-runtime" / "integration-lock"
+        lock_root = self._state_root / "claims" / "integration-lock"
         return locked_roots((lock_root,))
 
     def acquisition_lock(self) -> AbstractContextManager[None]:
         """Serialize portfolio selection and staged claim preparation."""
-        lock_root = self._state_root / "target-runtime" / "acquisition-lock"
+        lock_root = self._state_root / "claims" / "acquisition-lock"
         return locked_roots((lock_root,))
 
     def writer_capacity_available(self) -> bool:
@@ -336,7 +335,7 @@ class PortfolioCoordinator:
 
     def publish_finding(self, finding: IntegrationFinding) -> IntegrationFinding:
         """Publish one immutable integration finding inside target evidence."""
-        relative = Path("target-runtime/integration-findings") / f"{finding.finding_id}.json"
+        relative = Path("claims/integration-findings") / f"{finding.finding_id}.json"
         self._commit(
             f"finding-{finding.finding_id}",
             (TransactionParticipant(self._state_root, relative, _model_content(finding)),),
@@ -984,11 +983,11 @@ class ChangeWorkspaceManager:
             )
         return result
 
-    def publish_prepared_integration(
+    def validate_prepared_integration(
         self,
         preparation: AtomicIntegrationPreparation,
-    ) -> AtomicIntegrationResult:
-        """Publish one package-validated preparation through exactly one target CAS."""
+    ) -> AtomicIntegrationResult | None:
+        """Revalidate one prepared candidate without publishing its target."""
         if preparation.result is not None:
             return preparation.result
         if (
@@ -1010,18 +1009,20 @@ class ChangeWorkspaceManager:
                 code=DeliveryIntegrationAttentionCode.TARGET_IDENTITY_MISMATCH,
                 diagnostics=("registered Integration target changed after candidate validation",),
             )
-        reviewed_diagnostics = self._reviewed_preparation_diagnostics(coordination, preparation.change_head)
-        if reviewed_diagnostics:
-            code = (
-                DeliveryIntegrationAttentionCode.REVIEWED_WORKTREE_DIRTY
-                if reviewed_diagnostics == ("warm change worktree became dirty after candidate validation",)
-                else DeliveryIntegrationAttentionCode.REVIEWED_BOUNDARY_MISMATCH
-            )
+        if self._resolve(coordination.integration_target) != preparation.target_head:
             return AtomicIntegrationResult(
-                code=code,
-                diagnostics=reviewed_diagnostics,
+                code=DeliveryIntegrationAttentionCode.TARGET_CAS_LOST,
+                diagnostics=("integration target changed after candidate validation",),
             )
-        return self._cas_integration(coordination, preparation.candidate_commit, preparation.target_head)
+        reviewed_diagnostics = self._reviewed_preparation_diagnostics(coordination, preparation.change_head)
+        if not reviewed_diagnostics:
+            return None
+        code = (
+            DeliveryIntegrationAttentionCode.REVIEWED_WORKTREE_DIRTY
+            if reviewed_diagnostics == ("warm change worktree became dirty after candidate validation",)
+            else DeliveryIntegrationAttentionCode.REVIEWED_BOUNDARY_MISMATCH
+        )
+        return AtomicIntegrationResult(code=code, diagnostics=reviewed_diagnostics)
 
     def discard_integration_candidate(self, preparation: AtomicIntegrationPreparation) -> None:
         """Delete one exact terminal candidate ref without touching another preparation."""
@@ -1154,27 +1155,6 @@ class ChangeWorkspaceManager:
         if candidate_entries != target_entries:
             message = "reviewed change mutates sibling completed history"
             raise ValueError(message)
-
-    def _cas_integration(
-        self,
-        coordination: ChangeCoordination,
-        candidate_commit: str,
-        target_head: str,
-    ) -> AtomicIntegrationResult:
-        try:
-            self._git(
-                "update-ref",
-                f"refs/heads/{coordination.integration_target}",
-                candidate_commit,
-                target_head,
-            )
-        except subprocess.CalledProcessError:
-            return AtomicIntegrationResult(
-                code=DeliveryIntegrationAttentionCode.TARGET_CAS_LOST,
-                diagnostics=("integration target changed before compare-and-swap",),
-            )
-        self._refresh_checked_out_target(coordination.integration_target, candidate_commit)
-        return AtomicIntegrationResult(target_commit=candidate_commit)
 
     def cleanup_integrated_worktree(
         self,
@@ -1449,79 +1429,9 @@ class ChangeWorkspaceManager:
         return hashlib.sha256(result.stdout).hexdigest()
 
     def integrate(self, change_id: str, reviewed_commits: tuple[str, ...]) -> IntegrationResult:
-        """Merge one change without rewriting reviewed commits and CAS the configured target."""
-        with self._coordinator.integration_lock():
-            return self._integrate_locked(change_id, reviewed_commits)
-
-    def _integrate_locked(self, change_id: str, reviewed_commits: tuple[str, ...]) -> IntegrationResult:
-        coordination = self._coordinator.show(change_id)
-        change_head = self._resolve(coordination.branch)
-        for commit in reviewed_commits:
-            self._require_ancestor(commit, change_head)
-        target_head = self._resolve(coordination.integration_target)
-        if target_head == change_head:
-            self._require_merge_commit(change_head, reviewed_commits, cwd=coordination.worktree_path)
-            synchronized = coordination.model_copy(
-                update={"target_head": change_head, "last_reviewed_commit": change_head}
-            )
-            self._coordinator.update(synchronized)
-            return IntegrationResult(merge_commit=change_head)
-        self._require_clean_checked_out_target(coordination.integration_target)
-        merge_commit = self._merge_target(coordination, change_head, target_head)
-        if merge_commit is None:
-            return IntegrationResult(finding=self._publish_integration_finding(coordination, change_head, target_head))
-        self._require_merge_commit(merge_commit, reviewed_commits, cwd=coordination.worktree_path)
-        try:
-            self._git(
-                "update-ref",
-                f"refs/heads/{coordination.integration_target}",
-                merge_commit,
-                target_head,
-            )
-        except subprocess.CalledProcessError as exc:
-            msg = "integration target changed concurrently"
-            raise CoordinationConflictError(msg) from exc
-        self._refresh_checked_out_target(coordination.integration_target, merge_commit)
-        updated = coordination.model_copy(update={"target_head": merge_commit, "last_reviewed_commit": merge_commit})
-        self._coordinator.update(updated)
-        return IntegrationResult(merge_commit=merge_commit)
-
-    def _merge_target(
-        self,
-        coordination: ChangeCoordination,
-        change_head: str,
-        target_head: str,
-    ) -> str | None:
-        worktree = coordination.worktree_path
-        if self._git("-C", str(worktree), "status", "--porcelain"):
-            _workspace_failure("integration requires a clean change worktree")
-        if self._is_ancestor(target_head, change_head, cwd=worktree):
-            tree = self._git("-C", str(worktree), "rev-parse", f"{change_head}^{{tree}}")
-            merge_commit = self._git(
-                "-C",
-                str(worktree),
-                "commit-tree",
-                tree,
-                "-p",
-                change_head,
-                "-p",
-                target_head,
-                "-m",
-                f"Integrate {coordination.change_id}",
-            )
-            self._git(
-                "update-ref",
-                f"refs/heads/{coordination.branch}",
-                merge_commit,
-                change_head,
-            )
-            return merge_commit
-        try:
-            self._git("-C", str(worktree), "merge", "--no-ff", "--no-edit", target_head)
-        except subprocess.CalledProcessError:
-            self._git("-C", str(worktree), "merge", "--abort", check=False)
-            return None
-        return self._resolve("HEAD", cwd=worktree)
+        """Reject the retired local target Integration operation."""
+        del change_id, reviewed_commits
+        _workspace_failure("local target Integration is disabled; external acceptance is required")
 
     def _publish_integration_finding(
         self,
@@ -1551,14 +1461,6 @@ class ChangeWorkspaceManager:
         if not self._is_ancestor(commit, descendant, cwd=self._repository):
             _workspace_failure("reviewed commit is not an ancestor of the change head")
 
-    def _require_merge_commit(self, commit: str, reviewed: tuple[str, ...], *, cwd: Path) -> None:
-        parents = self._git("-C", str(cwd), "rev-list", "--parents", "-n", "1", commit).split()
-        if len(parents) < _MERGE_RECORD_PARTS:
-            _workspace_failure("integration did not create a merge commit")
-        for reviewed_commit in reviewed:
-            if not self._is_ancestor(reviewed_commit, commit, cwd=cwd):
-                _workspace_failure("integration rewrote or omitted a reviewed commit")
-
     @staticmethod
     def _is_ancestor(ancestor: str, descendant: str, *, cwd: Path) -> bool:
         result = subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
@@ -1567,15 +1469,6 @@ class ChangeWorkspaceManager:
             capture_output=True,
         )
         return result.returncode == 0
-
-    def _require_clean_checked_out_target(self, target: str) -> None:
-        current = self._git("branch", "--show-current")
-        if current == target and self._git("status", "--porcelain"):
-            _workspace_failure("checked-out integration target has uncommitted changes")
-
-    def _refresh_checked_out_target(self, target: str, commit: str) -> None:
-        if self._git("branch", "--show-current") == target:
-            self._git("reset", "--hard", commit)
 
     def _resolve(self, revision: str, *, cwd: Path | None = None, missing_ok: bool = False) -> str | None:
         try:

@@ -128,7 +128,7 @@ def test_admission_recovers_receipt_last_publication_and_replays_exact_sources(
     with pytest.raises(RuntimeError, match="receipt-last interruption"):
         interrupted.admit(_request())
 
-    delivery_root = target_root / "delivery/changes/source-bound-change"
+    delivery_root = target_root / "changes/source-bound-change"
     assert (delivery_root / "contract.json").is_file()
     assert not (delivery_root / "admission.json").exists()
 
@@ -149,7 +149,7 @@ def test_admission_recovers_receipt_last_publication_and_replays_exact_sources(
         "OUT-003",
     )
     assert all(binding.task_ids == binding.result_ids == () for binding in recovered.frontier.bindings)
-    assert not (target_root / "changes/source-bound-change").exists()
+    assert not (target_root / "delivery/changes/source-bound-change").exists()
 
 
 def test_rejected_package_validation_cannot_publish_during_later_recovery(
@@ -232,7 +232,7 @@ def test_revision_preserves_unchanged_binding_and_invalidates_changed_dependents
             )
         )
     populated = DeliveryFrontier(bindings=tuple(populated_bindings))
-    delivery_root = target_root / "delivery/changes/source-bound-change"
+    delivery_root = target_root / "changes/source-bound-change"
     (delivery_root / "frontier.json").write_bytes(_canonical(populated))
 
     revised_intent, revised_design = _sources(first_statement="Change the first result behavior.")
@@ -293,4 +293,4 @@ def test_revision_rejects_active_claims_before_mutation(repository: Path, tmp_pa
             )
         )
 
-    assert (target_root / "delivery/changes/source-bound-change/contract.json").read_bytes() == first.contract_bytes
+    assert (target_root / "changes/source-bound-change/contract.json").read_bytes() == first.contract_bytes

@@ -583,7 +583,11 @@ class WorkItemProjector:
                 next_step = headline
                 activity = WorkItemActivity(state=WorkItemActivityState.IDLE)
                 action = WorkItemAction()
-                progress = "Attempt failed"
+                progress = (
+                    "Awaiting external acceptance"
+                    if attention.code == DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED
+                    else "Attempt failed"
+                )
         return WorkItemCardView(
             item_key="integration",
             work_item_id=self._snapshot.contract.change_id,
@@ -739,6 +743,7 @@ class WorkItemProjector:
 
 def _integration_headline(code: DeliveryIntegrationAttentionCode) -> str:
     return {
+        DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED: "External acceptance required",
         DeliveryIntegrationAttentionCode.MERGE_CONFLICT: "Merge conflict",
         DeliveryIntegrationAttentionCode.REPAIR_AUTHORITY: "Authority revision required",
         DeliveryIntegrationAttentionCode.TARGET_CAS_LOST: "Integration retry available",

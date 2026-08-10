@@ -395,6 +395,42 @@ def test_retryable_integration_attention_is_ready_for_orchestration() -> None:
     assert detail.integration.explanation == "Integration is ready to retry against the current target."
 
 
+def test_external_acceptance_attention_projects_operator_waiting_state() -> None:
+    attention = DeliveryIntegrationAttention(
+        attention_id="a" * 64,
+        code=DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED,
+        change_id="portfolio-change",
+        change_head="1" * 40,
+        target_head="2" * 40,
+        integration_target="dev",
+        diagnostics=("Reviewed candidate commit: " + "3" * 40,),
+        retry_condition="Publish the reviewed Change through the provider and observe external acceptance.",
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (
+                _binding("OUT-001", DeliveryStage.COMPLETED),
+                _binding("OUT-002", DeliveryStage.COMPLETED),
+            ),
+            attention=attention,
+            target_head="2" * 40,
+        )
+    )
+
+    card = projector.group_view().items[-1]
+    detail = projector.show_view("integration")
+
+    assert card.needs_headline == "External acceptance required"
+    assert card.progress.label == "Awaiting external acceptance"
+    assert (card.next_actor, card.next_step) == (
+        WorkItemNextActor.YOU,
+        "External acceptance required",
+    )
+    assert detail.integration is not None
+    assert detail.integration.headline == "External acceptance required"
+    assert detail.integration.retry_condition == attention.retry_condition
+
+
 def test_repair_activity_and_conflict_paths_use_retained_evidence() -> None:
     diagnostics = (
         "100644 " + "1" * 40 + " 1\tshare/agent.md",

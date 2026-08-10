@@ -278,6 +278,7 @@ class DeliveryIntegrationAttentionCode(StrEnum):
     REPAIR_AUTHORITY = "repair-authority"
     CANDIDATE_PROOF_FAILED = "candidate-proof-failed"
     TARGET_CAS_LOST = "target-cas-lost"
+    EXTERNAL_ACCEPTANCE_REQUIRED = "external-acceptance-required"
 
 
 def integration_attention_disposition(
@@ -684,16 +685,16 @@ class DeliveryRuntime:
 
     def __init__(
         self,
-        target_root: Path,
+        runtime_root: Path,
         contract: DeliveryContract,
         *,
         workspace_manager: ChangeWorkspaceManager | None = None,
     ) -> None:
-        self._target_root = target_root.resolve()
+        self._target_root = runtime_root.resolve()
         self._contract = contract
         self._workspace_manager = workspace_manager
         self._authority_digest = hashlib.sha256(_model_content(contract)).hexdigest()
-        self._frontier_path = self._target_root / "delivery" / "changes" / contract.change_id / "frontier.json"
+        self._frontier_path = self._target_root / "changes" / contract.change_id / "frontier.json"
         self._validate_frontier(self._read()[0])
 
     @property

@@ -3,8 +3,8 @@
 `owlbear-delivery` is the transport-free control plane for target delivery. It projects semantic work
 items from admitted Specification authority, owns deterministic Planning and Build transitions,
 coordinates bounded execution and writer capacity, integrates reviewed changes, and publishes
-recoverable completed history. It also retains the public cutover and evidence contracts used to
-authorize the target store and inspect historical transformation state.
+recoverable completed history. It also retains legacy Target cutover and evidence contracts for
+historical consumers; canonical Delivery startup does not use them.
 
 Parent project: [README.md](../../README.md)
 
@@ -25,7 +25,7 @@ The main public areas are:
 | Work projection | Portfolio work items with dependency readiness, typed attention, requests, blocks, and task progress |
 | Coordination | Per-change writers, separate execution/writer capacity, warm worktrees, and reviewed source boundaries |
 | Integration and history | Atomic target publication, typed Integration attention, reviewed additive repair admission, and bounded completed lookup |
-| Cutover and retained evidence | `TargetRuntime`, `list_frontier`, target snapshots, mutation authorization, receipts, and legacy verification remain public for activation and evidence consumers |
+| Legacy Target evidence | `TargetRuntime`, `list_frontier`, target snapshots, mutation authorization, receipts, and legacy verification remain public for historical consumers |
 
 Assembly remains a live stage, projection, and required role-policy configuration type. Current
 compiled bindings leave `assembly_required` false, and the agent MCP registry exposes no Assembly
@@ -34,10 +34,9 @@ unexpected launch is recovered by exact claim identity.
 
 ## Configuration
 
-The package reads no environment variables. Callers pass package, target-state, repository,
-worktree, Integration target, role policies, and capacity configuration explicitly. MCP, Cockpit,
-and setup own process-level configuration and must authorize target mutation through the published
-cutover receipt before writing runtime state.
+The package reads no environment variables. Callers pass package, runtime-state, repository,
+worktree, Integration target, role policies, and capacity configuration explicitly. MCP and Cockpit
+load tracked project policy and compose owners over canonical Delivery roots; setup seeds that policy.
 
 ## Dependencies
 
@@ -48,5 +47,5 @@ cutover receipt before writing runtime state.
 | `pyyaml` | Manifest loading |
 
 Filesystem writes use contained paths, locking, immutable create/replay semantics, and transactional
-recovery. Callers should use the public target runtimes, coordinators, and cutover operations rather
-than writing authority or runtime files directly.
+recovery. Callers should use the public Delivery application, stores, and coordinators rather than
+writing authority or runtime files directly.

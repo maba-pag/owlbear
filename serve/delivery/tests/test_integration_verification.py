@@ -122,8 +122,8 @@ def test_verification_persists_exact_receipt_and_replays_without_execution(tmp_p
     assert replayed == first
     assert marker.read_text(encoding="utf-8") == "x"
     assert not (tmp_path / "verification-worktrees" / first.request_id).exists()
-    assert (tmp_path / "target/target-runtime/integration-verification/requests" / f"{first.request_id}.json").is_file()
-    assert (tmp_path / "target/target-runtime/integration-verification/receipts" / f"{first.request_id}.json").is_file()
+    assert (tmp_path / "target/claims/integration-verification/requests" / f"{first.request_id}.json").is_file()
+    assert (tmp_path / "target/claims/integration-verification/receipts" / f"{first.request_id}.json").is_file()
 
 
 def test_concurrent_verification_executes_one_exact_request_once(tmp_path: Path) -> None:

@@ -115,6 +115,9 @@ def _timestamp(value: str) -> datetime:
 
 
 _COMPLETED_ROOT = ".owlbear/completed"
+_PROVIDER_ACCEPTANCE_REQUIRED = (
+    "local target ancestry is not provider acceptance evidence; completion requires an observed merged pull request"
+)
 
 
 def _operating_scope(scope: WorkItemScope) -> PortfolioWorkScope:
@@ -1329,7 +1332,7 @@ class PortfolioApplication:
         )
 
     def integrate_ready_change(self, change_id: str) -> DeliveryIntegrationResult:
-        """Publish reviewed product and its completed package through one target CAS."""
+        """Validate one reviewed candidate and retain external-acceptance attention."""
         with self._coordinator.integration_lock():
             runtime = self._runtime(change_id)
             self._workspace_manager.refresh_integration_target(change_id)
@@ -1349,9 +1352,8 @@ class PortfolioApplication:
             if isinstance(prepared, DeliveryIntegrationResult):
                 return prepared
             if prepared.preparation.result is not None:
-                result = self._publish_prepared_integration(runtime, context, prepared)
                 self._workspace_manager.discard_stale_integration_candidate(change_id)
-                return result
+                return self._revalidate_for_external_acceptance(runtime, context, prepared)
 
         receipt = self._integration_verifier.verify(prepared.candidate, prepared.preparation)
 
@@ -1379,7 +1381,7 @@ class PortfolioApplication:
             return result
 
     def prepare_external_completion(self, change_id: str) -> ExternalCompletionResult:
-        """Prepare or acknowledge completion after reviewed product merged externally."""
+        """Prepare a detached proposal without inferring acceptance from local Git state."""
         with self._coordinator.integration_lock():
             runtime = self._runtime(change_id)
             self._workspace_manager.refresh_integration_target(change_id)
@@ -1405,24 +1407,14 @@ class PortfolioApplication:
                         candidate=captured.candidate,
                     )
                     return ExternalCompletionResult(change_id=change_id, attention=failed.attention)
-                completion = DeliveryIntegrationCompletion(
-                    completion_id=captured.snapshot.completion_id,
-                    candidate_id=captured.candidate.candidate_id,
-                    package_id=captured.snapshot.package_id,
-                    target_commit=prepared.target_commit,
-                    completion_path=captured.snapshot.manifest.completion_path,
+                waiting = self._integration_attention(
+                    runtime,
+                    context,
+                    DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED,
+                    (_PROVIDER_ACCEPTANCE_REQUIRED,),
+                    candidate=captured.candidate,
                 )
-                runtime.publish_integration_completion(completion)
-                self._workspace_manager.discard_external_completion_proposal(
-                    captured.candidate,
-                    prepared.target_commit,
-                )
-                self._cleanup_integration(change_id, completion)
-                return ExternalCompletionResult(
-                    change_id=change_id,
-                    completion=completion,
-                    replayed=prepared.replayed,
-                )
+                return ExternalCompletionResult(change_id=change_id, attention=waiting.attention)
             return ExternalCompletionResult(change_id=change_id, proposal=prepared)
 
     def admit_reviewed_integration_repair(
@@ -1548,7 +1540,11 @@ class PortfolioApplication:
             return self._package_store.capture_completion(
                 prepared.capture,
                 validation_callback=lambda snapshot: self._require_verified_snapshot(prepared, snapshot),
-                publication_callback=lambda verified: self._publish_prepared_integration(runtime, context, verified),
+                publication_callback=lambda verified: self._revalidate_for_external_acceptance(
+                    runtime,
+                    context,
+                    verified,
+                ),
             )
         except DesignPackageConflictError as exc:
             return self._integration_attention(
@@ -1558,6 +1554,37 @@ class PortfolioApplication:
                 (str(exc),),
                 candidate=prepared.candidate,
             )
+
+    def _revalidate_for_external_acceptance(
+        self,
+        runtime: DeliveryRuntime,
+        context: IntegrationContext,
+        prepared: _PreparedIntegration,
+    ) -> DeliveryIntegrationResult:
+        invalid = self._workspace_manager.validate_prepared_integration(prepared.preparation)
+        if invalid is not None:
+            if invalid.code is None:
+                return self._integration_attention(
+                    runtime,
+                    context,
+                    DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED,
+                    (_PROVIDER_ACCEPTANCE_REQUIRED,),
+                    candidate=prepared.candidate,
+                )
+            return self._integration_attention(
+                runtime,
+                context,
+                invalid.code,
+                invalid.diagnostics,
+                candidate=prepared.candidate,
+            )
+        return self._integration_attention(
+            runtime,
+            context,
+            DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED,
+            ("local target publication is disabled; completion requires externally observed acceptance",),
+            candidate=prepared.candidate,
+        )
 
     @staticmethod
     def _require_verified_snapshot(
@@ -1579,40 +1606,6 @@ class PortfolioApplication:
             elif step.stdout and step.status.value != "passed":
                 diagnostics.append(step.stdout[:1_024])
         return tuple(diagnostics[:16])
-
-    def _publish_prepared_integration(
-        self,
-        runtime: DeliveryRuntime,
-        context: IntegrationContext,
-        prepared: _PreparedIntegration,
-    ) -> DeliveryIntegrationResult:
-        candidate = prepared.candidate
-        snapshot = prepared.snapshot
-        publication = self._workspace_manager.publish_prepared_integration(prepared.preparation)
-        if publication.code is not None:
-            return self._integration_attention(
-                runtime,
-                context,
-                publication.code,
-                publication.diagnostics,
-                candidate=candidate,
-            )
-        if publication.target_commit is None:
-            self._fail("Integration publication returned no target commit")
-        completion = DeliveryIntegrationCompletion(
-            completion_id=snapshot.completion_id,
-            candidate_id=candidate.candidate_id,
-            package_id=snapshot.package_id,
-            target_commit=publication.target_commit,
-            completion_path=snapshot.manifest.completion_path,
-        )
-        runtime.publish_integration_completion(completion)
-        return DeliveryIntegrationResult(
-            change_id=runtime.contract.change_id,
-            candidate=candidate,
-            completion=completion,
-            replayed=publication.replayed,
-        )
 
     def _integration_candidate(
         self,
@@ -2113,6 +2106,8 @@ def _canonical(payload: object) -> bytes:
 
 
 def _integration_retry_condition(code: DeliveryIntegrationAttentionCode) -> str:
+    if code == DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED:
+        return "Publish the reviewed Change through the provider and observe external acceptance."
     if code == DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED:
         return (
             "Correct the Integration profile or failing candidate verification step, "

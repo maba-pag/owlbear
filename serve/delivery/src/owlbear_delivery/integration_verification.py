@@ -237,11 +237,11 @@ class IntegrationVerificationStore:
 
     def verification_lock(self, request_id: str) -> AbstractContextManager[None]:
         """Serialize execution only for one exact request identity."""
-        root = self._target_root / "target-runtime" / "integration-verification" / "locks" / request_id
+        root = self._target_root / "claims" / "integration-verification" / "locks" / request_id
         return locked_roots((root,))
 
     def _publish(self, kind: str, identity: str, model: _VerificationModel) -> None:
-        relative = Path("target-runtime/integration-verification") / kind / f"{identity}.json"
+        relative = Path("claims/integration-verification") / kind / f"{identity}.json"
         content = model.model_dump_json(indent=2).encode() + b"\n"
         RuntimeTransaction(
             self._target_root,
@@ -250,7 +250,7 @@ class IntegrationVerificationStore:
         ).commit()
 
     def _path(self, kind: str, identity: str) -> Path:
-        return self._target_root / "target-runtime" / "integration-verification" / kind / f"{identity}.json"
+        return self._target_root / "claims" / "integration-verification" / kind / f"{identity}.json"
 
 
 class IntegrationVerifier:

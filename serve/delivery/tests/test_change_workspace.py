@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import subprocess
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from threading import Event
 from unittest.mock import patch
 
 import pytest
@@ -205,7 +203,7 @@ def test_coordinator_recovers_pending_runtime_transaction(tmp_path: Path) -> Non
 
 def test_coordinator_reconfigures_capacity_when_active_holders_fit(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
-    ledger_path = state_root / "target-runtime/capacity.json"
+    ledger_path = state_root / "capacity.json"
     ledger_path.parent.mkdir(parents=True)
     ledger_path.write_text(
         CapacityLedger(capacity=4, change_ids=("change-a",)).model_dump_json(),
@@ -222,7 +220,7 @@ def test_coordinator_reconfigures_capacity_when_active_holders_fit(tmp_path: Pat
 
 def test_coordinator_rejects_capacity_below_active_holders(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
-    ledger_path = state_root / "target-runtime/capacity.json"
+    ledger_path = state_root / "capacity.json"
     ledger_path.parent.mkdir(parents=True)
     ledger_path.write_text(
         CapacityLedger(capacity=4, change_ids=("change-a", "change-b")).model_dump_json(),
@@ -358,163 +356,24 @@ def test_restart_recovers_missing_worktree_at_each_git_interruption(tmp_path: Pa
     assert recovered.writer is None
 
 
-def test_integration_uses_merge_commit_and_configured_target_cas(tmp_path: Path) -> None:
+def test_integration_rejects_local_target_and_checkout_mutation(tmp_path: Path) -> None:
     repository, initial = _repository(tmp_path, target="release")
     _coordinator, manager = _manager(tmp_path, repository, target="release")
     coordination = manager.create("merge-change")
     reviewed = _commit_file(coordination.worktree_path, "reviewed\n", "reviewed task")
     manager.record_reviewed("merge-change", reviewed)
+    user_file = repository / "user-work.txt"
+    user_file.write_text("preserved\n", encoding="utf-8")
+    status_before = _git(repository, "status", "--porcelain")
 
-    result = manager.integrate("merge-change", (reviewed,))
-
-    assert result.finding is None
-    assert result.merge_commit is not None
-    assert _git(repository, "rev-parse", "release") == result.merge_commit
-    assert _git(repository, "rev-parse", "main") == initial
-    merge_record = _git(repository, "rev-list", "--parents", "-n", "1", result.merge_commit).split()
-    assert merge_record == [result.merge_commit, reviewed, initial]
-    _git(repository, "merge-base", "--is-ancestor", reviewed, result.merge_commit)
-    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == result.merge_commit
-
-
-def test_integration_retry_recovers_after_target_cas_before_coordination_update(tmp_path: Path) -> None:
-    repository, _initial = _repository(tmp_path)
-    coordinator, manager = _manager(tmp_path, repository)
-    coordination = manager.create("recover-integration")
-    reviewed = _commit_file(coordination.worktree_path, "reviewed\n", "reviewed task")
-    manager.record_reviewed("recover-integration", reviewed)
-
-    with (
-        patch.object(coordinator, "update", side_effect=CoordinationConflictError("injected")),
-        pytest.raises(CoordinationConflictError, match="injected"),
-    ):
-        manager.integrate("recover-integration", (reviewed,))
-
-    target_after_interruption = _git(repository, "rev-parse", "release")
-    recovered = manager.integrate("recover-integration", (reviewed,))
-
-    assert recovered.merge_commit == target_after_interruption
-    assert coordinator.show("recover-integration").target_head == target_after_interruption
-    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == target_after_interruption
-
-
-def test_integration_serializes_independent_managers(tmp_path: Path) -> None:
-    repository, _initial = _repository(tmp_path)
-    _coordinator_a, manager_a = _manager(tmp_path, repository)
-    coordinator_b = PortfolioCoordinator(tmp_path / "state", capacity=2)
-    manager_b = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator_b, "release")
-    coordination_a = manager_a.create("parallel-a")
-    coordination_b = manager_b.create("parallel-b")
-    reviewed_a = _commit_new_file(coordination_a.worktree_path, "a.txt", "a\n", "change a")
-    reviewed_b = _commit_new_file(coordination_b.worktree_path, "b.txt", "b\n", "change b")
-    manager_a.record_reviewed("parallel-a", reviewed_a)
-    manager_b.record_reviewed("parallel-b", reviewed_b)
-    first_entered = Event()
-    release_first = Event()
-    second_entered = Event()
-    original_a = manager_a._integrate_locked
-    original_b = manager_b._integrate_locked
-
-    def hold_first(change_id: str, reviewed: tuple[str, ...]):
-        first_entered.set()
-        assert release_first.wait(timeout=2)
-        return original_a(change_id, reviewed)
-
-    def mark_second(change_id: str, reviewed: tuple[str, ...]):
-        second_entered.set()
-        return original_b(change_id, reviewed)
-
-    with (
-        patch.object(manager_a, "_integrate_locked", side_effect=hold_first),
-        patch.object(manager_b, "_integrate_locked", side_effect=mark_second),
-        ThreadPoolExecutor(max_workers=2) as executor,
-    ):
-        first = executor.submit(manager_a.integrate, "parallel-a", (reviewed_a,))
-        assert first_entered.wait(timeout=2)
-        second = executor.submit(manager_b.integrate, "parallel-b", (reviewed_b,))
-        assert not second_entered.wait(timeout=0.1)
-        release_first.set()
-        result_a = first.result(timeout=2)
-        result_b = second.result(timeout=2)
-
-    assert result_a.merge_commit is not None
-    assert result_b.merge_commit == _git(repository, "rev-parse", "release")
-    _git(repository, "merge-base", "--is-ancestor", reviewed_a, result_b.merge_commit)
-    _git(repository, "merge-base", "--is-ancestor", reviewed_b, result_b.merge_commit)
-
-
-def test_integration_reports_typed_target_cas_loss_and_retries(tmp_path: Path) -> None:
-    repository, initial = _repository(tmp_path)
-    _coordinator, manager = _manager(tmp_path, repository)
-    coordination = manager.create("cas-loss")
-    reviewed = _commit_file(coordination.worktree_path, "reviewed\n", "reviewed task")
-    manager.record_reviewed("cas-loss", reviewed)
-    original_git = manager._git
-
-    def reject_target_cas(*arguments: str, **kwargs) -> str:
-        if arguments[:2] == ("update-ref", "refs/heads/release"):
-            raise subprocess.CalledProcessError(1, arguments)
-        return original_git(*arguments, **kwargs)
-
-    with (
-        patch.object(manager, "_git", side_effect=reject_target_cas),
-        pytest.raises(CoordinationConflictError, match="target changed concurrently"),
-    ):
-        manager.integrate("cas-loss", (reviewed,))
+    with pytest.raises(RuntimeError, match="local target Integration is disabled"):
+        manager.integrate("merge-change", (reviewed,))
 
     assert _git(repository, "rev-parse", "release") == initial
-    recovered = manager.integrate("cas-loss", (reviewed,))
-    assert recovered.merge_commit == _git(repository, "rev-parse", "release")
-
-
-def test_integration_conflict_emits_finding_without_advancing_target(tmp_path: Path) -> None:
-    repository, _initial = _repository(tmp_path)
-    _coordinator, manager = _manager(tmp_path, repository)
-    coordination = manager.create("conflict-change")
-    reviewed = _commit_file(coordination.worktree_path, "change\n", "change side")
-    manager.record_reviewed("conflict-change", reviewed)
-    target_worktree = tmp_path / "target-worktree"
-    _git(repository, "worktree", "add", str(target_worktree), "release")
-    target_head = _commit_file(target_worktree, "target\n", "target side")
-    _git(repository, "worktree", "remove", str(target_worktree))
-
-    result = manager.integrate("conflict-change", (reviewed,))
-
-    assert result.merge_commit is None
-    assert result.finding is not None
-    assert result.finding.detail.startswith("Change and integration target conflict")
-    assert _git(repository, "rev-parse", "release") == target_head
-    finding_path = tmp_path / "state/target-runtime/integration-findings" / f"{result.finding.finding_id}.json"
-    assert finding_path.is_file()
-
-    authority = TargetAuthority(
-        change_id="conflict-change",
-        title="Conflict change",
-        task_plan_scopes=(
-            TaskPlanScope(
-                scope_id="PLAN-001",
-                kind=PlanScopeKind.CHANGE_ASSEMBLY,
-                target_id="conflict-change",
-                composition_claim="The conflicting pieces work together after resolution.",
-            ),
-        ),
-    )
-    runtime = TargetRuntime(authority, tmp_path / "assembly-runtime")
-    runtime.materialize(
-        (
-            TargetJob(
-                job_id=3,
-                kind="assembly",
-                change_id="conflict-change",
-                authority_digest=runtime.authority_digest,
-                work_item_id="conflict-change",
-                plan_scope_id="PLAN-001",
-                created_at="2026-08-02T00:00:03Z",
-            ),
-        )
-    )
-
-    assert runtime.list_frontier()[0].kind == "assembly"
+    assert _git(repository, "rev-parse", "main") == initial
+    assert _git(repository, "status", "--porcelain") == status_before
+    assert user_file.read_text(encoding="utf-8") == "preserved\n"
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == reviewed
 
 
 def test_repair_candidate_commits_conflict_paths_and_replays(tmp_path: Path) -> None:

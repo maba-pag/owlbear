@@ -152,7 +152,7 @@ def _runtime(
             )
         )
     frontier = DeliveryFrontier(bindings=tuple(bindings))
-    path = tmp_path / "delivery/changes/delivery-runtime/frontier.json"
+    path = tmp_path / "changes/delivery-runtime/frontier.json"
     path.parent.mkdir(parents=True)
     path.write_bytes(_canonical(frontier))
     return DeliveryRuntime(tmp_path, contract)
@@ -395,7 +395,7 @@ def test_build_advance_binds_compact_result_and_releases_writer(tmp_path: Path) 
             for index in range(1, 4)
         )
     )
-    frontier_path = state_root / "delivery/changes/delivery-runtime/frontier.json"
+    frontier_path = state_root / "changes/delivery-runtime/frontier.json"
     frontier_path.parent.mkdir(parents=True)
     frontier_path.write_bytes(_canonical(frontier))
     runtime = DeliveryRuntime(state_root, _contract(), workspace_manager=manager)
@@ -492,7 +492,7 @@ def _active_second_task(tmp_path: Path):
             OutcomeAuthorityBinding(outcome_id="OUT-003", plan_scope_id="SCOPE-003"),
         )
     )
-    frontier_path = state_root / "delivery/changes/delivery-runtime/frontier.json"
+    frontier_path = state_root / "changes/delivery-runtime/frontier.json"
     frontier_path.parent.mkdir(parents=True)
     frontier_path.write_bytes(_canonical(frontier))
     runtime = DeliveryRuntime(state_root, contract, workspace_manager=manager)

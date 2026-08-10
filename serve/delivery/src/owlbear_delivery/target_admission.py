@@ -248,7 +248,7 @@ class DeliveryAuthorityRegistry:
 
     def admit(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult:
         """Publish or revise authority derived from the exact active package sources."""
-        lock_root = self._target_root / "delivery-locks" / request.change_id
+        lock_root = self._target_root / "claims" / "admission" / request.change_id
         with locked_roots((lock_root,)):
             compiled = self._compile_package(request.change_id)
             current = self._read_current(request.change_id)
@@ -339,7 +339,7 @@ class DeliveryAuthorityRegistry:
         return self._package_store.checkpoint(change_id).commit
 
     def _read_current(self, change_id: str) -> _CurrentDelivery | None:
-        root = self._target_root / "delivery" / "changes" / change_id
+        root = self._target_root / "changes" / change_id
         paths = tuple(root / name for name in _DELIVERY_NAMES)
         existing = tuple(path.exists() for path in paths)
         if not any(existing):
@@ -370,7 +370,7 @@ class DeliveryAuthorityRegistry:
         receipt: DeliveryAdmissionReceipt,
         current: _CurrentDelivery | None,
     ) -> tuple[tuple[TransactionParticipant | ReplacementTransactionParticipant, ...], bool]:
-        relative_root = Path("delivery") / "changes" / change_id
+        relative_root = Path("changes") / change_id
         relative_paths = tuple(relative_root / name for name in _DELIVERY_NAMES)
         replacements = (contract_bytes, _model_content(frontier), _model_content(receipt))
         if current is None or current.is_partial:
