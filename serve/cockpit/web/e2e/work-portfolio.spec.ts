@@ -342,7 +342,7 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(inspected.detail).toContainText('Build OUT-002')
     await returnToPortfolio(page, inspected.trigger)
 
-    inspected = await inspect(page, 'Assemble release')
+    inspected = await inspect(page, 'Finalize release')
     const parentScrollHeight = await page.getByTestId('work-scroll-surface').evaluate((element) => element.scrollHeight)
     await inspected.detail.getByText('Administrative actions', { exact: true }).click()
     await expect.poll(() => page.getByTestId('work-scroll-surface').evaluate((element) => element.scrollHeight))

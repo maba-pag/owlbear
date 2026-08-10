@@ -52,7 +52,6 @@ interface WorkItemDetailProps {
 const WORKER_ROLE_LABELS: Record<DeliveryWorkerRole, string> = {
   planner: 'Planner',
   builder: 'Builder',
-  'assembly-reviewer': 'Assembly reviewer',
   'integration-repairer': 'Integration repairer',
 }
 
@@ -279,7 +278,7 @@ function AttentionItem({ label, reason, retry, evidence, sourceBoundary }: {
   return <div><strong>{label}</strong><p>{reason}</p>{retry ? <p className="text-contrast-medium">Next: {retry}</p> : null}{evidence ? <p className="text-contrast-medium">Evidence: {evidence}</p> : null}{sourceBoundary ? <p className="text-contrast-medium">Source boundary: {sourceBoundary}</p> : null}</div>
 }
 
-const STAGES: WorkItemStage[] = ['design', 'planning', 'implementation', 'assembly', 'completed']
+const STAGES: WorkItemStage[] = ['design', 'planning', 'implementation', 'completed']
 
 function BackwardMoveSection({ detail, pendingAction, onPreviewBackward, onMoveBackward }: WorkItemDetailProps) {
   const currentStage = detail.item.card.stage

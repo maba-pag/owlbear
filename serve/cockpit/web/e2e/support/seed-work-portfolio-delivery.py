@@ -124,7 +124,7 @@ def _result(contract: DeliveryContract, task: DeliveryTaskDefinition, head: str)
 
 def _current_bindings(contract: DeliveryContract, head: str) -> tuple[OutcomeAuthorityBinding, ...]:
     build_task = _task("OUT-002", 2)
-    assembly_task = _task("OUT-003", 3)
+    finalized_task = _task("OUT-003", 3)
     completed_task = _task("OUT-005", 5)
     return (
         OutcomeAuthorityBinding(
@@ -161,10 +161,9 @@ def _current_bindings(contract: DeliveryContract, head: str) -> tuple[OutcomeAut
         OutcomeAuthorityBinding(
             outcome_id="OUT-003",
             plan_scope_id="SCOPE-003",
-            stage=DeliveryStage.ASSEMBLY,
-            assembly_required=True,
-            tasks=(assembly_task,),
-            results=(_result(contract, assembly_task, head),),
+            stage=DeliveryStage.COMPLETED,
+            tasks=(finalized_task,),
+            results=(_result(contract, finalized_task, head),),
         ),
         OutcomeAuthorityBinding(
             outcome_id="OUT-004",
@@ -196,7 +195,7 @@ def _write_current_delivery(runtime_root: Path, head: str) -> None:
     outcomes = (
         _outcome("OUT-001", "Choose release mode", "Resolve the bounded release decision."),
         _outcome("OUT-002", "Build operator controls", "Ship exact Delivery controls."),
-        _outcome("OUT-003", "Assemble release", "Compose reviewed Delivery outputs."),
+        _outcome("OUT-003", "Finalize release", "Finalize reviewed Delivery outputs."),
         _outcome("OUT-004", "Plan release notes", "Prepare bounded release notes."),
         _outcome("OUT-005", "Publish operator guide", "Publish the reviewed operator guide."),
         _outcome("OUT-006", "Verify dependent rollout", "Wait for operator controls.", ("OUT-002",)),

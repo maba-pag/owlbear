@@ -1,4 +1,4 @@
-export type WorkItemStage = 'design' | 'planning' | 'implementation' | 'assembly' | 'completed'
+export type WorkItemStage = 'design' | 'planning' | 'implementation' | 'completed'
 export type WorkItemScope = 'outcome' | 'change-integration'
 export type WorkItemNeed = 'you' | 'dependency' | 'none'
 export type WorkItemNextActor = 'you' | 'agent' | 'dependency' | 'none'
@@ -11,9 +11,9 @@ export type WorkItemActionKind =
   | 'integrate-change'
   | 'retry-integration'
   | 'start-orchestration'
-export type WorkItemProgressKind = 'tasks' | 'assembly' | 'design-return' | 'plan' | 'integration'
+export type WorkItemProgressKind = 'tasks' | 'design-return' | 'plan' | 'integration'
 export type WorkItemChangeLifecycle = 'in-delivery' | 'integration'
-export type DeliveryWorkerRole = 'planner' | 'builder' | 'assembly-reviewer' | 'integration-repairer'
+export type DeliveryWorkerRole = 'planner' | 'builder' | 'integration-repairer'
 export type DeliveryIntegrationAttentionDisposition = 'retryable' | 'repair-required' | 'operator-required'
 export type DeliveryIntegrationAttentionCode =
   | 'revision-pending'

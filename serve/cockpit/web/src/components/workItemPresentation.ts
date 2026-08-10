@@ -4,14 +4,12 @@ export const PROGRESS_STAGE_LABELS: Record<WorkItemStage, string> = {
   design: 'Design',
   planning: 'Planning',
   implementation: 'Implementation',
-  assembly: 'Assembly',
   completed: 'Completed',
 }
 
 const WORKER_STATUS_LABELS: Record<DeliveryWorkerRole, string> = {
   planner: 'Planner working',
   builder: 'Builder working',
-  'assembly-reviewer': 'Assembly reviewer working',
   'integration-repairer': 'Integration repairer working',
 }
 
