@@ -16,7 +16,7 @@ Parse the supplied value as exactly one lowercase-hyphenated `change_id` followe
 lowercase hexadecimal `attention_id`. Reject missing, extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
-`OwlBear Delivery show_integration_attention integrate_ready_change list_work_items`. Call
+`OwlBear Delivery show_integration_attention integrate_ready_change prepare_external_completion list_work_items`. Call
 `show_integration_attention(change_id)` and require a current attention whose change and attention
 identities equal the supplied values. If no attention exists, its identity differs, or Delivery
 reports that the retained condition is superseded, report the current state and stop without
@@ -75,6 +75,11 @@ Use only an existing operation whose contract owns the selected result:
 
 - retryable or superseded Integration: `integrate_ready_change(change_id)` only when current Delivery
   state authorizes retry;
+- product already integrated externally: call `prepare_external_completion(change_id)` once to
+  create a detached completion-only proposal, require human review and merge of that exact proposal
+  commit into the named Integration target, then call the operation again to record completed
+  history and run guarded cleanup. Never merge the proposal or advance the target inside this
+  workflow;
 - Design or admitted-authority revision: hand off with `/design <change_id>` and explain the exact
   revision required;
 - reviewed merge conflict: hand off with `/orchestrate`; the claimed Integration repair workflow

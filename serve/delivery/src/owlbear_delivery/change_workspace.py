@@ -190,6 +190,17 @@ class AtomicIntegrationPreparation(_WorkspaceModel):
         return self
 
 
+class ExternalCompletionProposal(_WorkspaceModel):
+    """Detached completion-only commit for an externally integrated change."""
+
+    change_id: ChangeId
+    proposal_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    proposal_ref: str = Field(min_length=1)
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    completion_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    completion_path: str = Field(min_length=1)
+
+
 class IntegrationContext(_WorkspaceModel):
     """Exact source and target identities used to capture an Integration candidate."""
 
@@ -888,6 +899,84 @@ class ChangeWorkspaceManager:
             target_head=target_head,
         )
 
+    def prepare_external_completion_proposal(
+        self,
+        candidate: DeliveryIntegrationCandidate,
+    ) -> ExternalCompletionProposal | AtomicIntegrationResult:
+        """Anchor a completion-only proposal without moving the Integration target."""
+        preflight = self._preflight_external_completion(candidate)
+        if isinstance(preflight, AtomicIntegrationResult):
+            return preflight
+        target_head = preflight
+        try:
+            target_tree = self._git("rev-parse", f"{target_head}^{{tree}}")
+            self._require_unchanged_completed_siblings(target_tree, target_head, candidate.change_id)
+            proposal_tree = self._replace_tree_path(
+                target_tree,
+                tuple(candidate.completion_path.split("/")),
+                candidate.package_tree,
+            )
+        except ValueError as exc:
+            return AtomicIntegrationResult(
+                code=DeliveryIntegrationAttentionCode.COMPLETED_HISTORY_MUTATED,
+                diagnostics=(str(exc),),
+            )
+        proposal_ref = f"refs/owlbear/external-completion-proposals/{candidate.change_id}"
+        current = self._resolve(proposal_ref, missing_ok=True)
+        proposal_commit = self._write_external_completion_proposal(candidate, proposal_tree, target_head)
+        if current != proposal_commit:
+            self._git("update-ref", proposal_ref, proposal_commit, current or "0" * 40)
+        return ExternalCompletionProposal(
+            change_id=candidate.change_id,
+            proposal_commit=proposal_commit,
+            proposal_ref=proposal_ref,
+            target_head=target_head,
+            completion_id=candidate.completion_id,
+            completion_path=candidate.completion_path,
+        )
+
+    def _preflight_external_completion(
+        self,
+        candidate: DeliveryIntegrationCandidate,
+    ) -> str | AtomicIntegrationResult:
+        coordination = self._coordinator.show(candidate.change_id)
+        change_head = self._resolve(coordination.branch)
+        target_head = self._resolve(coordination.integration_target)
+        identity_diagnostics = self._integration_identity_diagnostics(coordination, candidate)
+        if identity_diagnostics:
+            result: str | AtomicIntegrationResult = AtomicIntegrationResult(
+                code=DeliveryIntegrationAttentionCode.TARGET_IDENTITY_MISMATCH,
+                diagnostics=identity_diagnostics,
+            )
+        elif candidate.target_head != target_head:
+            result = AtomicIntegrationResult(
+                code=DeliveryIntegrationAttentionCode.TARGET_CAS_LOST,
+                diagnostics=("integration target changed after proposal capture",),
+            )
+        elif (replayed_commit := self._published_completion_commit(candidate)) is not None:
+            result = AtomicIntegrationResult(target_commit=replayed_commit, replayed=True)
+        elif change_head != coordination.last_reviewed_commit or change_head != candidate.reviewed_change_head:
+            result = AtomicIntegrationResult(
+                code=DeliveryIntegrationAttentionCode.REVIEWED_BOUNDARY_MISMATCH,
+                diagnostics=("change branch head differs from its reviewed boundary",),
+            )
+        elif not self._is_ancestor(change_head, target_head, cwd=self._repository):
+            result = AtomicIntegrationResult(
+                code=DeliveryIntegrationAttentionCode.REVIEWED_BOUNDARY_MISMATCH,
+                diagnostics=("integration target does not contain the reviewed change",),
+            )
+        else:
+            self._require_worktree(coordination.worktree_path, coordination.branch, change_head)
+            result = (
+                AtomicIntegrationResult(
+                    code=DeliveryIntegrationAttentionCode.REVIEWED_WORKTREE_DIRTY,
+                    diagnostics=("change worktree is not clean at its reviewed boundary",),
+                )
+                if self._git("-C", str(coordination.worktree_path), "status", "--porcelain")
+                else target_head
+            )
+        return result
+
     def publish_prepared_integration(
         self,
         preparation: AtomicIntegrationPreparation,
@@ -937,6 +1026,22 @@ class ChangeWorkspaceManager:
         if current != preparation.candidate_commit:
             return
         self._git("update-ref", "-d", preparation.candidate_ref, preparation.candidate_commit)
+
+    def discard_external_completion_proposal(
+        self,
+        candidate: DeliveryIntegrationCandidate,
+        target_commit: str,
+    ) -> None:
+        """Delete the exact merged completion proposal ref without moving its target."""
+        proposal_ref = f"refs/owlbear/external-completion-proposals/{candidate.change_id}"
+        proposal_commit = self._resolve(proposal_ref, missing_ok=True)
+        if proposal_commit is None:
+            return
+        if not self._is_ancestor(proposal_commit, target_commit, cwd=self._repository):
+            return
+        if self._completion_identity(proposal_commit, candidate.completion_path) != candidate.completion_id:
+            return
+        self._git("update-ref", "-d", proposal_ref, proposal_commit)
 
     def discard_stale_integration_candidate(self, change_id: str) -> None:
         """Delete any candidate ref owned by a terminally replayed change."""
@@ -1260,6 +1365,21 @@ class ChangeWorkspaceManager:
         commit = self._write_integration_commit(candidate, tree, target_head, change_head)
         self._git("update-ref", reference, commit, current or "0" * 40)
         return commit
+
+    def _write_external_completion_proposal(
+        self,
+        candidate: DeliveryIntegrationCandidate,
+        tree: str,
+        target_head: str,
+    ) -> str:
+        return self._git(
+            "commit-tree",
+            tree,
+            "-p",
+            target_head,
+            "-m",
+            f"Complete externally integrated {candidate.change_id} ({candidate.candidate_id})",
+        )
 
     def _integration_commit_matches(
         self,

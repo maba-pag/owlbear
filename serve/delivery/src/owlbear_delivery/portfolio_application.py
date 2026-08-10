@@ -16,10 +16,12 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from owlbear_delivery.change_workspace import (
     AtomicIntegrationPreparation,
+    AtomicIntegrationResult,
     ChangeCoordination,
     ChangeWorkspaceManager,
     ChangeWriter,
     CoordinationConflictError,
+    ExternalCompletionProposal,
     IntegrationContext,
     IntegrationRepairCandidate,
     PortfolioCoordinator,
@@ -419,6 +421,27 @@ class DeliveryIntegrationResult(_ApplicationModel):
             raise ValueError(message)
         if self.attention is not None and self.replayed:
             message = "Integration attention cannot be a completed replay"
+            raise ValueError(message)
+        return self
+
+
+class ExternalCompletionResult(_ApplicationModel):
+    """One detached completion proposal, acknowledged completion, or typed attention."""
+
+    change_id: str = Field(min_length=1)
+    proposal: ExternalCompletionProposal | None = None
+    completion: DeliveryIntegrationCompletion | None = None
+    attention: DeliveryIntegrationAttention | None = None
+    replayed: bool = False
+
+    @model_validator(mode="after")
+    def _validate_disposition(self) -> ExternalCompletionResult:
+        dispositions = (self.proposal, self.completion, self.attention)
+        if sum(disposition is not None for disposition in dispositions) != 1:
+            message = "external completion requires one proposal, completion, or attention"
+            raise ValueError(message)
+        if self.completion is None and self.replayed:
+            message = "only external completion acknowledgment can replay"
             raise ValueError(message)
         return self
 
@@ -1355,6 +1378,53 @@ class PortfolioApplication:
                 self._cleanup_integration(change_id, result.completion)
             return result
 
+    def prepare_external_completion(self, change_id: str) -> ExternalCompletionResult:
+        """Prepare or acknowledge completion after reviewed product merged externally."""
+        with self._coordinator.integration_lock():
+            runtime = self._runtime(change_id)
+            self._workspace_manager.refresh_integration_target(change_id)
+            context = self._workspace_manager.integration_context(change_id)
+            existing = runtime.integration_completion()
+            if existing is not None:
+                self._cleanup_integration(change_id, existing)
+                return ExternalCompletionResult(change_id=change_id, completion=existing, replayed=True)
+            if runtime.change_stage() != DeliveryChangeStage.INTEGRATION:
+                self._fail("change is not ready for Integration")
+            captured = self._capture_ready_integration(change_id, runtime, context)
+            if isinstance(captured, DeliveryIntegrationResult):
+                return ExternalCompletionResult(change_id=change_id, attention=captured.attention)
+            prepared = self._workspace_manager.prepare_external_completion_proposal(captured.candidate)
+            self._workspace_manager.discard_integration_candidate(captured.preparation)
+            if isinstance(prepared, AtomicIntegrationResult):
+                if prepared.target_commit is None:
+                    failed = self._integration_attention(
+                        runtime,
+                        context,
+                        prepared.code,
+                        prepared.diagnostics,
+                        candidate=captured.candidate,
+                    )
+                    return ExternalCompletionResult(change_id=change_id, attention=failed.attention)
+                completion = DeliveryIntegrationCompletion(
+                    completion_id=captured.snapshot.completion_id,
+                    candidate_id=captured.candidate.candidate_id,
+                    package_id=captured.snapshot.package_id,
+                    target_commit=prepared.target_commit,
+                    completion_path=captured.snapshot.manifest.completion_path,
+                )
+                runtime.publish_integration_completion(completion)
+                self._workspace_manager.discard_external_completion_proposal(
+                    captured.candidate,
+                    prepared.target_commit,
+                )
+                self._cleanup_integration(change_id, completion)
+                return ExternalCompletionResult(
+                    change_id=change_id,
+                    completion=completion,
+                    replayed=prepared.replayed,
+                )
+            return ExternalCompletionResult(change_id=change_id, proposal=prepared)
+
     def admit_reviewed_integration_repair(
         self,
         attempt_id: str,
@@ -2067,6 +2137,7 @@ __all__ = [
     "DeliveryLaunchPackage",
     "DeliveryPlanContext",
     "DeliveryRolePolicy",
+    "ExternalCompletionResult",
     "PortfolioApplication",
     "PortfolioApplicationConfig",
     "PortfolioApplicationDependencies",

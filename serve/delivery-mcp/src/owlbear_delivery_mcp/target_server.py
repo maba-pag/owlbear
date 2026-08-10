@@ -95,6 +95,7 @@ DELIVERY_OPERATION_NAMES = (
     "list_integration_ready_changes",
     "show_integration_attention",
     "integrate_ready_change",
+    "prepare_external_completion",
     "admit_reviewed_integration_repair",
     "publish_integration_repair_authority_attention",
     "list_completed_changes",
@@ -313,6 +314,11 @@ class TargetMCPAdapter:
             params,
             lambda: self._application.integrate_ready_change(params.change_id),
         )
+
+    async def prepare_external_completion(self, request: ChangeRequest) -> dict[str, object]:
+        """Prepare or acknowledge completion after reviewed product merged externally."""
+        params = self._validate(ChangeParams, request)
+        return self._call(params, lambda: self._application.prepare_external_completion(params.change_id))
 
     async def admit_reviewed_integration_repair(self, request: IntegrationRepairRequest) -> dict[str, object]:
         """Admit one independently reviewed Integration repair."""
