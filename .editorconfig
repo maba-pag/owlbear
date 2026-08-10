@@ -30,15 +30,15 @@ max_line_length = unset
 indent_size = unset
 max_line_length = unset
 
-# Native change YAML is schema-validated; wrapping it creates semantic diff noise
-[.owlbear/changes/**/*.yaml]
+# Delivery runtime is machine-managed structured state
+[.owlbear/delivery/runtime/**]
 max_line_length = unset
 
-# Retired Kanban files are preserved machine-managed state; do not reformat them
-[.owlbear/kanban/**]
+# Legacy records are preserved machine-managed state; do not reformat them
+[.owlbear/legacy/**]
 max_line_length = unset
 
-# Design packages are Kanban-managed canonical records; do not reformat them
+# Design packages are Delivery-managed canonical records; do not reformat them
 [.owlbear/delivery/packages/**]
 max_line_length = unset
 

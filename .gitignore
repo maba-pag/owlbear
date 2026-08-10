@@ -67,8 +67,9 @@ playwright-report/
 !.owlbear/scratch/.gitkeep
 !.owlbear/scratch/.instructions.md
 
-# Briefs — transient template directory (renamed to draft-{name}/ at M1)
-.owlbear/briefs/draft-new/
+# Host-local Delivery runtime and linked worktrees
+/.owlbear/delivery/runtime/
+/.owlbear/delivery/worktrees/
 
 # Agent scratch/tmp output (quality-runner, coverage runs)
 serve/cockpit/web/.owlbear-scratch-*
@@ -102,9 +103,6 @@ store/audit/
 .owlbear/scratch/*
 !.owlbear/scratch/.gitkeep
 !.owlbear/scratch/.instructions.md
-
-# Brief drafts (transient template directory)
-.owlbear/briefs/draft-new/
 
 # Knowledge and memory databases
 .owlbear/knowledge/*.db
