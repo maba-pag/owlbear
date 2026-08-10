@@ -31,7 +31,6 @@ class WorkItemStage(StrEnum):
     DESIGN = "design"
     PLANNING = "planning"
     IMPLEMENTATION = "implementation"
-    ASSEMBLY = "assembly"
     COMPLETED = "completed"
 
 
@@ -93,7 +92,6 @@ class WorkItemProgressKind(StrEnum):
     """Scope-specific progress category."""
 
     TASKS = "tasks"
-    ASSEMBLY = "assembly"
     DESIGN_RETURN = "design-return"
     PLAN = "plan"
     INTEGRATION = "integration"
@@ -511,13 +509,6 @@ class WorkItemProjector:
             )
         if binding.stage == DeliveryStage.PLANNING:
             return WorkItemProgress(kind=WorkItemProgressKind.PLAN, label="Task plan not published")
-        if binding.stage == DeliveryStage.ASSEMBLY:
-            return WorkItemProgress(
-                kind=WorkItemProgressKind.ASSEMBLY,
-                label="Tasks reviewed — assembling",
-                done=len(binding.results),
-                total=len(binding.tasks),
-            )
         return WorkItemProgress(
             kind=WorkItemProgressKind.TASKS,
             label=f"{len(binding.results)} of {len(binding.tasks)} Delivery tasks reviewed",

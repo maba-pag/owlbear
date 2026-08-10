@@ -118,7 +118,6 @@ def _runtime(
         DeliveryStage.PLANNING,
         DeliveryStage.PLANNING,
     ),
-    assembly_required: bool = False,
 ) -> DeliveryRuntime:
     contract = _contract()
     authority_digest = hashlib.sha256(
@@ -138,7 +137,7 @@ def _runtime(
                     completed_commit=f"{index}" * 40,
                 ),
             )
-            if stage in {DeliveryStage.ASSEMBLY, DeliveryStage.COMPLETED}
+            if stage == DeliveryStage.COMPLETED
             else ()
         )
         bindings.append(
@@ -146,7 +145,6 @@ def _runtime(
                 outcome_id=f"OUT-{index:03}",
                 plan_scope_id=f"SCOPE-{index:03}",
                 stage=stage,
-                assembly_required=assembly_required if index == 1 else False,
                 tasks=(task,) if stage not in {DeliveryStage.DESIGN, DeliveryStage.PLANNING} else (),
                 results=results,
             )
@@ -179,7 +177,6 @@ def _activate(
     role = {
         DeliveryStage.PLANNING: DeliveryWorkerRole.PLANNER,
         DeliveryStage.IMPLEMENTATION: DeliveryWorkerRole.BUILDER,
-        DeliveryStage.ASSEMBLY: DeliveryWorkerRole.ASSEMBLY_REVIEWER,
     }[stage]
     return runtime.activate_claim(
         ActivateDeliveryClaim(
@@ -611,7 +608,7 @@ def test_implementation_nonadvance_persists_only_consumed_successor_state(
 @pytest.mark.parametrize(
     ("stage", "transition", "expected_stage"),
     [
-        (DeliveryStage.ASSEMBLY, "block", DeliveryStage.ASSEMBLY),
+        (DeliveryStage.PLANNING, "block", DeliveryStage.PLANNING),
     ],
 )
 def test_worker_transition_routes_canonical_stage_and_rejects_stale_or_review_input(

@@ -467,7 +467,7 @@ class PortfolioApplicationConfig(_ApplicationModel):
 
     package_root: Path
     execution_capacity: int = Field(gt=0)
-    role_policies: tuple[DeliveryRolePolicy, ...] = Field(min_length=4, max_length=4)
+    role_policies: tuple[DeliveryRolePolicy, ...] = Field(min_length=3, max_length=3)
     claim_ttl_seconds: int = Field(default=30 * 60, gt=0)
 
     @model_validator(mode="after")
@@ -1719,7 +1719,6 @@ class PortfolioApplication:
                 role = {
                     DeliveryStage.PLANNING: DeliveryWorkerRole.PLANNER,
                     DeliveryStage.IMPLEMENTATION: DeliveryWorkerRole.BUILDER,
-                    DeliveryStage.ASSEMBLY: DeliveryWorkerRole.ASSEMBLY_REVIEWER,
                 }[binding.stage]
                 ranked.append(
                     _Candidate(

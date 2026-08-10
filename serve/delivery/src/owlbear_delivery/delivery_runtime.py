@@ -24,7 +24,6 @@ class DeliveryStage(StrEnum):
     DESIGN = "design"
     PLANNING = "planning"
     IMPLEMENTATION = "implementation"
-    ASSEMBLY = "assembly"
     COMPLETED = "completed"
 
 
@@ -43,7 +42,6 @@ class DeliveryOutputKind(StrEnum):
     DESIGN = "design"
     PLANNING = "planning"
     IMPLEMENTATION = "implementation"
-    ASSEMBLY = "assembly"
     COMPLETED = "completed"
 
 
@@ -59,7 +57,6 @@ class DeliveryWorkerRole(StrEnum):
 
     PLANNER = "planner"
     BUILDER = "builder"
-    ASSEMBLY_REVIEWER = "assembly-reviewer"
     INTEGRATION_REPAIRER = "integration-repairer"
 
 
@@ -390,7 +387,6 @@ class OutcomeAuthorityBinding(_DeliveryModel):
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     plan_scope_id: str = Field(pattern=r"^SCOPE-[0-9]{3}$")
     stage: DeliveryStage = DeliveryStage.PLANNING
-    assembly_required: bool = False
     tasks: tuple[DeliveryTaskDefinition, ...] = ()
     results: tuple[DeliveryTaskResult, ...] = ()
     active_claim: DeliveryActiveClaim | None = None
@@ -429,7 +425,6 @@ class OutcomeAuthorityBinding(_DeliveryModel):
         expected_role = {
             DeliveryStage.PLANNING: DeliveryWorkerRole.PLANNER,
             DeliveryStage.IMPLEMENTATION: DeliveryWorkerRole.BUILDER,
-            DeliveryStage.ASSEMBLY: DeliveryWorkerRole.ASSEMBLY_REVIEWER,
         }.get(self.stage)
         if self.active_claim.worker_role != expected_role:
             message = "active claim worker role does not match its Delivery stage"
@@ -670,13 +665,11 @@ _STAGE_ORDER = {
     DeliveryStage.DESIGN: 0,
     DeliveryStage.PLANNING: 1,
     DeliveryStage.IMPLEMENTATION: 2,
-    DeliveryStage.ASSEMBLY: 3,
-    DeliveryStage.COMPLETED: 4,
+    DeliveryStage.COMPLETED: 3,
 }
 _RETURN_TARGETS = {
     DeliveryStage.PLANNING: {DeliveryStage.DESIGN},
     DeliveryStage.IMPLEMENTATION: {DeliveryStage.PLANNING, DeliveryStage.DESIGN},
-    DeliveryStage.ASSEMBLY: {DeliveryStage.PLANNING, DeliveryStage.DESIGN},
 }
 
 
@@ -1006,7 +999,6 @@ class DeliveryRuntime:
         expected_role = {
             DeliveryStage.PLANNING: DeliveryWorkerRole.PLANNER,
             DeliveryStage.IMPLEMENTATION: DeliveryWorkerRole.BUILDER,
-            DeliveryStage.ASSEMBLY: DeliveryWorkerRole.ASSEMBLY_REVIEWER,
         }.get(binding.stage)
         if request.claim.worker_role != expected_role:
             _conflict("claim worker role does not match the current Delivery stage")
@@ -1254,11 +1246,7 @@ class DeliveryRuntime:
             results = (*binding.results, candidate.result)
             completed_tasks = {result.task_id for result in results}
             complete = completed_tasks == {task.task_id for task in binding.tasks}
-            destination = (
-                (DeliveryStage.ASSEMBLY if binding.assembly_required else DeliveryStage.COMPLETED)
-                if complete
-                else DeliveryStage.IMPLEMENTATION
-            )
+            destination = DeliveryStage.COMPLETED if complete else DeliveryStage.IMPLEMENTATION
             return binding.model_copy(
                 update={
                     "stage": destination,
@@ -1272,17 +1260,7 @@ class DeliveryRuntime:
                     "requests": (),
                 }
             )
-        if binding.stage == DeliveryStage.ASSEMBLY:
-            destination = DeliveryStage.COMPLETED
-        else:
-            _conflict("current stage cannot advance")
-        return binding.model_copy(
-            update={
-                "stage": destination,
-                "active_claim": None,
-                "recovery_attention": None,
-            }
-        )
+        return _conflict("current stage cannot advance")
 
     def _retry(
         self,
@@ -1523,7 +1501,6 @@ def _reset_binding(binding: OutcomeAuthorityBinding, stage: DeliveryStage) -> Ou
     return binding.model_copy(
         update={
             "stage": stage,
-            "assembly_required": False,
             "tasks": (),
             "results": (),
             "active_claim": None,

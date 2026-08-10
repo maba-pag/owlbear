@@ -34,7 +34,6 @@ class PlanScopeKind(StrEnum):
     """Semantic parent accepted task planning may refine."""
 
     OUTCOME = "outcome"
-    CHANGE_ASSEMBLY = "change-assembly"
 
 
 class _AuthorityModel(BaseModel):
@@ -97,14 +96,6 @@ class TaskPlanScope(_AuthorityModel):
     scope_id: AuthorityId
     kind: PlanScopeKind
     target_id: str = Field(min_length=1)
-    composition_claim: str | None = None
-
-    @model_validator(mode="after")
-    def _validate_change_assembly(self) -> TaskPlanScope:
-        if self.kind == PlanScopeKind.CHANGE_ASSEMBLY and not self.composition_claim:
-            msg = "change assembly scopes require a composition claim"
-            raise ValueError(msg)
-        return self
 
 
 class DesignReentryBriefing(_AuthorityModel):
@@ -167,9 +158,6 @@ class TargetAuthority(_AuthorityModel):
         for scope in self.task_plan_scopes:
             if scope.kind == PlanScopeKind.OUTCOME and scope.target_id not in outcomes:
                 msg = f"task plan outcome is missing: {scope.target_id}"
-                raise ValueError(msg)
-            if scope.kind == PlanScopeKind.CHANGE_ASSEMBLY and scope.target_id != self.change_id:
-                msg = "change assembly scope must target its change"
                 raise ValueError(msg)
         for briefing in self.design_reentries:
             _require_work_item(briefing.work_item_id, work_item_ids)

@@ -120,14 +120,13 @@ def _binding(
                 completed_commit=f"{index}" * 40,
             ),
         )
-        if stage in {DeliveryStage.ASSEMBLY, DeliveryStage.COMPLETED}
+        if stage == DeliveryStage.COMPLETED
         else ()
     )
     return OutcomeAuthorityBinding(
         outcome_id=outcome_id,
         plan_scope_id=outcome_id.replace("OUT", "SCOPE"),
         stage=stage,
-        assembly_required=stage == DeliveryStage.ASSEMBLY,
         tasks=tasks,
         results=results,
         active_claim=claim,
@@ -299,11 +298,11 @@ def test_dependency_and_active_claim_are_independent_axes() -> None:
     assert cards[1].next_actor == WorkItemNextActor.DEPENDENCY
 
 
-def test_assembly_uses_outcome_progress_and_detail_contains_result_evidence() -> None:
+def test_completed_outcome_progress_and_detail_contain_result_evidence() -> None:
     projector = WorkItemProjector(
         _snapshot(
             (
-                _binding("OUT-001", DeliveryStage.ASSEMBLY),
+                _binding("OUT-001", DeliveryStage.COMPLETED),
                 _binding("OUT-002", DeliveryStage.PLANNING),
             )
         )
@@ -312,7 +311,7 @@ def test_assembly_uses_outcome_progress_and_detail_contains_result_evidence() ->
     card = projector.group_view().items[0]
     detail = projector.show_view("outcome:OUT-001")
 
-    assert card.progress.label == "Tasks reviewed — assembling"
+    assert card.progress.label == "1 of 1 Delivery tasks reviewed"
     assert detail.acceptance == ("Foundation is observable.",)
     assert detail.commitments[0].statement == "Keep user attention scoped."
     assert detail.tasks[0].status == "reviewed"

@@ -156,8 +156,8 @@ def _runtime(
 ) -> DeliveryRuntime:
     task = _task()
     authority_digest = hashlib.sha256(_canonical(contract)).hexdigest()
-    has_task = stage in {DeliveryStage.IMPLEMENTATION, DeliveryStage.ASSEMBLY, DeliveryStage.COMPLETED}
-    has_result = stage in {DeliveryStage.ASSEMBLY, DeliveryStage.COMPLETED}
+    has_task = stage in {DeliveryStage.IMPLEMENTATION, DeliveryStage.COMPLETED}
+    has_result = stage == DeliveryStage.COMPLETED
     result = DeliveryTaskResult(
         result_id="RESULT-001",
         change_id=contract.change_id,
@@ -172,7 +172,6 @@ def _runtime(
                 outcome_id="OUT-001",
                 plan_scope_id="SCOPE-001",
                 stage=stage,
-                assembly_required=stage == DeliveryStage.ASSEMBLY,
                 tasks=(task,) if has_task else (),
                 results=(result,) if has_result else (),
             ),
@@ -194,11 +193,6 @@ def _policies() -> tuple[DeliveryRolePolicy, ...]:
         DeliveryRolePolicy(
             worker_role=DeliveryWorkerRole.BUILDER,
             worker_agent="builder",
-            reviewer_agent="build-reviewer",
-        ),
-        DeliveryRolePolicy(
-            worker_role=DeliveryWorkerRole.ASSEMBLY_REVIEWER,
-            worker_agent="build-reviewer",
             reviewer_agent="build-reviewer",
         ),
         DeliveryRolePolicy(
@@ -1104,7 +1098,6 @@ def test_acquisition_returns_bounded_stage_packages_and_unclaimed_integration(tm
         tmp_path,
         {
             "change-d": DeliveryStage.COMPLETED,
-            "change-c": DeliveryStage.ASSEMBLY,
             "change-b": DeliveryStage.IMPLEMENTATION,
             "change-a": DeliveryStage.PLANNING,
         },
@@ -1115,23 +1108,20 @@ def test_acquisition_returns_bounded_stage_packages_and_unclaimed_integration(tm
     assert tuple(package.change_id for package in acquired.launch_packages) == (
         "change-a",
         "change-b",
-        "change-c",
     )
     assert tuple(package.claim.worker_role for package in acquired.launch_packages) == (
         DeliveryWorkerRole.PLANNER,
         DeliveryWorkerRole.BUILDER,
-        DeliveryWorkerRole.ASSEMBLY_REVIEWER,
     )
     assert acquired.integration_ready_change_ids == ("change-d",)
     assert acquired.failures == ()
     assert runtimes["change-d"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
     assert coordinator.show("change-b").writer is not None
-    assert coordinator.show("change-c").writer is None
     ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
     assert ledger.change_ids == ("change-b",)
 
-    plan_package, build_package, assembly_package = acquired.launch_packages
+    plan_package, build_package = acquired.launch_packages
     plan_context = application.show_plan_context(
         plan_package.change_id,
         plan_package.outcome_id,
@@ -1148,7 +1138,6 @@ def test_acquisition_returns_bounded_stage_packages_and_unclaimed_integration(tm
     assert build_context.task.task_id == "TASK-001"
     assert build_context.task_digest == build_context.task.digest
     assert build_context.model_dump(mode="json")["task_digest"] == build_context.task.digest
-    assert assembly_package.writer is None
     with pytest.raises(DeliveryRuntimeConflictError, match="execution identity"):
         application.show_plan_context(
             plan_package.change_id,
@@ -1215,7 +1204,7 @@ def test_writer_capacity_skips_blocked_build_but_launches_read_only_work(tmp_pat
     assert ledger.change_ids == ("change-a",)
 
 
-@pytest.mark.parametrize("stage", [DeliveryStage.PLANNING, DeliveryStage.ASSEMBLY])
+@pytest.mark.parametrize("stage", [DeliveryStage.PLANNING])
 def test_read_only_claim_recovery_removes_only_exact_runtime_claim(tmp_path: Path, stage: DeliveryStage) -> None:
     application, runtimes, coordinator, state_root = _portfolio(tmp_path, {"change-a": stage})
     package = application.acquire_frontier_work().launch_packages[0]

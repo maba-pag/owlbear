@@ -53,7 +53,7 @@ class ChangeWriter(WriterIdentity):
     """One active writer bound to a target transformation."""
 
     job_id: int = Field(gt=0)
-    kind: Literal["plan", "build", "assembly", "repair"]
+    kind: Literal["plan", "build", "repair"]
 
 
 class ChangeCoordination(_WorkspaceModel):

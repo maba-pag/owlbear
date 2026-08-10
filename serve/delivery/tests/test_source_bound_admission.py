@@ -219,7 +219,6 @@ def test_revision_preserves_unchanged_binding_and_invalidates_changed_dependents
                 outcome_id=binding.outcome_id,
                 plan_scope_id=binding.plan_scope_id,
                 stage=DeliveryStage.IMPLEMENTATION,
-                assembly_required=True,
                 tasks=(task,),
                 results=(result,),
                 output=DeliveryOutputReference(
