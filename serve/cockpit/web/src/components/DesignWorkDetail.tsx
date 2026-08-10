@@ -15,7 +15,7 @@ export default function DesignWorkDetail({ detail }: { detail: DesignWorkDetailR
         <PTag compact>Design</PTag>
       </header>
       <p className="mt-static-md max-w-[72ch] text-base leading-relaxed">Authored Design work that has not been admitted to Delivery.</p>
-      <div className="mt-static-md flex flex-wrap items-baseline gap-static-xs text-sm">
+      <div className="mt-static-md flex flex-wrap items-center gap-static-sm text-sm">
         <span className="text-contrast-medium">Continue with</span>
         <CopyCommand command={designCommand(detail.change_id)} />
       </div>

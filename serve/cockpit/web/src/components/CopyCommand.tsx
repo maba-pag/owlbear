@@ -61,7 +61,7 @@ export default function CopyCommand({ command, className = '' }: CopyCommandProp
       title={copyState === 'copied' ? `Copied ${command}` : copyState === 'failed' ? `Could not copy ${command}` : `Copy ${command}`}
       onClick={(event) => void copyCommand(event)}
     >
-      <PIcon className="shrink-0" name="copy" size="inherit" color="inherit" aria-hidden="true" />
+      <PIcon className="shrink-0" name="ai-code" size="inherit" color="inherit" aria-hidden="true" />
       <code className="min-w-0 max-w-full break-words text-inherit leading-5">{command}</code>
       {stateIcon ? <PIcon className="shrink-0" name={stateIcon} size="inherit" color="inherit" aria-hidden="true" /> : null}
     </button>

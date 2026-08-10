@@ -222,7 +222,7 @@ test.describe('assembled Delivery portfolio', () => {
       expect(visualContract).not.toBeNull()
       expect(visualContract!.fontSize).toBe('13px')
       expect(visualContract!.color).toBe('rgba(17, 17, 19, 0.6)')
-      expect(visualContract!.iconName).toBe('copy')
+      expect(visualContract!.iconName).toBe('ai-code')
       expect(visualContract!.centerDelta).toBeLessThanOrEqual(1)
       expect(visualContract!.codeInsideButton).toBe(true)
     }
@@ -249,7 +249,21 @@ test.describe('assembled Delivery portfolio', () => {
     await designTrigger.click()
     const designDetail = page.getByTestId('design-work-detail')
     await expect(designDetail).toContainText('Coordinate the next focused Delivery change.')
-    await expect(designDetail.getByText('/design design-operations-roadmap', { exact: true })).toBeVisible()
+    const detailCommand = designDetail.getByRole('button', { name: `Copy command ${designCommand}` })
+    await expect(detailCommand).toBeVisible()
+    const detailCommandLayout = await detailCommand.evaluate((button) => {
+      const label = button.previousElementSibling
+      if (!label) return null
+      const labelBox = label.getBoundingClientRect()
+      const buttonBox = button.getBoundingClientRect()
+      return {
+        centerDelta: Math.abs((labelBox.top + labelBox.height / 2) - (buttonBox.top + buttonBox.height / 2)),
+        gap: buttonBox.left - labelBox.right,
+      }
+    })
+    expect(detailCommandLayout).not.toBeNull()
+    expect(detailCommandLayout!.centerDelta).toBeLessThanOrEqual(1)
+    expect(detailCommandLayout!.gap).toBeGreaterThanOrEqual(8)
     await page.reload()
     await expect(designDetail.locator('h1').first()).toHaveText('Design Operations Roadmap')
     await page.getByRole('button', { name: 'Dismiss flyout' }).click()
@@ -375,7 +389,7 @@ test.describe('assembled Delivery portfolio', () => {
       }
     })
     expect(compactCommandLayout).not.toBeNull()
-    expect(compactCommandLayout!.iconName).toBe('copy')
+    expect(compactCommandLayout!.iconName).toBe('ai-code')
     expect(compactCommandLayout!.firstLineDelta).toBeLessThanOrEqual(1)
     expect(compactCommandLayout!.overflow).toBe(0)
     expect(compactCommandLayout!.contained).toBe(true)
