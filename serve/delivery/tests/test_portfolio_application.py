@@ -205,8 +205,10 @@ def _policies() -> tuple[DeliveryRolePolicy, ...]:
 
 def _startup_config() -> DeliveryStartupConfig:
     return DeliveryStartupConfig(
-        schema_version=1,
-        integration_target="main",
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
     )
 
 
@@ -219,6 +221,8 @@ def _repository(tmp_path: Path) -> Path:
     (repository / "product.txt").write_text("baseline\n", encoding="utf-8")
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "baseline")
+    _git(repository, "remote", "add", "origin", "https://github.com/example/project.git")
+    _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
     return repository
 
 

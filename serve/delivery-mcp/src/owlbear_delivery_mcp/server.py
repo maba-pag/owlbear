@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 _DELIVERY_CONFIG_PATH = Path(".owlbear/delivery/config.json")
 _UNCONFIGURED = "ERR_DELIVERY_STARTUP_UNCONFIGURED"
 _INVALID = "ERR_DELIVERY_STARTUP_INVALID"
-_REQUIRED_TOP_LEVEL_FIELDS = {"schema_version", "integration_target"}
+_REQUIRED_TOP_LEVEL_FIELDS = {"schema_version", "remote", "target_branch", "github_repository"}
 _live_context: DeliveryAppContext | None = None
 
 

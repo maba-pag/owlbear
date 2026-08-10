@@ -25,6 +25,7 @@ def run_init_without_test_surface() -> Callable[..., None]:
     """Run setup initialization while requiring its missing-test-surface warning."""
 
     def run(initializer: Callable[..., object], /, *args: object, **kwargs: object) -> None:
+        kwargs.setdefault("github_repository", "example/project")
         with pytest.warns(UserWarning, match="No supported test surface was detected"):
             initializer(*args, **kwargs)
 

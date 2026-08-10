@@ -103,8 +103,8 @@ COMMANDS = (
         topic_only=True,
     ),
     Command(
-        "integration-target",
-        "uv run integration-target [BRANCH]",
+        "target-branch",
+        "uv run target-branch [BRANCH]",
         "Show or safely change the Delivery target branch.",
         "Setup",
         topic_only=True,

@@ -86,6 +86,8 @@ def _legacy_repository(tmp_path: Path) -> tuple[Path, Path, bytes]:
     (repository / "README.md").write_text("migration fixture\n", encoding="utf-8")
     _git(repository, "add", "README.md")
     _git(repository, "commit", "-m", "baseline")
+    _git(repository, "remote", "add", "origin", "https://github.com/example/project.git")
+    _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
     head = _git(repository, "rev-parse", "HEAD")
 
     change_id = "change-a"
@@ -164,7 +166,12 @@ def test_migration_moves_owned_worktree_and_preserves_runtime_and_archive(tmp_pa
     assert not (repository / ".owlbear/worktrees").exists()
 
     application = load_delivery_application(
-        DeliveryStartupConfig(schema_version=1, integration_target="main"),
+        DeliveryStartupConfig(
+            schema_version=2,
+            remote="origin",
+            target_branch="main",
+            github_repository="example/project",
+        ),
         workspace_root=repository,
     )
     assert tuple(item.change_id for item in application.list_work_items()) == ("change-a",)

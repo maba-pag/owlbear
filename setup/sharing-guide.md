@@ -46,6 +46,9 @@ code .
 > `uv run --project ..\owlbear python ..\owlbear\setup\init.py`.
 > owlbear and the project must be on the same drive.
 
+Setup infers the GitHub `owner/name` identity from the default `origin` remote. If the project uses a
+different remote or has no inferable GitHub URL, pass `--remote NAME --github-repository OWNER/NAME`.
+
 After VS Code opens, have the teammate verify the setup using the **Diagnostics view**
 (right-click the Chat panel → "Diagnostics") — it should show owlbear agents, skills,
 and instructions loaded from the shared installation.

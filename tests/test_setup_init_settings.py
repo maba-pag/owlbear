@@ -97,7 +97,7 @@ def test_init_creates_delivery_policy_without_runtime_selection_artifacts(
         run_init_without_test_surface(init_module.init, target_dir, _REPO_ROOT, interactive=False)
 
     config = DeliveryStartupConfig.model_validate_json((target_dir / ".owlbear/delivery/config.json").read_bytes())
-    assert config.integration_target
+    assert config.target_branch
     for retired_path in (
         ".owlbear/target",
         ".owlbear/worktrees",
@@ -140,8 +140,10 @@ def test_init_creates_delivery_policy_without_runtime_selection_artifacts(
     delivery_config_path = target_dir / ".owlbear/delivery/config.json"
     assert "env" not in mcp["servers"]["owlbear-delivery"]
     delivery_config = DeliveryStartupConfig.model_validate_json(delivery_config_path.read_bytes())
-    assert delivery_config.schema_version == 1
-    assert delivery_config.integration_target == "main"
+    assert delivery_config.schema_version == 2
+    assert delivery_config.remote == "origin"
+    assert delivery_config.target_branch == "main"
+    assert delivery_config.github_repository == "example/project"
     assert "/.owlbear/delivery/config.json" not in (target_dir / ".gitignore").read_text(encoding="utf-8")
     installed_text = "\n".join(
         path.read_text(encoding="utf-8")
@@ -170,7 +172,7 @@ def test_init_rerun_preserves_user_settings_and_target_records(
     settings_path.write_text(json.dumps(settings), encoding="utf-8")
     delivery_config_path = target_dir / ".owlbear/delivery/config.json"
     delivery_config = json.loads(delivery_config_path.read_text(encoding="utf-8"))
-    delivery_config["integration_target"] = "release"
+    delivery_config["target_branch"] = "release"
     delivery_config_path.write_text(json.dumps(delivery_config), encoding="utf-8")
     gitignore_path = target_dir / ".gitignore"
     gitignore_path.write_text(
@@ -203,7 +205,7 @@ def test_init_rerun_preserves_user_settings_and_target_records(
     merged_settings = json.loads(settings_path.read_text(encoding="utf-8"))
     assert merged_settings["example.userSetting"] == "preserved"
     assert merged_settings["chat.tools.terminal.autoApprove"]["example-command"] is False
-    assert json.loads(delivery_config_path.read_text(encoding="utf-8"))["integration_target"] == "release"
+    assert json.loads(delivery_config_path.read_text(encoding="utf-8"))["target_branch"] == "release"
     assert all((target_dir / path).read_bytes() == content for path, content in records.items())
     gitignore = gitignore_path.read_text(encoding="utf-8")
     for retired in (".owlbear/briefs/draft-new/",):
@@ -221,7 +223,48 @@ def test_init_rerun_preserves_user_settings_and_target_records(
     assert second_rerun == first_rerun
 
 
-def test_init_uses_requested_existing_integration_target(
+def test_init_migrates_exact_schema_one_delivery_policy(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    run_init_without_test_surface: Callable[..., None],
+) -> None:
+    target_dir = tmp_path / "project"
+    config_path = target_dir / ".owlbear/delivery/config.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text('{"schema_version":1,"integration_target":"release"}\n', encoding="utf-8")
+
+    run_init_without_test_surface(
+        init_module.init,
+        target_dir,
+        _REPO_ROOT,
+        interactive=False,
+        remote="upstream",
+        github_repository="example/project",
+    )
+
+    config = DeliveryStartupConfig.model_validate_json(config_path.read_bytes())
+    assert config.model_dump() == {
+        "schema_version": 2,
+        "remote": "upstream",
+        "target_branch": "release",
+        "github_repository": "example/project",
+    }
+
+
+def test_init_requires_exact_github_identity_when_remote_cannot_supply_it(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+) -> None:
+    target_dir = tmp_path / "project"
+    target_dir.mkdir()
+
+    with pytest.raises(RuntimeError, match="GitHub repository must be provided"):
+        init_module.init(target_dir, _REPO_ROOT, interactive=False)
+
+    assert not (target_dir / ".owlbear/delivery/config.json").exists()
+
+
+def test_init_uses_requested_target_branch_without_local_ref(
     tmp_path: Path,
     init_module: types.ModuleType,
     monkeypatch: pytest.MonkeyPatch,
@@ -229,18 +272,18 @@ def test_init_uses_requested_existing_integration_target(
 ) -> None:
     target_dir = tmp_path / "project"
     target_dir.mkdir()
-    monkeypatch.setattr(init_module, "_branch_exists", lambda _target, branch: branch == "release")
+    monkeypatch.setattr(init_module, "_valid_branch_name", lambda _target, branch: branch == "release")
 
     run_init_without_test_surface(
         init_module.init,
         target_dir,
         _REPO_ROOT,
         interactive=False,
-        integration_target="release",
+        target_branch="release",
     )
 
     config = json.loads((target_dir / ".owlbear/delivery/config.json").read_text(encoding="utf-8"))
-    assert config["integration_target"] == "release"
+    assert config["target_branch"] == "release"
 
 
 def test_init_interactive_target_defaults_to_checked_out_branch(
@@ -252,13 +295,13 @@ def test_init_interactive_target_defaults_to_checked_out_branch(
     target_dir = tmp_path / "project"
     target_dir.mkdir()
     monkeypatch.setattr(init_module, "_current_branch", lambda _target: "develop")
-    monkeypatch.setattr(init_module, "_branch_exists", lambda _target, branch: branch == "develop")
+    monkeypatch.setattr(init_module, "_valid_branch_name", lambda _target, branch: branch == "develop")
     monkeypatch.setattr("builtins.input", lambda _prompt: "")
 
     run_init_without_test_surface(init_module.init, target_dir, _REPO_ROOT, interactive=True)
 
     config = json.loads((target_dir / ".owlbear/delivery/config.json").read_text(encoding="utf-8"))
-    assert config["integration_target"] == "develop"
+    assert config["target_branch"] == "develop"
 
 
 def test_init_scaffolds_and_preserves_detected_verification_profile(
@@ -271,7 +314,12 @@ def test_init_scaffolds_and_preserves_detected_verification_profile(
     (target_dir / "package.json").write_text('{"scripts":{"test":"vitest run"}}\n', encoding="utf-8")
     (target_dir / "package-lock.json").write_text("{}\n", encoding="utf-8")
 
-    init_module.init(target_dir, _REPO_ROOT, interactive=False)
+    init_module.init(
+        target_dir,
+        _REPO_ROOT,
+        interactive=False,
+        github_repository="example/project",
+    )
 
     profile_path = target_dir / ".owlbear/delivery/verification.json"
     profile = json.loads(profile_path.read_text(encoding="utf-8"))
@@ -284,7 +332,12 @@ def test_init_scaffolds_and_preserves_detected_verification_profile(
     profile["steps"][0]["timeout_seconds"] = 42
     profile_path.write_text(json.dumps(profile), encoding="utf-8")
 
-    init_module.init(target_dir, _REPO_ROOT, interactive=False)
+    init_module.init(
+        target_dir,
+        _REPO_ROOT,
+        interactive=False,
+        github_repository="example/project",
+    )
 
     preserved = json.loads(profile_path.read_text(encoding="utf-8"))
     assert preserved["steps"][0]["timeout_seconds"] == 42

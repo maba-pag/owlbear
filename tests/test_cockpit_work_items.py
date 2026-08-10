@@ -310,7 +310,12 @@ def test_startup_loads_shared_delivery_configuration(
     tmp_path: Path,
 ) -> None:
     workspace_root = tmp_path / "workspace"
-    config = DeliveryStartupConfig(schema_version=1, integration_target="dev")
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="dev",
+        github_repository="example/project",
+    )
     config_path = workspace_root / ".owlbear/delivery/config.json"
     config_path.parent.mkdir(parents=True)
     config_path.write_text(config.model_dump_json(by_alias=True), encoding="utf-8")
@@ -333,7 +338,12 @@ def test_startup_discovers_workspace_delivery_configuration(
     tmp_path: Path,
 ) -> None:
     workspace_root = tmp_path / "workspace"
-    config = DeliveryStartupConfig(schema_version=1, integration_target="dev")
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="dev",
+        github_repository="example/project",
+    )
     config_path = workspace_root / ".owlbear/delivery/config.json"
     config_path.parent.mkdir(parents=True)
     config_path.write_text(config.model_dump_json(by_alias=True), encoding="utf-8")
@@ -353,7 +363,12 @@ def test_startup_discovers_workspace_delivery_configuration(
 
 def test_startup_reports_delivery_migration_blocker(tmp_path: Path) -> None:
     workspace_root = tmp_path / "workspace"
-    config = DeliveryStartupConfig(schema_version=1, integration_target="dev")
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="dev",
+        github_repository="example/project",
+    )
     config_path = workspace_root / ".owlbear/delivery/config.json"
     config_path.parent.mkdir(parents=True)
     config_path.write_text(config.model_dump_json(by_alias=True), encoding="utf-8")

@@ -317,13 +317,20 @@ def _seed_repository(repository: Path) -> str:
     (repository / "product.txt").write_text("baseline\n", encoding="utf-8")
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "baseline")
+    _git(repository, "remote", "add", "origin", "https://github.com/example/project.git")
+    _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
     baseline = _git(repository, "rev-parse", "HEAD")
     first = _publish_completion(repository, "completed-alpha", "Alpha delivery", baseline)
     return _publish_completion(repository, "completed-beta", "Beta search", first)
 
 
 def _write_config(workspace: Path) -> None:
-    config = DeliveryStartupConfig(schema_version=1, integration_target="main")
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+    )
     path = workspace / ".owlbear/delivery/config.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(config.model_dump_json(by_alias=True), encoding="utf-8")

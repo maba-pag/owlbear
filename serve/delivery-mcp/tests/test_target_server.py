@@ -179,13 +179,17 @@ def _repository(tmp_path: Path) -> Path:
     (repository / "product.txt").write_text("baseline\n", encoding="utf-8")
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "baseline")
+    _git(repository, "remote", "add", "origin", "https://github.com/example/project.git")
+    _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
     return repository
 
 
 def _config() -> dict[str, object]:
     return {
-        "schema_version": 1,
-        "integration_target": "main",
+        "schema_version": 2,
+        "remote": "origin",
+        "target_branch": "main",
+        "github_repository": "example/project",
     }
 
 
@@ -368,7 +372,12 @@ async def test_integration_verification_yields_the_mcp_event_loop() -> None:
     assert result == {"operation": "integrate_ready_change"}
 
 
-MISSING_FIELDS = [("schema_version",), ("integration_target",)]
+MISSING_FIELDS = [
+    ("schema_version",),
+    ("remote",),
+    ("target_branch",),
+    ("github_repository",),
+]
 
 
 @pytest.mark.parametrize("field_path", MISSING_FIELDS)
@@ -413,8 +422,10 @@ async def test_missing_canonical_config_fails_before_state_creation(
 @pytest.mark.parametrize(
     ("mutation", "field"),
     [
-        (lambda content, _tmp: content.update(schema_version=2), "schema_version"),
-        (lambda content, _tmp: content.update(integration_target=""), "integration_target"),
+        (lambda content, _tmp: content.update(schema_version=1), "schema_version"),
+        (lambda content, _tmp: content.update(remote=""), "remote"),
+        (lambda content, _tmp: content.update(target_branch=""), "target_branch"),
+        (lambda content, _tmp: content.update(github_repository="invalid"), "github_repository"),
         (lambda content, _tmp: content.update(execution_capacity=2), "execution_capacity"),
     ],
 )
@@ -449,12 +460,12 @@ def test_malformed_json_fails_invalid_without_exposing_content(tmp_path: Path) -
     assert "do-not-report" not in str(exc_info.value)
 
 
-def test_invalid_integration_target_fails_before_owner_state_mutation(
+def test_invalid_target_branch_fails_before_owner_state_mutation(
     tmp_path: Path,
 ) -> None:
     repository = _repository(tmp_path)
     content = _config()
-    content["integration_target"] = "bad target"
+    content["target_branch"] = "bad target"
     path = tmp_path / "delivery.json"
     _write_config(path, content)
     config = load_delivery_config(path)
@@ -462,7 +473,46 @@ def test_invalid_integration_target_fails_before_owner_state_mutation(
         load_delivery_application(config, repository)
 
     assert exc_info.value.code == "ERR_DELIVERY_STARTUP_INVALID"
-    assert exc_info.value.field == "integration_target"
+    assert exc_info.value.field == "target_branch"
+    assert not (tmp_path / "target").exists()
+
+
+def test_startup_uses_remote_tracking_target_without_local_target_branch(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    _git(repository, "checkout", "--detach", "HEAD")
+    _git(repository, "branch", "-D", "main")
+    path = tmp_path / "delivery.json"
+    _write_config(path, _config())
+
+    application = load_delivery_application(load_delivery_config(path), repository)
+
+    assert isinstance(application, PortfolioApplication)
+
+
+def test_missing_remote_tracking_target_fails_before_owner_state_mutation(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    _git(repository, "update-ref", "-d", "refs/remotes/origin/main")
+    path = tmp_path / "delivery.json"
+    _write_config(path, _config())
+
+    with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
+        load_delivery_application(load_delivery_config(path), repository)
+
+    assert exc_info.value.field == "target_branch"
+    assert not (tmp_path / "target").exists()
+
+
+def test_github_repository_mismatch_fails_before_owner_state_mutation(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    content = _config()
+    content["github_repository"] = "other/project"
+    path = tmp_path / "delivery.json"
+    _write_config(path, content)
+
+    with pytest.raises(DeliveryStartupDiagnostic) as exc_info:
+        load_delivery_application(load_delivery_config(path), repository)
+
+    assert exc_info.value.field == "github_repository"
     assert not (tmp_path / "target").exists()
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,8 +39,10 @@ class _LoaderModel(BaseModel):
 class DeliveryStartupConfig(_LoaderModel):
     """Workspace-local Delivery policy loaded before owner construction."""
 
-    schema_version: Literal[1]
-    integration_target: str = Field(min_length=1)
+    schema_version: Literal[2]
+    remote: str = Field(min_length=1)
+    target_branch: str = Field(min_length=1)
+    github_repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
 
 
 @dataclass(frozen=True)
@@ -117,8 +120,12 @@ def _validate_git_config(config: DeliveryStartupConfig, paths: _DeliveryPaths) -
         raise error from exc
     checks = (
         (("rev-parse", "--git-dir"), "repository_root"),
-        (("check-ref-format", f"refs/heads/{config.integration_target}"), "integration_target"),
-        (("rev-parse", "--verify", f"refs/heads/{config.integration_target}^{{commit}}"), "integration_target"),
+        (("check-ref-format", f"refs/heads/{config.target_branch}"), "target_branch"),
+        (("remote", "get-url", config.remote), "remote"),
+        (
+            ("rev-parse", "--verify", f"refs/remotes/{config.remote}/{config.target_branch}^{{commit}}"),
+            "target_branch",
+        ),
     )
     for arguments, field in checks:
         completed = subprocess.run(  # noqa: S603 - fixed executable and argument vector.
@@ -129,6 +136,20 @@ def _validate_git_config(config: DeliveryStartupConfig, paths: _DeliveryPaths) -
         if completed.returncode != 0:
             error = _load_error(field, "configured repository or integration target is invalid")
             raise error
+    remote_url = subprocess.run(  # noqa: S603 - fixed executable and argument vector.
+        (git_executable, "-C", str(paths.repository_root), "remote", "get-url", config.remote),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    match = re.fullmatch(
+        r"(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)([^\s/]+/[^\s/]+?)(?:\.git)?",
+        remote_url.stdout.strip(),
+    )
+    if match is None or match.group(1) != config.github_repository:
+        field = "github_repository"
+        detail = "configured GitHub repository does not match the remote URL"
+        raise _load_error(field, detail)
     worktrees = subprocess.run(  # noqa: S603 - fixed executable and argument vector.
         (git_executable, "-C", str(paths.repository_root), "worktree", "list", "--porcelain", "-z"),
         check=False,
@@ -232,7 +253,7 @@ def _compose_application(
         paths.repository_root,
         paths.worktree_root,
         coordinator,
-        config.integration_target,
+        config.target_branch,
     )
     integration_verifier = IntegrationVerifier(
         paths.repository_root,
@@ -249,12 +270,12 @@ def _compose_application(
         authority_registry=DeliveryAuthorityRegistry(
             paths.runtime_root,
             package_store,
-            integration_target=config.integration_target,
+            integration_target=config.target_branch,
         ),
         coordinator=coordinator,
         workspace_manager=workspace_manager,
         integration_verifier=integration_verifier,
-        completed_history_catalog=CompletedHistoryCatalog(paths.repository_root, config.integration_target),
+        completed_history_catalog=CompletedHistoryCatalog(paths.repository_root, config.target_branch),
     )
     application_config = PortfolioApplicationConfig(
         package_root=paths.package_root,

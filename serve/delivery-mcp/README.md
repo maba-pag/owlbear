@@ -36,16 +36,19 @@ directory, so no Delivery environment variable is required.
 
 ```json
 {
- "schema_version": 1,
- "integration_target": "main"
+ "schema_version": 2,
+ "remote": "origin",
+ "target_branch": "main",
+ "github_repository": "your-org/your-project"
 }
 ```
 
 The workspace root determines the repository and the canonical `.owlbear/delivery/packages`,
 `.owlbear/delivery/runtime`, and `.owlbear/delivery/worktrees` locations. Delivery admits one active
 claim and one Build writer at a time. Agent frontmatter owns model selection; Delivery owns the fixed
-Planner, Builder, and reviewer routing. `integration_target` names the branch from which change
-worktrees start and against which reviewed changes are prepared for external acceptance.
+Planner, Builder, and reviewer routing. Startup validates the configured remote, the exact
+`refs/remotes/<remote>/<target_branch>` commit, and the GitHub `owner/name` identity parsed from that
+remote URL. It does not require or inspect a local target branch.
 
 The tracked `.owlbear/delivery/verification.json` profile declares ordered argv, working directory,
 timeout, and environment-name allowlist for exact-candidate verification. `integrate_ready_change`

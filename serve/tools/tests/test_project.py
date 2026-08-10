@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from owlbear_tools.megalinter import MegaLinterImage, load_megalinter_image
-from owlbear_tools.project import deps_status, deps_sync, doctor, integration_target, megalint_clean
+from owlbear_tools.project import deps_status, deps_sync, doctor, megalint_clean, target_branch
 
 
 def _git_result(command: list[str], *, cwd: Path | None = None) -> int:  # noqa: ARG001
@@ -30,74 +30,84 @@ def test_megalinter_image_loads_from_workspace_config(tmp_path: Path) -> None:
     assert image.tag == "v-current"
 
 
-def test_integration_target_prints_current_value(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: object
-) -> None:
+def test_target_branch_prints_current_value(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: object) -> None:
     config = tmp_path / ".owlbear/delivery/config.json"
     config.parent.mkdir(parents=True)
-    config.write_text('{"schema_version": 1, "integration_target": "dev"}\n', encoding="utf-8")
+    config.write_text(
+        '{"schema_version":2,"remote":"origin","target_branch":"dev","github_repository":"example/project"}\n',
+        encoding="utf-8",
+    )
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(sys, "argv", ["integration-target"])
+    monkeypatch.setattr(sys, "argv", ["target-branch"])
 
-    integration_target()
+    target_branch()
 
     assert capsys.readouterr().out == "dev\n"
 
 
-def test_integration_target_atomically_changes_idle_project(
+def test_target_branch_atomically_changes_idle_project(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: object,
 ) -> None:
     config = tmp_path / ".owlbear/delivery/config.json"
     config.parent.mkdir(parents=True)
-    config.write_text('{"schema_version": 1, "integration_target": "dev"}\n', encoding="utf-8")
+    config.write_text(
+        '{"schema_version":2,"remote":"origin","target_branch":"dev","github_repository":"example/project"}\n',
+        encoding="utf-8",
+    )
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(sys, "argv", ["integration-target", "release"])
+    monkeypatch.setattr(sys, "argv", ["target-branch", "release"])
 
     with patch("owlbear_tools.project._run", side_effect=_git_result):
-        integration_target()
+        target_branch()
 
-    assert json.loads(config.read_text(encoding="utf-8"))["integration_target"] == "release"
+    assert json.loads(config.read_text(encoding="utf-8"))["target_branch"] == "release"
     assert "dev -> release" in capsys.readouterr().out
 
 
-def test_integration_target_rejects_unfinished_delivery_work(
+def test_target_branch_rejects_unfinished_delivery_work(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = tmp_path / ".owlbear/delivery/config.json"
     config.parent.mkdir(parents=True)
-    config.write_text('{"schema_version": 1, "integration_target": "dev"}\n', encoding="utf-8")
+    config.write_text(
+        '{"schema_version":2,"remote":"origin","target_branch":"dev","github_repository":"example/project"}\n',
+        encoding="utf-8",
+    )
     frontier = tmp_path / ".owlbear/delivery/runtime/changes/example/frontier.json"
     frontier.parent.mkdir(parents=True)
     frontier.write_text('{"bindings": [], "integration_completion": null}\n', encoding="utf-8")
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(sys, "argv", ["integration-target", "release"])
+    monkeypatch.setattr(sys, "argv", ["target-branch", "release"])
 
     with patch("owlbear_tools.project._run", side_effect=_git_result), pytest.raises(SystemExit, match="2"):
-        integration_target()
+        target_branch()
 
-    assert json.loads(config.read_text(encoding="utf-8"))["integration_target"] == "dev"
+    assert json.loads(config.read_text(encoding="utf-8"))["target_branch"] == "dev"
 
 
-def test_integration_target_rejects_idle_change_coordination_without_frontier(
+def test_target_branch_rejects_idle_change_coordination_without_frontier(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = tmp_path / ".owlbear/delivery/config.json"
     config.parent.mkdir(parents=True)
-    config.write_text('{"schema_version": 1, "integration_target": "dev"}\n', encoding="utf-8")
+    config.write_text(
+        '{"schema_version":2,"remote":"origin","target_branch":"dev","github_repository":"example/project"}\n',
+        encoding="utf-8",
+    )
     coordination = tmp_path / ".owlbear/delivery/runtime/claims/changes/example.json"
     coordination.parent.mkdir(parents=True)
     coordination.write_text('{"writer": null}\n', encoding="utf-8")
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(sys, "argv", ["integration-target", "release"])
+    monkeypatch.setattr(sys, "argv", ["target-branch", "release"])
 
     with patch("owlbear_tools.project._run", side_effect=_git_result), pytest.raises(SystemExit, match="2"):
-        integration_target()
+        target_branch()
 
-    assert json.loads(config.read_text(encoding="utf-8"))["integration_target"] == "dev"
+    assert json.loads(config.read_text(encoding="utf-8"))["target_branch"] == "dev"
 
 
 @pytest.mark.parametrize(
@@ -107,45 +117,51 @@ def test_integration_target_rejects_idle_change_coordination_without_frontier(
         ".owlbear/delivery/packages/example/manifest.json",
     ],
 )
-def test_integration_target_rejects_partial_change_authority(
+def test_target_branch_rejects_partial_change_authority(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     unfinished_path: str,
 ) -> None:
     config = tmp_path / ".owlbear/delivery/config.json"
     config.parent.mkdir(parents=True)
-    config.write_text('{"schema_version": 1, "integration_target": "dev"}\n', encoding="utf-8")
+    config.write_text(
+        '{"schema_version":2,"remote":"origin","target_branch":"dev","github_repository":"example/project"}\n',
+        encoding="utf-8",
+    )
     authority = tmp_path / unfinished_path
     authority.parent.mkdir(parents=True)
     authority.write_text("{}\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(sys, "argv", ["integration-target", "release"])
+    monkeypatch.setattr(sys, "argv", ["target-branch", "release"])
 
     with patch("owlbear_tools.project._run", side_effect=_git_result), pytest.raises(SystemExit, match="2"):
-        integration_target()
+        target_branch()
 
-    assert json.loads(config.read_text(encoding="utf-8"))["integration_target"] == "dev"
+    assert json.loads(config.read_text(encoding="utf-8"))["target_branch"] == "dev"
 
 
 @pytest.mark.parametrize("legacy_root", [".owlbear/target", ".owlbear/worktrees"])
-def test_integration_target_rejects_unmigrated_delivery_state(
+def test_target_branch_rejects_unmigrated_delivery_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     legacy_root: str,
 ) -> None:
     config = tmp_path / ".owlbear/delivery/config.json"
     config.parent.mkdir(parents=True)
-    config.write_text('{"schema_version": 1, "integration_target": "dev"}\n', encoding="utf-8")
+    config.write_text(
+        '{"schema_version":2,"remote":"origin","target_branch":"dev","github_repository":"example/project"}\n',
+        encoding="utf-8",
+    )
     state = tmp_path / legacy_root / "state"
     state.parent.mkdir(parents=True)
     state.write_text("unmigrated\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(sys, "argv", ["integration-target", "release"])
+    monkeypatch.setattr(sys, "argv", ["target-branch", "release"])
 
     with patch("owlbear_tools.project._run", side_effect=_git_result), pytest.raises(SystemExit, match="2"):
-        integration_target()
+        target_branch()
 
-    assert json.loads(config.read_text(encoding="utf-8"))["integration_target"] == "dev"
+    assert json.loads(config.read_text(encoding="utf-8"))["target_branch"] == "dev"
 
 
 def test_doctor_accepts_canonical_workspace_without_cutover_receipt(
@@ -155,7 +171,10 @@ def test_doctor_accepts_canonical_workspace_without_cutover_receipt(
 ) -> None:
     config = tmp_path / ".owlbear/delivery/config.json"
     config.parent.mkdir(parents=True)
-    config.write_text('{"schema_version": 1, "integration_target": "dev"}\n', encoding="utf-8")
+    config.write_text(
+        '{"schema_version":2,"remote":"origin","target_branch":"dev","github_repository":"example/project"}\n',
+        encoding="utf-8",
+    )
     mcp = tmp_path / ".vscode/mcp.json"
     mcp.parent.mkdir(parents=True)
     mcp.write_text("{}\n", encoding="utf-8")
@@ -163,7 +182,8 @@ def test_doctor_accepts_canonical_workspace_without_cutover_receipt(
 
     with (
         patch("owlbear_tools.project.shutil.which", return_value="/usr/bin/tool"),
-        patch("owlbear_tools.project._git_branch_exists", return_value=True),
+        patch("owlbear_tools.project._remote_target_exists", return_value=True),
+        patch("owlbear_tools.project._remote_github_repository", return_value="example/project"),
         pytest.raises(SystemExit, match="0"),
     ):
         doctor()
@@ -179,7 +199,10 @@ def test_doctor_rejects_unmigrated_delivery_state(
 ) -> None:
     config = tmp_path / ".owlbear/delivery/config.json"
     config.parent.mkdir(parents=True)
-    config.write_text('{"schema_version": 1, "integration_target": "dev"}\n', encoding="utf-8")
+    config.write_text(
+        '{"schema_version":2,"remote":"origin","target_branch":"dev","github_repository":"example/project"}\n',
+        encoding="utf-8",
+    )
     legacy = tmp_path / ".owlbear/target/runtime.json"
     legacy.parent.mkdir(parents=True)
     legacy.write_text("{}\n", encoding="utf-8")
@@ -190,7 +213,8 @@ def test_doctor_rejects_unmigrated_delivery_state(
 
     with (
         patch("owlbear_tools.project.shutil.which", return_value="/usr/bin/tool"),
-        patch("owlbear_tools.project._git_branch_exists", return_value=True),
+        patch("owlbear_tools.project._remote_target_exists", return_value=True),
+        patch("owlbear_tools.project._remote_github_repository", return_value="example/project"),
         pytest.raises(SystemExit, match="1"),
     ):
         doctor()

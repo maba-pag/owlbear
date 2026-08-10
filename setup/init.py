@@ -16,6 +16,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import warnings
 from contextlib import suppress
 from pathlib import Path
@@ -71,6 +72,7 @@ _RETIRED_OWLBEAR_GITIGNORE_LINES = frozenset(
 )
 _HOOKS_REL_PREFIX = ".owlbear/hooks/"
 _DELIVERY_CONFIG_PATH = Path(".owlbear/delivery/config.json")
+_DELIVERY_CONFIG_SCHEMA_VERSION = 2
 _VERIFICATION_PROFILE_PATH = Path(".owlbear/delivery/verification.json")
 
 # Regex: match // line-comments outside of strings.  Handles the common JSONC
@@ -241,60 +243,125 @@ def _current_branch(target_dir: Path) -> str | None:
     return branch or None
 
 
-def _branch_exists(target_dir: Path, branch: str) -> bool:
-    """Return whether *branch* is a valid local branch in the target repository."""
+def _valid_branch_name(target_dir: Path, branch: str) -> bool:
+    """Return whether *branch* is a valid unqualified Git branch name."""
     syntax = subprocess.run(  # noqa: S603
         ["git", "check-ref-format", f"refs/heads/{branch}"],  # noqa: S607
         cwd=target_dir,
         check=False,
         capture_output=True,
     )
-    exists = subprocess.run(  # noqa: S603
-        ["git", "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"],  # noqa: S607
-        cwd=target_dir,
-        check=False,
-        capture_output=True,
-    )
-    return syntax.returncode == 0 and exists.returncode == 0
+    return syntax.returncode == 0
 
 
-def _select_integration_target(target_dir: Path, requested: str | None, *, interactive: bool) -> str:
+def _select_target_branch(target_dir: Path, requested: str | None, *, interactive: bool) -> str:
     """Resolve a fresh project's target from an option, prompt, or stable fallback."""
     if requested is not None:
-        if not _branch_exists(target_dir, requested):
-            msg = f"Integration target must name an existing local branch: {requested}"
+        if not _valid_branch_name(target_dir, requested):
+            msg = f"Target branch name is invalid: {requested}"
             raise RuntimeError(msg)
         return requested
     if not interactive:
         return "main"
     suggested = _current_branch(target_dir) or "main"
-    selected = input(f"Integration target branch [{suggested}]: ").strip() or suggested
-    if not _branch_exists(target_dir, selected):
-        msg = f"Integration target must name an existing local branch: {selected}"
+    selected = input(f"Target branch [{suggested}]: ").strip() or suggested
+    if not _valid_branch_name(target_dir, selected):
+        msg = f"Target branch name is invalid: {selected}"
+        raise RuntimeError(msg)
+    return selected
+
+
+def _github_repository_from_remote(target_dir: Path, remote: str) -> str | None:
+    """Infer an exact GitHub ``owner/name`` identity from one remote URL."""
+    completed = subprocess.run(  # noqa: S603
+        ["git", "remote", "get-url", remote],  # noqa: S607
+        cwd=target_dir,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return None
+    match = re.fullmatch(
+        r"(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)([^\s/]+/[^\s/]+?)(?:\.git)?",
+        completed.stdout.strip(),
+    )
+    return match.group(1) if match else None
+
+
+def _select_github_repository(
+    target_dir: Path,
+    remote: str,
+    requested: str | None,
+    *,
+    interactive: bool,
+) -> str:
+    """Resolve an exact GitHub repository identity without placeholders."""
+    selected = requested or _github_repository_from_remote(target_dir, remote)
+    if selected is None and interactive:
+        selected = input("GitHub repository (owner/name): ").strip()
+    if selected is None or re.fullmatch(r"[^\s/]+/[^\s/]+", selected) is None:
+        msg = "GitHub repository must be provided as owner/name or inferred from the configured remote"
         raise RuntimeError(msg)
     return selected
 
 
 def _write_delivery_config(
     target_dir: Path,
-    integration_target: str | None,
+    remote: str,
+    target_branch: str | None,
+    github_repository: str | None,
     *,
     interactive: bool,
 ) -> None:
-    """Create the tracked project Delivery policy once."""
+    """Create or migrate the tracked project Delivery policy."""
     path = target_dir / _DELIVERY_CONFIG_PATH
     if path.exists():
-        return
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            msg = f"Delivery configuration cannot be migrated: {path}"
+            raise RuntimeError(msg) from exc
+        if isinstance(existing, dict) and existing.get("schema_version") == _DELIVERY_CONFIG_SCHEMA_VERSION:
+            return
+        if (
+            not isinstance(existing, dict)
+            or set(existing) != {"schema_version", "integration_target"}
+            or existing.get("schema_version") != 1
+            or not isinstance(existing.get("integration_target"), str)
+            or not existing["integration_target"]
+        ):
+            msg = f"Delivery configuration schema cannot be migrated: {path}"
+            raise RuntimeError(msg)
+        target_branch = existing["integration_target"]
     path.parent.mkdir(parents=True, exist_ok=True)
     content = {
-        "schema_version": 1,
-        "integration_target": _select_integration_target(
+        "schema_version": _DELIVERY_CONFIG_SCHEMA_VERSION,
+        "remote": remote,
+        "target_branch": _select_target_branch(
             target_dir,
-            integration_target,
+            target_branch,
+            interactive=interactive,
+        ),
+        "github_repository": _select_github_repository(
+            target_dir,
+            remote,
+            github_repository,
             interactive=interactive,
         ),
     }
-    path.write_text(json.dumps(content, indent=2) + "\n", encoding="utf-8")
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        delete=False,
+    ) as temporary:
+        temporary.write(json.dumps(content, indent=2) + "\n")
+        temporary.flush()
+        os.fsync(temporary.fileno())
+        temporary_path = Path(temporary.name)
+    temporary_path.replace(path)
 
 
 def _verification_steps(target_dir: Path) -> list[dict[str, object]]:
@@ -456,13 +523,15 @@ def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def init(  # noqa: C901
+def init(  # noqa: C901, PLR0913
     target_dir: Path,
     owlbear_dir: Path,
     *,
     replace_hooks: bool = False,
     interactive: bool | None = None,
-    integration_target: str | None = None,
+    remote: str = "origin",
+    target_branch: str | None = None,
+    github_repository: str | None = None,
 ) -> None:
     """Initialise an OwlBear workspace in *target_dir*.
 
@@ -477,7 +546,9 @@ def init(  # noqa: C901
         owlbear_dir: Root of the owlbear installation (contains ``seed/``).
         replace_hooks: Overwrite differing existing hook runtime files.
         interactive: Whether hook conflicts may prompt. Defaults to TTY detect.
-        integration_target: Existing local branch used for fresh Delivery configuration.
+        remote: Git remote used for Delivery publication.
+        target_branch: Unqualified branch targeted by Delivery pull requests.
+        github_repository: Exact GitHub ``owner/name`` identity for publication.
     """
     seed_dir = owlbear_dir / "seed"
     replacements = _build_replacements(owlbear_dir, target_dir)
@@ -528,7 +599,9 @@ def init(  # noqa: C901
 
     _write_delivery_config(
         target_dir,
-        integration_target,
+        remote,
+        target_branch,
+        github_repository,
         interactive=interactive_mode,
     )
     _write_verification_profile(target_dir)
@@ -548,9 +621,20 @@ if __name__ == "__main__":  # pragma: no cover
         help="Overwrite differing existing .owlbear/hooks files instead of skipping or prompting.",
     )
     parser.add_argument(
-        "--integration-target",
+        "--remote",
+        default="origin",
+        metavar="NAME",
+        help="Use this Git remote for Delivery publication (default: origin).",
+    )
+    parser.add_argument(
+        "--target-branch",
         metavar="BRANCH",
-        help="Use an existing local branch for fresh Delivery configuration.",
+        help="Use this target branch for Delivery pull requests (default: main).",
+    )
+    parser.add_argument(
+        "--github-repository",
+        metavar="OWNER/NAME",
+        help="Use this GitHub repository identity, or infer it from the configured remote.",
     )
     args = parser.parse_args()
 
@@ -561,7 +645,9 @@ if __name__ == "__main__":  # pragma: no cover
             _target,
             _owlbear,
             replace_hooks=args.replace_hooks,
-            integration_target=args.integration_target,
+            remote=args.remote,
+            target_branch=args.target_branch,
+            github_repository=args.github_repository,
         )
     except RuntimeError as exc:
         raise SystemExit(str(exc)) from exc

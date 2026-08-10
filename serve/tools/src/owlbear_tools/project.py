@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -22,6 +23,7 @@ _FRONTIER_GLOB = ".owlbear/delivery/runtime/changes/*/frontier.json"
 _COORDINATION_GLOB = ".owlbear/delivery/runtime/claims/changes/*.json"
 _PACKAGE_GLOB = ".owlbear/delivery/packages/*"
 _LEGACY_DELIVERY_ROOTS = (Path(".owlbear/target"), Path(".owlbear/worktrees"))
+_DELIVERY_CONFIG_SCHEMA_VERSION = 2
 
 
 def _run(command: list[str], *, cwd: Path | None = None) -> int:
@@ -44,13 +46,18 @@ def setup_project() -> None:
     """Run the repository initializer for a target project."""
     parser = argparse.ArgumentParser(prog="setup-project")
     parser.add_argument("path", nargs="?", type=Path, default=Path.cwd())
-    parser.add_argument("--integration-target", metavar="BRANCH")
+    parser.add_argument("--remote", default="origin", metavar="NAME")
+    parser.add_argument("--target-branch", metavar="BRANCH")
+    parser.add_argument("--github-repository", metavar="OWNER/NAME")
     parser.add_argument("--replace-hooks", action="store_true")
     args = parser.parse_args()
     target = args.path.expanduser().resolve()
     command = [sys.executable, str(_REPOSITORY_ROOT / "setup/init.py")]
-    if args.integration_target:
-        command.extend(["--integration-target", args.integration_target])
+    command.extend(["--remote", args.remote])
+    if args.target_branch:
+        command.extend(["--target-branch", args.target_branch])
+    if args.github_repository:
+        command.extend(["--github-repository", args.github_repository])
     if args.replace_hooks:
         command.append("--replace-hooks")
     _finish(_run(command, cwd=target))
@@ -64,10 +71,53 @@ def _load_json(path: Path) -> dict[str, object]:
     return content
 
 
-def _git_branch_exists(root: Path, branch: str) -> bool:
+def _remote_target_exists(root: Path, remote: str, branch: str) -> bool:
     syntax = _run(["git", "check-ref-format", f"refs/heads/{branch}"], cwd=root)
-    exists = _run(["git", "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"], cwd=root)
+    exists = _run(
+        ["git", "show-ref", "--verify", "--quiet", f"refs/remotes/{remote}/{branch}"],
+        cwd=root,
+    )
     return syntax == 0 and exists == 0
+
+
+def _remote_github_repository(root: Path, remote: str) -> str | None:
+    completed = subprocess.run(  # noqa: S603
+        ["git", "remote", "get-url", remote],  # noqa: S607
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return None
+    match = re.fullmatch(
+        r"(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)([^\s/]+/[^\s/]+?)(?:\.git)?",
+        completed.stdout.strip(),
+    )
+    return match.group(1) if match else None
+
+
+def _delivery_config_status(root: Path) -> tuple[list[str], str | None]:
+    config_path = root / _DELIVERY_CONFIG
+    try:
+        config = _load_json(config_path)
+    except (OSError, TypeError, json.JSONDecodeError) as exc:
+        return [f"Delivery config is unavailable: {exc}"], None
+    failures: list[str] = []
+    schema_version = config.get("schema_version")
+    remote = config.get("remote")
+    target = config.get("target_branch")
+    github_repository = config.get("github_repository")
+    if schema_version != _DELIVERY_CONFIG_SCHEMA_VERSION:
+        failures.append(f"unsupported Delivery config schema: {schema_version}")
+    valid_target = isinstance(remote, str) and isinstance(target, str) and _remote_target_exists(root, remote, target)
+    if not valid_target:
+        failures.append(f"configured remote-tracking target is unavailable: {remote}/{target}")
+    elif not isinstance(github_repository, str) or _remote_github_repository(root, remote) != github_repository:
+        failures.append(f"configured GitHub repository does not match remote {remote}: {github_repository}")
+    if failures:
+        return failures, None
+    return [], f"Delivery target is {remote}/{target} in {github_repository}"
 
 
 def _legacy_delivery_blockers(root: Path) -> list[str]:
@@ -115,34 +165,35 @@ def _delivery_blockers(root: Path) -> list[str]:
     return blockers
 
 
-def integration_target() -> None:
-    """Show or safely update the Delivery integration target."""
-    parser = argparse.ArgumentParser(prog="integration-target")
+def target_branch() -> None:
+    """Show or safely update the Delivery pull-request target branch."""
+    parser = argparse.ArgumentParser(prog="target-branch")
     parser.add_argument("branch", nargs="?")
     args = parser.parse_args()
     root = Path.cwd().resolve()
     path = root / _DELIVERY_CONFIG
     try:
         config = _load_json(path)
-        current = config["integration_target"]
+        current = config["target_branch"]
+        remote = config["remote"]
     except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
         parser.error(f"cannot read {path}: {exc}")
-    if not isinstance(current, str) or not current:
-        parser.error(f"{path} has an invalid integration_target")
+    if not isinstance(current, str) or not current or not isinstance(remote, str) or not remote:
+        parser.error(f"{path} has an invalid target_branch or remote")
     if args.branch is None:
         print(current)  # noqa: T201
         return
     if args.branch == current:
-        print(f"Integration target is already {current}.")  # noqa: T201
+        print(f"Target branch is already {current}.")  # noqa: T201
         return
-    if not _git_branch_exists(root, args.branch):
-        parser.error(f"local branch does not exist or is invalid: {args.branch}")
+    if not _remote_target_exists(root, remote, args.branch):
+        parser.error(f"remote-tracking target does not exist or is invalid: {remote}/{args.branch}")
     blockers = _delivery_blockers(root)
     if blockers:
         parser.error("cannot change target while Delivery work exists:\n  " + "\n  ".join(blockers))
-    config["integration_target"] = args.branch
+    config["target_branch"] = args.branch
     atomic_write(path, json.dumps(config, indent=2) + "\n")
-    print(f"Integration target changed: {current} -> {args.branch}")  # noqa: T201
+    print(f"Target branch changed: {current} -> {args.branch}")  # noqa: T201
     print(command_footer(), file=sys.stderr)  # noqa: T201
 
 
@@ -160,16 +211,10 @@ def doctor() -> None:
             print(f"PASS  {executable} is available")  # noqa: T201
         else:
             failures.append(f"{executable} is not available")
-    config_path = root / _DELIVERY_CONFIG
-    try:
-        config = _load_json(config_path)
-        target = config.get("integration_target")
-        if not isinstance(target, str) or not _git_branch_exists(root, target):
-            failures.append(f"configured integration target is not a local branch: {target}")
-        else:
-            print(f"PASS  Delivery target is {target}")  # noqa: T201
-    except (OSError, TypeError, json.JSONDecodeError) as exc:
-        failures.append(f"Delivery config is unavailable: {exc}")
+    config_failures, config_success = _delivery_config_status(root)
+    failures.extend(config_failures)
+    if config_success is not None:
+        print(f"PASS  {config_success}")  # noqa: T201
     failures.extend(_legacy_delivery_blockers(root))
     for relative in (Path(".vscode/mcp.json"),):
         if (root / relative).is_file():

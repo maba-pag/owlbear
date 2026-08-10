@@ -37,15 +37,21 @@ mkdir my-project
 
 # 3. Bootstrap the OwlBear workspace from inside your project directory
 cd my-project
-uv run --project ../owlbear python ../owlbear/setup/init.py
+uv run --project ../owlbear python ../owlbear/setup/init.py \
+  --github-repository your-org/my-project
 
 # 4. Open the project in VS Code
 code .
 ```
 
 > **Windows:** use backslashes:
-> `uv run --project ..\owlbear python ..\owlbear\setup\init.py`. owlbear and your project
+> `uv run --project ..\owlbear python ..\owlbear\setup\init.py --github-repository your-org/my-project`.
+> owlbear and your project
 > must be on the same drive.
+
+Setup defaults to remote `origin` and target branch `main`. When `origin` has a GitHub HTTPS or SSH
+URL, setup infers the `owner/name` identity and `--github-repository` may be omitted. Use `--remote`
+and `--target-branch` for other publication policy. These values do not require a local target branch.
 
 ---
 
@@ -57,7 +63,7 @@ Running `init.py` writes the following files into your project directory:
 |------------------|---------|-------------|
 | `.vscode/settings.json` | Points VS Code at owlbear agents, skills, and instructions; enables `mermaid-chat.enabled` for Mermaid diagram rendering in chat | Merged (owlbear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 5 MCP servers (4 owlbear stdio, including browser access, + markitdown) | Merged (owlbear servers as defaults; your existing servers are preserved) |
-| `.owlbear/delivery/config.json` | Declares the project Delivery integration branch; roots, single-worker capacities, agent routing, and models come from workspace conventions and agent definitions | Seeded once, tracked in Git, and preserved on rerun so project policy changes remain intact |
+| `.owlbear/delivery/config.json` | Declares the Git remote, pull-request target branch, and exact GitHub `owner/name` identity; roots, capacity, agent routing, and models come from workspace conventions and agent definitions | Tracked in Git; exact schema-1 policy is migrated once and schema-2 project edits are preserved on rerun |
 | `.owlbear/delivery/verification.json` | Declares ordered commands that must pass against each exact merged candidate | Detected once from root Python tests and the root npm `test` script; tracked in Git and preserved on rerun |
 | `.owlbear/hooks/allow-stances-only.py` | Restricts ideation agents to approved stance outputs | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-src-writes.py` | Constrains test-only roles to `tests/`, `__tests__/`, and scratch surfaces | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
