@@ -104,6 +104,7 @@ test.describe('assembled Delivery portfolio', () => {
     const guidance = page.getByLabel('Session suggestions')
     await expect(guidance).toContainText('Review 2 items that need you')
     await expect(guidance).toContainText('/orchestrate is already working')
+    await expect(guidance).toContainText('Continue Design with:')
     await expect(guidance.getByText('/orchestrate', { exact: true })).toHaveCSS('font-family', /mono/i)
     await expect(guidance.getByText('/design design-operations-roadmap', { exact: true })).toBeVisible()
     const tableBox = await table.boundingBox()
@@ -237,7 +238,20 @@ test.describe('assembled Delivery portfolio', () => {
       return wrapper.getBoundingClientRect().left - proseRange.getBoundingClientRect().right
     })
     expect(guidanceSpacing).not.toBeNull()
-    expect(guidanceSpacing!).toBeGreaterThanOrEqual(8)
+    expect(guidanceSpacing!).toBeCloseTo(8, 0)
+    const guidanceItems = guidance.locator('li')
+    const guidanceLayout = await guidanceItems.evaluateAll((items) => {
+      const list = items[0]?.parentElement
+      const boxes = items.map((item) => item.getBoundingClientRect())
+      return {
+        display: list ? getComputedStyle(list).display : null,
+        adjacentGap: boxes.length > 1 ? boxes[1].left - boxes[0].right : null,
+      }
+    })
+    expect(guidanceLayout.display).toBe('flex')
+    expect(guidanceLayout.adjacentGap).not.toBeNull()
+    expect(guidanceLayout.adjacentGap!).toBeGreaterThanOrEqual(32)
+    expect(guidanceLayout.adjacentGap!).toBeLessThanOrEqual(64)
     await page.screenshot({ path: testInfo.outputPath('delivery-command-alignment.png') })
     await designCommandButton.locator('code').click()
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(designCommand)

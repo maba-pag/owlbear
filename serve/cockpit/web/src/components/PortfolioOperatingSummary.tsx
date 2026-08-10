@@ -14,7 +14,7 @@ function countLabel(count: number, singular: string, plural = `${singular}s`) {
 
 function Command({ children }: { children: string }) {
   return (
-    <span className="mx-static-sm inline-flex max-w-full items-center align-middle">
+    <span className="ml-static-sm inline-flex max-w-full items-center align-middle">
       <CopyCommand command={children} />
     </span>
   )
@@ -25,15 +25,15 @@ function Guidance({ guidance }: { guidance: PortfolioGuidance }) {
     case 'intervene':
       return <>{guidance.work_count === 1 ? 'Review 1 item that needs you.' : `Review ${guidance.work_count} items that need you.`}</>
     case 'resume-design':
-      return <>Continue Design with {guidance.change_ids.map((changeId, index) => <span key={changeId}>{index > 0 ? ' or ' : null}<Command>{designCommand(changeId)}</Command></span>)}</>
+      return <>Continue Design with:{guidance.change_ids.map((changeId, index) => <span key={changeId}>{index > 0 ? ' or ' : null}<Command>{designCommand(changeId)}</Command></span>)}</>
     case 'start-orchestration':
-      return <>Process {countLabel(guidance.work_count, 'queued work item')} with <Command>/orchestrate</Command></>
+      return <>Process {countLabel(guidance.work_count, 'queued work item')} with:<Command>/orchestrate</Command></>
     case 'work-underway':
       return <><Command>/orchestrate</Command> is already working; no new session is needed.</>
     case 'wait':
       return <>No session action needed.</>
     case 'create-change':
-      return <>Start with <Command>/ideate</Command> or <Command>/design &lt;change-id&gt;</Command></>
+      return <>Start with:<Command>/ideate</Command> or <Command>/design &lt;change-id&gt;</Command></>
   }
 }
 
@@ -160,8 +160,8 @@ export default function PortfolioOperatingSummary({ operating }: { operating: Po
   return (
     <aside className="grid min-w-0 gap-static-xs px-static-sm text-sm leading-relaxed text-contrast-medium sm:grid-cols-[auto_minmax(0,1fr)] sm:items-start sm:gap-static-md" aria-label="Session suggestions">
       <strong className="text-primary">Session suggestions</strong>
-      <ul className="m-0 grid min-w-0 list-none gap-static-xs p-0 lg:grid-cols-2 lg:gap-x-static-lg">
-        {operating.guidance.map((guidance) => <li key={guidance.kind}><Guidance guidance={guidance} /></li>)}
+      <ul className="m-0 flex min-w-0 flex-wrap items-center gap-x-static-xl gap-y-static-xs p-0">
+        {operating.guidance.map((guidance) => <li className="min-w-0" key={guidance.kind}><Guidance guidance={guidance} /></li>)}
       </ul>
     </aside>
   )
