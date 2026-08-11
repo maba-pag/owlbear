@@ -39,6 +39,7 @@ line-length = 120
 extend-exclude = ["*.md"]
 src = [
   "serve/delivery/src",
+  "serve/delivery-github/src",
   "serve/knowledge/src",
   "serve/delivery-mcp/src",
   "serve/knowledge-mcp/src",

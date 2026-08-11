@@ -77,6 +77,29 @@ def test_update_requires_exact_current_head_and_exposes_no_merge_operation() -> 
 
     assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
     assert provider.read_pull_request(_REPOSITORY, created.number) == created
+    updated = provider.update_pull_request(
+        UpdatePublicationPullRequest(
+            repository=_REPOSITORY,
+            number=created.number,
+            expected_head_sha=created.head_sha,
+            title="Changed title",
+            body="Changed body",
+        )
+    )
+    assert updated.title == "Changed title"
+    assert updated.body == "Changed body"
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.set_pull_request_draft_state(
+            SetPublicationPullRequestDraftState(
+                repository=_REPOSITORY,
+                number=created.number,
+                node_id="PR_wrong",
+                expected_head_sha=created.head_sha,
+                draft=False,
+            )
+        )
+    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
     ready = provider.set_pull_request_draft_state(
         SetPublicationPullRequestDraftState(
             repository=_REPOSITORY,
@@ -109,3 +132,14 @@ def test_unmerged_pull_request_may_report_provider_test_merge_sha() -> None:
 
     assert pull_request.merged is False
     assert pull_request.merge_commit_sha == _OTHER_HEAD
+
+
+def test_synthetic_node_ids_are_unique_across_repositories() -> None:
+    provider = _provider()
+    other_repository = "example/other"
+    provider.add_repository(PublicationRepository(repository=other_repository, default_branch="main"))
+
+    first = provider.create_draft_pull_request(_create_request())
+    second = provider.create_draft_pull_request(_create_request().model_copy(update={"repository": other_repository}))
+
+    assert first.node_id != second.node_id

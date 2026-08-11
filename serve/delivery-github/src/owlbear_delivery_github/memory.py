@@ -96,7 +96,7 @@ class InMemoryPublicationProvider:
         pull_request = PublicationPullRequest(
             repository=request.repository,
             number=next_number,
-            node_id=f"PR_{next_number}",
+            node_id=f"PR_{request.repository}_{next_number}",
             head_branch=request.head_branch,
             head_sha=request.head_sha,
             base_branch=request.base_branch,
