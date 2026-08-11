@@ -35,6 +35,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryActiveClaim,
     DeliveryBlock,
     DeliveryChangeStage,
+    DeliveryCheckpointPublicationState,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
@@ -621,6 +622,10 @@ class PortfolioApplication:
             message = "draft pull-request publication is not configured"
             raise PortfolioApplicationError(message)
         return self._draft_pull_request_publisher.observe_checks(request)
+
+    def show_change_checkpoint_publication(self, change_id: str) -> DeliveryCheckpointPublicationState:
+        """Return the durable checkpoint queue for one admitted Change."""
+        return self._runtime(change_id).checkpoint_publication_state()
 
     def read_design_session(self, change_id: str) -> VerifiedDesignPackage:
         """Return one verified authored Design package and its current identity."""

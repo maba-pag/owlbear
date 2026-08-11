@@ -1,4 +1,4 @@
-"""Mechanical schema-v2 Delivery state and worker-owned transitions."""
+"""Mechanical Delivery state and worker-owned transitions."""
 
 from __future__ import annotations
 
@@ -58,6 +58,15 @@ class DeliveryWorkerRole(StrEnum):
     PLANNER = "planner"
     BUILDER = "builder"
     INTEGRATION_REPAIRER = "integration-repairer"
+
+
+class DeliveryCheckpointTriggerKind(StrEnum):
+    """Delivery-owned reasons that require Change checkpoint publication."""
+
+    FIRST_PROMOTED_TASK = "first-promoted-task"
+    VERIFIED_OUTCOME = "verified-outcome"
+    FINALIZATION = "finalization"
+    EXPLICIT = "explicit"
 
 
 class _DeliveryModel(BaseModel):
@@ -134,6 +143,51 @@ class DeliveryTaskResult(_DeliveryModel):
     task_id: str = Field(min_length=1)
     task_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     completed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class DeliveryCheckpointTrigger(_DeliveryModel):
+    """One durable reason to publish an exact reviewed Change head."""
+
+    kind: DeliveryCheckpointTriggerKind
+    outcome_id: str | None = Field(default=None, pattern=r"^OUT-[0-9]{3}$")
+    task_id: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> DeliveryCheckpointTrigger:
+        if self.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK:
+            if self.outcome_id is None or self.task_id is None:
+                message = "first promoted Task checkpoint trigger requires Outcome and Task identity"
+                raise ValueError(message)
+        elif self.kind == DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME:
+            if self.outcome_id is None or self.task_id is not None:
+                message = "verified Outcome checkpoint trigger requires only Outcome identity"
+                raise ValueError(message)
+        elif self.outcome_id is not None or self.task_id is not None:
+            message = "Change-level checkpoint trigger cannot name Outcome or Task identity"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryPendingCheckpoint(_DeliveryModel):
+    """Latest reviewed head carrying one or more undrained checkpoint obligations."""
+
+    head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    triggers: tuple[DeliveryCheckpointTrigger, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_triggers(self) -> DeliveryPendingCheckpoint:
+        if len(self.triggers) != len(set(self.triggers)):
+            message = "pending checkpoint triggers must be unique"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryCheckpointPublicationState(_DeliveryModel):
+    """Change-scoped checkpoint queue and last acknowledged remote head."""
+
+    change_id: str = Field(min_length=1)
+    published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    pending_checkpoint: DeliveryPendingCheckpoint | None = None
 
 
 class DeliveryResultCandidate(_DeliveryModel):
@@ -470,10 +524,12 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 
 
 class DeliveryFrontier(_DeliveryModel):
-    """Canonical schema-v2 outcome state persisted beside Delivery authority."""
+    """Canonical outcome and Change checkpoint state persisted beside authority."""
 
-    schema_version: Literal[2] = 2
+    schema_version: Literal[3] = 3
     bindings: tuple[OutcomeAuthorityBinding, ...]
+    published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    pending_checkpoint: DeliveryPendingCheckpoint | None = None
     operator_moves: tuple[DeliveryOperatorMove, ...] = ()
     integration_result_id: str | None = None
     integration_completion: DeliveryIntegrationCompletion | None = None
@@ -667,7 +723,8 @@ _STAGE_ORDER = {
     DeliveryStage.IMPLEMENTATION: 2,
     DeliveryStage.COMPLETED: 3,
 }
-_FRONTIER_SCHEMA_VERSION = 2
+_PREVIOUS_FRONTIER_SCHEMA_VERSION = 2
+_FRONTIER_SCHEMA_VERSION = 3
 _RETURN_TARGETS = {
     DeliveryStage.PLANNING: {DeliveryStage.DESIGN},
     DeliveryStage.IMPLEMENTATION: {DeliveryStage.PLANNING, DeliveryStage.DESIGN},
@@ -731,6 +788,15 @@ class DeliveryRuntime:
     def show_binding(self, outcome_id: str) -> OutcomeAuthorityBinding:
         """Return one current outcome binding."""
         return _find_binding(self._read()[0], outcome_id)
+
+    def checkpoint_publication_state(self) -> DeliveryCheckpointPublicationState:
+        """Return the Change-level checkpoint queue without provider identity."""
+        frontier, _content = self._read()
+        return DeliveryCheckpointPublicationState(
+            change_id=self._contract.change_id,
+            published_head=frontier.published_head,
+            pending_checkpoint=frontier.pending_checkpoint,
+        )
 
     def active_claims(self) -> tuple[tuple[str, DeliveryActiveClaim], ...]:
         """Return active claim identity keyed by outcome in authority order."""
@@ -1107,7 +1173,10 @@ class DeliveryRuntime:
             updated = self._return(binding, request)
         else:
             updated = self._block(binding, request)
-        self._replace(previous, _replace_binding(frontier, binding, updated))
+        replacement = _replace_binding(frontier, binding, updated)
+        if isinstance(request, AdvanceDelivery) and binding.stage == DeliveryStage.IMPLEMENTATION:
+            replacement = _queue_promoted_result_checkpoint(replacement, frontier, binding, updated)
+        self._replace(previous, replacement)
         return updated
 
     def resolve_request(
@@ -1495,6 +1564,8 @@ def parse_delivery_frontier(content: bytes) -> tuple[DeliveryFrontier, bytes]:
             if assembly_required is not False:
                 raise ValueError
         payload["schema_version"] = _FRONTIER_SCHEMA_VERSION
+    elif schema_version == _PREVIOUS_FRONTIER_SCHEMA_VERSION:
+        payload["schema_version"] = _FRONTIER_SCHEMA_VERSION
     elif schema_version != _FRONTIER_SCHEMA_VERSION:
         raise ValueError
     frontier = DeliveryFrontier.model_validate_json(
@@ -1522,6 +1593,45 @@ def _replace_binding(
 ) -> DeliveryFrontier:
     return frontier.model_copy(
         update={"bindings": tuple(replacement if item == previous else item for item in frontier.bindings)}
+    )
+
+
+def _queue_promoted_result_checkpoint(
+    replacement: DeliveryFrontier,
+    previous: DeliveryFrontier,
+    binding: OutcomeAuthorityBinding,
+    updated: OutcomeAuthorityBinding,
+) -> DeliveryFrontier:
+    candidate = binding.result_candidate
+    if candidate is None:
+        _conflict("promoted Task checkpoint requires the published result candidate")
+    triggers: list[DeliveryCheckpointTrigger] = []
+    if not any(item.results for item in previous.bindings):
+        triggers.append(
+            DeliveryCheckpointTrigger(
+                kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
+                outcome_id=binding.outcome_id,
+                task_id=candidate.result.task_id,
+            )
+        )
+    if updated.stage == DeliveryStage.COMPLETED:
+        triggers.append(
+            DeliveryCheckpointTrigger(
+                kind=DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
+                outcome_id=binding.outcome_id,
+            )
+        )
+    pending = previous.pending_checkpoint
+    if pending is None and not triggers:
+        return replacement
+    combined = (*(() if pending is None else pending.triggers), *triggers)
+    return replacement.model_copy(
+        update={
+            "pending_checkpoint": DeliveryPendingCheckpoint(
+                head=candidate.result.completed_commit,
+                triggers=tuple(dict.fromkeys(combined)),
+            )
+        }
     )
 
 

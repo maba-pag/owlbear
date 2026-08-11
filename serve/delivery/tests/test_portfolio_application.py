@@ -370,6 +370,20 @@ def test_portfolio_claim_suppresses_second_orchestration_recommendation(tmp_path
     assert tuple(item.kind.value for item in view.guidance) == ("work-underway",)
 
 
+def test_portfolio_projects_change_checkpoint_publication_state(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+
+    state = application.show_change_checkpoint_publication("change-a")
+
+    assert state == runtimes["change-a"].checkpoint_publication_state()
+    assert state.change_id == "change-a"
+    assert state.published_head is None
+    assert state.pending_checkpoint is None
+
+
 def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     runtime_root = repository / ".owlbear/delivery/runtime"

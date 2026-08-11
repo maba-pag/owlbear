@@ -19,6 +19,7 @@ from owlbear_delivery import (
     ChangeWriter,
     DeliveryActiveClaim,
     DeliveryChangeStage,
+    DeliveryCheckpointTriggerKind,
     DeliveryContract,
     DeliveryFrontier,
     DeliveryIntegrationAttention,
@@ -299,8 +300,26 @@ def test_runtime_migrates_reducible_assembly_metadata_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 2
+    assert canonical["schema_version"] == 3
     assert all("assembly_required" not in binding for binding in canonical["bindings"])
+    assert json.loads(path.read_bytes()) == canonical
+
+
+def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    path = tmp_path / "changes/delivery-runtime/frontier.json"
+    payload = json.loads(runtime.frontier_bytes())
+    payload["schema_version"] = 2
+    payload.pop("published_head")
+    payload.pop("pending_checkpoint")
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    migrated = DeliveryRuntime(tmp_path, _contract())
+    canonical = json.loads(migrated.frontier_bytes())
+
+    assert canonical["schema_version"] == 3
+    assert canonical["published_head"] is None
+    assert canonical["pending_checkpoint"] is None
     assert json.loads(path.read_bytes()) == canonical
 
 
@@ -442,7 +461,11 @@ def test_build_advance_binds_compact_result_and_releases_writer(tmp_path: Path) 
         PublishDeliveryPlan(
             outcome_id="OUT-001",
             claim_id="plan-claim",
-            tasks=(_task("TASK-001"), _task("TASK-002", dependency_ids=("TASK-001",))),
+            tasks=(
+                _task("TASK-001"),
+                _task("TASK-002", dependency_ids=("TASK-001",)),
+                _task("TASK-003", dependency_ids=("TASK-002",)),
+            ),
         )
     )
     runtime.transition(AdvanceDelivery(outcome_id="OUT-001", claim_id="plan-claim", output=plan.output))
@@ -471,8 +494,15 @@ def test_build_advance_binds_compact_result_and_releases_writer(tmp_path: Path) 
     assert coordinator.show("delivery-runtime").last_reviewed_commit == completed_commit
     assert coordinator.show("delivery-runtime").writer is None
     assert json.loads(runtime.frontier_bytes())["bindings"][0]["results"] == [result.model_dump(mode="json")]
+    first_checkpoint = runtime.checkpoint_publication_state()
+    assert first_checkpoint.published_head is None
+    assert first_checkpoint.pending_checkpoint is not None
+    assert first_checkpoint.pending_checkpoint.head == completed_commit
+    assert tuple(trigger.kind for trigger in first_checkpoint.pending_checkpoint.triggers) == (
+        DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
+    )
 
-    second_result, second_candidate, _second_commit, second_claim = _publish_task_result(
+    second_result, second_candidate, second_commit, second_claim = _publish_task_result(
         runtime,
         coordinator,
         coordination,
@@ -480,7 +510,7 @@ def test_build_advance_binds_compact_result_and_releases_writer(tmp_path: Path) 
         job_id=2,
     )
 
-    completed = runtime.transition(
+    second_advance = runtime.transition(
         AdvanceDelivery(
             outcome_id="OUT-001",
             claim_id=second_claim,
@@ -488,8 +518,38 @@ def test_build_advance_binds_compact_result_and_releases_writer(tmp_path: Path) 
         )
     )
 
+    assert second_advance.stage == DeliveryStage.IMPLEMENTATION
+    middle_checkpoint = runtime.checkpoint_publication_state()
+    assert middle_checkpoint.pending_checkpoint is not None
+    assert middle_checkpoint.pending_checkpoint.head == second_commit
+    assert tuple(trigger.kind for trigger in middle_checkpoint.pending_checkpoint.triggers) == (
+        DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
+    )
+    third_result, third_candidate, _third_commit, third_claim = _publish_task_result(
+        runtime,
+        coordinator,
+        coordination,
+        task_id="TASK-003",
+        job_id=3,
+    )
+
+    completed = runtime.transition(
+        AdvanceDelivery(
+            outcome_id="OUT-001",
+            claim_id=third_claim,
+            output=third_candidate.output,
+        )
+    )
+
     assert completed.stage == DeliveryStage.COMPLETED
-    assert completed.results == (result, second_result)
+    assert completed.results == (result, second_result, third_result)
+    completed_checkpoint = runtime.checkpoint_publication_state()
+    assert completed_checkpoint.pending_checkpoint is not None
+    assert completed_checkpoint.pending_checkpoint.head == third_result.completed_commit
+    assert tuple(trigger.kind for trigger in completed_checkpoint.pending_checkpoint.triggers) == (
+        DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
+        DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
+    )
     serialized = runtime.frontier_bytes().decode()
     for residue in (
         "reviewer-sentinel",
