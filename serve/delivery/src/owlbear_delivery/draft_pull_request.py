@@ -187,29 +187,27 @@ class DraftPullRequestPublisher:
 
     def observe_checks(self, request: ObserveChangePublicationChecks) -> PublicationCheckSnapshot:
         """Observe checks for the exact PR and head bound to one Change."""
-        lock_root = self._state_root / "locks" / request.change_id
-        with locked_roots((lock_root,)):
-            publication = self._read_receipt(request)
-            if publication is None:
-                self._conflict(request, "Change has no draft pull-request publication receipt")
-            current = self._provider.read_pull_request(publication.repository, publication.number)
-            self._validate_publication_identity(current, publication, request)
-            snapshot = self._provider.observe_checks(
-                ObservePublicationChecks(
-                    repository=publication.repository,
-                    number=publication.number,
-                    expected_head_sha=request.published_head,
-                )
+        publication = self._read_receipt(request)
+        if publication is None:
+            self._conflict(request, "Change has no draft pull-request publication receipt")
+        current = self._provider.read_pull_request(publication.repository, publication.number)
+        self._validate_publication_identity(current, publication, request)
+        snapshot = self._provider.observe_checks(
+            ObservePublicationChecks(
+                repository=publication.repository,
+                number=publication.number,
+                expected_head_sha=request.published_head,
             )
-            if (
-                snapshot.repository != publication.repository
-                or snapshot.number != publication.number
-                or snapshot.head_sha != request.published_head
-            ):
-                self._invalid_response(request, "provider returned checks for a different publication identity")
-            observed = self._provider.read_pull_request(publication.repository, publication.number)
-            self._validate_publication_identity(observed, publication, request)
-            return snapshot
+        )
+        if (
+            snapshot.repository != publication.repository
+            or snapshot.number != publication.number
+            or snapshot.head_sha != request.published_head
+        ):
+            self._invalid_response(request, "provider returned checks for a different publication identity")
+        observed = self._provider.read_pull_request(publication.repository, publication.number)
+        self._validate_publication_identity(observed, publication, request)
+        return snapshot
 
     def _update_generated_summary_locked(
         self,

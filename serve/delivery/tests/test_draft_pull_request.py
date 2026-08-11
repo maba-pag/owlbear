@@ -206,6 +206,9 @@ def test_observes_checks_from_change_bound_pull_request_identity(tmp_path: Path)
     provider = _Provider()
     publisher = _publisher(tmp_path, provider)
     publication = publisher.publish(_request())
+    change_lock_root = tmp_path / "pull-requests" / "locks" / "change-a"
+    (change_lock_root / ".storage.lock").unlink()
+    change_lock_root.rmdir()
 
     snapshot = publisher.observe_checks(_checks_request())
 
@@ -219,6 +222,7 @@ def test_observes_checks_from_change_bound_pull_request_identity(tmp_path: Path)
             expected_head_sha=publication.head_sha,
         )
     ]
+    assert not change_lock_root.exists()
 
 
 def test_rejects_moved_pull_request_before_check_observation(tmp_path: Path) -> None:
