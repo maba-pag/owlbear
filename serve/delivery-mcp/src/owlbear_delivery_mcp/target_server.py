@@ -24,6 +24,7 @@ from owlbear_delivery.delivery_runtime import (
 )
 from owlbear_delivery.design_package import DesignPackageConflictError
 from owlbear_delivery.portfolio_application import PortfolioApplication, PortfolioApplicationError
+from owlbear_delivery.publication_provider import PublicationProviderError
 from owlbear_delivery.runtime_transaction import (
     TransactionConflictError,
     TransactionManifestError,
@@ -41,6 +42,8 @@ from owlbear_delivery_mcp.target_models import (
     CompletedPageRequest,
     CreateDesignSessionParams,
     CreateDesignSessionRequest,
+    CreateOrReconcileDraftPullRequestParams,
+    CreateOrReconcileDraftPullRequestRequest,
     DeliveryPlanPublication,
     DeliveryResultPublication,
     EmptyParams,
@@ -49,6 +52,8 @@ from owlbear_delivery_mcp.target_models import (
     IntegrationRepairAuthorityAttentionRequest,
     IntegrationRepairParams,
     IntegrationRepairRequest,
+    PublishChangeBranchParams,
+    PublishChangeBranchRequest,
     PublishDeliveryPlanParams,
     PublishDeliveryPlanRequest,
     PublishDeliveryResultParams,
@@ -89,6 +94,8 @@ DELIVERY_OPERATION_NAMES = (
     "create_integration_repair_candidate",
     "publish_delivery_plan",
     "publish_delivery_result",
+    "publish_change_branch",
+    "create_or_reconcile_draft_pull_request",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
@@ -275,6 +282,27 @@ class TargetMCPAdapter:
         )
         return DeliveryResultPublication.from_candidate(candidate)
 
+    async def publish_change_branch(self, request: PublishChangeBranchRequest) -> dict[str, object]:
+        """Publish or reconcile one exact reviewed Change branch checkpoint."""
+        params = self._validate(PublishChangeBranchParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.publish_change_branch(params.request),
+        )
+
+    async def create_or_reconcile_draft_pull_request(
+        self,
+        request: CreateOrReconcileDraftPullRequestRequest,
+    ) -> dict[str, object]:
+        """Create or recover the unique draft PR for one first checkpoint."""
+        params = self._validate(CreateOrReconcileDraftPullRequestParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.create_or_reconcile_draft_pull_request(params.request),
+        )
+
     async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]:
         """Apply one worker-owned Delivery transition."""
         params = self._validate(TransitionDeliveryParams, request)
@@ -407,6 +435,13 @@ class TargetMCPAdapter:
                 exc.diagnostic.detail,
                 authority,
                 retry_safe=isinstance(exc, CompletedHistoryStaleError),
+            )
+        except PublicationProviderError as exc:
+            self._raise(
+                exc.code.value,
+                str(exc) or exc.code.value,
+                self._authority(params),
+                retry_safe=exc.retry_safe,
             )
         except _NAMED_DELIVERY_ERRORS as exc:
             self._raise(

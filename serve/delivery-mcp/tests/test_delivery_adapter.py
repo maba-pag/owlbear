@@ -23,6 +23,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryTaskResult,
 )
 from owlbear_delivery.design_package import DesignPackageConflictError
+from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
 from owlbear_delivery.runtime_transaction import TransactionPathError
 from owlbear_delivery_mcp.target_server import (
     DELIVERY_OPERATION_ANNOTATIONS,
@@ -159,6 +160,22 @@ def _requests() -> dict[str, dict[str, object]]:
         "publish_delivery_result": {
             **change,
             "request": {"outcome_id": "OUT-001", "claim_id": "claim", "result": _result()},
+        },
+        "publish_change_branch": {
+            "request": {
+                "change_id": CHANGE,
+                "expected_remote_head": None,
+                "operation_id": "branch-operation",
+            }
+        },
+        "create_or_reconcile_draft_pull_request": {
+            "request": {
+                "change_id": CHANGE,
+                "operation_id": "pr-operation",
+                "published_head": COMMIT,
+                "title": "Change A",
+                "generated_summary": "First reviewed checkpoint.",
+            }
         },
         "transition_delivery": {
             **change,
@@ -319,6 +336,17 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             "revise_design_session",
             DesignPackageConflictError("package identity is stale"),
             "ERR_DESIGN_PACKAGE_CONFLICT",
+            True,
+        ),
+        (
+            "create_or_reconcile_draft_pull_request",
+            PublicationProviderError(
+                PublicationProviderFailureCode.RATE_LIMITED,
+                "create_draft_pull_request",
+                "provider rate limit reached",
+                retry_safe=True,
+            ),
+            "rate_limited",
             True,
         ),
         ("integrate_ready_change", TransactionPathError(), "ERR_TRANSACTION_PATH_UNSAFE", False),

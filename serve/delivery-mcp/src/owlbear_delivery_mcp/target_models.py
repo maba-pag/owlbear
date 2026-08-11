@@ -8,6 +8,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
+from owlbear_delivery.change_publication import PublishChangeBranch
 from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
     DeliveryIntegrationRepair,
@@ -21,6 +22,7 @@ from owlbear_delivery.delivery_runtime import (
     PublishDeliveryPlan,
     PublishDeliveryResult,
 )
+from owlbear_delivery.draft_pull_request import CreateOrReconcileDraftPullRequest
 from owlbear_delivery.identities import ChangeId
 from owlbear_delivery.target_admission import DeliveryAdmissionRequest
 
@@ -120,6 +122,18 @@ class PublishDeliveryResultParams(ChangeParams):
     """Validate one Build result publication."""
 
     request: PublishDeliveryResult
+
+
+class PublishChangeBranchParams(_TargetProtocolModel):
+    """Validate one exact reviewed Change-branch publication."""
+
+    request: PublishChangeBranch
+
+
+class CreateOrReconcileDraftPullRequestParams(_TargetProtocolModel):
+    """Validate one exact first-checkpoint draft pull-request publication."""
+
+    request: CreateOrReconcileDraftPullRequest
 
 
 class DeliveryPlanPublication(_TargetProtocolModel):
@@ -226,6 +240,14 @@ type PublishDeliveryPlanRequest = Annotated[
     PublishDeliveryPlanParams,
     BeforeValidator(partial(_parse_json_model, PublishDeliveryPlanParams)),
 ]
+type PublishChangeBranchRequest = Annotated[
+    PublishChangeBranchParams,
+    BeforeValidator(partial(_parse_json_model, PublishChangeBranchParams)),
+]
+type CreateOrReconcileDraftPullRequestRequest = Annotated[
+    CreateOrReconcileDraftPullRequestParams,
+    BeforeValidator(partial(_parse_json_model, CreateOrReconcileDraftPullRequestParams)),
+]
 type RepairClaimContextRequest = Annotated[
     RepairClaimContextParams,
     BeforeValidator(partial(_parse_json_model, RepairClaimContextParams)),
@@ -264,6 +286,8 @@ __all__ = [
     "CompletedPageRequest",
     "CreateDesignSessionParams",
     "CreateDesignSessionRequest",
+    "CreateOrReconcileDraftPullRequestParams",
+    "CreateOrReconcileDraftPullRequestRequest",
     "DeliveryPlanPublication",
     "DeliveryResultPublication",
     "DeliveryStartupConfig",
@@ -274,6 +298,8 @@ __all__ = [
     "IntegrationRepairAuthorityAttentionRequest",
     "IntegrationRepairParams",
     "IntegrationRepairRequest",
+    "PublishChangeBranchParams",
+    "PublishChangeBranchRequest",
     "PublishDeliveryPlanParams",
     "PublishDeliveryPlanRequest",
     "PublishDeliveryResultParams",

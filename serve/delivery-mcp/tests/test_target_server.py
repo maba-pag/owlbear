@@ -58,6 +58,8 @@ DELIVERY_TOOLS = {
     "create_integration_repair_candidate",
     "publish_delivery_plan",
     "publish_delivery_result",
+    "publish_change_branch",
+    "create_or_reconcile_draft_pull_request",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
