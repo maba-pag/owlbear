@@ -42,8 +42,6 @@ from owlbear_delivery_mcp.target_models import (
     CompletedPageRequest,
     CreateDesignSessionParams,
     CreateDesignSessionRequest,
-    CreateOrReconcileDraftPullRequestParams,
-    CreateOrReconcileDraftPullRequestRequest,
     DeliveryPlanPublication,
     DeliveryResultPublication,
     EmptyParams,
@@ -52,10 +50,6 @@ from owlbear_delivery_mcp.target_models import (
     IntegrationRepairAuthorityAttentionRequest,
     IntegrationRepairParams,
     IntegrationRepairRequest,
-    ObserveChangePublicationChecksParams,
-    ObserveChangePublicationChecksRequest,
-    PublishChangeBranchParams,
-    PublishChangeBranchRequest,
     PublishDeliveryPlanParams,
     PublishDeliveryPlanRequest,
     PublishDeliveryResultParams,
@@ -71,8 +65,6 @@ from owlbear_delivery_mcp.target_models import (
     TargetDiagnostic,
     TransitionDeliveryParams,
     TransitionDeliveryRequest,
-    UpdateGeneratedPullRequestSummaryParams,
-    UpdateGeneratedPullRequestSummaryRequest,
     WorkItemParams,
     WorkItemRequest,
 )
@@ -98,9 +90,7 @@ DELIVERY_OPERATION_NAMES = (
     "create_integration_repair_candidate",
     "publish_delivery_plan",
     "publish_delivery_result",
-    "publish_change_branch",
-    "create_or_reconcile_draft_pull_request",
-    "update_generated_pull_request_summary",
+    "reconcile_change_checkpoint",
     "observe_change_publication_checks",
     "transition_delivery",
     "recover_claim",
@@ -289,49 +279,25 @@ class TargetMCPAdapter:
         )
         return DeliveryResultPublication.from_candidate(candidate)
 
-    async def publish_change_branch(self, request: PublishChangeBranchRequest) -> dict[str, object]:
-        """Publish or reconcile one exact reviewed Change branch checkpoint."""
-        params = self._validate(PublishChangeBranchParams, request)
+    async def reconcile_change_checkpoint(self, request: ChangeRequest) -> dict[str, object]:
+        """Reconcile one durable checkpoint using only engine-derived external identities."""
+        params = self._validate(ChangeParams, request)
         return await asyncio.to_thread(
             self._call,
             params,
-            lambda: self._application.publish_change_branch(params.request),
-        )
-
-    async def create_or_reconcile_draft_pull_request(
-        self,
-        request: CreateOrReconcileDraftPullRequestRequest,
-    ) -> dict[str, object]:
-        """Create or recover the unique draft PR for one first checkpoint."""
-        params = self._validate(CreateOrReconcileDraftPullRequestParams, request)
-        return await asyncio.to_thread(
-            self._call,
-            params,
-            lambda: self._application.create_or_reconcile_draft_pull_request(params.request),
-        )
-
-    async def update_generated_pull_request_summary(
-        self,
-        request: UpdateGeneratedPullRequestSummaryRequest,
-    ) -> dict[str, object]:
-        """Replace or reconcile OwlBear's generated block for one published Change."""
-        params = self._validate(UpdateGeneratedPullRequestSummaryParams, request)
-        return await asyncio.to_thread(
-            self._call,
-            params,
-            lambda: self._application.update_generated_pull_request_summary(params.request),
+            lambda: self._application.reconcile_change_checkpoint(params.change_id),
         )
 
     async def observe_change_publication_checks(
         self,
-        request: ObserveChangePublicationChecksRequest,
+        request: ChangeRequest,
     ) -> dict[str, object]:
-        """Observe checks for one Change-bound published head."""
-        params = self._validate(ObserveChangePublicationChecksParams, request)
+        """Observe checks at the engine-derived published Change head."""
+        params = self._validate(ChangeParams, request)
         return await asyncio.to_thread(
             self._call,
             params,
-            lambda: self._application.observe_change_publication_checks(params.request),
+            lambda: self._application.observe_change_publication_checks(params.change_id),
         )
 
     async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]:

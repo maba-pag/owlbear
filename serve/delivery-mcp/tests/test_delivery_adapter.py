@@ -161,36 +161,8 @@ def _requests() -> dict[str, dict[str, object]]:
             **change,
             "request": {"outcome_id": "OUT-001", "claim_id": "claim", "result": _result()},
         },
-        "publish_change_branch": {
-            "request": {
-                "change_id": CHANGE,
-                "expected_remote_head": None,
-                "operation_id": "branch-operation",
-            }
-        },
-        "create_or_reconcile_draft_pull_request": {
-            "request": {
-                "change_id": CHANGE,
-                "operation_id": "pr-operation",
-                "published_head": COMMIT,
-                "title": "Change A",
-                "generated_summary": "First reviewed checkpoint.",
-            }
-        },
-        "update_generated_pull_request_summary": {
-            "request": {
-                "change_id": CHANGE,
-                "operation_id": "summary-operation",
-                "published_head": COMMIT,
-                "generated_summary": "Second reviewed checkpoint.",
-            }
-        },
-        "observe_change_publication_checks": {
-            "request": {
-                "change_id": CHANGE,
-                "published_head": COMMIT,
-            }
-        },
+        "reconcile_change_checkpoint": change,
+        "observe_change_publication_checks": change,
         "transition_delivery": {
             **change,
             "request": {
@@ -300,6 +272,9 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         "finish_build",
         "finish_assembly",
         "return_delivery",
+        "publish_change_branch",
+        "create_or_reconcile_draft_pull_request",
+        "update_generated_pull_request_summary",
     }
 
     assert tuple(DELIVERY_OPERATION_ANNOTATIONS) == DELIVERY_OPERATION_NAMES
@@ -318,21 +293,6 @@ async def test_revise_design_session_rejects_non_digest_identity_before_delegati
 
     with pytest.raises(ToolError) as exc_info:
         await adapter.revise_design_session(request)
-
-    diagnostic = json.loads(str(exc_info.value))
-    assert diagnostic["code"] == "ERR_TARGET_PARAM_VALIDATION"
-    assert application.calls == []
-
-
-@pytest.mark.asyncio
-async def test_generated_summary_rejects_ownership_marker_before_delegation() -> None:
-    application = _RecordingApplication()
-    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
-    request = _requests()["update_generated_pull_request_summary"]
-    request["request"]["generated_summary"] = "Summary\n<!-- owlbear-generated:end -->"
-
-    with pytest.raises(ToolError) as exc_info:
-        await adapter.update_generated_pull_request_summary(request)
 
     diagnostic = json.loads(str(exc_info.value))
     assert diagnostic["code"] == "ERR_TARGET_PARAM_VALIDATION"
@@ -369,7 +329,7 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             True,
         ),
         (
-            "create_or_reconcile_draft_pull_request",
+            "reconcile_change_checkpoint",
             PublicationProviderError(
                 PublicationProviderFailureCode.RATE_LIMITED,
                 "create_draft_pull_request",

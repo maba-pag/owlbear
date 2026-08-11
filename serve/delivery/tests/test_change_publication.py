@@ -119,6 +119,43 @@ def test_publishes_and_replays_exact_change_branch_without_mutating_target_or_us
     assert (repository / "user.txt").read_text(encoding="utf-8") == "uncommitted user work\n"
 
 
+def test_rejects_reviewed_head_drift_before_remote_publication(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, reviewed = _reviewed_change(manager, "drifted-checkpoint")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        publisher.publish(
+            PublishChangeBranch(
+                change_id="drifted-checkpoint",
+                expected_remote_head=None,
+                expected_published_head="f" * 40,
+                operation_id="stale-checkpoint",
+            )
+        )
+
+    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
+    assert _head(repository, "refs/heads/owlbear/change/drifted-checkpoint") == reviewed
+    assert (
+        _git(
+            remote,
+            "show-ref",
+            "--verify",
+            "--quiet",
+            "refs/heads/owlbear/change/drifted-checkpoint",
+            check=False,
+        ).returncode
+        == 1
+    )
+
+
 def test_rejects_divergent_remote_change_branch_without_rewriting_it(tmp_path: Path) -> None:
     repository, remote, _initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)

@@ -804,6 +804,50 @@ class DeliveryRuntime:
             pending_checkpoint=frontier.pending_checkpoint,
         )
 
+    def record_checkpoint_branch_publication(
+        self,
+        expected: DeliveryCheckpointPublicationState,
+        published_head: str,
+    ) -> DeliveryCheckpointPublicationState:
+        """Record one exact reconciled remote head without draining its obligations."""
+        frontier, previous = self._read()
+        pending = expected.pending_checkpoint
+        if (
+            expected.change_id != self._contract.change_id
+            or pending is None
+            or pending.head != published_head
+            or frontier.published_head != expected.published_head
+        ):
+            _conflict("checkpoint branch publication no longer matches the durable queue")
+        updated = frontier.model_copy(update={"published_head": published_head})
+        self._replace(previous, updated)
+        return self.checkpoint_publication_state()
+
+    def acknowledge_checkpoint_publication(
+        self,
+        expected: DeliveryPendingCheckpoint,
+        published_head: str,
+    ) -> DeliveryCheckpointPublicationState:
+        """Drain reconciled obligations while retaining any newer local checkpoint."""
+        frontier, previous = self._read()
+        current = frontier.pending_checkpoint
+        if expected.head != published_head or frontier.published_head != published_head or current is None:
+            _conflict("checkpoint acknowledgment no longer matches the published head")
+        if current.head == published_head:
+            retained = tuple(trigger for trigger in current.triggers if trigger not in expected.triggers)
+        else:
+            retained = tuple(
+                trigger
+                for trigger in current.triggers
+                if not (
+                    trigger in expected.triggers and trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK
+                )
+            )
+        pending = current.model_copy(update={"triggers": retained}) if retained else None
+        updated = frontier.model_copy(update={"pending_checkpoint": pending})
+        self._replace(previous, updated)
+        return self.checkpoint_publication_state()
+
     def active_claims(self) -> tuple[tuple[str, DeliveryActiveClaim], ...]:
         """Return active claim identity keyed by outcome in authority order."""
         frontier, _content = self._read()

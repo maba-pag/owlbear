@@ -14,6 +14,11 @@ from typing import TYPE_CHECKING, Literal, Never
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from owlbear_delivery.change_publication import (
+    ChangeBranchPublicationReceipt,
+    ChangeBranchPublisher,
+    PublishChangeBranch,
+)
 from owlbear_delivery.change_workspace import (
     AtomicIntegrationPreparation,
     AtomicIntegrationResult,
@@ -36,6 +41,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryBlock,
     DeliveryChangeStage,
     DeliveryCheckpointPublicationState,
+    DeliveryCheckpointTriggerKind,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
@@ -43,6 +49,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryIntegrationCompletion,
     DeliveryIntegrationRepair,
     DeliveryIntegrationRepairAuthorityAttention,
+    DeliveryPendingCheckpoint,
     DeliveryPlanCandidate,
     DeliveryRecoveryAttention,
     DeliveryRequest,
@@ -67,6 +74,14 @@ from owlbear_delivery.design_package import (
     DesignPackageConflictError,
     DesignPackageResult,
 )
+from owlbear_delivery.draft_pull_request import (
+    CreateOrReconcileDraftPullRequest,
+    DraftPullRequestPublicationReceipt,
+    DraftPullRequestPublisher,
+    GeneratedPullRequestSummaryReceipt,
+    ObserveChangePublicationChecks,
+    UpdateGeneratedPullRequestSummary,
+)
 from owlbear_delivery.portfolio_operating import (
     PortfolioGuidanceFacts,
     PortfolioOperatingView,
@@ -74,6 +89,7 @@ from owlbear_delivery.portfolio_operating import (
     PortfolioWorkScope,
     derive_portfolio_guidance,
 )
+from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCompilationResult,
@@ -92,25 +108,12 @@ from owlbear_delivery.work_items import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from owlbear_delivery.change_publication import (
-        ChangeBranchPublicationReceipt,
-        ChangeBranchPublisher,
-        PublishChangeBranch,
-    )
     from owlbear_delivery.completed_history import (
         CompletedChangePage,
         CompletedChangeRecord,
         CompletedHistoryCatalog,
     )
     from owlbear_delivery.design_package import DesignPackageStore, VerifiedDesignPackage
-    from owlbear_delivery.draft_pull_request import (
-        CreateOrReconcileDraftPullRequest,
-        DraftPullRequestPublicationReceipt,
-        DraftPullRequestPublisher,
-        GeneratedPullRequestSummaryReceipt,
-        ObserveChangePublicationChecks,
-        UpdateGeneratedPullRequestSummary,
-    )
     from owlbear_delivery.integration_verification import IntegrationVerificationReceipt, IntegrationVerifier
     from owlbear_delivery.publication_provider import PublicationCheckSnapshot
     from owlbear_delivery.target_admission import (
@@ -139,6 +142,31 @@ def _operating_scope(scope: WorkItemScope) -> PortfolioWorkScope:
     if scope == WorkItemScope.CHANGE_INTEGRATION:
         return PortfolioWorkScope.INTEGRATION
     return PortfolioWorkScope.OUTCOME
+
+
+def _checkpoint_operation_id(kind: str, *parts: str) -> str:
+    payload = json.dumps((kind, *parts), separators=(",", ":"))
+    return f"checkpoint-{kind}-{hashlib.sha256(payload.encode()).hexdigest()}"
+
+
+def _checkpoint_summary(
+    runtime: DeliveryRuntime,
+    pending: DeliveryPendingCheckpoint,
+    head: str,
+) -> str:
+    outcome_titles = {outcome.outcome_id: outcome.title for outcome in runtime.contract.outcomes}
+    lines = [f"Reviewed Delivery checkpoint `{head}`.", "", "Included boundaries:"]
+    for trigger in pending.triggers:
+        if trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK:
+            lines.append("- First promoted Task result")
+        elif trigger.kind == DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME:
+            title = outcome_titles.get(trigger.outcome_id or "", trigger.outcome_id or "unknown Outcome")
+            lines.append(f"- Verified Outcome `{trigger.outcome_id}`: {title}")
+        elif trigger.kind == DeliveryCheckpointTriggerKind.FINALIZATION:
+            lines.append("- Finalized Change")
+        else:
+            lines.append("- Explicit publication request")
+    return "\n".join(lines)
 
 
 def _operator_claim(claim: DeliveryActiveClaim | None) -> DeliveryOperatorClaim | None:
@@ -477,6 +505,18 @@ class PortfolioReadView(_ApplicationModel):
     operating: PortfolioOperatingView
 
 
+class DeliveryCheckpointReconciliationResult(_ApplicationModel):
+    """One deterministic checkpoint reconciliation attempt and remaining queue state."""
+
+    change_id: str = Field(min_length=1)
+    attempted_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    branch_publication: ChangeBranchPublicationReceipt | None = None
+    draft_pull_request: DraftPullRequestPublicationReceipt | None = None
+    generated_summary: GeneratedPullRequestSummaryReceipt | None = None
+    state: DeliveryCheckpointPublicationState
+    reconciled: bool
+
+
 class PortfolioApplicationConfig(_ApplicationModel):
     """Configured capacity, source root, and complete stage-role policy."""
 
@@ -586,46 +626,113 @@ class PortfolioApplication:
         """Create or replay one exact authored Design package."""
         return self._package_store.create(change_id, intent_bytes, design_bytes)
 
-    def publish_change_branch(self, request: PublishChangeBranch) -> ChangeBranchPublicationReceipt:
-        """Publish or reconcile one exact reviewed Change branch checkpoint."""
-        if self._change_branch_publisher is None:
-            message = "Change branch publication is not configured"
-            raise PortfolioApplicationError(message)
-        return self._change_branch_publisher.publish(request)
-
-    def create_or_reconcile_draft_pull_request(
-        self,
-        request: CreateOrReconcileDraftPullRequest,
-    ) -> DraftPullRequestPublicationReceipt:
-        """Create or recover the unique draft PR for one first checkpoint."""
-        if self._draft_pull_request_publisher is None:
-            message = "draft pull-request publication is not configured"
-            raise PortfolioApplicationError(message)
-        return self._draft_pull_request_publisher.publish(request)
-
-    def update_generated_pull_request_summary(
-        self,
-        request: UpdateGeneratedPullRequestSummary,
-    ) -> GeneratedPullRequestSummaryReceipt:
-        """Replace or reconcile OwlBear's generated block for one published Change."""
-        if self._draft_pull_request_publisher is None:
-            message = "draft pull-request publication is not configured"
-            raise PortfolioApplicationError(message)
-        return self._draft_pull_request_publisher.update_generated_summary(request)
-
     def observe_change_publication_checks(
         self,
-        request: ObserveChangePublicationChecks,
+        change_id: str,
     ) -> PublicationCheckSnapshot:
-        """Observe provider checks for one Change-bound published head."""
+        """Observe provider checks at the exact durable published Change head."""
         if self._draft_pull_request_publisher is None:
             message = "draft pull-request publication is not configured"
             raise PortfolioApplicationError(message)
-        return self._draft_pull_request_publisher.observe_checks(request)
+        published_head = self._runtime(change_id).checkpoint_publication_state().published_head
+        if published_head is None:
+            message = "Change has no reconciled checkpoint publication"
+            raise PortfolioApplicationError(message)
+        return self._draft_pull_request_publisher.observe_checks(
+            ObserveChangePublicationChecks(change_id=change_id, published_head=published_head)
+        )
 
     def show_change_checkpoint_publication(self, change_id: str) -> DeliveryCheckpointPublicationState:
         """Return the durable checkpoint queue for one admitted Change."""
         return self._runtime(change_id).checkpoint_publication_state()
+
+    def reconcile_change_checkpoint(self, change_id: str) -> DeliveryCheckpointReconciliationResult:
+        """Reconcile one durable checkpoint without accepting caller-supplied external fences."""
+        if self._change_branch_publisher is None or self._draft_pull_request_publisher is None:
+            message = "checkpoint publication is not configured"
+            raise PortfolioApplicationError(message)
+        lock_root = self._target_root / "publications/checkpoints/locks" / change_id
+        with locked_roots((lock_root,)):
+            return self._reconcile_change_checkpoint(change_id)
+
+    def _reconcile_change_checkpoint(self, change_id: str) -> DeliveryCheckpointReconciliationResult:
+        runtime = self._runtime(change_id)
+        initial = runtime.checkpoint_publication_state()
+        pending = initial.pending_checkpoint
+        if pending is None:
+            return DeliveryCheckpointReconciliationResult(
+                change_id=change_id,
+                attempted_head=None,
+                state=initial,
+                reconciled=True,
+            )
+        if pending.head is None:
+            message = "checkpoint publication requires a current reviewed head"
+            raise PortfolioApplicationError(message)
+
+        head = pending.head
+        branch_receipt = None
+        state = initial
+        if initial.published_head != head:
+            branch_request = PublishChangeBranch(
+                change_id=change_id,
+                expected_remote_head=initial.published_head,
+                expected_published_head=head,
+                operation_id=_checkpoint_operation_id(
+                    "branch",
+                    change_id,
+                    head,
+                    initial.published_head or "missing",
+                ),
+            )
+            branch_receipt = self._change_branch_publisher.publish(branch_request)
+            state = runtime.record_checkpoint_branch_publication(initial, branch_receipt.published_head)
+
+        current = state.pending_checkpoint
+        if current is None or current.head is None or not set(pending.triggers) <= set(current.triggers):
+            return DeliveryCheckpointReconciliationResult(
+                change_id=change_id,
+                attempted_head=head,
+                branch_publication=branch_receipt,
+                state=state,
+                reconciled=False,
+            )
+
+        summary = _checkpoint_summary(runtime, pending, head)
+        first_checkpoint = any(
+            trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK for trigger in pending.triggers
+        )
+        draft_receipt = None
+        summary_receipt = None
+        if first_checkpoint:
+            draft_receipt = self._draft_pull_request_publisher.publish(
+                CreateOrReconcileDraftPullRequest(
+                    change_id=change_id,
+                    operation_id=_checkpoint_operation_id("pull-request", change_id, head, summary),
+                    published_head=head,
+                    title=runtime.contract.title,
+                    generated_summary=summary,
+                )
+            )
+        else:
+            summary_receipt = self._draft_pull_request_publisher.update_generated_summary(
+                UpdateGeneratedPullRequestSummary(
+                    change_id=change_id,
+                    operation_id=_checkpoint_operation_id("summary", change_id, head, summary),
+                    published_head=head,
+                    generated_summary=summary,
+                )
+            )
+        state = runtime.acknowledge_checkpoint_publication(pending, head)
+        return DeliveryCheckpointReconciliationResult(
+            change_id=change_id,
+            attempted_head=head,
+            branch_publication=branch_receipt,
+            draft_pull_request=draft_receipt,
+            generated_summary=summary_receipt,
+            state=state,
+            reconciled=state.pending_checkpoint is None,
+        )
 
     def read_design_session(self, change_id: str) -> VerifiedDesignPackage:
         """Return one verified authored Design package and its current identity."""

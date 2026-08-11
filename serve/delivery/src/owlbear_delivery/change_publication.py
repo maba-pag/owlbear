@@ -50,6 +50,7 @@ class PublishChangeBranch(_PublicationModel):
 
     change_id: ChangeId
     expected_remote_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    expected_published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
@@ -238,6 +239,8 @@ class ChangeBranchPublisher:
         branch_head = self._resolve_commit(f"refs/heads/{coordination.branch}", request)
         if branch_head != coordination.last_reviewed_commit:
             self._conflict(request, "Change branch head differs from the reviewed boundary")
+        if request.expected_published_head is not None and branch_head != request.expected_published_head:
+            self._conflict(request, "Change branch head differs from the requested checkpoint")
         self._require_clean_worktree(coordination.worktree_path, request)
         target_head = self._fetch_target(request)
         if not self._is_ancestor(target_head, branch_head, request):
@@ -615,6 +618,10 @@ class ChangeBranchPublisher:
             or operation.change_id != request.change_id
             or operation.branch != f"owlbear/change/{operation.change_id}"
             or operation.expected_remote_head != request.expected_remote_head
+            or (
+                request.expected_published_head is not None
+                and operation.published_head != request.expected_published_head
+            )
             or operation.remote != self._remote
             or operation.target_branch != self._target_branch
         ):
