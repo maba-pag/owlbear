@@ -100,6 +100,11 @@ from owlbear_delivery.design_package import (
     DesignPackageStore,
     VerifiedDesignPackage,
 )
+from owlbear_delivery.draft_pull_request import (
+    CreateOrReconcileDraftPullRequest,
+    DraftPullRequestPublicationReceipt,
+    DraftPullRequestPublisher,
+)
 from owlbear_delivery.integration_verification import (
     INTEGRATION_VERIFICATION_PROFILE_PATH,
     IntegrationVerificationProfile,
@@ -294,6 +299,7 @@ __all__ = [
     "CompletionSummary",
     "CoordinationConflictError",
     "CreateDraftPublicationPullRequest",
+    "CreateOrReconcileDraftPullRequest",
     "DeliveryAcquisitionFailure",
     "DeliveryAcquisitionResult",
     "DeliveryActiveClaim",
@@ -367,6 +373,8 @@ __all__ = [
     "DesignPackageResult",
     "DesignPackageStore",
     "DesignReentryBriefing",
+    "DraftPullRequestPublicationReceipt",
+    "DraftPullRequestPublisher",
     "ExternalCompletionProposal",
     "ExternalCompletionResult",
     "FindPublicationPullRequest",
