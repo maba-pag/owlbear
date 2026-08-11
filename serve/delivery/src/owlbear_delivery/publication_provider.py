@@ -67,11 +67,19 @@ class PublicationPullRequest(_ProviderModel):
     state: str = Field(pattern=r"^(open|closed)$")
     merged: bool
     merge_commit_sha: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    merged_at: datetime | None = None
+    merged_by_login: str | None = Field(default=None, min_length=1)
 
     @model_validator(mode="after")
     def _validate_merge_state(self) -> PublicationPullRequest:
         if self.merged and self.merge_commit_sha is None:
             message = "merged pull requests require one merge commit"
+            raise ValueError(message)
+        if self.merged and self.merged_at is None:
+            message = "merged pull requests require one merge timestamp"
+            raise ValueError(message)
+        if self.merged_at is not None and self.merged_at.tzinfo is None:
+            message = "pull request merge timestamps must be timezone-aware"
             raise ValueError(message)
         if self.merged and self.state != "closed":
             message = "merged pull requests must be closed"

@@ -49,6 +49,8 @@ def _pull_response(*, draft: bool = True, head: str = _HEAD) -> dict[str, object
         "state": "open",
         "merged": False,
         "merge_commit_sha": _OTHER_HEAD,
+        "merged_at": None,
+        "merged_by": None,
     }
 
 
@@ -181,6 +183,62 @@ def test_pull_request_lookup_distinguishes_missing_and_ambiguous_identity() -> N
     with pytest.raises(PublicationProviderError) as exc_info:
         provider.find_pull_request(request)
     assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
+
+
+def test_reads_merged_pull_request_evidence_from_one_response() -> None:
+    response = {
+        **_pull_response(draft=False),
+        "state": "closed",
+        "merged": True,
+        "merged_at": "2026-08-11T10:02:00Z",
+        "merged_by": {"login": "octocat"},
+    }
+    provider, _ = _provider(_completed(response))
+
+    pull_request = provider.read_pull_request(_REPOSITORY, 7)
+
+    assert pull_request.merged_at is not None
+    assert pull_request.merged_at.isoformat() == "2026-08-11T10:02:00+00:00"
+    assert pull_request.merged_by_login == "octocat"
+
+
+@pytest.mark.parametrize("missing_key", ["merged_at", "merged_by"])
+def test_pull_request_read_rejects_missing_merge_evidence_key(missing_key: str) -> None:
+    response = _pull_response()
+    del response[missing_key]
+    provider, _ = _provider(_completed(response))
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.read_pull_request(_REPOSITORY, 7)
+
+    assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+
+
+@pytest.mark.parametrize(
+    ("merged_at", "merge_commit_sha"),
+    [
+        (None, _OTHER_HEAD),
+        ("2026-08-11T10:02:00Z", None),
+        ("2026-08-11T10:02:00", _OTHER_HEAD),
+    ],
+)
+def test_pull_request_read_rejects_invalid_merged_evidence(
+    merged_at: str | None,
+    merge_commit_sha: str | None,
+) -> None:
+    response = {
+        **_pull_response(draft=False),
+        "state": "closed",
+        "merged": True,
+        "merged_at": merged_at,
+        "merge_commit_sha": merge_commit_sha,
+    }
+    provider, _ = _provider(_completed(response))
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.read_pull_request(_REPOSITORY, 7)
+
+    assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
 
 
 def test_creates_draft_pull_request_with_fixed_json_payload() -> None:

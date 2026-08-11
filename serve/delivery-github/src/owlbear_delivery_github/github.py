@@ -103,6 +103,10 @@ class _PullRef(_GitHubModel):
     sha: str
 
 
+class _PullUser(_GitHubModel):
+    login: str = Field(min_length=1)
+
+
 class _PullResponse(_GitHubModel):
     number: int = Field(gt=0)
     node_id: str = Field(min_length=1)
@@ -114,6 +118,8 @@ class _PullResponse(_GitHubModel):
     state: str
     merged: bool
     merge_commit_sha: str | None
+    merged_at: str | None
+    merged_by: _PullUser | None
 
 
 class _PullListItem(_GitHubModel):
@@ -569,9 +575,9 @@ class GitHubCliPublicationProvider:
         try:
             parsed = datetime.fromisoformat(value)
         except ValueError as exc:
-            self._invalid_response(operation, "GitHub returned an invalid check timestamp", retry_safe=True, cause=exc)
+            self._invalid_response(operation, "GitHub returned an invalid timestamp", retry_safe=True, cause=exc)
         if parsed.tzinfo is None:
-            self._invalid_response(operation, "GitHub returned a timezone-naive check timestamp", retry_safe=True)
+            self._invalid_response(operation, "GitHub returned a timezone-naive timestamp", retry_safe=True)
         return parsed
 
     def _duration(
@@ -738,6 +744,8 @@ class GitHubCliPublicationProvider:
                 state=response.state,
                 merged=response.merged,
                 merge_commit_sha=response.merge_commit_sha,
+                merged_at=self._timestamp(response.merged_at, operation),
+                merged_by_login=response.merged_by.login if response.merged_by is not None else None,
             )
         except ValidationError as exc:
             self._invalid_response(
