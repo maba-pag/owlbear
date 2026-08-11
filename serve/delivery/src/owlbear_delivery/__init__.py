@@ -105,6 +105,7 @@ from owlbear_delivery.draft_pull_request import (
     DraftPullRequestPublicationReceipt,
     DraftPullRequestPublisher,
     GeneratedPullRequestSummaryReceipt,
+    ObserveChangePublicationChecks,
     UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.integration_verification import (
@@ -415,6 +416,7 @@ __all__ = [
     "LegacySnapshotResult",
     "LegacySnapshotSourceChangedError",
     "LegacySnapshotVerificationError",
+    "ObserveChangePublicationChecks",
     "ObservePublicationChecks",
     "Outcome",
     "OutcomeAuthorityBinding",

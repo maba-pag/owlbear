@@ -10,11 +10,14 @@ import pytest
 from owlbear_delivery.draft_pull_request import (
     CreateOrReconcileDraftPullRequest,
     DraftPullRequestPublisher,
+    ObserveChangePublicationChecks,
     UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.publication_provider import (
     CreateDraftPublicationPullRequest,
     FindPublicationPullRequest,
+    ObservePublicationChecks,
+    PublicationCheckSnapshot,
     PublicationProviderError,
     PublicationProviderFailureCode,
     PublicationPullRequest,
@@ -35,6 +38,8 @@ class _Provider:
     pull_requests: list[PublicationPullRequest] = field(default_factory=list)
     create_calls: int = 0
     update_calls: int = 0
+    observed_requests: list[ObservePublicationChecks] = field(default_factory=list)
+    observed_head: str | None = None
     lose_update_response: bool = False
 
     def read_repository(self, repository: str) -> PublicationRepository:
@@ -117,6 +122,16 @@ class _Provider:
             )
         return updated
 
+    def observe_checks(self, request: ObservePublicationChecks) -> PublicationCheckSnapshot:
+        self.observed_requests.append(request)
+        return PublicationCheckSnapshot(
+            repository=request.repository,
+            number=request.number,
+            head_sha=self.observed_head or request.expected_head_sha,
+            rollup_state="success",
+            checks=(),
+        )
+
 
 def _request(**updates: object) -> CreateOrReconcileDraftPullRequest:
     values = {
@@ -150,6 +165,12 @@ def _summary_request(**updates: object) -> UpdateGeneratedPullRequestSummary:
     return UpdateGeneratedPullRequestSummary.model_validate(values)
 
 
+def _checks_request(**updates: object) -> ObserveChangePublicationChecks:
+    values = {"change_id": "change-a", "published_head": _HEAD}
+    values.update(updates)
+    return ObserveChangePublicationChecks.model_validate(values)
+
+
 def test_creates_one_marked_draft_pr_and_replays_local_receipt(tmp_path: Path) -> None:
     provider = _Provider()
     publisher = _publisher(tmp_path, provider)
@@ -173,6 +194,51 @@ def test_reconciles_lost_create_response_without_creating_second_pr(tmp_path: Pa
     assert receipt.number == 7
     assert provider.create_calls == 1
     assert len(provider.pull_requests) == 1
+
+
+def test_observes_checks_from_change_bound_pull_request_identity(tmp_path: Path) -> None:
+    provider = _Provider()
+    publisher = _publisher(tmp_path, provider)
+    publication = publisher.publish(_request())
+
+    snapshot = publisher.observe_checks(_checks_request())
+
+    assert snapshot.repository == publication.repository
+    assert snapshot.number == publication.number
+    assert snapshot.head_sha == publication.head_sha
+    assert provider.observed_requests == [
+        ObservePublicationChecks(
+            repository=publication.repository,
+            number=publication.number,
+            expected_head_sha=publication.head_sha,
+        )
+    ]
+
+
+def test_rejects_moved_pull_request_before_check_observation(tmp_path: Path) -> None:
+    provider = _Provider()
+    publisher = _publisher(tmp_path, provider)
+    publisher.publish(_request())
+    current = provider.pull_requests[0]
+    provider.pull_requests[0] = current.model_copy(update={"base_branch": "different-target"})
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        publisher.observe_checks(_checks_request())
+
+    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
+    assert provider.observed_requests == []
+
+
+def test_rejects_check_snapshot_for_different_head(tmp_path: Path) -> None:
+    provider = _Provider(observed_head="2" * 40)
+    publisher = _publisher(tmp_path, provider)
+    publisher.publish(_request())
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        publisher.observe_checks(_checks_request())
+
+    assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+    assert len(provider.observed_requests) == 1
 
 
 def test_updates_only_generated_block_and_replays_receipt(tmp_path: Path) -> None:
