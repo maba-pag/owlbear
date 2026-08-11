@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -16,8 +17,12 @@ from owlbear_delivery.completed_history import (
     CompletedHistoryMissingError,
 )
 from owlbear_delivery.delivery_runtime import (
+    DeliveryObservation,
+    DeliveryObservationReceipt,
     DeliveryPlanCandidate,
     DeliveryResultCandidate,
+    DeliveryReview,
+    DeliveryReviewReceipt,
     DeliveryRuntimeReferenceError,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
@@ -97,6 +102,28 @@ def _task() -> dict[str, object]:
 
 
 def _result() -> dict[str, object]:
+    observed_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id=CHANGE,
+            task_or_finalization_id="TASK-001",
+            exact_commit=COMMIT,
+            observation_kind="pytest",
+            command_or_procedure="Delivery MCP adapter contract test",
+            exit_status_or_artifact_locator="exit:0",
+            observer_or_runner_identity="pytest",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit=COMMIT,
+            author_id="MCP adapter test author",
+            reviewer_id="MCP adapter test reviewer",
+            evidence=("The exact fixture commit satisfies task authority.",),
+            reviewed_at=observed_at,
+        )
+    )
     return {
         "result_id": "result-one",
         "change_id": CHANGE,
@@ -104,6 +131,8 @@ def _result() -> dict[str, object]:
         "task_id": "TASK-001",
         "task_digest": DIGEST,
         "completed_commit": COMMIT,
+        "observations": [observation.model_dump(mode="json")],
+        "review": review.model_dump(mode="json"),
     }
 
 

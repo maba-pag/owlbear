@@ -8,6 +8,7 @@ import json
 import subprocess
 import threading
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +31,14 @@ from owlbear_delivery import (
     OutcomeAuthorityBinding,
     PortfolioApplication,
 )
-from owlbear_delivery.delivery_runtime import DeliveryResultCandidate, PublishDeliveryResult
+from owlbear_delivery.delivery_runtime import (
+    DeliveryObservation,
+    DeliveryObservationReceipt,
+    DeliveryResultCandidate,
+    DeliveryReview,
+    DeliveryReviewReceipt,
+    PublishDeliveryResult,
+)
 from owlbear_delivery_mcp.server import (
     app_lifespan,
     load_delivery_application,
@@ -296,6 +304,42 @@ async def test_registered_tool_invokes_strict_adapter_once() -> None:
     assert application.calls == ["list_work_items"]
 
 
+def _published_result_payload() -> dict[str, object]:
+    completed_commit = "c" * 40
+    observed_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id="change-a",
+            task_or_finalization_id="TASK-001",
+            exact_commit=completed_commit,
+            observation_kind="pytest",
+            command_or_procedure="live Delivery MCP contract test",
+            exit_status_or_artifact_locator="exit:0",
+            observer_or_runner_identity="pytest",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit=completed_commit,
+            author_id="MCP server test author",
+            reviewer_id="MCP server test reviewer",
+            evidence=("The exact fixture commit satisfies task authority.",),
+            reviewed_at=observed_at,
+        )
+    )
+    return {
+        "result_id": "result-1",
+        "change_id": "change-a",
+        "authority_digest": "a" * 64,
+        "task_id": "TASK-001",
+        "task_digest": "b" * 64,
+        "completed_commit": completed_commit,
+        "observations": [observation.model_dump(mode="json")],
+        "review": review.model_dump(mode="json"),
+    }
+
+
 @pytest.mark.asyncio
 async def test_published_result_output_forwards_unchanged_to_transition() -> None:
     application = _PublicationApplication()
@@ -305,14 +349,7 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
         "request": {
             "outcome_id": "OUT-001",
             "claim_id": "claim-1",
-            "result": {
-                "result_id": "result-1",
-                "change_id": "change-a",
-                "authority_digest": "a" * 64,
-                "task_id": "TASK-001",
-                "task_digest": "b" * 64,
-                "completed_commit": "c" * 40,
-            },
+            "result": _published_result_payload(),
         },
     }
 
@@ -341,7 +378,14 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
     transition_definitions = tools["transition_delivery"].input_schema["$defs"]
     publication_definition = publication_definitions[publication_schema["$ref"].removeprefix("#/$defs/")]
     publication_definition = publication_definitions[publication_definition["$ref"].removeprefix("#/$defs/")]
+    publication_request_definition = publication_definitions[
+        publication_definition["properties"]["request"]["$ref"].removeprefix("#/$defs/")
+    ]
+    result_definition = publication_definitions[
+        publication_request_definition["properties"]["result"]["$ref"].removeprefix("#/$defs/")
+    ]
     assert publication_definition["properties"]["change_id"]["type"] == "string"
+    assert {"observations", "review"} <= set(result_definition["required"])
     assert transition_definitions["DeliveryTransition"]["discriminator"]["propertyName"] == "action"
     assert "output" in tools["publish_delivery_plan"].output_schema["required"]
     assert "output" in tools["publish_delivery_result"].output_schema["required"]
