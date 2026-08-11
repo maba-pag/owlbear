@@ -146,7 +146,7 @@ Git administration rather than Delivery-authored product state.
 | `.owlbear/delivery/runtime/changes/<change-id>/**` | Per-Change lifecycle events, claims, attempts, finalization, and acceptance state | Host-local and ignored |
 | `.owlbear/delivery/runtime/claims/**` | Shared fenced mutation-claim coordination | Host-local and ignored |
 | `.owlbear/delivery/runtime/transactions/**` | Append-only transaction journals and recovery state | Host-local and ignored |
-| `.owlbear/delivery/runtime/publications/**` | Checkpoint, remote-head, PR, and check-observation receipts | Host-local and ignored |
+| `.owlbear/delivery/runtime/publications/**` | Checkpoint, remote-head, PR, check-observation, and acceptance-observation receipts | Host-local and ignored |
 | `.owlbear/delivery/runtime/completions/**` | Receipt-backed completion history | Host-local and ignored |
 | `.owlbear/delivery/runtime/capacity.json` | Host-local cross-Change execution capacity | Host-local and ignored |
 | `.owlbear/delivery/worktrees/<change-id>/` | The one linked Change worktree | Host-local and ignored |
@@ -215,8 +215,9 @@ while an awaiting-merge Change is actively observed. No always-on webhook receiv
 **R-GH-03:** Merge actor is corroborating evidence unless OwlBear uses a distinct App/bot identity.
 With user credentials, user-only merge is enforced by the absence of merge routes and structural tests.
 
-**R-GH-04:** GitHub does not report the historical merge method on the merged-PR read path. Delivery
-records no merge method and infers none from commit shape.
+**R-GH-04:** GitHub's merged-PR read response has no completed historical merge-method field. Its
+`auto_merge.merge_method`, when present, describes configured auto-merge behavior rather than the
+completed acceptance fact. Delivery records no merge method and infers none from commit shape.
 
 ### 4.4 User Authority
 
@@ -362,6 +363,13 @@ Completion requires read-only provider evidence that:
   merge commit;
 - provider-required review/check evidence is recorded for the exact head.
 
+`observe_acceptance` persists the validated current provider payload as a content-addressed
+`AcceptanceObservationReceipt` before it may append completion. The first merged receipt establishes
+an immutable merged-state latch for the bound PR. Later reads compare against that latch: identical
+merged evidence is idempotent, while unmerged or changed evidence enters acceptance attention and
+cannot overwrite it. The latch is conflict evidence only; completion always requires a fresh current
+merged payload and never proceeds from the latch alone when the provider is unavailable or regresses.
+
 A `CompletionReceipt` binds:
 
 ```text
@@ -409,7 +417,7 @@ the existing matching receipt after a lost response.
 | `mark_pr_ready(change_id, finalization_id, operation_id)` | exact finalized PR head | Updates PR draft state; reads back | ready receipt / publication attention |
 | `return_pr_to_draft(change_id, finalization_id, operation_id)` | finalized head drifted | Returns PR to draft; invalidates finalization | invalidation event / publication attention |
 | `observe_required_checks(change_id, exact_head)` | PR exists | Reads check/review evidence; never dispatches or reruns | observation record / provider unavailable |
-| `observe_acceptance(change_id, finalization_id)` | `awaiting-merge` or reconciliation | Reads one current PR payload, validates bound publication/finalization identities, and applies the monotonic merged-state latch | completion receipt / acceptance attention |
+| `observe_acceptance(change_id, finalization_id)` | `awaiting-merge` or reconciliation | Reads one current PR payload, persists its acceptance observation, validates bound publication/finalization identities, and applies the monotonic merged-state latch | acceptance observation plus completion receipt / acceptance attention |
 | `cleanup_completed_change_worktree(change_id, completion_id)` | exact durable completion receipt; no active claim | Removes only the registered Change worktree directory/registration; retains branch and receipts | cleanup receipt / cleanup attention |
 | `defer_change(change_id)` | no active claim | Retains worktree and state | defer event |
 | `resume_change(change_id)` | deferred | Returns to named prior state | resume event |
@@ -446,6 +454,13 @@ observed_at
 Promotion fails when evidence binds a different commit. Observation forms include tests, builds,
 linters, type checks, browser interaction, screenshots, logs, API behavior, rendering, generated
 artifacts, and specified manual inspection.
+
+Acceptance observations are a distinct provider-evidence receipt rather than validation evidence.
+An `AcceptanceObservationReceipt` content-addresses the exact normalized PR payload, including
+repository and PR identity, base, head, state, merged state, merge timestamp, reported merge commit,
+nullable merge actor, and observation time. Missing provider response keys are invalid; a present
+nullable actor is observed absence. The receipt is appended under
+`.owlbear/delivery/runtime/publications/**` before latch or completion state changes.
 
 ### 6.3 GitHub Actions
 
@@ -556,7 +571,7 @@ content, the index, `HEAD`, operation state, stash, configuration, hooks, and re
 | Merge evidence mismatches finalized head/base/repository | Acceptance attention; no completion receipt |
 | Translating acceptance | Record finalized head and accepted merge commit separately without an ancestry claim |
 | PR reports merged without merge timestamp or merge commit | Acceptance attention; no completion receipt |
-| Previously observed merged PR later reads unmerged or reports different head/merge evidence | Acceptance attention; merged-state latch is never overwritten |
+| Previously observed merged PR later reads unmerged or reports different head/merge evidence | Acceptance attention; merged-state latch is never overwritten or used to complete without a fresh current merged payload |
 | Duplicate operation | Return existing matching receipt or reconcile exact external effect |
 
 ## 9. Acceptance Criteria
@@ -804,7 +819,7 @@ Appendices are non-normative. They explain the authority but do not override Sec
 | Current Delivery runtime/work-item modules | Assembly is represented as stage, role, scope, and job kind and must be removed for sequential Tasks |
 | Current completed-history modules | Completion history currently depends on in-target packages and needs receipt-store projection |
 | Current Delivery MCP/Cockpit surfaces | Integration operations and UI are externally exposed and require replacement |
-| GitHub API evidence in `.owlbear/sources/overview.md` | PR write permission breadth and provider evidence contracts |
+| GitHub API evidence in `.owlbear/sources/overview.md` | PR write permission breadth; merged timestamp, actor, and reported commit fields; test-merge SHA semantics; and absence of a completed historical merge-method field |
 
 # Appendix C — Rejected Alternatives
 
