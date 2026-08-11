@@ -26,6 +26,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryRuntimeReferenceError,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
+    FinalizeDeliveryChange,
 )
 from owlbear_delivery.design_package import DesignPackageConflictError
 from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
@@ -158,6 +159,38 @@ def _repair_authority_attention() -> dict[str, object]:
     }
 
 
+def _finalization() -> dict[str, object]:
+    operation_id = "finalize-one"
+    observed_at = datetime(2026, 8, 11, 13, tzinfo=UTC)
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id=CHANGE,
+            task_or_finalization_id=operation_id,
+            exact_commit=COMMIT,
+            observation_kind="pytest",
+            command_or_procedure="Delivery MCP finalization contract test",
+            exit_status_or_artifact_locator="exit:0",
+            observer_or_runner_identity="pytest",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit=COMMIT,
+            author_id="MCP finalization test author",
+            reviewer_id="MCP finalization test reviewer",
+            evidence=("The exact Change head satisfies finalization authority.",),
+            reviewed_at=observed_at,
+        )
+    )
+    return {
+        "operation_id": operation_id,
+        "exact_head": COMMIT,
+        "observations": [observation.model_dump(mode="json")],
+        "review": review.model_dump(mode="json"),
+    }
+
+
 def _requests() -> dict[str, dict[str, object]]:
     change = {"change_id": CHANGE}
     claim = {**change, "outcome_id": "OUT-001", "attempt_id": "attempt", "claim_id": "claim"}
@@ -190,6 +223,8 @@ def _requests() -> dict[str, dict[str, object]]:
             **change,
             "request": {"outcome_id": "OUT-001", "claim_id": "claim", "result": _result()},
         },
+        "finalize_change": {**change, "request": _finalization()},
+        "reconcile_finalization_head": change,
         "reconcile_change_checkpoint": change,
         "observe_change_publication_checks": change,
         "transition_delivery": {
@@ -237,6 +272,10 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
     result = await getattr(adapter, operation_name)(_requests()[operation_name])
 
     assert [call[0] for call in application.calls] == [operation_name]
+    if operation_name == "finalize_change":
+        assert isinstance(application.calls[0][1][1], FinalizeDeliveryChange)
+    if operation_name == "reconcile_finalization_head":
+        assert application.calls[0][1] == (CHANGE,)
     tuple_results = {"list_work_items", "list_integration_ready_changes"}
     publication_results = {
         "publish_delivery_plan": {"candidate_id": "plan", "claim_id": "claim"},

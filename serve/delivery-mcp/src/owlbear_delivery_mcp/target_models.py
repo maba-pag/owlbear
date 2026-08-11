@@ -18,6 +18,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryTransition,
+    FinalizeDeliveryChange,
     PublishDeliveryPlan,
     PublishDeliveryResult,
 )
@@ -122,6 +123,12 @@ class PublishDeliveryResultParams(ChangeParams):
     request: PublishDeliveryResult
 
 
+class FinalizeDeliveryChangeParams(ChangeParams):
+    """Validate one exact-head Change finalization request."""
+
+    request: FinalizeDeliveryChange
+
+
 class DeliveryPlanPublication(_TargetProtocolModel):
     """Planning publication response with its transition-ready output reference."""
 
@@ -222,6 +229,10 @@ type IntegrationRepairAuthorityAttentionRequest = Annotated[
     IntegrationRepairAuthorityAttentionParams,
     BeforeValidator(partial(_parse_json_model, IntegrationRepairAuthorityAttentionParams)),
 ]
+type FinalizeDeliveryChangeRequest = Annotated[
+    FinalizeDeliveryChangeParams,
+    BeforeValidator(partial(_parse_json_model, FinalizeDeliveryChangeParams)),
+]
 type PublishDeliveryPlanRequest = Annotated[
     PublishDeliveryPlanParams,
     BeforeValidator(partial(_parse_json_model, PublishDeliveryPlanParams)),
@@ -270,6 +281,8 @@ __all__ = [
     "DeliveryStartupDiagnostic",
     "EmptyParams",
     "EmptyRequest",
+    "FinalizeDeliveryChangeParams",
+    "FinalizeDeliveryChangeRequest",
     "IntegrationRepairAuthorityAttentionParams",
     "IntegrationRepairAuthorityAttentionRequest",
     "IntegrationRepairParams",

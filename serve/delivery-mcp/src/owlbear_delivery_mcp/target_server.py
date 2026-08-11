@@ -46,6 +46,8 @@ from owlbear_delivery_mcp.target_models import (
     DeliveryResultPublication,
     EmptyParams,
     EmptyRequest,
+    FinalizeDeliveryChangeParams,
+    FinalizeDeliveryChangeRequest,
     IntegrationRepairAuthorityAttentionParams,
     IntegrationRepairAuthorityAttentionRequest,
     IntegrationRepairParams,
@@ -90,6 +92,8 @@ DELIVERY_OPERATION_NAMES = (
     "create_integration_repair_candidate",
     "publish_delivery_plan",
     "publish_delivery_result",
+    "finalize_change",
+    "reconcile_finalization_head",
     "reconcile_change_checkpoint",
     "observe_change_publication_checks",
     "transition_delivery",
@@ -278,6 +282,24 @@ class TargetMCPAdapter:
             DeliveryResultCandidate,
         )
         return DeliveryResultPublication.from_candidate(candidate)
+
+    async def finalize_change(self, request: FinalizeDeliveryChangeRequest) -> dict[str, object]:
+        """Finalize one exact clean reviewed Change head with persisted evidence."""
+        params = self._validate(FinalizeDeliveryChangeParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.finalize_change(params.change_id, params.request),
+        )
+
+    async def reconcile_finalization_head(self, request: ChangeRequest) -> dict[str, object] | None:
+        """Retain or invalidate finalization from engine-derived local/provider head evidence."""
+        params = self._validate(ChangeParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.reconcile_finalization_head(params.change_id),
+        )
 
     async def reconcile_change_checkpoint(self, request: ChangeRequest) -> dict[str, object]:
         """Reconcile one durable checkpoint using only engine-derived external identities."""

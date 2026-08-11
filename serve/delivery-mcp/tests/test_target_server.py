@@ -66,6 +66,8 @@ DELIVERY_TOOLS = {
     "create_integration_repair_candidate",
     "publish_delivery_plan",
     "publish_delivery_result",
+    "finalize_change",
+    "reconcile_finalization_head",
     "reconcile_change_checkpoint",
     "observe_change_publication_checks",
     "transition_delivery",
@@ -386,6 +388,12 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
     ]
     assert publication_definition["properties"]["change_id"]["type"] == "string"
     assert {"observations", "review"} <= set(result_definition["required"])
+    finalization_schema = tools["finalize_change"].input_schema
+    finalization_request = finalization_schema["$defs"]["FinalizeDeliveryChange"]
+    assert {"operation_id", "exact_head", "observations", "review"} <= set(finalization_request["required"])
+    reconciliation_schema = tools["reconcile_finalization_head"].input_schema
+    reconciliation_request = reconciliation_schema["$defs"]["ChangeParams"]
+    assert set(reconciliation_request["properties"]) == {"change_id"}
     assert transition_definitions["DeliveryTransition"]["discriminator"]["propertyName"] == "action"
     assert "output" in tools["publish_delivery_plan"].output_schema["required"]
     assert "output" in tools["publish_delivery_result"].output_schema["required"]
