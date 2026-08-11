@@ -22,7 +22,10 @@ from owlbear_delivery.delivery_runtime import (
     PublishDeliveryPlan,
     PublishDeliveryResult,
 )
-from owlbear_delivery.draft_pull_request import CreateOrReconcileDraftPullRequest
+from owlbear_delivery.draft_pull_request import (
+    CreateOrReconcileDraftPullRequest,
+    UpdateGeneratedPullRequestSummary,
+)
 from owlbear_delivery.identities import ChangeId
 from owlbear_delivery.target_admission import DeliveryAdmissionRequest
 
@@ -134,6 +137,12 @@ class CreateOrReconcileDraftPullRequestParams(_TargetProtocolModel):
     """Validate one exact first-checkpoint draft pull-request publication."""
 
     request: CreateOrReconcileDraftPullRequest
+
+
+class UpdateGeneratedPullRequestSummaryParams(_TargetProtocolModel):
+    """Validate one generated pull-request summary update."""
+
+    request: UpdateGeneratedPullRequestSummary
 
 
 class DeliveryPlanPublication(_TargetProtocolModel):
@@ -248,6 +257,10 @@ type CreateOrReconcileDraftPullRequestRequest = Annotated[
     CreateOrReconcileDraftPullRequestParams,
     BeforeValidator(partial(_parse_json_model, CreateOrReconcileDraftPullRequestParams)),
 ]
+type UpdateGeneratedPullRequestSummaryRequest = Annotated[
+    UpdateGeneratedPullRequestSummaryParams,
+    BeforeValidator(partial(_parse_json_model, UpdateGeneratedPullRequestSummaryParams)),
+]
 type RepairClaimContextRequest = Annotated[
     RepairClaimContextParams,
     BeforeValidator(partial(_parse_json_model, RepairClaimContextParams)),
@@ -315,6 +328,8 @@ __all__ = [
     "TargetDiagnostic",
     "TransitionDeliveryParams",
     "TransitionDeliveryRequest",
+    "UpdateGeneratedPullRequestSummaryParams",
+    "UpdateGeneratedPullRequestSummaryRequest",
     "WorkItemParams",
     "WorkItemRequest",
 ]

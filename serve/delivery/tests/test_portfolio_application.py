@@ -69,6 +69,7 @@ from owlbear_delivery import (
     PublishDeliveryPlan,
     PublishDeliveryResult,
     RetryDelivery,
+    UpdateGeneratedPullRequestSummary,
     load_delivery_application,
 )
 from owlbear_delivery.integration_verification import (
@@ -404,6 +405,12 @@ def test_delivery_loader_injects_publication_provider_and_delegates_exact_reques
         title="Change A",
         generated_summary="First checkpoint.",
     )
+    summary_request = UpdateGeneratedPullRequestSummary(
+        change_id="change-a",
+        operation_id="summary-operation",
+        published_head="1" * 40,
+        generated_summary="Second checkpoint.",
+    )
 
     with (
         patch.object(
@@ -416,12 +423,19 @@ def test_delivery_loader_injects_publication_provider_and_delegates_exact_reques
             "publish",
             return_value=sentinel.pull_request_receipt,
         ) as publish_pull_request,
+        patch.object(
+            application._draft_pull_request_publisher,  # noqa: SLF001
+            "update_generated_summary",
+            return_value=sentinel.summary_receipt,
+        ) as update_summary,
     ):
         assert application.publish_change_branch(branch_request) is sentinel.branch_receipt
         assert application.create_or_reconcile_draft_pull_request(pull_request) is sentinel.pull_request_receipt
+        assert application.update_generated_pull_request_summary(summary_request) is sentinel.summary_receipt
 
     publish_branch.assert_called_once_with(branch_request)
     publish_pull_request.assert_called_once_with(pull_request)
+    update_summary.assert_called_once_with(summary_request)
 
 
 def test_delivery_loader_without_provider_fails_closed_only_for_draft_pr(tmp_path: Path) -> None:
@@ -435,9 +449,17 @@ def test_delivery_loader_without_provider_fails_closed_only_for_draft_pr(tmp_pat
         title="Change A",
         generated_summary="First checkpoint.",
     )
+    summary_request = UpdateGeneratedPullRequestSummary(
+        change_id="change-a",
+        operation_id="summary-operation",
+        published_head="1" * 40,
+        generated_summary="Second checkpoint.",
+    )
 
     with pytest.raises(PortfolioApplicationError, match="not configured"):
         application.create_or_reconcile_draft_pull_request(request)
+    with pytest.raises(PortfolioApplicationError, match="not configured"):
+        application.update_generated_pull_request_summary(summary_request)
 
 
 @pytest.mark.parametrize(

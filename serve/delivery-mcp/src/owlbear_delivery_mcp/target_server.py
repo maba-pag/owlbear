@@ -69,6 +69,8 @@ from owlbear_delivery_mcp.target_models import (
     TargetDiagnostic,
     TransitionDeliveryParams,
     TransitionDeliveryRequest,
+    UpdateGeneratedPullRequestSummaryParams,
+    UpdateGeneratedPullRequestSummaryRequest,
     WorkItemParams,
     WorkItemRequest,
 )
@@ -96,6 +98,7 @@ DELIVERY_OPERATION_NAMES = (
     "publish_delivery_result",
     "publish_change_branch",
     "create_or_reconcile_draft_pull_request",
+    "update_generated_pull_request_summary",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
@@ -301,6 +304,18 @@ class TargetMCPAdapter:
             self._call,
             params,
             lambda: self._application.create_or_reconcile_draft_pull_request(params.request),
+        )
+
+    async def update_generated_pull_request_summary(
+        self,
+        request: UpdateGeneratedPullRequestSummaryRequest,
+    ) -> dict[str, object]:
+        """Replace or reconcile OwlBear's generated block for one published Change."""
+        params = self._validate(UpdateGeneratedPullRequestSummaryParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.update_generated_pull_request_summary(params.request),
         )
 
     async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]:

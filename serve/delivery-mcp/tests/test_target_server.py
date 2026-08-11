@@ -60,6 +60,7 @@ DELIVERY_TOOLS = {
     "publish_delivery_result",
     "publish_change_branch",
     "create_or_reconcile_draft_pull_request",
+    "update_generated_pull_request_summary",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",

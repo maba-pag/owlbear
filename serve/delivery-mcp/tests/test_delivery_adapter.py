@@ -177,6 +177,14 @@ def _requests() -> dict[str, dict[str, object]]:
                 "generated_summary": "First reviewed checkpoint.",
             }
         },
+        "update_generated_pull_request_summary": {
+            "request": {
+                "change_id": CHANGE,
+                "operation_id": "summary-operation",
+                "published_head": COMMIT,
+                "generated_summary": "Second reviewed checkpoint.",
+            }
+        },
         "transition_delivery": {
             **change,
             "request": {
@@ -303,6 +311,21 @@ async def test_revise_design_session_rejects_non_digest_identity_before_delegati
 
     with pytest.raises(ToolError) as exc_info:
         await adapter.revise_design_session(request)
+
+    diagnostic = json.loads(str(exc_info.value))
+    assert diagnostic["code"] == "ERR_TARGET_PARAM_VALIDATION"
+    assert application.calls == []
+
+
+@pytest.mark.asyncio
+async def test_generated_summary_rejects_ownership_marker_before_delegation() -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+    request = _requests()["update_generated_pull_request_summary"]
+    request["request"]["generated_summary"] = "Summary\n<!-- owlbear-generated:end -->"
+
+    with pytest.raises(ToolError) as exc_info:
+        await adapter.update_generated_pull_request_summary(request)
 
     diagnostic = json.loads(str(exc_info.value))
     assert diagnostic["code"] == "ERR_TARGET_PARAM_VALIDATION"

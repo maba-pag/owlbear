@@ -106,6 +106,8 @@ if TYPE_CHECKING:
         CreateOrReconcileDraftPullRequest,
         DraftPullRequestPublicationReceipt,
         DraftPullRequestPublisher,
+        GeneratedPullRequestSummaryReceipt,
+        UpdateGeneratedPullRequestSummary,
     )
     from owlbear_delivery.integration_verification import IntegrationVerificationReceipt, IntegrationVerifier
     from owlbear_delivery.target_admission import (
@@ -597,6 +599,16 @@ class PortfolioApplication:
             message = "draft pull-request publication is not configured"
             raise PortfolioApplicationError(message)
         return self._draft_pull_request_publisher.publish(request)
+
+    def update_generated_pull_request_summary(
+        self,
+        request: UpdateGeneratedPullRequestSummary,
+    ) -> GeneratedPullRequestSummaryReceipt:
+        """Replace or reconcile OwlBear's generated block for one published Change."""
+        if self._draft_pull_request_publisher is None:
+            message = "draft pull-request publication is not configured"
+            raise PortfolioApplicationError(message)
+        return self._draft_pull_request_publisher.update_generated_summary(request)
 
     def read_design_session(self, change_id: str) -> VerifiedDesignPackage:
         """Return one verified authored Design package and its current identity."""
