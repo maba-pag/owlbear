@@ -64,7 +64,8 @@ Only a merged GitHub pull request completes a Change.
 
 - **OUT-04.1:** The user performs the merge.
 - **OUT-04.2:** OwlBear observes provider evidence read-only.
-- **OUT-04.3:** Completion binds the merged PR to the exact finalized head and accepted target commit.
+- **OUT-04.3:** Completion binds the merged PR to the exact finalized head and the accepted merge
+  commit GitHub reports.
 - **OUT-04.4:** A finalized but unpublished or unmerged Change waits, defers, or is abandoned; it never
   completes through another path.
 
@@ -102,7 +103,7 @@ Validation follows the work, and GitHub Actions remain repository-owned behavior
 | **Checkpoint** | An exact reviewed Change-branch head published for durability and collaboration. |
 | **Finalized Change** | The exact reviewed and validated Change head offered through the PR. |
 | **Acceptance** | GitHub reports that the finalized PR was merged into the configured target. |
-| **Completion receipt** | Typed local record binding finalization, PR merge evidence, and accepted target commit. |
+| **Completion receipt** | Typed local record binding finalization, PR merge evidence, and the provider-reported accepted merge commit. |
 | **Attention** | Durable nonterminal state requiring reconciliation or an explicit user disposition. |
 
 ### 3.1 Shared and Per-Worktree Git State
@@ -204,7 +205,7 @@ The cross-Change execution limit remains host-local at
 ### 4.3 GitHub Authority
 
 GitHub is authoritative for repository and PR identity, PR head/base, draft/open/closed/merged state,
-reviews, checks, merge method, merge actor, and accepted target commit.
+reviews, checks, merge actor evidence, and the merge commit it reports for a merged pull request.
 
 **R-GH-01:** Webhooks are wake-up hints. Provider state is read back before a local transition.
 
@@ -213,6 +214,9 @@ while an awaiting-merge Change is actively observed. No always-on webhook receiv
 
 **R-GH-03:** Merge actor is corroborating evidence unless OwlBear uses a distinct App/bot identity.
 With user credentials, user-only merge is enforced by the absence of merge routes and structural tests.
+
+**R-GH-04:** GitHub does not report the historical merge method on the merged-PR read path. Delivery
+records no merge method and infers none from commit shape.
 
 ### 4.4 User Authority
 
@@ -352,8 +356,10 @@ Completion requires read-only provider evidence that:
 - the exact repository and PR identity match the Change publication;
 - the PR base is the configured target;
 - the merged PR head equals the finalized Change head;
-- GitHub reports the PR merged;
-- GitHub identifies the accepted target commit and merge method;
+- one current provider payload reports the PR closed and merged, with a non-null merge timestamp and
+  non-null merge commit;
+- no earlier merged observation for the bound PR disagrees on its head, merge timestamp, or reported
+  merge commit;
 - provider-required review/check evidence is recorded for the exact head.
 
 A `CompletionReceipt` binds:
@@ -366,15 +372,19 @@ finalized_change_head
 repository_identity
 pull_request_identity
 accepted_target_ref
-accepted_target_commit
-merge_method
-merge_actor
-provider_evidence_digest
+accepted_merge_commit
+merged_at
+acceptance_observation_id
+check_observation_ids
+review_receipt_ids
+acceptance_evidence_digest
 completed_at
 ```
 
-Squash and rebase merge methods may translate the Change graph. Completed-history projections show
-both the finalized Change head and accepted target commit and never imply ancestry that does not exist.
+The evidence identities bind content-addressed provider, check, and review receipts. GitHub may
+translate the Change graph when accepting a pull request. Completed-history projections show the
+finalized Change head and accepted merge commit as separate exact identities, assert no ancestry or
+target reachability between them, and record no merge method.
 
 ## 6. Operations
 
@@ -399,7 +409,7 @@ the existing matching receipt after a lost response.
 | `mark_pr_ready(change_id, finalization_id, operation_id)` | exact finalized PR head | Updates PR draft state; reads back | ready receipt / publication attention |
 | `return_pr_to_draft(change_id, finalization_id, operation_id)` | finalized head drifted | Returns PR to draft; invalidates finalization | invalidation event / publication attention |
 | `observe_required_checks(change_id, exact_head)` | PR exists | Reads check/review evidence; never dispatches or reruns | observation record / provider unavailable |
-| `observe_acceptance(change_id, finalization_id)` | `awaiting-merge` or reconciliation | Reads merged PR and validates exact identities | completion receipt / acceptance attention |
+| `observe_acceptance(change_id, finalization_id)` | `awaiting-merge` or reconciliation | Reads one current PR payload, validates bound publication/finalization identities, and applies the monotonic merged-state latch | completion receipt / acceptance attention |
 | `cleanup_completed_change_worktree(change_id, completion_id)` | exact durable completion receipt; no active claim | Removes only the registered Change worktree directory/registration; retains branch and receipts | cleanup receipt / cleanup attention |
 | `defer_change(change_id)` | no active claim | Retains worktree and state | defer event |
 | `resume_change(change_id)` | deferred | Returns to named prior state | resume event |
@@ -544,7 +554,9 @@ content, the index, `HEAD`, operation state, stash, configuration, hooks, and re
 | Network/provider unavailable | Continue local Task work and validation; queue publication; finalized state may wait |
 | Finalized head changes | Invalidate finalization, return PR to draft, resume building |
 | Merge evidence mismatches finalized head/base/repository | Acceptance attention; no completion receipt |
-| Squash/rebase acceptance | Record finalized and accepted commits separately; rebase unpublished dependent Changes or merge target into published ones |
+| Translating acceptance | Record finalized head and accepted merge commit separately without an ancestry claim |
+| PR reports merged without merge timestamp or merge commit | Acceptance attention; no completion receipt |
+| Previously observed merged PR later reads unmerged or reports different head/merge evidence | Acceptance attention; merged-state latch is never overwritten |
 | Duplicate operation | Return existing matching receipt or reconcile exact external effect |
 
 ## 9. Acceptance Criteria
@@ -563,11 +575,11 @@ content, the index, `HEAD`, operation state, stash, configuration, hooks, and re
 | AC-10 | Finalization binds one exact remote PR head and invalidates on head drift | OUT-03.1-3 |
 | AC-11 | No API/tool/client can merge, auto-merge, update-branch, or complete without merged-PR evidence | OUT-04.1-4, R-SAFE-04 |
 | AC-12 | A finalized Change with no PR or unmerged PR never reaches completed | OUT-04.4 |
-| AC-13 | Merge, squash, and rebase acceptance receipts preserve exact finalized and accepted commits without false ancestry | OUT-04.3 |
+| AC-13 | Acceptance receipts preserve the exact finalized head and provider-reported accepted merge commit as distinct identities, record no merge method, and no projection asserts ancestry or target reachability between them | OUT-04.3 |
 | AC-14 | Workflow files publish normally and no Delivery workflow-risk gate/classifier exists | OUT-06.3-4 |
 | AC-15 | Actions checks are observed but never selected, dispatched, rerun, or used as sole lifecycle authority | OUT-06.3 |
 | AC-16 | Completed history rebuilds from local completion receipts; new product commits contain no Delivery completion package | OUT-05.1-2 |
-| AC-17 | Lost-response, stale-fence, stale-head, offline, automation-writeback, and duplicate-operation scenarios reconcile idempotently | OUT-05.3 |
+| AC-17 | Lost-response, stale-fence, stale-head, offline, automation-writeback, duplicate-operation, repeated acceptance observation, and merged-state regression scenarios reconcile idempotently | OUT-05.3 |
 | AC-18 | Finalized Changes may wait/defer/abandon without alternate completion | OUT-04.4 |
 | AC-19 | No Delivery-authored product artifact is created under `$GIT_DIR`, `$GIT_COMMON_DIR`, or `.git/worktrees/**`; expected Git-owned linked-worktree registration is allowed, and every Delivery `.owlbear/**` artifact obeys R-AUTH-02 | OUT-05.1, R-AUTH-01-02 |
 
@@ -656,7 +668,7 @@ recover_integration_repair_claim
 | Backend/HTTP models | Carry the explicit Change lifecycle and versioned completion-history records |
 | `api/workItems.ts` | Mirrors the new lifecycle/action/progress/attention unions and removes Assembly/Integration carriers |
 | `WorkItemDetail.tsx`, `WorkPortfolioTable.tsx`, `workItemPresentation.ts` | Present Task progress, checkpoint/PR timeline, finalization/drift, checks, and awaiting-merge/acceptance attention |
-| `CompletedHistoryWorkspace.tsx` | Shows finalized head and accepted target commit for new and legacy records |
+| `CompletedHistoryWorkspace.tsx` | Shows finalized head and accepted merge commit as separate identities for new records, with explicit legacy semantics for old records |
 | `useWorkItems.ts`, `WorkPortfolioPage.tsx` | Invoke and reconcile the new fixed operations |
 | E2E seed/support | Seed the new persisted schema without Assembly/Integration authority |
 
@@ -685,7 +697,8 @@ mutation, workflow-risk approval, or alternate-completion operation.
 ### 11.1 Structural Gates
 
 - Add symbol-scoped gates under `tests/` for forbidden target-ref writes, checked-out-target reset,
-  provider merge methods, obsolete Delivery Assembly/Integration carriers, and extra-worktree factories.
+  provider merge operations, merge-method fields in Delivery/provider response models, obsolete
+  Delivery Assembly/Integration carriers, and extra-worktree factories.
   Historical fixtures, generated `serve/cockpit/dist/**`, `assemble_target_app`, `semble`, and unrelated
   prose uses of assembly/integration are excluded.
 - Assert one `git worktree add` implementation exists and is reachable only through
@@ -704,8 +717,8 @@ mutation, workflow-risk approval, or alternate-completion operation.
   lost responses, and supersession.
 - Exercise target sync triggers and semantic conflict review.
 - Exercise user and known-automation head adoption plus bounded quiescence.
-- Exercise finalization, head drift, pending/failing/passing checks, merge/squash/rebase acceptance, and
-  exact completion receipts.
+- Exercise finalization, head drift, pending/failing/passing checks, translating and non-translating
+  acceptance, merged-state regression, and exact completion receipts.
 
 ### 11.3 Incident Regression
 
@@ -730,7 +743,10 @@ local target ref, stash, config, hooks, and unrelated refs remain unchanged.
   history are.
 - With user GitHub credentials, merge-actor evidence cannot distinguish a user browser call from a
   hypothetical OwlBear API call; absence of merge routes is the enforcement boundary.
-- Squash and rebase acceptance do not preserve the finalized Change commit as target ancestry.
+- A merged pull-request payload does not prove that its reported merge commit is reachable from the
+  configured target ref. Delivery performs no reachability check; acceptance is the user's merged-PR
+  event, not target-ancestry proof. Translating acceptance may not preserve the finalized Change
+  commit as target ancestry.
 
 ---
 
@@ -807,6 +823,9 @@ Appendices are non-normative. They explain the authority but do not override Sec
 | Mandatory VM/sandbox | Rejected | Imports an unapproved threat model and breaks host/browser workflows | ADR-05 |
 | Broad checkout fingerprint/snapshot | Rejected | Does not replace removal of the destructive route | ADR-05 |
 | Mandatory post-merge rerun/confirmation | Rejected | Adds ceremony after exact user acceptance without changing the accepted fact | ADR-02 |
+| Historical merge-method recording | Rejected | GitHub does not report the completed method on the merged-PR read path; commit shape cannot recover it reliably | ADR-02 |
+| Accepted-commit parent or compare inference | Rejected | Test-merge and queued commits can mimic accepted topology; Delivery records exact identities without asserting ancestry | ADR-02, ADR-04 |
+| Target reachability verification | Rejected | Adds target-observation authority to PR-only acceptance and can regress after legitimate target movement | ADR-02, ADR-05 |
 
 # Appendix D — Migration and Cutover
 
@@ -862,7 +881,8 @@ through local target observation.
 
 1. Add exact-head finalization and head-drift invalidation.
 2. Add ready/draft transitions.
-3. Add read-only merged-PR acceptance observation and completion receipts.
+3. Add read-only merged-PR acceptance observation, a monotonic merged-state latch, and completion
+  receipts bound to content-addressed evidence identities.
 4. Version completed-history records and cursors so one page can project legacy
   `.owlbear/legacy/completed/**` packages and new `.owlbear/delivery/runtime/completions/**` receipts
   without false ancestry.
