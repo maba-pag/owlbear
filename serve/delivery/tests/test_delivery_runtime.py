@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -27,6 +28,8 @@ from owlbear_delivery import (
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationCompletion,
     DeliveryIntegrationAttentionDisposition,
+    DeliveryObservation,
+    DeliveryObservationReceipt,
     DeliveryOutcome,
     DeliveryOutputKind,
     DeliveryOutputReference,
@@ -36,6 +39,8 @@ from owlbear_delivery import (
     DeliveryRequestKind,
     DeliveryRequestOption,
     DeliveryRequestResolution,
+    DeliveryReview,
+    DeliveryReviewReceipt,
     DeliveryRuntime,
     DeliveryRuntimeConflictError,
     DeliveryRuntimeReferenceError,
@@ -53,6 +58,37 @@ from owlbear_delivery import (
     integration_attention_disposition,
 )
 from owlbear_delivery.delivery_runtime import invalidate_checkpoint_publication, parse_delivery_frontier
+
+
+def test_exact_commit_evidence_receipts_validate_identity_and_independence() -> None:
+    observed_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id="delivery-runtime",
+            task_or_finalization_id="TASK-001",
+            exact_commit="1" * 40,
+            observation_kind="pytest",
+            command_or_procedure="uv run pytest focused.py",
+            exit_status_or_artifact_locator="exit:0",
+            observer_or_runner_identity="GitHub Copilot",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit="1" * 40,
+            author_id="GitHub Copilot",
+            reviewer_id="build-reviewer",
+            evidence=("Exact diff satisfies the Task authority.",),
+            reviewed_at=observed_at,
+        )
+    )
+
+    assert observation.exact_commit == review.exact_commit
+    with pytest.raises(ValidationError, match="identity is invalid"):
+        DeliveryObservationReceipt.model_validate(observation.model_copy(update={"exact_commit": "2" * 40}))
+    with pytest.raises(ValidationError, match="independent"):
+        DeliveryReviewReceipt.model_validate(review.model_copy(update={"reviewer_id": review.author_id}))
 
 
 def test_integration_attention_codes_have_one_operational_disposition() -> None:

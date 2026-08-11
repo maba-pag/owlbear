@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Annotated, Literal
 
@@ -112,6 +113,87 @@ class DeliveryTaskDefinition(_DeliveryModel):
     def digest(self) -> str:
         """Return the canonical immutable task-definition digest."""
         return hashlib.sha256(_model_content(self)).hexdigest()
+
+
+class DeliveryObservation(_DeliveryModel):
+    """Typed validation evidence before its immutable receipt identity is assigned."""
+
+    schema_version: Literal[1] = 1
+    change_id: str = Field(min_length=1)
+    task_or_finalization_id: str = Field(min_length=1)
+    exact_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    observation_kind: str = Field(min_length=1)
+    command_or_procedure: str = Field(min_length=1)
+    exit_status_or_artifact_locator: str = Field(min_length=1)
+    observer_or_runner_identity: str = Field(min_length=1)
+    observed_at: datetime
+
+
+class DeliveryObservationReceipt(DeliveryObservation):
+    """One exact-commit validation observation retained as lifecycle evidence."""
+
+    observation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @classmethod
+    def create(
+        cls,
+        observation: DeliveryObservation,
+    ) -> DeliveryObservationReceipt:
+        """Create one receipt using the canonical typed-content digest."""
+        values = observation.model_dump()
+        candidate = cls.model_construct(observation_id="0" * 64, **values)
+        return cls(observation_id=_receipt_digest(candidate, "observation_id"), **values)
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> DeliveryObservationReceipt:
+        if self.observed_at.tzinfo is None:
+            message = "Delivery observation timestamp must include a timezone"
+            raise ValueError(message)
+        if self.observation_id != _receipt_digest(self, "observation_id"):
+            message = "Delivery observation receipt identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryReview(_DeliveryModel):
+    """Typed independent advisory pass before receipt identity is assigned."""
+
+    schema_version: Literal[1] = 1
+    exact_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    author_id: str = Field(min_length=1)
+    reviewer_id: str = Field(min_length=1)
+    disposition: Literal["pass"] = "pass"
+    evidence: tuple[str, ...] = Field(min_length=1)
+    reviewed_at: datetime
+
+
+class DeliveryReviewReceipt(DeliveryReview):
+    """Independent advisory pass bound to one exact implementation commit."""
+
+    review_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @classmethod
+    def create(
+        cls,
+        review: DeliveryReview,
+    ) -> DeliveryReviewReceipt:
+        """Create one independent pass receipt using the canonical digest."""
+        values = review.model_dump()
+        candidate = cls.model_construct(review_id="0" * 64, **values)
+        return cls(review_id=_receipt_digest(candidate, "review_id"), **values)
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> DeliveryReviewReceipt:
+        if self.author_id == self.reviewer_id:
+            message = "Delivery review must be independent from implementation authorship"
+            raise ValueError(message)
+        if self.reviewed_at.tzinfo is None:
+            message = "Delivery review timestamp must include a timezone"
+            raise ValueError(message)
+        if self.review_id != _receipt_digest(self, "review_id"):
+            message = "Delivery review receipt identity is invalid"
+            raise ValueError(message)
+        return self
 
 
 class DeliveryPlanCandidate(_DeliveryModel):
@@ -1833,6 +1915,12 @@ def _model_content(model: BaseModel) -> bytes:
     return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
+def _receipt_digest(receipt: BaseModel, identity_field: str) -> str:
+    payload = receipt.model_dump(mode="json", exclude={identity_field})
+    content = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(content).hexdigest()
+
+
 def _canonical_content(models: tuple[BaseModel, ...]) -> bytes:
     payload = tuple(model.model_dump(mode="json") for model in models)
     return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
@@ -1865,6 +1953,8 @@ __all__ = [
     "DeliveryIntegrationAttentionCode",
     "DeliveryIntegrationCandidate",
     "DeliveryIntegrationCompletion",
+    "DeliveryObservation",
+    "DeliveryObservationReceipt",
     "DeliveryOperatorMove",
     "DeliveryOutputKind",
     "DeliveryOutputReference",
@@ -1875,6 +1965,8 @@ __all__ = [
     "DeliveryRequestResolution",
     "DeliveryResultCandidate",
     "DeliveryReturnContext",
+    "DeliveryReview",
+    "DeliveryReviewReceipt",
     "DeliveryRuntime",
     "DeliveryRuntimeConflictError",
     "DeliveryRuntimeReferenceError",
