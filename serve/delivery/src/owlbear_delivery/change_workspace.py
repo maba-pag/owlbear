@@ -9,6 +9,7 @@ import re
 import subprocess
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from itertools import pairwise
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Never
 
@@ -931,6 +932,29 @@ class ChangeWorkspaceManager:
         if self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
             _workspace_failure("change source worktree is not clean")
         return branch_head
+
+    def validate_finalization_head(
+        self,
+        change_id: str,
+        exact_head: str,
+        promoted_commits: tuple[str, ...],
+    ) -> ChangeCoordination:
+        """Require one unclaimed clean reviewed head containing every promoted Task commit."""
+        coordination = self._coordinator.show(change_id)
+        if coordination.writer is not None:
+            _workspace_failure("Delivery finalization cannot overlap an active Change writer")
+        if self.reviewed_source_head(change_id) != exact_head:
+            _workspace_failure("Delivery finalization head differs from the reviewed Change head")
+        for predecessor, successor in pairwise(promoted_commits):
+            self._require_ancestor(predecessor, successor)
+        for promoted_commit in promoted_commits:
+            self._require_ancestor(promoted_commit, exact_head)
+        return coordination
+
+    def observed_change_head(self, change_id: str) -> str:
+        """Read the current managed Change branch head without mutating any checkout."""
+        coordination = self._coordinator.show(change_id)
+        return self._resolve(coordination.branch)
 
     def recovery_snapshot(self, change_id: str, attempt_id: str) -> WorkspaceRecoverySnapshot:
         """Inspect exact recovery state without changing the branch, worktree, or custody."""

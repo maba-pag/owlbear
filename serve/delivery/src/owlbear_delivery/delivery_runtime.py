@@ -34,6 +34,7 @@ class DeliveryChangeStage(StrEnum):
     DESIGN = "design"
     ACTIVE_DELIVERY = "active-delivery"
     INTEGRATION = "integration"
+    FINALIZED = "finalized"
     COMPLETED = "completed"
 
 
@@ -244,6 +245,102 @@ class DeliveryTaskResult(_DeliveryModel):
             raise ValueError(message)
         if self.review.exact_commit != self.completed_commit:
             message = "Delivery task result review evidence does not match the exact task commit"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryFinalization(_DeliveryModel):
+    """Exact reviewed Change head and evidence prepared for finalization."""
+
+    schema_version: Literal[1] = 1
+    operation_id: str = Field(min_length=1)
+    change_id: str = Field(min_length=1)
+    exact_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    authority_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    result_digests: tuple[str, ...] = Field(min_length=1)
+    observations: tuple[DeliveryObservationReceipt, ...] = Field(min_length=1)
+    review: DeliveryReviewReceipt
+    finalized_at: datetime
+
+
+class DeliveryFinalizationReceipt(DeliveryFinalization):
+    """Durable finalization authority for one exact reviewed Change head."""
+
+    finalization_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @classmethod
+    def create(cls, finalization: DeliveryFinalization) -> DeliveryFinalizationReceipt:
+        """Create one finalization receipt using the canonical typed-content digest."""
+        values = {field_name: getattr(finalization, field_name) for field_name in type(finalization).model_fields}
+        candidate = cls.model_construct(finalization_id="0" * 64, **values)
+        return cls(finalization_id=_receipt_digest(candidate, "finalization_id"), **values)
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> DeliveryFinalizationReceipt:
+        if self.finalized_at.tzinfo is None:
+            message = "Delivery finalization timestamp must include a timezone"
+            raise ValueError(message)
+        if len(self.result_digests) != len(set(self.result_digests)):
+            message = "Delivery finalization result digests must be unique"
+            raise ValueError(message)
+        observation_ids = tuple(observation.observation_id for observation in self.observations)
+        if len(observation_ids) != len(set(observation_ids)):
+            message = "Delivery finalization observations must be unique"
+            raise ValueError(message)
+        if any(
+            observation.change_id != self.change_id
+            or observation.task_or_finalization_id != self.operation_id
+            or observation.exact_commit != self.exact_head
+            for observation in self.observations
+        ):
+            message = "Delivery finalization observations do not match its exact authority"
+            raise ValueError(message)
+        if self.review.exact_commit != self.exact_head:
+            message = "Delivery finalization review does not match its exact head"
+            raise ValueError(message)
+        if self.finalization_id != _receipt_digest(self, "finalization_id"):
+            message = "Delivery finalization receipt identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryFinalizationInvalidation(_DeliveryModel):
+    """Observed Change-head drift that invalidates one finalization receipt."""
+
+    schema_version: Literal[1] = 1
+    change_id: str = Field(min_length=1)
+    finalization_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    observed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    reason: Literal["head-drift"] = "head-drift"
+    invalidated_at: datetime
+
+
+class DeliveryFinalizationInvalidationReceipt(DeliveryFinalizationInvalidation):
+    """Durable evidence that exact-head finalization no longer holds."""
+
+    invalidation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @classmethod
+    def create(
+        cls,
+        invalidation: DeliveryFinalizationInvalidation,
+    ) -> DeliveryFinalizationInvalidationReceipt:
+        """Create one finalization invalidation using the canonical digest."""
+        values = invalidation.model_dump()
+        candidate = cls.model_construct(invalidation_id="0" * 64, **values)
+        return cls(invalidation_id=_receipt_digest(candidate, "invalidation_id"), **values)
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> DeliveryFinalizationInvalidationReceipt:
+        if self.expected_head == self.observed_head:
+            message = "Delivery finalization invalidation requires head drift"
+            raise ValueError(message)
+        if self.invalidated_at.tzinfo is None:
+            message = "Delivery finalization invalidation timestamp must include a timezone"
+            raise ValueError(message)
+        if self.invalidation_id != _receipt_digest(self, "invalidation_id"):
+            message = "Delivery finalization invalidation identity is invalid"
             raise ValueError(message)
         return self
 
@@ -631,11 +728,13 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 class DeliveryFrontier(_DeliveryModel):
     """Canonical outcome and Change checkpoint state persisted beside authority."""
 
-    schema_version: Literal[4] = 4
+    schema_version: Literal[5] = 5
     bindings: tuple[OutcomeAuthorityBinding, ...]
     published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint: DeliveryPendingCheckpoint | None = None
     operator_moves: tuple[DeliveryOperatorMove, ...] = ()
+    finalization: DeliveryFinalizationReceipt | None = None
+    finalization_invalidation: DeliveryFinalizationInvalidationReceipt | None = None
     integration_result_id: str | None = None
     integration_completion: DeliveryIntegrationCompletion | None = None
     integration_attention: DeliveryIntegrationAttention | None = None
@@ -663,6 +762,17 @@ class DeliveryFrontier(_DeliveryModel):
             raise ValueError(message)
         if self.integration_completion is not None and self.integration_attention is not None:
             message = "completed Integration cannot retain attention"
+            raise ValueError(message)
+        if self.finalization is not None and self.finalization_invalidation is not None:
+            message = "Delivery finalization and invalidation cannot coexist"
+            raise ValueError(message)
+        if self.finalization is not None and (
+            any(binding.stage != DeliveryStage.COMPLETED for binding in self.bindings)
+            or any(binding.active_claim is not None for binding in self.bindings)
+            or self.integration_repair_claim is not None
+            or self.integration_completion is not None
+        ):
+            message = "Delivery finalization requires completed unclaimed outcome authority"
             raise ValueError(message)
         return self
 
@@ -727,6 +837,32 @@ class PublishDeliveryResult(_DeliveryModel):
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     claim_id: str = Field(min_length=1)
     result: DeliveryTaskResult
+
+
+class FinalizeDeliveryChange(_DeliveryModel):
+    """Finalize one exact reviewed Change head with exact-commit evidence."""
+
+    operation_id: str = Field(min_length=1)
+    exact_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    observations: tuple[DeliveryObservationReceipt, ...] = Field(min_length=1)
+    review: DeliveryReviewReceipt
+
+    @model_validator(mode="after")
+    def _validate_exact_commit_evidence(self) -> FinalizeDeliveryChange:
+        observation_ids = tuple(observation.observation_id for observation in self.observations)
+        if len(observation_ids) != len(set(observation_ids)):
+            message = "Delivery finalization observations must be unique"
+            raise ValueError(message)
+        if any(
+            observation.task_or_finalization_id != self.operation_id or observation.exact_commit != self.exact_head
+            for observation in self.observations
+        ):
+            message = "Delivery finalization observations do not match the exact head"
+            raise ValueError(message)
+        if self.review.exact_commit != self.exact_head:
+            message = "Delivery finalization review does not match the exact head"
+            raise ValueError(message)
+        return self
 
 
 class AdvanceDelivery(_DeliveryModel):
@@ -828,8 +964,8 @@ _STAGE_ORDER = {
     DeliveryStage.IMPLEMENTATION: 2,
     DeliveryStage.COMPLETED: 3,
 }
-_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3})
-_FRONTIER_SCHEMA_VERSION = 4
+_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4})
+_FRONTIER_SCHEMA_VERSION = 5
 _RETURN_TARGETS = {
     DeliveryStage.PLANNING: {DeliveryStage.DESIGN},
     DeliveryStage.IMPLEMENTATION: {DeliveryStage.PLANNING, DeliveryStage.DESIGN},
@@ -898,6 +1034,10 @@ class DeliveryRuntime:
         """Return one current outcome binding."""
         return _find_binding(self._read()[0], outcome_id)
 
+    def bindings(self) -> tuple[OutcomeAuthorityBinding, ...]:
+        """Return current outcome bindings in admitted authority order."""
+        return self._read()[0].bindings
+
     def checkpoint_publication_state(self) -> DeliveryCheckpointPublicationState:
         """Return the Change-level checkpoint queue without provider identity."""
         frontier, _content = self._read()
@@ -950,6 +1090,102 @@ class DeliveryRuntime:
         updated = frontier.model_copy(update={"pending_checkpoint": pending})
         self._replace(previous, updated)
         return self.checkpoint_publication_state()
+
+    def finalization(self) -> DeliveryFinalizationReceipt | None:
+        """Return current exact-head finalization authority, if any."""
+        return self._read()[0].finalization
+
+    def finalization_invalidation(self) -> DeliveryFinalizationInvalidationReceipt | None:
+        """Return the latest durable finalization invalidation, if any."""
+        return self._read()[0].finalization_invalidation
+
+    def finalize_change(
+        self,
+        request: FinalizeDeliveryChange,
+        finalized_at: datetime,
+    ) -> DeliveryFinalizationReceipt:
+        """Bind completed authority and final validation to one exact Change head."""
+        frontier, previous = self._read()
+        existing = frontier.finalization
+        if existing is not None:
+            if (
+                existing.operation_id == request.operation_id
+                and existing.exact_head == request.exact_head
+                and existing.observations == request.observations
+                and existing.review == request.review
+            ):
+                return existing
+            _conflict("Delivery Change is already finalized with different authority")
+        if any(binding.stage != DeliveryStage.COMPLETED for binding in frontier.bindings):
+            _conflict("Delivery finalization requires every Outcome completed")
+        if any(binding.active_claim is not None for binding in frontier.bindings):
+            _conflict("Delivery finalization cannot overlap an active Outcome claim")
+        if frontier.integration_repair_claim is not None:
+            _conflict("Delivery finalization cannot overlap an Integration repair claim")
+        if frontier.integration_completion is not None:
+            _conflict("completed legacy Integration cannot be finalized as a Change")
+        for binding in frontier.bindings:
+            if tuple(result.task_id for result in binding.results) != binding.task_ids:
+                _conflict("Delivery finalization requires every Task result in authority order")
+        if any(observation.change_id != self._contract.change_id for observation in request.observations):
+            _conflict("Delivery finalization observations do not match the Change")
+        results = tuple(result for binding in frontier.bindings for result in binding.results)
+        finalization = DeliveryFinalization(
+            operation_id=request.operation_id,
+            change_id=self._contract.change_id,
+            exact_head=request.exact_head,
+            authority_digest=self._authority_digest,
+            result_digests=tuple(hashlib.sha256(_model_content(result)).hexdigest() for result in results),
+            observations=request.observations,
+            review=request.review,
+            finalized_at=finalized_at,
+        )
+        receipt = DeliveryFinalizationReceipt.create(finalization)
+        updated = _queue_finalization_checkpoint(
+            frontier.model_copy(
+                update={
+                    "finalization": receipt,
+                    "finalization_invalidation": None,
+                }
+            ),
+            request.exact_head,
+        )
+        self._replace(previous, updated)
+        return receipt
+
+    def reconcile_finalization_head(
+        self,
+        observed_head: str,
+        invalidated_at: datetime,
+    ) -> DeliveryFinalizationReceipt | DeliveryFinalizationInvalidationReceipt | None:
+        """Retain exact finalization or invalidate it after observed Change-head drift."""
+        frontier, previous = self._read()
+        finalization = frontier.finalization
+        if finalization is None:
+            invalidation = frontier.finalization_invalidation
+            if invalidation is not None and invalidation.observed_head == observed_head:
+                return invalidation
+            return None
+        if finalization.exact_head == observed_head:
+            return finalization
+        invalidation = DeliveryFinalizationInvalidationReceipt.create(
+            DeliveryFinalizationInvalidation(
+                change_id=self._contract.change_id,
+                finalization_id=finalization.finalization_id,
+                expected_head=finalization.exact_head,
+                observed_head=observed_head,
+                invalidated_at=invalidated_at,
+            )
+        )
+        updated = frontier.model_copy(
+            update={
+                "finalization": None,
+                "finalization_invalidation": invalidation,
+                "pending_checkpoint": _invalidate_finalization_checkpoint(frontier.pending_checkpoint),
+            }
+        )
+        self._replace(previous, updated)
+        return invalidation
 
     def active_claims(self) -> tuple[tuple[str, DeliveryActiveClaim], ...]:
         """Return active claim identity keyed by outcome in authority order."""
@@ -1199,10 +1435,12 @@ class DeliveryRuntime:
         frontier, _content = self._read()
         if frontier.integration_result_id is not None:
             return DeliveryChangeStage.COMPLETED
+        if frontier.finalization is not None:
+            return DeliveryChangeStage.FINALIZED
         stages = {binding.stage for binding in frontier.bindings}
         if DeliveryStage.DESIGN in stages:
             return DeliveryChangeStage.DESIGN
-        if stages == {DeliveryStage.COMPLETED}:
+        if stages == {DeliveryStage.COMPLETED} and frontier.finalization_invalidation is None:
             return DeliveryChangeStage.INTEGRATION
         return DeliveryChangeStage.ACTIVE_DELIVERY
 
@@ -1388,6 +1626,8 @@ class DeliveryRuntime:
     ) -> AdministrativeDeliveryMoveResult:
         """Move backward and invalidate the completed dependent closure."""
         frontier, previous = self._read()
+        if frontier.finalization is not None:
+            _conflict("administrative movement cannot cross finalized Change authority")
         if hashlib.sha256(previous).hexdigest() != request.expected_version:
             _conflict("administrative movement preview is stale")
         ordered = _administrative_move_closure(self._contract, frontier, request.outcome_id, request.target)
@@ -1846,6 +2086,33 @@ def _queue_promoted_result_checkpoint(
     )
 
 
+def _queue_finalization_checkpoint(frontier: DeliveryFrontier, exact_head: str) -> DeliveryFrontier:
+    pending = frontier.pending_checkpoint
+    trigger = DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FINALIZATION)
+    combined = (*(() if pending is None else pending.triggers), trigger)
+    return frontier.model_copy(
+        update={
+            "pending_checkpoint": DeliveryPendingCheckpoint(
+                head=exact_head,
+                triggers=tuple(dict.fromkeys(combined)),
+            )
+        }
+    )
+
+
+def _invalidate_finalization_checkpoint(
+    pending: DeliveryPendingCheckpoint | None,
+) -> DeliveryPendingCheckpoint | None:
+    if pending is None:
+        return None
+    retained = tuple(
+        trigger for trigger in pending.triggers if trigger.kind != DeliveryCheckpointTriggerKind.FINALIZATION
+    )
+    if not retained:
+        return None
+    return pending.model_copy(update={"head": None, "triggers": retained})
+
+
 def _has_checkpoint_trigger(
     pending: DeliveryPendingCheckpoint | None,
     kind: DeliveryCheckpointTriggerKind,
@@ -1969,6 +2236,10 @@ __all__ = [
     "DeliveryCheckpointPublicationState",
     "DeliveryCheckpointTrigger",
     "DeliveryCheckpointTriggerKind",
+    "DeliveryFinalization",
+    "DeliveryFinalizationInvalidation",
+    "DeliveryFinalizationInvalidationReceipt",
+    "DeliveryFinalizationReceipt",
     "DeliveryFrontier",
     "DeliveryIntegrationAttention",
     "DeliveryIntegrationAttentionCode",
@@ -1994,6 +2265,7 @@ __all__ = [
     "DeliveryStage",
     "DeliveryTaskDefinition",
     "DeliveryTaskResult",
+    "FinalizeDeliveryChange",
     "OutcomeAuthorityBinding",
     "PublishDeliveryOutput",
     "PublishDeliveryPlan",

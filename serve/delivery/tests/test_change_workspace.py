@@ -281,6 +281,22 @@ def _commit_new_file(worktree: Path, name: str, content: str, message: str) -> s
     return _git(worktree, "rev-parse", "HEAD")
 
 
+def test_finalization_rejects_divergent_promoted_task_history(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.create("divergent-tasks")
+    first = _commit_new_file(coordination.worktree_path, "first.txt", "first\n", "first task")
+    _git(coordination.worktree_path, "checkout", "-b", "divergent-task", initial)
+    second = _commit_new_file(coordination.worktree_path, "second.txt", "second\n", "second task")
+    _git(coordination.worktree_path, "checkout", coordination.branch)
+    _git(coordination.worktree_path, "merge", "--no-ff", "divergent-task", "-m", "merge divergent tasks")
+    exact_head = _git(coordination.worktree_path, "rev-parse", "HEAD")
+    manager.record_reviewed(coordination.change_id, exact_head)
+
+    with pytest.raises(RuntimeError, match="not an ancestor"):
+        manager.validate_finalization_head(coordination.change_id, exact_head, (first, second))
+
+
 def test_external_completion_proposal_preserves_dirty_checked_out_target(tmp_path: Path) -> None:
     repository, _initial = _repository(tmp_path)
     _coordinator, manager = _manager(tmp_path, repository)

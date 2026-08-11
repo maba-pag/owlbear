@@ -35,10 +35,13 @@ from owlbear_delivery import (
     DeliveryAuthorityRegistry,
     DeliveryClaimRecoveryResult,
     DeliveryClaimRecoveryStatus,
+    DeliveryChangeStage,
     DeliveryContract,
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
+    DeliveryFinalizationInvalidationReceipt,
+    DeliveryFinalizationReceipt,
     DeliveryFrontier,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationCandidate,
@@ -65,10 +68,12 @@ from owlbear_delivery import (
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryWorkerRole,
+    FinalizeDeliveryChange,
     DesignPackageManifest,
     DesignPackageConflictError,
     DesignPackageStore,
     DraftPullRequestPublicationReceipt,
+    CreateOrReconcileDraftPullRequest,
     DraftPullRequestPublisher,
     GeneratedPullRequestSummaryReceipt,
     OutcomeAuthorityBinding,
@@ -259,6 +264,38 @@ def _task_result(
     )
 
 
+def _finalization_request(change_id: str, exact_head: str) -> FinalizeDeliveryChange:
+    operation_id = f"finalize-{change_id}"
+    observed_at = datetime(2026, 8, 11, 13, tzinfo=UTC)
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id=change_id,
+            task_or_finalization_id=operation_id,
+            exact_commit=exact_head,
+            observation_kind="pytest",
+            command_or_procedure="PortfolioApplication finalization validation",
+            exit_status_or_artifact_locator="exit:0",
+            observer_or_runner_identity="pytest",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit=exact_head,
+            author_id="Portfolio finalization author",
+            reviewer_id="Portfolio finalization reviewer",
+            evidence=("The exact Change head satisfies finalization authority.",),
+            reviewed_at=observed_at,
+        )
+    )
+    return FinalizeDeliveryChange(
+        operation_id=operation_id,
+        exact_head=exact_head,
+        observations=(observation,),
+        review=review,
+    )
+
+
 def _runtime(
     state_root: Path,
     contract: DeliveryContract,
@@ -428,6 +465,98 @@ def _portfolio(  # noqa: PLR0913
         ),
     )
     return application, runtimes, coordinator, state_root
+
+
+def test_finalization_uses_managed_head_and_invalidates_observed_drift(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    coordination = coordinator.show("change-a")
+    exact_head = coordination.last_reviewed_commit
+    request = _finalization_request("change-a", exact_head)
+
+    receipt = application.finalize_change("change-a", request)
+
+    assert isinstance(receipt, DeliveryFinalizationReceipt)
+    assert application.finalize_change("change-a", request) == receipt
+    assert runtimes["change-a"].change_stage() == DeliveryChangeStage.FINALIZED
+    publication = application.show_change_checkpoint_publication("change-a")
+    assert publication.pending_checkpoint is not None
+    assert publication.pending_checkpoint.head == exact_head
+
+    (coordination.worktree_path / "external.txt").write_text("external head drift\n", encoding="utf-8")
+    _git(coordination.worktree_path, "add", "external.txt")
+    _git(coordination.worktree_path, "commit", "-m", "simulate external head drift")
+    observed_head = _git(coordination.worktree_path, "rev-parse", "HEAD")
+
+    invalidation = application.reconcile_finalization_head("change-a")
+
+    assert isinstance(invalidation, DeliveryFinalizationInvalidationReceipt)
+    assert invalidation.expected_head == exact_head
+    assert invalidation.observed_head == observed_head
+    assert runtimes["change-a"].change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
+
+
+def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    exact_head = coordinator.show("change-a").last_reviewed_commit
+    receipt = application.finalize_change("change-a", _finalization_request("change-a", exact_head))
+    provider = Mock()
+    provider.read_repository.return_value = PublicationRepository(
+        repository="example/project",
+        default_branch="main",
+    )
+    provider.find_pull_request.return_value = None
+    pull_requests: list[PublicationPullRequest] = []
+
+    def create_pull_request(request):
+        pull_request = PublicationPullRequest(
+            repository=request.repository,
+            number=7,
+            node_id="PR_node_7",
+            head_branch=request.head_branch,
+            head_sha=request.head_sha,
+            base_branch=request.base_branch,
+            title=request.title,
+            body=request.body,
+            draft=True,
+            state="open",
+            merged=False,
+        )
+        pull_requests.append(pull_request)
+        return pull_request
+
+    provider.create_draft_pull_request.side_effect = create_pull_request
+    publisher = DraftPullRequestPublisher(
+        provider,
+        repository="example/project",
+        target_branch="main",
+        state_root=tmp_path / "pull-requests",
+    )
+    publisher.publish(
+        CreateOrReconcileDraftPullRequest(
+            change_id="change-a",
+            operation_id="create-change-a",
+            published_head=exact_head,
+            title="Change A",
+            generated_summary="Finalized Change A.",
+        )
+    )
+    provider.read_pull_request.return_value = pull_requests[0].model_copy(update={"head_sha": "f" * 40})
+    application._draft_pull_request_publisher = publisher  # noqa: SLF001
+
+    invalidation = application.reconcile_finalization_head("change-a")
+
+    assert isinstance(invalidation, DeliveryFinalizationInvalidationReceipt)
+    assert invalidation.finalization_id == receipt.finalization_id
+    assert invalidation.expected_head == exact_head
+    assert invalidation.observed_head == "f" * 40
+    assert application._workspace_manager.observed_change_head("change-a") == exact_head  # noqa: SLF001
+    assert runtimes["change-a"].change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
 
 
 def test_portfolio_operating_view_recommends_creation_when_no_work_exists(tmp_path: Path) -> None:
@@ -1088,7 +1217,7 @@ dependencies: []
     assert recovered.replayed
     assert coordinator.show("change-a").last_reviewed_commit == reviewed_head
     assert application.show_change_checkpoint_publication("change-a").pending_checkpoint is not None
-    assert json.loads(frontier_path.read_bytes())["schema_version"] == 4
+    assert json.loads(frontier_path.read_bytes())["schema_version"] == 5
 
 
 def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
@@ -1139,7 +1268,7 @@ def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_pa
 
     assert state.pending_checkpoint is not None
     assert state.pending_checkpoint.head == coordination.last_reviewed_commit
-    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 4
+    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 5
 
 
 def test_delivery_loader_injects_publication_provider_and_derives_check_head(tmp_path: Path) -> None:

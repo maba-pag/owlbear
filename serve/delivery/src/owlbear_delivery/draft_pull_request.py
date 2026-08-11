@@ -74,6 +74,12 @@ class ObserveChangePublicationChecks(_DraftPullRequestModel):
     published_head: str = Field(pattern=_SHA_PATTERN)
 
 
+class ObserveChangePublicationPullRequest(_DraftPullRequestModel):
+    """Observe the current provider state of one bound publication pull request."""
+
+    change_id: str = Field(pattern=_CHANGE_ID_PATTERN)
+
+
 class DraftPullRequestPublicationReceipt(_DraftPullRequestModel):
     """Immutable local binding to one provider-observed draft pull request."""
 
@@ -159,6 +165,34 @@ class PublicationCheckObservationReceipt(_PublicationCheckObservationPayload):
         return self
 
 
+class _PublicationPullRequestObservationPayload(_DraftPullRequestModel):
+    schema_version: Literal[1] = 1
+    change_id: str = Field(pattern=_CHANGE_ID_PATTERN)
+    observed_at: datetime
+    snapshot: PublicationPullRequest
+    provider_evidence_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class PublicationPullRequestObservationReceipt(_PublicationPullRequestObservationPayload):
+    """Durable provider evidence for the current bound pull-request head and state."""
+
+    observation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> PublicationPullRequestObservationReceipt:
+        if self.observed_at.tzinfo is None:
+            msg = "pull-request observation timestamp must include a timezone"
+            raise ValueError(msg)
+        if self.provider_evidence_digest != _digest(self.snapshot.model_dump(mode="json")):
+            msg = "pull-request observation receipt does not match its provider snapshot"
+            raise ValueError(msg)
+        payload = self.model_dump(mode="json", exclude={"observation_id"})
+        if self.observation_id != _digest(payload):
+            msg = "pull-request observation receipt identity is invalid"
+            raise ValueError(msg)
+        return self
+
+
 class _DraftPullRequestOperation(_DraftPullRequestModel):
     schema_version: Literal[1] = 1
     operation_id: str = Field(pattern=_OPERATION_ID_PATTERN)
@@ -185,7 +219,10 @@ class _GeneratedSummaryOperation(_DraftPullRequestModel):
 
 
 type _PublicationRequest = (
-    CreateOrReconcileDraftPullRequest | ObserveChangePublicationChecks | UpdateGeneratedPullRequestSummary
+    CreateOrReconcileDraftPullRequest
+    | ObserveChangePublicationChecks
+    | ObserveChangePublicationPullRequest
+    | UpdateGeneratedPullRequestSummary
 )
 
 
@@ -230,6 +267,43 @@ class DraftPullRequestPublisher:
         lock_root = self._state_root / "locks" / request.change_id
         with locked_roots((lock_root,)):
             return self._observe_checks_locked(request)
+
+    def observe_pull_request(
+        self,
+        request: ObserveChangePublicationPullRequest,
+    ) -> PublicationPullRequestObservationReceipt | None:
+        """Observe and durably record current provider state for one bound pull request."""
+        lock_root = self._state_root / "locks" / request.change_id
+        with locked_roots((lock_root,)):
+            publication = self._read_receipt(request)
+            if publication is None:
+                return None
+            snapshot = self._provider.read_pull_request(publication.repository, publication.number)
+            if (
+                snapshot.repository != publication.repository
+                or snapshot.number != publication.number
+                or snapshot.node_id != publication.node_id
+                or snapshot.head_branch != publication.head_branch
+                or snapshot.base_branch != publication.base_branch
+            ):
+                self._conflict(request, "provider pull request does not match the bound publication identity")
+            evidence_digest = _digest(snapshot.model_dump(mode="json"))
+            payload = _PublicationPullRequestObservationPayload(
+                change_id=request.change_id,
+                observed_at=self._clock(),
+                snapshot=snapshot,
+                provider_evidence_digest=evidence_digest,
+            )
+            receipt = PublicationPullRequestObservationReceipt(
+                observation_id=_digest(payload.model_dump(mode="json")),
+                **payload.model_dump(),
+            )
+            return self._publish_or_read(
+                self._pull_request_observation_path(request, evidence_digest),
+                receipt,
+                PublicationPullRequestObservationReceipt,
+                request,
+            )
 
     def _observe_checks_locked(
         self,
@@ -707,6 +781,13 @@ class DraftPullRequestPublisher:
     ) -> Path:
         return self._state_root / "check-observations" / request.change_id / f"{evidence_digest}.json"
 
+    def _pull_request_observation_path(
+        self,
+        request: ObserveChangePublicationPullRequest,
+        evidence_digest: str,
+    ) -> Path:
+        return self._state_root / "pull-request-observations" / request.change_id / f"{evidence_digest}.json"
+
     @staticmethod
     def _require_directory(path: Path) -> None:
         if path.is_symlink():
@@ -780,6 +861,8 @@ def _raise_conflict(request: _PublicationRequest, detail: str) -> Never:
 def _request_operation(request: _PublicationRequest) -> str:
     if isinstance(request, ObserveChangePublicationChecks):
         return "observe_change_publication_checks"
+    if isinstance(request, ObserveChangePublicationPullRequest):
+        return "observe_change_publication_pull_request"
     return request.operation_id
 
 

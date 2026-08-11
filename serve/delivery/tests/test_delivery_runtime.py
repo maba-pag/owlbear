@@ -23,6 +23,8 @@ from owlbear_delivery import (
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
     DeliveryContract,
+    DeliveryFinalizationInvalidationReceipt,
+    DeliveryFinalizationReceipt,
     DeliveryFrontier,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
@@ -48,6 +50,7 @@ from owlbear_delivery import (
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryWorkerRole,
+    FinalizeDeliveryChange,
     OutcomeAuthorityBinding,
     PortfolioCoordinator,
     PublishDeliveryPlan,
@@ -373,6 +376,68 @@ def _task_result(
     )
 
 
+def _finalization_request(exact_head: str) -> FinalizeDeliveryChange:
+    operation_id = "finalize-delivery-runtime"
+    observed_at = datetime(2026, 8, 11, 13, tzinfo=UTC)
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id="delivery-runtime",
+            task_or_finalization_id=operation_id,
+            exact_commit=exact_head,
+            observation_kind="pytest",
+            command_or_procedure="full Delivery finalization validation",
+            exit_status_or_artifact_locator="exit:0",
+            observer_or_runner_identity="pytest",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit=exact_head,
+            author_id="Delivery finalization author",
+            reviewer_id="Delivery finalization reviewer",
+            evidence=("The exact Change head satisfies finalization authority.",),
+            reviewed_at=observed_at,
+        )
+    )
+    return FinalizeDeliveryChange(
+        operation_id=operation_id,
+        exact_head=exact_head,
+        observations=(observation,),
+        review=review,
+    )
+
+
+def test_finalization_binds_exact_head_and_invalidates_on_head_drift(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    exact_head = "3" * 40
+    request = _finalization_request(exact_head)
+
+    receipt = runtime.finalize_change(request, datetime(2026, 8, 11, 14, tzinfo=UTC))
+
+    assert isinstance(receipt, DeliveryFinalizationReceipt)
+    assert runtime.finalize_change(request, datetime(2026, 8, 11, 15, tzinfo=UTC)) == receipt
+    assert runtime.change_stage() == DeliveryChangeStage.FINALIZED
+    publication = runtime.checkpoint_publication_state()
+    assert publication.pending_checkpoint is not None
+    assert publication.pending_checkpoint.head == exact_head
+    assert DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FINALIZATION) in (
+        publication.pending_checkpoint.triggers
+    )
+
+    invalidation = runtime.reconcile_finalization_head("4" * 40, datetime(2026, 8, 11, 16, tzinfo=UTC))
+
+    assert isinstance(invalidation, DeliveryFinalizationInvalidationReceipt)
+    assert invalidation.finalization_id == receipt.finalization_id
+    assert runtime.finalization() is None
+    assert runtime.finalization_invalidation() == invalidation
+    assert runtime.change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
+    assert runtime.checkpoint_publication_state().pending_checkpoint is None
+
+
 def test_plan_publication_is_idempotent_and_promotes_dependency_order(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path)
     _activate(runtime, "OUT-001", "claim-001")
@@ -409,7 +474,7 @@ def test_runtime_migrates_reducible_assembly_metadata_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 4
+    assert canonical["schema_version"] == 5
     assert all("assembly_required" not in binding for binding in canonical["bindings"])
     assert json.loads(path.read_bytes()) == canonical
 
@@ -426,7 +491,7 @@ def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 4
+    assert canonical["schema_version"] == 5
     assert canonical["published_head"] is None
     assert canonical["pending_checkpoint"] is None
     assert json.loads(path.read_bytes()) == canonical

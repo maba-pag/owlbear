@@ -42,6 +42,8 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangeStage,
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointTriggerKind,
+    DeliveryFinalizationInvalidationReceipt,
+    DeliveryFinalizationReceipt,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
@@ -62,6 +64,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryTaskResult,
     DeliveryTransition,
     DeliveryWorkerRole,
+    FinalizeDeliveryChange,
     OutcomeAuthorityBinding,
     PublishDeliveryPlan,
     PublishDeliveryResult,
@@ -80,6 +83,7 @@ from owlbear_delivery.draft_pull_request import (
     DraftPullRequestPublisher,
     GeneratedPullRequestSummaryReceipt,
     ObserveChangePublicationChecks,
+    ObserveChangePublicationPullRequest,
     PublicationCheckObservationReceipt,
     UpdateGeneratedPullRequestSummary,
 )
@@ -651,6 +655,43 @@ class PortfolioApplication:
     def show_change_checkpoint_publication(self, change_id: str) -> DeliveryCheckpointPublicationState:
         """Return the durable checkpoint queue for one admitted Change."""
         return self._runtime(change_id).checkpoint_publication_state()
+
+    def finalize_change(
+        self,
+        change_id: str,
+        request: FinalizeDeliveryChange,
+    ) -> DeliveryFinalizationReceipt:
+        """Finalize one exact clean reviewed Change head and queue its checkpoint."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            results = tuple(result for binding in runtime.bindings() for result in binding.results)
+            self._workspace_manager.validate_finalization_head(
+                change_id,
+                request.exact_head,
+                tuple(result.completed_commit for result in results),
+            )
+            return runtime.finalize_change(request, _timestamp(self._clock()))
+
+    def reconcile_finalization_head(
+        self,
+        change_id: str,
+    ) -> DeliveryFinalizationReceipt | DeliveryFinalizationInvalidationReceipt | None:
+        """Retain or invalidate finalization from the engine-derived Change branch head."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            observation = (
+                None
+                if self._draft_pull_request_publisher is None
+                else self._draft_pull_request_publisher.observe_pull_request(
+                    ObserveChangePublicationPullRequest(change_id=change_id)
+                )
+            )
+            observed_head = (
+                self._workspace_manager.observed_change_head(change_id)
+                if observation is None
+                else observation.snapshot.head_sha
+            )
+            return runtime.reconcile_finalization_head(observed_head, _timestamp(self._clock()))
 
     def reconcile_change_checkpoint(self, change_id: str) -> DeliveryCheckpointReconciliationResult:
         """Reconcile one durable checkpoint without accepting caller-supplied external fences."""

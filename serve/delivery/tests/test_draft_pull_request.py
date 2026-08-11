@@ -12,7 +12,9 @@ from owlbear_delivery.draft_pull_request import (
     CreateOrReconcileDraftPullRequest,
     DraftPullRequestPublisher,
     ObserveChangePublicationChecks,
+    ObserveChangePublicationPullRequest,
     PublicationCheckObservationReceipt,
+    PublicationPullRequestObservationReceipt,
     UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.publication_provider import (
@@ -291,6 +293,25 @@ def test_identical_check_observation_replays_durable_receipt(tmp_path: Path) -> 
     assert replayed == first
     assert len(provider.observed_requests) == 2
     assert len(tuple((tmp_path / "pull-requests/check-observations/change-a").glob("*.json"))) == 1
+
+
+def test_observes_and_persists_bound_pull_request_head_drift(tmp_path: Path) -> None:
+    provider = _Provider()
+    publisher = _publisher(tmp_path, provider)
+    publisher.publish(_request())
+    provider.pull_requests[0] = provider.pull_requests[0].model_copy(update={"head_sha": "2" * 40})
+    request = ObserveChangePublicationPullRequest(change_id="change-a")
+
+    receipt = publisher.observe_pull_request(request)
+    replayed = publisher.observe_pull_request(request)
+
+    assert isinstance(receipt, PublicationPullRequestObservationReceipt)
+    assert replayed == receipt
+    assert receipt.snapshot.head_sha == "2" * 40
+    observation_path = (
+        tmp_path / "pull-requests/pull-request-observations/change-a" / f"{receipt.provider_evidence_digest}.json"
+    )
+    assert PublicationPullRequestObservationReceipt.model_validate_json(observation_path.read_bytes()) == receipt
 
 
 def test_rejects_moved_pull_request_before_check_observation(tmp_path: Path) -> None:
