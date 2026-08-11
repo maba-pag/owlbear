@@ -31,6 +31,7 @@ _HEAD = "1" * 40
 @dataclass
 class _Provider:
     lose_create_response: bool = False
+    fail_create_before_write_once: bool = False
     create_started: Event | None = None
     allow_create: Event | None = None
     update_started: Event | None = None
@@ -42,6 +43,7 @@ class _Provider:
     observed_head: str | None = None
     move_pull_request_during_observation: bool = False
     lose_update_response: bool = False
+    fail_update_before_write_once: bool = False
 
     def read_repository(self, repository: str) -> PublicationRepository:
         return PublicationRepository(repository=repository, default_branch="main")
@@ -58,6 +60,14 @@ class _Provider:
 
     def create_draft_pull_request(self, request: CreateDraftPublicationPullRequest) -> PublicationPullRequest:
         self.create_calls += 1
+        if self.fail_create_before_write_once:
+            self.fail_create_before_write_once = False
+            raise PublicationProviderError(
+                PublicationProviderFailureCode.UNAVAILABLE,
+                "create_draft_pull_request",
+                "provider unavailable",
+                retry_safe=True,
+            )
         if self.create_started is not None:
             self.create_started.set()
         if self.allow_create is not None and not self.allow_create.wait(timeout=5):
@@ -105,6 +115,14 @@ class _Provider:
                 "update_pull_request",
                 "pull request differs from the update fence",
                 retry_safe=False,
+            )
+        if self.fail_update_before_write_once:
+            self.fail_update_before_write_once = False
+            raise PublicationProviderError(
+                PublicationProviderFailureCode.UNAVAILABLE,
+                "update_pull_request",
+                "provider unavailable",
+                retry_safe=True,
             )
         self.update_calls += 1
         if self.update_started is not None:
@@ -186,6 +204,34 @@ def test_creates_one_marked_draft_pr_and_replays_local_receipt(tmp_path: Path) -
 
     assert replayed == first
     assert first.number == 7
+    assert provider.create_calls == 1
+
+
+def test_creation_retries_at_new_head_after_prior_operation_failed(tmp_path: Path) -> None:
+    provider = _Provider(fail_create_before_write_once=True)
+    publisher = _publisher(tmp_path, provider)
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        publisher.publish(_request())
+
+    assert exc_info.value.code is PublicationProviderFailureCode.UNAVAILABLE
+    newer_head = "2" * 40
+    receipt = publisher.publish(_request(operation_id="operation-2", published_head=newer_head))
+
+    assert receipt.head_sha == newer_head
+    assert provider.create_calls == 2
+
+
+def test_existing_publication_reconciles_after_branch_head_advances(tmp_path: Path) -> None:
+    provider = _Provider()
+    publisher = _publisher(tmp_path, provider)
+    original = publisher.publish(_request())
+    newer_head = "2" * 40
+    provider.pull_requests[0] = provider.pull_requests[0].model_copy(update={"head_sha": newer_head})
+
+    replayed = publisher.publish(_request(operation_id="operation-2", published_head=newer_head))
+
+    assert replayed == original
     assert provider.create_calls == 1
     assert provider.pull_requests[0].body.count("<!-- owlbear-change:change-a -->") == 1
     assert (tmp_path / "pull-requests/receipts/change-a.json").is_file()
@@ -290,6 +336,26 @@ def test_reconciles_lost_summary_update_response_without_second_write(tmp_path: 
 
     assert receipt.body_digest
     assert provider.update_calls == 1
+    assert "Second reviewed checkpoint." in provider.pull_requests[0].body
+
+
+def test_retries_summary_after_user_prose_changes(tmp_path: Path) -> None:
+    provider = _Provider(fail_update_before_write_once=True)
+    publisher = _publisher(tmp_path, provider)
+    publisher.publish(_request())
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        publisher.update_generated_summary(_summary_request())
+
+    assert exc_info.value.code is PublicationProviderFailureCode.UNAVAILABLE
+    current = provider.pull_requests[0]
+    provider.pull_requests[0] = current.model_copy(update={"body": f"User intro.\n\n{current.body}"})
+
+    receipt = publisher.update_generated_summary(_summary_request())
+
+    assert receipt.body_digest
+    assert provider.update_calls == 1
+    assert provider.pull_requests[0].body.startswith("User intro.\n\n")
     assert "Second reviewed checkpoint." in provider.pull_requests[0].body
 
 
@@ -485,7 +551,8 @@ def test_rejects_symlinked_leaf_state_before_provider_write(tmp_path: Path, kind
     leaf_root.mkdir(parents=True)
     target = tmp_path / f"{kind}.json"
     target.write_text("{}\n", encoding="utf-8")
-    (leaf_root / "change-a.json").symlink_to(target)
+    leaf_name = "change-a--operation-1.json" if kind == "operations" else "change-a.json"
+    (leaf_root / leaf_name).symlink_to(target)
 
     with pytest.raises(PublicationProviderError) as exc_info:
         _publisher(tmp_path, provider).publish(_request())

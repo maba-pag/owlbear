@@ -651,12 +651,16 @@ class PortfolioApplication:
         if self._change_branch_publisher is None or self._draft_pull_request_publisher is None:
             message = "checkpoint publication is not configured"
             raise PortfolioApplicationError(message)
+        runtime = self._runtime(change_id)
         lock_root = self._target_root / "publications/checkpoints/locks" / change_id
         with locked_roots((lock_root,)):
-            return self._reconcile_change_checkpoint(change_id)
+            return self._reconcile_change_checkpoint(change_id, runtime)
 
-    def _reconcile_change_checkpoint(self, change_id: str) -> DeliveryCheckpointReconciliationResult:
-        runtime = self._runtime(change_id)
+    def _reconcile_change_checkpoint(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+    ) -> DeliveryCheckpointReconciliationResult:
         initial = runtime.checkpoint_publication_state()
         pending = initial.pending_checkpoint
         if pending is None:
@@ -667,25 +671,28 @@ class PortfolioApplication:
                 reconciled=True,
             )
         if pending.head is None:
-            message = "checkpoint publication requires a current reviewed head"
-            raise PortfolioApplicationError(message)
+            return DeliveryCheckpointReconciliationResult(
+                change_id=change_id,
+                attempted_head=None,
+                state=initial,
+                reconciled=False,
+            )
 
         head = pending.head
-        branch_receipt = None
+        branch_request = PublishChangeBranch(
+            change_id=change_id,
+            expected_remote_head=initial.published_head,
+            expected_published_head=head,
+            operation_id=_checkpoint_operation_id(
+                "branch",
+                change_id,
+                head,
+                initial.published_head or "missing",
+            ),
+        )
+        branch_receipt = self._change_branch_publisher.publish(branch_request)
         state = initial
         if initial.published_head != head:
-            branch_request = PublishChangeBranch(
-                change_id=change_id,
-                expected_remote_head=initial.published_head,
-                expected_published_head=head,
-                operation_id=_checkpoint_operation_id(
-                    "branch",
-                    change_id,
-                    head,
-                    initial.published_head or "missing",
-                ),
-            )
-            branch_receipt = self._change_branch_publisher.publish(branch_request)
             state = runtime.record_checkpoint_branch_publication(initial, branch_receipt.published_head)
 
         current = state.pending_checkpoint
@@ -714,15 +721,14 @@ class PortfolioApplication:
                     generated_summary=summary,
                 )
             )
-        else:
-            summary_receipt = self._draft_pull_request_publisher.update_generated_summary(
-                UpdateGeneratedPullRequestSummary(
-                    change_id=change_id,
-                    operation_id=_checkpoint_operation_id("summary", change_id, head, summary),
-                    published_head=head,
-                    generated_summary=summary,
-                )
+        summary_receipt = self._draft_pull_request_publisher.update_generated_summary(
+            UpdateGeneratedPullRequestSummary(
+                change_id=change_id,
+                operation_id=_checkpoint_operation_id("summary", change_id, head, summary),
+                published_head=head,
+                generated_summary=summary,
             )
+        )
         state = runtime.acknowledge_checkpoint_publication(pending, head)
         return DeliveryCheckpointReconciliationResult(
             change_id=change_id,

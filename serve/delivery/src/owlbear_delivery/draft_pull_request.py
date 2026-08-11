@@ -140,9 +140,6 @@ class _GeneratedSummaryOperation(_DraftPullRequestModel):
     head_branch: str = Field(min_length=1)
     head_sha: str = Field(pattern=_SHA_PATTERN)
     base_branch: str = Field(min_length=1)
-    expected_title: str = Field(min_length=1)
-    expected_body: str
-    desired_body: str = Field(max_length=_MAX_PULL_REQUEST_BODY_LENGTH)
     generated_summary_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
@@ -226,10 +223,9 @@ class DraftPullRequestPublisher:
 
         current = self._provider.read_pull_request(operation.repository, operation.number)
         self._validate_summary_pull_request(current, operation, request)
-        if current.title == operation.expected_title and current.body == operation.desired_body:
+        desired_body = _replace_generated_block(current.body, request.generated_summary, request)
+        if current.body == desired_body:
             return self._bind_summary_receipt(self._summary_receipt(operation, current), request)
-        if current.title != operation.expected_title or current.body != operation.expected_body:
-            self._conflict(request, "pull request metadata differs from the generated-summary operation")
 
         try:
             updated = self._provider.update_pull_request(
@@ -237,10 +233,10 @@ class DraftPullRequestPublisher:
                     repository=operation.repository,
                     number=operation.number,
                     expected_head_sha=operation.head_sha,
-                    expected_title=operation.expected_title,
-                    expected_body=operation.expected_body,
-                    title=operation.expected_title,
-                    body=operation.desired_body,
+                    expected_title=current.title,
+                    expected_body=current.body,
+                    title=current.title,
+                    body=desired_body,
                 )
             )
         except PublicationProviderError as exc:
@@ -248,12 +244,13 @@ class DraftPullRequestPublisher:
                 raise
             reconciled = self._provider.read_pull_request(operation.repository, operation.number)
             self._validate_summary_pull_request(reconciled, operation, request)
-            if reconciled.title == operation.expected_title and reconciled.body == operation.desired_body:
+            reconciled_body = _replace_generated_block(reconciled.body, request.generated_summary, request)
+            if reconciled.body == reconciled_body:
                 return self._bind_summary_receipt(self._summary_receipt(operation, reconciled), request)
             raise
 
         self._validate_summary_pull_request(updated, operation, request)
-        if updated.title != operation.expected_title or updated.body != operation.desired_body:
+        if updated.title != current.title or updated.body != desired_body:
             self._invalid_response(request, "provider did not apply the generated pull-request summary")
         return self._bind_summary_receipt(self._summary_receipt(operation, updated), request)
 
@@ -263,7 +260,7 @@ class DraftPullRequestPublisher:
             self._conflict(request, "Change has no draft pull-request publication receipt")
         current = self._provider.read_pull_request(publication.repository, publication.number)
         self._validate_publication_identity(current, publication, request)
-        desired_body = _replace_generated_block(current.body, request.generated_summary, request)
+        _generated_block_bounds(current.body, request)
         return _GeneratedSummaryOperation(
             operation_id=request.operation_id,
             change_id=request.change_id,
@@ -273,9 +270,6 @@ class DraftPullRequestPublisher:
             head_branch=publication.head_branch,
             head_sha=request.published_head,
             base_branch=publication.base_branch,
-            expected_title=current.title,
-            expected_body=current.body,
-            desired_body=desired_body,
             generated_summary_digest=_digest(request.generated_summary),
         )
 
@@ -287,6 +281,10 @@ class DraftPullRequestPublisher:
         existing = self._read_receipt(request)
         if existing is not None:
             self._validate_receipt(existing, operation, request)
+            current = self._provider.read_pull_request(existing.repository, existing.number)
+            self._validate_publication_identity(current, existing, request)
+            if current.body.count(_change_marker(request.change_id)) != 1:
+                self._conflict(request, "provider pull request does not contain the exact Change marker")
             return existing
 
         repository = self._provider.read_repository(self._repository)
@@ -392,7 +390,7 @@ class DraftPullRequestPublisher:
         operation: _DraftPullRequestOperation,
         request: CreateOrReconcileDraftPullRequest,
     ) -> _DraftPullRequestOperation:
-        path = self._path("operations", request.change_id)
+        path = self._operation_path(request)
         existing = self._publish_or_read(path, operation, _DraftPullRequestOperation, request)
         if existing != operation:
             self._conflict(request, "draft pull-request operation differs from the stored operation")
@@ -509,7 +507,6 @@ class DraftPullRequestPublisher:
             or receipt.repository != operation.repository
             or receipt.number != operation.number
             or receipt.head_sha != operation.head_sha
-            or receipt.body_digest != _digest(operation.desired_body)
         ):
             self._conflict(request, "stored generated-summary receipt differs from the operation")
 
@@ -517,7 +514,7 @@ class DraftPullRequestPublisher:
         self,
         pull_request: PublicationPullRequest,
         publication: DraftPullRequestPublicationReceipt,
-        request: ObserveChangePublicationChecks | UpdateGeneratedPullRequestSummary,
+        request: _PublicationRequest,
     ) -> None:
         if (
             pull_request.repository != publication.repository
@@ -562,7 +559,7 @@ class DraftPullRequestPublisher:
             "repository": operation.repository,
             "number": operation.number,
             "head_sha": operation.head_sha,
-            "body_digest": _digest(operation.desired_body),
+            "body_digest": _digest(pull_request.body),
             "provider_evidence_digest": _digest(pull_request.model_dump(mode="json")),
         }
         return GeneratedPullRequestSummaryReceipt(receipt_id=_digest(payload), **payload)
@@ -597,14 +594,15 @@ class DraftPullRequestPublisher:
         request: CreateOrReconcileDraftPullRequest,
     ) -> None:
         if (
-            receipt.operation_id != operation.operation_id
-            or receipt.change_id != operation.change_id
+            receipt.change_id != operation.change_id
             or receipt.repository != operation.repository
             or receipt.head_branch != operation.head_branch
-            or receipt.head_sha != operation.head_sha
             or receipt.base_branch != operation.base_branch
         ):
             self._conflict(request, "stored draft pull-request receipt differs from the operation")
+
+    def _operation_path(self, request: CreateOrReconcileDraftPullRequest) -> Path:
+        return self._state_root / "operations" / f"{request.change_id}--{request.operation_id}.json"
 
     def _path(self, kind: str, change_id: str) -> Path:
         return self._state_root / kind / f"{change_id}.json"

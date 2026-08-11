@@ -82,6 +82,12 @@ from owlbear_delivery.integration_verification import (
     IntegrationVerificationStatus,
     IntegrationVerifier,
 )
+from owlbear_delivery.publication_provider import (
+    PublicationProviderError,
+    PublicationProviderFailureCode,
+    PublicationPullRequest,
+    PublicationRepository,
+)
 from owlbear_delivery.runtime_transaction import RuntimeTransaction
 
 
@@ -473,6 +479,7 @@ def test_reconcile_first_checkpoint_publishes_branch_creates_pr_and_drains(tmp_p
     branch_publisher.publish.return_value = _branch_receipt(head)
     pull_request_publisher = Mock()
     pull_request_publisher.publish.return_value = _draft_receipt(head)
+    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
     application._change_branch_publisher = branch_publisher  # noqa: SLF001
     application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
 
@@ -486,6 +493,7 @@ def test_reconcile_first_checkpoint_publishes_branch_creates_pr_and_drains(tmp_p
     assert replayed.attempted_head is None
     assert branch_publisher.publish.call_count == 1
     assert pull_request_publisher.publish.call_count == 1
+    assert pull_request_publisher.update_generated_summary.call_count == 1
     request = pull_request_publisher.publish.call_args.args[0]
     assert request.published_head == head
     assert "Verified Outcome `OUT-001`" in request.generated_summary
@@ -545,6 +553,7 @@ def test_reconcile_checkpoint_retains_newer_head_after_first_pr_creation(tmp_pat
     branch_publisher = Mock()
     branch_publisher.publish.return_value = _branch_receipt(head)
     pull_request_publisher = Mock()
+    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
 
     def create_pull_request(_request):
         current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
@@ -636,6 +645,7 @@ def test_reconcile_checkpoint_replays_pr_after_lost_local_acknowledgment(tmp_pat
     branch_publisher.publish.return_value = _branch_receipt(head)
     pull_request_publisher = Mock()
     pull_request_publisher.publish.return_value = _draft_receipt(head)
+    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
     application._change_branch_publisher = branch_publisher  # noqa: SLF001
     application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
     runtime = runtimes["change-a"]
@@ -655,12 +665,123 @@ def test_reconcile_checkpoint_replays_pr_after_lost_local_acknowledgment(tmp_pat
 
     assert replayed.reconciled
     assert replayed.state.pending_checkpoint is None
-    assert branch_publisher.publish.call_count == 1
+    assert branch_publisher.publish.call_count == 2
     assert pull_request_publisher.publish.call_count == 2
+    assert pull_request_publisher.update_generated_summary.call_count == 2
     assert (
         pull_request_publisher.publish.call_args_list[0].args[0]
         == pull_request_publisher.publish.call_args_list[1].args[0]
     )
+
+
+def test_reconcile_first_pr_recovers_at_newer_head_after_provider_failure(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    first_head = coordinator.show("change-a").last_reviewed_commit
+    second_head = "f" * 40
+    pending = DeliveryPendingCheckpoint(
+        head=first_head,
+        triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+    )
+    _set_checkpoint(runtimes["change-a"], state_root, pending)
+    branch_publisher = Mock()
+    branch_publisher.publish.side_effect = (
+        _branch_receipt(first_head),
+        _branch_receipt(second_head, first_head),
+    )
+    provider = Mock()
+    provider.read_repository.return_value = PublicationRepository(
+        repository="example/project",
+        default_branch="main",
+    )
+    pull_requests: list[PublicationPullRequest] = []
+    create_attempts = 0
+
+    def find_pull_request(_request):
+        return pull_requests[0] if pull_requests else None
+
+    def create_pull_request(request):
+        nonlocal create_attempts
+        create_attempts += 1
+        if create_attempts == 1:
+            raise PublicationProviderError(
+                PublicationProviderFailureCode.UNAVAILABLE,
+                "create_draft_pull_request",
+                "provider unavailable",
+                retry_safe=True,
+            )
+        pull_request = PublicationPullRequest(
+            repository=request.repository,
+            number=7,
+            node_id="PR_node_7",
+            head_branch=request.head_branch,
+            head_sha=request.head_sha,
+            base_branch=request.base_branch,
+            title=request.title,
+            body=request.body,
+            draft=True,
+            state="open",
+            merged=False,
+        )
+        pull_requests.append(pull_request)
+        return pull_request
+
+    provider.find_pull_request.side_effect = find_pull_request
+    provider.create_draft_pull_request.side_effect = create_pull_request
+    provider.read_pull_request.side_effect = lambda _repository, _number: pull_requests[0]
+    application._change_branch_publisher = branch_publisher  # noqa: SLF001
+    application._draft_pull_request_publisher = DraftPullRequestPublisher(  # noqa: SLF001
+        provider,
+        repository="example/project",
+        target_branch="main",
+        state_root=tmp_path / "pull-requests",
+    )
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        application.reconcile_change_checkpoint("change-a")
+
+    assert exc_info.value.code is PublicationProviderFailureCode.UNAVAILABLE
+    _set_checkpoint(
+        runtimes["change-a"],
+        state_root,
+        pending.model_copy(update={"head": second_head}),
+        published_head=first_head,
+    )
+
+    result = application.reconcile_change_checkpoint("change-a")
+
+    assert result.reconciled
+    assert result.draft_pull_request is not None
+    assert result.draft_pull_request.head_sha == second_head
+    assert result.generated_summary is not None
+    assert create_attempts == 2
+    assert provider.update_pull_request.call_count == 0
+
+
+def test_reconcile_unanchored_checkpoint_waits_without_provider_calls(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    pending = DeliveryPendingCheckpoint(
+        head=None,
+        triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+    )
+    _set_checkpoint(runtimes["change-a"], state_root, pending)
+    branch_publisher = Mock()
+    pull_request_publisher = Mock()
+    application._change_branch_publisher = branch_publisher  # noqa: SLF001
+    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+
+    result = application.reconcile_change_checkpoint("change-a")
+
+    assert not result.reconciled
+    assert result.attempted_head is None
+    assert result.state.pending_checkpoint == pending
+    assert branch_publisher.publish.call_count == 0
+    assert pull_request_publisher.publish.call_count == 0
 
 
 def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path: Path) -> None:
