@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
+from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 from owlbear_delivery.runtime_transaction import ReplacementTransactionParticipant, RuntimeTransaction
 
 if TYPE_CHECKING:
@@ -35,6 +36,7 @@ class DeliveryChangeStage(StrEnum):
     ACTIVE_DELIVERY = "active-delivery"
     INTEGRATION = "integration"
     FINALIZED = "finalized"
+    AWAITING_MERGE = "awaiting-merge"
     COMPLETED = "completed"
 
 
@@ -728,13 +730,14 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 class DeliveryFrontier(_DeliveryModel):
     """Canonical outcome and Change checkpoint state persisted beside authority."""
 
-    schema_version: Literal[5] = 5
+    schema_version: Literal[6] = 6
     bindings: tuple[OutcomeAuthorityBinding, ...]
     published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint: DeliveryPendingCheckpoint | None = None
     operator_moves: tuple[DeliveryOperatorMove, ...] = ()
     finalization: DeliveryFinalizationReceipt | None = None
     finalization_invalidation: DeliveryFinalizationInvalidationReceipt | None = None
+    ready: PullRequestReadyReceipt | None = None
     integration_result_id: str | None = None
     integration_completion: DeliveryIntegrationCompletion | None = None
     integration_attention: DeliveryIntegrationAttention | None = None
@@ -765,6 +768,14 @@ class DeliveryFrontier(_DeliveryModel):
             raise ValueError(message)
         if self.finalization is not None and self.finalization_invalidation is not None:
             message = "Delivery finalization and invalidation cannot coexist"
+            raise ValueError(message)
+        if self.ready is not None and (
+            self.finalization is None
+            or self.ready.change_id != self.finalization.change_id
+            or self.ready.finalization_id != self.finalization.finalization_id
+            or self.ready.head_sha != self.finalization.exact_head
+        ):
+            message = "pull-request ready authority requires its exact current finalization"
             raise ValueError(message)
         if self.finalization is not None and (
             any(binding.stage != DeliveryStage.COMPLETED for binding in self.bindings)
@@ -964,8 +975,8 @@ _STAGE_ORDER = {
     DeliveryStage.IMPLEMENTATION: 2,
     DeliveryStage.COMPLETED: 3,
 }
-_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4})
-_FRONTIER_SCHEMA_VERSION = 5
+_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5})
+_FRONTIER_SCHEMA_VERSION = 6
 _RETURN_TARGETS = {
     DeliveryStage.PLANNING: {DeliveryStage.DESIGN},
     DeliveryStage.IMPLEMENTATION: {DeliveryStage.PLANNING, DeliveryStage.DESIGN},
@@ -1099,6 +1110,37 @@ class DeliveryRuntime:
         """Return the latest durable finalization invalidation, if any."""
         return self._read()[0].finalization_invalidation
 
+    def ready_receipt(self) -> PullRequestReadyReceipt | None:
+        """Return durable authority that the exact finalized pull request is ready."""
+        return self._read()[0].ready
+
+    def mark_awaiting_merge(self, receipt: PullRequestReadyReceipt) -> PullRequestReadyReceipt:
+        """Bind provider-observed ready state to the exact current finalization."""
+        frontier, previous = self._read()
+        finalization = frontier.finalization
+        if finalization is None:
+            _conflict("pull-request ready state requires current finalization authority")
+        if (
+            receipt.change_id != self._contract.change_id
+            or receipt.finalization_id != finalization.finalization_id
+            or receipt.head_sha != finalization.exact_head
+        ):
+            _conflict("pull-request ready receipt does not match current finalization authority")
+        if frontier.ready is not None:
+            if frontier.ready == receipt:
+                return receipt
+            _conflict("Delivery Change is already awaiting merge with different authority")
+        self._replace(previous, frontier.model_copy(update={"ready": receipt}))
+        return receipt
+
+    def reconcile_pull_request_draft_state(self, *, provider_draft: bool) -> PullRequestReadyReceipt | None:
+        """Retain ready authority only while the provider reports the PR ready."""
+        frontier, previous = self._read()
+        if frontier.ready is None or not provider_draft:
+            return frontier.ready
+        self._replace(previous, frontier.model_copy(update={"ready": None}))
+        return None
+
     def finalize_change(
         self,
         request: FinalizeDeliveryChange,
@@ -1146,6 +1188,7 @@ class DeliveryRuntime:
                 update={
                     "finalization": receipt,
                     "finalization_invalidation": None,
+                    "ready": None,
                 }
             ),
             request.exact_head,
@@ -1181,6 +1224,7 @@ class DeliveryRuntime:
             update={
                 "finalization": None,
                 "finalization_invalidation": invalidation,
+                "ready": None,
                 "pending_checkpoint": _invalidate_finalization_checkpoint(frontier.pending_checkpoint),
             }
         )
@@ -1435,6 +1479,8 @@ class DeliveryRuntime:
         frontier, _content = self._read()
         if frontier.integration_result_id is not None:
             return DeliveryChangeStage.COMPLETED
+        if frontier.ready is not None:
+            return DeliveryChangeStage.AWAITING_MERGE
         if frontier.finalization is not None:
             return DeliveryChangeStage.FINALIZED
         stages = {binding.stage for binding in frontier.bindings}

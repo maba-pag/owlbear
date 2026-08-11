@@ -75,6 +75,7 @@ from owlbear_delivery import (
     DraftPullRequestPublicationReceipt,
     CreateOrReconcileDraftPullRequest,
     DraftPullRequestPublisher,
+    MarkChangePullRequestReady,
     GeneratedPullRequestSummaryReceipt,
     OutcomeAuthorityBinding,
     ObserveChangePublicationChecks,
@@ -546,8 +547,36 @@ def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Pat
             generated_summary="Finalized Change A.",
         )
     )
-    provider.read_pull_request.return_value = pull_requests[0].model_copy(update={"head_sha": "f" * 40})
+    provider.read_pull_request.side_effect = lambda _repository, _number: pull_requests[0]
+
+    def set_draft_state(request):
+        pull_requests[0] = pull_requests[0].model_copy(update={"draft": request.draft})
+        return pull_requests[0]
+
+    provider.set_pull_request_draft_state.side_effect = set_draft_state
     application._draft_pull_request_publisher = publisher  # noqa: SLF001
+    checkpoint = runtimes["change-a"].checkpoint_publication_state()
+    assert checkpoint.pending_checkpoint is not None
+    ready_request = MarkChangePullRequestReady(
+        change_id="change-a",
+        operation_id="ready-change-a",
+        finalization_id=receipt.finalization_id,
+        exact_head=exact_head,
+    )
+
+    with pytest.raises(PortfolioApplicationError, match="reconciled final checkpoint"):
+        application.mark_change_ready("change-a", ready_request)
+
+    assert provider.set_pull_request_draft_state.call_count == 0
+    runtimes["change-a"].record_checkpoint_branch_publication(checkpoint, exact_head)
+    runtimes["change-a"].acknowledge_checkpoint_publication(checkpoint.pending_checkpoint, exact_head)
+
+    ready = application.mark_change_ready("change-a", ready_request)
+
+    assert ready.finalization_id == receipt.finalization_id
+    assert runtimes["change-a"].change_stage() == DeliveryChangeStage.AWAITING_MERGE
+    assert pull_requests[0].draft is False
+    pull_requests[0] = pull_requests[0].model_copy(update={"head_sha": "f" * 40})
 
     invalidation = application.reconcile_finalization_head("change-a")
 
@@ -557,6 +586,8 @@ def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Pat
     assert invalidation.observed_head == "f" * 40
     assert application._workspace_manager.observed_change_head("change-a") == exact_head  # noqa: SLF001
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
+    assert pull_requests[0].draft is True
+    assert provider.set_pull_request_draft_state.call_count == 2
 
 
 def test_portfolio_operating_view_recommends_creation_when_no_work_exists(tmp_path: Path) -> None:
@@ -1217,7 +1248,7 @@ dependencies: []
     assert recovered.replayed
     assert coordinator.show("change-a").last_reviewed_commit == reviewed_head
     assert application.show_change_checkpoint_publication("change-a").pending_checkpoint is not None
-    assert json.loads(frontier_path.read_bytes())["schema_version"] == 5
+    assert json.loads(frontier_path.read_bytes())["schema_version"] == 6
 
 
 def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
@@ -1268,7 +1299,7 @@ def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_pa
 
     assert state.pending_checkpoint is not None
     assert state.pending_checkpoint.head == coordination.last_reviewed_commit
-    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 5
+    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 6
 
 
 def test_delivery_loader_injects_publication_provider_and_derives_check_head(tmp_path: Path) -> None:

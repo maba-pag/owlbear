@@ -11,10 +11,14 @@ import pytest
 from owlbear_delivery.draft_pull_request import (
     CreateOrReconcileDraftPullRequest,
     DraftPullRequestPublisher,
+    MarkChangePullRequestReady,
     ObserveChangePublicationChecks,
     ObserveChangePublicationPullRequest,
     PublicationCheckObservationReceipt,
     PublicationPullRequestObservationReceipt,
+    PullRequestDraftReceipt,
+    PullRequestReadyReceipt,
+    ReturnChangePullRequestToDraft,
     UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.publication_provider import (
@@ -26,6 +30,7 @@ from owlbear_delivery.publication_provider import (
     PublicationProviderFailureCode,
     PublicationPullRequest,
     PublicationRepository,
+    SetPublicationPullRequestDraftState,
     UpdatePublicationPullRequest,
 )
 
@@ -48,6 +53,8 @@ class _Provider:
     move_pull_request_during_observation: bool = False
     lose_update_response: bool = False
     fail_update_before_write_once: bool = False
+    draft_state_calls: int = 0
+    lose_draft_state_response: bool = False
 
     def read_repository(self, repository: str) -> PublicationRepository:
         return PublicationRepository(repository=repository, default_branch="main")
@@ -160,6 +167,23 @@ class _Provider:
             checks=(),
         )
 
+    def set_pull_request_draft_state(
+        self,
+        request: SetPublicationPullRequestDraftState,
+    ) -> PublicationPullRequest:
+        current = self.read_pull_request(request.repository, request.number)
+        self.draft_state_calls += 1
+        updated = current.model_copy(update={"draft": request.draft})
+        self.pull_requests[self.pull_requests.index(current)] = updated
+        if self.lose_draft_state_response:
+            raise PublicationProviderError(
+                PublicationProviderFailureCode.RESPONSE_UNKNOWN,
+                "set_pull_request_draft_state",
+                "response lost",
+                retry_safe=False,
+            )
+        return updated
+
 
 def _request(**updates: object) -> CreateOrReconcileDraftPullRequest:
     values = {
@@ -198,6 +222,24 @@ def _checks_request(**updates: object) -> ObserveChangePublicationChecks:
     values = {"change_id": "change-a", "published_head": _HEAD}
     values.update(updates)
     return ObserveChangePublicationChecks.model_validate(values)
+
+
+def _ready_request(**updates: object) -> MarkChangePullRequestReady:
+    values = {
+        "change_id": "change-a",
+        "operation_id": "ready-operation",
+        "finalization_id": "a" * 64,
+        "exact_head": _HEAD,
+    }
+    values.update(updates)
+    return MarkChangePullRequestReady.model_validate(values)
+
+
+def _draft_request(**updates: object) -> ReturnChangePullRequestToDraft:
+    values = _ready_request().model_dump()
+    values["operation_id"] = "draft-operation"
+    values.update(updates)
+    return ReturnChangePullRequestToDraft.model_validate(values)
 
 
 def test_creates_one_marked_draft_pr_and_replays_local_receipt(tmp_path: Path) -> None:
@@ -251,6 +293,32 @@ def test_reconciles_lost_create_response_without_creating_second_pr(tmp_path: Pa
     assert receipt.number == 7
     assert provider.create_calls == 1
     assert len(provider.pull_requests) == 1
+
+
+def test_mark_ready_reconciles_lost_response_and_replays_durable_receipt(tmp_path: Path) -> None:
+    provider = _Provider(lose_draft_state_response=True)
+    publisher = _publisher(tmp_path, provider)
+    publisher.publish(_request())
+
+    first = publisher.mark_ready(_ready_request())
+    replayed = publisher.mark_ready(_ready_request())
+
+    assert isinstance(first, PullRequestReadyReceipt)
+    assert replayed == first
+    assert first.finalization_id == "a" * 64
+    assert first.head_sha == _HEAD
+    assert provider.pull_requests[0].draft is False
+    assert provider.draft_state_calls == 1
+
+    provider.lose_draft_state_response = True
+    drafted = publisher.return_to_draft(_draft_request())
+    draft_replay = publisher.return_to_draft(_draft_request())
+
+    assert isinstance(drafted, PullRequestDraftReceipt)
+    assert draft_replay == drafted
+    assert drafted.finalization_id == first.finalization_id
+    assert provider.pull_requests[0].draft is True
+    assert provider.draft_state_calls == 2
 
 
 def test_observes_checks_from_change_bound_pull_request_identity(tmp_path: Path) -> None:

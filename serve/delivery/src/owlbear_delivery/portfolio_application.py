@@ -82,9 +82,12 @@ from owlbear_delivery.draft_pull_request import (
     DraftPullRequestPublicationReceipt,
     DraftPullRequestPublisher,
     GeneratedPullRequestSummaryReceipt,
+    MarkChangePullRequestReady,
     ObserveChangePublicationChecks,
     ObserveChangePublicationPullRequest,
     PublicationCheckObservationReceipt,
+    PullRequestReadyReceipt,
+    ReturnChangePullRequestToDraft,
     UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.portfolio_operating import (
@@ -672,6 +675,33 @@ class PortfolioApplication:
             )
             return runtime.finalize_change(request, _timestamp(self._clock()))
 
+    def mark_change_ready(
+        self,
+        change_id: str,
+        request: MarkChangePullRequestReady,
+    ) -> PullRequestReadyReceipt:
+        """Mark the exact finalized and fully published Change pull request ready."""
+        if self._draft_pull_request_publisher is None:
+            message = "draft pull-request publication is not configured"
+            raise PortfolioApplicationError(message)
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            finalization = runtime.finalization()
+            publication = runtime.checkpoint_publication_state()
+            if (
+                finalization is None
+                or request.change_id != change_id
+                or request.finalization_id != finalization.finalization_id
+                or request.exact_head != finalization.exact_head
+            ):
+                message = "pull-request ready request does not match current finalization authority"
+                raise PortfolioApplicationError(message)
+            if publication.published_head != finalization.exact_head or publication.pending_checkpoint is not None:
+                message = "pull-request readiness requires the reconciled final checkpoint"
+                raise PortfolioApplicationError(message)
+            receipt = self._draft_pull_request_publisher.mark_ready(request)
+            return runtime.mark_awaiting_merge(receipt)
+
     def reconcile_finalization_head(
         self,
         change_id: str,
@@ -679,6 +709,7 @@ class PortfolioApplication:
         """Retain or invalidate finalization from the engine-derived Change branch head."""
         runtime = self._runtime(change_id)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
+            ready = runtime.ready_receipt()
             observation = (
                 None
                 if self._draft_pull_request_publisher is None
@@ -691,7 +722,23 @@ class PortfolioApplication:
                 if observation is None
                 else observation.snapshot.head_sha
             )
-            return runtime.reconcile_finalization_head(observed_head, _timestamp(self._clock()))
+            result = runtime.reconcile_finalization_head(observed_head, _timestamp(self._clock()))
+            if (
+                isinstance(result, DeliveryFinalizationInvalidationReceipt)
+                and ready is not None
+                and observation is not None
+            ):
+                self._draft_pull_request_publisher.return_to_draft(
+                    ReturnChangePullRequestToDraft(
+                        change_id=change_id,
+                        operation_id=f"return-draft-{ready.finalization_id}",
+                        finalization_id=ready.finalization_id,
+                        exact_head=observation.snapshot.head_sha,
+                    )
+                )
+            elif observation is not None:
+                runtime.reconcile_pull_request_draft_state(provider_draft=observation.snapshot.draft)
+            return result
 
     def reconcile_change_checkpoint(self, change_id: str) -> DeliveryCheckpointReconciliationResult:
         """Reconcile one durable checkpoint without accepting caller-supplied external fences."""

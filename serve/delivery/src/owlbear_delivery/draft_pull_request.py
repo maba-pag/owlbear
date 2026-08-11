@@ -18,6 +18,7 @@ from owlbear_delivery.publication_provider import (
     PublicationProviderError,
     PublicationProviderFailureCode,
     PublicationPullRequest,
+    SetPublicationPullRequestDraftState,
     UpdatePublicationPullRequest,
 )
 from owlbear_delivery.storage_io import atomic_write, locked_roots
@@ -78,6 +79,21 @@ class ObserveChangePublicationPullRequest(_DraftPullRequestModel):
     """Observe the current provider state of one bound publication pull request."""
 
     change_id: str = Field(pattern=_CHANGE_ID_PATTERN)
+
+
+class _ChangePullRequestDraftStateRequest(_DraftPullRequestModel):
+    change_id: str = Field(pattern=_CHANGE_ID_PATTERN)
+    operation_id: str = Field(pattern=_OPERATION_ID_PATTERN)
+    finalization_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    exact_head: str = Field(pattern=_SHA_PATTERN)
+
+
+class MarkChangePullRequestReady(_ChangePullRequestDraftStateRequest):
+    """Bind one stable operation to an exact finalized pull-request head."""
+
+
+class ReturnChangePullRequestToDraft(_ChangePullRequestDraftStateRequest):
+    """Return one drifted finalized pull request to draft state."""
 
 
 class DraftPullRequestPublicationReceipt(_DraftPullRequestModel):
@@ -193,6 +209,44 @@ class PublicationPullRequestObservationReceipt(_PublicationPullRequestObservatio
         return self
 
 
+class _PullRequestDraftStateReceipt(_DraftPullRequestModel):
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=_OPERATION_ID_PATTERN)
+    change_id: str = Field(pattern=_CHANGE_ID_PATTERN)
+    finalization_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    number: int = Field(gt=0)
+    node_id: str = Field(min_length=1)
+    head_sha: str = Field(pattern=_SHA_PATTERN)
+    draft: bool
+    observed_at: datetime
+    provider_evidence_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> _PullRequestDraftStateReceipt:
+        if self.observed_at.tzinfo is None:
+            msg = "pull-request draft-state timestamp must include a timezone"
+            raise ValueError(msg)
+        payload = self.model_dump(mode="json", exclude={"receipt_id"})
+        if self.receipt_id != _digest(payload):
+            msg = "pull-request draft-state receipt identity is invalid"
+            raise ValueError(msg)
+        return self
+
+
+class PullRequestReadyReceipt(_PullRequestDraftStateReceipt):
+    """Durable provider evidence that one finalized pull request is ready."""
+
+    draft: Literal[False] = False
+
+
+class PullRequestDraftReceipt(_PullRequestDraftStateReceipt):
+    """Durable provider evidence that one invalidated pull request is draft."""
+
+    draft: Literal[True] = True
+
+
 class _DraftPullRequestOperation(_DraftPullRequestModel):
     schema_version: Literal[1] = 1
     operation_id: str = Field(pattern=_OPERATION_ID_PATTERN)
@@ -218,10 +272,26 @@ class _GeneratedSummaryOperation(_DraftPullRequestModel):
     generated_summary_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class _DraftStateOperation(_DraftPullRequestModel):
+    schema_version: Literal[1] = 1
+    operation_id: str = Field(pattern=_OPERATION_ID_PATTERN)
+    change_id: str = Field(pattern=_CHANGE_ID_PATTERN)
+    finalization_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    number: int = Field(gt=0)
+    node_id: str = Field(min_length=1)
+    head_branch: str = Field(min_length=1)
+    head_sha: str = Field(pattern=_SHA_PATTERN)
+    base_branch: str = Field(min_length=1)
+    draft: bool
+
+
 type _PublicationRequest = (
     CreateOrReconcileDraftPullRequest
+    | MarkChangePullRequestReady
     | ObserveChangePublicationChecks
     | ObserveChangePublicationPullRequest
+    | ReturnChangePullRequestToDraft
     | UpdateGeneratedPullRequestSummary
 )
 
@@ -304,6 +374,126 @@ class DraftPullRequestPublisher:
                 PublicationPullRequestObservationReceipt,
                 request,
             )
+
+    def mark_ready(self, request: MarkChangePullRequestReady) -> PullRequestReadyReceipt:
+        """Mark one exact finalized pull request ready and retain provider evidence."""
+        lock_root = self._state_root / "locks" / request.change_id
+        with locked_roots((lock_root,)):
+            return self._set_draft_state(request, draft=False, receipt_type=PullRequestReadyReceipt)
+
+    def return_to_draft(self, request: ReturnChangePullRequestToDraft) -> PullRequestDraftReceipt:
+        """Return one invalidated pull request to draft and retain provider evidence."""
+        lock_root = self._state_root / "locks" / request.change_id
+        with locked_roots((lock_root,)):
+            return self._set_draft_state(request, draft=True, receipt_type=PullRequestDraftReceipt)
+
+    def _set_draft_state[ReceiptT: _PullRequestDraftStateReceipt](
+        self,
+        request: _ChangePullRequestDraftStateRequest,
+        *,
+        draft: bool,
+        receipt_type: type[ReceiptT],
+    ) -> ReceiptT:
+        publication = self._read_receipt(request)
+        if publication is None:
+            self._conflict(request, "Change has no draft pull-request publication receipt")
+        operation = _DraftStateOperation(
+            operation_id=request.operation_id,
+            change_id=request.change_id,
+            finalization_id=request.finalization_id,
+            repository=publication.repository,
+            number=publication.number,
+            node_id=publication.node_id,
+            head_branch=publication.head_branch,
+            head_sha=request.exact_head,
+            base_branch=publication.base_branch,
+            draft=draft,
+        )
+        operation_path = self._draft_state_path("draft-state-operations", request)
+        stored_operation = self._publish_or_read(operation_path, operation, _DraftStateOperation, request)
+        if stored_operation != operation:
+            self._conflict(request, "pull-request draft-state operation differs from the stored operation")
+        receipt_path = self._draft_state_path("draft-state-receipts", request)
+        existing = self._read_state(receipt_path, receipt_type, request)
+        current = self._provider.read_pull_request(operation.repository, operation.number)
+        self._validate_draft_state_identity(current, operation, request)
+        if existing is not None:
+            if current.draft != draft:
+                self._conflict(request, "provider pull request no longer matches the draft-state receipt")
+            return existing
+        if current.draft != draft:
+            self._mutate_draft_state(operation)
+        observed = self._provider.read_pull_request(operation.repository, operation.number)
+        self._validate_draft_state_identity(observed, operation, request)
+        if observed.draft != draft:
+            self._invalid_response(request, "provider did not apply the requested pull-request draft state")
+        return self._bind_draft_state_receipt(operation, observed, request, receipt_type, receipt_path)
+
+    def _mutate_draft_state(
+        self,
+        operation: _DraftStateOperation,
+    ) -> None:
+        try:
+            self._provider.set_pull_request_draft_state(
+                SetPublicationPullRequestDraftState(
+                    repository=operation.repository,
+                    number=operation.number,
+                    node_id=operation.node_id,
+                    expected_head_sha=operation.head_sha,
+                    draft=operation.draft,
+                )
+            )
+        except PublicationProviderError as exc:
+            if exc.code is not PublicationProviderFailureCode.RESPONSE_UNKNOWN:
+                raise
+
+    def _bind_draft_state_receipt[ReceiptT: _PullRequestDraftStateReceipt](
+        self,
+        operation: _DraftStateOperation,
+        observed: PublicationPullRequest,
+        request: _ChangePullRequestDraftStateRequest,
+        receipt_type: type[ReceiptT],
+        receipt_path: Path,
+    ) -> ReceiptT:
+        observed_at = self._clock()
+        payload = {
+            "schema_version": 1,
+            "operation_id": operation.operation_id,
+            "change_id": operation.change_id,
+            "finalization_id": operation.finalization_id,
+            "repository": operation.repository,
+            "number": operation.number,
+            "node_id": operation.node_id,
+            "head_sha": operation.head_sha,
+            "draft": operation.draft,
+            "observed_at": observed_at,
+            "provider_evidence_digest": _digest(observed.model_dump(mode="json")),
+        }
+        candidate = receipt_type.model_construct(receipt_id="0" * 64, **payload)
+        receipt_id = _digest(candidate.model_dump(mode="json", exclude={"receipt_id"}))
+        receipt = receipt_type(receipt_id=receipt_id, **payload)
+        stored_receipt = self._publish_or_read(receipt_path, receipt, receipt_type, request)
+        if stored_receipt != receipt:
+            self._conflict(request, "pull-request draft-state receipt differs from the provider result")
+        return stored_receipt
+
+    def _validate_draft_state_identity(
+        self,
+        pull_request: PublicationPullRequest,
+        operation: _DraftStateOperation,
+        request: _ChangePullRequestDraftStateRequest,
+    ) -> None:
+        if (
+            pull_request.repository != operation.repository
+            or pull_request.number != operation.number
+            or pull_request.node_id != operation.node_id
+            or pull_request.head_branch != operation.head_branch
+            or pull_request.head_sha != operation.head_sha
+            or pull_request.base_branch != operation.base_branch
+            or pull_request.state != "open"
+            or pull_request.merged
+        ):
+            self._conflict(request, "provider pull request moved outside the finalization fence")
 
     def _observe_checks_locked(
         self,
@@ -772,6 +962,9 @@ class DraftPullRequestPublisher:
         return self._state_root / kind / f"{change_id}.json"
 
     def _summary_path(self, kind: str, request: UpdateGeneratedPullRequestSummary) -> Path:
+        return self._state_root / kind / f"{request.change_id}--{request.operation_id}.json"
+
+    def _draft_state_path(self, kind: str, request: _ChangePullRequestDraftStateRequest) -> Path:
         return self._state_root / kind / f"{request.change_id}--{request.operation_id}.json"
 
     def _check_observation_path(

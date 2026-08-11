@@ -61,6 +61,7 @@ from owlbear_delivery import (
     integration_attention_disposition,
 )
 from owlbear_delivery.delivery_runtime import invalidate_checkpoint_publication, parse_delivery_frontier
+from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 
 
 def test_exact_commit_evidence_receipts_validate_identity_and_independence() -> None:
@@ -408,6 +409,31 @@ def _finalization_request(exact_head: str) -> FinalizeDeliveryChange:
     )
 
 
+def _ready_receipt(finalization_id: str, exact_head: str) -> PullRequestReadyReceipt:
+    observed_at = datetime(2026, 8, 11, 15, tzinfo=UTC)
+    values = {
+        "schema_version": 1,
+        "operation_id": "ready-delivery-runtime",
+        "change_id": "delivery-runtime",
+        "finalization_id": finalization_id,
+        "repository": "example/project",
+        "number": 7,
+        "node_id": "PR_node_7",
+        "head_sha": exact_head,
+        "draft": False,
+        "observed_at": observed_at,
+        "provider_evidence_digest": "a" * 64,
+    }
+    candidate = PullRequestReadyReceipt.model_construct(receipt_id="0" * 64, **values)
+    payload = json.dumps(
+        candidate.model_dump(mode="json", exclude={"receipt_id"}),
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    receipt_id = hashlib.sha256(payload).hexdigest()
+    return PullRequestReadyReceipt(receipt_id=receipt_id, **values)
+
+
 def test_finalization_binds_exact_head_and_invalidates_on_head_drift(tmp_path: Path) -> None:
     runtime = _runtime(
         tmp_path,
@@ -428,11 +454,17 @@ def test_finalization_binds_exact_head_and_invalidates_on_head_drift(tmp_path: P
         publication.pending_checkpoint.triggers
     )
 
+    ready = runtime.mark_awaiting_merge(_ready_receipt(receipt.finalization_id, exact_head))
+
+    assert runtime.ready_receipt() == ready
+    assert runtime.change_stage() == DeliveryChangeStage.AWAITING_MERGE
+
     invalidation = runtime.reconcile_finalization_head("4" * 40, datetime(2026, 8, 11, 16, tzinfo=UTC))
 
     assert isinstance(invalidation, DeliveryFinalizationInvalidationReceipt)
     assert invalidation.finalization_id == receipt.finalization_id
     assert runtime.finalization() is None
+    assert runtime.ready_receipt() is None
     assert runtime.finalization_invalidation() == invalidation
     assert runtime.change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
     assert runtime.checkpoint_publication_state().pending_checkpoint is None
@@ -474,7 +506,7 @@ def test_runtime_migrates_reducible_assembly_metadata_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 5
+    assert canonical["schema_version"] == 6
     assert all("assembly_required" not in binding for binding in canonical["bindings"])
     assert json.loads(path.read_bytes()) == canonical
 
@@ -491,7 +523,7 @@ def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 5
+    assert canonical["schema_version"] == 6
     assert canonical["published_head"] is None
     assert canonical["pending_checkpoint"] is None
     assert json.loads(path.read_bytes()) == canonical
