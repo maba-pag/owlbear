@@ -85,6 +85,7 @@ from owlbear_delivery import (
     PortfolioApplicationError,
     PortfolioApplicationHooks,
     PortfolioCoordinator,
+    PublicationCheckSnapshot,
     PublishDeliveryPlan,
     PublishDeliveryResult,
     RetryDelivery,
@@ -567,6 +568,12 @@ def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Pat
         )
     )
     provider.read_pull_request.side_effect = lambda _repository, _number: pull_requests[0]
+    provider.observe_checks.return_value = PublicationCheckSnapshot(
+        repository="example/project",
+        number=7,
+        head_sha=exact_head,
+        checks=(),
+    )
 
     def set_draft_state(request):
         pull_requests[0] = pull_requests[0].model_copy(update={"draft": request.draft})
@@ -595,6 +602,7 @@ def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Pat
     assert ready.finalization_id == receipt.finalization_id
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.AWAITING_MERGE
     assert pull_requests[0].draft is False
+    provider.observe_checks.assert_called_once()
     pull_requests[0] = pull_requests[0].model_copy(update={"head_sha": "f" * 40})
     provider.set_pull_request_draft_state.side_effect = _fail_once_then_set_draft_state(pull_requests)
 
