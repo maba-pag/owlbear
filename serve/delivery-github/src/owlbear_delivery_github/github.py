@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from collections.abc import Callable
-from typing import cast
+from typing import NoReturn, cast
 from urllib.parse import quote, urlencode
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
@@ -110,18 +110,22 @@ class GitHubCliPublicationProvider:
     def read_repository(self, repository: str) -> PublicationRepository:
         """Read and verify one exact GitHub repository identity."""
         payload = self._rest("read_repository", "GET", _repository_endpoint(repository))
-        response = self._validate(_RepositoryResponse, payload, "read_repository")
+        response = self._validate(_RepositoryResponse, payload, "read_repository", retry_safe=True)
         if response.full_name.casefold() != repository.casefold():
-            self._invalid_response("read_repository", "GitHub returned another repository identity")
+            self._invalid_response(
+                "read_repository",
+                "GitHub returned another repository identity",
+                retry_safe=True,
+            )
         return PublicationRepository(repository=response.full_name, default_branch=response.default_branch)
 
     def read_pull_request(self, repository: str, number: int) -> PublicationPullRequest:
         """Read one exact GitHub pull request."""
         operation = "read_pull_request"
         payload = self._rest(operation, "GET", f"{_repository_endpoint(repository)}/pulls/{number}")
-        pull_request = self._pull_request(repository, payload, operation)
+        pull_request = self._pull_request(repository, payload, operation, retry_safe=True)
         if pull_request.number != number:
-            self._invalid_response(operation, "GitHub returned another pull request identity")
+            self._invalid_response(operation, "GitHub returned another pull request identity", retry_safe=True)
         return pull_request
 
     def find_pull_request(self, request: FindPublicationPullRequest) -> PublicationPullRequest | None:
@@ -140,7 +144,12 @@ class GitHubCliPublicationProvider:
         try:
             matches = _PULL_LIST.validate_python(payload)
         except ValidationError as exc:
-            self._invalid_response(operation, "GitHub returned an invalid pull request list", cause=exc)
+            self._invalid_response(
+                operation,
+                "GitHub returned an invalid pull request list",
+                retry_safe=True,
+                cause=exc,
+            )
         if len(matches) > 1:
             raise PublicationProviderError(
                 PublicationProviderFailureCode.CONFLICT,
@@ -312,7 +321,7 @@ class GitHubCliPublicationProvider:
                 code,
                 operation,
                 "GitHub CLI returned invalid JSON",
-                retry_safe=False,
+                retry_safe=not write,
             ) from exc
 
     @staticmethod
@@ -343,8 +352,15 @@ class GitHubCliPublicationProvider:
             retry_safe=retry_safe,
         )
 
-    def _pull_request(self, repository: str, payload: _JsonValue, operation: str) -> PublicationPullRequest:
-        response = self._validate(_PullResponse, payload, operation)
+    def _pull_request(
+        self,
+        repository: str,
+        payload: _JsonValue,
+        operation: str,
+        *,
+        retry_safe: bool = False,
+    ) -> PublicationPullRequest:
+        response = self._validate(_PullResponse, payload, operation, retry_safe=retry_safe)
         try:
             return PublicationPullRequest(
                 repository=repository,
@@ -361,18 +377,30 @@ class GitHubCliPublicationProvider:
                 merge_commit_sha=response.merge_commit_sha,
             )
         except ValidationError as exc:
-            self._invalid_response(operation, "GitHub returned invalid pull request state", cause=exc)
+            self._invalid_response(
+                operation,
+                "GitHub returned invalid pull request state",
+                retry_safe=retry_safe,
+                cause=exc,
+            )
 
     def _validate[Model: _GitHubModel](
         self,
         model: type[Model],
         payload: _JsonValue,
         operation: str,
+        *,
+        retry_safe: bool = False,
     ) -> Model:
         try:
             return model.model_validate(payload)
         except ValidationError as exc:
-            self._invalid_response(operation, "GitHub returned an invalid response", cause=exc)
+            self._invalid_response(
+                operation,
+                "GitHub returned an invalid response",
+                retry_safe=retry_safe,
+                cause=exc,
+            )
 
     def _draft_state(
         self,
@@ -391,17 +419,23 @@ class GitHubCliPublicationProvider:
         return self._validate(_DraftStateResponse, mutation.get("pullRequest"), operation)
 
     @staticmethod
-    def _invalid_response(operation: str, detail: str, *, cause: Exception | None = None) -> None:
+    def _invalid_response(
+        operation: str,
+        detail: str,
+        *,
+        retry_safe: bool = False,
+        cause: Exception | None = None,
+    ) -> NoReturn:
         error = PublicationProviderError(
             PublicationProviderFailureCode.INVALID_RESPONSE,
             operation,
             detail,
-            retry_safe=False,
+            retry_safe=retry_safe,
         )
         raise error from cause
 
     @staticmethod
-    def _conflict(operation: str, detail: str) -> None:
+    def _conflict(operation: str, detail: str) -> NoReturn:
         raise PublicationProviderError(
             PublicationProviderFailureCode.CONFLICT,
             operation,

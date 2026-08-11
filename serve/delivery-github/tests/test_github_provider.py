@@ -107,6 +107,21 @@ def test_reads_repository_and_unique_pull_request_through_fixed_get_vectors() ->
     assert all(call[1] is None and call[2] == 12.5 for call in runner.calls)
 
 
+def test_pull_request_lookup_distinguishes_missing_and_ambiguous_identity() -> None:
+    request = FindPublicationPullRequest(
+        repository=_REPOSITORY,
+        head_branch="owlbear/change/example",
+        base_branch="main",
+    )
+    provider, _ = _provider(_completed([]))
+    assert provider.find_pull_request(request) is None
+
+    provider, _ = _provider(_completed([{"number": 7}, {"number": 8}]))
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.find_pull_request(request)
+    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
+
+
 def test_creates_draft_pull_request_with_fixed_json_payload() -> None:
     provider, runner = _provider(_completed(_pull_response()))
 
@@ -133,6 +148,35 @@ def test_creates_draft_pull_request_with_fixed_json_payload() -> None:
     }
     assert not hasattr(provider, "merge_pull_request")
     assert not hasattr(provider, "request")
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {**_pull_response(), "draft": False},
+        {
+            **_pull_response(),
+            "head": {"ref": "owlbear/change/example", "sha": _OTHER_HEAD},
+        },
+        {**_pull_response(), "state": "closed", "merged": True},
+    ],
+)
+def test_create_rejects_provider_response_outside_requested_identity(response: dict[str, object]) -> None:
+    provider, _ = _provider(_completed(response))
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.create_draft_pull_request(
+            CreateDraftPublicationPullRequest(
+                repository=_REPOSITORY,
+                head_branch="owlbear/change/example",
+                head_sha=_HEAD,
+                base_branch="main",
+                title="Example change",
+                body="Generated summary",
+            )
+        )
+
+    assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
 
 
 def test_updates_metadata_only_after_exact_head_read_and_write_fences() -> None:
@@ -202,6 +246,34 @@ def test_ready_transition_uses_only_named_graphql_document_and_reads_back() -> N
     assert arguments == ("gh", "api", "graphql", "--method", "POST", "--input", "-")
     assert payload["operationName"] == "MarkPullRequestReadyForReview"
     assert "markPullRequestReadyForReview" in payload["query"]
+    assert "mergePullRequest" not in payload["query"]
+    assert payload["variables"] == {"pullRequestId": "PR_node_7"}
+
+
+def test_draft_transition_uses_only_named_graphql_document_and_reads_back() -> None:
+    mutation_response = {"data": {"convertPullRequestToDraft": {"pullRequest": {"id": "PR_node_7", "isDraft": True}}}}
+    provider, runner = _provider(
+        _completed(_pull_response(draft=False)),
+        _completed(mutation_response),
+        _completed(_pull_response()),
+    )
+
+    draft = provider.set_pull_request_draft_state(
+        SetPublicationPullRequestDraftState(
+            repository=_REPOSITORY,
+            number=7,
+            node_id="PR_node_7",
+            expected_head_sha=_HEAD,
+            draft=True,
+        )
+    )
+
+    arguments, input_bytes, _ = runner.calls[1]
+    payload = json.loads(input_bytes or b"")
+    assert draft.draft is True
+    assert arguments == ("gh", "api", "graphql", "--method", "POST", "--input", "-")
+    assert payload["operationName"] == "ConvertPullRequestToDraft"
+    assert "convertPullRequestToDraft" in payload["query"]
     assert "mergePullRequest" not in payload["query"]
     assert payload["variables"] == {"pullRequestId": "PR_node_7"}
 
@@ -292,3 +364,11 @@ def test_read_timeout_and_malformed_response_are_safe_typed_failures() -> None:
     with pytest.raises(PublicationProviderError) as invalid_info:
         provider.read_repository(_REPOSITORY)
     assert invalid_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+    assert invalid_info.value.retry_safe is True
+
+    invalid_json = subprocess.CompletedProcess(args=(), returncode=0, stdout=b"not-json", stderr=b"")
+    provider, _ = _provider(invalid_json)
+    with pytest.raises(PublicationProviderError) as invalid_json_info:
+        provider.read_repository(_REPOSITORY)
+    assert invalid_json_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+    assert invalid_json_info.value.retry_safe is True
