@@ -181,6 +181,7 @@ def test_exact_lease_rejects_remote_advance_between_observation_and_push(tmp_pat
     assert exc_info.value.retry_safe is True
     assert _head(remote, "refs/heads/owlbear/change/raced-change") == competing
     assert _head(repository, "refs/heads/owlbear/change/raced-change") == reviewed
+    assert coordinator.show("raced-change").publication_lease is None
 
 
 def test_exact_empty_lease_rejects_remote_creation_between_observation_and_push(tmp_path: Path) -> None:

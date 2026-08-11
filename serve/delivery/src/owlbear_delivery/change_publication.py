@@ -360,6 +360,7 @@ class ChangeBranchPublisher:
         if observed == operation.published_head:
             return
         if observed != operation.expected_remote_head:
+            attempt.write_outcome_ambiguous = False
             self._conflict(request, "remote Change branch changed before publication", retry_safe=True)
         attempt.write_outcome_ambiguous = False
         if timed_out:
