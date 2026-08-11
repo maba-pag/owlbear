@@ -119,6 +119,34 @@ def test_publishes_and_replays_exact_change_branch_without_mutating_target_or_us
     assert (repository / "user.txt").read_text(encoding="utf-8") == "uncommitted user work\n"
 
 
+def test_adopts_exact_reviewed_remote_head_when_durable_head_is_missing(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, reviewed = _reviewed_change(manager, "migrated-change")
+    _git(repository, "push", "origin", f"{reviewed}:refs/heads/owlbear/change/migrated-change")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+
+    with patch.object(publisher, "_push_exact_head", side_effect=AssertionError("unexpected push")):
+        receipt = publisher.publish(
+            PublishChangeBranch(
+                change_id="migrated-change",
+                expected_remote_head=None,
+                expected_published_head=reviewed,
+                operation_id="migration-recovery",
+            )
+        )
+
+    assert receipt.published_head == reviewed
+    assert receipt.expected_remote_head is None
+    assert _head(remote, "refs/heads/owlbear/change/migrated-change") == reviewed
+
+
 def test_rejects_reviewed_head_drift_before_remote_publication(tmp_path: Path) -> None:
     repository, remote, _initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)

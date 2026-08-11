@@ -136,6 +136,7 @@ _COMPLETED_ROOT = ".owlbear/completed"
 _PROVIDER_ACCEPTANCE_REQUIRED = (
     "local target ancestry is not provider acceptance evidence; completion requires an observed merged pull request"
 )
+_MAX_PULL_REQUEST_TITLE_LENGTH = 256
 
 
 def _operating_scope(scope: WorkItemScope) -> PortfolioWorkScope:
@@ -150,23 +151,28 @@ def _checkpoint_operation_id(kind: str, *parts: str) -> str:
 
 
 def _checkpoint_summary(
-    runtime: DeliveryRuntime,
     pending: DeliveryPendingCheckpoint,
     head: str,
 ) -> str:
-    outcome_titles = {outcome.outcome_id: outcome.title for outcome in runtime.contract.outcomes}
     lines = [f"Reviewed Delivery checkpoint `{head}`.", "", "Included boundaries:"]
     for trigger in pending.triggers:
         if trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK:
             lines.append("- First promoted Task result")
         elif trigger.kind == DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME:
-            title = outcome_titles.get(trigger.outcome_id or "", trigger.outcome_id or "unknown Outcome")
-            lines.append(f"- Verified Outcome `{trigger.outcome_id}`: {title}")
+            lines.append(f"- Verified Outcome `{trigger.outcome_id}`")
         elif trigger.kind == DeliveryCheckpointTriggerKind.FINALIZATION:
             lines.append("- Finalized Change")
         else:
             lines.append("- Explicit publication request")
     return "\n".join(lines)
+
+
+def _checkpoint_pull_request_title(runtime: DeliveryRuntime) -> str:
+    printable = "".join(character if character.isprintable() else " " for character in runtime.contract.title)
+    title = " ".join(printable.split()) or f"Delivery Change {runtime.contract.change_id}"
+    if len(title) <= _MAX_PULL_REQUEST_TITLE_LENGTH:
+        return title
+    return f"{title[: _MAX_PULL_REQUEST_TITLE_LENGTH - 3]}..."
 
 
 def _operator_claim(claim: DeliveryActiveClaim | None) -> DeliveryOperatorClaim | None:
@@ -652,8 +658,7 @@ class PortfolioApplication:
             message = "checkpoint publication is not configured"
             raise PortfolioApplicationError(message)
         runtime = self._runtime(change_id)
-        lock_root = self._target_root / "publications/checkpoints/locks" / change_id
-        with locked_roots((lock_root,)):
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
             return self._reconcile_change_checkpoint(change_id, runtime)
 
     def _reconcile_change_checkpoint(
@@ -679,6 +684,8 @@ class PortfolioApplication:
             )
 
         head = pending.head
+        summary = _checkpoint_summary(pending, head)
+        pull_request_title = _checkpoint_pull_request_title(runtime)
         branch_request = PublishChangeBranch(
             change_id=change_id,
             expected_remote_head=initial.published_head,
@@ -694,6 +701,8 @@ class PortfolioApplication:
         state = initial
         if initial.published_head != head:
             state = runtime.record_checkpoint_branch_publication(initial, branch_receipt.published_head)
+        else:
+            state = runtime.checkpoint_publication_state()
 
         current = state.pending_checkpoint
         if current is None or current.head is None or not set(pending.triggers) <= set(current.triggers):
@@ -705,19 +714,17 @@ class PortfolioApplication:
                 reconciled=False,
             )
 
-        summary = _checkpoint_summary(runtime, pending, head)
         first_checkpoint = any(
             trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK for trigger in pending.triggers
         )
         draft_receipt = None
-        summary_receipt = None
         if first_checkpoint:
             draft_receipt = self._draft_pull_request_publisher.publish(
                 CreateOrReconcileDraftPullRequest(
                     change_id=change_id,
                     operation_id=_checkpoint_operation_id("pull-request", change_id, head, summary),
                     published_head=head,
-                    title=runtime.contract.title,
+                    title=pull_request_title,
                     generated_summary=summary,
                 )
             )
@@ -806,7 +813,9 @@ class PortfolioApplication:
         request: DeliveryTransition,
     ) -> OutcomeAuthorityBinding:
         """Apply one validated mechanical transition through its exact runtime."""
-        return self._runtime(change_id).transition(request)
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            return runtime.transition(request)
 
     def list_integration_ready_changes(self) -> tuple[str, ...]:
         """List unclaimed Integration changes that are ready or safe to retry."""
@@ -1147,7 +1156,9 @@ class PortfolioApplication:
     ) -> AdministrativeDeliveryMoveResult:
         """Delegate an authorized operator backward movement to the owning runtime."""
         with self._coordinator.acquisition_lock():
-            return self._runtime(change_id).administrative_move(request)
+            runtime = self._runtime(change_id)
+            with locked_roots((self._checkpoint_lock_root(change_id),)):
+                return runtime.administrative_move(request)
 
     def preview_administrative_move(
         self,
@@ -2263,6 +2274,9 @@ class PortfolioApplication:
             return self._runtimes[change_id]
         except KeyError as exc:
             self._fail(f"Delivery runtime is absent: {change_id}", exc)
+
+    def _checkpoint_lock_root(self, change_id: str) -> Path:
+        return self._target_root / "publications/checkpoints/locks" / change_id
 
     @staticmethod
     def _outcome(runtime: DeliveryRuntime, outcome_id: str) -> DeliveryOutcome:

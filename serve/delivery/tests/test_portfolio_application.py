@@ -7,7 +7,9 @@ import os
 import shutil
 import subprocess
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event
 from unittest.mock import Mock, patch, sentinel
 
 import pytest
@@ -499,6 +501,53 @@ def test_reconcile_first_checkpoint_publishes_branch_creates_pr_and_drains(tmp_p
     assert "Verified Outcome `OUT-001`" in request.generated_summary
 
 
+def test_reconcile_derives_bounded_provider_text_from_authored_titles(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    runtime = runtimes["change-a"]
+    head = coordinator.show("change-a").last_reviewed_commit
+    runtime._contract = runtime.contract.model_copy(  # noqa: SLF001
+        update={
+            "title": f"  {'Title ' * 40}\x00{'Title ' * 40}  ",
+            "outcomes": (
+                runtime.contract.outcomes[0].model_copy(
+                    update={"title": "Authored <!-- owlbear-change:forged --> title"}
+                ),
+            ),
+        }
+    )
+    pending = DeliveryPendingCheckpoint(
+        head=head,
+        triggers=(
+            DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),
+            DeliveryCheckpointTrigger(
+                kind=DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
+                outcome_id="OUT-001",
+            ),
+        ),
+    )
+    _set_checkpoint(runtime, state_root, pending)
+    branch_publisher = Mock()
+    branch_publisher.publish.return_value = _branch_receipt(head)
+    pull_request_publisher = Mock()
+    pull_request_publisher.publish.return_value = _draft_receipt(head)
+    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
+    application._change_branch_publisher = branch_publisher  # noqa: SLF001
+    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+
+    result = application.reconcile_change_checkpoint("change-a")
+
+    assert result.reconciled
+    request = pull_request_publisher.publish.call_args.args[0]
+    assert len(request.title) == 256
+    assert not request.title.startswith(" ")
+    assert "\x00" not in request.title
+    assert "owlbear-change:forged" not in request.generated_summary
+    assert "Verified Outcome `OUT-001`" in request.generated_summary
+
+
 def test_reconcile_later_checkpoint_updates_summary_from_prior_published_head(tmp_path: Path) -> None:
     application, runtimes, _coordinator, state_root = _portfolio(
         tmp_path,
@@ -628,6 +677,116 @@ def test_reconcile_checkpoint_records_remote_head_after_local_invalidation(tmp_p
     assert result.state.published_head == head
     assert result.state.pending_checkpoint == DeliveryPendingCheckpoint(head=None, triggers=(first_trigger,))
     assert pull_request_publisher.publish.call_count == 0
+
+
+def test_reconcile_published_head_stops_after_concurrent_invalidation(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    head = coordinator.show("change-a").last_reviewed_commit
+    first_trigger = DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK)
+    pending = DeliveryPendingCheckpoint(head=head, triggers=(first_trigger,))
+    frontier_path = _set_checkpoint(runtimes["change-a"], state_root, pending, published_head=head)
+    branch_publisher = Mock()
+
+    def verify_branch(_request):
+        current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+        frontier_path.write_bytes(
+            _canonical(
+                current.model_copy(
+                    update={
+                        "pending_checkpoint": DeliveryPendingCheckpoint(
+                            head=None,
+                            triggers=(first_trigger,),
+                        )
+                    }
+                )
+            )
+        )
+        return _branch_receipt(head, head)
+
+    branch_publisher.publish.side_effect = verify_branch
+    pull_request_publisher = Mock()
+    application._change_branch_publisher = branch_publisher  # noqa: SLF001
+    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+
+    result = application.reconcile_change_checkpoint("change-a")
+
+    assert not result.reconciled
+    assert result.state.published_head == head
+    assert result.state.pending_checkpoint == DeliveryPendingCheckpoint(head=None, triggers=(first_trigger,))
+    assert pull_request_publisher.publish.call_count == 0
+    assert pull_request_publisher.update_generated_summary.call_count == 0
+
+
+def test_reconcile_serializes_administrative_invalidation_through_provider_work(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    head = coordinator.show("change-a").last_reviewed_commit
+    pending = DeliveryPendingCheckpoint(
+        head=head,
+        triggers=(
+            DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),
+            DeliveryCheckpointTrigger(
+                kind=DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
+                outcome_id="OUT-001",
+            ),
+        ),
+    )
+    _set_checkpoint(runtimes["change-a"], state_root, pending)
+    preview = application.preview_administrative_move("change-a", "OUT-001", DeliveryStage.PLANNING)
+    move = AdministrativeDeliveryMove(
+        move_id="move-during-reconcile",
+        outcome_id="OUT-001",
+        target=DeliveryStage.PLANNING,
+        reason="Invalidate the reviewed result.",
+        expected_version=preview.snapshot_version,
+    )
+    branch_started = Event()
+    allow_branch = Event()
+    move_started = Event()
+    branch_publisher = Mock()
+
+    def publish_branch(_request):
+        branch_started.set()
+        if not allow_branch.wait(timeout=5):
+            message = "test branch publication remained blocked"
+            raise TimeoutError(message)
+        return _branch_receipt(head)
+
+    def move_change():
+        move_started.set()
+        return application.administrative_move("change-a", move)
+
+    branch_publisher.publish.side_effect = publish_branch
+    pull_request_publisher = Mock()
+    pull_request_publisher.publish.return_value = _draft_receipt(head)
+    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
+    application._change_branch_publisher = branch_publisher  # noqa: SLF001
+    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        reconcile_future = executor.submit(application.reconcile_change_checkpoint, "change-a")
+        assert branch_started.wait(timeout=5)
+        move_future = executor.submit(move_change)
+        assert move_started.wait(timeout=5)
+        assert not move_future.done()
+        allow_branch.set()
+        reconciled = reconcile_future.result(timeout=5)
+        with pytest.raises(DeliveryRuntimeConflictError, match="preview is stale"):
+            move_future.result(timeout=5)
+
+    assert reconciled.reconciled
+    fresh_preview = application.preview_administrative_move("change-a", "OUT-001", DeliveryStage.PLANNING)
+    moved = application.administrative_move(
+        "change-a",
+        move.model_copy(update={"expected_version": fresh_preview.snapshot_version}),
+    )
+    assert moved.invalidated_outcome_ids == ("OUT-001",)
+    assert application.show_work_item("change-a", "OUT-001").projection.stage.value == "planning"
 
 
 def test_reconcile_checkpoint_replays_pr_after_lost_local_acknowledgment(tmp_path: Path) -> None:

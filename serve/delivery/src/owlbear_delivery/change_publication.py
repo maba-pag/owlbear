@@ -199,6 +199,10 @@ class ChangeBranchPublisher:
             refresh_target=not created,
         )
         remote_head = self._remote_head(operation.branch, request)
+        if operation.expected_remote_head is None and remote_head == operation.published_head:
+            attempt.reservation_released = True
+            self._release_publication(operation, attempt.owner_id, lock)
+            return self._receipt(operation)
         if remote_head != operation.expected_remote_head:
             self._conflict(request, "remote Change branch differs from the expected head")
         if remote_head is not None and not self._is_ancestor(remote_head, operation.published_head, request):
