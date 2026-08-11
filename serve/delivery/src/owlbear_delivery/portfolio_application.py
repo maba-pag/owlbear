@@ -698,7 +698,6 @@ class PortfolioApplication:
             ),
         )
         branch_receipt = self._change_branch_publisher.publish(branch_request)
-        state = initial
         if initial.published_head != head:
             state = runtime.record_checkpoint_branch_publication(initial, branch_receipt.published_head)
         else:

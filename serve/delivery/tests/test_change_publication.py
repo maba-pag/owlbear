@@ -630,7 +630,7 @@ def test_replay_rejects_changed_inputs_for_same_operation_id(tmp_path: Path) -> 
     assert exc_info.value.retry_safe is False
 
 
-def test_first_attempt_fetches_target_once_and_excludes_writer_until_push_completes(tmp_path: Path) -> None:
+def test_first_attempt_revalidates_target_and_excludes_writer_until_push_completes(tmp_path: Path) -> None:
     repository, _remote, _initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)
     _worktree, _reviewed = _reviewed_change(manager, "reserved-change")
@@ -667,7 +667,7 @@ def test_first_attempt_fetches_target_once_and_excludes_writer_until_push_comple
             )
         )
 
-    assert fetch_count == 1
+    assert fetch_count == 2
     assert coordinator.show("reserved-change").publication_lease is None
 
 
@@ -821,6 +821,51 @@ def test_failed_push_with_unchanged_remote_is_retryable_and_releases_lease(tmp_p
     assert exc_info.value.code is PublicationProviderFailureCode.UNAVAILABLE
     assert exc_info.value.retry_safe is True
     assert coordinator.show("failed-push-change").publication_lease is None
+
+
+def test_failed_push_replays_after_target_advances_within_reviewed_head(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, intermediate_target = _reviewed_change(manager, "target-advance-change")
+    (worktree / "product.txt").write_text("reviewed after target advance\n", encoding="utf-8")
+    _git(worktree, "add", "product.txt")
+    _git(worktree, "commit", "-m", "reviewed after target advance")
+    reviewed = _head(worktree)
+    manager.record_reviewed("target-advance-change", reviewed)
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+    original_run = publisher._run_git
+
+    def reject_push(*arguments: str) -> subprocess.CompletedProcess[bytes]:
+        if arguments[0] == "push":
+            return subprocess.CompletedProcess(arguments, 1, stdout=b"", stderr=b"rejected")
+        return original_run(*arguments)
+
+    request = PublishChangeBranch(
+        change_id="target-advance-change",
+        expected_remote_head=None,
+        expected_published_head=reviewed,
+        operation_id="target-advance-replay",
+    )
+    with (
+        patch.object(publisher, "_run_git", side_effect=reject_push),
+        pytest.raises(PublicationProviderError) as exc_info,
+    ):
+        publisher.publish(request)
+
+    assert exc_info.value.code is PublicationProviderFailureCode.UNAVAILABLE
+    assert exc_info.value.retry_safe
+    _git(repository, "push", "origin", f"{intermediate_target}:refs/heads/main")
+
+    receipt = publisher.publish(request)
+
+    assert receipt.published_head == reviewed
+    assert _head(remote, "refs/heads/owlbear/change/target-advance-change") == reviewed
 
 
 def test_authentication_failed_push_is_terminal_and_releases_reservation(tmp_path: Path) -> None:

@@ -85,7 +85,6 @@ class _PublicationOperation(_PublicationModel):
 class _PublicationAttempt:
     owner_id: str
     reservation: ChangeCoordination | None = None
-    operation: _PublicationOperation | None = None
     observed_remote_head: str | None = None
     write_started: bool = False
     write_outcome_ambiguous: bool = False
@@ -186,18 +185,15 @@ class ChangeBranchPublisher:
                 self._release_publication(operation, attempt.owner_id, lock)
                 return self._receipt(operation)
 
-        created = False
         if operation is None:
             candidate = self._prepare_operation(request, attempt.reservation, attempt.owner_id)
-            operation, created = self._bind_operation(candidate, request)
+            operation = self._bind_operation(candidate, request)
             self._validate_replay(operation, request)
-        attempt.operation = operation
 
         self._validate_prepared_operation(
             operation,
             request,
             owner_id=attempt.owner_id,
-            refresh_target=not created,
         )
         remote_head = self._remote_head(operation.branch, request)
         if remote_head == operation.published_head:
@@ -272,7 +268,6 @@ class ChangeBranchPublisher:
         request: PublishChangeBranch,
         *,
         owner_id: str,
-        refresh_target: bool,
     ) -> None:
         coordination = self._coordination(request)
         if (
@@ -287,8 +282,9 @@ class ChangeBranchPublisher:
         if branch_head != operation.published_head or branch_head != coordination.last_reviewed_commit:
             self._conflict(request, "prepared publication no longer names the reviewed boundary")
         self._require_clean_worktree(coordination.worktree_path, request)
-        if refresh_target and self._fetch_target(request) != operation.target_head:
-            self._conflict(request, "remote target changed after publication preparation")
+        current_target_head = self._fetch_target(request)
+        if not self._is_ancestor(current_target_head, operation.published_head, request):
+            self._conflict(request, "fresh remote target is not an ancestor of the reviewed Change head")
 
     def _require_current_reviewed_boundary(
         self,
@@ -616,7 +612,7 @@ class ChangeBranchPublisher:
         self,
         operation: _PublicationOperation,
         request: PublishChangeBranch,
-    ) -> tuple[_PublicationOperation, bool]:
+    ) -> _PublicationOperation:
         with locked_roots((self._operation_root,)):
             path = self._operation_path(operation.operation_id)
             try:
@@ -634,9 +630,9 @@ class ChangeBranchPublisher:
                         "publication operation could not be persisted",
                         cause=exc,
                     )
-                return operation, True
+                return operation
             try:
-                return _PublicationOperation.model_validate_json(content), False
+                return _PublicationOperation.model_validate_json(content)
             except ValidationError as exc:
                 self._failure(
                     PublicationProviderFailureCode.INVALID_RESPONSE,
