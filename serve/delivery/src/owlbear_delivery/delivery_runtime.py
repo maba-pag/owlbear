@@ -225,6 +225,27 @@ class DeliveryTaskResult(_DeliveryModel):
     task_id: str = Field(min_length=1)
     task_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     completed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    observations: tuple[DeliveryObservationReceipt, ...] = Field(min_length=1)
+    review: DeliveryReviewReceipt
+
+    @model_validator(mode="after")
+    def _validate_exact_commit_evidence(self) -> DeliveryTaskResult:
+        observation_ids = tuple(observation.observation_id for observation in self.observations)
+        if len(observation_ids) != len(set(observation_ids)):
+            message = "Delivery task result observations must be unique"
+            raise ValueError(message)
+        if any(
+            observation.change_id != self.change_id
+            or observation.task_or_finalization_id != self.task_id
+            or observation.exact_commit != self.completed_commit
+            for observation in self.observations
+        ):
+            message = "Delivery task result observation evidence does not match the exact task commit"
+            raise ValueError(message)
+        if self.review.exact_commit != self.completed_commit:
+            message = "Delivery task result review evidence does not match the exact task commit"
+            raise ValueError(message)
+        return self
 
 
 class DeliveryCheckpointTrigger(_DeliveryModel):
@@ -610,7 +631,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 class DeliveryFrontier(_DeliveryModel):
     """Canonical outcome and Change checkpoint state persisted beside authority."""
 
-    schema_version: Literal[3] = 3
+    schema_version: Literal[4] = 4
     bindings: tuple[OutcomeAuthorityBinding, ...]
     published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint: DeliveryPendingCheckpoint | None = None
@@ -807,8 +828,8 @@ _STAGE_ORDER = {
     DeliveryStage.IMPLEMENTATION: 2,
     DeliveryStage.COMPLETED: 3,
 }
-_PREVIOUS_FRONTIER_SCHEMA_VERSION = 2
-_FRONTIER_SCHEMA_VERSION = 3
+_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3})
+_FRONTIER_SCHEMA_VERSION = 4
 _RETURN_TARGETS = {
     DeliveryStage.PLANNING: {DeliveryStage.DESIGN},
     DeliveryStage.IMPLEMENTATION: {DeliveryStage.PLANNING, DeliveryStage.DESIGN},
@@ -1709,7 +1730,7 @@ def parse_delivery_frontier(
             if assembly_required is not False:
                 raise ValueError
         payload["schema_version"] = _FRONTIER_SCHEMA_VERSION
-    elif schema_version == _PREVIOUS_FRONTIER_SCHEMA_VERSION:
+    elif schema_version in _PREVIOUS_FRONTIER_SCHEMA_VERSIONS:
         payload["schema_version"] = _FRONTIER_SCHEMA_VERSION
     elif schema_version != _FRONTIER_SCHEMA_VERSION:
         raise ValueError

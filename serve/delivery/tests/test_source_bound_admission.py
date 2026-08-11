@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -13,9 +14,13 @@ from owlbear_delivery import (
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
     DeliveryFrontier,
+    DeliveryObservation,
+    DeliveryObservationReceipt,
     DeliveryOutputKind,
     DeliveryOutputReference,
     DeliveryPendingCheckpoint,
+    DeliveryReview,
+    DeliveryReviewReceipt,
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
@@ -105,6 +110,47 @@ def _request() -> DeliveryAdmissionRequest:
 
 def _canonical(model: DeliveryFrontier) -> bytes:
     return (json.dumps(model.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def _task_result(
+    result_id: str,
+    change_id: str,
+    authority_digest: str,
+    task: DeliveryTaskDefinition,
+    completed_commit: str,
+) -> DeliveryTaskResult:
+    observed_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id=change_id,
+            task_or_finalization_id=task.task_id,
+            exact_commit=completed_commit,
+            observation_kind="pytest",
+            command_or_procedure="source-bound admission fixture validation",
+            exit_status_or_artifact_locator="exit:0",
+            observer_or_runner_identity="pytest",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit=completed_commit,
+            author_id="Source admission test author",
+            reviewer_id="Source admission test reviewer",
+            evidence=("The exact fixture commit satisfies task authority.",),
+            reviewed_at=observed_at,
+        )
+    )
+    return DeliveryTaskResult(
+        result_id=result_id,
+        change_id=change_id,
+        authority_digest=authority_digest,
+        task_id=task.task_id,
+        task_digest=task.digest,
+        completed_commit=completed_commit,
+        observations=(observation,),
+        review=review,
+    )
 
 
 def test_admission_recovers_receipt_last_publication_and_replays_exact_sources(
@@ -209,13 +255,12 @@ def test_revision_preserves_unchanged_binding_and_invalidates_changed_dependents
             acceptance_observations=("Result is bound",),
             proof_boundaries=("Delivery runtime",),
         )
-        result = DeliveryTaskResult(
-            result_id=f"RESULT-{index:03}",
-            change_id="source-bound-change",
-            authority_digest=first.contract_digest,
-            task_id=task.task_id,
-            task_digest=task.digest,
-            completed_commit=f"{index}" * 40,
+        result = _task_result(
+            f"RESULT-{index:03}",
+            "source-bound-change",
+            first.contract_digest,
+            task,
+            f"{index}" * 40,
         )
         populated_bindings.append(
             OutcomeAuthorityBinding(

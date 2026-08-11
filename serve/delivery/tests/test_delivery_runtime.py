@@ -83,12 +83,42 @@ def test_exact_commit_evidence_receipts_validate_identity_and_independence() -> 
             reviewed_at=observed_at,
         )
     )
+    result_values = {
+        "result_id": "RESULT-001",
+        "change_id": "delivery-runtime",
+        "authority_digest": "a" * 64,
+        "task_id": "TASK-001",
+        "task_digest": "b" * 64,
+        "completed_commit": "1" * 40,
+        "observations": (observation,),
+        "review": review,
+    }
 
     assert observation.exact_commit == review.exact_commit
+    assert DeliveryTaskResult(**result_values).completed_commit == observation.exact_commit
     with pytest.raises(ValidationError, match="identity is invalid"):
         DeliveryObservationReceipt.model_validate(observation.model_copy(update={"exact_commit": "2" * 40}))
     with pytest.raises(ValidationError, match="independent"):
         DeliveryReviewReceipt.model_validate(review.model_copy(update={"reviewer_id": review.author_id}))
+    with pytest.raises(ValidationError, match="observation evidence does not match"):
+        DeliveryTaskResult(**(result_values | {"completed_commit": "2" * 40}))
+    with pytest.raises(ValidationError, match="review evidence does not match"):
+        DeliveryTaskResult(
+            **(
+                result_values
+                | {
+                    "review": DeliveryReviewReceipt.create(
+                        DeliveryReview(
+                            exact_commit="2" * 40,
+                            author_id="GitHub Copilot",
+                            reviewer_id="build-reviewer",
+                            evidence=("Exact diff satisfies the Task authority.",),
+                            reviewed_at=observed_at,
+                        )
+                    )
+                }
+            )
+        )
 
 
 def test_integration_attention_codes_have_one_operational_disposition() -> None:
@@ -168,13 +198,12 @@ def _runtime(
         task = _task(f"TASK-{index:03}", outcome_id=f"OUT-{index:03}")
         results = (
             (
-                DeliveryTaskResult(
-                    result_id=f"RESULT-{index:03}",
-                    change_id="delivery-runtime",
-                    authority_digest=authority_digest,
-                    task_id=task.task_id,
-                    task_digest=task.digest,
-                    completed_commit=f"{index}" * 40,
+                _task_result(
+                    f"RESULT-{index:03}",
+                    "delivery-runtime",
+                    authority_digest,
+                    task,
+                    f"{index}" * 40,
                 ),
             )
             if stage == DeliveryStage.COMPLETED
@@ -303,6 +332,47 @@ def _task(
     )
 
 
+def _task_result(
+    result_id: str,
+    change_id: str,
+    authority_digest: str,
+    task: DeliveryTaskDefinition,
+    completed_commit: str,
+) -> DeliveryTaskResult:
+    observed_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id=change_id,
+            task_or_finalization_id=task.task_id,
+            exact_commit=completed_commit,
+            observation_kind="pytest",
+            command_or_procedure="focused Delivery runtime test",
+            exit_status_or_artifact_locator="exit:0",
+            observer_or_runner_identity="pytest",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit=completed_commit,
+            author_id="Delivery test author",
+            reviewer_id="Delivery test reviewer",
+            evidence=("The exact test commit satisfies task authority.",),
+            reviewed_at=observed_at,
+        )
+    )
+    return DeliveryTaskResult(
+        result_id=result_id,
+        change_id=change_id,
+        authority_digest=authority_digest,
+        task_id=task.task_id,
+        task_digest=task.digest,
+        completed_commit=completed_commit,
+        observations=(observation,),
+        review=review,
+    )
+
+
 def test_plan_publication_is_idempotent_and_promotes_dependency_order(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path)
     _activate(runtime, "OUT-001", "claim-001")
@@ -339,7 +409,7 @@ def test_runtime_migrates_reducible_assembly_metadata_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 3
+    assert canonical["schema_version"] == 4
     assert all("assembly_required" not in binding for binding in canonical["bindings"])
     assert json.loads(path.read_bytes()) == canonical
 
@@ -356,10 +426,25 @@ def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 3
+    assert canonical["schema_version"] == 4
     assert canonical["published_head"] is None
     assert canonical["pending_checkpoint"] is None
     assert json.loads(path.read_bytes()) == canonical
+
+
+def test_runtime_rejects_schema_three_result_history_without_exact_commit_evidence(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.PLANNING, DeliveryStage.PLANNING),
+    )
+    payload = json.loads(runtime.frontier_bytes())
+    payload["schema_version"] = 3
+    result = payload["bindings"][0]["results"][0]
+    result.pop("observations")
+    result.pop("review")
+
+    with pytest.raises(ValidationError, match="observations"):
+        parse_delivery_frontier(json.dumps(payload).encode())
 
 
 def test_schema_two_result_history_backfills_checkpoint_at_exact_reviewed_head(tmp_path: Path) -> None:
@@ -555,13 +640,12 @@ def _publish_task_result(
     _git(coordination.worktree_path, "commit", "-m", f"complete {task_id}")
     completed_commit = _git(coordination.worktree_path, "rev-parse", "HEAD")
     task = next(item for item in runtime.show_binding(outcome_id).tasks if item.task_id == task_id)
-    result = DeliveryTaskResult(
-        result_id=f"RESULT-{job_id:03}",
-        change_id="delivery-runtime",
-        authority_digest=runtime.authority_digest,
-        task_id=task.task_id,
-        task_digest=task.digest,
-        completed_commit=completed_commit,
+    result = _task_result(
+        f"RESULT-{job_id:03}",
+        "delivery-runtime",
+        runtime.authority_digest,
+        task,
+        completed_commit,
     )
     candidate = runtime.publish_result(PublishDeliveryResult(outcome_id=outcome_id, claim_id=claim_id, result=result))
     return result, candidate, completed_commit, claim_id
@@ -677,7 +761,7 @@ def test_empty_checkpoint_invalidation_preserves_valid_anchor() -> None:
     assert invalidate_checkpoint_publication(pending, set()) is pending
 
 
-def test_build_advance_binds_compact_result_and_releases_writer(tmp_path: Path) -> None:
+def test_build_advance_binds_exact_commit_evidence_and_releases_writer(tmp_path: Path) -> None:
     state_root, coordinator, manager, coordination = _workspace(tmp_path)
     frontier = DeliveryFrontier(
         bindings=tuple(
@@ -784,14 +868,9 @@ def test_build_advance_binds_compact_result_and_releases_writer(tmp_path: Path) 
         DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
     )
     serialized = runtime.frontier_bytes().decode()
-    for residue in (
-        "reviewer-sentinel",
-        "model-sentinel",
-        "command-sentinel",
-        "passing-report-sentinel",
-        "review-evidence-sentinel",
-    ):
-        assert residue not in serialized
+    for promoted_result in completed.results:
+        assert promoted_result.observations[0].observation_id in serialized
+        assert promoted_result.review.review_id in serialized
 
 
 def _active_second_task(tmp_path: Path):
@@ -802,13 +881,12 @@ def _active_second_task(tmp_path: Path):
         (json.dumps(contract.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
     ).hexdigest()
     tasks = (_task("TASK-001"), _task("TASK-002", dependency_ids=("TASK-001",)))
-    first_result = DeliveryTaskResult(
-        result_id="RESULT-001",
-        change_id="delivery-runtime",
-        authority_digest=authority_digest,
-        task_id="TASK-001",
-        task_digest=tasks[0].digest,
-        completed_commit=initial,
+    first_result = _task_result(
+        "RESULT-001",
+        "delivery-runtime",
+        authority_digest,
+        tasks[0],
+        initial,
     )
     frontier = DeliveryFrontier(
         bindings=(

@@ -8,6 +8,7 @@ import shutil
 import subprocess
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
 from unittest.mock import Mock, patch, sentinel
@@ -45,6 +46,8 @@ from owlbear_delivery import (
     DeliveryIntegrationRepair,
     DeliveryIntegrationRepairAuthorityAttention,
     DeliveryIntegrationRepairReview,
+    DeliveryObservation,
+    DeliveryObservationReceipt,
     DeliveryOutcome,
     DeliveryPendingCheckpoint,
     DeliveryPlanScope,
@@ -52,6 +55,8 @@ from owlbear_delivery import (
     DeliveryRequestKind,
     DeliveryRequestOption,
     DeliveryRequestResolution,
+    DeliveryReview,
+    DeliveryReviewReceipt,
     DeliveryRolePolicy,
     DeliveryRuntime,
     DeliveryRuntimeConflictError,
@@ -213,6 +218,47 @@ def _task() -> DeliveryTaskDefinition:
     )
 
 
+def _task_result(
+    result_id: str,
+    change_id: str,
+    authority_digest: str,
+    task: DeliveryTaskDefinition,
+    completed_commit: str,
+) -> DeliveryTaskResult:
+    observed_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id=change_id,
+            task_or_finalization_id=task.task_id,
+            exact_commit=completed_commit,
+            observation_kind="pytest",
+            command_or_procedure="PortfolioApplication fixture validation",
+            exit_status_or_artifact_locator="exit:0",
+            observer_or_runner_identity="pytest",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit=completed_commit,
+            author_id="Portfolio test author",
+            reviewer_id="Portfolio test reviewer",
+            evidence=("The exact fixture commit satisfies task authority.",),
+            reviewed_at=observed_at,
+        )
+    )
+    return DeliveryTaskResult(
+        result_id=result_id,
+        change_id=change_id,
+        authority_digest=authority_digest,
+        task_id=task.task_id,
+        task_digest=task.digest,
+        completed_commit=completed_commit,
+        observations=(observation,),
+        review=review,
+    )
+
+
 def _runtime(
     state_root: Path,
     contract: DeliveryContract,
@@ -224,13 +270,12 @@ def _runtime(
     authority_digest = hashlib.sha256(_canonical(contract)).hexdigest()
     has_task = stage in {DeliveryStage.IMPLEMENTATION, DeliveryStage.COMPLETED}
     has_result = stage == DeliveryStage.COMPLETED
-    result = DeliveryTaskResult(
-        result_id="RESULT-001",
-        change_id=contract.change_id,
-        authority_digest=authority_digest,
-        task_id=task.task_id,
-        task_digest=task.digest,
-        completed_commit=completed_commit,
+    result = _task_result(
+        "RESULT-001",
+        contract.change_id,
+        authority_digest,
+        task,
+        completed_commit,
     )
     frontier = DeliveryFrontier(
         bindings=(
@@ -1012,13 +1057,12 @@ dependencies: []
                 stage=DeliveryStage.COMPLETED,
                 tasks=(task,),
                 results=(
-                    DeliveryTaskResult(
-                        result_id="RESULT-001",
-                        change_id="change-a",
-                        authority_digest=hashlib.sha256(admitted.contract_bytes).hexdigest(),
-                        task_id=task.task_id,
-                        task_digest=task.digest,
-                        completed_commit=reviewed_head,
+                    _task_result(
+                        "RESULT-001",
+                        "change-a",
+                        hashlib.sha256(admitted.contract_bytes).hexdigest(),
+                        task,
+                        reviewed_head,
                     ),
                 ),
             ),
@@ -1044,7 +1088,7 @@ dependencies: []
     assert recovered.replayed
     assert coordinator.show("change-a").last_reviewed_commit == reviewed_head
     assert application.show_change_checkpoint_publication("change-a").pending_checkpoint is not None
-    assert json.loads(frontier_path.read_bytes())["schema_version"] == 3
+    assert json.loads(frontier_path.read_bytes())["schema_version"] == 4
 
 
 def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
@@ -1060,13 +1104,12 @@ def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_pa
     coordination = manager.create("change-a")
     contract = _contract("change-a", b"intent", b"design")
     task = _task()
-    result = DeliveryTaskResult(
-        result_id="RESULT-001",
-        change_id="change-a",
-        authority_digest=hashlib.sha256(_canonical(contract)).hexdigest(),
-        task_id=task.task_id,
-        task_digest=task.digest,
-        completed_commit=coordination.last_reviewed_commit,
+    result = _task_result(
+        "RESULT-001",
+        "change-a",
+        hashlib.sha256(_canonical(contract)).hexdigest(),
+        task,
+        coordination.last_reviewed_commit,
     )
     frontier = DeliveryFrontier(
         bindings=(
@@ -1096,7 +1139,7 @@ def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_pa
 
     assert state.pending_checkpoint is not None
     assert state.pending_checkpoint.head == coordination.last_reviewed_commit
-    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 3
+    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 4
 
 
 def test_delivery_loader_injects_publication_provider_and_derives_check_head(tmp_path: Path) -> None:
@@ -1421,13 +1464,12 @@ def test_delivery_publication_and_transition_delegate_to_exact_runtimes(tmp_path
     result_request = PublishDeliveryResult(
         outcome_id=build_launch.outcome_id,
         claim_id=build_launch.claim.claim_id,
-        result=DeliveryTaskResult(
-            result_id="RESULT-PUBLIC",
-            change_id="change-b",
-            authority_digest=runtimes["change-b"].authority_digest,
-            task_id=build_task.task_id,
-            task_digest=build_task.digest,
-            completed_commit=completed_commit,
+        result=_task_result(
+            "RESULT-PUBLIC",
+            "change-b",
+            runtimes["change-b"].authority_digest,
+            build_task,
+            completed_commit,
         ),
     )
     result = application.publish_delivery_result("change-b", result_request)

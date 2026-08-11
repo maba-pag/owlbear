@@ -4,6 +4,7 @@ import hashlib
 import json
 import subprocess
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,10 @@ from owlbear_delivery.completed_history import (
 )
 from owlbear_delivery.delivery_runtime import (
     DeliveryFrontier,
+    DeliveryObservation,
+    DeliveryObservationReceipt,
+    DeliveryReview,
+    DeliveryReviewReceipt,
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
@@ -75,6 +80,47 @@ def _contract(change_id: str, title: str, intent: bytes, design: bytes) -> Deliv
     )
 
 
+def _task_result(
+    result_id: str,
+    change_id: str,
+    authority_digest: str,
+    task: DeliveryTaskDefinition,
+    completed_commit: str,
+) -> DeliveryTaskResult:
+    observed_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id=change_id,
+            task_or_finalization_id=task.task_id,
+            exact_commit=completed_commit,
+            observation_kind="pytest",
+            command_or_procedure="completed-history fixture validation",
+            exit_status_or_artifact_locator="exit:0",
+            observer_or_runner_identity="pytest",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit=completed_commit,
+            author_id="Completed history test author",
+            reviewer_id="Completed history test reviewer",
+            evidence=("The exact fixture commit satisfies task authority.",),
+            reviewed_at=observed_at,
+        )
+    )
+    return DeliveryTaskResult(
+        result_id=result_id,
+        change_id=change_id,
+        authority_digest=authority_digest,
+        task_id=task.task_id,
+        task_digest=task.digest,
+        completed_commit=completed_commit,
+        observations=(observation,),
+        review=review,
+    )
+
+
 def _capture_content(change_id: str, title: str, reviewed_head: str) -> dict[str, bytes]:
     intent = f"intent body sentinel {change_id}\n".encode()
     design = f"design body sentinel {change_id}\n".encode()
@@ -82,13 +128,12 @@ def _capture_content(change_id: str, title: str, reviewed_head: str) -> dict[str
     authority = _canonical(contract)
     authority_digest = hashlib.sha256(authority).hexdigest()
     task = _task()
-    result = DeliveryTaskResult(
-        result_id=f"result-{change_id}",
-        change_id=change_id,
-        authority_digest=authority_digest,
-        task_id=task.task_id,
-        task_digest=task.digest,
-        completed_commit=reviewed_head,
+    result = _task_result(
+        f"result-{change_id}",
+        change_id,
+        authority_digest,
+        task,
+        reviewed_head,
     )
     frontier = DeliveryFrontier(
         bindings=(

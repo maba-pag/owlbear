@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 
 from owlbear_delivery.delivery_runtime import (
     DeliveryActiveClaim,
@@ -9,10 +10,14 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
+    DeliveryObservation,
+    DeliveryObservationReceipt,
     DeliveryOperatorMove,
     DeliveryRequest,
     DeliveryRequestKind,
     DeliveryReturnContext,
+    DeliveryReview,
+    DeliveryReviewReceipt,
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
@@ -98,6 +103,47 @@ def _task(outcome_id: str, index: int) -> DeliveryTaskDefinition:
     )
 
 
+def _task_result(
+    result_id: str,
+    change_id: str,
+    authority_digest: str,
+    task: DeliveryTaskDefinition,
+    completed_commit: str,
+) -> DeliveryTaskResult:
+    observed_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id=change_id,
+            task_or_finalization_id=task.task_id,
+            exact_commit=completed_commit,
+            observation_kind="pytest",
+            command_or_procedure="work-item fixture validation",
+            exit_status_or_artifact_locator="exit:0",
+            observer_or_runner_identity="pytest",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit=completed_commit,
+            author_id="Work item test author",
+            reviewer_id="Work item test reviewer",
+            evidence=("The exact fixture commit satisfies task authority.",),
+            reviewed_at=observed_at,
+        )
+    )
+    return DeliveryTaskResult(
+        result_id=result_id,
+        change_id=change_id,
+        authority_digest=authority_digest,
+        task_id=task.task_id,
+        task_digest=task.digest,
+        completed_commit=completed_commit,
+        observations=(observation,),
+        review=review,
+    )
+
+
 def _binding(
     outcome_id: str,
     stage: DeliveryStage,
@@ -111,13 +157,12 @@ def _binding(
     tasks = () if stage in {DeliveryStage.DESIGN, DeliveryStage.PLANNING} else (task,)
     results = (
         (
-            DeliveryTaskResult(
-                result_id=f"RESULT-{index:03}",
-                change_id="portfolio-change",
-                authority_digest="c" * 64,
-                task_id=task.task_id,
-                task_digest=task.digest,
-                completed_commit=f"{index}" * 40,
+            _task_result(
+                f"RESULT-{index:03}",
+                "portfolio-change",
+                "c" * 64,
+                task,
+                f"{index}" * 40,
             ),
         )
         if stage == DeliveryStage.COMPLETED
