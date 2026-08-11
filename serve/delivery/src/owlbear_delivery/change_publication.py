@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import subprocess
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, NoReturn
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -25,6 +27,7 @@ if TYPE_CHECKING:
     from owlbear_delivery.change_workspace import ChangeCoordination, PortfolioCoordinator
 
 _COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}")
+_GIT_TIMEOUT_SECONDS = 30.0
 _LS_REMOTE_MISSING = 2
 _REMOTE_REF_FIELD_COUNT = 2
 
@@ -68,6 +71,13 @@ class _PublicationOperation(_PublicationModel):
     published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
 
 
+@dataclass
+class _PublicationAttempt:
+    reservation: ChangeCoordination | None = None
+    operation: _PublicationOperation | None = None
+    write_started: bool = False
+
+
 class ChangeBranchPublisher:
     """Publish one reviewed Change head to its same-named remote branch."""
 
@@ -85,39 +95,39 @@ class ChangeBranchPublisher:
         self._coordinator = coordinator
         self._remote = remote
         self._target_branch = target_branch
-        self._operation_root = operation_root
+        self._operation_root = operation_root.resolve()
+        self._git_environment = os.environ.copy()
+        self._git_environment["GIT_TERMINAL_PROMPT"] = "0"
+        for variable in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
+            self._git_environment.pop(variable, None)
         self._validate_configuration()
 
     def publish(self, request: PublishChangeBranch) -> ChangeBranchPublicationReceipt:
         """Publish or reconcile one exact reviewed Change branch checkpoint."""
+        attempt = _PublicationAttempt()
         try:
-            with locked_roots((self._operation_root,)):
-                operation = self._read_operation(request)
-                if operation is not None:
-                    self._validate_replay(operation, request)
-                    if self._remote_head(operation.branch, request) == operation.published_head:
-                        return self._receipt(operation)
-                else:
-                    operation = self._prepare_operation(request)
-                    self._write_operation(operation, request)
-
-                self._validate_prepared_operation(operation, request)
-                remote_head = self._remote_head(operation.branch, request)
-                if remote_head != operation.expected_remote_head:
-                    self._conflict(request, "remote Change branch differs from the expected head", retry_safe=True)
-                if remote_head is not None and not self._is_ancestor(remote_head, operation.published_head, request):
-                    self._conflict(request, "remote Change branch cannot fast-forward to the reviewed head")
-                self._push_exact_head(operation, request)
-                if self._remote_head(operation.branch, request) != operation.published_head:
-                    self._failure(
-                        PublicationProviderFailureCode.RESPONSE_UNKNOWN,
-                        request,
-                        "remote Change branch does not expose the published head",
-                    )
-                return self._receipt(operation)
-        except PublicationProviderError:
+            return self._publish(request, attempt)
+        except PublicationProviderError as exc:
+            self._handle_publication_failure(request, attempt, exc)
             raise
+        except subprocess.TimeoutExpired as exc:
+            if attempt.reservation is not None and not attempt.write_started:
+                self._release_reserved_request(request)
+            code = (
+                PublicationProviderFailureCode.RESPONSE_UNKNOWN
+                if attempt.write_started
+                else PublicationProviderFailureCode.TIMEOUT
+            )
+            error = PublicationProviderError(
+                code,
+                request.operation_id,
+                "Git publication operation timed out",
+                retry_safe=not attempt.write_started,
+            )
+            raise error from exc
         except (OSError, ValueError) as exc:
+            if attempt.reservation is not None and not attempt.write_started:
+                self._release_reserved_request(request)
             error = PublicationProviderError(
                 PublicationProviderFailureCode.UNAVAILABLE,
                 request.operation_id,
@@ -126,11 +136,78 @@ class ChangeBranchPublisher:
             )
             raise error from exc
 
-    def _prepare_operation(self, request: PublishChangeBranch) -> _PublicationOperation:
-        coordination = self._coordination(request)
+    def _publish(
+        self,
+        request: PublishChangeBranch,
+        attempt: _PublicationAttempt,
+    ) -> ChangeBranchPublicationReceipt:
+        operation = self._read_operation(request)
+        if operation is not None:
+            self._validate_replay(operation, request)
+            self._require_current_reviewed_boundary(operation, request)
+            if self._remote_head(operation.branch, request) == operation.published_head:
+                self._release_publication_if_owned(operation)
+                return self._receipt(operation)
+
+        attempt.reservation = self._reserve_publication(request)
+        created = False
+        if operation is None:
+            candidate = self._prepare_operation(request, attempt.reservation)
+            operation, created = self._bind_operation(candidate, request)
+            self._validate_replay(operation, request)
+        attempt.operation = operation
+
+        self._validate_prepared_operation(operation, request, refresh_target=not created)
+        remote_head = self._remote_head(operation.branch, request)
+        if remote_head != operation.expected_remote_head:
+            self._conflict(request, "remote Change branch differs from the expected head")
+        if remote_head is not None and not self._is_ancestor(remote_head, operation.published_head, request):
+            self._conflict(request, "remote Change branch cannot fast-forward to the reviewed head")
+        attempt.write_started = True
+        self._push_exact_head(operation, request)
+        if self._remote_head(operation.branch, request) != operation.published_head:
+            self._failure(
+                PublicationProviderFailureCode.RESPONSE_UNKNOWN,
+                request,
+                "remote Change branch does not expose the published head",
+            )
+        self._release_publication(operation)
+        return self._receipt(operation)
+
+    def _handle_publication_failure(
+        self,
+        request: PublishChangeBranch,
+        attempt: _PublicationAttempt,
+        error: PublicationProviderError,
+    ) -> None:
+        if attempt.reservation is None:
+            return
+        if not attempt.write_started:
+            self._release_reserved_request(request)
+            return
+        retained_codes = {
+            PublicationProviderFailureCode.RESPONSE_UNKNOWN,
+            PublicationProviderFailureCode.TIMEOUT,
+            PublicationProviderFailureCode.UNAVAILABLE,
+        }
+        if error.code not in retained_codes:
+            self._release_reserved_request(request)
+
+    def _prepare_operation(
+        self,
+        request: PublishChangeBranch,
+        coordination: ChangeCoordination,
+    ) -> _PublicationOperation:
         expected_branch = f"owlbear/change/{request.change_id}"
-        if coordination.branch != expected_branch or coordination.writer is not None:
-            self._conflict(request, "Change branch publication requires one idle canonical workspace")
+        if (
+            coordination.branch != expected_branch
+            or coordination.writer is not None
+            or coordination.publication_operation_id != request.operation_id
+        ):
+            self._conflict(request, "Change branch publication requires one reserved canonical workspace")
+        worktree = coordination.worktree_path.resolve()
+        if self._operation_root == worktree or self._operation_root.is_relative_to(worktree):
+            self._conflict(request, "publication operation storage cannot be inside the Change worktree")
         branch_head = self._resolve_commit(f"refs/heads/{coordination.branch}", request)
         if branch_head != coordination.last_reviewed_commit:
             self._conflict(request, "Change branch head differs from the reviewed boundary")
@@ -153,16 +230,31 @@ class ChangeBranchPublisher:
         self,
         operation: _PublicationOperation,
         request: PublishChangeBranch,
+        *,
+        refresh_target: bool,
     ) -> None:
         coordination = self._coordination(request)
-        if coordination.writer is not None or coordination.branch != operation.branch:
-            self._conflict(request, "prepared publication requires one idle canonical workspace")
+        if (
+            coordination.writer is not None
+            or coordination.branch != operation.branch
+            or coordination.publication_operation_id != operation.operation_id
+        ):
+            self._conflict(request, "prepared publication does not own the Change workspace")
         branch_head = self._resolve_commit(f"refs/heads/{operation.branch}", request)
         if branch_head != operation.published_head or branch_head != coordination.last_reviewed_commit:
             self._conflict(request, "prepared publication no longer names the reviewed boundary")
         self._require_clean_worktree(coordination.worktree_path, request)
-        if self._fetch_target(request) != operation.target_head:
-            self._conflict(request, "remote target changed after publication preparation", retry_safe=True)
+        if refresh_target and self._fetch_target(request) != operation.target_head:
+            self._conflict(request, "remote target changed after publication preparation")
+
+    def _require_current_reviewed_boundary(
+        self,
+        operation: _PublicationOperation,
+        request: PublishChangeBranch,
+    ) -> None:
+        coordination = self._coordination(request)
+        if coordination.branch != operation.branch or coordination.last_reviewed_commit != operation.published_head:
+            self._conflict(request, "published operation no longer names the reviewed boundary")
 
     def _fetch_target(self, request: PublishChangeBranch) -> str:
         target_ref = f"refs/heads/{self._target_branch}"
@@ -177,9 +269,9 @@ class ChangeBranchPublisher:
         )
         if result.returncode != 0:
             self._unavailable(request, "configured target could not be fetched")
-        self._resolve_commit(target_head, request, invalid_response=True)
         if self._remote_ref(target_ref, request) != target_head:
-            self._conflict(request, "remote target changed while it was fetched", retry_safe=True)
+            self._conflict(request, "remote target changed while it was fetched")
+        self._resolve_commit(target_head, request, invalid_response=True)
         return target_head
 
     def _remote_head(self, branch: str, request: PublishChangeBranch) -> str | None:
@@ -209,24 +301,68 @@ class ChangeBranchPublisher:
     ) -> None:
         destination = f"refs/heads/{operation.branch}"
         lease_head = operation.expected_remote_head or ""
-        result = self._run_git(
-            "push",
-            "--porcelain",
-            f"--force-with-lease={destination}:{lease_head}",
-            self._remote,
-            f"{operation.published_head}:{destination}",
-        )
+        try:
+            result = self._run_git(
+                "push",
+                "--porcelain",
+                f"--force-with-lease={destination}:{lease_head}",
+                self._remote,
+                f"{operation.published_head}:{destination}",
+            )
+        except subprocess.TimeoutExpired:
+            self._reconcile_failed_push(operation, request, timed_out=True, result=None)
+            return
         if result.returncode == 0:
             return
+        self._reconcile_failed_push(operation, request, timed_out=False, result=result)
+
+    def _reconcile_failed_push(
+        self,
+        operation: _PublicationOperation,
+        request: PublishChangeBranch,
+        *,
+        timed_out: bool,
+        result: subprocess.CompletedProcess[bytes] | None,
+    ) -> None:
         observed = self._remote_head(operation.branch, request)
         if observed == operation.published_head:
             return
         if observed != operation.expected_remote_head:
             self._conflict(request, "remote Change branch changed before publication", retry_safe=True)
+        if timed_out:
+            self._failure(
+                PublicationProviderFailureCode.TIMEOUT,
+                request,
+                "Change branch push timed out without changing the remote",
+                retry_safe=True,
+            )
+        if result is None:
+            self._failure(
+                PublicationProviderFailureCode.RESPONSE_UNKNOWN,
+                request,
+                "Change branch push outcome could not be classified",
+            )
+        diagnostics = (result.stdout + result.stderr).decode(errors="replace").casefold()
+        if "authentication failed" in diagnostics or "could not read username" in diagnostics:
+            self._failure(
+                PublicationProviderFailureCode.AUTHENTICATION_REQUIRED,
+                request,
+                "Change branch push requires authentication",
+            )
+        if "rate limit" in diagnostics or "too many requests" in diagnostics:
+            self._failure(
+                PublicationProviderFailureCode.RATE_LIMITED,
+                request,
+                "Change branch push was rate limited",
+                retry_safe=True,
+            )
+        if "pre-receive hook declined" in diagnostics or "remote rejected" in diagnostics:
+            self._conflict(request, "remote rejected the Change branch publication")
         self._failure(
-            PublicationProviderFailureCode.RESPONSE_UNKNOWN,
+            PublicationProviderFailureCode.UNAVAILABLE,
             request,
-            "Change branch push failed without a matching remote read-back",
+            "Change branch push failed without changing the remote",
+            retry_safe=True,
         )
 
     def _require_clean_worktree(self, worktree: Path, request: PublishChangeBranch) -> None:
@@ -243,6 +379,8 @@ class ChangeBranchPublisher:
             ),
             check=False,
             capture_output=True,
+            env=self._git_environment,
+            timeout=_GIT_TIMEOUT_SECONDS,
         )
         if result.returncode != 0:
             self._failure(
@@ -292,6 +430,8 @@ class ChangeBranchPublisher:
             (self._git_executable, "-C", str(self._repository), *arguments),
             check=False,
             capture_output=True,
+            env=self._git_environment,
+            timeout=_GIT_TIMEOUT_SECONDS,
         )
 
     def _validate_configuration(self) -> None:
@@ -317,15 +457,65 @@ class ChangeBranchPublisher:
                 cause=exc,
             )
 
+    def _reserve_publication(self, request: PublishChangeBranch) -> ChangeCoordination:
+        try:
+            return self._coordinator.reserve_publication(request.change_id, request.operation_id)
+        except (CoordinationConflictError, OSError, ValueError) as exc:
+            error = PublicationProviderError(
+                PublicationProviderFailureCode.CONFLICT,
+                request.operation_id,
+                "Change workspace cannot be reserved for publication",
+                retry_safe=False,
+            )
+            raise error from exc
+
+    def _release_publication(self, operation: _PublicationOperation) -> None:
+        try:
+            self._coordinator.release_publication(operation.change_id, operation.operation_id)
+        except (CoordinationConflictError, OSError, ValueError) as exc:
+            error = PublicationProviderError(
+                PublicationProviderFailureCode.RESPONSE_UNKNOWN,
+                operation.operation_id,
+                "published Change branch ownership could not be released",
+                retry_safe=False,
+            )
+            raise error from exc
+
+    def _release_publication_if_owned(self, operation: _PublicationOperation) -> None:
+        coordination = self._coordination(
+            PublishChangeBranch(
+                change_id=operation.change_id,
+                expected_remote_head=operation.expected_remote_head,
+                operation_id=operation.operation_id,
+            )
+        )
+        if coordination.publication_operation_id == operation.operation_id:
+            self._release_publication(operation)
+
+    def _release_reserved_request(self, request: PublishChangeBranch) -> None:
+        try:
+            self._coordinator.release_publication(request.change_id, request.operation_id)
+        except (CoordinationConflictError, OSError, ValueError) as exc:
+            error = PublicationProviderError(
+                PublicationProviderFailureCode.RESPONSE_UNKNOWN,
+                request.operation_id,
+                "Change publication ownership could not be released",
+                retry_safe=False,
+            )
+            raise error from exc
+
     def _operation_path(self, operation_id: str) -> Path:
         identity = hashlib.sha256(operation_id.encode()).hexdigest()
         return self._operation_root / f"{identity}.json"
 
     def _read_operation(self, request: PublishChangeBranch) -> _PublicationOperation | None:
-        try:
-            content = self._operation_path(request.operation_id).read_bytes()
-        except FileNotFoundError:
+        if not self._operation_root.exists():
             return None
+        with locked_roots((self._operation_root,)):
+            try:
+                content = self._operation_path(request.operation_id).read_bytes()
+            except FileNotFoundError:
+                return None
         try:
             return _PublicationOperation.model_validate_json(content)
         except ValidationError as exc:
@@ -336,19 +526,38 @@ class ChangeBranchPublisher:
                 cause=exc,
             )
 
-    def _write_operation(self, operation: _PublicationOperation, request: PublishChangeBranch) -> None:
-        try:
-            atomic_write(
-                self._operation_path(operation.operation_id),
-                json.dumps(operation.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n",
-            )
-        except OSError as exc:
-            self._failure(
-                PublicationProviderFailureCode.UNAVAILABLE,
-                request,
-                "publication operation could not be persisted",
-                cause=exc,
-            )
+    def _bind_operation(
+        self,
+        operation: _PublicationOperation,
+        request: PublishChangeBranch,
+    ) -> tuple[_PublicationOperation, bool]:
+        with locked_roots((self._operation_root,)):
+            path = self._operation_path(operation.operation_id)
+            try:
+                content = path.read_bytes()
+            except FileNotFoundError:
+                try:
+                    atomic_write(
+                        path,
+                        json.dumps(operation.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n",
+                    )
+                except OSError as exc:
+                    self._failure(
+                        PublicationProviderFailureCode.UNAVAILABLE,
+                        request,
+                        "publication operation could not be persisted",
+                        cause=exc,
+                    )
+                return operation, True
+            try:
+                return _PublicationOperation.model_validate_json(content), False
+            except ValidationError as exc:
+                self._failure(
+                    PublicationProviderFailureCode.INVALID_RESPONSE,
+                    request,
+                    "stored publication operation is invalid",
+                    cause=exc,
+                )
 
     def _validate_replay(self, operation: _PublicationOperation, request: PublishChangeBranch) -> None:
         if (

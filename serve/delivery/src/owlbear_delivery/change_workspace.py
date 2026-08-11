@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Never
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
 
 _TREE_ENTRY_PARTS = 3
 _OCC_RETRY_LIMIT = 8
+_PUBLICATION_OPERATION_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 
 
 class _WorkspaceModel(BaseModel):
@@ -67,6 +69,10 @@ class ChangeCoordination(_WorkspaceModel):
     target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     writer: ChangeWriter | None = None
+    publication_operation_id: str | None = Field(
+        default=None,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+    )
 
 
 class WorkspaceRecoverySnapshot(_WorkspaceModel):
@@ -274,7 +280,11 @@ class PortfolioCoordinator:
         coordination = ChangeCoordination.model_validate_json(coordination_bytes)
         ledger_bytes = self._ledger_path.read_bytes()
         ledger = CapacityLedger.model_validate_json(ledger_bytes)
-        if coordination.writer is not None or change_id in ledger.change_ids:
+        if (
+            coordination.writer is not None
+            or coordination.publication_operation_id is not None
+            or change_id in ledger.change_ids
+        ):
             _coordination_conflict("change already has an active writer")
         if len(ledger.change_ids) >= ledger.capacity:
             _coordination_conflict("global writer capacity is exhausted")
@@ -323,8 +333,13 @@ class PortfolioCoordinator:
         path = self._coordination_path(coordination.change_id)
         previous = path.read_bytes()
         existing = ChangeCoordination.model_validate_json(previous)
-        if existing.writer != coordination.writer:
-            _coordination_conflict("workspace update cannot change writer ownership")
+        if (
+            existing.writer != coordination.writer
+            or existing.publication_operation_id != coordination.publication_operation_id
+        ):
+            _coordination_conflict("workspace update cannot change ownership")
+        if existing.publication_operation_id is not None and existing != coordination:
+            _coordination_conflict("workspace update cannot change a reserved publication boundary")
         participant = _replacement(self._state_root, path, previous, coordination)
         try:
             self._commit(f"update-{coordination.change_id}", (participant,))
@@ -332,6 +347,57 @@ class PortfolioCoordinator:
             msg = "change workspace changed concurrently"
             raise CoordinationConflictError(msg) from exc
         return coordination
+
+    def reserve_publication(self, change_id: str, operation_id: str) -> ChangeCoordination:
+        """Reserve one idle Change for an exact replayable publication operation."""
+        self._validate_publication_operation_id(operation_id)
+        path = self._coordination_path(change_id)
+        previous = path.read_bytes()
+        coordination = ChangeCoordination.model_validate_json(previous)
+        if coordination.publication_operation_id == operation_id:
+            return coordination
+        if coordination.writer is not None or coordination.publication_operation_id is not None:
+            _coordination_conflict("change already has active ownership")
+        reserved = coordination.model_copy(update={"publication_operation_id": operation_id})
+        operation_digest = hashlib.sha256(operation_id.encode()).hexdigest()
+        try:
+            self._commit(
+                f"reserve-publication-{change_id}-{operation_digest}",
+                (_replacement(self._state_root, path, previous, reserved),),
+            )
+        except TransactionConflictError as exc:
+            msg = "change ownership changed during publication reservation"
+            raise CoordinationConflictError(msg) from exc
+        return reserved
+
+    def release_publication(self, change_id: str, operation_id: str) -> ChangeCoordination:
+        """Release one exact publication reservation without changing reviewed state."""
+        self._validate_publication_operation_id(operation_id)
+        for _attempt in range(_OCC_RETRY_LIMIT):
+            path = self._coordination_path(change_id)
+            previous = path.read_bytes()
+            coordination = ChangeCoordination.model_validate_json(previous)
+            if coordination.publication_operation_id is None:
+                return coordination
+            if coordination.publication_operation_id != operation_id:
+                _coordination_conflict("publication operation does not own the change workspace")
+            released = coordination.model_copy(update={"publication_operation_id": None})
+            operation_digest = hashlib.sha256(operation_id.encode()).hexdigest()
+            try:
+                self._commit(
+                    f"release-publication-{change_id}-{operation_digest}",
+                    (_replacement(self._state_root, path, previous, released),),
+                )
+            except TransactionConflictError:
+                continue
+            return released
+        return _coordination_conflict("publication ownership remained concurrent")
+
+    @staticmethod
+    def _validate_publication_operation_id(operation_id: str) -> None:
+        if _PUBLICATION_OPERATION_PATTERN.fullmatch(operation_id) is None:
+            msg = "publication operation identity is invalid"
+            raise ValueError(msg)
 
     def publish_finding(self, finding: IntegrationFinding) -> IntegrationFinding:
         """Publish one immutable integration finding inside target evidence."""

@@ -11,6 +11,7 @@ from owlbear_delivery import (
     ChangeBranchPublisher,
     ChangeWriter,
     ChangeWorkspaceManager,
+    CoordinationConflictError,
     PortfolioCoordinator,
     PublicationProviderError,
     PublicationProviderFailureCode,
@@ -142,6 +143,7 @@ def test_rejects_divergent_remote_change_branch_without_rewriting_it(tmp_path: P
 
     assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
     assert _head(remote, "refs/heads/owlbear/change/diverged-change") == divergent
+    assert coordinator.show("diverged-change").publication_operation_id is None
 
 
 def test_exact_lease_rejects_remote_advance_between_observation_and_push(tmp_path: Path) -> None:
@@ -176,6 +178,40 @@ def test_exact_lease_rejects_remote_advance_between_observation_and_push(tmp_pat
     assert exc_info.value.retry_safe is True
     assert _head(remote, "refs/heads/owlbear/change/raced-change") == competing
     assert _head(repository, "refs/heads/owlbear/change/raced-change") == reviewed
+
+
+def test_exact_empty_lease_rejects_remote_creation_between_observation_and_push(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, reviewed = _reviewed_change(manager, "created-change")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+    original_push = publisher._push_exact_head
+    competing = _git(
+        repository, "commit-tree", _git(repository, "mktree").stdout.strip(), "-m", "competing"
+    ).stdout.strip()
+
+    def create_then_push(operation: Any, request: PublishChangeBranch) -> None:
+        _git(repository, "push", "origin", f"{competing}:refs/heads/{operation.branch}")
+        original_push(operation, request)
+
+    with (
+        patch.object(publisher, "_push_exact_head", side_effect=create_then_push),
+        pytest.raises(PublicationProviderError) as exc_info,
+    ):
+        publisher.publish(
+            PublishChangeBranch(change_id="created-change", expected_remote_head=None, operation_id="operation-create")
+        )
+
+    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
+    assert exc_info.value.retry_safe is True
+    assert _head(remote, "refs/heads/owlbear/change/created-change") == competing
+    assert _head(repository, "refs/heads/owlbear/change/created-change") == reviewed
 
 
 def test_fast_forwards_existing_remote_change_branch_from_exact_expected_head(tmp_path: Path) -> None:
@@ -278,6 +314,34 @@ def test_replay_returns_original_receipt_before_target_worktree_or_writer_checks
     assert replayed.published_head == reviewed
 
 
+def test_replay_rejects_receipt_after_reviewed_boundary_advances(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, _reviewed = _reviewed_change(manager, "superseded-change")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+    request = PublishChangeBranch(
+        change_id="superseded-change",
+        expected_remote_head=None,
+        operation_id="operation-superseded",
+    )
+    publisher.publish(request)
+    (worktree / "product.txt").write_text("superseded\n", encoding="utf-8")
+    _git(worktree, "add", "product.txt")
+    _git(worktree, "commit", "-m", "superseding review")
+    manager.record_reviewed("superseded-change", _head(worktree))
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        publisher.publish(request)
+
+    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
+
+
 def test_replay_rejects_changed_inputs_for_same_operation_id(tmp_path: Path) -> None:
     repository, _remote, _initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)
@@ -304,6 +368,175 @@ def test_replay_rejects_changed_inputs_for_same_operation_id(tmp_path: Path) -> 
 
     assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
     assert exc_info.value.retry_safe is False
+
+
+def test_first_attempt_fetches_target_once_and_excludes_writer_until_push_completes(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, _reviewed = _reviewed_change(manager, "reserved-change")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+    original_fetch = publisher._fetch_target
+    original_push = publisher._push_exact_head
+    fetch_count = 0
+
+    def counted_fetch(request: PublishChangeBranch) -> str:
+        nonlocal fetch_count
+        fetch_count += 1
+        return original_fetch(request)
+
+    def assert_reserved_then_push(operation: Any, request: PublishChangeBranch) -> None:
+        with pytest.raises(CoordinationConflictError, match="active writer"):
+            coordinator.acquire("reserved-change", _writer("reserved-change"))
+        original_push(operation, request)
+
+    with (
+        patch.object(publisher, "_fetch_target", side_effect=counted_fetch),
+        patch.object(publisher, "_push_exact_head", side_effect=assert_reserved_then_push),
+    ):
+        publisher.publish(
+            PublishChangeBranch(
+                change_id="reserved-change",
+                expected_remote_head=None,
+                operation_id="operation-reserved",
+            )
+        )
+
+    assert fetch_count == 1
+    assert coordinator.show("reserved-change").publication_operation_id is None
+
+
+def test_pre_push_timeout_releases_reservation_for_new_operation(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, _reviewed = _reviewed_change(manager, "timeout-change")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+
+    with (
+        patch.object(publisher, "_fetch_target", side_effect=subprocess.TimeoutExpired(("git", "fetch"), 30)),
+        pytest.raises(PublicationProviderError) as exc_info,
+    ):
+        publisher.publish(
+            PublishChangeBranch(change_id="timeout-change", expected_remote_head=None, operation_id="operation-timeout")
+        )
+
+    assert exc_info.value.code is PublicationProviderFailureCode.TIMEOUT
+    assert exc_info.value.retry_safe is True
+    assert coordinator.show("timeout-change").publication_operation_id is None
+    assert coordinator.reserve_publication("timeout-change", "operation-after-timeout").publication_operation_id == (
+        "operation-after-timeout"
+    )
+
+
+def test_failed_push_with_unchanged_remote_is_retryable_and_retains_operation(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, _reviewed = _reviewed_change(manager, "failed-push-change")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+    original_run = publisher._run_git
+
+    def reject_push(*arguments: str) -> subprocess.CompletedProcess[bytes]:
+        if arguments[0] == "push":
+            return subprocess.CompletedProcess(arguments, 1, stdout=b"", stderr=b"rejected")
+        return original_run(*arguments)
+
+    with (
+        patch.object(publisher, "_run_git", side_effect=reject_push),
+        pytest.raises(PublicationProviderError) as exc_info,
+    ):
+        publisher.publish(
+            PublishChangeBranch(
+                change_id="failed-push-change",
+                expected_remote_head=None,
+                operation_id="operation-failed-push",
+            )
+        )
+
+    assert exc_info.value.code is PublicationProviderFailureCode.UNAVAILABLE
+    assert exc_info.value.retry_safe is True
+    assert coordinator.show("failed-push-change").publication_operation_id == "operation-failed-push"
+
+
+def test_authentication_failed_push_is_terminal_and_releases_reservation(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, _reviewed = _reviewed_change(manager, "auth-change")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+    original_run = publisher._run_git
+
+    def reject_authentication(*arguments: str) -> subprocess.CompletedProcess[bytes]:
+        if arguments[0] == "push":
+            return subprocess.CompletedProcess(arguments, 128, stdout=b"", stderr=b"Authentication failed")
+        return original_run(*arguments)
+
+    with (
+        patch.object(publisher, "_run_git", side_effect=reject_authentication),
+        pytest.raises(PublicationProviderError) as exc_info,
+    ):
+        publisher.publish(
+            PublishChangeBranch(change_id="auth-change", expected_remote_head=None, operation_id="operation-auth")
+        )
+
+    assert exc_info.value.code is PublicationProviderFailureCode.AUTHENTICATION_REQUIRED
+    assert exc_info.value.retry_safe is False
+    assert coordinator.show("auth-change").publication_operation_id is None
+
+
+def test_push_timeout_after_remote_applies_returns_receipt_and_releases_reservation(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, reviewed = _reviewed_change(manager, "lost-response-change")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+    original_run = publisher._run_git
+
+    def push_then_timeout(*arguments: str) -> subprocess.CompletedProcess[bytes]:
+        if arguments[0] == "push":
+            completed = original_run(*arguments)
+            assert completed.returncode == 0
+            raise subprocess.TimeoutExpired(arguments, 30)
+        return original_run(*arguments)
+
+    with patch.object(publisher, "_run_git", side_effect=push_then_timeout):
+        receipt = publisher.publish(
+            PublishChangeBranch(
+                change_id="lost-response-change",
+                expected_remote_head=None,
+                operation_id="operation-lost-response",
+            )
+        )
+
+    assert receipt.published_head == reviewed
+    assert _head(remote, "refs/heads/owlbear/change/lost-response-change") == reviewed
+    assert coordinator.show("lost-response-change").publication_operation_id is None
 
 
 def test_rejects_dirty_change_worktree_before_creating_remote_branch(tmp_path: Path) -> None:

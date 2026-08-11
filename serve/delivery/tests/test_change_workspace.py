@@ -99,6 +99,30 @@ def test_portfolio_coordinates_independent_changes_but_rejects_second_writer(tmp
         )
 
 
+def test_publication_reservation_excludes_writers_and_boundary_updates(tmp_path: Path) -> None:
+    coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
+    coordination = coordinator.register(_coordination(tmp_path, "publish-change"))
+
+    reserved = coordinator.reserve_publication("publish-change", "operation-1")
+    replayed = coordinator.reserve_publication("publish-change", "operation-1")
+
+    assert reserved.publication_operation_id == "operation-1"
+    assert replayed == reserved
+    with pytest.raises(CoordinationConflictError, match="active writer"):
+        coordinator.acquire(
+            "publish-change",
+            ChangeWriter(**_identity("publish-change").model_dump(), job_id=1, kind="build"),
+        )
+    with pytest.raises(CoordinationConflictError, match="reserved publication boundary"):
+        coordinator.update(
+            coordination.model_copy(update={"target_head": "b" * 40, "publication_operation_id": "operation-1"})
+        )
+
+    released = coordinator.release_publication("publish-change", "operation-1")
+
+    assert released.publication_operation_id is None
+
+
 def _git(repository: Path, *arguments: str) -> str:
     return subprocess.run(
         ("git", "-C", str(repository), *arguments),
