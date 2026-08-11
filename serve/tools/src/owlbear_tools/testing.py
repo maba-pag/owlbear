@@ -15,6 +15,7 @@ _COCKPIT_WEB = _REPOSITORY_ROOT / "serve/cockpit/web"
 _DOCS_ONLY_PREFIXES = ("share/", ".owlbear/", "setup/")
 _PYTHON_ROUTES = (
     ("serve/cockpit/", ("serve/cockpit/tests",), ("test_cockpit_*.py",)),
+    ("serve/delivery-github/", ("serve/delivery-github/tests",), ()),
     ("serve/delivery-mcp/", ("serve/delivery-mcp/tests",), ()),
     ("serve/delivery/", ("serve/delivery/tests",), ("test_delivery_*.py", "test_engine_*.py")),
     ("serve/knowledge-mcp/", (), ("test_mcp_knowledge_*.py", "test_enrichment_tools_registry.py")),

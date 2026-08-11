@@ -175,6 +175,7 @@ quote-style = "double"
 [tool.coverage.run]
 source_pkgs = [
   "owlbear_delivery",
+  "owlbear_delivery_github",
   "owlbear_knowledge",
   "owlbear_browser_mcp",
   "owlbear_delivery_mcp",

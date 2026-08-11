@@ -13,6 +13,7 @@ members = [
     "owlbear-browser-mcp",
     "owlbear-cockpit",
     "owlbear-delivery",
+    "owlbear-delivery-github",
     "owlbear-delivery-mcp",
     "owlbear-knowledge",
     "owlbear-knowledge-mcp",
@@ -1613,6 +1614,21 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "ruamel-yaml", specifier = ">=0.19.1" },
+]
+
+[[package]]
+name = "owlbear-delivery-github"
+version = "0.1.0"
+source = { editable = "serve/delivery-github" }
+dependencies = [
+    { name = "owlbear-delivery" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "owlbear-delivery", editable = "serve/delivery" },
+    { name = "pydantic", specifier = ">=2.13.4" },
 ]
 
 [[package]]
