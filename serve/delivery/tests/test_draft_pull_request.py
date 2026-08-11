@@ -254,6 +254,51 @@ def test_rejects_summary_input_drift_before_second_metadata_write(tmp_path: Path
     assert provider.update_calls == 1
 
 
+def test_new_summary_operation_updates_from_latest_provider_body(tmp_path: Path) -> None:
+    provider = _Provider()
+    publisher = _publisher(tmp_path, provider)
+    publisher.publish(_request())
+    publisher.update_generated_summary(_summary_request())
+    first_body = provider.pull_requests[0].body
+
+    second = publisher.update_generated_summary(
+        _summary_request(operation_id="summary-operation-2", generated_summary="Third reviewed checkpoint.")
+    )
+
+    assert second.operation_id == "summary-operation-2"
+    assert provider.update_calls == 2
+    assert "Third reviewed checkpoint." in provider.pull_requests[0].body
+    assert "Second reviewed checkpoint." not in provider.pull_requests[0].body
+    assert provider.pull_requests[0].body != first_body
+
+
+@pytest.mark.parametrize(
+    "reserved_token",
+    ["<!-- owlbear-generated:start -->", "<!-- owlbear-generated:end -->", "<!-- owlbear-change:other -->"],
+)
+def test_rejects_reserved_generated_summary_tokens_before_provider_write(
+    tmp_path: Path,
+    reserved_token: str,
+) -> None:
+    provider = _Provider()
+    publisher = _publisher(tmp_path, provider)
+    publisher.publish(_request())
+
+    with pytest.raises(ValueError, match="reserved ownership marker"):
+        _summary_request(generated_summary=f"Summary\n{reserved_token}")
+
+    assert provider.update_calls == 0
+
+
+def test_rejects_reserved_summary_tokens_before_draft_pr_creation() -> None:
+    provider = _Provider()
+
+    with pytest.raises(ValueError, match="reserved ownership marker"):
+        _request(generated_summary="Summary\n<!-- owlbear-generated:end -->")
+
+    assert provider.create_calls == 0
+
+
 @pytest.mark.parametrize("kind", ["summary-operations", "summary-receipts"])
 def test_rejects_symlinked_summary_state_before_metadata_write(tmp_path: Path, kind: str) -> None:
     provider = _Provider()

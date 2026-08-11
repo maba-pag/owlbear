@@ -43,6 +43,11 @@ class CreateOrReconcileDraftPullRequest(_DraftPullRequestModel):
     title: str = Field(min_length=1, max_length=256)
     generated_summary: str = Field(min_length=1, max_length=50_000)
 
+    @model_validator(mode="after")
+    def _validate_generated_summary(self) -> CreateOrReconcileDraftPullRequest:
+        _require_safe_generated_summary(self.generated_summary)
+        return self
+
 
 class UpdateGeneratedPullRequestSummary(_DraftPullRequestModel):
     """Replace only OwlBear's generated block at one published Change head."""
@@ -51,6 +56,11 @@ class UpdateGeneratedPullRequestSummary(_DraftPullRequestModel):
     operation_id: str = Field(pattern=_OPERATION_ID_PATTERN)
     published_head: str = Field(pattern=_SHA_PATTERN)
     generated_summary: str = Field(min_length=1, max_length=50_000)
+
+    @model_validator(mode="after")
+    def _validate_generated_summary(self) -> UpdateGeneratedPullRequestSummary:
+        _require_safe_generated_summary(self.generated_summary)
+        return self
 
 
 class DraftPullRequestPublicationReceipt(_DraftPullRequestModel):
@@ -619,6 +629,13 @@ class DraftPullRequestPublisher:
 
 def _change_marker(change_id: str) -> str:
     return f"<!-- owlbear-change:{change_id} -->"
+
+
+def _require_safe_generated_summary(generated_summary: str) -> None:
+    reserved_tokens = (_GENERATED_START, _GENERATED_END, "<!-- owlbear-change:")
+    if any(token in generated_summary for token in reserved_tokens):
+        msg = "generated pull-request summary contains a reserved ownership marker"
+        raise ValueError(msg)
 
 
 def _raise_conflict(request: _PublicationRequest, detail: str) -> Never:
