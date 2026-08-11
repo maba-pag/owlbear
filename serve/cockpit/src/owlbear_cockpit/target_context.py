@@ -11,6 +11,7 @@ from owlbear_delivery.delivery_application_loader import (
     DeliveryStartupConfig,
     load_delivery_application,
 )
+from owlbear_delivery_github import GitHubCliPublicationProvider
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -26,6 +27,7 @@ def load_target_context(workspace_root: Path) -> PortfolioApplication:
         return load_delivery_application(
             config,
             workspace_root=workspace_root,
+            publication_provider=GitHubCliPublicationProvider(),
         )
     except DeliveryApplicationLoadError as exc:
         message = f"Cockpit Delivery startup failed for {exc.field}: {exc.detail}"

@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from owlbear_cockpit.routes.target_work import assemble_target_app
 from owlbear_cockpit.target_context import load_target_context
+from owlbear_delivery_github import GitHubCliPublicationProvider
 from owlbear_delivery.delivery_application_loader import DeliveryApplicationLoadError
 from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
@@ -328,10 +329,11 @@ def test_startup_loads_shared_delivery_configuration(
         result = load_target_context(workspace_root)
 
     assert result is application
-    load.assert_called_once_with(
-        config,
-        workspace_root=workspace_root,
-    )
+    load.assert_called_once()
+    call = load.call_args
+    assert call.args == (config,)
+    assert call.kwargs["workspace_root"] == workspace_root
+    assert isinstance(call.kwargs["publication_provider"], GitHubCliPublicationProvider)
 
 
 def test_startup_discovers_workspace_delivery_configuration(
@@ -355,10 +357,11 @@ def test_startup_discovers_workspace_delivery_configuration(
         result = load_target_context(workspace_root)
 
     assert result is application
-    load.assert_called_once_with(
-        config,
-        workspace_root=workspace_root,
-    )
+    load.assert_called_once()
+    call = load.call_args
+    assert call.args == (config,)
+    assert call.kwargs["workspace_root"] == workspace_root
+    assert isinstance(call.kwargs["publication_provider"], GitHubCliPublicationProvider)
 
 
 def test_startup_reports_delivery_migration_blocker(tmp_path: Path) -> None:

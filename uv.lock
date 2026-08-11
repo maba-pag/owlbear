@@ -1615,6 +1615,7 @@ source = { editable = "serve/cockpit" }
 dependencies = [
     { name = "fastapi" },
     { name = "owlbear-delivery" },
+    { name = "owlbear-delivery-github" },
     { name = "owlbear-memory" },
     { name = "pydantic" },
     { name = "uvicorn" },
@@ -1624,6 +1625,7 @@ dependencies = [
 requires-dist = [
     { name = "fastapi" },
     { name = "owlbear-delivery", editable = "serve/delivery" },
+    { name = "owlbear-delivery-github", editable = "serve/delivery-github" },
     { name = "owlbear-memory", editable = "serve/memory" },
     { name = "pydantic" },
     { name = "uvicorn" },
@@ -1670,6 +1672,7 @@ source = { editable = "serve/delivery-mcp" }
 dependencies = [
     { name = "mcp", extra = ["cli"] },
     { name = "owlbear-delivery" },
+    { name = "owlbear-delivery-github" },
     { name = "pydantic" },
 ]
 
@@ -1677,6 +1680,7 @@ dependencies = [
 requires-dist = [
     { name = "mcp", extras = ["cli"], specifier = ">=2,<2.1" },
     { name = "owlbear-delivery", editable = "serve/delivery" },
+    { name = "owlbear-delivery-github", editable = "serve/delivery-github" },
     { name = "pydantic", specifier = ">=2.13.4" },
 ]
 

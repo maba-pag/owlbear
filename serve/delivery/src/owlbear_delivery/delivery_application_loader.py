@@ -7,10 +7,11 @@ import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from owlbear_delivery.change_publication import ChangeBranchPublisher
 from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator
 from owlbear_delivery.completed_history import CompletedHistoryCatalog
 from owlbear_delivery.delivery_runtime import (
@@ -20,6 +21,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryWorkerRole,
 )
 from owlbear_delivery.design_package import DesignPackageStore
+from owlbear_delivery.draft_pull_request import DraftPullRequestPublisher
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.integration_verification import IntegrationVerificationStore, IntegrationVerifier
 from owlbear_delivery.portfolio_application import (
@@ -30,6 +32,9 @@ from owlbear_delivery.portfolio_application import (
 )
 from owlbear_delivery.target_admission import DeliveryAuthorityRegistry
 from owlbear_delivery.target_contract import DeliveryContract
+
+if TYPE_CHECKING:
+    from owlbear_delivery.publication_provider import PublicationProvider
 
 
 class _LoaderModel(BaseModel):
@@ -251,6 +256,7 @@ def _compose_application(
     config: DeliveryStartupConfig,
     paths: _DeliveryPaths,
     contracts: dict[str, DeliveryContract],
+    publication_provider: PublicationProvider | None,
 ) -> PortfolioApplication:
     package_store = DesignPackageStore(paths.package_root, paths.repository_root)
     coordinator = PortfolioCoordinator(paths.runtime_root, capacity=1)
@@ -281,6 +287,23 @@ def _compose_application(
         workspace_manager=workspace_manager,
         integration_verifier=integration_verifier,
         completed_history_catalog=CompletedHistoryCatalog(paths.repository_root, config.target_branch),
+        change_branch_publisher=ChangeBranchPublisher(
+            paths.repository_root,
+            coordinator,
+            remote=config.remote,
+            target_branch=config.target_branch,
+            operation_root=paths.runtime_root / "publications/change-branches/operations",
+        ),
+        draft_pull_request_publisher=(
+            DraftPullRequestPublisher(
+                publication_provider,
+                repository=config.github_repository,
+                target_branch=config.target_branch,
+                state_root=paths.runtime_root / "publications/pull-requests",
+            )
+            if publication_provider is not None
+            else None
+        ),
     )
     application_config = PortfolioApplicationConfig(
         package_root=paths.package_root,
@@ -294,10 +317,11 @@ def load_delivery_application(
     config: DeliveryStartupConfig,
     *,
     workspace_root: Path,
+    publication_provider: PublicationProvider | None = None,
 ) -> PortfolioApplication:
     """Validate external identities before constructing the Delivery state owners."""
     paths = _derive_paths(workspace_root)
     _validate_git_config(config, paths)
     contracts = _load_contracts(paths.runtime_root)
     _validate_runtime_state(paths.runtime_root, contracts)
-    return _compose_application(config, paths, contracts)
+    return _compose_application(config, paths, contracts, publication_provider)

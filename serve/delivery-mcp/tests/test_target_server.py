@@ -37,6 +37,7 @@ from owlbear_delivery_mcp.server import (
     load_delivery_config,
     mcp,
 )
+from owlbear_delivery_github import GitHubCliPublicationProvider
 from owlbear_delivery_mcp.target_models import DeliveryStartupDiagnostic
 from owlbear_delivery_mcp.target_server import TargetMCPAdapter, assemble_target_server
 
@@ -545,16 +546,18 @@ def test_mcp_startup_delegates_owner_construction_to_delivery(
     _write_config(path, _config())
     config = load_delivery_config(path)
     application = object()
-    calls: list[tuple[object, Path]] = []
+    calls: list[tuple[object, Path, object]] = []
 
-    def load_core(candidate: object, *, workspace_root: Path) -> object:
-        calls.append((candidate, workspace_root))
+    def load_core(candidate: object, *, workspace_root: Path, publication_provider: object) -> object:
+        calls.append((candidate, workspace_root, publication_provider))
         return application
 
     monkeypatch.setattr(live_server, "load_core_delivery_application", load_core)
 
     assert load_delivery_application(config, repository) is application
-    assert calls == [(config, repository)]
+    assert len(calls) == 1
+    assert calls[0][:2] == (config, repository)
+    assert isinstance(calls[0][2], GitHubCliPublicationProvider)
 
 
 @pytest.mark.asyncio

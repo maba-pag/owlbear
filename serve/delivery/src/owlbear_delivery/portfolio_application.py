@@ -91,12 +91,22 @@ from owlbear_delivery.work_items import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
+    from owlbear_delivery.change_publication import (
+        ChangeBranchPublicationReceipt,
+        ChangeBranchPublisher,
+        PublishChangeBranch,
+    )
     from owlbear_delivery.completed_history import (
         CompletedChangePage,
         CompletedChangeRecord,
         CompletedHistoryCatalog,
     )
     from owlbear_delivery.design_package import DesignPackageStore, VerifiedDesignPackage
+    from owlbear_delivery.draft_pull_request import (
+        CreateOrReconcileDraftPullRequest,
+        DraftPullRequestPublicationReceipt,
+        DraftPullRequestPublisher,
+    )
     from owlbear_delivery.integration_verification import IntegrationVerificationReceipt, IntegrationVerifier
     from owlbear_delivery.target_admission import (
         DeliveryAdmissionRequest,
@@ -490,6 +500,8 @@ class PortfolioApplicationDependencies:
     workspace_manager: ChangeWorkspaceManager
     integration_verifier: IntegrationVerifier
     completed_history_catalog: CompletedHistoryCatalog | None = None
+    change_branch_publisher: ChangeBranchPublisher | None = None
+    draft_pull_request_publisher: DraftPullRequestPublisher | None = None
 
 
 @dataclass(frozen=True)
@@ -548,6 +560,8 @@ class PortfolioApplication:
         self._workspace_manager = dependencies.workspace_manager
         self._integration_verifier = dependencies.integration_verifier
         self._completed_history_catalog = dependencies.completed_history_catalog
+        self._change_branch_publisher = dependencies.change_branch_publisher
+        self._draft_pull_request_publisher = dependencies.draft_pull_request_publisher
         self._execution_capacity = config.execution_capacity
         self._claim_ttl = timedelta(seconds=config.claim_ttl_seconds)
         self._policies = {policy.worker_role: policy for policy in config.role_policies}
@@ -566,6 +580,23 @@ class PortfolioApplication:
     ) -> DesignPackageResult:
         """Create or replay one exact authored Design package."""
         return self._package_store.create(change_id, intent_bytes, design_bytes)
+
+    def publish_change_branch(self, request: PublishChangeBranch) -> ChangeBranchPublicationReceipt:
+        """Publish or reconcile one exact reviewed Change branch checkpoint."""
+        if self._change_branch_publisher is None:
+            message = "Change branch publication is not configured"
+            raise PortfolioApplicationError(message)
+        return self._change_branch_publisher.publish(request)
+
+    def create_or_reconcile_draft_pull_request(
+        self,
+        request: CreateOrReconcileDraftPullRequest,
+    ) -> DraftPullRequestPublicationReceipt:
+        """Create or recover the unique draft PR for one first checkpoint."""
+        if self._draft_pull_request_publisher is None:
+            message = "draft pull-request publication is not configured"
+            raise PortfolioApplicationError(message)
+        return self._draft_pull_request_publisher.publish(request)
 
     def read_design_session(self, change_id: str) -> VerifiedDesignPackage:
         """Return one verified authored Design package and its current identity."""

@@ -8,7 +8,7 @@ import shutil
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch, sentinel
 
 import pytest
 
@@ -16,12 +16,14 @@ from owlbear_delivery import (
     AdministrativeDeliveryMove,
     AtomicIntegrationPreparation,
     CapacityLedger,
+    ChangeBranchPublisher,
     AdvanceDelivery,
     BlockDelivery,
     CompletedHistoryCatalog,
     ChangeWorkspaceManager,
     ChangeWriter,
     CoordinationConflictError,
+    CreateOrReconcileDraftPullRequest,
     DeliveryApplicationLoadError,
     DeliveryCommitment,
     DeliveryCommitmentClass,
@@ -55,6 +57,7 @@ from owlbear_delivery import (
     DesignPackageManifest,
     DesignPackageConflictError,
     DesignPackageStore,
+    DraftPullRequestPublisher,
     OutcomeAuthorityBinding,
     PortfolioApplication,
     PortfolioApplicationConfig,
@@ -62,6 +65,7 @@ from owlbear_delivery import (
     PortfolioApplicationError,
     PortfolioApplicationHooks,
     PortfolioCoordinator,
+    PublishChangeBranch,
     PublishDeliveryPlan,
     PublishDeliveryResult,
     RetryDelivery,
@@ -376,6 +380,64 @@ def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path
     assert (runtime_root / "capacity.json").is_file()
     assert not (repository / ".owlbear/target").exists()
     assert not (repository / ".owlbear/worktrees").exists()
+
+
+def test_delivery_loader_injects_publication_provider_and_delegates_exact_requests(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    provider = Mock()
+    application = load_delivery_application(
+        _startup_config(),
+        workspace_root=repository,
+        publication_provider=provider,
+    )
+    assert isinstance(application._change_branch_publisher, ChangeBranchPublisher)  # noqa: SLF001
+    assert isinstance(application._draft_pull_request_publisher, DraftPullRequestPublisher)  # noqa: SLF001
+    branch_request = PublishChangeBranch(
+        change_id="change-a",
+        expected_remote_head=None,
+        operation_id="branch-operation",
+    )
+    pull_request = CreateOrReconcileDraftPullRequest(
+        change_id="change-a",
+        operation_id="pr-operation",
+        published_head="1" * 40,
+        title="Change A",
+        generated_summary="First checkpoint.",
+    )
+
+    with (
+        patch.object(
+            application._change_branch_publisher,  # noqa: SLF001
+            "publish",
+            return_value=sentinel.branch_receipt,
+        ) as publish_branch,
+        patch.object(
+            application._draft_pull_request_publisher,  # noqa: SLF001
+            "publish",
+            return_value=sentinel.pull_request_receipt,
+        ) as publish_pull_request,
+    ):
+        assert application.publish_change_branch(branch_request) is sentinel.branch_receipt
+        assert application.create_or_reconcile_draft_pull_request(pull_request) is sentinel.pull_request_receipt
+
+    publish_branch.assert_called_once_with(branch_request)
+    publish_pull_request.assert_called_once_with(pull_request)
+
+
+def test_delivery_loader_without_provider_fails_closed_only_for_draft_pr(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    application = load_delivery_application(_startup_config(), workspace_root=repository)
+    assert isinstance(application._change_branch_publisher, ChangeBranchPublisher)  # noqa: SLF001
+    request = CreateOrReconcileDraftPullRequest(
+        change_id="change-a",
+        operation_id="pr-operation",
+        published_head="1" * 40,
+        title="Change A",
+        generated_summary="First checkpoint.",
+    )
+
+    with pytest.raises(PortfolioApplicationError, match="not configured"):
+        application.create_or_reconcile_draft_pull_request(request)
 
 
 @pytest.mark.parametrize(

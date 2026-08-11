@@ -15,6 +15,7 @@ from owlbear_delivery import (
     PortfolioApplication,
 )
 from owlbear_delivery import load_delivery_application as load_core_delivery_application
+from owlbear_delivery_github import GitHubCliPublicationProvider
 from owlbear_delivery_mcp.target_models import (
     DeliveryStartupDiagnostic,
 )
@@ -89,6 +90,7 @@ def load_delivery_application(config: DeliveryStartupConfig, workspace_root: Pat
         return load_core_delivery_application(
             config,
             workspace_root=workspace_root,
+            publication_provider=GitHubCliPublicationProvider(),
         )
     except DeliveryApplicationLoadError as exc:
         raise DeliveryStartupDiagnostic(_INVALID, exc.detail, exc.field) from exc
