@@ -150,28 +150,23 @@ class DeliveryCheckpointTrigger(_DeliveryModel):
 
     kind: DeliveryCheckpointTriggerKind
     outcome_id: str | None = Field(default=None, pattern=r"^OUT-[0-9]{3}$")
-    task_id: str | None = Field(default=None, min_length=1)
 
     @model_validator(mode="after")
     def _validate_identity(self) -> DeliveryCheckpointTrigger:
-        if self.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK:
-            if self.outcome_id is None or self.task_id is None:
-                message = "first promoted Task checkpoint trigger requires Outcome and Task identity"
+        if self.kind == DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME:
+            if self.outcome_id is None:
+                message = "verified Outcome checkpoint trigger requires Outcome identity"
                 raise ValueError(message)
-        elif self.kind == DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME:
-            if self.outcome_id is None or self.task_id is not None:
-                message = "verified Outcome checkpoint trigger requires only Outcome identity"
-                raise ValueError(message)
-        elif self.outcome_id is not None or self.task_id is not None:
-            message = "Change-level checkpoint trigger cannot name Outcome or Task identity"
+        elif self.outcome_id is not None:
+            message = "Change-level checkpoint trigger cannot name Outcome identity"
             raise ValueError(message)
         return self
 
 
 class DeliveryPendingCheckpoint(_DeliveryModel):
-    """Latest reviewed head carrying one or more undrained checkpoint obligations."""
+    """Undrained obligations, anchored only when an exact reviewed head remains valid."""
 
-    head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     triggers: tuple[DeliveryCheckpointTrigger, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -1266,7 +1261,10 @@ class DeliveryRuntime:
                 "bindings": updated_bindings,
                 "operator_moves": (*frontier.operator_moves, move),
                 "integration_attention": None,
-                "pending_checkpoint": _prune_checkpoint_triggers(frontier.pending_checkpoint, invalidated),
+                "pending_checkpoint": _invalidate_checkpoint_triggers(
+                    frontier.pending_checkpoint,
+                    invalidated,
+                ),
             }
         )
         self._replace(previous, updated)
@@ -1520,7 +1518,10 @@ class DeliveryRuntime:
             content = self._frontier_path.read_bytes()
             migration_head = None
             if self._workspace_manager is not None and _requires_checkpoint_migration(content):
-                migration_head = self._workspace_manager.show(self._contract.change_id).last_reviewed_commit
+                try:
+                    migration_head = self._workspace_manager.show(self._contract.change_id).last_reviewed_commit
+                except RuntimeError as exc:
+                    raise ValueError from exc
             frontier, canonical = parse_delivery_frontier(
                 content,
                 migration_reviewed_head=migration_head,
@@ -1618,12 +1619,9 @@ def _backfill_checkpoint_state(
         if required:
             raise ValueError
         return frontier
-    first = result_bindings[0]
     triggers = [
         DeliveryCheckpointTrigger(
             kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
-            outcome_id=first.outcome_id,
-            task_id=first.results[0].task_id,
         )
     ]
     triggers.extend(
@@ -1676,12 +1674,14 @@ def _queue_promoted_result_checkpoint(
     if candidate is None:
         _conflict("promoted Task checkpoint requires the published result candidate")
     triggers: list[DeliveryCheckpointTrigger] = []
-    if not any(item.results for item in previous.bindings):
+    pending = previous.pending_checkpoint
+    if previous.published_head is None and not _has_checkpoint_trigger(
+        pending,
+        DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
+    ):
         triggers.append(
             DeliveryCheckpointTrigger(
                 kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
-                outcome_id=binding.outcome_id,
-                task_id=candidate.result.task_id,
             )
         )
     if updated.stage == DeliveryStage.COMPLETED:
@@ -1691,7 +1691,6 @@ def _queue_promoted_result_checkpoint(
                 outcome_id=binding.outcome_id,
             )
         )
-    pending = previous.pending_checkpoint
     if pending is None and not triggers:
         return replacement
     combined = (*(() if pending is None else pending.triggers), *triggers)
@@ -1705,16 +1704,27 @@ def _queue_promoted_result_checkpoint(
     )
 
 
-def _prune_checkpoint_triggers(
+def _has_checkpoint_trigger(
+    pending: DeliveryPendingCheckpoint | None,
+    kind: DeliveryCheckpointTriggerKind,
+) -> bool:
+    return pending is not None and any(trigger.kind == kind for trigger in pending.triggers)
+
+
+def _invalidate_checkpoint_triggers(
     pending: DeliveryPendingCheckpoint | None,
     invalidated_outcome_ids: set[str],
 ) -> DeliveryPendingCheckpoint | None:
     if pending is None:
         return None
-    retained = tuple(trigger for trigger in pending.triggers if trigger.outcome_id not in invalidated_outcome_ids)
+    retained = tuple(
+        trigger
+        for trigger in pending.triggers
+        if trigger.outcome_id is None or trigger.outcome_id not in invalidated_outcome_ids
+    )
     if not retained:
         return None
-    return pending.model_copy(update={"triggers": retained})
+    return pending.model_copy(update={"head": None, "triggers": retained})
 
 
 def _require_claim(binding: OutcomeAuthorityBinding, claim_id: str) -> None:

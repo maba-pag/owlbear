@@ -344,12 +344,10 @@ def test_schema_two_result_history_backfills_checkpoint_at_exact_reviewed_head(t
 
     assert migrated.pending_checkpoint is not None
     assert migrated.pending_checkpoint.head == "f" * 40
-    assert tuple(
-        (trigger.kind, trigger.outcome_id, trigger.task_id) for trigger in migrated.pending_checkpoint.triggers
-    ) == (
-        (DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK, "OUT-001", "TASK-001"),
-        (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-001", None),
-        (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-002", None),
+    assert tuple((trigger.kind, trigger.outcome_id) for trigger in migrated.pending_checkpoint.triggers) == (
+        (DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK, None),
+        (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-001"),
+        (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-002"),
     )
 
 
@@ -501,7 +499,7 @@ def test_first_task_checkpoint_is_change_wide_and_one_task_outcomes_coalesce(tmp
     frontier_path.write_bytes(_canonical(frontier))
     runtime = DeliveryRuntime(state_root, _contract(), workspace_manager=manager)
 
-    for index in (1, 2):
+    for index in (1, 3):
         outcome_id = f"OUT-{index:03}"
         task_id = f"TASK-{index:03}"
         _plan_single_task(runtime, outcome_id, _task(task_id, outcome_id=outcome_id))
@@ -517,9 +515,44 @@ def test_first_task_checkpoint_is_change_wide_and_one_task_outcomes_coalesce(tmp
     pending = runtime.checkpoint_publication_state().pending_checkpoint
     assert pending is not None
     assert tuple((trigger.kind, trigger.outcome_id) for trigger in pending.triggers) == (
-        (DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK, "OUT-001"),
+        (DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK, None),
         (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-001"),
-        (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-002"),
+        (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-003"),
+    )
+
+    preview = runtime.preview_administrative_move("OUT-001", DeliveryStage.PLANNING)
+    runtime.administrative_move(
+        AdministrativeDeliveryMove(
+            move_id="move-checkpoint-reanchor",
+            outcome_id="OUT-001",
+            target=DeliveryStage.PLANNING,
+            reason="Replace invalidated foundation authority.",
+            expected_version=preview.snapshot_version,
+        )
+    )
+    unanchored = runtime.checkpoint_publication_state().pending_checkpoint
+    assert unanchored is not None
+    assert unanchored.head is None
+    assert tuple((trigger.kind, trigger.outcome_id) for trigger in unanchored.triggers) == (
+        (DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK, None),
+        (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-003"),
+    )
+
+    _plan_single_task(runtime, "OUT-001", _task("TASK-004", outcome_id="OUT-001"))
+    _result, candidate, reviewed_head, claim_id = _publish_task_result(
+        runtime,
+        coordinator,
+        coordination,
+        job_id=4,
+    )
+    runtime.transition(AdvanceDelivery(outcome_id="OUT-001", claim_id=claim_id, output=candidate.output))
+    reanchored = runtime.checkpoint_publication_state().pending_checkpoint
+    assert reanchored is not None
+    assert reanchored.head == reviewed_head
+    assert tuple((trigger.kind, trigger.outcome_id) for trigger in reanchored.triggers) == (
+        (DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK, None),
+        (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-003"),
+        (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-001"),
     )
 
 
@@ -530,13 +563,9 @@ def test_pending_checkpoint_rejects_duplicate_first_task_trigger() -> None:
             triggers=(
                 DeliveryCheckpointTrigger(
                     kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
-                    outcome_id="OUT-001",
-                    task_id="TASK-001",
                 ),
                 DeliveryCheckpointTrigger(
                     kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
-                    outcome_id="OUT-002",
-                    task_id="TASK-002",
                 ),
             ),
         )
@@ -948,8 +977,6 @@ def test_administrative_backward_move_invalidates_completed_dependents_only(tmp_
         triggers=(
             DeliveryCheckpointTrigger(
                 kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
-                outcome_id="OUT-001",
-                task_id="TASK-001",
             ),
             DeliveryCheckpointTrigger(
                 kind=DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
@@ -988,7 +1015,8 @@ def test_administrative_backward_move_invalidates_completed_dependents_only(tmp_
     assert runtime.show_binding("OUT-003").result_ids == ("RESULT-003",)
     retained = runtime.checkpoint_publication_state().pending_checkpoint
     assert retained is not None
-    assert retained.triggers == (pending.triggers[2],)
+    assert retained.head is None
+    assert retained.triggers == (pending.triggers[0], pending.triggers[2])
     assert runtime.change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
 
 
