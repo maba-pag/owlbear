@@ -206,6 +206,11 @@ class GitHubCliPublicationProvider:
         )
         updated = self._pull_request(request.repository, payload, "update_pull_request")
         self._require_matching_head(updated, request.expected_head_sha, "update_pull_request")
+        if updated.title != request.title or updated.body != request.body:
+            self._invalid_response(
+                "update_pull_request",
+                "GitHub did not apply the requested pull request metadata",
+            )
         return updated
 
     def set_pull_request_draft_state(

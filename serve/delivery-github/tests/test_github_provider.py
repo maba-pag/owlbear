@@ -244,6 +244,29 @@ def test_changed_metadata_blocks_update_before_patch() -> None:
     assert len(runner.calls) == 1
 
 
+def test_update_rejects_response_without_requested_metadata() -> None:
+    provider, runner = _provider(
+        _completed(_pull_response()),
+        _completed(_pull_response()),
+    )
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.update_pull_request(
+            UpdatePublicationPullRequest(
+                repository=_REPOSITORY,
+                number=7,
+                expected_head_sha=_HEAD,
+                expected_title="Example change",
+                expected_body="Generated summary",
+                title="Updated",
+                body="Updated body",
+            )
+        )
+
+    assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+    assert len(runner.calls) == 2
+
+
 def test_ready_transition_uses_only_named_graphql_document_and_reads_back() -> None:
     mutation_response = {
         "data": {"markPullRequestReadyForReview": {"pullRequest": {"id": "PR_node_7", "isDraft": False}}}

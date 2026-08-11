@@ -118,6 +118,30 @@ def test_update_requires_exact_current_head_and_exposes_no_merge_operation() -> 
     assert not hasattr(provider, "request")
 
 
+@pytest.mark.parametrize(
+    ("expected_title", "expected_body"), [("Stale", "Generated summary"), ("Example change", "Stale")]
+)
+def test_update_rejects_stale_metadata_fence(expected_title: str, expected_body: str) -> None:
+    provider = _provider()
+    created = provider.create_draft_pull_request(_create_request())
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.update_pull_request(
+            UpdatePublicationPullRequest(
+                repository=_REPOSITORY,
+                number=created.number,
+                expected_head_sha=created.head_sha,
+                expected_title=expected_title,
+                expected_body=expected_body,
+                title="Changed title",
+                body="Changed body",
+            )
+        )
+
+    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
+    assert provider.read_pull_request(_REPOSITORY, created.number) == created
+
+
 def test_unmerged_pull_request_may_report_provider_test_merge_sha() -> None:
     pull_request = PublicationPullRequest(
         repository=_REPOSITORY,
