@@ -110,6 +110,7 @@ from owlbear_delivery.draft_pull_request import (
     DraftPullRequestPublisher,
     GeneratedPullRequestSummaryReceipt,
     ObserveChangePublicationChecks,
+    PublicationCheckObservationReceipt,
     UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.integration_verification import (
@@ -445,6 +446,7 @@ __all__ = [
     "PortfolioWorkScope",
     "PublicationCheck",
     "PublicationCheckKind",
+    "PublicationCheckObservationReceipt",
     "PublicationCheckSnapshot",
     "PublicationLease",
     "PublicationProvider",

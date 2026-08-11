@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
 
@@ -11,6 +12,7 @@ from owlbear_delivery.draft_pull_request import (
     CreateOrReconcileDraftPullRequest,
     DraftPullRequestPublisher,
     ObserveChangePublicationChecks,
+    PublicationCheckObservationReceipt,
     UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.publication_provider import (
@@ -175,6 +177,7 @@ def _publisher(tmp_path: Path, provider: _Provider) -> DraftPullRequestPublisher
         repository="example/project",
         target_branch="main",
         state_root=tmp_path / "pull-requests",
+        clock=lambda: datetime(2026, 8, 11, 12, tzinfo=UTC),
     )
 
 
@@ -256,11 +259,18 @@ def test_observes_checks_from_change_bound_pull_request_identity(tmp_path: Path)
     (change_lock_root / ".storage.lock").unlink()
     change_lock_root.rmdir()
 
-    snapshot = publisher.observe_checks(_checks_request())
+    receipt = publisher.observe_checks(_checks_request())
 
-    assert snapshot.repository == publication.repository
-    assert snapshot.number == publication.number
-    assert snapshot.head_sha == publication.head_sha
+    assert isinstance(receipt, PublicationCheckObservationReceipt)
+    assert receipt.repository == publication.repository
+    assert receipt.number == publication.number
+    assert receipt.exact_commit == publication.head_sha
+    assert receipt.snapshot.head_sha == publication.head_sha
+    assert receipt.observed_at == datetime(2026, 8, 11, 12, tzinfo=UTC)
+    observation_path = (
+        tmp_path / "pull-requests/check-observations/change-a" / f"{receipt.provider_evidence_digest}.json"
+    )
+    assert PublicationCheckObservationReceipt.model_validate_json(observation_path.read_bytes()) == receipt
     assert provider.observed_requests == [
         ObservePublicationChecks(
             repository=publication.repository,
@@ -268,7 +278,19 @@ def test_observes_checks_from_change_bound_pull_request_identity(tmp_path: Path)
             expected_head_sha=publication.head_sha,
         )
     ]
-    assert not change_lock_root.exists()
+
+
+def test_identical_check_observation_replays_durable_receipt(tmp_path: Path) -> None:
+    provider = _Provider()
+    publisher = _publisher(tmp_path, provider)
+    publisher.publish(_request())
+
+    first = publisher.observe_checks(_checks_request())
+    replayed = publisher.observe_checks(_checks_request())
+
+    assert replayed == first
+    assert len(provider.observed_requests) == 2
+    assert len(tuple((tmp_path / "pull-requests/check-observations/change-a").glob("*.json"))) == 1
 
 
 def test_rejects_moved_pull_request_before_check_observation(tmp_path: Path) -> None:

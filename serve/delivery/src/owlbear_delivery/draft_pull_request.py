@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal, Never
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -22,6 +23,7 @@ from owlbear_delivery.publication_provider import (
 from owlbear_delivery.storage_io import atomic_write, locked_roots
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 _CHANGE_ID_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
@@ -118,6 +120,45 @@ class GeneratedPullRequestSummaryReceipt(_DraftPullRequestModel):
         return self
 
 
+class _PublicationCheckObservationPayload(_DraftPullRequestModel):
+    schema_version: Literal[1] = 1
+    change_id: str = Field(pattern=_CHANGE_ID_PATTERN)
+    repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    number: int = Field(gt=0)
+    exact_commit: str = Field(pattern=_SHA_PATTERN)
+    observation_kind: Literal["github-checks"] = "github-checks"
+    command_or_procedure: Literal["observe-publication-checks"] = "observe-publication-checks"
+    observer_or_runner_identity: Literal["github"] = "github"
+    observed_at: datetime
+    snapshot: PublicationCheckSnapshot
+    provider_evidence_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class PublicationCheckObservationReceipt(_PublicationCheckObservationPayload):
+    """Durable exact-head evidence from one fixed provider check observation."""
+
+    observation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> PublicationCheckObservationReceipt:
+        if self.observed_at.tzinfo is None:
+            msg = "check observation timestamp must include a timezone"
+            raise ValueError(msg)
+        if (
+            self.snapshot.repository != self.repository
+            or self.snapshot.number != self.number
+            or self.snapshot.head_sha != self.exact_commit
+            or self.provider_evidence_digest != _digest(self.snapshot.model_dump(mode="json"))
+        ):
+            msg = "check observation receipt does not match its provider snapshot"
+            raise ValueError(msg)
+        payload = self.model_dump(mode="json", exclude={"observation_id"})
+        if self.observation_id != _digest(payload):
+            msg = "check observation receipt identity is invalid"
+            raise ValueError(msg)
+        return self
+
+
 class _DraftPullRequestOperation(_DraftPullRequestModel):
     schema_version: Literal[1] = 1
     operation_id: str = Field(pattern=_OPERATION_ID_PATTERN)
@@ -158,11 +199,13 @@ class DraftPullRequestPublisher:
         repository: str,
         target_branch: str,
         state_root: Path,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self._provider = provider
         self._repository = repository
         self._target_branch = target_branch
         self._state_root = state_root.resolve()
+        self._clock = clock
         if state_root.is_symlink():
             msg = "draft pull-request state root must not be a symlink"
             raise ValueError(msg)
@@ -182,8 +225,16 @@ class DraftPullRequestPublisher:
         with locked_roots((lock_root,)):
             return self._update_generated_summary_locked(request)
 
-    def observe_checks(self, request: ObserveChangePublicationChecks) -> PublicationCheckSnapshot:
-        """Observe checks for the exact PR and head bound to one Change."""
+    def observe_checks(self, request: ObserveChangePublicationChecks) -> PublicationCheckObservationReceipt:
+        """Observe and durably record checks for one exact Change publication."""
+        lock_root = self._state_root / "locks" / request.change_id
+        with locked_roots((lock_root,)):
+            return self._observe_checks_locked(request)
+
+    def _observe_checks_locked(
+        self,
+        request: ObserveChangePublicationChecks,
+    ) -> PublicationCheckObservationReceipt:
         publication = self._read_receipt(request)
         if publication is None:
             self._conflict(request, "Change has no draft pull-request publication receipt")
@@ -204,7 +255,46 @@ class DraftPullRequestPublisher:
             self._invalid_response(request, "provider returned checks for a different publication identity")
         observed = self._provider.read_pull_request(publication.repository, publication.number)
         self._validate_publication_identity(observed, publication, request)
-        return snapshot
+        return self._record_check_observation(request, snapshot)
+
+    def _record_check_observation(
+        self,
+        request: ObserveChangePublicationChecks,
+        snapshot: PublicationCheckSnapshot,
+    ) -> PublicationCheckObservationReceipt:
+        evidence_digest = _digest(snapshot.model_dump(mode="json"))
+        path = self._check_observation_path(request, evidence_digest)
+        existing = self._read_state(path, PublicationCheckObservationReceipt, request)
+        if existing is not None:
+            self._validate_check_observation(existing, request, snapshot)
+            return existing
+        payload = _PublicationCheckObservationPayload(
+            change_id=request.change_id,
+            repository=snapshot.repository,
+            number=snapshot.number,
+            exact_commit=snapshot.head_sha,
+            observed_at=self._clock(),
+            snapshot=snapshot,
+            provider_evidence_digest=evidence_digest,
+        )
+        receipt = PublicationCheckObservationReceipt(
+            observation_id=_digest(payload.model_dump(mode="json")),
+            **payload.model_dump(),
+        )
+        return self._publish_or_read(path, receipt, PublicationCheckObservationReceipt, request)
+
+    def _validate_check_observation(
+        self,
+        receipt: PublicationCheckObservationReceipt,
+        request: ObserveChangePublicationChecks,
+        snapshot: PublicationCheckSnapshot,
+    ) -> None:
+        if (
+            receipt.change_id != request.change_id
+            or receipt.exact_commit != request.published_head
+            or receipt.snapshot != snapshot
+        ):
+            self._conflict(request, "stored check observation differs from the provider snapshot")
 
     def _update_generated_summary_locked(
         self,
@@ -609,6 +699,13 @@ class DraftPullRequestPublisher:
 
     def _summary_path(self, kind: str, request: UpdateGeneratedPullRequestSummary) -> Path:
         return self._state_root / kind / f"{request.change_id}--{request.operation_id}.json"
+
+    def _check_observation_path(
+        self,
+        request: ObserveChangePublicationChecks,
+        evidence_digest: str,
+    ) -> Path:
+        return self._state_root / "check-observations" / request.change_id / f"{evidence_digest}.json"
 
     @staticmethod
     def _require_directory(path: Path) -> None:

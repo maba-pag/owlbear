@@ -80,6 +80,7 @@ from owlbear_delivery.draft_pull_request import (
     DraftPullRequestPublisher,
     GeneratedPullRequestSummaryReceipt,
     ObserveChangePublicationChecks,
+    PublicationCheckObservationReceipt,
     UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.portfolio_operating import (
@@ -115,7 +116,6 @@ if TYPE_CHECKING:
     )
     from owlbear_delivery.design_package import DesignPackageStore, VerifiedDesignPackage
     from owlbear_delivery.integration_verification import IntegrationVerificationReceipt, IntegrationVerifier
-    from owlbear_delivery.publication_provider import PublicationCheckSnapshot
     from owlbear_delivery.target_admission import (
         DeliveryAdmissionRequest,
         DeliveryAdmissionResult,
@@ -635,7 +635,7 @@ class PortfolioApplication:
     def observe_change_publication_checks(
         self,
         change_id: str,
-    ) -> PublicationCheckSnapshot:
+    ) -> PublicationCheckObservationReceipt:
         """Observe provider checks at the exact durable published Change head."""
         if self._draft_pull_request_publisher is None:
             message = "draft pull-request publication is not configured"
