@@ -130,7 +130,6 @@ def _branch_receipt(head: str, expected: str | None = None) -> ChangeBranchPubli
         remote="origin",
         branch="owlbear/change/change-a",
         target_branch="main",
-        target_head=expected or head,
         expected_remote_head=expected,
         published_head=head,
     )

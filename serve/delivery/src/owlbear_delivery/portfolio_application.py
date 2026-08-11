@@ -694,7 +694,6 @@ class PortfolioApplication:
                 "branch",
                 change_id,
                 head,
-                initial.published_head or "missing",
             ),
         )
         branch_receipt = self._change_branch_publisher.publish(branch_request)

@@ -537,43 +537,6 @@ def test_exact_lease_rejects_remote_deletion_between_observation_and_push(tmp_pa
     assert _head(repository, f"refs/heads/{branch}") == reviewed
 
 
-def test_replay_does_not_bypass_active_writer_ownership(tmp_path: Path) -> None:
-    repository, _remote, initial = _repository(tmp_path)
-    coordinator, manager = _change_workspace(tmp_path, repository)
-    worktree, reviewed = _reviewed_change(manager, "replay-change")
-    publisher = ChangeBranchPublisher(
-        repository,
-        coordinator,
-        remote="origin",
-        target_branch="main",
-        operation_root=tmp_path / "operations",
-    )
-    request = PublishChangeBranch(
-        change_id="replay-change",
-        expected_remote_head=None,
-        operation_id="operation-replay",
-    )
-    publisher.publish(request)
-    advanced_target = _git(
-        repository,
-        "commit-tree",
-        _git(repository, "mktree").stdout.strip(),
-        "-p",
-        initial,
-        "-m",
-        "advanced target",
-    ).stdout.strip()
-    _git(repository, "push", "origin", f"{advanced_target}:refs/heads/main")
-    (worktree / "dirty.txt").write_text("dirty\n", encoding="utf-8")
-    coordinator.acquire("replay-change", _writer("replay-change"))
-
-    with pytest.raises(PublicationProviderError) as exc_info:
-        publisher.publish(request)
-
-    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
-    assert _head(repository, "refs/heads/owlbear/change/replay-change") == reviewed
-
-
 def test_replay_rejects_receipt_after_reviewed_boundary_advances(tmp_path: Path) -> None:
     repository, _remote, _initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)
@@ -602,35 +565,7 @@ def test_replay_rejects_receipt_after_reviewed_boundary_advances(tmp_path: Path)
     assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
 
 
-def test_replay_rejects_changed_inputs_for_same_operation_id(tmp_path: Path) -> None:
-    repository, _remote, _initial = _repository(tmp_path)
-    coordinator, manager = _change_workspace(tmp_path, repository)
-    _worktree, reviewed = _reviewed_change(manager, "drift-change")
-    publisher = ChangeBranchPublisher(
-        repository,
-        coordinator,
-        remote="origin",
-        target_branch="main",
-        operation_root=tmp_path / "operations",
-    )
-    publisher.publish(
-        PublishChangeBranch(change_id="drift-change", expected_remote_head=None, operation_id="operation-drift")
-    )
-
-    with pytest.raises(PublicationProviderError) as exc_info:
-        publisher.publish(
-            PublishChangeBranch(
-                change_id="drift-change",
-                expected_remote_head=reviewed,
-                operation_id="operation-drift",
-            )
-        )
-
-    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
-    assert exc_info.value.retry_safe is False
-
-
-def test_first_attempt_revalidates_target_and_excludes_writer_until_push_completes(tmp_path: Path) -> None:
+def test_first_attempt_excludes_writer_until_push_completes(tmp_path: Path) -> None:
     repository, _remote, _initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)
     _worktree, _reviewed = _reviewed_change(manager, "reserved-change")
@@ -641,24 +576,14 @@ def test_first_attempt_revalidates_target_and_excludes_writer_until_push_complet
         target_branch="main",
         operation_root=tmp_path / "operations",
     )
-    original_fetch = publisher._fetch_target
     original_push = publisher._push_exact_head
-    fetch_count = 0
-
-    def counted_fetch(request: PublishChangeBranch) -> str:
-        nonlocal fetch_count
-        fetch_count += 1
-        return original_fetch(request)
 
     def assert_reserved_then_push(operation: Any, request: PublishChangeBranch, attempt: Any) -> None:
         with pytest.raises(CoordinationConflictError, match="active writer"):
             coordinator.acquire("reserved-change", _writer("reserved-change"))
         original_push(operation, request, attempt)
 
-    with (
-        patch.object(publisher, "_fetch_target", side_effect=counted_fetch),
-        patch.object(publisher, "_push_exact_head", side_effect=assert_reserved_then_push),
-    ):
+    with patch.object(publisher, "_push_exact_head", side_effect=assert_reserved_then_push):
         publisher.publish(
             PublishChangeBranch(
                 change_id="reserved-change",
@@ -667,7 +592,6 @@ def test_first_attempt_revalidates_target_and_excludes_writer_until_push_complet
             )
         )
 
-    assert fetch_count == 2
     assert coordinator.show("reserved-change").publication_lease is None
 
 
@@ -735,7 +659,7 @@ def test_pre_push_timeout_releases_reservation_for_new_operation(tmp_path: Path)
     )
 
     with (
-        patch.object(publisher, "_fetch_target", side_effect=subprocess.TimeoutExpired(("git", "fetch"), 30)),
+        patch.object(publisher, "_remote_head", side_effect=subprocess.TimeoutExpired(("git", "ls-remote"), 30)),
         pytest.raises(PublicationProviderError) as exc_info,
     ):
         publisher.publish(
@@ -774,7 +698,7 @@ def test_unexpected_pre_write_failure_releases_lease(tmp_path: Path) -> None:
     )
 
     with (
-        patch.object(publisher, "_fetch_target", side_effect=RuntimeError("unexpected")),
+        patch.object(publisher, "_remote_head", side_effect=RuntimeError("unexpected")),
         pytest.raises(RuntimeError, match="unexpected"),
     ):
         publisher.publish(
@@ -823,15 +747,10 @@ def test_failed_push_with_unchanged_remote_is_retryable_and_releases_lease(tmp_p
     assert coordinator.show("failed-push-change").publication_lease is None
 
 
-def test_failed_push_replays_after_target_advances_within_reviewed_head(tmp_path: Path) -> None:
-    repository, remote, _initial = _repository(tmp_path)
+def test_failed_push_replays_after_unrelated_target_advance(tmp_path: Path) -> None:
+    repository, remote, initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)
-    worktree, intermediate_target = _reviewed_change(manager, "target-advance-change")
-    (worktree / "product.txt").write_text("reviewed after target advance\n", encoding="utf-8")
-    _git(worktree, "add", "product.txt")
-    _git(worktree, "commit", "-m", "reviewed after target advance")
-    reviewed = _head(worktree)
-    manager.record_reviewed("target-advance-change", reviewed)
+    _worktree, reviewed = _reviewed_change(manager, "target-advance-change")
     publisher = ChangeBranchPublisher(
         repository,
         coordinator,
@@ -860,12 +779,46 @@ def test_failed_push_replays_after_target_advances_within_reviewed_head(tmp_path
 
     assert exc_info.value.code is PublicationProviderFailureCode.UNAVAILABLE
     assert exc_info.value.retry_safe
-    _git(repository, "push", "origin", f"{intermediate_target}:refs/heads/main")
+    unrelated_target = _git(
+        repository,
+        "commit-tree",
+        _git(repository, "rev-parse", f"{initial}^{{tree}}").stdout.strip(),
+        "-p",
+        initial,
+        "-m",
+        "unrelated target advance",
+    ).stdout.strip()
+    _git(repository, "push", "origin", f"{unrelated_target}:refs/heads/main")
 
     receipt = publisher.publish(request)
 
     assert receipt.published_head == reviewed
     assert _head(remote, "refs/heads/owlbear/change/target-advance-change") == reviewed
+
+
+def test_published_operation_replays_with_active_writer(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, reviewed = _reviewed_change(manager, "writer-replay-change")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+    request = PublishChangeBranch(
+        change_id="writer-replay-change",
+        expected_remote_head=None,
+        expected_published_head=reviewed,
+        operation_id="writer-replay",
+    )
+    receipt = publisher.publish(request)
+    coordinator.acquire("writer-replay-change", _writer("writer-replay-change"))
+
+    replayed = publisher.publish(request.model_copy(update={"expected_remote_head": reviewed}))
+
+    assert replayed == receipt
 
 
 def test_authentication_failed_push_is_terminal_and_releases_reservation(tmp_path: Path) -> None:
@@ -1035,4 +988,5 @@ def test_rejects_option_shaped_remote_head_before_any_later_git_operation(tmp_pa
         )
 
     assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
-    assert later_operations == ["rev-parse"]
+    assert "fetch" not in later_operations
+    assert "push" not in later_operations

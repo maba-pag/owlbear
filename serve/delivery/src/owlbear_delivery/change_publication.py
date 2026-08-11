@@ -64,7 +64,6 @@ class ChangeBranchPublicationReceipt(_PublicationModel):
     remote: str = Field(min_length=1)
     branch: str = Field(min_length=1)
     target_branch: str = Field(min_length=1)
-    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     expected_remote_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
 
@@ -76,7 +75,6 @@ class _PublicationOperation(_PublicationModel):
     remote: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
     branch: str = Field(pattern=r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*$")
     target_branch: str = Field(min_length=1)
-    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     expected_remote_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
 
@@ -177,13 +175,12 @@ class ChangeBranchPublisher:
         operation = self._read_operation(request)
         if operation is not None:
             self._validate_replay(operation, request)
+            self._require_current_reviewed_boundary(operation, request)
+            if self._remote_head(operation.branch, request) == operation.published_head:
+                return self._receipt(operation)
         attempt.reservation = self._reserve_publication(request, attempt.owner_id, lock)
         if operation is not None:
             self._require_current_reviewed_boundary(operation, request)
-            if self._remote_head(operation.branch, request) == operation.published_head:
-                attempt.reservation_released = True
-                self._release_publication(operation, attempt.owner_id, lock)
-                return self._receipt(operation)
 
         if operation is None:
             candidate = self._prepare_operation(request, attempt.reservation, attempt.owner_id)
@@ -248,16 +245,12 @@ class ChangeBranchPublisher:
         if request.expected_published_head is not None and branch_head != request.expected_published_head:
             self._conflict(request, "Change branch head differs from the requested checkpoint")
         self._require_clean_worktree(coordination.worktree_path, request)
-        target_head = self._fetch_target(request)
-        if not self._is_ancestor(target_head, branch_head, request):
-            self._conflict(request, "fresh remote target is not an ancestor of the reviewed Change head")
         return _PublicationOperation(
             operation_id=request.operation_id,
             change_id=request.change_id,
             remote=self._remote,
             branch=coordination.branch,
             target_branch=self._target_branch,
-            target_head=target_head,
             expected_remote_head=request.expected_remote_head,
             published_head=branch_head,
         )
@@ -282,9 +275,6 @@ class ChangeBranchPublisher:
         if branch_head != operation.published_head or branch_head != coordination.last_reviewed_commit:
             self._conflict(request, "prepared publication no longer names the reviewed boundary")
         self._require_clean_worktree(coordination.worktree_path, request)
-        current_target_head = self._fetch_target(request)
-        if not self._is_ancestor(current_target_head, operation.published_head, request):
-            self._conflict(request, "fresh remote target is not an ancestor of the reviewed Change head")
 
     def _require_current_reviewed_boundary(
         self,
@@ -294,24 +284,6 @@ class ChangeBranchPublisher:
         coordination = self._coordination(request)
         if coordination.branch != operation.branch or coordination.last_reviewed_commit != operation.published_head:
             self._conflict(request, "published operation no longer names the reviewed boundary")
-
-    def _fetch_target(self, request: PublishChangeBranch) -> str:
-        target_ref = f"refs/heads/{self._target_branch}"
-        target_head = self._remote_ref(target_ref, request)
-        result = self._run_git(
-            "fetch",
-            "--no-tags",
-            "--no-write-fetch-head",
-            "--refmap=",
-            self._remote,
-            target_ref,
-        )
-        if result.returncode != 0:
-            self._unavailable(request, "configured target could not be fetched")
-        if self._remote_ref(target_ref, request) != target_head:
-            self._conflict(request, "remote target changed while it was fetched")
-        self._resolve_commit(target_head, request, invalid_response=True)
-        return target_head
 
     def _fetch_change_head(
         self,
@@ -343,18 +315,6 @@ class ChangeBranchPublisher:
         if result.returncode != 0:
             self._unavailable(request, "remote Change branch could not be observed")
         return self._parse_remote_ref(result.stdout, f"refs/heads/{branch}", request)
-
-    def _remote_ref(self, reference: str, request: PublishChangeBranch) -> str:
-        result = self._run_git("ls-remote", "--exit-code", "--heads", self._remote, reference)
-        if result.returncode == _LS_REMOTE_MISSING:
-            self._failure(
-                PublicationProviderFailureCode.NOT_FOUND,
-                request,
-                "required remote ref is unavailable",
-            )
-        if result.returncode != 0:
-            self._unavailable(request, "remote ref could not be observed")
-        return self._parse_remote_ref(result.stdout, reference, request)
 
     def _push_exact_head(
         self,
@@ -646,7 +606,7 @@ class ChangeBranchPublisher:
             operation.operation_id != request.operation_id
             or operation.change_id != request.change_id
             or operation.branch != f"owlbear/change/{operation.change_id}"
-            or operation.expected_remote_head != request.expected_remote_head
+            or request.expected_remote_head not in {operation.expected_remote_head, operation.published_head}
             or (
                 request.expected_published_head is not None
                 and operation.published_head != request.expected_published_head
@@ -698,7 +658,6 @@ class ChangeBranchPublisher:
             remote=operation.remote,
             branch=operation.branch,
             target_branch=operation.target_branch,
-            target_head=operation.target_head,
             expected_remote_head=operation.expected_remote_head,
             published_head=operation.published_head,
         )
