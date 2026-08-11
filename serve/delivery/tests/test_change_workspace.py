@@ -322,6 +322,26 @@ def test_external_completion_proposal_preserves_dirty_checked_out_target(tmp_pat
     assert _git(repository, "status", "--porcelain") == "M shared.txt"
 
 
+def test_workspace_recovery_requires_and_preserves_exact_reviewed_head(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    state_root = tmp_path / "state"
+    coordinator = PortfolioCoordinator(state_root, capacity=2)
+    manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "release")
+    coordination = manager.create("recovered-change")
+    reviewed = _commit_new_file(coordination.worktree_path, "product.txt", "reviewed\n", "reviewed product")
+    manager.record_reviewed(coordination.change_id, reviewed)
+    (state_root / "claims/changes/recovered-change.json").unlink()
+    recovered_manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "release")
+
+    with pytest.raises(CoordinationConflictError, match="exact recovery reviewed head"):
+        recovered_manager.create("recovered-change")
+
+    recovered = recovered_manager.create("recovered-change", recovery_reviewed_head=reviewed)
+
+    assert recovered.last_reviewed_commit == reviewed
+    assert _git(recovered.worktree_path, "rev-parse", "HEAD") == reviewed
+
+
 def test_coordinator_recovers_pending_runtime_transaction(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
     participant = TransactionParticipant(state_root, Path("target-runtime/recovered.json"), b"{}\n")

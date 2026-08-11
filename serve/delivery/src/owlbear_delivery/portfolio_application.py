@@ -657,12 +657,17 @@ class PortfolioApplication:
     def admit_delivery_change(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult:
         """Admit source-bound Delivery authority through the owning registry."""
         with self._coordinator.acquisition_lock():
+            self._workspace_manager.validate_recovery(request.change_id, request.recovery_reviewed_head)
             result = self._authority_registry.admit(request)
-            self._workspace_manager.create(request.change_id)
+            coordination = self._workspace_manager.create(
+                request.change_id,
+                recovery_reviewed_head=request.recovery_reviewed_head,
+            )
             self._runtimes[request.change_id] = DeliveryRuntime(
                 self._target_root,
                 result.contract,
                 workspace_manager=self._workspace_manager,
+                migration_reviewed_head=coordination.last_reviewed_commit,
             )
             return result
 

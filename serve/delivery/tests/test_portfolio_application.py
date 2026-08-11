@@ -420,6 +420,75 @@ def test_delivery_loader_isolates_contract_without_workspace_coordination(tmp_pa
     assert application.list_work_items() == ()
 
 
+def test_admission_replay_recovers_isolated_legacy_change_at_exact_reviewed_head(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, state_root = _portfolio(tmp_path, {})
+    intent = b"""# Recovered Delivery
+
+```yaml target-contract
+kind: commitment
+id: COM-001
+class: agreed-path
+provenance: recovery test
+statement: Preserve reviewed recovery authority.
+```
+
+```yaml target-contract
+kind: outcome
+id: OUT-001
+title: Recover authority
+promise: Restore exact reviewed coordination.
+acceptance: [Recovery is observable.]
+commitments: [COM-001]
+dependencies: []
+```
+"""
+    application.create_design_session("change-a", intent, b"# Architecture\n")
+    admitted = application.admit_delivery_change(DeliveryAdmissionRequest(change_id="change-a", active_claim_ids=()))
+    reviewed_head = coordinator.show("change-a").last_reviewed_commit
+    task = _task()
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(
+                outcome_id="OUT-001",
+                plan_scope_id="SCOPE-001",
+                stage=DeliveryStage.COMPLETED,
+                tasks=(task,),
+                results=(
+                    DeliveryTaskResult(
+                        result_id="RESULT-001",
+                        change_id="change-a",
+                        authority_digest=hashlib.sha256(admitted.contract_bytes).hexdigest(),
+                        task_id=task.task_id,
+                        task_digest=task.digest,
+                        completed_commit=reviewed_head,
+                    ),
+                ),
+            ),
+        )
+    )
+    payload = frontier.model_dump(mode="json")
+    payload["schema_version"] = 2
+    payload.pop("published_head")
+    payload.pop("pending_checkpoint")
+    frontier_path = state_root / "changes/change-a/frontier.json"
+    frontier_path.write_text(json.dumps(payload), encoding="utf-8")
+    legacy_frontier = frontier_path.read_bytes()
+    (state_root / "claims/changes/change-a.json").unlink()
+    del application._runtimes["change-a"]  # noqa: SLF001
+    request = DeliveryAdmissionRequest(change_id="change-a", active_claim_ids=())
+
+    with pytest.raises(CoordinationConflictError, match="exact recovery reviewed head"):
+        application.admit_delivery_change(request)
+    assert frontier_path.read_bytes() == legacy_frontier
+
+    recovered = application.admit_delivery_change(request.model_copy(update={"recovery_reviewed_head": reviewed_head}))
+
+    assert recovered.replayed
+    assert coordinator.show("change-a").last_reviewed_commit == reviewed_head
+    assert application.show_change_checkpoint_publication("change-a").pending_checkpoint is not None
+    assert json.loads(frontier_path.read_bytes())["schema_version"] == 3
+
+
 def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     runtime_root = repository / ".owlbear/delivery/runtime"

@@ -1605,6 +1605,8 @@ def _backfill_checkpoint_state(
     *,
     required: bool,
 ) -> DeliveryFrontier:
+    if frontier.integration_completion is not None:
+        return frontier
     result_bindings = tuple(binding for binding in frontier.bindings if binding.results)
     if not result_bindings:
         return frontier

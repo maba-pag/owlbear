@@ -157,6 +157,7 @@ class DeliveryAdmissionRequest(_AdmissionModel):
 
     change_id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
     active_claim_ids: tuple[str, ...]
+    recovery_reviewed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
 
     @model_validator(mode="after")
     def _validate_claims(self) -> DeliveryAdmissionRequest:

@@ -351,6 +351,34 @@ def test_schema_two_result_history_backfills_checkpoint_at_exact_reviewed_head(t
     )
 
 
+def test_schema_two_completed_change_does_not_backfill_checkpoint(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    runtime.publish_integration_completion(
+        DeliveryIntegrationCompletion(
+            completion_id="a" * 64,
+            candidate_id="b" * 64,
+            package_id="c" * 64,
+            target_commit="1" * 40,
+            completion_path=".owlbear/completed/delivery-runtime.json",
+        )
+    )
+    payload = json.loads(runtime.frontier_bytes())
+    payload["schema_version"] = 2
+    payload.pop("published_head")
+    payload.pop("pending_checkpoint")
+
+    migrated, _canonical_bytes = parse_delivery_frontier(
+        json.dumps(payload).encode(),
+        migration_reviewed_head="f" * 40,
+        require_checkpoint_backfill=True,
+    )
+
+    assert migrated.pending_checkpoint is None
+
+
 def test_completion_capture_excludes_change_publication_state(tmp_path: Path) -> None:
     runtime = _runtime(
         tmp_path,

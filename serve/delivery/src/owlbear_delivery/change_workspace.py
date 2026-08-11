@@ -610,7 +610,12 @@ class ChangeWorkspaceManager:
         self._integration_target = integration_target
         self._git("check-ref-format", f"refs/heads/{integration_target}")
 
-    def create(self, change_id: str) -> ChangeCoordination:
+    def create(
+        self,
+        change_id: str,
+        *,
+        recovery_reviewed_head: str | None = None,
+    ) -> ChangeCoordination:
         """Create or replay one warm branch and worktree from the configured target."""
         try:
             existing = self._coordinator.show(change_id)
@@ -619,6 +624,8 @@ class ChangeWorkspaceManager:
         if existing is not None:
             if existing.integration_target != self._integration_target:
                 _workspace_failure("registered workspace uses another integration target")
+            if recovery_reviewed_head is not None and recovery_reviewed_head != existing.last_reviewed_commit:
+                _coordination_conflict("recovery reviewed head differs from registered workspace authority")
             self._require_worktree(
                 existing.worktree_path,
                 existing.branch,
@@ -631,8 +638,16 @@ class ChangeWorkspaceManager:
         target_head = self._resolve(self._integration_target)
         branch_head = self._resolve(branch, missing_ok=True)
         if branch_head is None:
+            if recovery_reviewed_head is not None:
+                _coordination_conflict("recovery reviewed head requires an existing Change branch")
             self._git("branch", branch, target_head)
             branch_head = target_head
+            last_reviewed_commit = target_head
+        else:
+            if recovery_reviewed_head is None:
+                _coordination_conflict("existing Change branch requires an exact recovery reviewed head")
+            self._require_ancestor(recovery_reviewed_head, branch_head)
+            last_reviewed_commit = recovery_reviewed_head
         if not worktree.exists():
             worktree.parent.mkdir(parents=True, exist_ok=True)
             self._git("worktree", "add", str(worktree), branch)
@@ -643,9 +658,29 @@ class ChangeWorkspaceManager:
             worktree_path=worktree,
             integration_target=self._integration_target,
             target_head=target_head,
-            last_reviewed_commit=target_head,
+            last_reviewed_commit=last_reviewed_commit,
         )
         return self._coordinator.register(coordination)
+
+    def validate_recovery(self, change_id: str, recovery_reviewed_head: str | None) -> None:
+        """Require exact reviewed authority when coordination is missing for a surviving branch."""
+        try:
+            existing = self._coordinator.show(change_id)
+        except CoordinationConflictError:
+            existing = None
+        if existing is not None:
+            if recovery_reviewed_head is not None and recovery_reviewed_head != existing.last_reviewed_commit:
+                _coordination_conflict("recovery reviewed head differs from registered workspace authority")
+            return
+        branch = f"owlbear/change/{change_id}"
+        branch_head = self._resolve(branch, missing_ok=True)
+        if branch_head is None:
+            if recovery_reviewed_head is not None:
+                _coordination_conflict("recovery reviewed head requires an existing Change branch")
+            return
+        if recovery_reviewed_head is None:
+            _coordination_conflict("existing Change branch requires an exact recovery reviewed head")
+        self._require_ancestor(recovery_reviewed_head, branch_head)
 
     def record_reviewed(self, change_id: str, commit: str) -> ChangeCoordination:
         """Advance the recorded reviewed boundary to an exact branch ancestor."""
