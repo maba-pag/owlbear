@@ -204,10 +204,12 @@ class ChangeBranchPublisher:
             attempt.reservation_released = True
             self._release_publication(operation, attempt.owner_id, lock)
             return self._receipt(operation)
-        if operation.expected_remote_head is not None and remote_head != operation.expected_remote_head:
-            self._conflict(request, "remote Change branch differs from the expected head")
         if remote_head is not None:
             self._fetch_change_head(operation.branch, remote_head, request)
+        if operation.expected_remote_head is not None and (
+            remote_head is None or not self._is_ancestor(operation.expected_remote_head, remote_head, request)
+        ):
+            self._conflict(request, "remote Change branch is behind or divergent from the expected head")
         if remote_head is not None and not self._is_ancestor(remote_head, operation.published_head, request):
             self._conflict(request, "remote Change branch cannot fast-forward to the reviewed head")
         attempt.observed_remote_head = remote_head

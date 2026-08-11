@@ -207,6 +207,38 @@ def test_fast_forwards_observed_ancestor_when_durable_head_is_missing(tmp_path: 
     assert _head(remote, "refs/heads/owlbear/change/recovered-change") == second_reviewed
 
 
+def test_recovers_unrecorded_remote_advance_between_durable_and_reviewed_heads(tmp_path: Path) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, first_reviewed = _reviewed_change(manager, "intermediate-change")
+    _git(repository, "push", "origin", f"{first_reviewed}:refs/heads/owlbear/change/intermediate-change")
+    (worktree / "product.txt").write_text("second reviewed\n", encoding="utf-8")
+    _git(worktree, "add", "product.txt")
+    _git(worktree, "commit", "-m", "second reviewed change")
+    second_reviewed = _head(worktree)
+    manager.record_reviewed("intermediate-change", second_reviewed)
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+
+    receipt = publisher.publish(
+        PublishChangeBranch(
+            change_id="intermediate-change",
+            expected_remote_head=initial,
+            expected_published_head=second_reviewed,
+            operation_id="unrecorded-intermediate-advance",
+        )
+    )
+
+    assert receipt.published_head == second_reviewed
+    assert receipt.expected_remote_head == initial
+    assert _head(remote, "refs/heads/owlbear/change/intermediate-change") == second_reviewed
+
+
 def test_rejects_reviewed_head_drift_before_remote_publication(tmp_path: Path) -> None:
     repository, remote, _initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)
