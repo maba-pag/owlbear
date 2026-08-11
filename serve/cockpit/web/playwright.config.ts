@@ -11,6 +11,11 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: [
+        '**/memory-purge-assembled.spec.ts',
+        '**/memory-lifecycle-assembled.spec.ts',
+        '**/work-portfolio.spec.ts',
+      ],
       use: { ...devices['Desktop Chrome'] },
     },
     {

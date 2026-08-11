@@ -18,7 +18,7 @@
     "test:e2e:work": "cross-env WORK_PORTFOLIO_E2E=1 playwright test --project=work-portfolio",
     "test:e2e:memory-purge": "cross-env PURGE_E2E=1 playwright test --project=memory-purge-assembled",
     "test:e2e:memory-lifecycle": "cross-env LIFECYCLE_E2E=1 playwright test --project=memory-lifecycle-assembled",
-    "test:e2e:all": "playwright test"
+    "test:e2e:all": "node scripts/run-e2e-all.mjs"
   },
   "dependencies": {
     "@porsche-design-system/components-js": "^4.5.0",

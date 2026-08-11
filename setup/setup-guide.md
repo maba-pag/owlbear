@@ -13,7 +13,7 @@ Before running setup, ensure the following are installed on your machine:
 | VS Code | IDE | [code.visualstudio.com](https://code.visualstudio.com/) |
 | GitHub Copilot extension | Chat and agents | VS Code Extensions marketplace |
 | Git | Clone and version control | [git-scm.com](https://git-scm.com/) |
-| Chromium | Browser MCP runtime | Run `playwright install chromium` after setup |
+| Chromium | Browser MCP and Cockpit browser tests | Run `npx playwright install chromium` after installing npm dependencies |
 
 > **Windows limitation:** owlbear and your project must be on the **same drive**.
 > `init.py` uses relative paths, and `os.path.relpath` raises `ValueError` when
@@ -21,8 +21,8 @@ Before running setup, ensure the following are installed on your machine:
 
 <!-- separate blockquotes -->
 
-> **macOS and Linux:** No additional prerequisites — Python, uv, VS Code, and Git
-> work natively on all platforms.
+> **macOS and Linux:** Python, uv, VS Code, and Git work natively on both platforms. Browser-backed
+> commands still require the separate Chromium download described above.
 
 ---
 
@@ -52,6 +52,25 @@ code .
 Setup defaults to remote `origin` and target branch `main`. When `origin` has a GitHub HTTPS or SSH
 URL, setup infers the `owner/name` identity and `--github-repository` may be omitted. Use `--remote`
 and `--target-branch` for other publication policy. These values do not require a local target branch.
+
+## Browser-backed tests
+
+After setup, install the Cockpit web dependencies and its Playwright Chromium binary before running
+browser-backed tests:
+
+```shell
+cd my-project
+npm ci --prefix serve/cockpit/web
+cd serve/cockpit/web
+npx playwright install chromium
+cd ../../..
+uv run test-e2e
+```
+
+Expected outcome: the maintained Cockpit smoke tests start without an executable-missing error.
+The npm and uv caches do not contain Playwright browser binaries. If the runner reports that a
+Chromium executable does not exist, run `npx playwright install chromium` again from
+`serve/cockpit/web`.
 
 ---
 
