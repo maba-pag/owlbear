@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event
 from typing import Any
 from unittest.mock import patch
 
@@ -13,6 +15,7 @@ from owlbear_delivery import (
     ChangeWorkspaceManager,
     CoordinationConflictError,
     PortfolioCoordinator,
+    PublicationLease,
     PublicationProviderError,
     PublicationProviderFailureCode,
     PublishChangeBranch,
@@ -143,7 +146,7 @@ def test_rejects_divergent_remote_change_branch_without_rewriting_it(tmp_path: P
 
     assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
     assert _head(remote, "refs/heads/owlbear/change/diverged-change") == divergent
-    assert coordinator.show("diverged-change").publication_operation_id is None
+    assert coordinator.show("diverged-change").publication_lease is None
 
 
 def test_exact_lease_rejects_remote_advance_between_observation_and_push(tmp_path: Path) -> None:
@@ -162,9 +165,9 @@ def test_exact_lease_rejects_remote_advance_between_observation_and_push(tmp_pat
         repository, "commit-tree", _git(repository, "mktree").stdout.strip(), "-m", "competing"
     ).stdout.strip()
 
-    def advance_then_push(operation: Any, request: PublishChangeBranch) -> None:
+    def advance_then_push(operation: Any, request: PublishChangeBranch, attempt: Any) -> None:
         _git(repository, "push", "origin", f"{competing}:refs/heads/{operation.branch}")
-        original_push(operation, request)
+        original_push(operation, request, attempt)
 
     with (
         patch.object(publisher, "_push_exact_head", side_effect=advance_then_push),
@@ -196,9 +199,9 @@ def test_exact_empty_lease_rejects_remote_creation_between_observation_and_push(
         repository, "commit-tree", _git(repository, "mktree").stdout.strip(), "-m", "competing"
     ).stdout.strip()
 
-    def create_then_push(operation: Any, request: PublishChangeBranch) -> None:
+    def create_then_push(operation: Any, request: PublishChangeBranch, attempt: Any) -> None:
         _git(repository, "push", "origin", f"{competing}:refs/heads/{operation.branch}")
-        original_push(operation, request)
+        original_push(operation, request, attempt)
 
     with (
         patch.object(publisher, "_push_exact_head", side_effect=create_then_push),
@@ -256,9 +259,9 @@ def test_exact_lease_rejects_remote_deletion_between_observation_and_push(tmp_pa
     )
     original_push = publisher._push_exact_head
 
-    def delete_then_push(operation: Any, request: PublishChangeBranch) -> None:
+    def delete_then_push(operation: Any, request: PublishChangeBranch, attempt: Any) -> None:
         _git(repository, "push", "origin", f":refs/heads/{operation.branch}")
-        original_push(operation, request)
+        original_push(operation, request, attempt)
 
     with (
         patch.object(publisher, "_push_exact_head", side_effect=delete_then_push),
@@ -278,7 +281,7 @@ def test_exact_lease_rejects_remote_deletion_between_observation_and_push(tmp_pa
     assert _head(repository, f"refs/heads/{branch}") == reviewed
 
 
-def test_replay_returns_original_receipt_before_target_worktree_or_writer_checks(tmp_path: Path) -> None:
+def test_replay_does_not_bypass_active_writer_ownership(tmp_path: Path) -> None:
     repository, _remote, initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)
     worktree, reviewed = _reviewed_change(manager, "replay-change")
@@ -294,7 +297,7 @@ def test_replay_returns_original_receipt_before_target_worktree_or_writer_checks
         expected_remote_head=None,
         operation_id="operation-replay",
     )
-    receipt = publisher.publish(request)
+    publisher.publish(request)
     advanced_target = _git(
         repository,
         "commit-tree",
@@ -308,10 +311,11 @@ def test_replay_returns_original_receipt_before_target_worktree_or_writer_checks
     (worktree / "dirty.txt").write_text("dirty\n", encoding="utf-8")
     coordinator.acquire("replay-change", _writer("replay-change"))
 
-    replayed = publisher.publish(request)
+    with pytest.raises(PublicationProviderError) as exc_info:
+        publisher.publish(request)
 
-    assert replayed == receipt
-    assert replayed.published_head == reviewed
+    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
+    assert _head(repository, "refs/heads/owlbear/change/replay-change") == reviewed
 
 
 def test_replay_rejects_receipt_after_reviewed_boundary_advances(tmp_path: Path) -> None:
@@ -390,10 +394,10 @@ def test_first_attempt_fetches_target_once_and_excludes_writer_until_push_comple
         fetch_count += 1
         return original_fetch(request)
 
-    def assert_reserved_then_push(operation: Any, request: PublishChangeBranch) -> None:
+    def assert_reserved_then_push(operation: Any, request: PublishChangeBranch, attempt: Any) -> None:
         with pytest.raises(CoordinationConflictError, match="active writer"):
             coordinator.acquire("reserved-change", _writer("reserved-change"))
-        original_push(operation, request)
+        original_push(operation, request, attempt)
 
     with (
         patch.object(publisher, "_fetch_target", side_effect=counted_fetch),
@@ -408,7 +412,58 @@ def test_first_attempt_fetches_target_once_and_excludes_writer_until_push_comple
         )
 
     assert fetch_count == 1
-    assert coordinator.show("reserved-change").publication_operation_id is None
+    assert coordinator.show("reserved-change").publication_lease is None
+
+
+def test_same_operation_concurrent_publisher_conflicts_without_releasing_owner(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, reviewed = _reviewed_change(manager, "concurrent-change")
+    owner = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+    contender = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+    request = PublishChangeBranch(
+        change_id="concurrent-change",
+        expected_remote_head=None,
+        operation_id="operation-concurrent",
+    )
+    push_entered = Event()
+    allow_push = Event()
+    original_push = owner._push_exact_head
+
+    def paused_push(operation: Any, publish_request: PublishChangeBranch, attempt: Any) -> None:
+        push_entered.set()
+        assert allow_push.wait(timeout=5)
+        original_push(operation, publish_request, attempt)
+
+    with patch.object(owner, "_push_exact_head", side_effect=paused_push), ThreadPoolExecutor() as executor:
+        owner_result = executor.submit(owner.publish, request)
+        assert push_entered.wait(timeout=5)
+        retained = coordinator.show("concurrent-change").publication_lease
+        assert retained is not None
+
+        with pytest.raises(PublicationProviderError) as exc_info:
+            contender.publish(request)
+
+        assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
+        assert exc_info.value.retry_safe is True
+        assert coordinator.show("concurrent-change").publication_lease == retained
+        allow_push.set()
+        receipt = owner_result.result(timeout=5)
+
+    assert receipt.published_head == reviewed
+    assert coordinator.show("concurrent-change").publication_lease is None
 
 
 def test_pre_push_timeout_releases_reservation_for_new_operation(tmp_path: Path) -> None:
@@ -433,13 +488,51 @@ def test_pre_push_timeout_releases_reservation_for_new_operation(tmp_path: Path)
 
     assert exc_info.value.code is PublicationProviderFailureCode.TIMEOUT
     assert exc_info.value.retry_safe is True
-    assert coordinator.show("timeout-change").publication_operation_id is None
-    assert coordinator.reserve_publication("timeout-change", "operation-after-timeout").publication_operation_id == (
-        "operation-after-timeout"
+    assert coordinator.show("timeout-change").publication_lease is None
+    with coordinator.publication_lock("timeout-change") as lock:
+        assert (
+            coordinator.reserve_publication(
+                "timeout-change",
+                PublicationLease(
+                    operation_id="operation-after-timeout",
+                    owner_id="owner-after-timeout",
+                    expires_at="2026-08-02T00:10:00Z",
+                ),
+                lock,
+                now="2026-08-02T00:00:00Z",
+            ).publication_lease
+            is not None
+        )
+
+
+def test_unexpected_pre_write_failure_releases_lease(tmp_path: Path) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, _reviewed = _reviewed_change(manager, "unexpected-change")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
     )
 
+    with (
+        patch.object(publisher, "_fetch_target", side_effect=RuntimeError("unexpected")),
+        pytest.raises(RuntimeError, match="unexpected"),
+    ):
+        publisher.publish(
+            PublishChangeBranch(
+                change_id="unexpected-change",
+                expected_remote_head=None,
+                operation_id="operation-unexpected",
+            )
+        )
 
-def test_failed_push_with_unchanged_remote_is_retryable_and_retains_operation(tmp_path: Path) -> None:
+    assert coordinator.show("unexpected-change").publication_lease is None
+
+
+def test_failed_push_with_unchanged_remote_is_retryable_and_releases_lease(tmp_path: Path) -> None:
     repository, _remote, _initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)
     _worktree, _reviewed = _reviewed_change(manager, "failed-push-change")
@@ -471,7 +564,7 @@ def test_failed_push_with_unchanged_remote_is_retryable_and_retains_operation(tm
 
     assert exc_info.value.code is PublicationProviderFailureCode.UNAVAILABLE
     assert exc_info.value.retry_safe is True
-    assert coordinator.show("failed-push-change").publication_operation_id == "operation-failed-push"
+    assert coordinator.show("failed-push-change").publication_lease is None
 
 
 def test_authentication_failed_push_is_terminal_and_releases_reservation(tmp_path: Path) -> None:
@@ -502,7 +595,7 @@ def test_authentication_failed_push_is_terminal_and_releases_reservation(tmp_pat
 
     assert exc_info.value.code is PublicationProviderFailureCode.AUTHENTICATION_REQUIRED
     assert exc_info.value.retry_safe is False
-    assert coordinator.show("auth-change").publication_operation_id is None
+    assert coordinator.show("auth-change").publication_lease is None
 
 
 def test_push_timeout_after_remote_applies_returns_receipt_and_releases_reservation(tmp_path: Path) -> None:
@@ -536,7 +629,7 @@ def test_push_timeout_after_remote_applies_returns_receipt_and_releases_reservat
 
     assert receipt.published_head == reviewed
     assert _head(remote, "refs/heads/owlbear/change/lost-response-change") == reviewed
-    assert coordinator.show("lost-response-change").publication_operation_id is None
+    assert coordinator.show("lost-response-change").publication_lease is None
 
 
 def test_rejects_dirty_change_worktree_before_creating_remote_branch(tmp_path: Path) -> None:

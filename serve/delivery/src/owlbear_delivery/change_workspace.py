@@ -7,6 +7,8 @@ import json
 import os
 import re
 import subprocess
+from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Never
 
@@ -30,10 +32,12 @@ from owlbear_delivery.runtime_transaction import (
 from owlbear_delivery.storage_io import locked_roots
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from contextlib import AbstractContextManager
 
 _TREE_ENTRY_PARTS = 3
 _OCC_RETRY_LIMIT = 8
+_PUBLICATION_LEASE_MAX_SECONDS = 600
 _PUBLICATION_OPERATION_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 
 
@@ -58,6 +62,38 @@ class ChangeWriter(WriterIdentity):
     kind: Literal["plan", "build", "repair"]
 
 
+class PublicationLease(_WorkspaceModel):
+    """Expiring custody for one exact Change publication attempt."""
+
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    owner_id: str = Field(min_length=1)
+    expires_at: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_expiry(self) -> PublicationLease:
+        _publication_timestamp(self.expires_at)
+        return self
+
+
+class PublicationLock:
+    """Active proof that one coordinator holds one Change publication lock."""
+
+    __slots__ = ("_active", "_coordinator", "change_id")
+
+    def __init__(self, coordinator: PortfolioCoordinator, change_id: str) -> None:
+        self._coordinator = coordinator
+        self.change_id = change_id
+        self._active = True
+
+    def close(self) -> None:
+        """Invalidate this guard after its descriptor lock is released."""
+        self._active = False
+
+    def owns(self, coordinator: PortfolioCoordinator, change_id: str) -> bool:
+        """Return whether this guard actively owns the named coordinator lock."""
+        return self._active and self._coordinator is coordinator and self.change_id == change_id
+
+
 class ChangeCoordination(_WorkspaceModel):
     """One OCC-guarded writable workspace record per change."""
 
@@ -69,10 +105,24 @@ class ChangeCoordination(_WorkspaceModel):
     target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     writer: ChangeWriter | None = None
-    publication_operation_id: str | None = Field(
-        default=None,
-        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
-    )
+    publication_lease: PublicationLease | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _discard_retired_publication_reservation(cls, value: object) -> object:
+        if not isinstance(value, dict) or "publication_operation_id" not in value:
+            return value
+        migrated: dict[object, object] = dict(value)
+        migrated.pop("publication_operation_id", None)
+        migrated.pop("publication_expires_at", None)
+        return migrated
+
+    @property
+    def publication_expiry(self) -> datetime | None:
+        """Return the normalized lease expiry when publication owns this Change."""
+        if self.publication_lease is None:
+            return None
+        return _publication_timestamp(self.publication_lease.expires_at)
 
 
 class WorkspaceRecoverySnapshot(_WorkspaceModel):
@@ -244,6 +294,18 @@ class PortfolioCoordinator:
         lock_root = self._state_root / "claims" / "acquisition-lock"
         return locked_roots((lock_root,))
 
+    @contextmanager
+    def publication_lock(self, change_id: str, *, blocking: bool = True) -> Iterator[PublicationLock]:
+        """Serialize bounded publication attempts for one Change across processes."""
+        self._coordination_path(change_id)
+        lock_root = self._state_root / "claims" / "publication-locks" / change_id
+        with locked_roots((lock_root,), blocking=blocking):
+            lock = PublicationLock(self, change_id)
+            try:
+                yield lock
+            finally:
+                lock.close()
+
     def writer_capacity_available(self) -> bool:
         """Return whether another Build writer can be reserved."""
         ledger = CapacityLedger.model_validate_json(self._ledger_path.read_bytes())
@@ -275,20 +337,31 @@ class PortfolioCoordinator:
 
     def acquire(self, change_id: str, writer: ChangeWriter) -> ChangeCoordination:
         """Atomically bind one writer and one global capacity slot."""
+        coordination = self.show(change_id)
+        publication_expiry = coordination.publication_expiry
+        if publication_expiry is not None and publication_expiry > datetime.now(UTC):
+            _coordination_conflict("change already has an active writer")
+        with self.publication_lock(change_id):
+            return self._acquire(change_id, writer)
+
+    def _acquire(self, change_id: str, writer: ChangeWriter) -> ChangeCoordination:
         coordination_path = self._coordination_path(change_id)
         coordination_bytes = coordination_path.read_bytes()
         coordination = ChangeCoordination.model_validate_json(coordination_bytes)
         ledger_bytes = self._ledger_path.read_bytes()
         ledger = CapacityLedger.model_validate_json(ledger_bytes)
-        if (
-            coordination.writer is not None
-            or coordination.publication_operation_id is not None
-            or change_id in ledger.change_ids
-        ):
+        publication_expiry = coordination.publication_expiry
+        publication_active = publication_expiry is not None and publication_expiry > datetime.now(UTC)
+        if coordination.writer is not None or publication_active or change_id in ledger.change_ids:
             _coordination_conflict("change already has an active writer")
         if len(ledger.change_ids) >= ledger.capacity:
             _coordination_conflict("global writer capacity is exhausted")
-        claimed = coordination.model_copy(update={"writer": writer})
+        claimed = coordination.model_copy(
+            update={
+                "writer": writer,
+                "publication_lease": None,
+            }
+        )
         occupied = ledger.model_copy(update={"change_ids": tuple(sorted((*ledger.change_ids, change_id)))})
         participants = (
             _replacement(self._state_root, coordination_path, coordination_bytes, claimed),
@@ -330,15 +403,19 @@ class PortfolioCoordinator:
 
     def update(self, coordination: ChangeCoordination) -> ChangeCoordination:
         """OCC-replace one registered per-change record without touching capacity."""
+        existing = self.show(coordination.change_id)
+        if existing.publication_lease is not None and existing != coordination:
+            _coordination_conflict("workspace update cannot change a reserved publication boundary")
+        with self.publication_lock(coordination.change_id):
+            return self._update(coordination)
+
+    def _update(self, coordination: ChangeCoordination) -> ChangeCoordination:
         path = self._coordination_path(coordination.change_id)
         previous = path.read_bytes()
         existing = ChangeCoordination.model_validate_json(previous)
-        if (
-            existing.writer != coordination.writer
-            or existing.publication_operation_id != coordination.publication_operation_id
-        ):
+        if existing.writer != coordination.writer or existing.publication_lease != coordination.publication_lease:
             _coordination_conflict("workspace update cannot change ownership")
-        if existing.publication_operation_id is not None and existing != coordination:
+        if existing.publication_lease is not None and existing != coordination:
             _coordination_conflict("workspace update cannot change a reserved publication boundary")
         participant = _replacement(self._state_root, path, previous, coordination)
         try:
@@ -348,18 +425,35 @@ class PortfolioCoordinator:
             raise CoordinationConflictError(msg) from exc
         return coordination
 
-    def reserve_publication(self, change_id: str, operation_id: str) -> ChangeCoordination:
+    def reserve_publication(
+        self,
+        change_id: str,
+        lease: PublicationLease,
+        lock: PublicationLock,
+        *,
+        now: str,
+    ) -> ChangeCoordination:
         """Reserve one idle Change for an exact replayable publication operation."""
-        self._validate_publication_operation_id(operation_id)
+        self._require_publication_lock(lock, change_id)
+        now_value = self._publication_timestamp(now)
+        expires_value = self._publication_timestamp(lease.expires_at)
+        if expires_value <= now_value:
+            msg = "publication reservation expiry must be in the future"
+            raise ValueError(msg)
+        if (expires_value - now_value).total_seconds() > _PUBLICATION_LEASE_MAX_SECONDS:
+            msg = "publication reservation exceeds the maximum duration"
+            raise ValueError(msg)
         path = self._coordination_path(change_id)
         previous = path.read_bytes()
         coordination = ChangeCoordination.model_validate_json(previous)
-        if coordination.publication_operation_id == operation_id:
-            return coordination
-        if coordination.writer is not None or coordination.publication_operation_id is not None:
+        existing_lease = coordination.publication_lease
+        existing_expiry = coordination.publication_expiry
+        same_owner = existing_lease is not None and existing_lease.owner_id == lease.owner_id
+        expired = existing_expiry is not None and existing_expiry <= now_value
+        if coordination.writer is not None or (existing_lease is not None and not same_owner and not expired):
             _coordination_conflict("change already has active ownership")
-        reserved = coordination.model_copy(update={"publication_operation_id": operation_id})
-        operation_digest = hashlib.sha256(operation_id.encode()).hexdigest()
+        reserved = coordination.model_copy(update={"publication_lease": lease})
+        operation_digest = hashlib.sha256(lease.operation_id.encode()).hexdigest()
         try:
             self._commit(
                 f"reserve-publication-{change_id}-{operation_digest}",
@@ -370,18 +464,27 @@ class PortfolioCoordinator:
             raise CoordinationConflictError(msg) from exc
         return reserved
 
-    def release_publication(self, change_id: str, operation_id: str) -> ChangeCoordination:
+    def release_publication(
+        self,
+        change_id: str,
+        operation_id: str,
+        owner_id: str,
+        lock: PublicationLock,
+    ) -> ChangeCoordination:
         """Release one exact publication reservation without changing reviewed state."""
+        self._require_publication_lock(lock, change_id)
         self._validate_publication_operation_id(operation_id)
+        if not owner_id:
+            msg = "publication owner identity is invalid"
+            raise ValueError(msg)
         for _attempt in range(_OCC_RETRY_LIMIT):
             path = self._coordination_path(change_id)
             previous = path.read_bytes()
             coordination = ChangeCoordination.model_validate_json(previous)
-            if coordination.publication_operation_id is None:
-                return coordination
-            if coordination.publication_operation_id != operation_id:
+            lease = coordination.publication_lease
+            if lease is None or lease.operation_id != operation_id or lease.owner_id != owner_id:
                 _coordination_conflict("publication operation does not own the change workspace")
-            released = coordination.model_copy(update={"publication_operation_id": None})
+            released = coordination.model_copy(update={"publication_lease": None})
             operation_digest = hashlib.sha256(operation_id.encode()).hexdigest()
             try:
                 self._commit(
@@ -398,6 +501,15 @@ class PortfolioCoordinator:
         if _PUBLICATION_OPERATION_PATTERN.fullmatch(operation_id) is None:
             msg = "publication operation identity is invalid"
             raise ValueError(msg)
+
+    def _require_publication_lock(self, lock: PublicationLock, change_id: str) -> None:
+        if not lock.owns(self, change_id):
+            msg = "active publication lock does not own the Change"
+            raise ValueError(msg)
+
+    @staticmethod
+    def _publication_timestamp(value: str) -> datetime:
+        return _publication_timestamp(value)
 
     def publish_finding(self, finding: IntegrationFinding) -> IntegrationFinding:
         """Publish one immutable integration finding inside target evidence."""
@@ -1590,6 +1702,14 @@ def _model_content(model: BaseModel) -> bytes:
 
 def _coordination_conflict(detail: str) -> Never:
     raise CoordinationConflictError(detail)
+
+
+def _publication_timestamp(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None:
+        msg = "publication reservation timestamp requires a timezone"
+        raise ValueError(msg)
+    return parsed.astimezone(UTC)
 
 
 def _workspace_failure(detail: str) -> Never:

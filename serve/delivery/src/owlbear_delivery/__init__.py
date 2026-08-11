@@ -21,6 +21,7 @@ from owlbear_delivery.change_workspace import (
     IntegrationRepairCandidate,
     IntegrationResult,
     PortfolioCoordinator,
+    PublicationLease,
     WorkspaceRecoverySnapshot,
     WriterIdentity,
 )
@@ -414,6 +415,7 @@ __all__ = [
     "PortfolioReadView",
     "PortfolioWorkReference",
     "PortfolioWorkScope",
+    "PublicationLease",
     "PublicationProvider",
     "PublicationProviderError",
     "PublicationProviderFailureCode",

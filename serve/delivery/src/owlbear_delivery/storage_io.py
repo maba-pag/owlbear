@@ -22,7 +22,7 @@ _DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 _LOCK_FLAGS = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW
 
 
-def _open_lock(root_fd: int) -> int:
+def _open_lock(root_fd: int, *, blocking: bool) -> int:
     try:
         lock_fd = os.open(".storage.lock", _LOCK_FLAGS, 0o600, dir_fd=root_fd)
     except FileNotFoundError:
@@ -30,12 +30,17 @@ def _open_lock(root_fd: int) -> int:
     if not stat.S_ISREG(os.fstat(lock_fd).st_mode):
         msg = "storage lock must be a regular file"
         raise ValueError(msg)
-    fcntl.flock(lock_fd, fcntl.LOCK_EX)
+    flags = fcntl.LOCK_EX if blocking else fcntl.LOCK_EX | fcntl.LOCK_NB
+    try:
+        fcntl.flock(lock_fd, flags)
+    except BaseException:
+        os.close(lock_fd)
+        raise
     return lock_fd
 
 
 @contextlib.contextmanager
-def locked_roots(roots: Sequence[Path]) -> Iterator[None]:
+def locked_roots(roots: Sequence[Path], *, blocking: bool = True) -> Iterator[None]:
     """Hold exclusive descriptor-backed locks for canonical storage roots."""
     descriptors: list[tuple[int, int]] = []
     resolved_roots: dict[Path, Path] = {}
@@ -49,7 +54,7 @@ def locked_roots(roots: Sequence[Path]) -> Iterator[None]:
         for canonical_root in sorted(resolved_roots):
             root_fd = os.open(canonical_root, _DIRECTORY_FLAGS)
             try:
-                lock_fd = _open_lock(root_fd)
+                lock_fd = _open_lock(root_fd, blocking=blocking)
             except Exception:
                 os.close(root_fd)
                 raise

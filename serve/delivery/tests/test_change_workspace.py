@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import subprocess
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,6 +15,7 @@ from owlbear_delivery.change_workspace import (
     ChangeWriter,
     CoordinationConflictError,
     PortfolioCoordinator,
+    PublicationLease,
     WriterIdentity,
 )
 from owlbear_delivery.delivery_runtime import (
@@ -101,26 +104,138 @@ def test_portfolio_coordinates_independent_changes_but_rejects_second_writer(tmp
 
 def test_publication_reservation_excludes_writers_and_boundary_updates(tmp_path: Path) -> None:
     coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
-    coordination = coordinator.register(_coordination(tmp_path, "publish-change"))
+    coordinator.register(_coordination(tmp_path, "publish-change"))
+    now = datetime.now(UTC)
 
-    reserved = coordinator.reserve_publication("publish-change", "operation-1")
-    replayed = coordinator.reserve_publication("publish-change", "operation-1")
+    with coordinator.publication_lock("publish-change") as lock:
+        reserved = coordinator.reserve_publication(
+            "publish-change",
+            PublicationLease(
+                operation_id="operation-1",
+                owner_id="owner-1",
+                expires_at=(now + timedelta(minutes=10)).isoformat(),
+            ),
+            lock,
+            now=now.isoformat(),
+        )
 
-    assert reserved.publication_operation_id == "operation-1"
-    assert replayed == reserved
+    assert reserved.publication_lease is not None
+    assert reserved.publication_lease.operation_id == "operation-1"
     with pytest.raises(CoordinationConflictError, match="active writer"):
         coordinator.acquire(
             "publish-change",
             ChangeWriter(**_identity("publish-change").model_dump(), job_id=1, kind="build"),
         )
     with pytest.raises(CoordinationConflictError, match="reserved publication boundary"):
-        coordinator.update(
-            coordination.model_copy(update={"target_head": "b" * 40, "publication_operation_id": "operation-1"})
+        coordinator.update(reserved.model_copy(update={"target_head": "b" * 40}))
+    with coordinator.publication_lock("publish-change") as lock:
+        with pytest.raises(CoordinationConflictError, match="does not own"):
+            coordinator.release_publication("publish-change", "operation-1", "owner-2", lock)
+        released = coordinator.release_publication("publish-change", "operation-1", "owner-1", lock)
+
+    assert released.publication_lease is None
+    with pytest.raises(ValueError, match="active publication lock"):
+        coordinator.release_publication("publish-change", "operation-1", "owner-1", lock)
+
+
+def test_publication_lease_rejects_concurrent_owner_and_allows_expired_takeover(tmp_path: Path) -> None:
+    coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
+    coordinator.register(_coordination(tmp_path, "lease-change"))
+    with coordinator.publication_lock("lease-change") as lock:
+        coordinator.reserve_publication(
+            "lease-change",
+            PublicationLease(
+                operation_id="operation-1",
+                owner_id="owner-1",
+                expires_at="2026-08-02T00:10:00Z",
+            ),
+            lock,
+            now="2026-08-02T00:00:00Z",
+        )
+        with pytest.raises(CoordinationConflictError, match="active ownership"):
+            coordinator.reserve_publication(
+                "lease-change",
+                PublicationLease(
+                    operation_id="operation-1",
+                    owner_id="owner-2",
+                    expires_at="2026-08-02T00:15:00Z",
+                ),
+                lock,
+                now="2026-08-02T00:05:00Z",
+            )
+        recovered = coordinator.reserve_publication(
+            "lease-change",
+            PublicationLease(
+                operation_id="operation-2",
+                owner_id="owner-2",
+                expires_at="2026-08-02T00:21:00Z",
+            ),
+            lock,
+            now="2026-08-02T00:11:00Z",
         )
 
-    released = coordinator.release_publication("publish-change", "operation-1")
+    assert recovered.publication_lease is not None
+    assert recovered.publication_lease.operation_id == "operation-2"
+    assert recovered.publication_lease.owner_id == "owner-2"
+    with (
+        coordinator.publication_lock("lease-change") as lock,
+        pytest.raises(CoordinationConflictError, match="does not own"),
+    ):
+        coordinator.release_publication("lease-change", "operation-1", "owner-1", lock)
 
-    assert released.publication_operation_id is None
+
+def test_writer_acquisition_recovers_expired_publication_lease(tmp_path: Path) -> None:
+    coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
+    coordinator.register(_coordination(tmp_path, "expired-change"))
+    with coordinator.publication_lock("expired-change") as lock:
+        coordinator.reserve_publication(
+            "expired-change",
+            PublicationLease(
+                operation_id="operation-expired",
+                owner_id="owner-expired",
+                expires_at="2020-08-02T00:10:00Z",
+            ),
+            lock,
+            now="2020-08-02T00:00:00Z",
+        )
+
+    acquired = coordinator.acquire(
+        "expired-change",
+        ChangeWriter(**_identity("expired-change").model_dump(), job_id=1, kind="build"),
+    )
+
+    assert acquired.writer is not None
+    assert acquired.publication_lease is None
+
+
+def test_retired_scalar_publication_reservation_loads_as_abandoned(tmp_path: Path) -> None:
+    payload = _coordination(tmp_path, "retired-change").model_dump(mode="json")
+    payload["publication_operation_id"] = "operation-retired"
+    payload["publication_expires_at"] = "2099-08-02T00:10:00Z"
+
+    coordination = ChangeCoordination.model_validate_json(json.dumps(payload))
+
+    assert coordination.publication_lease is None
+
+
+def test_publication_lease_duration_is_bounded(tmp_path: Path) -> None:
+    coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
+    coordinator.register(_coordination(tmp_path, "bounded-change"))
+
+    with (
+        coordinator.publication_lock("bounded-change") as lock,
+        pytest.raises(ValueError, match="maximum duration"),
+    ):
+        coordinator.reserve_publication(
+            "bounded-change",
+            PublicationLease(
+                operation_id="operation-bounded",
+                owner_id="owner-bounded",
+                expires_at="2026-08-02T00:10:01Z",
+            ),
+            lock,
+            now="2026-08-02T00:00:00Z",
+        )
 
 
 def _git(repository: Path, *arguments: str) -> str:
