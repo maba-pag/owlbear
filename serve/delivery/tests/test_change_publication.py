@@ -404,7 +404,7 @@ def test_remote_change_branch_deletion_during_fetch_is_retryable_conflict(tmp_pa
     assert coordinator.show("deleted-during-fetch").publication_lease is None
 
 
-def test_exact_lease_rejects_remote_advance_between_observation_and_push(tmp_path: Path) -> None:
+def test_fast_forward_push_rejects_divergent_remote_advance(tmp_path: Path) -> None:
     repository, remote, _initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)
     _worktree, reviewed = _reviewed_change(manager, "raced-change")
@@ -439,7 +439,7 @@ def test_exact_lease_rejects_remote_advance_between_observation_and_push(tmp_pat
     assert coordinator.show("raced-change").publication_lease is None
 
 
-def test_exact_empty_lease_rejects_remote_creation_between_observation_and_push(tmp_path: Path) -> None:
+def test_fast_forward_push_rejects_divergent_remote_creation(tmp_path: Path) -> None:
     repository, remote, _initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)
     _worktree, reviewed = _reviewed_change(manager, "created-change")
@@ -500,7 +500,44 @@ def test_fast_forwards_existing_remote_change_branch_from_exact_expected_head(tm
     assert _head(remote, "refs/heads/main") == initial
 
 
-def test_exact_lease_rejects_remote_deletion_between_observation_and_push(tmp_path: Path) -> None:
+def test_fast_forward_push_admits_concurrent_ancestor_advance(tmp_path: Path) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, intermediate = _reviewed_change(manager, "ancestor-race-change")
+    (worktree / "product.txt").write_text("reviewed successor\n", encoding="utf-8")
+    _git(worktree, "add", "product.txt")
+    _git(worktree, "commit", "-m", "reviewed successor")
+    reviewed = _head(worktree)
+    manager.record_reviewed("ancestor-race-change", reviewed)
+    branch = "owlbear/change/ancestor-race-change"
+    _git(repository, "push", "origin", f"{initial}:refs/heads/{branch}")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+    original_push = publisher._push_exact_head
+
+    def advance_then_push(operation: Any, request: PublishChangeBranch, attempt: Any) -> None:
+        _git(repository, "push", "origin", f"{intermediate}:refs/heads/{operation.branch}")
+        original_push(operation, request, attempt)
+
+    with patch.object(publisher, "_push_exact_head", side_effect=advance_then_push):
+        receipt = publisher.publish(
+            PublishChangeBranch(
+                change_id="ancestor-race-change",
+                expected_remote_head=initial,
+                operation_id="operation-ancestor-race",
+            )
+        )
+
+    assert receipt.published_head == reviewed
+    assert _head(remote, f"refs/heads/{branch}") == reviewed
+
+
+def test_fast_forward_push_recreates_deleted_remote_at_exact_reviewed_head(tmp_path: Path) -> None:
     repository, remote, initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)
     _worktree, reviewed = _reviewed_change(manager, "deleted-change")
@@ -519,11 +556,8 @@ def test_exact_lease_rejects_remote_deletion_between_observation_and_push(tmp_pa
         _git(repository, "push", "origin", f":refs/heads/{operation.branch}")
         original_push(operation, request, attempt)
 
-    with (
-        patch.object(publisher, "_push_exact_head", side_effect=delete_then_push),
-        pytest.raises(PublicationProviderError) as exc_info,
-    ):
-        publisher.publish(
+    with patch.object(publisher, "_push_exact_head", side_effect=delete_then_push):
+        receipt = publisher.publish(
             PublishChangeBranch(
                 change_id="deleted-change",
                 expected_remote_head=initial,
@@ -531,9 +565,8 @@ def test_exact_lease_rejects_remote_deletion_between_observation_and_push(tmp_pa
             )
         )
 
-    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
-    assert exc_info.value.retry_safe is True
-    assert _git(remote, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}", check=False).returncode == 1
+    assert receipt.published_head == reviewed
+    assert _head(remote, f"refs/heads/{branch}") == reviewed
     assert _head(repository, f"refs/heads/{branch}") == reviewed
 
 

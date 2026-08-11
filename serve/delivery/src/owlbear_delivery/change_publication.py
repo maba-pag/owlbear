@@ -323,12 +323,10 @@ class ChangeBranchPublisher:
         attempt: _PublicationAttempt,
     ) -> None:
         destination = f"refs/heads/{operation.branch}"
-        lease_head = attempt.observed_remote_head or ""
         try:
             result = self._run_git(
                 "push",
                 "--porcelain",
-                f"--force-with-lease={destination}:{lease_head}",
                 self._remote,
                 f"{operation.published_head}:{destination}",
             )
