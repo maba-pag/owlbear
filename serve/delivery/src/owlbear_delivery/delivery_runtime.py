@@ -2120,7 +2120,7 @@ def parse_delivery_frontier(
     frontier = DeliveryFrontier.model_validate_json(
         json.dumps(payload, sort_keys=True, separators=(",", ":")),
     )
-    if schema_version != _FRONTIER_SCHEMA_VERSION:
+    if schema_version in {1, 2}:
         frontier = _backfill_checkpoint_state(
             frontier,
             migration_reviewed_head,

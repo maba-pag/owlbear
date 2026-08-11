@@ -609,6 +609,39 @@ def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: 
     assert json.loads(path.read_bytes()) == canonical
 
 
+def test_runtime_migrates_schema_six_without_rewriting_finalization_checkpoint(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    exact_head = "3" * 40
+    runtime.finalize_change(
+        _finalization_request(exact_head),
+        datetime(2026, 8, 11, 14, tzinfo=UTC),
+    )
+    path = tmp_path / "changes/delivery-runtime/frontier.json"
+    payload = json.loads(runtime.frontier_bytes())
+    payload["schema_version"] = 6
+    payload.pop("merged_pull_request_latch")
+    expected_checkpoint = payload["pending_checkpoint"]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    migrated = DeliveryRuntime(
+        tmp_path,
+        _contract(),
+        migration_reviewed_head="f" * 40,
+    )
+    canonical = json.loads(migrated.frontier_bytes())
+
+    assert canonical["schema_version"] == 7
+    assert canonical["pending_checkpoint"] == expected_checkpoint
+    assert canonical["pending_checkpoint"]["head"] == exact_head
+    assert canonical["pending_checkpoint"]["triggers"][-1] == {
+        "kind": DeliveryCheckpointTriggerKind.FINALIZATION,
+        "outcome_id": None,
+    }
+
+
 def test_runtime_rejects_schema_three_result_history_without_exact_commit_evidence(tmp_path: Path) -> None:
     runtime = _runtime(
         tmp_path,
