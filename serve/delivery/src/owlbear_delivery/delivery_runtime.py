@@ -176,8 +176,15 @@ class DeliveryPendingCheckpoint(_DeliveryModel):
 
     @model_validator(mode="after")
     def _validate_triggers(self) -> DeliveryPendingCheckpoint:
-        if len(self.triggers) != len(set(self.triggers)):
-            message = "pending checkpoint triggers must be unique"
+        identities = tuple(
+            (
+                trigger.kind,
+                trigger.outcome_id if trigger.kind == DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME else None,
+            )
+            for trigger in self.triggers
+        )
+        if len(identities) != len(set(identities)):
+            message = "pending checkpoint trigger kinds must be unique per scope"
             raise ValueError(message)
         return self
 
@@ -1259,6 +1266,7 @@ class DeliveryRuntime:
                 "bindings": updated_bindings,
                 "operator_moves": (*frontier.operator_moves, move),
                 "integration_attention": None,
+                "pending_checkpoint": _prune_checkpoint_triggers(frontier.pending_checkpoint, invalidated),
             }
         )
         self._replace(previous, updated)
@@ -1510,7 +1518,14 @@ class DeliveryRuntime:
         RuntimeTransaction.recover_all(self._target_root)
         try:
             content = self._frontier_path.read_bytes()
-            frontier, canonical = parse_delivery_frontier(content)
+            migration_head = None
+            if self._workspace_manager is not None and _requires_checkpoint_migration(content):
+                migration_head = self._workspace_manager.show(self._contract.change_id).last_reviewed_commit
+            frontier, canonical = parse_delivery_frontier(
+                content,
+                migration_reviewed_head=migration_head,
+                require_checkpoint_backfill=True,
+            )
             if canonical != content:
                 self._replace_content(content, canonical)
         except (OSError, TypeError, ValueError) as exc:
@@ -1547,7 +1562,12 @@ def _find_binding(frontier: DeliveryFrontier, outcome_id: str) -> OutcomeAuthori
         _reference(f"Delivery outcome is absent: {outcome_id}", exc)
 
 
-def parse_delivery_frontier(content: bytes) -> tuple[DeliveryFrontier, bytes]:
+def parse_delivery_frontier(
+    content: bytes,
+    *,
+    migration_reviewed_head: str | None = None,
+    require_checkpoint_backfill: bool = False,
+) -> tuple[DeliveryFrontier, bytes]:
     """Parse canonical frontier bytes and reduce safe pre-Assembly-removal state."""
     payload = json.loads(content)
     if not isinstance(payload, dict):
@@ -1571,7 +1591,57 @@ def parse_delivery_frontier(content: bytes) -> tuple[DeliveryFrontier, bytes]:
     frontier = DeliveryFrontier.model_validate_json(
         json.dumps(payload, sort_keys=True, separators=(",", ":")),
     )
+    if schema_version != _FRONTIER_SCHEMA_VERSION:
+        frontier = _backfill_checkpoint_state(
+            frontier,
+            migration_reviewed_head,
+            required=require_checkpoint_backfill,
+        )
     return frontier, _model_content(frontier)
+
+
+def _requires_checkpoint_migration(content: bytes) -> bool:
+    payload = json.loads(content)
+    return isinstance(payload, dict) and payload.get("schema_version") != _FRONTIER_SCHEMA_VERSION
+
+
+def _backfill_checkpoint_state(
+    frontier: DeliveryFrontier,
+    reviewed_head: str | None,
+    *,
+    required: bool,
+) -> DeliveryFrontier:
+    result_bindings = tuple(binding for binding in frontier.bindings if binding.results)
+    if not result_bindings:
+        return frontier
+    if reviewed_head is None:
+        if required:
+            raise ValueError
+        return frontier
+    first = result_bindings[0]
+    triggers = [
+        DeliveryCheckpointTrigger(
+            kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
+            outcome_id=first.outcome_id,
+            task_id=first.results[0].task_id,
+        )
+    ]
+    triggers.extend(
+        DeliveryCheckpointTrigger(
+            kind=DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
+            outcome_id=binding.outcome_id,
+        )
+        for binding in frontier.bindings
+        if binding.stage == DeliveryStage.COMPLETED
+    )
+    return frontier.model_copy(
+        update={
+            "pending_checkpoint": DeliveryPendingCheckpoint(
+                head=reviewed_head,
+                triggers=tuple(triggers),
+            )
+        }
+    )
 
 
 def _find_request(frontier: DeliveryFrontier, request_id: str) -> tuple[OutcomeAuthorityBinding, DeliveryRequest]:
@@ -1633,6 +1703,18 @@ def _queue_promoted_result_checkpoint(
             )
         }
     )
+
+
+def _prune_checkpoint_triggers(
+    pending: DeliveryPendingCheckpoint | None,
+    invalidated_outcome_ids: set[str],
+) -> DeliveryPendingCheckpoint | None:
+    if pending is None:
+        return None
+    retained = tuple(trigger for trigger in pending.triggers if trigger.outcome_id not in invalidated_outcome_ids)
+    if not retained:
+        return None
+    return pending.model_copy(update={"triggers": retained})
 
 
 def _require_claim(binding: OutcomeAuthorityBinding, claim_id: str) -> None:
@@ -1723,6 +1805,9 @@ __all__ = [
     "BlockDelivery",
     "DeliveryBlock",
     "DeliveryChangeStage",
+    "DeliveryCheckpointPublicationState",
+    "DeliveryCheckpointTrigger",
+    "DeliveryCheckpointTriggerKind",
     "DeliveryFrontier",
     "DeliveryIntegrationAttention",
     "DeliveryIntegrationAttentionCode",
@@ -1731,6 +1816,7 @@ __all__ = [
     "DeliveryOperatorMove",
     "DeliveryOutputKind",
     "DeliveryOutputReference",
+    "DeliveryPendingCheckpoint",
     "DeliveryRequest",
     "DeliveryRequestKind",
     "DeliveryRequestOption",

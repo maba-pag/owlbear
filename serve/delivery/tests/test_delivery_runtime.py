@@ -19,6 +19,7 @@ from owlbear_delivery import (
     ChangeWriter,
     DeliveryActiveClaim,
     DeliveryChangeStage,
+    DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
     DeliveryContract,
     DeliveryFrontier,
@@ -29,6 +30,7 @@ from owlbear_delivery import (
     DeliveryOutcome,
     DeliveryOutputKind,
     DeliveryOutputReference,
+    DeliveryPendingCheckpoint,
     DeliveryPlanScope,
     DeliveryRequest,
     DeliveryRequestKind,
@@ -50,6 +52,7 @@ from owlbear_delivery import (
     ReturnDelivery,
     integration_attention_disposition,
 )
+from owlbear_delivery.delivery_runtime import parse_delivery_frontier
 
 
 def test_integration_attention_codes_have_one_operational_disposition() -> None:
@@ -323,6 +326,33 @@ def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: 
     assert json.loads(path.read_bytes()) == canonical
 
 
+def test_schema_two_result_history_backfills_checkpoint_at_exact_reviewed_head(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.PLANNING),
+    )
+    payload = json.loads(runtime.frontier_bytes())
+    payload["schema_version"] = 2
+    payload.pop("published_head")
+    payload.pop("pending_checkpoint")
+
+    migrated, _canonical_bytes = parse_delivery_frontier(
+        json.dumps(payload).encode(),
+        migration_reviewed_head="f" * 40,
+        require_checkpoint_backfill=True,
+    )
+
+    assert migrated.pending_checkpoint is not None
+    assert migrated.pending_checkpoint.head == "f" * 40
+    assert tuple(
+        (trigger.kind, trigger.outcome_id, trigger.task_id) for trigger in migrated.pending_checkpoint.triggers
+    ) == (
+        (DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK, "OUT-001", "TASK-001"),
+        (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-001", None),
+        (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-002", None),
+    )
+
+
 @pytest.mark.parametrize(
     ("stage", "assembly_required_value"),
     [("planning", "true"), ("assembly", "false")],
@@ -406,9 +436,10 @@ def _publish_task_result(
     coordinator: PortfolioCoordinator,
     coordination,
     *,
-    task_id: str,
     job_id: int,
+    outcome_id: str = "OUT-001",
 ):
+    task_id = runtime.claimable_task_ids(outcome_id)[0]
     attempt_id = f"attempt-{job_id:03}"
     claim_id = f"claim-{job_id:03}"
     coordinator.acquire(
@@ -423,12 +454,12 @@ def _publish_task_result(
             kind="build",
         ),
     )
-    _activate(runtime, "OUT-001", claim_id, task_id=task_id)
+    _activate(runtime, outcome_id, claim_id, task_id=task_id)
     (coordination.worktree_path / "product.txt").write_text(f"{task_id}\n", encoding="utf-8")
     _git(coordination.worktree_path, "add", "product.txt")
     _git(coordination.worktree_path, "commit", "-m", f"complete {task_id}")
     completed_commit = _git(coordination.worktree_path, "rev-parse", "HEAD")
-    task = next(item for item in runtime.show_binding("OUT-001").tasks if item.task_id == task_id)
+    task = next(item for item in runtime.show_binding(outcome_id).tasks if item.task_id == task_id)
     result = DeliveryTaskResult(
         result_id=f"RESULT-{job_id:03}",
         change_id="delivery-runtime",
@@ -437,8 +468,78 @@ def _publish_task_result(
         task_digest=task.digest,
         completed_commit=completed_commit,
     )
-    candidate = runtime.publish_result(PublishDeliveryResult(outcome_id="OUT-001", claim_id=claim_id, result=result))
+    candidate = runtime.publish_result(PublishDeliveryResult(outcome_id=outcome_id, claim_id=claim_id, result=result))
     return result, candidate, completed_commit, claim_id
+
+
+def _plan_single_task(runtime: DeliveryRuntime, outcome_id: str, task: DeliveryTaskDefinition) -> None:
+    claim_id = f"plan-{outcome_id}"
+    _activate(runtime, outcome_id, claim_id)
+    plan = runtime.publish_plan(
+        PublishDeliveryPlan(
+            outcome_id=outcome_id,
+            claim_id=claim_id,
+            tasks=(task,),
+        )
+    )
+    runtime.transition(AdvanceDelivery(outcome_id=outcome_id, claim_id=claim_id, output=plan.output))
+
+
+def test_first_task_checkpoint_is_change_wide_and_one_task_outcomes_coalesce(tmp_path: Path) -> None:
+    state_root, coordinator, manager, coordination = _workspace(tmp_path)
+    frontier = DeliveryFrontier(
+        bindings=tuple(
+            OutcomeAuthorityBinding(
+                outcome_id=f"OUT-{index:03}",
+                plan_scope_id=f"SCOPE-{index:03}",
+            )
+            for index in range(1, 4)
+        )
+    )
+    frontier_path = state_root / "changes/delivery-runtime/frontier.json"
+    frontier_path.parent.mkdir(parents=True)
+    frontier_path.write_bytes(_canonical(frontier))
+    runtime = DeliveryRuntime(state_root, _contract(), workspace_manager=manager)
+
+    for index in (1, 2):
+        outcome_id = f"OUT-{index:03}"
+        task_id = f"TASK-{index:03}"
+        _plan_single_task(runtime, outcome_id, _task(task_id, outcome_id=outcome_id))
+        _result, candidate, _commit, claim_id = _publish_task_result(
+            runtime,
+            coordinator,
+            coordination,
+            job_id=index,
+            outcome_id=outcome_id,
+        )
+        runtime.transition(AdvanceDelivery(outcome_id=outcome_id, claim_id=claim_id, output=candidate.output))
+
+    pending = runtime.checkpoint_publication_state().pending_checkpoint
+    assert pending is not None
+    assert tuple((trigger.kind, trigger.outcome_id) for trigger in pending.triggers) == (
+        (DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK, "OUT-001"),
+        (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-001"),
+        (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-002"),
+    )
+
+
+def test_pending_checkpoint_rejects_duplicate_first_task_trigger() -> None:
+    with pytest.raises(ValueError, match="unique per scope"):
+        DeliveryPendingCheckpoint(
+            head="1" * 40,
+            triggers=(
+                DeliveryCheckpointTrigger(
+                    kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
+                    outcome_id="OUT-001",
+                    task_id="TASK-001",
+                ),
+                DeliveryCheckpointTrigger(
+                    kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
+                    outcome_id="OUT-002",
+                    task_id="TASK-002",
+                ),
+            ),
+        )
 
 
 def test_build_advance_binds_compact_result_and_releases_writer(tmp_path: Path) -> None:
@@ -473,7 +574,6 @@ def test_build_advance_binds_compact_result_and_releases_writer(tmp_path: Path) 
         runtime,
         coordinator,
         coordination,
-        task_id="TASK-001",
         job_id=1,
     )
 
@@ -506,7 +606,6 @@ def test_build_advance_binds_compact_result_and_releases_writer(tmp_path: Path) 
         runtime,
         coordinator,
         coordination,
-        task_id="TASK-002",
         job_id=2,
     )
 
@@ -529,7 +628,6 @@ def test_build_advance_binds_compact_result_and_releases_writer(tmp_path: Path) 
         runtime,
         coordinator,
         coordination,
-        task_id="TASK-003",
         job_id=3,
     )
 
@@ -843,6 +941,28 @@ def test_administrative_backward_move_invalidates_completed_dependents_only(tmp_
         tmp_path,
         stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
     )
+    path = tmp_path / "changes/delivery-runtime/frontier.json"
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    pending = DeliveryPendingCheckpoint(
+        head="3" * 40,
+        triggers=(
+            DeliveryCheckpointTrigger(
+                kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
+                outcome_id="OUT-001",
+                task_id="TASK-001",
+            ),
+            DeliveryCheckpointTrigger(
+                kind=DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
+                outcome_id="OUT-001",
+            ),
+            DeliveryCheckpointTrigger(
+                kind=DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
+                outcome_id="OUT-003",
+            ),
+        ),
+    )
+    path.write_bytes(_canonical(frontier.model_copy(update={"pending_checkpoint": pending})))
+    runtime = DeliveryRuntime(tmp_path, _contract())
     assert runtime.change_stage() == DeliveryChangeStage.INTEGRATION
     before = runtime.frontier_bytes()
     preview = runtime.preview_administrative_move("OUT-001", DeliveryStage.PLANNING)
@@ -866,6 +986,9 @@ def test_administrative_backward_move_invalidates_completed_dependents_only(tmp_
     assert runtime.show_binding("OUT-002").stage == DeliveryStage.PLANNING
     assert runtime.show_binding("OUT-003").stage == DeliveryStage.COMPLETED
     assert runtime.show_binding("OUT-003").result_ids == ("RESULT-003",)
+    retained = runtime.checkpoint_publication_state().pending_checkpoint
+    assert retained is not None
+    assert retained.triggers == (pending.triggers[2],)
     assert runtime.change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
 
 
