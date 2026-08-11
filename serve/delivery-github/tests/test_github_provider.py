@@ -87,6 +87,20 @@ def _check_response(
     }
 
 
+def _check_run(check_id: str = "CR_1") -> dict[str, object]:
+    return {
+        "__typename": "CheckRun",
+        "id": check_id,
+        "name": "test",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "startedAt": "2026-08-11T10:00:00Z",
+        "completedAt": "2026-08-11T10:02:00Z",
+        "detailsUrl": None,
+        "isRequired": True,
+    }
+
+
 def _completed(
     payload: object,
     *,
@@ -479,7 +493,12 @@ def test_observes_no_rollup_as_an_empty_snapshot() -> None:
 
 def test_check_observation_rejects_head_drift_between_pages() -> None:
     provider, runner = _provider(
-        _completed(_check_response([], options=_CheckResponseOptions(has_next_page=True, end_cursor="cursor-1"))),
+        _completed(
+            _check_response(
+                [_check_run()],
+                options=_CheckResponseOptions(has_next_page=True, end_cursor="cursor-1", total_count=1),
+            )
+        ),
         _completed(_check_response([], options=_CheckResponseOptions(head=_OTHER_HEAD))),
     )
 
@@ -489,6 +508,26 @@ def test_check_observation_rejects_head_drift_between_pages() -> None:
     assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
     assert exc_info.value.retry_safe is False
     assert len(runner.calls) == 2
+
+
+def test_check_observation_rejects_empty_interior_page_before_another_call() -> None:
+    provider, runner = _provider(
+        _completed(
+            _check_response(
+                [],
+                options=_CheckResponseOptions(has_next_page=True, end_cursor="cursor-1", total_count=0),
+            )
+        ),
+        _completed(_check_response([])),
+    )
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.observe_checks(ObservePublicationChecks(repository=_REPOSITORY, number=7, expected_head_sha=_HEAD))
+
+    assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+    assert exc_info.value.retry_safe is True
+    assert "empty check page" in str(exc_info.value)
+    assert len(runner.calls) == 1
 
 
 @pytest.mark.parametrize(
@@ -508,7 +547,7 @@ def test_check_observation_treats_paginated_rollup_drift_as_retry_safe(
     provider, _ = _provider(
         _completed(
             _check_response(
-                [],
+                [_check_run()],
                 options=_CheckResponseOptions(has_next_page=True, end_cursor="cursor-1", total_count=1),
             )
         ),

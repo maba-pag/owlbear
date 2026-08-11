@@ -412,6 +412,12 @@ class GitHubCliPublicationProvider:
         if state.total_count is not None and state.total_count != rollup.contexts.total_count:
             self._invalid_response(operation, "GitHub check count changed during pagination", retry_safe=True)
         page_checks = self._publication_checks(rollup.contexts.nodes, head_sha, operation)
+        if not page_checks and rollup.contexts.page_info.has_next_page:
+            self._invalid_response(
+                operation,
+                "GitHub returned an empty check page while more pages remain",
+                retry_safe=True,
+            )
         page_check_ids = {check.check_id for check in page_checks}
         if len(page_check_ids) != len(page_checks) or state.seen_check_ids.intersection(page_check_ids):
             self._invalid_response(operation, "GitHub returned duplicate check identities", retry_safe=True)
