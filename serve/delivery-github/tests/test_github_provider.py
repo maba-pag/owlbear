@@ -26,6 +26,17 @@ _HEAD = "a" * 40
 _OTHER_HEAD = "b" * 40
 
 
+@dataclass(frozen=True)
+class _CheckResponseOptions:
+    head: str = _HEAD
+    has_next_page: bool = False
+    end_cursor: str | None = None
+    rollup: bool = True
+    rollup_state: str = "SUCCESS"
+    total_count: int | None = None
+    repository: object = ...
+
+
 def _pull_response(*, draft: bool = True, head: str = _HEAD) -> dict[str, object]:
     return {
         "number": 7,
@@ -44,30 +55,34 @@ def _pull_response(*, draft: bool = True, head: str = _HEAD) -> dict[str, object
 def _check_response(
     nodes: list[object],
     *,
-    head: str = _HEAD,
-    has_next_page: bool = False,
-    end_cursor: str | None = None,
-    rollup: bool = True,
+    options: _CheckResponseOptions | None = None,
 ) -> dict[str, object]:
+    options = options or _CheckResponseOptions()
     status_check_rollup: object = None
-    if rollup:
+    if options.rollup:
         status_check_rollup = {
-            "state": "SUCCESS",
+            "state": options.rollup_state,
             "contexts": {
-                "pageInfo": {"hasNextPage": has_next_page, "endCursor": end_cursor},
+                "totalCount": len(nodes) if options.total_count is None else options.total_count,
+                "pageInfo": {"hasNextPage": options.has_next_page, "endCursor": options.end_cursor},
                 "nodes": nodes,
             },
         }
+    repository_response = (
+        {
+            "nameWithOwner": _REPOSITORY,
+            "pullRequest": {
+                "number": 7,
+                "headRefOid": options.head,
+                "commits": {"nodes": [{"oid": options.head, "statusCheckRollup": status_check_rollup}]},
+            },
+        }
+        if options.repository is ...
+        else options.repository
+    )
     return {
         "data": {
-            "repository": {
-                "nameWithOwner": _REPOSITORY,
-                "pullRequest": {
-                    "number": 7,
-                    "headRefOid": head,
-                    "commits": {"nodes": [{"oid": head, "statusCheckRollup": status_check_rollup}]},
-                },
-            }
+            "repository": repository_response,
         }
     }
 
@@ -392,8 +407,7 @@ def test_observes_paginated_check_runs_and_status_contexts_with_fixed_query() ->
                         "isRequired": True,
                     }
                 ],
-                has_next_page=True,
-                end_cursor="cursor-1",
+                options=_CheckResponseOptions(has_next_page=True, end_cursor="cursor-1", total_count=2),
             )
         ),
         _completed(
@@ -409,7 +423,8 @@ def test_observes_paginated_check_runs_and_status_contexts_with_fixed_query() ->
                         "targetUrl": None,
                         "isRequired": False,
                     }
-                ]
+                ],
+                options=_CheckResponseOptions(total_count=2),
             )
         ),
     )
@@ -428,7 +443,9 @@ def test_observes_paginated_check_runs_and_status_contexts_with_fixed_query() ->
     assert snapshot.checks[0].conclusion == "success"
     assert snapshot.checks[0].duration_seconds == 120
     assert snapshot.checks[1].status == "pending"
-    assert snapshot.checks[1].duration_seconds == 30
+    assert snapshot.checks[1].conclusion is None
+    assert snapshot.checks[1].completed_at is None
+    assert snapshot.checks[1].duration_seconds is None
     assert all(call[0] == ("gh", "api", "graphql", "--method", "POST", "--input", "-") for call in runner.calls)
     payloads = [json.loads(call[1] or b"") for call in runner.calls]
     assert [payload["operationName"] for payload in payloads] == [
@@ -450,7 +467,7 @@ def test_observes_paginated_check_runs_and_status_contexts_with_fixed_query() ->
 
 
 def test_observes_no_rollup_as_an_empty_snapshot() -> None:
-    provider, _ = _provider(_completed(_check_response([], rollup=False)))
+    provider, _ = _provider(_completed(_check_response([], options=_CheckResponseOptions(rollup=False))))
 
     snapshot = provider.observe_checks(
         ObservePublicationChecks(repository=_REPOSITORY, number=7, expected_head_sha=_HEAD)
@@ -462,8 +479,8 @@ def test_observes_no_rollup_as_an_empty_snapshot() -> None:
 
 def test_check_observation_rejects_head_drift_between_pages() -> None:
     provider, runner = _provider(
-        _completed(_check_response([], has_next_page=True, end_cursor="cursor-1")),
-        _completed(_check_response([], head=_OTHER_HEAD)),
+        _completed(_check_response([], options=_CheckResponseOptions(has_next_page=True, end_cursor="cursor-1"))),
+        _completed(_check_response([], options=_CheckResponseOptions(head=_OTHER_HEAD))),
     )
 
     with pytest.raises(PublicationProviderError) as exc_info:
@@ -472,6 +489,156 @@ def test_check_observation_rejects_head_drift_between_pages() -> None:
     assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
     assert exc_info.value.retry_safe is False
     assert len(runner.calls) == 2
+
+
+@pytest.mark.parametrize(
+    ("second_response", "detail"),
+    [
+        (
+            _check_response([], options=_CheckResponseOptions(rollup_state="FAILURE", total_count=1)),
+            "rollup changed",
+        ),
+        (_check_response([], options=_CheckResponseOptions(total_count=2)), "count changed"),
+    ],
+)
+def test_check_observation_treats_paginated_rollup_drift_as_retry_safe(
+    second_response: dict[str, object],
+    detail: str,
+) -> None:
+    provider, _ = _provider(
+        _completed(
+            _check_response(
+                [],
+                options=_CheckResponseOptions(has_next_page=True, end_cursor="cursor-1", total_count=1),
+            )
+        ),
+        _completed(second_response),
+    )
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.observe_checks(ObservePublicationChecks(repository=_REPOSITORY, number=7, expected_head_sha=_HEAD))
+
+    assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+    assert exc_info.value.retry_safe is True
+    assert detail in str(exc_info.value)
+
+
+def test_check_observation_rejects_incomplete_and_duplicate_pages_as_retry_safe() -> None:
+    duplicate = {
+        "__typename": "StatusContext",
+        "id": "SC_1",
+        "context": "deployment",
+        "state": "SUCCESS",
+        "createdAt": "2026-08-11T10:03:00Z",
+        "updatedAt": "2026-08-11T10:03:30Z",
+        "targetUrl": None,
+        "isRequired": True,
+    }
+    provider, _ = _provider(_completed(_check_response([], options=_CheckResponseOptions(total_count=1))))
+    with pytest.raises(PublicationProviderError) as incomplete_info:
+        provider.observe_checks(ObservePublicationChecks(repository=_REPOSITORY, number=7, expected_head_sha=_HEAD))
+    assert incomplete_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+    assert incomplete_info.value.retry_safe is True
+
+    provider, _ = _provider(
+        _completed(_check_response([duplicate, duplicate], options=_CheckResponseOptions(total_count=2)))
+    )
+    with pytest.raises(PublicationProviderError) as duplicate_info:
+        provider.observe_checks(ObservePublicationChecks(repository=_REPOSITORY, number=7, expected_head_sha=_HEAD))
+    assert duplicate_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+    assert duplicate_info.value.retry_safe is True
+
+
+@pytest.mark.parametrize("nodes", [[None], [{"__typename": "UnknownCheck", "id": "unknown"}]])
+def test_check_observation_rejects_malformed_union_nodes_as_retry_safe(nodes: list[object]) -> None:
+    provider, _ = _provider(_completed(_check_response(nodes)))
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.observe_checks(ObservePublicationChecks(repository=_REPOSITORY, number=7, expected_head_sha=_HEAD))
+
+    assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+    assert exc_info.value.retry_safe is True
+
+
+def test_check_observation_rejects_missing_pagination_cursor_as_retry_safe() -> None:
+    provider, _ = _provider(
+        _completed(_check_response([], options=_CheckResponseOptions(has_next_page=True, total_count=1)))
+    )
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.observe_checks(ObservePublicationChecks(repository=_REPOSITORY, number=7, expected_head_sha=_HEAD))
+
+    assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+    assert exc_info.value.retry_safe is True
+
+
+def test_status_context_terminal_state_exposes_conclusion_and_duration() -> None:
+    status_context = {
+        "__typename": "StatusContext",
+        "id": "SC_1",
+        "context": "deployment",
+        "state": "SUCCESS",
+        "createdAt": "2026-08-11T10:03:00Z",
+        "updatedAt": "2026-08-11T10:03:30Z",
+        "targetUrl": None,
+        "isRequired": True,
+    }
+    provider, _ = _provider(_completed(_check_response([status_context])))
+
+    snapshot = provider.observe_checks(
+        ObservePublicationChecks(repository=_REPOSITORY, number=7, expected_head_sha=_HEAD)
+    )
+
+    assert snapshot.checks[0].status == "success"
+    assert snapshot.checks[0].conclusion == "success"
+    assert snapshot.checks[0].duration_seconds == 30
+
+
+def test_check_observation_rejects_invalid_timestamp_as_retry_safe() -> None:
+    check_run = {
+        "__typename": "CheckRun",
+        "id": "CR_1",
+        "name": "test",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "startedAt": "not-a-timestamp",
+        "completedAt": "2026-08-11T10:02:00Z",
+        "detailsUrl": None,
+        "isRequired": True,
+    }
+    provider, _ = _provider(_completed(_check_response([check_run])))
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.observe_checks(ObservePublicationChecks(repository=_REPOSITORY, number=7, expected_head_sha=_HEAD))
+
+    assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+    assert exc_info.value.retry_safe is True
+
+
+def test_check_observation_rejects_missing_repository_as_terminal_not_found() -> None:
+    provider, _ = _provider(_completed(_check_response([], options=_CheckResponseOptions(repository=None))))
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.observe_checks(ObservePublicationChecks(repository=_REPOSITORY, number=7, expected_head_sha=_HEAD))
+
+    assert exc_info.value.code is PublicationProviderFailureCode.NOT_FOUND
+    assert exc_info.value.retry_safe is False
+
+
+def test_graphql_repository_resolution_failure_is_terminal_not_found() -> None:
+    provider, _ = _provider(
+        _completed(
+            {},
+            returncode=1,
+            stderr=b"Could not resolve to a Repository with the name 'example/project'.",
+        )
+    )
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.observe_checks(ObservePublicationChecks(repository=_REPOSITORY, number=7, expected_head_sha=_HEAD))
+
+    assert exc_info.value.code is PublicationProviderFailureCode.NOT_FOUND
+    assert exc_info.value.retry_safe is False
 
 
 @pytest.mark.parametrize(

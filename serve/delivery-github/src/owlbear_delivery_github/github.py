@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import NoReturn, cast
 from urllib.parse import quote, urlencode
@@ -52,6 +53,7 @@ _OBSERVE_CHECKS_QUERY = """query ObservePublicationChecks(
                     statusCheckRollup {
                         state
                         contexts(first: 100, after: $cursor) {
+                            totalCount
                             pageInfo { hasNextPage endCursor }
                             nodes {
                                 __typename
@@ -72,6 +74,15 @@ _OBSERVE_CHECKS_QUERY = """query ObservePublicationChecks(
     }
 }"""
 _MAX_OBSERVED_CHECKS = 1_000
+
+
+@dataclass
+class _CheckObservationState:
+    checks: list[PublicationCheck] = field(default_factory=list)
+    seen_check_ids: set[str] = field(default_factory=set)
+    rollup_state: str | None = None
+    total_count: int | None = None
+
 
 _CommandRunner = Callable[[tuple[str, ...], bytes | None, float], subprocess.CompletedProcess[bytes]]
 type _JsonValue = bool | int | float | str | list[_JsonValue] | dict[str, _JsonValue] | None
@@ -122,10 +133,11 @@ class _CheckPageInfo(_GitHubModel):
 class _CheckContextsResponse(_GitHubModel):
     nodes: list[dict[str, _JsonValue] | None]
     page_info: _CheckPageInfo = Field(alias="pageInfo")
+    total_count: int = Field(ge=0, alias="totalCount")
 
 
 class _StatusRollupResponse(_GitHubModel):
-    state: str
+    state: str = Field(min_length=1)
     contexts: _CheckContextsResponse
 
 
@@ -352,8 +364,7 @@ class GitHubCliPublicationProvider:
         owner, name = request.repository.split("/", maxsplit=1)
         cursor: str | None = None
         seen_cursors: set[str] = set()
-        checks: list[PublicationCheck] = []
-        rollup_state: str | None = None
+        state = _CheckObservationState()
         while True:
             rollup = self._observe_check_page(request, owner, name, cursor, operation)
             if rollup is None:
@@ -364,33 +375,21 @@ class GitHubCliPublicationProvider:
                         retry_safe=True,
                     )
                 break
-            normalized_state = rollup.state.casefold()
-            if rollup_state is None:
-                rollup_state = normalized_state
-            elif rollup_state != normalized_state:
-                self._conflict(operation, "check rollup changed during pagination")
-            checks.extend(self._publication_checks(rollup.contexts.nodes, request.expected_head_sha, operation))
-            page_info = rollup.contexts.page_info
-            if len(checks) > _MAX_OBSERVED_CHECKS or (len(checks) == _MAX_OBSERVED_CHECKS and page_info.has_next_page):
-                self._invalid_response(
-                    operation,
-                    "GitHub check observation exceeds the bounded limit",
-                    retry_safe=False,
-                )
-            if not page_info.has_next_page:
+            self._record_check_page(state, rollup, request.expected_head_sha, operation)
+            next_cursor = self._next_check_cursor(state, rollup.contexts.page_info, seen_cursors, operation)
+            if next_cursor is None:
                 break
-            next_cursor = page_info.end_cursor
-            if not next_cursor or next_cursor in seen_cursors:
-                self._invalid_response(operation, "GitHub returned an invalid check pagination cursor", retry_safe=True)
             seen_cursors.add(next_cursor)
             cursor = next_cursor
+        if state.total_count is not None and len(state.checks) != state.total_count:
+            self._invalid_response(operation, "GitHub returned an incomplete check observation", retry_safe=True)
         try:
             return PublicationCheckSnapshot(
                 repository=request.repository,
                 number=request.number,
                 head_sha=request.expected_head_sha,
-                rollup_state=rollup_state,
-                checks=tuple(checks),
+                rollup_state=state.rollup_state,
+                checks=tuple(state.checks),
             )
         except ValidationError as exc:
             self._invalid_response(
@@ -399,6 +398,49 @@ class GitHubCliPublicationProvider:
                 retry_safe=False,
                 cause=exc,
             )
+
+    def _record_check_page(
+        self,
+        state: _CheckObservationState,
+        rollup: _StatusRollupResponse,
+        head_sha: str,
+        operation: str,
+    ) -> None:
+        rollup_state = rollup.state.casefold()
+        if state.rollup_state is not None and state.rollup_state != rollup_state:
+            self._invalid_response(operation, "GitHub check rollup changed during pagination", retry_safe=True)
+        if state.total_count is not None and state.total_count != rollup.contexts.total_count:
+            self._invalid_response(operation, "GitHub check count changed during pagination", retry_safe=True)
+        page_checks = self._publication_checks(rollup.contexts.nodes, head_sha, operation)
+        page_check_ids = {check.check_id for check in page_checks}
+        if len(page_check_ids) != len(page_checks) or state.seen_check_ids.intersection(page_check_ids):
+            self._invalid_response(operation, "GitHub returned duplicate check identities", retry_safe=True)
+        state.rollup_state = rollup_state
+        state.total_count = rollup.contexts.total_count
+        state.checks.extend(page_checks)
+        state.seen_check_ids.update(page_check_ids)
+
+    def _next_check_cursor(
+        self,
+        state: _CheckObservationState,
+        page_info: _CheckPageInfo,
+        seen_cursors: set[str],
+        operation: str,
+    ) -> str | None:
+        if len(state.checks) > _MAX_OBSERVED_CHECKS or (
+            len(state.checks) == _MAX_OBSERVED_CHECKS and page_info.has_next_page
+        ):
+            self._invalid_response(
+                operation,
+                "GitHub check observation exceeds the bounded limit",
+                retry_safe=False,
+            )
+        if not page_info.has_next_page:
+            return None
+        next_cursor = page_info.end_cursor
+        if not next_cursor or next_cursor in seen_cursors:
+            self._invalid_response(operation, "GitHub returned an invalid check pagination cursor", retry_safe=True)
+        return next_cursor
 
     def _observe_check_page(
         self,
@@ -417,7 +459,7 @@ class GitHubCliPublicationProvider:
             },
         )
         response = self._validate(_CheckQueryResponse, payload, operation, retry_safe=True)
-        _, commit = self._check_page_identity(response, request, operation)
+        commit = self._check_page_identity(response, request, operation)
         return commit.status_check_rollup
 
     def _check_page_identity(
@@ -425,9 +467,16 @@ class GitHubCliPublicationProvider:
         response: _CheckQueryResponse,
         request: ObservePublicationChecks,
         operation: str,
-    ) -> tuple[_CheckPullRequestResponse, _CheckCommitResponse]:
+    ) -> _CheckCommitResponse:
         repository = response.data.repository
-        if repository is None or repository.name_with_owner.casefold() != request.repository.casefold():
+        if repository is None:
+            raise PublicationProviderError(
+                PublicationProviderFailureCode.NOT_FOUND,
+                operation,
+                "publication repository was not found",
+                retry_safe=False,
+            )
+        if repository.name_with_owner.casefold() != request.repository.casefold():
             self._invalid_response(operation, "GitHub returned another repository identity", retry_safe=True)
         pull_request = repository.pull_request
         if pull_request is None:
@@ -448,7 +497,7 @@ class GitHubCliPublicationProvider:
                 "GitHub check rollup is not bound to the pull request head",
                 retry_safe=True,
             )
-        return pull_request, commits[0]
+        return commits[0]
 
     def _publication_checks(
         self,
@@ -483,19 +532,24 @@ class GitHubCliPublicationProvider:
             elif kind == "StatusContext":
                 response = self._validate(_StatusContextResponse, node, operation, retry_safe=True)
                 created_at = self._timestamp(response.created_at, operation)
-                updated_at = self._timestamp(response.updated_at, operation)
+                state = response.state.casefold()
+                completed_at = (
+                    self._timestamp(response.updated_at, operation)
+                    if state in {"error", "failure", "success"}
+                    else None
+                )
                 checks.append(
                     PublicationCheck(
                         check_id=response.node_id,
                         kind=PublicationCheckKind.STATUS_CONTEXT,
                         name=response.context,
                         head_sha=head_sha,
-                        status=response.state.casefold(),
-                        conclusion=None,
+                        status=state,
+                        conclusion=state if completed_at is not None else None,
                         required=response.required,
                         started_at=created_at,
-                        completed_at=updated_at,
-                        duration_seconds=self._duration(created_at, updated_at, operation),
+                        completed_at=completed_at,
+                        duration_seconds=self._duration(created_at, completed_at, operation),
                         details_url=response.target_url,
                     )
                 )
@@ -636,7 +690,7 @@ class GitHubCliPublicationProvider:
         elif "gh auth login" in normalized or "http 401" in normalized or "bad credentials" in normalized:
             code = PublicationProviderFailureCode.AUTHENTICATION_REQUIRED
             retry_safe = False
-        elif "http 404" in normalized or "not found" in normalized:
+        elif "http 404" in normalized or "not found" in normalized or "could not resolve to" in normalized:
             code = PublicationProviderFailureCode.NOT_FOUND
             retry_safe = False
         elif "http 409" in normalized or "http 422" in normalized or "already exists" in normalized:

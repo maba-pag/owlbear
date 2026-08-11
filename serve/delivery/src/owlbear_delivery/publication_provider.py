@@ -136,7 +136,7 @@ class PublicationCheckKind(StrEnum):
 
 
 class PublicationCheck(_ProviderModel):
-    """One provider-observed check bound to a snapshot head."""
+    """One provider check; status retains the provider vocabulary for its kind."""
 
     check_id: str = Field(min_length=1)
     kind: PublicationCheckKind
@@ -157,7 +157,7 @@ class PublicationCheckSnapshot(_ProviderModel):
     repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
     number: int = Field(gt=0)
     head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
-    rollup_state: str | None = None
+    rollup_state: str | None = Field(default=None, min_length=1)
     checks: tuple[PublicationCheck, ...] = Field(max_length=1_000)
 
     @model_validator(mode="after")
