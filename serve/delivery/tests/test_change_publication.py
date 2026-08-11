@@ -147,6 +147,34 @@ def test_adopts_exact_reviewed_remote_head_when_durable_head_is_missing(tmp_path
     assert _head(remote, "refs/heads/owlbear/change/migrated-change") == reviewed
 
 
+def test_adopts_exact_reviewed_remote_head_after_lost_push_response(tmp_path: Path) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, reviewed = _reviewed_change(manager, "lost-push-change")
+    _git(repository, "push", "origin", f"{reviewed}:refs/heads/owlbear/change/lost-push-change")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+
+    with patch.object(publisher, "_push_exact_head", side_effect=AssertionError("unexpected push")):
+        receipt = publisher.publish(
+            PublishChangeBranch(
+                change_id="lost-push-change",
+                expected_remote_head=initial,
+                expected_published_head=reviewed,
+                operation_id="lost-push-response",
+            )
+        )
+
+    assert receipt.published_head == reviewed
+    assert receipt.expected_remote_head == initial
+    assert _head(remote, "refs/heads/owlbear/change/lost-push-change") == reviewed
+
+
 def test_fast_forwards_observed_ancestor_when_durable_head_is_missing(tmp_path: Path) -> None:
     repository, remote, _initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)
@@ -244,6 +272,104 @@ def test_rejects_divergent_remote_change_branch_without_rewriting_it(tmp_path: P
     assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
     assert _head(remote, "refs/heads/owlbear/change/diverged-change") == divergent
     assert coordinator.show("diverged-change").publication_lease is None
+
+
+def test_rejects_remote_only_divergent_change_head_as_permanent_conflict(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, _reviewed = _reviewed_change(manager, "remote-diverged-change")
+    _git(remote, "config", "user.name", "Remote Test User")
+    _git(remote, "config", "user.email", "remote@example.com")
+    divergent = _git(
+        remote,
+        "commit-tree",
+        _git(remote, "mktree").stdout.strip(),
+        "-m",
+        "remote-only divergent",
+    ).stdout.strip()
+    _git(remote, "update-ref", "refs/heads/owlbear/change/remote-diverged-change", divergent)
+    assert _git(repository, "cat-file", "-e", f"{divergent}^{{commit}}", check=False).returncode != 0
+    fetch_head = Path(_git(repository, "rev-parse", "--git-path", "FETCH_HEAD").stdout.strip())
+    fetch_head_before = fetch_head.read_bytes() if fetch_head.exists() else None
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        publisher.publish(
+            PublishChangeBranch(
+                change_id="remote-diverged-change",
+                expected_remote_head=None,
+                operation_id="remote-divergence",
+            )
+        )
+
+    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
+    assert not exc_info.value.retry_safe
+    assert _head(remote, "refs/heads/owlbear/change/remote-diverged-change") == divergent
+    assert (fetch_head.read_bytes() if fetch_head.exists() else None) == fetch_head_before
+    assert (
+        _git(
+            repository,
+            "show-ref",
+            "--verify",
+            "--quiet",
+            "refs/remotes/origin/owlbear/change/remote-diverged-change",
+            check=False,
+        ).returncode
+        == 1
+    )
+    assert coordinator.show("remote-diverged-change").publication_lease is None
+
+
+def test_remote_change_branch_deletion_during_fetch_is_retryable_conflict(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, _reviewed = _reviewed_change(manager, "deleted-during-fetch")
+    _git(remote, "config", "user.name", "Remote Test User")
+    _git(remote, "config", "user.email", "remote@example.com")
+    divergent = _git(
+        remote,
+        "commit-tree",
+        _git(remote, "mktree").stdout.strip(),
+        "-m",
+        "deleted remote head",
+    ).stdout.strip()
+    branch_ref = "refs/heads/owlbear/change/deleted-during-fetch"
+    _git(remote, "update-ref", branch_ref, divergent)
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+    original_run_git = publisher._run_git
+
+    def delete_before_fetch(*arguments: str):
+        if arguments[0] == "fetch" and arguments[-1] == branch_ref:
+            _git(remote, "update-ref", "-d", branch_ref)
+        return original_run_git(*arguments)
+
+    with (
+        patch.object(publisher, "_run_git", side_effect=delete_before_fetch),
+        pytest.raises(PublicationProviderError) as exc_info,
+    ):
+        publisher.publish(
+            PublishChangeBranch(
+                change_id="deleted-during-fetch",
+                expected_remote_head=None,
+                operation_id="deleted-during-fetch",
+            )
+        )
+
+    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
+    assert exc_info.value.retry_safe
+    assert coordinator.show("deleted-during-fetch").publication_lease is None
 
 
 def test_exact_lease_rejects_remote_advance_between_observation_and_push(tmp_path: Path) -> None:

@@ -200,12 +200,14 @@ class ChangeBranchPublisher:
             refresh_target=not created,
         )
         remote_head = self._remote_head(operation.branch, request)
-        if operation.expected_remote_head is None and remote_head == operation.published_head:
+        if remote_head == operation.published_head:
             attempt.reservation_released = True
             self._release_publication(operation, attempt.owner_id, lock)
             return self._receipt(operation)
         if operation.expected_remote_head is not None and remote_head != operation.expected_remote_head:
             self._conflict(request, "remote Change branch differs from the expected head")
+        if remote_head is not None:
+            self._fetch_change_head(operation.branch, remote_head, request)
         if remote_head is not None and not self._is_ancestor(remote_head, operation.published_head, request):
             self._conflict(request, "remote Change branch cannot fast-forward to the reviewed head")
         attempt.observed_remote_head = remote_head
@@ -312,6 +314,29 @@ class ChangeBranchPublisher:
             self._conflict(request, "remote target changed while it was fetched")
         self._resolve_commit(target_head, request, invalid_response=True)
         return target_head
+
+    def _fetch_change_head(
+        self,
+        branch: str,
+        expected_head: str,
+        request: PublishChangeBranch,
+    ) -> None:
+        branch_ref = f"refs/heads/{branch}"
+        result = self._run_git(
+            "fetch",
+            "--no-tags",
+            "--no-write-fetch-head",
+            "--refmap=",
+            self._remote,
+            branch_ref,
+        )
+        if result.returncode != 0:
+            if self._remote_head(branch, request) != expected_head:
+                self._conflict(request, "remote Change branch changed while it was fetched", retry_safe=True)
+            self._unavailable(request, "remote Change branch could not be fetched")
+        if self._remote_head(branch, request) != expected_head:
+            self._conflict(request, "remote Change branch changed while it was fetched", retry_safe=True)
+        self._resolve_commit(expected_head, request, invalid_response=True)
 
     def _remote_head(self, branch: str, request: PublishChangeBranch) -> str | None:
         result = self._run_git("ls-remote", "--exit-code", "--heads", self._remote, f"refs/heads/{branch}")
