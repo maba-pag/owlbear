@@ -5,8 +5,6 @@ from __future__ import annotations
 from owlbear_delivery.change_publication import (
     ChangeBranchPublicationReceipt,
     ChangeBranchPublisher,
-    ChangePublicationError,
-    ChangePublicationFailureCode,
     PublishChangeBranch,
 )
 from owlbear_delivery.change_workspace import (
@@ -275,8 +273,6 @@ __all__ = [
     "ChangeBranchPublicationReceipt",
     "ChangeBranchPublisher",
     "ChangeCoordination",
-    "ChangePublicationError",
-    "ChangePublicationFailureCode",
     "ChangeWorkspaceManager",
     "ChangeWriter",
     "Commitment",
