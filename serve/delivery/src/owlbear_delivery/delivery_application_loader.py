@@ -15,10 +15,10 @@ from owlbear_delivery.change_publication import ChangeBranchPublisher
 from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator
 from owlbear_delivery.completed_history import CompletedHistoryCatalog
 from owlbear_delivery.delivery_runtime import (
+    DeliveryFrontier,
     DeliveryRuntime,
-    DeliveryRuntimeConflictError,
-    DeliveryRuntimeReferenceError,
     DeliveryWorkerRole,
+    parse_delivery_frontier,
 )
 from owlbear_delivery.design_package import DesignPackageStore
 from owlbear_delivery.draft_pull_request import DraftPullRequestPublisher
@@ -246,10 +246,19 @@ def _role_policies() -> tuple[DeliveryRolePolicy, ...]:
 def _validate_runtime_state(runtime_root: Path, contracts: dict[str, DeliveryContract]) -> None:
     try:
         for contract in contracts.values():
-            DeliveryRuntime(runtime_root, contract)
-    except (OSError, ValidationError, DeliveryRuntimeConflictError, DeliveryRuntimeReferenceError) as exc:
+            frontier_path = runtime_root / "changes" / contract.change_id / "frontier.json"
+            frontier = parse_delivery_frontier(frontier_path.read_bytes())[0]
+            _require_runtime_bindings(contract, frontier)
+    except (OSError, ValidationError, TypeError, ValueError) as exc:
         error = _load_error("runtime_root", "Delivery runtime state is invalid")
         raise error from exc
+
+
+def _require_runtime_bindings(contract: DeliveryContract, frontier: DeliveryFrontier) -> None:
+    expected = tuple((scope.outcome_id, scope.scope_id) for scope in contract.plan_scopes)
+    actual = tuple((binding.outcome_id, binding.plan_scope_id) for binding in frontier.bindings)
+    if actual != expected:
+        raise ValueError
 
 
 def _compose_application(
@@ -272,7 +281,12 @@ def _compose_application(
         IntegrationVerificationStore(paths.runtime_root),
     )
     runtimes = {
-        change_id: DeliveryRuntime(paths.runtime_root, contract, workspace_manager=workspace_manager)
+        change_id: DeliveryRuntime(
+            paths.runtime_root,
+            contract,
+            workspace_manager=workspace_manager,
+            migration_reviewed_head=workspace_manager.show(change_id).last_reviewed_commit,
+        )
         for change_id, contract in contracts.items()
     }
     dependencies = PortfolioApplicationDependencies(

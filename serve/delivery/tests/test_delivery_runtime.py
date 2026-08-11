@@ -351,6 +351,39 @@ def test_schema_two_result_history_backfills_checkpoint_at_exact_reviewed_head(t
     )
 
 
+def test_completion_capture_excludes_change_publication_state(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    path = tmp_path / "changes/delivery-runtime/frontier.json"
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    path.write_bytes(
+        _canonical(
+            frontier.model_copy(
+                update={
+                    "published_head": "2" * 40,
+                    "pending_checkpoint": DeliveryPendingCheckpoint(
+                        head="3" * 40,
+                        triggers=(
+                            DeliveryCheckpointTrigger(
+                                kind=DeliveryCheckpointTriggerKind.FINALIZATION,
+                            ),
+                        ),
+                    ),
+                }
+            )
+        )
+    )
+    runtime = DeliveryRuntime(tmp_path, _contract())
+
+    capture_bytes, _result_bytes = runtime.completion_capture_bytes()
+    capture = DeliveryFrontier.model_validate_json(capture_bytes)
+
+    assert capture.published_head is None
+    assert capture.pending_checkpoint is None
+
+
 @pytest.mark.parametrize(
     ("stage", "assembly_required_value"),
     [("planning", "true"), ("assembly", "false")],

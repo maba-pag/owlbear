@@ -398,6 +398,58 @@ def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path
     assert not (repository / ".owlbear/worktrees").exists()
 
 
+def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    coordinator = PortfolioCoordinator(runtime_root, capacity=1)
+    manager = ChangeWorkspaceManager(
+        repository,
+        repository / ".owlbear/delivery/worktrees",
+        coordinator,
+        "main",
+    )
+    coordination = manager.create("change-a")
+    contract = _contract("change-a", b"intent", b"design")
+    task = _task()
+    result = DeliveryTaskResult(
+        result_id="RESULT-001",
+        change_id="change-a",
+        authority_digest=hashlib.sha256(_canonical(contract)).hexdigest(),
+        task_id=task.task_id,
+        task_digest=task.digest,
+        completed_commit=coordination.last_reviewed_commit,
+    )
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(
+                outcome_id="OUT-001",
+                plan_scope_id="SCOPE-001",
+                stage=DeliveryStage.COMPLETED,
+                tasks=(task,),
+                results=(result,),
+            ),
+        )
+    )
+    payload = frontier.model_dump(mode="json")
+    payload["schema_version"] = 2
+    payload.pop("published_head")
+    payload.pop("pending_checkpoint")
+    change_root = runtime_root / "changes/change-a"
+    change_root.mkdir(parents=True)
+    (change_root / "contract.json").write_bytes(_canonical(contract))
+    (change_root / "frontier.json").write_text(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+    application = load_delivery_application(_startup_config(), workspace_root=repository)
+    state = application.show_change_checkpoint_publication("change-a")
+
+    assert state.pending_checkpoint is not None
+    assert state.pending_checkpoint.head == coordination.last_reviewed_commit
+    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 3
+
+
 def test_delivery_loader_injects_publication_provider_and_delegates_exact_requests(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     provider = Mock()

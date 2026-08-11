@@ -9,7 +9,12 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from owlbear_delivery.delivery_runtime import DeliveryFrontier, OutcomeAuthorityBinding, parse_delivery_frontier
+from owlbear_delivery.delivery_runtime import (
+    DeliveryFrontier,
+    OutcomeAuthorityBinding,
+    invalidate_checkpoint_publication,
+    parse_delivery_frontier,
+)
 from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
     RuntimeTransaction,
@@ -629,7 +634,15 @@ def _delivery_frontier(
         )
         if outcome_id in invalidated
     )
-    return DeliveryFrontier(bindings=bindings), RevisionCarryForward(
+    return DeliveryFrontier(
+        bindings=bindings,
+        published_head=current.frontier.published_head,
+        pending_checkpoint=invalidate_checkpoint_publication(
+            current.frontier.pending_checkpoint,
+            invalidated,
+        ),
+        operator_moves=current.frontier.operator_moves,
+    ), RevisionCarryForward(
         preserved_outcome_ids=preserved,
         invalidated_outcome_ids=tuple(dict.fromkeys(ordered_invalidated)),
     )

@@ -10,9 +10,12 @@ from owlbear_delivery import (
     DeliveryAdmissionConflictError,
     DeliveryAdmissionRequest,
     DeliveryAuthorityRegistry,
+    DeliveryCheckpointTrigger,
+    DeliveryCheckpointTriggerKind,
     DeliveryFrontier,
     DeliveryOutputKind,
     DeliveryOutputReference,
+    DeliveryPendingCheckpoint,
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
@@ -230,7 +233,25 @@ def test_revision_preserves_unchanged_binding_and_invalidates_changed_dependents
                 ),
             )
         )
-    populated = DeliveryFrontier(bindings=tuple(populated_bindings))
+    pending = DeliveryPendingCheckpoint(
+        head="3" * 40,
+        triggers=(
+            DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),
+            DeliveryCheckpointTrigger(
+                kind=DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
+                outcome_id="OUT-001",
+            ),
+            DeliveryCheckpointTrigger(
+                kind=DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
+                outcome_id="OUT-003",
+            ),
+        ),
+    )
+    populated = DeliveryFrontier(
+        bindings=tuple(populated_bindings),
+        published_head="2" * 40,
+        pending_checkpoint=pending,
+    )
     delivery_root = target_root / "changes/source-bound-change"
     (delivery_root / "frontier.json").write_bytes(_canonical(populated))
 
@@ -258,6 +279,10 @@ def test_revision_preserves_unchanged_binding_and_invalidates_changed_dependents
     assert bindings["OUT-001"].tasks == bindings["OUT-002"].tasks == ()
     assert bindings["OUT-001"].results == bindings["OUT-002"].results == ()
     assert bindings["OUT-003"] == populated.bindings[2]
+    assert revised.frontier.published_head == "2" * 40
+    assert revised.frontier.pending_checkpoint is not None
+    assert revised.frontier.pending_checkpoint.head is None
+    assert revised.frontier.pending_checkpoint.triggers == (pending.triggers[0], pending.triggers[2])
     revision_root = delivery_root / "revisions" / first.contract_digest
     assert {path.name for path in revision_root.iterdir()} == {
         "admission.json",

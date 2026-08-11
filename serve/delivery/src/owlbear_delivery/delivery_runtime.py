@@ -742,10 +742,12 @@ class DeliveryRuntime:
         contract: DeliveryContract,
         *,
         workspace_manager: ChangeWorkspaceManager | None = None,
+        migration_reviewed_head: str | None = None,
     ) -> None:
         self._target_root = runtime_root.resolve()
         self._contract = contract
         self._workspace_manager = workspace_manager
+        self._migration_reviewed_head = migration_reviewed_head
         self._authority_digest = hashlib.sha256(_model_content(contract)).hexdigest()
         self._frontier_path = self._target_root / "changes" / contract.change_id / "frontier.json"
         self._validate_frontier(self._read()[0])
@@ -774,6 +776,8 @@ class DeliveryRuntime:
                 "integration_result_id": None,
                 "integration_completion": None,
                 "integration_attention": None,
+                "published_head": None,
+                "pending_checkpoint": None,
             }
         )
         results = tuple(result for binding in frontier.bindings for result in binding.results)
@@ -1261,7 +1265,7 @@ class DeliveryRuntime:
                 "bindings": updated_bindings,
                 "operator_moves": (*frontier.operator_moves, move),
                 "integration_attention": None,
-                "pending_checkpoint": _invalidate_checkpoint_triggers(
+                "pending_checkpoint": invalidate_checkpoint_publication(
                     frontier.pending_checkpoint,
                     invalidated,
                 ),
@@ -1516,15 +1520,9 @@ class DeliveryRuntime:
         RuntimeTransaction.recover_all(self._target_root)
         try:
             content = self._frontier_path.read_bytes()
-            migration_head = None
-            if self._workspace_manager is not None and _requires_checkpoint_migration(content):
-                try:
-                    migration_head = self._workspace_manager.show(self._contract.change_id).last_reviewed_commit
-                except RuntimeError as exc:
-                    raise ValueError from exc
             frontier, canonical = parse_delivery_frontier(
                 content,
-                migration_reviewed_head=migration_head,
+                migration_reviewed_head=self._migration_reviewed_head,
                 require_checkpoint_backfill=True,
             )
             if canonical != content:
@@ -1711,10 +1709,11 @@ def _has_checkpoint_trigger(
     return pending is not None and any(trigger.kind == kind for trigger in pending.triggers)
 
 
-def _invalidate_checkpoint_triggers(
+def invalidate_checkpoint_publication(
     pending: DeliveryPendingCheckpoint | None,
     invalidated_outcome_ids: set[str],
 ) -> DeliveryPendingCheckpoint | None:
+    """Retain valid obligations while removing their invalidated publication head."""
     if pending is None:
         return None
     retained = tuple(
@@ -1845,4 +1844,5 @@ __all__ = [
     "PublishDeliveryResult",
     "RetryDelivery",
     "ReturnDelivery",
+    "invalidate_checkpoint_publication",
 ]
