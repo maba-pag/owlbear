@@ -1277,7 +1277,7 @@ dependencies: []
     assert recovered.replayed
     assert coordinator.show("change-a").last_reviewed_commit == reviewed_head
     assert application.show_change_checkpoint_publication("change-a").pending_checkpoint is not None
-    assert json.loads(frontier_path.read_bytes())["schema_version"] == 6
+    assert json.loads(frontier_path.read_bytes())["schema_version"] == 7
 
 
 def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
@@ -1328,7 +1328,7 @@ def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_pa
 
     assert state.pending_checkpoint is not None
     assert state.pending_checkpoint.head == coordination.last_reviewed_commit
-    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 6
+    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 7
 
 
 def test_delivery_loader_injects_publication_provider_and_derives_check_head(tmp_path: Path) -> None:

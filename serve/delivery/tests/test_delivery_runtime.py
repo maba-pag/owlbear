@@ -26,6 +26,7 @@ from owlbear_delivery import (
     DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
     DeliveryFrontier,
+    DeliveryMergedPullRequestLatch,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationCompletion,
@@ -53,6 +54,8 @@ from owlbear_delivery import (
     FinalizeDeliveryChange,
     OutcomeAuthorityBinding,
     PortfolioCoordinator,
+    PublicationPullRequest,
+    PublicationPullRequestObservationReceipt,
     PublishDeliveryPlan,
     PublishDeliveryResult,
     PublishDeliveryOutput,
@@ -434,6 +437,51 @@ def _ready_receipt(finalization_id: str, exact_head: str) -> PullRequestReadyRec
     return PullRequestReadyReceipt(receipt_id=receipt_id, **values)
 
 
+def _pull_request_observation(
+    *,
+    merged: bool = True,
+    merge_commit_sha: str = "5" * 40,
+    observed_at: datetime = datetime(2026, 8, 11, 16, tzinfo=UTC),
+    merged_at: datetime = datetime(2026, 8, 11, 15, tzinfo=UTC),
+    merged_by_login: str | None = None,
+) -> PublicationPullRequestObservationReceipt:
+    snapshot = PublicationPullRequest(
+        repository="example/project",
+        number=7,
+        node_id="PR_node_7",
+        head_branch="owlbear/change/delivery-runtime",
+        head_sha="3" * 40,
+        base_branch="main",
+        title="Delivery runtime",
+        body="Generated summary",
+        draft=False,
+        state="closed" if merged else "open",
+        merged=merged,
+        merge_commit_sha=merge_commit_sha,
+        merged_at=merged_at if merged else None,
+        merged_by_login=merged_by_login,
+    )
+    provider_evidence_digest = hashlib.sha256(
+        json.dumps(snapshot.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    values = {
+        "schema_version": 1,
+        "change_id": "delivery-runtime",
+        "observed_at": observed_at,
+        "snapshot": snapshot,
+        "provider_evidence_digest": provider_evidence_digest,
+    }
+    candidate = PublicationPullRequestObservationReceipt.model_construct(observation_id="0" * 64, **values)
+    observation_id = hashlib.sha256(
+        json.dumps(
+            candidate.model_dump(mode="json", exclude={"observation_id"}),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    return PublicationPullRequestObservationReceipt(observation_id=observation_id, **values)
+
+
 def test_finalization_binds_exact_head_and_invalidates_on_head_drift(tmp_path: Path) -> None:
     runtime = _runtime(
         tmp_path,
@@ -468,6 +516,38 @@ def test_finalization_binds_exact_head_and_invalidates_on_head_drift(tmp_path: P
     assert runtime.finalization_invalidation() == invalidation
     assert runtime.change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
     assert runtime.checkpoint_publication_state().pending_checkpoint is None
+
+
+def test_merged_pull_request_latch_is_monotonic_and_rejects_regression(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    exact_head = "3" * 40
+    finalization = runtime.finalize_change(
+        _finalization_request(exact_head),
+        datetime(2026, 8, 11, 14, tzinfo=UTC),
+    )
+    runtime.mark_awaiting_merge(_ready_receipt(finalization.finalization_id, exact_head))
+
+    first = runtime.latch_merged_pull_request(_pull_request_observation())
+    replayed = runtime.latch_merged_pull_request(
+        _pull_request_observation(
+            observed_at=datetime(2026, 8, 11, 17, tzinfo=UTC),
+            merged_by_login="octocat",
+        )
+    )
+
+    assert isinstance(first, DeliveryMergedPullRequestLatch)
+    assert replayed == first
+    assert runtime.merged_pull_request_latch() == first
+
+    with pytest.raises(DeliveryRuntimeConflictError):
+        runtime.latch_merged_pull_request(_pull_request_observation(merge_commit_sha="6" * 40))
+    with pytest.raises(DeliveryRuntimeConflictError):
+        runtime.latch_merged_pull_request(_pull_request_observation(merged=False))
+
+    assert runtime.merged_pull_request_latch() == first
 
 
 def test_plan_publication_is_idempotent_and_promotes_dependency_order(tmp_path: Path) -> None:
@@ -506,7 +586,7 @@ def test_runtime_migrates_reducible_assembly_metadata_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 6
+    assert canonical["schema_version"] == 7
     assert all("assembly_required" not in binding for binding in canonical["bindings"])
     assert json.loads(path.read_bytes()) == canonical
 
@@ -523,7 +603,7 @@ def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 6
+    assert canonical["schema_version"] == 7
     assert canonical["published_head"] is None
     assert canonical["pending_checkpoint"] is None
     assert json.loads(path.read_bytes()) == canonical

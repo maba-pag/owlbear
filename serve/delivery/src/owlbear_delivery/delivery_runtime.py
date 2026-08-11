@@ -10,7 +10,10 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
-from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
+from owlbear_delivery.draft_pull_request import (
+    PublicationPullRequestObservationReceipt,
+    PullRequestReadyReceipt,
+)
 from owlbear_delivery.runtime_transaction import ReplacementTransactionParticipant, RuntimeTransaction
 
 if TYPE_CHECKING:
@@ -343,6 +346,31 @@ class DeliveryFinalizationInvalidationReceipt(DeliveryFinalizationInvalidation):
             raise ValueError(message)
         if self.invalidation_id != _receipt_digest(self, "invalidation_id"):
             message = "Delivery finalization invalidation identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryMergedPullRequestLatch(_DeliveryModel):
+    """Immutable first merged evidence for one finalized pull request."""
+
+    schema_version: Literal[1] = 1
+    change_id: str = Field(min_length=1)
+    finalization_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    ready_receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    acceptance_observation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    provider_evidence_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    number: int = Field(gt=0)
+    node_id: str = Field(min_length=1)
+    base_branch: str = Field(min_length=1)
+    head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    accepted_merge_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    merged_at: datetime
+
+    @model_validator(mode="after")
+    def _validate_timestamp(self) -> DeliveryMergedPullRequestLatch:
+        if self.merged_at.tzinfo is None:
+            message = "merged pull-request latch timestamp must include a timezone"
             raise ValueError(message)
         return self
 
@@ -730,7 +758,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 class DeliveryFrontier(_DeliveryModel):
     """Canonical outcome and Change checkpoint state persisted beside authority."""
 
-    schema_version: Literal[6] = 6
+    schema_version: Literal[7] = 7
     bindings: tuple[OutcomeAuthorityBinding, ...]
     published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint: DeliveryPendingCheckpoint | None = None
@@ -738,6 +766,7 @@ class DeliveryFrontier(_DeliveryModel):
     finalization: DeliveryFinalizationReceipt | None = None
     finalization_invalidation: DeliveryFinalizationInvalidationReceipt | None = None
     ready: PullRequestReadyReceipt | None = None
+    merged_pull_request_latch: DeliveryMergedPullRequestLatch | None = None
     integration_result_id: str | None = None
     integration_completion: DeliveryIntegrationCompletion | None = None
     integration_attention: DeliveryIntegrationAttention | None = None
@@ -975,8 +1004,8 @@ _STAGE_ORDER = {
     DeliveryStage.IMPLEMENTATION: 2,
     DeliveryStage.COMPLETED: 3,
 }
-_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5})
-_FRONTIER_SCHEMA_VERSION = 6
+_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6})
+_FRONTIER_SCHEMA_VERSION = 7
 _RETURN_TARGETS = {
     DeliveryStage.PLANNING: {DeliveryStage.DESIGN},
     DeliveryStage.IMPLEMENTATION: {DeliveryStage.PLANNING, DeliveryStage.DESIGN},
@@ -1114,6 +1143,10 @@ class DeliveryRuntime:
         """Return durable authority that the exact finalized pull request is ready."""
         return self._read()[0].ready
 
+    def merged_pull_request_latch(self) -> DeliveryMergedPullRequestLatch | None:
+        """Return immutable first merged evidence for the bound pull request."""
+        return self._read()[0].merged_pull_request_latch
+
     def mark_awaiting_merge(self, receipt: PullRequestReadyReceipt) -> PullRequestReadyReceipt:
         """Bind provider-observed ready state to the exact current finalization."""
         frontier, previous = self._read()
@@ -1140,6 +1173,70 @@ class DeliveryRuntime:
             return frontier.ready
         self._replace(previous, frontier.model_copy(update={"ready": None}))
         return None
+
+    def latch_merged_pull_request(
+        self,
+        observation: PublicationPullRequestObservationReceipt,
+    ) -> DeliveryMergedPullRequestLatch:
+        """Persist the first exact merged tuple and reject later regression or drift."""
+        frontier, previous = self._read()
+        finalization = frontier.finalization
+        ready = frontier.ready
+        snapshot = observation.snapshot
+        if finalization is None or ready is None:
+            _conflict("merged pull-request evidence requires awaiting-merge authority")
+        if (
+            observation.change_id != self._contract.change_id
+            or ready.change_id != self._contract.change_id
+            or ready.finalization_id != finalization.finalization_id
+            or snapshot.repository != ready.repository
+            or snapshot.number != ready.number
+            or snapshot.node_id != ready.node_id
+            or snapshot.head_sha != finalization.exact_head
+            or snapshot.head_sha != ready.head_sha
+        ):
+            _conflict("merged pull-request evidence does not match awaiting-merge authority")
+        if not snapshot.merged or snapshot.state != "closed":
+            _conflict("acceptance observation does not report a merged pull request")
+        if snapshot.merged_at is None or snapshot.merge_commit_sha is None:
+            _conflict("merged pull-request evidence is incomplete")
+        candidate = DeliveryMergedPullRequestLatch(
+            change_id=self._contract.change_id,
+            finalization_id=finalization.finalization_id,
+            ready_receipt_id=ready.receipt_id,
+            acceptance_observation_id=observation.observation_id,
+            provider_evidence_digest=observation.provider_evidence_digest,
+            repository=snapshot.repository,
+            number=snapshot.number,
+            node_id=snapshot.node_id,
+            base_branch=snapshot.base_branch,
+            head_sha=snapshot.head_sha,
+            accepted_merge_commit=snapshot.merge_commit_sha,
+            merged_at=snapshot.merged_at,
+        )
+        existing = frontier.merged_pull_request_latch
+        if existing is not None:
+            if (
+                existing.repository,
+                existing.number,
+                existing.node_id,
+                existing.base_branch,
+                existing.head_sha,
+                existing.accepted_merge_commit,
+                existing.merged_at,
+            ) == (
+                candidate.repository,
+                candidate.number,
+                candidate.node_id,
+                candidate.base_branch,
+                candidate.head_sha,
+                candidate.accepted_merge_commit,
+                candidate.merged_at,
+            ):
+                return existing
+            _conflict("merged pull-request evidence conflicts with the immutable latch")
+        self._replace(previous, frontier.model_copy(update={"merged_pull_request_latch": candidate}))
+        return candidate
 
     def finalize_change(
         self,
@@ -2291,6 +2388,7 @@ __all__ = [
     "DeliveryIntegrationAttentionCode",
     "DeliveryIntegrationCandidate",
     "DeliveryIntegrationCompletion",
+    "DeliveryMergedPullRequestLatch",
     "DeliveryObservation",
     "DeliveryObservationReceipt",
     "DeliveryOperatorMove",
