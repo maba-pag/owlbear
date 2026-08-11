@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
+from threading import Event
 
 import pytest
 
@@ -24,6 +26,8 @@ _HEAD = "1" * 40
 @dataclass
 class _Provider:
     lose_create_response: bool = False
+    create_started: Event | None = None
+    allow_create: Event | None = None
     pull_requests: list[PublicationPullRequest] = field(default_factory=list)
     create_calls: int = 0
 
@@ -42,6 +46,11 @@ class _Provider:
 
     def create_draft_pull_request(self, request: CreateDraftPublicationPullRequest) -> PublicationPullRequest:
         self.create_calls += 1
+        if self.create_started is not None:
+            self.create_started.set()
+        if self.allow_create is not None and not self.allow_create.wait(timeout=5):
+            msg = "test provider create remained blocked"
+            raise TimeoutError(msg)
         pull_request = PublicationPullRequest(
             repository=request.repository,
             number=7,
@@ -112,6 +121,26 @@ def test_reconciles_lost_create_response_without_creating_second_pr(tmp_path: Pa
     assert len(provider.pull_requests) == 1
 
 
+def test_concurrent_same_change_publishers_create_one_pull_request(tmp_path: Path) -> None:
+    create_started = Event()
+    allow_create = Event()
+    provider = _Provider(create_started=create_started, allow_create=allow_create)
+    first_publisher = _publisher(tmp_path, provider)
+    second_publisher = _publisher(tmp_path, provider)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first_future = executor.submit(first_publisher.publish, _request())
+        assert create_started.wait(timeout=5)
+        second_future = executor.submit(second_publisher.publish, _request())
+        allow_create.set()
+        first = first_future.result(timeout=5)
+        second = second_future.result(timeout=5)
+
+    assert second == first
+    assert provider.create_calls == 1
+    assert len(provider.pull_requests) == 1
+
+
 def test_rejects_existing_pr_without_exact_change_marker(tmp_path: Path) -> None:
     provider = _Provider()
     provider.pull_requests.append(
@@ -161,3 +190,20 @@ def test_rejects_corrupted_local_receipt_without_another_provider_write(tmp_path
 
     assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
     assert provider.create_calls == 1
+
+
+@pytest.mark.parametrize("kind", ["operations", "receipts"])
+def test_rejects_symlinked_leaf_state_before_provider_write(tmp_path: Path, kind: str) -> None:
+    provider = _Provider()
+    state_root = tmp_path / "pull-requests"
+    leaf_root = state_root / kind
+    leaf_root.mkdir(parents=True)
+    target = tmp_path / f"{kind}.json"
+    target.write_text("{}\n", encoding="utf-8")
+    (leaf_root / "change-a.json").symlink_to(target)
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        _publisher(tmp_path, provider).publish(_request())
+
+    assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+    assert provider.create_calls == 0

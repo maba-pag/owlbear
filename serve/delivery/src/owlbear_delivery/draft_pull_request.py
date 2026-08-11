@@ -99,6 +99,14 @@ class DraftPullRequestPublisher:
 
     def publish(self, request: CreateOrReconcileDraftPullRequest) -> DraftPullRequestPublicationReceipt:
         """Create or recover the unique draft PR for one first checkpoint."""
+        lock_root = self._state_root / "locks" / request.change_id
+        with locked_roots((lock_root,)):
+            return self._publish_locked(request)
+
+    def _publish_locked(
+        self,
+        request: CreateOrReconcileDraftPullRequest,
+    ) -> DraftPullRequestPublicationReceipt:
         operation = self._bind_operation(self._operation(request), request)
         existing = self._read_receipt(request)
         if existing is not None:
@@ -220,6 +228,7 @@ class DraftPullRequestPublisher:
     ) -> DraftPullRequestPublicationReceipt | None:
         path = self._path("receipts", request.change_id)
         with locked_roots((self._state_root,)):
+            self._reject_symlink(path, request)
             try:
                 content = path.read_bytes()
             except FileNotFoundError:
@@ -249,6 +258,7 @@ class DraftPullRequestPublisher:
     ) -> ModelT:
         with locked_roots((self._state_root,)):
             self._require_directory(path.parent)
+            self._reject_symlink(path, request)
             try:
                 content = path.read_bytes()
             except FileNotFoundError:
@@ -287,6 +297,14 @@ class DraftPullRequestPublisher:
             msg = "draft pull-request state directory must not be a symlink"
             raise ValueError(msg)
         path.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _reject_symlink(path: Path, request: CreateOrReconcileDraftPullRequest) -> None:
+        if path.is_symlink():
+            DraftPullRequestPublisher._invalid_response(
+                request,
+                "draft pull-request state file must not be a symlink",
+            )
 
     @staticmethod
     def _conflict(request: CreateOrReconcileDraftPullRequest, detail: str) -> None:
