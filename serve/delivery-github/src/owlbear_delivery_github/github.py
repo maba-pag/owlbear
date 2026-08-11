@@ -189,7 +189,14 @@ class GitHubCliPublicationProvider:
 
     def update_pull_request(self, request: UpdatePublicationPullRequest) -> PublicationPullRequest:
         """Update fixed generated metadata after exact-head read fences."""
-        self._require_open_head(request.repository, request.number, request.expected_head_sha, "update_pull_request")
+        current = self._require_open_head(
+            request.repository,
+            request.number,
+            request.expected_head_sha,
+            "update_pull_request",
+        )
+        if current.title != request.expected_title or current.body != request.expected_body:
+            self._conflict("update_pull_request", "pull request metadata differs from the update fence")
         payload = self._rest(
             "update_pull_request",
             "PATCH",

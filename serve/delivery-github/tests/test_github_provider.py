@@ -191,6 +191,8 @@ def test_updates_metadata_only_after_exact_head_read_and_write_fences() -> None:
             repository=_REPOSITORY,
             number=7,
             expected_head_sha=_HEAD,
+            expected_title="Example change",
+            expected_body="Generated summary",
             title="Updated",
             body="Updated body",
         )
@@ -211,6 +213,28 @@ def test_wrong_head_blocks_metadata_write_before_patch() -> None:
                 repository=_REPOSITORY,
                 number=7,
                 expected_head_sha=_OTHER_HEAD,
+                expected_title="Example change",
+                expected_body="Generated summary",
+                title="Updated",
+                body="Updated body",
+            )
+        )
+
+    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
+    assert len(runner.calls) == 1
+
+
+def test_changed_metadata_blocks_update_before_patch() -> None:
+    provider, runner = _provider(_completed({**_pull_response(), "body": "User-edited body"}))
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.update_pull_request(
+            UpdatePublicationPullRequest(
+                repository=_REPOSITORY,
+                number=7,
+                expected_head_sha=_HEAD,
+                expected_title="Example change",
+                expected_body="Generated summary",
                 title="Updated",
                 body="Updated body",
             )

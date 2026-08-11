@@ -103,6 +103,8 @@ class UpdatePublicationPullRequest(_ProviderModel):
     repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
     number: int = Field(gt=0)
     expected_head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    expected_title: str = Field(min_length=1)
+    expected_body: str
     title: str = Field(min_length=1)
     body: str
 

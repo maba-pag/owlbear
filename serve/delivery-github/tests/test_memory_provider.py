@@ -70,6 +70,8 @@ def test_update_requires_exact_current_head_and_exposes_no_merge_operation() -> 
                 repository=_REPOSITORY,
                 number=created.number,
                 expected_head_sha=_OTHER_HEAD,
+                expected_title=created.title,
+                expected_body=created.body,
                 title="Changed title",
                 body="Changed body",
             )
@@ -82,6 +84,8 @@ def test_update_requires_exact_current_head_and_exposes_no_merge_operation() -> 
             repository=_REPOSITORY,
             number=created.number,
             expected_head_sha=created.head_sha,
+            expected_title=created.title,
+            expected_body=created.body,
             title="Changed title",
             body="Changed body",
         )

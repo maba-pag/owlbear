@@ -112,7 +112,13 @@ class InMemoryPublicationProvider:
     def update_pull_request(self, request: UpdatePublicationPullRequest) -> PublicationPullRequest:
         """Update fixed generated fields after exact-head fencing."""
         current = self.read_pull_request(request.repository, request.number)
-        if current.head_sha != request.expected_head_sha or current.state != "open" or current.merged:
+        if (
+            current.head_sha != request.expected_head_sha
+            or current.title != request.expected_title
+            or current.body != request.expected_body
+            or current.state != "open"
+            or current.merged
+        ):
             raise PublicationProviderError(
                 PublicationProviderFailureCode.CONFLICT,
                 "update_pull_request",
