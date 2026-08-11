@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from owlbear_delivery.publication_provider import (
     CreateDraftPublicationPullRequest,
     FindPublicationPullRequest,
+    ObservePublicationChecks,
+    PublicationCheckSnapshot,
     PublicationProviderError,
     PublicationProviderFailureCode,
     PublicationPullRequest,
@@ -22,6 +24,7 @@ class InMemoryPublicationProvider:
 
     repositories: dict[str, PublicationRepository] = field(default_factory=dict)
     pull_requests: dict[tuple[str, int], PublicationPullRequest] = field(default_factory=dict)
+    check_snapshots: dict[tuple[str, int, str], PublicationCheckSnapshot] = field(default_factory=dict)
 
     def add_repository(self, repository: PublicationRepository) -> None:
         """Register one exact provider repository identity."""
@@ -155,3 +158,27 @@ class InMemoryPublicationProvider:
         updated = current.model_copy(update={"draft": request.draft})
         self.pull_requests[(request.repository, request.number)] = updated
         return updated
+
+    def add_check_snapshot(self, snapshot: PublicationCheckSnapshot) -> None:
+        """Register one exact deterministic provider check observation."""
+        self.check_snapshots[(snapshot.repository, snapshot.number, snapshot.head_sha)] = snapshot
+
+    def observe_checks(self, request: ObservePublicationChecks) -> PublicationCheckSnapshot:
+        """Read registered checks only when the pull-request head still matches."""
+        pull_request = self.read_pull_request(request.repository, request.number)
+        if pull_request.head_sha != request.expected_head_sha:
+            raise PublicationProviderError(
+                PublicationProviderFailureCode.CONFLICT,
+                "observe_checks",
+                "publication pull request head differs from the check observation fence",
+                retry_safe=False,
+            )
+        return self.check_snapshots.get(
+            (request.repository, request.number, request.expected_head_sha),
+            PublicationCheckSnapshot(
+                repository=request.repository,
+                number=request.number,
+                head_sha=request.expected_head_sha,
+                checks=(),
+            ),
+        )

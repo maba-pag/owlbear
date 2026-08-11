@@ -11,6 +11,7 @@ External repos and resources studied during OwlBear development.
 | GitHub REST API — Pull requests | <https://docs.github.com/en/rest/pulls/pulls> | Fixed repository PR read/create/update endpoints and provider test-merge SHA semantics used by the publication adapter | `serve/delivery-github/src/owlbear_delivery_github/github.py` | 2026-08-11 |
 | GitHub CLI — `gh api` | <https://cli.github.com/manual/gh_api> | Authenticated fixed endpoint calls, JSON stdin bodies, and GraphQL variable transport | `serve/delivery-github/src/owlbear_delivery_github/github.py` | 2026-08-11 |
 | GitHub GraphQL API — Mutations | <https://docs.github.com/en/graphql/reference/mutations> | Named draft and ready-state pull-request mutations used by the fixed publication adapter | `serve/delivery-github/src/owlbear_delivery_github/github.py` | 2026-08-11 |
+| GitHub GraphQL API — Checks and commits | <https://docs.github.com/en/graphql/reference/checks#checkrun> | Paginated check-run and status-context rollups, exact-PR required flags, and provider timing fields used by the read-only check observer | `serve/delivery-github/src/owlbear_delivery_github/github.py` | 2026-08-11 |
 
 ## Dependency Verification and Consumer Tooling Review
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from collections.abc import Callable
+from datetime import datetime
 from typing import NoReturn, cast
 from urllib.parse import quote, urlencode
 
@@ -13,6 +14,10 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 from owlbear_delivery import (
     CreateDraftPublicationPullRequest,
     FindPublicationPullRequest,
+    ObservePublicationChecks,
+    PublicationCheck,
+    PublicationCheckKind,
+    PublicationCheckSnapshot,
     PublicationProviderError,
     PublicationProviderFailureCode,
     PublicationPullRequest,
@@ -33,6 +38,40 @@ _DRAFT_MUTATION = """mutation ConvertPullRequestToDraft($pullRequestId: ID!) {
     pullRequest { id isDraft }
   }
 }"""
+_OBSERVE_CHECKS_QUERY = """query ObservePublicationChecks(
+    $owner: String!, $name: String!, $number: Int!, $cursor: String
+) {
+    repository(owner: $owner, name: $name) {
+        nameWithOwner
+        pullRequest(number: $number) {
+            number
+            headRefOid
+            commits(last: 1) {
+                nodes {
+                    oid
+                    statusCheckRollup {
+                        state
+                        contexts(first: 100, after: $cursor) {
+                            pageInfo { hasNextPage endCursor }
+                            nodes {
+                                __typename
+                                ... on CheckRun {
+                                    id name status conclusion startedAt completedAt detailsUrl
+                                    isRequired(pullRequestNumber: $number)
+                                }
+                                ... on StatusContext {
+                                    id context state createdAt updatedAt targetUrl
+                                    isRequired(pullRequestNumber: $number)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}"""
+_MAX_OBSERVED_CHECKS = 1_000
 
 _CommandRunner = Callable[[tuple[str, ...], bytes | None, float], subprocess.CompletedProcess[bytes]]
 type _JsonValue = bool | int | float | str | list[_JsonValue] | dict[str, _JsonValue] | None
@@ -73,6 +112,70 @@ class _PullListItem(_GitHubModel):
 class _DraftStateResponse(_GitHubModel):
     id: str = Field(min_length=1)
     is_draft: bool = Field(alias="isDraft")
+
+
+class _CheckPageInfo(_GitHubModel):
+    has_next_page: bool = Field(alias="hasNextPage")
+    end_cursor: str | None = Field(alias="endCursor")
+
+
+class _CheckContextsResponse(_GitHubModel):
+    nodes: list[dict[str, _JsonValue] | None]
+    page_info: _CheckPageInfo = Field(alias="pageInfo")
+
+
+class _StatusRollupResponse(_GitHubModel):
+    state: str
+    contexts: _CheckContextsResponse
+
+
+class _CheckCommitResponse(_GitHubModel):
+    oid: str = Field(pattern=r"^[0-9a-f]{40}$")
+    status_check_rollup: _StatusRollupResponse | None = Field(alias="statusCheckRollup")
+
+
+class _CheckCommitConnection(_GitHubModel):
+    nodes: list[_CheckCommitResponse | None]
+
+
+class _CheckPullRequestResponse(_GitHubModel):
+    number: int = Field(gt=0)
+    head_ref_oid: str = Field(pattern=r"^[0-9a-f]{40}$", alias="headRefOid")
+    commits: _CheckCommitConnection
+
+
+class _CheckRepositoryResponse(_GitHubModel):
+    name_with_owner: str = Field(min_length=3, alias="nameWithOwner")
+    pull_request: _CheckPullRequestResponse | None = Field(alias="pullRequest")
+
+
+class _CheckQueryData(_GitHubModel):
+    repository: _CheckRepositoryResponse | None
+
+
+class _CheckQueryResponse(_GitHubModel):
+    data: _CheckQueryData
+
+
+class _CheckRunResponse(_GitHubModel):
+    node_id: str = Field(min_length=1, alias="id")
+    name: str = Field(min_length=1)
+    status: str = Field(min_length=1)
+    conclusion: str | None
+    started_at: str | None = Field(alias="startedAt")
+    completed_at: str | None = Field(alias="completedAt")
+    details_url: str | None = Field(alias="detailsUrl")
+    required: bool = Field(alias="isRequired")
+
+
+class _StatusContextResponse(_GitHubModel):
+    node_id: str = Field(min_length=1, alias="id")
+    context: str = Field(min_length=1)
+    state: str = Field(min_length=1)
+    created_at: str = Field(min_length=1, alias="createdAt")
+    updated_at: str = Field(min_length=1, alias="updatedAt")
+    target_url: str | None = Field(alias="targetUrl")
+    required: bool = Field(alias="isRequired")
 
 
 _PULL_LIST = TypeAdapter(list[_PullListItem])
@@ -243,6 +346,187 @@ class GitHubCliPublicationProvider:
             self._invalid_response(operation, "GitHub did not apply the requested draft state")
         return updated
 
+    def observe_checks(self, request: ObservePublicationChecks) -> PublicationCheckSnapshot:
+        """Read a complete bounded check rollup for one exact pull-request head."""
+        operation = "observe_checks"
+        owner, name = request.repository.split("/", maxsplit=1)
+        cursor: str | None = None
+        seen_cursors: set[str] = set()
+        checks: list[PublicationCheck] = []
+        rollup_state: str | None = None
+        while True:
+            rollup = self._observe_check_page(request, owner, name, cursor, operation)
+            if rollup is None:
+                if cursor is not None:
+                    self._invalid_response(
+                        operation,
+                        "GitHub removed the check rollup during pagination",
+                        retry_safe=True,
+                    )
+                break
+            normalized_state = rollup.state.casefold()
+            if rollup_state is None:
+                rollup_state = normalized_state
+            elif rollup_state != normalized_state:
+                self._conflict(operation, "check rollup changed during pagination")
+            checks.extend(self._publication_checks(rollup.contexts.nodes, request.expected_head_sha, operation))
+            page_info = rollup.contexts.page_info
+            if len(checks) > _MAX_OBSERVED_CHECKS or (len(checks) == _MAX_OBSERVED_CHECKS and page_info.has_next_page):
+                self._invalid_response(
+                    operation,
+                    "GitHub check observation exceeds the bounded limit",
+                    retry_safe=False,
+                )
+            if not page_info.has_next_page:
+                break
+            next_cursor = page_info.end_cursor
+            if not next_cursor or next_cursor in seen_cursors:
+                self._invalid_response(operation, "GitHub returned an invalid check pagination cursor", retry_safe=True)
+            seen_cursors.add(next_cursor)
+            cursor = next_cursor
+        try:
+            return PublicationCheckSnapshot(
+                repository=request.repository,
+                number=request.number,
+                head_sha=request.expected_head_sha,
+                rollup_state=rollup_state,
+                checks=tuple(checks),
+            )
+        except ValidationError as exc:
+            self._invalid_response(
+                operation,
+                "GitHub returned inconsistent check identities",
+                retry_safe=False,
+                cause=exc,
+            )
+
+    def _observe_check_page(
+        self,
+        request: ObservePublicationChecks,
+        owner: str,
+        name: str,
+        cursor: str | None,
+        operation: str,
+    ) -> _StatusRollupResponse | None:
+        payload = self._graphql_query(
+            operation,
+            {
+                "query": _OBSERVE_CHECKS_QUERY,
+                "operationName": "ObservePublicationChecks",
+                "variables": {"owner": owner, "name": name, "number": request.number, "cursor": cursor},
+            },
+        )
+        response = self._validate(_CheckQueryResponse, payload, operation, retry_safe=True)
+        _, commit = self._check_page_identity(response, request, operation)
+        return commit.status_check_rollup
+
+    def _check_page_identity(
+        self,
+        response: _CheckQueryResponse,
+        request: ObservePublicationChecks,
+        operation: str,
+    ) -> tuple[_CheckPullRequestResponse, _CheckCommitResponse]:
+        repository = response.data.repository
+        if repository is None or repository.name_with_owner.casefold() != request.repository.casefold():
+            self._invalid_response(operation, "GitHub returned another repository identity", retry_safe=True)
+        pull_request = repository.pull_request
+        if pull_request is None:
+            raise PublicationProviderError(
+                PublicationProviderFailureCode.NOT_FOUND,
+                operation,
+                "publication pull request was not found",
+                retry_safe=False,
+            )
+        if pull_request.number != request.number:
+            self._invalid_response(operation, "GitHub returned another pull request identity", retry_safe=True)
+        if pull_request.head_ref_oid != request.expected_head_sha:
+            self._conflict(operation, "pull request head differs from the check observation fence")
+        commits = tuple(commit for commit in pull_request.commits.nodes if commit is not None)
+        if len(commits) != 1 or commits[0].oid != request.expected_head_sha:
+            self._invalid_response(
+                operation,
+                "GitHub check rollup is not bound to the pull request head",
+                retry_safe=True,
+            )
+        return pull_request, commits[0]
+
+    def _publication_checks(
+        self,
+        nodes: list[dict[str, _JsonValue] | None],
+        head_sha: str,
+        operation: str,
+    ) -> tuple[PublicationCheck, ...]:
+        checks: list[PublicationCheck] = []
+        for node in nodes:
+            if node is None:
+                self._invalid_response(operation, "GitHub returned an empty check context", retry_safe=True)
+            kind = node.get("__typename")
+            if kind == "CheckRun":
+                response = self._validate(_CheckRunResponse, node, operation, retry_safe=True)
+                started_at = self._timestamp(response.started_at, operation)
+                completed_at = self._timestamp(response.completed_at, operation)
+                checks.append(
+                    PublicationCheck(
+                        check_id=response.node_id,
+                        kind=PublicationCheckKind.CHECK_RUN,
+                        name=response.name,
+                        head_sha=head_sha,
+                        status=response.status.casefold(),
+                        conclusion=response.conclusion.casefold() if response.conclusion else None,
+                        required=response.required,
+                        started_at=started_at,
+                        completed_at=completed_at,
+                        duration_seconds=self._duration(started_at, completed_at, operation),
+                        details_url=response.details_url,
+                    )
+                )
+            elif kind == "StatusContext":
+                response = self._validate(_StatusContextResponse, node, operation, retry_safe=True)
+                created_at = self._timestamp(response.created_at, operation)
+                updated_at = self._timestamp(response.updated_at, operation)
+                checks.append(
+                    PublicationCheck(
+                        check_id=response.node_id,
+                        kind=PublicationCheckKind.STATUS_CONTEXT,
+                        name=response.context,
+                        head_sha=head_sha,
+                        status=response.state.casefold(),
+                        conclusion=None,
+                        required=response.required,
+                        started_at=created_at,
+                        completed_at=updated_at,
+                        duration_seconds=self._duration(created_at, updated_at, operation),
+                        details_url=response.target_url,
+                    )
+                )
+            else:
+                self._invalid_response(operation, "GitHub returned an unknown check context type", retry_safe=True)
+        return tuple(checks)
+
+    def _timestamp(self, value: str | None, operation: str) -> datetime | None:
+        if value is None:
+            return None
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError as exc:
+            self._invalid_response(operation, "GitHub returned an invalid check timestamp", retry_safe=True, cause=exc)
+        if parsed.tzinfo is None:
+            self._invalid_response(operation, "GitHub returned a timezone-naive check timestamp", retry_safe=True)
+        return parsed
+
+    def _duration(
+        self,
+        started_at: datetime | None,
+        completed_at: datetime | None,
+        operation: str,
+    ) -> float | None:
+        if started_at is None or completed_at is None:
+            return None
+        duration = (completed_at - started_at).total_seconds()
+        if duration < 0:
+            self._invalid_response(operation, "GitHub returned an invalid check duration", retry_safe=True)
+        return duration
+
     def _require_open_head(
         self,
         repository: str,
@@ -292,6 +576,13 @@ class GitHubCliPublicationProvider:
     def _graphql(self, operation: str, body: _JsonObject) -> _JsonValue:
         arguments = ("gh", "api", "graphql", "--method", "POST", "--input", "-")
         return self._execute(operation, arguments, body, write=True)
+
+    def _graphql_query(self, operation: str, body: _JsonObject) -> _JsonValue:
+        arguments = ("gh", "api", "graphql", "--method", "POST", "--input", "-")
+        payload = self._execute(operation, arguments, body, write=False)
+        if not isinstance(payload, dict) or "errors" in payload:
+            self._invalid_response(operation, "GitHub returned a failed GraphQL query", retry_safe=True)
+        return payload
 
     def _execute(
         self,

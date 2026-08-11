@@ -12,6 +12,7 @@ import pytest
 from owlbear_delivery import (
     CreateDraftPublicationPullRequest,
     FindPublicationPullRequest,
+    ObservePublicationChecks,
     PublicationProvider,
     PublicationProviderError,
     PublicationProviderFailureCode,
@@ -37,6 +38,37 @@ def _pull_response(*, draft: bool = True, head: str = _HEAD) -> dict[str, object
         "state": "open",
         "merged": False,
         "merge_commit_sha": _OTHER_HEAD,
+    }
+
+
+def _check_response(
+    nodes: list[object],
+    *,
+    head: str = _HEAD,
+    has_next_page: bool = False,
+    end_cursor: str | None = None,
+    rollup: bool = True,
+) -> dict[str, object]:
+    status_check_rollup: object = None
+    if rollup:
+        status_check_rollup = {
+            "state": "SUCCESS",
+            "contexts": {
+                "pageInfo": {"hasNextPage": has_next_page, "endCursor": end_cursor},
+                "nodes": nodes,
+            },
+        }
+    return {
+        "data": {
+            "repository": {
+                "nameWithOwner": _REPOSITORY,
+                "pullRequest": {
+                    "number": 7,
+                    "headRefOid": head,
+                    "commits": {"nodes": [{"oid": head, "statusCheckRollup": status_check_rollup}]},
+                },
+            }
+        }
     }
 
 
@@ -341,6 +373,105 @@ def test_wrong_node_id_blocks_draft_state_mutation() -> None:
 
     assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
     assert len(runner.calls) == 1
+
+
+def test_observes_paginated_check_runs_and_status_contexts_with_fixed_query() -> None:
+    provider, runner = _provider(
+        _completed(
+            _check_response(
+                [
+                    {
+                        "__typename": "CheckRun",
+                        "id": "CR_1",
+                        "name": "test",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "startedAt": "2026-08-11T10:00:00Z",
+                        "completedAt": "2026-08-11T10:02:00Z",
+                        "detailsUrl": "https://example.test/checks/1",
+                        "isRequired": True,
+                    }
+                ],
+                has_next_page=True,
+                end_cursor="cursor-1",
+            )
+        ),
+        _completed(
+            _check_response(
+                [
+                    {
+                        "__typename": "StatusContext",
+                        "id": "SC_1",
+                        "context": "deployment",
+                        "state": "PENDING",
+                        "createdAt": "2026-08-11T10:03:00Z",
+                        "updatedAt": "2026-08-11T10:03:30Z",
+                        "targetUrl": None,
+                        "isRequired": False,
+                    }
+                ]
+            )
+        ),
+    )
+
+    snapshot = provider.observe_checks(
+        ObservePublicationChecks(repository=_REPOSITORY, number=7, expected_head_sha=_HEAD)
+    )
+
+    assert snapshot.rollup_state == "success"
+    assert [(check.kind.value, check.name) for check in snapshot.checks] == [
+        ("check_run", "test"),
+        ("status_context", "deployment"),
+    ]
+    assert snapshot.checks[0].status == "completed"
+    assert {check.head_sha for check in snapshot.checks} == {_HEAD}
+    assert snapshot.checks[0].conclusion == "success"
+    assert snapshot.checks[0].duration_seconds == 120
+    assert snapshot.checks[1].status == "pending"
+    assert snapshot.checks[1].duration_seconds == 30
+    assert all(call[0] == ("gh", "api", "graphql", "--method", "POST", "--input", "-") for call in runner.calls)
+    payloads = [json.loads(call[1] or b"") for call in runner.calls]
+    assert [payload["operationName"] for payload in payloads] == [
+        "ObservePublicationChecks",
+        "ObservePublicationChecks",
+    ]
+    assert payloads[0]["variables"] == {
+        "owner": "example",
+        "name": "project",
+        "number": 7,
+        "cursor": None,
+    }
+    assert payloads[1]["variables"]["cursor"] == "cursor-1"
+    query = payloads[0]["query"]
+    assert "isRequired(pullRequestNumber: $number)" in query
+    assert "mutation" not in query
+    assert "workflowDispatch" not in query
+    assert "rerequestCheckSuite" not in query
+
+
+def test_observes_no_rollup_as_an_empty_snapshot() -> None:
+    provider, _ = _provider(_completed(_check_response([], rollup=False)))
+
+    snapshot = provider.observe_checks(
+        ObservePublicationChecks(repository=_REPOSITORY, number=7, expected_head_sha=_HEAD)
+    )
+
+    assert snapshot.rollup_state is None
+    assert snapshot.checks == ()
+
+
+def test_check_observation_rejects_head_drift_between_pages() -> None:
+    provider, runner = _provider(
+        _completed(_check_response([], has_next_page=True, end_cursor="cursor-1")),
+        _completed(_check_response([], head=_OTHER_HEAD)),
+    )
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.observe_checks(ObservePublicationChecks(repository=_REPOSITORY, number=7, expected_head_sha=_HEAD))
+
+    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
+    assert exc_info.value.retry_safe is False
+    assert len(runner.calls) == 2
 
 
 @pytest.mark.parametrize(

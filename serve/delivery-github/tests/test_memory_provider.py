@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from owlbear_delivery import (
     CreateDraftPublicationPullRequest,
     FindPublicationPullRequest,
+    ObservePublicationChecks,
+    PublicationCheck,
+    PublicationCheckKind,
+    PublicationCheckSnapshot,
     PublicationProvider,
     PublicationProviderError,
     PublicationProviderFailureCode,
@@ -160,6 +166,56 @@ def test_unmerged_pull_request_may_report_provider_test_merge_sha() -> None:
 
     assert pull_request.merged is False
     assert pull_request.merge_commit_sha == _OTHER_HEAD
+
+
+def test_observes_registered_checks_only_for_exact_pull_request_head() -> None:
+    provider = _provider()
+    created = provider.create_draft_pull_request(_create_request())
+    started_at = datetime(2026, 8, 11, 10, 0, tzinfo=UTC)
+    completed_at = datetime(2026, 8, 11, 10, 2, tzinfo=UTC)
+    snapshot = PublicationCheckSnapshot(
+        repository=_REPOSITORY,
+        number=created.number,
+        head_sha=created.head_sha,
+        rollup_state="success",
+        checks=(
+            PublicationCheck(
+                check_id="CR_1",
+                kind=PublicationCheckKind.CHECK_RUN,
+                name="test",
+                head_sha=created.head_sha,
+                status="completed",
+                conclusion="success",
+                required=True,
+                started_at=started_at,
+                completed_at=completed_at,
+                duration_seconds=120,
+                details_url="https://example.test/checks/1",
+            ),
+        ),
+    )
+    provider.add_check_snapshot(snapshot)
+
+    observed = provider.observe_checks(
+        ObservePublicationChecks(
+            repository=_REPOSITORY,
+            number=created.number,
+            expected_head_sha=created.head_sha,
+        )
+    )
+
+    assert observed == snapshot
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.observe_checks(
+            ObservePublicationChecks(
+                repository=_REPOSITORY,
+                number=created.number,
+                expected_head_sha=_OTHER_HEAD,
+            )
+        )
+    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
+    assert not hasattr(provider, "dispatch_workflow")
+    assert not hasattr(provider, "rerun_check")
 
 
 def test_synthetic_node_ids_are_unique_across_repositories() -> None:

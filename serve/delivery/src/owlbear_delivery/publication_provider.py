@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
@@ -119,6 +120,58 @@ class SetPublicationPullRequestDraftState(_ProviderModel):
     draft: bool
 
 
+class ObservePublicationChecks(_ProviderModel):
+    """Fixed read of provider checks for one exact pull-request head."""
+
+    repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    number: int = Field(gt=0)
+    expected_head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class PublicationCheckKind(StrEnum):
+    """Provider check representations included in one status rollup."""
+
+    CHECK_RUN = "check_run"
+    STATUS_CONTEXT = "status_context"
+
+
+class PublicationCheck(_ProviderModel):
+    """One provider-observed check bound to a snapshot head."""
+
+    check_id: str = Field(min_length=1)
+    kind: PublicationCheckKind
+    name: str = Field(min_length=1)
+    head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    status: str = Field(min_length=1)
+    conclusion: str | None = None
+    required: bool
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    duration_seconds: float | None = Field(default=None, ge=0)
+    details_url: str | None = None
+
+
+class PublicationCheckSnapshot(_ProviderModel):
+    """Complete bounded provider check observation for one exact PR head."""
+
+    repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    number: int = Field(gt=0)
+    head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    rollup_state: str | None = None
+    checks: tuple[PublicationCheck, ...] = Field(max_length=1_000)
+
+    @model_validator(mode="after")
+    def _validate_check_identities(self) -> PublicationCheckSnapshot:
+        identities = tuple(check.check_id for check in self.checks)
+        if len(identities) != len(set(identities)):
+            message = "publication check identities must be unique"
+            raise ValueError(message)
+        if any(check.head_sha != self.head_sha for check in self.checks):
+            message = "publication checks must match the snapshot head"
+            raise ValueError(message)
+        return self
+
+
 @runtime_checkable
 class PublicationProvider(Protocol):
     """Provider operations available to Delivery lifecycle decisions."""
@@ -148,4 +201,8 @@ class PublicationProvider(Protocol):
         request: SetPublicationPullRequestDraftState,
     ) -> PublicationPullRequest:
         """Transition one exact pull request between draft and ready state."""
+        ...
+
+    def observe_checks(self, request: ObservePublicationChecks) -> PublicationCheckSnapshot:
+        """Observe checks for one exact pull-request head without requesting provider work."""
         ...
