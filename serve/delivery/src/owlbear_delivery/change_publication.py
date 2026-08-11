@@ -86,6 +86,7 @@ class _PublicationAttempt:
     owner_id: str
     reservation: ChangeCoordination | None = None
     operation: _PublicationOperation | None = None
+    observed_remote_head: str | None = None
     write_started: bool = False
     write_outcome_ambiguous: bool = False
     reservation_released: bool = False
@@ -203,10 +204,11 @@ class ChangeBranchPublisher:
             attempt.reservation_released = True
             self._release_publication(operation, attempt.owner_id, lock)
             return self._receipt(operation)
-        if remote_head != operation.expected_remote_head:
+        if operation.expected_remote_head is not None and remote_head != operation.expected_remote_head:
             self._conflict(request, "remote Change branch differs from the expected head")
         if remote_head is not None and not self._is_ancestor(remote_head, operation.published_head, request):
             self._conflict(request, "remote Change branch cannot fast-forward to the reviewed head")
+        attempt.observed_remote_head = remote_head
         attempt.write_started = True
         attempt.write_outcome_ambiguous = True
         self._push_exact_head(operation, request, attempt)
@@ -338,7 +340,7 @@ class ChangeBranchPublisher:
         attempt: _PublicationAttempt,
     ) -> None:
         destination = f"refs/heads/{operation.branch}"
-        lease_head = operation.expected_remote_head or ""
+        lease_head = attempt.observed_remote_head or ""
         try:
             result = self._run_git(
                 "push",
@@ -366,7 +368,7 @@ class ChangeBranchPublisher:
         observed = self._remote_head(operation.branch, request)
         if observed == operation.published_head:
             return
-        if observed != operation.expected_remote_head:
+        if observed != attempt.observed_remote_head:
             attempt.write_outcome_ambiguous = False
             self._conflict(request, "remote Change branch changed before publication", retry_safe=True)
         attempt.write_outcome_ambiguous = False

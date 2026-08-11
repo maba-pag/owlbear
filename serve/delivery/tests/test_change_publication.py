@@ -147,6 +147,38 @@ def test_adopts_exact_reviewed_remote_head_when_durable_head_is_missing(tmp_path
     assert _head(remote, "refs/heads/owlbear/change/migrated-change") == reviewed
 
 
+def test_fast_forwards_observed_ancestor_when_durable_head_is_missing(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, first_reviewed = _reviewed_change(manager, "recovered-change")
+    _git(repository, "push", "origin", f"{first_reviewed}:refs/heads/owlbear/change/recovered-change")
+    (worktree / "product.txt").write_text("second reviewed\n", encoding="utf-8")
+    _git(worktree, "add", "product.txt")
+    _git(worktree, "commit", "-m", "second reviewed change")
+    second_reviewed = _head(worktree)
+    manager.record_reviewed("recovered-change", second_reviewed)
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+
+    receipt = publisher.publish(
+        PublishChangeBranch(
+            change_id="recovered-change",
+            expected_remote_head=None,
+            expected_published_head=second_reviewed,
+            operation_id="lost-local-recording-recovery",
+        )
+    )
+
+    assert receipt.published_head == second_reviewed
+    assert receipt.expected_remote_head is None
+    assert _head(remote, "refs/heads/owlbear/change/recovered-change") == second_reviewed
+
+
 def test_rejects_reviewed_head_drift_before_remote_publication(tmp_path: Path) -> None:
     repository, remote, _initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)
