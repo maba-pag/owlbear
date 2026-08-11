@@ -40,6 +40,7 @@ class _Provider:
     update_calls: int = 0
     observed_requests: list[ObservePublicationChecks] = field(default_factory=list)
     observed_head: str | None = None
+    move_pull_request_during_observation: bool = False
     lose_update_response: bool = False
 
     def read_repository(self, repository: str) -> PublicationRepository:
@@ -124,6 +125,11 @@ class _Provider:
 
     def observe_checks(self, request: ObservePublicationChecks) -> PublicationCheckSnapshot:
         self.observed_requests.append(request)
+        if self.move_pull_request_during_observation:
+            current = self.read_pull_request(request.repository, request.number)
+            self.pull_requests[self.pull_requests.index(current)] = current.model_copy(
+                update={"base_branch": "different-target"}
+            )
         return PublicationCheckSnapshot(
             repository=request.repository,
             number=request.number,
@@ -238,6 +244,18 @@ def test_rejects_check_snapshot_for_different_head(tmp_path: Path) -> None:
         publisher.observe_checks(_checks_request())
 
     assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+    assert len(provider.observed_requests) == 1
+
+
+def test_rejects_pull_request_drift_during_check_observation(tmp_path: Path) -> None:
+    provider = _Provider(move_pull_request_during_observation=True)
+    publisher = _publisher(tmp_path, provider)
+    publisher.publish(_request())
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        publisher.observe_checks(_checks_request())
+
+    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
     assert len(provider.observed_requests) == 1
 
 

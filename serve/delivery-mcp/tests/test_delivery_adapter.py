@@ -185,6 +185,12 @@ def _requests() -> dict[str, dict[str, object]]:
                 "generated_summary": "Second reviewed checkpoint.",
             }
         },
+        "observe_change_publication_checks": {
+            "request": {
+                "change_id": CHANGE,
+                "published_head": COMMIT,
+            }
+        },
         "transition_delivery": {
             **change,
             "request": {
@@ -275,6 +281,7 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         "show_integration_repair_context",
         "list_integration_ready_changes",
         "show_integration_attention",
+        "observe_change_publication_checks",
         "list_completed_changes",
         "search_completed_changes",
         "show_completed_change",

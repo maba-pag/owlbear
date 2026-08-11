@@ -531,7 +531,7 @@ class DraftPullRequestPublisher:
             or pull_request.state != "open"
             or pull_request.merged
         ):
-            self._conflict(request, "provider pull request does not match the generated-summary identity")
+            self._conflict(request, "provider pull request does not match the bound publication identity")
 
     def _validate_summary_pull_request(
         self,

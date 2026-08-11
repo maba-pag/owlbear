@@ -52,6 +52,8 @@ from owlbear_delivery_mcp.target_models import (
     IntegrationRepairAuthorityAttentionRequest,
     IntegrationRepairParams,
     IntegrationRepairRequest,
+    ObserveChangePublicationChecksParams,
+    ObserveChangePublicationChecksRequest,
     PublishChangeBranchParams,
     PublishChangeBranchRequest,
     PublishDeliveryPlanParams,
@@ -99,6 +101,7 @@ DELIVERY_OPERATION_NAMES = (
     "publish_change_branch",
     "create_or_reconcile_draft_pull_request",
     "update_generated_pull_request_summary",
+    "observe_change_publication_checks",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
@@ -124,6 +127,7 @@ _DELIVERY_READS = frozenset(
         "show_integration_repair_context",
         "list_integration_ready_changes",
         "show_integration_attention",
+        "observe_change_publication_checks",
         "list_completed_changes",
         "search_completed_changes",
         "show_completed_change",
@@ -316,6 +320,18 @@ class TargetMCPAdapter:
             self._call,
             params,
             lambda: self._application.update_generated_pull_request_summary(params.request),
+        )
+
+    async def observe_change_publication_checks(
+        self,
+        request: ObserveChangePublicationChecksRequest,
+    ) -> dict[str, object]:
+        """Observe checks for one Change-bound published head."""
+        params = self._validate(ObserveChangePublicationChecksParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.observe_change_publication_checks(params.request),
         )
 
     async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]:

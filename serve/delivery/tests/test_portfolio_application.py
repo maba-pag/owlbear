@@ -59,6 +59,7 @@ from owlbear_delivery import (
     DesignPackageStore,
     DraftPullRequestPublisher,
     OutcomeAuthorityBinding,
+    ObserveChangePublicationChecks,
     PortfolioApplication,
     PortfolioApplicationConfig,
     PortfolioApplicationDependencies,
@@ -411,6 +412,10 @@ def test_delivery_loader_injects_publication_provider_and_delegates_exact_reques
         published_head="1" * 40,
         generated_summary="Second checkpoint.",
     )
+    checks_request = ObserveChangePublicationChecks(
+        change_id="change-a",
+        published_head="1" * 40,
+    )
 
     with (
         patch.object(
@@ -428,14 +433,21 @@ def test_delivery_loader_injects_publication_provider_and_delegates_exact_reques
             "update_generated_summary",
             return_value=sentinel.summary_receipt,
         ) as update_summary,
+        patch.object(
+            application._draft_pull_request_publisher,  # noqa: SLF001
+            "observe_checks",
+            return_value=sentinel.check_snapshot,
+        ) as observe_checks,
     ):
         assert application.publish_change_branch(branch_request) is sentinel.branch_receipt
         assert application.create_or_reconcile_draft_pull_request(pull_request) is sentinel.pull_request_receipt
         assert application.update_generated_pull_request_summary(summary_request) is sentinel.summary_receipt
+        assert application.observe_change_publication_checks(checks_request) is sentinel.check_snapshot
 
     publish_branch.assert_called_once_with(branch_request)
     publish_pull_request.assert_called_once_with(pull_request)
     update_summary.assert_called_once_with(summary_request)
+    observe_checks.assert_called_once_with(checks_request)
 
 
 def test_delivery_loader_without_provider_fails_closed_only_for_draft_pr(tmp_path: Path) -> None:
@@ -455,11 +467,14 @@ def test_delivery_loader_without_provider_fails_closed_only_for_draft_pr(tmp_pat
         published_head="1" * 40,
         generated_summary="Second checkpoint.",
     )
+    checks_request = ObserveChangePublicationChecks(change_id="change-a", published_head="1" * 40)
 
     with pytest.raises(PortfolioApplicationError, match="not configured"):
         application.create_or_reconcile_draft_pull_request(request)
     with pytest.raises(PortfolioApplicationError, match="not configured"):
         application.update_generated_pull_request_summary(summary_request)
+    with pytest.raises(PortfolioApplicationError, match="not configured"):
+        application.observe_change_publication_checks(checks_request)
 
 
 @pytest.mark.parametrize(

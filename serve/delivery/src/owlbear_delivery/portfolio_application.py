@@ -107,9 +107,11 @@ if TYPE_CHECKING:
         DraftPullRequestPublicationReceipt,
         DraftPullRequestPublisher,
         GeneratedPullRequestSummaryReceipt,
+        ObserveChangePublicationChecks,
         UpdateGeneratedPullRequestSummary,
     )
     from owlbear_delivery.integration_verification import IntegrationVerificationReceipt, IntegrationVerifier
+    from owlbear_delivery.publication_provider import PublicationCheckSnapshot
     from owlbear_delivery.target_admission import (
         DeliveryAdmissionRequest,
         DeliveryAdmissionResult,
@@ -609,6 +611,16 @@ class PortfolioApplication:
             message = "draft pull-request publication is not configured"
             raise PortfolioApplicationError(message)
         return self._draft_pull_request_publisher.update_generated_summary(request)
+
+    def observe_change_publication_checks(
+        self,
+        request: ObserveChangePublicationChecks,
+    ) -> PublicationCheckSnapshot:
+        """Observe provider checks for one Change-bound published head."""
+        if self._draft_pull_request_publisher is None:
+            message = "draft pull-request publication is not configured"
+            raise PortfolioApplicationError(message)
+        return self._draft_pull_request_publisher.observe_checks(request)
 
     def read_design_session(self, change_id: str) -> VerifiedDesignPackage:
         """Return one verified authored Design package and its current identity."""

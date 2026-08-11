@@ -24,6 +24,7 @@ from owlbear_delivery.delivery_runtime import (
 )
 from owlbear_delivery.draft_pull_request import (
     CreateOrReconcileDraftPullRequest,
+    ObserveChangePublicationChecks,
     UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.identities import ChangeId
@@ -145,6 +146,12 @@ class UpdateGeneratedPullRequestSummaryParams(_TargetProtocolModel):
     request: UpdateGeneratedPullRequestSummary
 
 
+class ObserveChangePublicationChecksParams(_TargetProtocolModel):
+    """Validate one Change-bound provider check observation."""
+
+    request: ObserveChangePublicationChecks
+
+
 class DeliveryPlanPublication(_TargetProtocolModel):
     """Planning publication response with its transition-ready output reference."""
 
@@ -261,6 +268,10 @@ type UpdateGeneratedPullRequestSummaryRequest = Annotated[
     UpdateGeneratedPullRequestSummaryParams,
     BeforeValidator(partial(_parse_json_model, UpdateGeneratedPullRequestSummaryParams)),
 ]
+type ObserveChangePublicationChecksRequest = Annotated[
+    ObserveChangePublicationChecksParams,
+    BeforeValidator(partial(_parse_json_model, ObserveChangePublicationChecksParams)),
+]
 type RepairClaimContextRequest = Annotated[
     RepairClaimContextParams,
     BeforeValidator(partial(_parse_json_model, RepairClaimContextParams)),
@@ -311,6 +322,8 @@ __all__ = [
     "IntegrationRepairAuthorityAttentionRequest",
     "IntegrationRepairParams",
     "IntegrationRepairRequest",
+    "ObserveChangePublicationChecksParams",
+    "ObserveChangePublicationChecksRequest",
     "PublishChangeBranchParams",
     "PublishChangeBranchRequest",
     "PublishDeliveryPlanParams",
