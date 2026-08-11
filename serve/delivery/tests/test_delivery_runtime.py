@@ -52,7 +52,7 @@ from owlbear_delivery import (
     ReturnDelivery,
     integration_attention_disposition,
 )
-from owlbear_delivery.delivery_runtime import parse_delivery_frontier
+from owlbear_delivery.delivery_runtime import invalidate_checkpoint_publication, parse_delivery_frontier
 
 
 def test_integration_attention_codes_have_one_operational_disposition() -> None:
@@ -602,6 +602,15 @@ def test_pending_checkpoint_rejects_duplicate_first_task_trigger() -> None:
                 ),
             ),
         )
+
+
+def test_empty_checkpoint_invalidation_preserves_valid_anchor() -> None:
+    pending = DeliveryPendingCheckpoint(
+        head="1" * 40,
+        triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+    )
+
+    assert invalidate_checkpoint_publication(pending, set()) is pending
 
 
 def test_build_advance_binds_compact_result_and_releases_writer(tmp_path: Path) -> None:

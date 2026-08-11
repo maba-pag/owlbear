@@ -1599,11 +1599,6 @@ def parse_delivery_frontier(
     return frontier, _model_content(frontier)
 
 
-def _requires_checkpoint_migration(content: bytes) -> bool:
-    payload = json.loads(content)
-    return isinstance(payload, dict) and payload.get("schema_version") != _FRONTIER_SCHEMA_VERSION
-
-
 def _backfill_checkpoint_state(
     frontier: DeliveryFrontier,
     reviewed_head: str | None,
@@ -1716,6 +1711,8 @@ def invalidate_checkpoint_publication(
     """Retain valid obligations while removing their invalidated publication head."""
     if pending is None:
         return None
+    if not invalidated_outcome_ids:
+        return pending
     retained = tuple(
         trigger
         for trigger in pending.triggers

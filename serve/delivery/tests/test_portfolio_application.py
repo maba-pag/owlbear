@@ -398,6 +398,28 @@ def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path
     assert not (repository / ".owlbear/worktrees").exists()
 
 
+def test_delivery_loader_isolates_contract_without_workspace_coordination(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    contract = _contract("change-a", b"intent", b"design")
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(
+                outcome_id="OUT-001",
+                plan_scope_id="SCOPE-001",
+            ),
+        )
+    )
+    change_root = runtime_root / "changes/change-a"
+    change_root.mkdir(parents=True)
+    (change_root / "contract.json").write_bytes(_canonical(contract))
+    (change_root / "frontier.json").write_bytes(_canonical(frontier))
+
+    application = load_delivery_application(_startup_config(), workspace_root=repository)
+
+    assert application.list_work_items() == ()
+
+
 def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     runtime_root = repository / ".owlbear/delivery/runtime"

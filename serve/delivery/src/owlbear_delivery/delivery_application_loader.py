@@ -12,7 +12,11 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from owlbear_delivery.change_publication import ChangeBranchPublisher
-from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator
+from owlbear_delivery.change_workspace import (
+    ChangeWorkspaceManager,
+    CoordinationConflictError,
+    PortfolioCoordinator,
+)
 from owlbear_delivery.completed_history import CompletedHistoryCatalog
 from owlbear_delivery.delivery_runtime import (
     DeliveryFrontier,
@@ -280,15 +284,7 @@ def _compose_application(
         paths.worktree_root / "integration-verification",
         IntegrationVerificationStore(paths.runtime_root),
     )
-    runtimes = {
-        change_id: DeliveryRuntime(
-            paths.runtime_root,
-            contract,
-            workspace_manager=workspace_manager,
-            migration_reviewed_head=workspace_manager.show(change_id).last_reviewed_commit,
-        )
-        for change_id, contract in contracts.items()
-    }
+    runtimes = _composed_runtimes(paths.runtime_root, contracts, workspace_manager)
     dependencies = PortfolioApplicationDependencies(
         target_root=paths.runtime_root,
         package_store=package_store,
@@ -325,6 +321,26 @@ def _compose_application(
         role_policies=_role_policies(),
     )
     return PortfolioApplication(runtimes, dependencies, application_config)
+
+
+def _composed_runtimes(
+    runtime_root: Path,
+    contracts: dict[str, DeliveryContract],
+    workspace_manager: ChangeWorkspaceManager,
+) -> dict[str, DeliveryRuntime]:
+    runtimes = {}
+    for change_id, contract in contracts.items():
+        try:
+            reviewed_head = workspace_manager.show(change_id).last_reviewed_commit
+        except CoordinationConflictError:
+            continue
+        runtimes[change_id] = DeliveryRuntime(
+            runtime_root,
+            contract,
+            workspace_manager=workspace_manager,
+            migration_reviewed_head=reviewed_head,
+        )
+    return runtimes
 
 
 def load_delivery_application(
