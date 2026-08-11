@@ -22,6 +22,7 @@ from owlbear_delivery.delivery_runtime import (
     PublishDeliveryPlan,
     PublishDeliveryResult,
 )
+from owlbear_delivery.draft_pull_request import MarkChangePullRequestReady
 from owlbear_delivery.identities import ChangeId
 from owlbear_delivery.target_admission import DeliveryAdmissionRequest
 
@@ -129,6 +130,12 @@ class FinalizeDeliveryChangeParams(ChangeParams):
     request: FinalizeDeliveryChange
 
 
+class MarkChangeReadyParams(_TargetProtocolModel):
+    """Validate one exact finalized pull-request ready transition."""
+
+    request: MarkChangePullRequestReady
+
+
 class DeliveryPlanPublication(_TargetProtocolModel):
     """Planning publication response with its transition-ready output reference."""
 
@@ -233,6 +240,10 @@ type FinalizeDeliveryChangeRequest = Annotated[
     FinalizeDeliveryChangeParams,
     BeforeValidator(partial(_parse_json_model, FinalizeDeliveryChangeParams)),
 ]
+type MarkChangeReadyRequest = Annotated[
+    MarkChangeReadyParams,
+    BeforeValidator(partial(_parse_json_model, MarkChangeReadyParams)),
+]
 type PublishDeliveryPlanRequest = Annotated[
     PublishDeliveryPlanParams,
     BeforeValidator(partial(_parse_json_model, PublishDeliveryPlanParams)),
@@ -287,6 +298,8 @@ __all__ = [
     "IntegrationRepairAuthorityAttentionRequest",
     "IntegrationRepairParams",
     "IntegrationRepairRequest",
+    "MarkChangeReadyParams",
+    "MarkChangeReadyRequest",
     "PublishDeliveryPlanParams",
     "PublishDeliveryPlanRequest",
     "PublishDeliveryResultParams",

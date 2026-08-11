@@ -52,6 +52,8 @@ from owlbear_delivery_mcp.target_models import (
     IntegrationRepairAuthorityAttentionRequest,
     IntegrationRepairParams,
     IntegrationRepairRequest,
+    MarkChangeReadyParams,
+    MarkChangeReadyRequest,
     PublishDeliveryPlanParams,
     PublishDeliveryPlanRequest,
     PublishDeliveryResultParams,
@@ -93,6 +95,7 @@ DELIVERY_OPERATION_NAMES = (
     "publish_delivery_plan",
     "publish_delivery_result",
     "finalize_change",
+    "mark_change_ready",
     "reconcile_finalization_head",
     "reconcile_change_checkpoint",
     "observe_change_publication_checks",
@@ -290,6 +293,15 @@ class TargetMCPAdapter:
             self._call,
             params,
             lambda: self._application.finalize_change(params.change_id, params.request),
+        )
+
+    async def mark_change_ready(self, request: MarkChangeReadyRequest) -> dict[str, object]:
+        """Mark one exact finalized and fully published Change pull request ready."""
+        params = self._validate(MarkChangeReadyParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.mark_change_ready(params.request.change_id, params.request),
         )
 
     async def reconcile_finalization_head(self, request: ChangeRequest) -> dict[str, object] | None:

@@ -67,6 +67,7 @@ DELIVERY_TOOLS = {
     "publish_delivery_plan",
     "publish_delivery_result",
     "finalize_change",
+    "mark_change_ready",
     "reconcile_finalization_head",
     "reconcile_change_checkpoint",
     "observe_change_publication_checks",
@@ -391,6 +392,9 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
     finalization_schema = tools["finalize_change"].input_schema
     finalization_request = finalization_schema["$defs"]["FinalizeDeliveryChange"]
     assert {"operation_id", "exact_head", "observations", "review"} <= set(finalization_request["required"])
+    ready_schema = tools["mark_change_ready"].input_schema
+    ready_request = ready_schema["$defs"]["MarkChangePullRequestReady"]
+    assert {"change_id", "operation_id", "finalization_id", "exact_head"} == set(ready_request["required"])
     reconciliation_schema = tools["reconcile_finalization_head"].input_schema
     reconciliation_request = reconciliation_schema["$defs"]["ChangeParams"]
     assert set(reconciliation_request["properties"]) == {"change_id"}

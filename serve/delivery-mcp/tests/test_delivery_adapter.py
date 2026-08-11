@@ -29,6 +29,7 @@ from owlbear_delivery.delivery_runtime import (
     FinalizeDeliveryChange,
 )
 from owlbear_delivery.design_package import DesignPackageConflictError
+from owlbear_delivery.draft_pull_request import MarkChangePullRequestReady
 from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
 from owlbear_delivery.runtime_transaction import TransactionPathError
 from owlbear_delivery_mcp.target_server import (
@@ -224,6 +225,14 @@ def _requests() -> dict[str, dict[str, object]]:
             "request": {"outcome_id": "OUT-001", "claim_id": "claim", "result": _result()},
         },
         "finalize_change": {**change, "request": _finalization()},
+        "mark_change_ready": {
+            "request": {
+                "change_id": CHANGE,
+                "operation_id": "ready-change-a",
+                "finalization_id": DIGEST,
+                "exact_head": COMMIT,
+            }
+        },
         "reconcile_finalization_head": change,
         "reconcile_change_checkpoint": change,
         "observe_change_publication_checks": change,
@@ -274,6 +283,9 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
     assert [call[0] for call in application.calls] == [operation_name]
     if operation_name == "finalize_change":
         assert isinstance(application.calls[0][1][1], FinalizeDeliveryChange)
+    if operation_name == "mark_change_ready":
+        assert application.calls[0][1][0] == CHANGE
+        assert isinstance(application.calls[0][1][1], MarkChangePullRequestReady)
     if operation_name == "reconcile_finalization_head":
         assert application.calls[0][1] == (CHANGE,)
     tuple_results = {"list_work_items", "list_integration_ready_changes"}
