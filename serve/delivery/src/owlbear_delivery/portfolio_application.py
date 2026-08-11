@@ -709,6 +709,7 @@ class PortfolioApplication:
         """Retain or invalidate finalization from the engine-derived Change branch head."""
         runtime = self._runtime(change_id)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
+            finalization = runtime.finalization()
             ready = runtime.ready_receipt()
             observation = (
                 None
@@ -722,11 +723,11 @@ class PortfolioApplication:
                 if observation is None
                 else observation.snapshot.head_sha
             )
-            result = runtime.reconcile_finalization_head(observed_head, _timestamp(self._clock()))
             if (
-                isinstance(result, DeliveryFinalizationInvalidationReceipt)
+                finalization is not None
                 and ready is not None
                 and observation is not None
+                and observed_head != finalization.exact_head
             ):
                 self._draft_pull_request_publisher.return_to_draft(
                     ReturnChangePullRequestToDraft(
@@ -736,7 +737,8 @@ class PortfolioApplication:
                         exact_head=observation.snapshot.head_sha,
                     )
                 )
-            elif observation is not None:
+            result = runtime.reconcile_finalization_head(observed_head, _timestamp(self._clock()))
+            if not isinstance(result, DeliveryFinalizationInvalidationReceipt) and observation is not None:
                 runtime.reconcile_pull_request_draft_state(provider_draft=observation.snapshot.draft)
             return result
 

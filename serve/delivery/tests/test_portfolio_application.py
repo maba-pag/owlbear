@@ -499,6 +499,25 @@ def test_finalization_uses_managed_head_and_invalidates_observed_drift(tmp_path:
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
 
 
+def _fail_once_then_set_draft_state(pull_requests: list[PublicationPullRequest]):
+    failures_remaining = 1
+
+    def transition(request):
+        nonlocal failures_remaining
+        if failures_remaining:
+            failures_remaining -= 1
+            raise PublicationProviderError(
+                PublicationProviderFailureCode.UNAVAILABLE,
+                "set_pull_request_draft_state",
+                "provider unavailable",
+                retry_safe=True,
+            )
+        pull_requests[0] = pull_requests[0].model_copy(update={"draft": request.draft})
+        return pull_requests[0]
+
+    return transition
+
+
 def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
@@ -577,6 +596,16 @@ def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Pat
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.AWAITING_MERGE
     assert pull_requests[0].draft is False
     pull_requests[0] = pull_requests[0].model_copy(update={"head_sha": "f" * 40})
+    provider.set_pull_request_draft_state.side_effect = _fail_once_then_set_draft_state(pull_requests)
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        application.reconcile_finalization_head("change-a")
+
+    assert exc_info.value.code is PublicationProviderFailureCode.UNAVAILABLE
+    assert runtimes["change-a"].finalization() == receipt
+    assert runtimes["change-a"].ready_receipt() == ready
+    assert runtimes["change-a"].change_stage() == DeliveryChangeStage.AWAITING_MERGE
+    assert pull_requests[0].draft is False
 
     invalidation = application.reconcile_finalization_head("change-a")
 
@@ -587,7 +616,7 @@ def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Pat
     assert application._workspace_manager.observed_change_head("change-a") == exact_head  # noqa: SLF001
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
     assert pull_requests[0].draft is True
-    assert provider.set_pull_request_draft_state.call_count == 2
+    assert provider.set_pull_request_draft_state.call_count == 3
 
 
 def test_portfolio_operating_view_recommends_creation_when_no_work_exists(tmp_path: Path) -> None:
