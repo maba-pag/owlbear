@@ -65,6 +65,10 @@ ADDITIONAL_EXCLUDED_DIRECTORIES:
   - dist                 # Vite build output
   - playwright-report    # Playwright HTML reports
   - test-results         # Playwright test output
+  - worktrees            # Host-local Delivery worktrees
+  - scratch              # Generated scratch workspace files
+  - runtime              # Host-local runtime state
+  - legacy               # Archived OwlBear workspace content
 
 # ──────────────────────────────────────────────
 # Linter-specific configuration
