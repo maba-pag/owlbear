@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+from owlbear_delivery.change_publication import (
+    ChangeBranchPublicationReceipt,
+    ChangeBranchPublisher,
+    ChangePublicationError,
+    ChangePublicationFailureCode,
+    PublishChangeBranch,
+)
 from owlbear_delivery.change_workspace import (
     AtomicIntegrationPreparation,
     AtomicIntegrationResult,
@@ -265,7 +272,11 @@ __all__ = [
     "AuthorityStatus",
     "BlockDelivery",
     "CapacityLedger",
+    "ChangeBranchPublicationReceipt",
+    "ChangeBranchPublisher",
     "ChangeCoordination",
+    "ChangePublicationError",
+    "ChangePublicationFailureCode",
     "ChangeWorkspaceManager",
     "ChangeWriter",
     "Commitment",
@@ -412,6 +423,7 @@ __all__ = [
     "PublicationProviderFailureCode",
     "PublicationPullRequest",
     "PublicationRepository",
+    "PublishChangeBranch",
     "PublishDeliveryOutput",
     "PublishDeliveryPlan",
     "PublishDeliveryResult",
