@@ -104,6 +104,8 @@ from owlbear_delivery.draft_pull_request import (
     CreateOrReconcileDraftPullRequest,
     DraftPullRequestPublicationReceipt,
     DraftPullRequestPublisher,
+    GeneratedPullRequestSummaryReceipt,
+    UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.integration_verification import (
     INTEGRATION_VERIFICATION_PROFILE_PATH,
@@ -380,6 +382,7 @@ __all__ = [
     "FindPublicationPullRequest",
     "FinishTargetJobRequest",
     "FinishedTargetJob",
+    "GeneratedPullRequestSummaryReceipt",
     "IntegrationContext",
     "IntegrationFinding",
     "IntegrationRepairCandidate",
@@ -473,6 +476,7 @@ __all__ = [
     "TargetRuntimeState",
     "TargetTask",
     "TaskPlanScope",
+    "UpdateGeneratedPullRequestSummary",
     "UpdatePublicationPullRequest",
     "VerifiedDesignPackage",
     "WorkItemAttention",
