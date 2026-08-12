@@ -26,6 +26,7 @@ from owlbear_delivery import (
     CompletedHistoryCatalog,
     ChangeWorkspaceManager,
     ChangeWriter,
+    CompletionReceipt,
     CoordinationConflictError,
     DeliveryApplicationLoadError,
     DeliveryCommitment,
@@ -625,6 +626,112 @@ def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Pat
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
     assert pull_requests[0].draft is True
     assert provider.set_pull_request_draft_state.call_count == 3
+
+
+def test_observe_acceptance_completes_once_and_replays_without_provider_io(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    runtime = runtimes["change-a"]
+    exact_head = coordinator.show("change-a").last_reviewed_commit
+    finalization = application.finalize_change(
+        "change-a",
+        _finalization_request("change-a", exact_head),
+    )
+    pull_request = PublicationPullRequest(
+        repository="example/project",
+        number=7,
+        node_id="PR_node_7",
+        head_branch="owlbear/change/change-a",
+        head_sha=exact_head,
+        base_branch="main",
+        title="Change A",
+        body=(
+            "<!-- owlbear-change:change-a -->\n\n"
+            "<!-- owlbear-generated:start -->\n"
+            "Finalized Change A.\n"
+            "<!-- owlbear-generated:end -->\n"
+        ),
+        draft=True,
+        state="open",
+        merged=False,
+    )
+    provider = Mock()
+    provider.read_repository.return_value = PublicationRepository(
+        repository="example/project",
+        default_branch="main",
+    )
+    provider.find_pull_request.return_value = None
+    provider.create_draft_pull_request.side_effect = lambda _request: pull_request
+    provider.read_pull_request.side_effect = lambda _repository, _number: pull_request
+    provider.observe_checks.return_value = PublicationCheckSnapshot(
+        repository="example/project",
+        number=7,
+        head_sha=exact_head,
+        checks=(),
+    )
+
+    def set_draft_state(request):
+        nonlocal pull_request
+        pull_request = pull_request.model_copy(update={"draft": request.draft})
+        return pull_request
+
+    provider.set_pull_request_draft_state.side_effect = set_draft_state
+    publisher = DraftPullRequestPublisher(
+        provider,
+        repository="example/project",
+        target_branch="main",
+        state_root=tmp_path / "pull-requests",
+    )
+    publisher.publish(
+        CreateOrReconcileDraftPullRequest(
+            change_id="change-a",
+            operation_id="create-change-a",
+            published_head=exact_head,
+            title="Change A",
+            generated_summary="Finalized Change A.",
+        )
+    )
+    application._draft_pull_request_publisher = publisher  # noqa: SLF001
+    checkpoint = runtime.checkpoint_publication_state()
+    assert checkpoint.pending_checkpoint is not None
+    runtime.record_checkpoint_branch_publication(checkpoint, exact_head)
+    runtime.acknowledge_checkpoint_publication(checkpoint.pending_checkpoint, exact_head)
+    application.mark_change_ready(
+        "change-a",
+        MarkChangePullRequestReady(
+            change_id="change-a",
+            operation_id="ready-change-a",
+            finalization_id=finalization.finalization_id,
+            exact_head=exact_head,
+        ),
+    )
+    pull_request = pull_request.model_copy(
+        update={
+            "state": "closed",
+            "merged": True,
+            "merge_commit_sha": "f" * 40,
+            "merged_at": datetime(2026, 8, 3, 23, tzinfo=UTC),
+            "merged_by_login": "octocat",
+        }
+    )
+
+    receipt = application.observe_acceptance("change-a")
+    provider_calls = provider.read_pull_request.call_count
+    replayed = application.observe_acceptance("change-a")
+    reconciled = application.reconcile_finalization_head("change-a")
+
+    assert isinstance(receipt, CompletionReceipt)
+    assert replayed == receipt
+    assert reconciled == finalization
+    assert provider.read_pull_request.call_count == provider_calls
+    assert runtime.change_stage() == DeliveryChangeStage.COMPLETED
+    assert application.list_work_items() == ()
+    assert application.list_integration_ready_changes() == ()
+    assert receipt.accepted_merge_commit == "f" * 40
+    assert receipt.check_observation_ids
+    assert receipt.review_receipt_ids == (finalization.review.review_id,)
 
 
 def test_portfolio_operating_view_recommends_creation_when_no_work_exists(tmp_path: Path) -> None:
@@ -1285,7 +1392,7 @@ dependencies: []
     assert recovered.replayed
     assert coordinator.show("change-a").last_reviewed_commit == reviewed_head
     assert application.show_change_checkpoint_publication("change-a").pending_checkpoint is not None
-    assert json.loads(frontier_path.read_bytes())["schema_version"] == 7
+    assert json.loads(frontier_path.read_bytes())["schema_version"] == 8
 
 
 def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
@@ -1336,7 +1443,7 @@ def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_pa
 
     assert state.pending_checkpoint is not None
     assert state.pending_checkpoint.head == coordination.last_reviewed_commit
-    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 7
+    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 8
 
 
 def test_delivery_loader_injects_publication_provider_and_derives_check_head(tmp_path: Path) -> None:

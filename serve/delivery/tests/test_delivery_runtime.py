@@ -18,6 +18,9 @@ from owlbear_delivery import (
     BlockDelivery,
     ChangeWorkspaceManager,
     ChangeWriter,
+    CompletionEvidence,
+    CompletionPullRequestIdentity,
+    CompletionReceipt,
     DeliveryActiveClaim,
     DeliveryChangeStage,
     DeliveryCheckpointTrigger,
@@ -65,6 +68,7 @@ from owlbear_delivery import (
 )
 from owlbear_delivery.delivery_runtime import invalidate_checkpoint_publication, parse_delivery_frontier
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
+from owlbear_delivery.runtime_transaction import RuntimeTransaction
 
 
 def test_exact_commit_evidence_receipts_validate_identity_and_independence() -> None:
@@ -482,6 +486,47 @@ def _pull_request_observation(
     return PublicationPullRequestObservationReceipt(observation_id=observation_id, **values)
 
 
+def _completion_receipt(runtime: DeliveryRuntime) -> CompletionReceipt:
+    finalization = runtime.finalization()
+    latch = runtime.merged_pull_request_latch()
+    assert finalization is not None
+    assert latch is not None
+    return CompletionReceipt.create(
+        CompletionEvidence(
+            change_id="delivery-runtime",
+            finalization_receipt_id=finalization.finalization_id,
+            finalized_change_head=finalization.exact_head,
+            repository_identity=latch.repository,
+            pull_request_identity=CompletionPullRequestIdentity(
+                number=latch.number,
+                node_id=latch.node_id,
+            ),
+            accepted_target_ref=latch.base_branch,
+            accepted_merge_commit=latch.accepted_merge_commit,
+            merged_at=latch.merged_at,
+            acceptance_observation_id=latch.acceptance_observation_id,
+            check_observation_ids=("8" * 64,),
+            review_receipt_ids=(finalization.review.review_id,),
+            completed_at=datetime(2026, 8, 11, 18, tzinfo=UTC),
+        )
+    )
+
+
+def _awaiting_merge_runtime(tmp_path: Path) -> DeliveryRuntime:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    exact_head = "3" * 40
+    finalization = runtime.finalize_change(
+        _finalization_request(exact_head),
+        datetime(2026, 8, 11, 14, tzinfo=UTC),
+    )
+    runtime.mark_awaiting_merge(_ready_receipt(finalization.finalization_id, exact_head))
+    runtime.latch_merged_pull_request(_pull_request_observation())
+    return runtime
+
+
 def test_finalization_binds_exact_head_and_invalidates_on_head_drift(tmp_path: Path) -> None:
     runtime = _runtime(
         tmp_path,
@@ -550,6 +595,48 @@ def test_merged_pull_request_latch_is_monotonic_and_rejects_regression(tmp_path:
     assert runtime.merged_pull_request_latch() == first
 
 
+def test_completion_receipt_and_terminal_frontier_publish_atomically(tmp_path: Path) -> None:
+    runtime = _awaiting_merge_runtime(tmp_path)
+    receipt = _completion_receipt(runtime)
+
+    completed = runtime.complete_change(receipt)
+
+    assert completed == receipt
+    assert runtime.completion_receipt() == receipt
+    assert runtime.change_stage() == DeliveryChangeStage.COMPLETED
+    assert runtime.complete_change(receipt) == receipt
+    completion_path = tmp_path / "completions/delivery-runtime" / f"{receipt.completion_id}.json"
+    assert CompletionReceipt.model_validate_json(completion_path.read_bytes()) == receipt
+    with pytest.raises(DeliveryRuntimeConflictError, match="terminal"):
+        runtime.reconcile_finalization_head("4" * 40, datetime(2026, 8, 11, 19, tzinfo=UTC))
+
+
+def test_completion_transaction_recovers_after_receipt_publication(tmp_path: Path) -> None:
+    runtime = _awaiting_merge_runtime(tmp_path)
+    receipt = _completion_receipt(runtime)
+    original_commit = RuntimeTransaction.commit
+
+    def fail_after_receipt(transaction: RuntimeTransaction) -> None:
+        def failure(point: str) -> None:
+            if point == "after-first-publication":
+                message = "simulated completion crash"
+                raise RuntimeError(message)
+
+        original_commit(transaction, failure=failure)
+
+    with (
+        patch.object(RuntimeTransaction, "commit", fail_after_receipt),
+        pytest.raises(RuntimeError, match="simulated completion crash"),
+    ):
+        runtime.complete_change(receipt)
+
+    recovered = DeliveryRuntime(tmp_path, _contract())
+
+    assert recovered.completion_receipt() == receipt
+    assert recovered.change_stage() == DeliveryChangeStage.COMPLETED
+    assert not tuple((tmp_path / ".runtime-transactions").glob("*.yaml"))
+
+
 def test_plan_publication_is_idempotent_and_promotes_dependency_order(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path)
     _activate(runtime, "OUT-001", "claim-001")
@@ -586,7 +673,7 @@ def test_runtime_migrates_reducible_assembly_metadata_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 7
+    assert canonical["schema_version"] == 8
     assert all("assembly_required" not in binding for binding in canonical["bindings"])
     assert json.loads(path.read_bytes()) == canonical
 
@@ -603,13 +690,17 @@ def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 7
+    assert canonical["schema_version"] == 8
     assert canonical["published_head"] is None
     assert canonical["pending_checkpoint"] is None
     assert json.loads(path.read_bytes()) == canonical
 
 
-def test_runtime_migrates_schema_six_without_rewriting_finalization_checkpoint(tmp_path: Path) -> None:
+@pytest.mark.parametrize("schema_version", [3, 4, 5, 6, 7])
+def test_runtime_migrates_prior_schema_without_rewriting_finalization_checkpoint(
+    tmp_path: Path,
+    schema_version: int,
+) -> None:
     runtime = _runtime(
         tmp_path,
         stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
@@ -621,8 +712,10 @@ def test_runtime_migrates_schema_six_without_rewriting_finalization_checkpoint(t
     )
     path = tmp_path / "changes/delivery-runtime/frontier.json"
     payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 6
-    payload.pop("merged_pull_request_latch")
+    payload["schema_version"] = schema_version
+    if schema_version < 7:
+        payload.pop("merged_pull_request_latch")
+    payload.pop("change_completion")
     expected_checkpoint = payload["pending_checkpoint"]
     path.write_text(json.dumps(payload), encoding="utf-8")
 
@@ -633,7 +726,7 @@ def test_runtime_migrates_schema_six_without_rewriting_finalization_checkpoint(t
     )
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 7
+    assert canonical["schema_version"] == 8
     assert canonical["pending_checkpoint"] == expected_checkpoint
     assert canonical["pending_checkpoint"]["head"] == exact_head
     assert canonical["pending_checkpoint"]["triggers"][-1] == {

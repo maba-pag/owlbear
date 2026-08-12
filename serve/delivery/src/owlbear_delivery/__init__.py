@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+from owlbear_delivery.acceptance import (
+    CompletionEvidence,
+    CompletionPullRequestIdentity,
+    CompletionReceipt,
+    CompletionReceiptConflictError,
+    CompletionReceiptStore,
+)
 from owlbear_delivery.change_publication import (
     ChangeBranchPublicationReceipt,
     ChangeBranchPublisher,
@@ -52,6 +59,7 @@ from owlbear_delivery.delivery_runtime import (
     BlockDelivery,
     DeliveryActiveClaim,
     DeliveryBlock,
+    DeliveryChangeCompletion,
     DeliveryChangeStage,
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointTrigger,
@@ -126,6 +134,7 @@ from owlbear_delivery.draft_pull_request import (
     PublicationPullRequestObservationReceipt,
     PullRequestDraftReceipt,
     PullRequestReadyReceipt,
+    ReadChangePublicationCheckObservations,
     ReturnChangePullRequestToDraft,
     UpdateGeneratedPullRequestSummary,
 )
@@ -323,8 +332,13 @@ __all__ = [
     "CompletedHistoryMissingError",
     "CompletedHistoryStaleError",
     "CompletionCapture",
+    "CompletionEvidence",
     "CompletionPackageManifest",
     "CompletionPackageSnapshot",
+    "CompletionPullRequestIdentity",
+    "CompletionReceipt",
+    "CompletionReceiptConflictError",
+    "CompletionReceiptStore",
     "CompletionSummary",
     "CoordinationConflictError",
     "CreateDraftPublicationPullRequest",
@@ -341,6 +355,7 @@ __all__ = [
     "DeliveryAuthorityRegistry",
     "DeliveryBlock",
     "DeliveryBuildContext",
+    "DeliveryChangeCompletion",
     "DeliveryChangeStage",
     "DeliveryCheckpointPublicationState",
     "DeliveryCheckpointReconciliationResult",
@@ -489,6 +504,7 @@ __all__ = [
     "PublishDeliveryResult",
     "PullRequestDraftReceipt",
     "PullRequestReadyReceipt",
+    "ReadChangePublicationCheckObservations",
     "RecoverInterruptedTaskRequest",
     "RespondToReviewRequest",
     "RetryDelivery",

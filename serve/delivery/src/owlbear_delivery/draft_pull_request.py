@@ -81,6 +81,15 @@ class ObserveChangePublicationPullRequest(_DraftPullRequestModel):
     change_id: str = Field(pattern=_CHANGE_ID_PATTERN)
 
 
+class ReadChangePublicationCheckObservations(_DraftPullRequestModel):
+    """Read durable provider check observations for one exact bound PR head."""
+
+    change_id: str = Field(pattern=_CHANGE_ID_PATTERN)
+    repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    number: int = Field(gt=0)
+    exact_commit: str = Field(pattern=_SHA_PATTERN)
+
+
 class _ChangePullRequestDraftStateRequest(_DraftPullRequestModel):
     change_id: str = Field(pattern=_CHANGE_ID_PATTERN)
     operation_id: str = Field(pattern=_OPERATION_ID_PATTERN)
@@ -291,6 +300,7 @@ type _PublicationRequest = (
     | MarkChangePullRequestReady
     | ObserveChangePublicationChecks
     | ObserveChangePublicationPullRequest
+    | ReadChangePublicationCheckObservations
     | ReturnChangePullRequestToDraft
     | UpdateGeneratedPullRequestSummary
 )
@@ -316,6 +326,16 @@ class DraftPullRequestPublisher:
         if state_root.is_symlink():
             msg = "draft pull-request state root must not be a symlink"
             raise ValueError(msg)
+
+    @property
+    def repository(self) -> str:
+        """Return the configured provider repository identity."""
+        return self._repository
+
+    @property
+    def target_branch(self) -> str:
+        """Return the configured pull-request target branch."""
+        return self._target_branch
 
     def publish(self, request: CreateOrReconcileDraftPullRequest) -> DraftPullRequestPublicationReceipt:
         """Create or recover the unique draft PR for one first checkpoint."""
@@ -374,6 +394,32 @@ class DraftPullRequestPublisher:
                 PublicationPullRequestObservationReceipt,
                 request,
             )
+
+    def read_check_observations(
+        self,
+        request: ReadChangePublicationCheckObservations,
+    ) -> tuple[PublicationCheckObservationReceipt, ...]:
+        """Read every durable check observation matching one bound PR and exact head."""
+        lock_root = self._state_root / "locks" / request.change_id
+        with locked_roots((lock_root,)):
+            root = self._state_root / "check-observations" / request.change_id
+            if root.is_symlink():
+                self._invalid_response(request, "stored check observation directory is invalid")
+            if not root.exists():
+                return ()
+            if not root.is_dir():
+                self._invalid_response(request, "stored check observation directory is invalid")
+            receipts = tuple(
+                receipt
+                for path in sorted(root.glob("*.json"))
+                for receipt in (self._read_state(path, PublicationCheckObservationReceipt, request),)
+                if receipt is not None
+                and receipt.change_id == request.change_id
+                and receipt.repository == request.repository
+                and receipt.number == request.number
+                and receipt.exact_commit == request.exact_commit
+            )
+            return tuple(sorted(receipts, key=lambda receipt: receipt.observation_id))
 
     def mark_ready(self, request: MarkChangePullRequestReady) -> PullRequestReadyReceipt:
         """Mark one exact finalized pull request ready and retain provider evidence."""

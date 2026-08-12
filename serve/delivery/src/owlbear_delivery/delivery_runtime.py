@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
+from owlbear_delivery.acceptance import CompletionReceipt, CompletionReceiptStore
 from owlbear_delivery.draft_pull_request import (
     PublicationPullRequestObservationReceipt,
     PullRequestReadyReceipt,
@@ -371,6 +372,20 @@ class DeliveryMergedPullRequestLatch(_DeliveryModel):
     def _validate_timestamp(self) -> DeliveryMergedPullRequestLatch:
         if self.merged_at.tzinfo is None:
             message = "merged pull-request latch timestamp must include a timezone"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryChangeCompletion(_DeliveryModel):
+    """Minimal terminal projection of one durable completion receipt."""
+
+    completion_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    completed_at: datetime
+
+    @model_validator(mode="after")
+    def _validate_timestamp(self) -> DeliveryChangeCompletion:
+        if self.completed_at.tzinfo is None:
+            message = "Delivery Change completion timestamp must include a timezone"
             raise ValueError(message)
         return self
 
@@ -758,7 +773,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 class DeliveryFrontier(_DeliveryModel):
     """Canonical outcome and Change checkpoint state persisted beside authority."""
 
-    schema_version: Literal[7] = 7
+    schema_version: Literal[8] = 8
     bindings: tuple[OutcomeAuthorityBinding, ...]
     published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint: DeliveryPendingCheckpoint | None = None
@@ -767,6 +782,7 @@ class DeliveryFrontier(_DeliveryModel):
     finalization_invalidation: DeliveryFinalizationInvalidationReceipt | None = None
     ready: PullRequestReadyReceipt | None = None
     merged_pull_request_latch: DeliveryMergedPullRequestLatch | None = None
+    change_completion: DeliveryChangeCompletion | None = None
     integration_result_id: str | None = None
     integration_completion: DeliveryIntegrationCompletion | None = None
     integration_attention: DeliveryIntegrationAttention | None = None
@@ -813,6 +829,18 @@ class DeliveryFrontier(_DeliveryModel):
             or self.integration_completion is not None
         ):
             message = "Delivery finalization requires completed unclaimed outcome authority"
+            raise ValueError(message)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_change_completion(self) -> DeliveryFrontier:
+        if self.change_completion is None:
+            return self
+        if self.finalization is None or self.ready is None or self.merged_pull_request_latch is None:
+            message = "Delivery Change completion requires finalization, ready, and merged evidence"
+            raise ValueError(message)
+        if self.integration_result_id is not None or self.integration_completion is not None:
+            message = "Delivery Change completion cannot coexist with legacy Integration completion"
             raise ValueError(message)
         return self
 
@@ -1004,8 +1032,8 @@ _STAGE_ORDER = {
     DeliveryStage.IMPLEMENTATION: 2,
     DeliveryStage.COMPLETED: 3,
 }
-_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6})
-_FRONTIER_SCHEMA_VERSION = 7
+_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7})
+_FRONTIER_SCHEMA_VERSION = 8
 _RETURN_TARGETS = {
     DeliveryStage.PLANNING: {DeliveryStage.DESIGN},
     DeliveryStage.IMPLEMENTATION: {DeliveryStage.PLANNING, DeliveryStage.DESIGN},
@@ -1048,6 +1076,8 @@ class DeliveryRuntime:
     def completion_capture_bytes(self) -> tuple[bytes, bytes]:
         """Return stable completed-outcome runtime and compact result history bytes."""
         frontier, _content = self._read()
+        if frontier.change_completion is not None:
+            _conflict("completed Change cannot enter legacy Integration capture")
         if {binding.stage for binding in frontier.bindings} != {DeliveryStage.COMPLETED}:
             _conflict("Integration capture requires every outcome to be completed")
         capture = frontier.model_copy(
@@ -1094,6 +1124,7 @@ class DeliveryRuntime:
     ) -> DeliveryCheckpointPublicationState:
         """Record one exact reconciled remote head without draining its obligations."""
         frontier, previous = self._read()
+        _require_change_incomplete(frontier)
         pending = expected.pending_checkpoint
         if (
             expected.change_id != self._contract.change_id
@@ -1113,6 +1144,7 @@ class DeliveryRuntime:
     ) -> DeliveryCheckpointPublicationState:
         """Drain reconciled obligations while retaining any newer local checkpoint."""
         frontier, previous = self._read()
+        _require_change_incomplete(frontier)
         current = frontier.pending_checkpoint
         if expected.head != published_head or frontier.published_head != published_head or current is None:
             _conflict("checkpoint acknowledgment no longer matches the published head")
@@ -1143,6 +1175,22 @@ class DeliveryRuntime:
         """Return durable authority that the exact finalized pull request is ready."""
         return self._read()[0].ready
 
+    def completion_receipt(self) -> CompletionReceipt | None:
+        """Return the exact terminal receipt while rejecting partial completion state."""
+        frontier, _content = self._read()
+        stored = CompletionReceiptStore(self._target_root).read(self._contract.change_id)
+        if frontier.change_completion is None:
+            if stored is not None:
+                _conflict("completion receipt exists without terminal frontier state")
+            return None
+        if (
+            stored is None
+            or stored.completion_id != frontier.change_completion.completion_id
+            or stored.completed_at != frontier.change_completion.completed_at
+        ):
+            _conflict("terminal frontier state does not match its completion receipt")
+        return stored
+
     def merged_pull_request_latch(self) -> DeliveryMergedPullRequestLatch | None:
         """Return immutable first merged evidence for the bound pull request."""
         return self._read()[0].merged_pull_request_latch
@@ -1150,6 +1198,7 @@ class DeliveryRuntime:
     def mark_awaiting_merge(self, receipt: PullRequestReadyReceipt) -> PullRequestReadyReceipt:
         """Bind provider-observed ready state to the exact current finalization."""
         frontier, previous = self._read()
+        _require_change_incomplete(frontier)
         finalization = frontier.finalization
         if finalization is None:
             _conflict("pull-request ready state requires current finalization authority")
@@ -1169,6 +1218,7 @@ class DeliveryRuntime:
     def reconcile_pull_request_draft_state(self, *, provider_draft: bool) -> PullRequestReadyReceipt | None:
         """Retain ready authority only while the provider reports the PR ready."""
         frontier, previous = self._read()
+        _require_change_incomplete(frontier)
         if frontier.ready is None or not provider_draft:
             return frontier.ready
         self._replace(previous, frontier.model_copy(update={"ready": None}))
@@ -1180,6 +1230,7 @@ class DeliveryRuntime:
     ) -> DeliveryMergedPullRequestLatch:
         """Persist the first exact merged tuple and reject later regression or drift."""
         frontier, previous = self._read()
+        _require_change_incomplete(frontier)
         finalization = frontier.finalization
         ready = frontier.ready
         snapshot = observation.snapshot
@@ -1238,6 +1289,56 @@ class DeliveryRuntime:
         self._replace(previous, frontier.model_copy(update={"merged_pull_request_latch": candidate}))
         return candidate
 
+    def complete_change(self, receipt: CompletionReceipt) -> CompletionReceipt:
+        """Atomically publish one terminal receipt and its minimal frontier projection."""
+        frontier, previous = self._read()
+        store = CompletionReceiptStore(self._target_root)
+        existing = store.read(self._contract.change_id)
+        if frontier.change_completion is not None:
+            if existing == receipt and frontier.change_completion.completion_id == receipt.completion_id:
+                return receipt
+            _conflict("Delivery Change is already completed with different authority")
+        if existing is not None:
+            _conflict("completion receipt exists without terminal frontier state")
+        finalization = frontier.finalization
+        ready = frontier.ready
+        latch = frontier.merged_pull_request_latch
+        if finalization is None or ready is None or latch is None:
+            _conflict("Delivery Change completion requires finalized awaiting-merge evidence")
+        if (
+            receipt.change_id != self._contract.change_id
+            or receipt.finalization_receipt_id != finalization.finalization_id
+            or receipt.finalized_change_head != finalization.exact_head
+            or receipt.repository_identity != latch.repository
+            or receipt.pull_request_identity.number != latch.number
+            or receipt.pull_request_identity.node_id != latch.node_id
+            or receipt.accepted_target_ref != latch.base_branch
+            or receipt.accepted_merge_commit != latch.accepted_merge_commit
+            or receipt.merged_at != latch.merged_at
+            or receipt.acceptance_observation_id != latch.acceptance_observation_id
+            or receipt.review_receipt_ids != (finalization.review.review_id,)
+        ):
+            _conflict("completion receipt does not match finalization and merged evidence")
+        projection = DeliveryChangeCompletion(
+            completion_id=receipt.completion_id,
+            completed_at=receipt.completed_at,
+        )
+        replacement = _model_content(frontier.model_copy(update={"change_completion": projection}))
+        completion_participant = store.participant(receipt)
+        frontier_participant = ReplacementTransactionParticipant(
+            self._target_root,
+            self._frontier_path.relative_to(self._target_root),
+            previous,
+            replacement,
+        )
+        transaction_id = hashlib.sha256(completion_participant.content + previous + replacement).hexdigest()
+        RuntimeTransaction(
+            self._target_root,
+            f"delivery-completion-{transaction_id}",
+            (completion_participant, frontier_participant),
+        ).commit()
+        return receipt
+
     def finalize_change(
         self,
         request: FinalizeDeliveryChange,
@@ -1245,6 +1346,7 @@ class DeliveryRuntime:
     ) -> DeliveryFinalizationReceipt:
         """Bind completed authority and final validation to one exact Change head."""
         frontier, previous = self._read()
+        _require_change_incomplete(frontier)
         existing = frontier.finalization
         if existing is not None:
             if (
@@ -1300,6 +1402,7 @@ class DeliveryRuntime:
     ) -> DeliveryFinalizationReceipt | DeliveryFinalizationInvalidationReceipt | None:
         """Retain exact finalization or invalidate it after observed Change-head drift."""
         frontier, previous = self._read()
+        _require_change_incomplete(frontier)
         finalization = frontier.finalization
         if finalization is None:
             invalidation = frontier.finalization_invalidation
@@ -1574,7 +1677,7 @@ class DeliveryRuntime:
     def change_stage(self) -> DeliveryChangeStage:
         """Derive change lifecycle from canonical outcome state."""
         frontier, _content = self._read()
-        if frontier.integration_result_id is not None:
+        if frontier.change_completion is not None or frontier.integration_result_id is not None:
             return DeliveryChangeStage.COMPLETED
         if frontier.ready is not None:
             return DeliveryChangeStage.AWAITING_MERGE
@@ -2091,6 +2194,11 @@ def _find_binding(frontier: DeliveryFrontier, outcome_id: str) -> OutcomeAuthori
         _reference(f"Delivery outcome is absent: {outcome_id}", exc)
 
 
+def _require_change_incomplete(frontier: DeliveryFrontier) -> None:
+    if frontier.change_completion is not None:
+        _conflict("completed Delivery Change is terminal")
+
+
 def parse_delivery_frontier(
     content: bytes,
     *,
@@ -2375,6 +2483,7 @@ __all__ = [
     "AdvanceDelivery",
     "BlockDelivery",
     "DeliveryBlock",
+    "DeliveryChangeCompletion",
     "DeliveryChangeStage",
     "DeliveryCheckpointPublicationState",
     "DeliveryCheckpointTrigger",

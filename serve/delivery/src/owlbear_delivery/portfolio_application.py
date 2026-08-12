@@ -14,6 +14,11 @@ from typing import TYPE_CHECKING, Literal, Never
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from owlbear_delivery.acceptance import (
+    CompletionEvidence,
+    CompletionPullRequestIdentity,
+    CompletionReceipt,
+)
 from owlbear_delivery.change_publication import (
     ChangeBranchPublicationReceipt,
     ChangeBranchPublisher,
@@ -87,6 +92,7 @@ from owlbear_delivery.draft_pull_request import (
     ObserveChangePublicationPullRequest,
     PublicationCheckObservationReceipt,
     PullRequestReadyReceipt,
+    ReadChangePublicationCheckObservations,
     ReturnChangePullRequestToDraft,
     UpdateGeneratedPullRequestSummary,
 )
@@ -708,6 +714,76 @@ class PortfolioApplication:
             receipt = self._draft_pull_request_publisher.mark_ready(request)
             return runtime.mark_awaiting_merge(receipt)
 
+    def observe_acceptance(self, change_id: str) -> CompletionReceipt:
+        """Complete one Change from a fresh exact merged-PR observation."""
+        if self._draft_pull_request_publisher is None:
+            message = "draft pull-request publication is not configured"
+            raise PortfolioApplicationError(message)
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            existing = runtime.completion_receipt()
+            if existing is not None:
+                return existing
+            finalization = runtime.finalization()
+            ready = runtime.ready_receipt()
+            publication = runtime.checkpoint_publication_state()
+            if finalization is None or ready is None:
+                message = "acceptance observation requires awaiting-merge authority"
+                raise PortfolioApplicationError(message)
+            if publication.published_head != finalization.exact_head or publication.pending_checkpoint is not None:
+                message = "acceptance observation requires the reconciled final checkpoint"
+                raise PortfolioApplicationError(message)
+            observation = self._draft_pull_request_publisher.observe_pull_request(
+                ObserveChangePublicationPullRequest(change_id=change_id)
+            )
+            if observation is None:
+                message = "acceptance observation requires a bound pull request"
+                raise PortfolioApplicationError(message)
+            snapshot = observation.snapshot
+            if (
+                snapshot.repository != self._draft_pull_request_publisher.repository
+                or snapshot.repository != ready.repository
+                or snapshot.number != ready.number
+                or snapshot.node_id != ready.node_id
+                or snapshot.base_branch != self._draft_pull_request_publisher.target_branch
+                or snapshot.head_sha != finalization.exact_head
+                or snapshot.state != "closed"
+                or not snapshot.merged
+                or snapshot.merge_commit_sha is None
+                or snapshot.merged_at is None
+            ):
+                message = "provider pull request does not satisfy acceptance authority"
+                raise PortfolioApplicationError(message)
+            latch = runtime.latch_merged_pull_request(observation)
+            checks = self._draft_pull_request_publisher.read_check_observations(
+                ReadChangePublicationCheckObservations(
+                    change_id=change_id,
+                    repository=latch.repository,
+                    number=latch.number,
+                    exact_commit=finalization.exact_head,
+                )
+            )
+            receipt = CompletionReceipt.create(
+                CompletionEvidence(
+                    change_id=change_id,
+                    finalization_receipt_id=finalization.finalization_id,
+                    finalized_change_head=finalization.exact_head,
+                    repository_identity=latch.repository,
+                    pull_request_identity=CompletionPullRequestIdentity(
+                        number=latch.number,
+                        node_id=latch.node_id,
+                    ),
+                    accepted_target_ref=latch.base_branch,
+                    accepted_merge_commit=latch.accepted_merge_commit,
+                    merged_at=latch.merged_at,
+                    acceptance_observation_id=latch.acceptance_observation_id,
+                    check_observation_ids=tuple(item.observation_id for item in checks),
+                    review_receipt_ids=(finalization.review.review_id,),
+                    completed_at=_timestamp(self._clock()),
+                )
+            )
+            return runtime.complete_change(receipt)
+
     def reconcile_finalization_head(
         self,
         change_id: str,
@@ -715,6 +791,8 @@ class PortfolioApplication:
         """Retain or invalidate finalization from the engine-derived Change branch head."""
         runtime = self._runtime(change_id)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
+            if runtime.completion_receipt() is not None:
+                return runtime.finalization()
             finalization = runtime.finalization()
             ready = runtime.ready_receipt()
             observation = (
@@ -1294,7 +1372,7 @@ class PortfolioApplication:
 
     @staticmethod
     def _snapshot_change_stage(snapshot: DeliveryPortfolioSnapshot) -> DeliveryChangeStage:
-        if snapshot.frontier.integration_result_id is not None:
+        if snapshot.frontier.change_completion is not None or snapshot.frontier.integration_result_id is not None:
             return DeliveryChangeStage.COMPLETED
         stages = {binding.stage for binding in snapshot.frontier.bindings}
         if DeliveryStage.DESIGN in stages:
