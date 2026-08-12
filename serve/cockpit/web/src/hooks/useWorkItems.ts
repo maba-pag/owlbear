@@ -3,10 +3,12 @@ import {
   answerWorkItemRequest,
   clearWorkItemBlock,
   listCompletedChanges,
+  markWorkItemPublicationReady,
   moveWorkItemBackward,
+  observeWorkItemAcceptance,
   previewWorkItemBackward,
+  reconcileWorkItemPublication,
   recoverWorkItemClaim,
-  retryWorkItemIntegration,
   searchCompletedChanges,
   showDesignWork,
   showCompletedChange,
@@ -302,10 +304,20 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
         setPendingAction(null)
       }
     },
-    retryIntegration: () => mutate(
-      'integration',
-      () => retryWorkItemIntegration(identity.changeId),
-      'Integration verification started.',
+    reconcilePublication: () => mutate(
+      'publication-reconcile',
+      () => reconcileWorkItemPublication(identity.changeId),
+      'Publication checkpoint reconciled.',
+    ),
+    markPublicationReady: () => mutate(
+      'publication-ready',
+      () => markWorkItemPublicationReady(identity.changeId),
+      'Pull request marked ready.',
+    ),
+    observeAcceptance: () => mutate(
+      'acceptance-observe',
+      () => observeWorkItemAcceptance(identity.changeId),
+      'GitHub acceptance observed.',
     ),
     retry: polling.refetch,
   }

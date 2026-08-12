@@ -100,7 +100,7 @@ function ActivityMetric({ count, icon, label }: { count: number; icon: 'play' | 
       data-testid={`portfolio-activity-${label.toLowerCase()}`}
       className={[
         'inline-flex items-center gap-1.5 whitespace-nowrap tabular-nums',
-        count === 0 ? 'text-contrast-low' : 'text-primary',
+        count === 0 ? 'text-contrast-medium' : 'text-primary',
       ].join(' ')}
     >
       <PIcon name={icon} size="x-small" color="inherit" aria-hidden="true" />

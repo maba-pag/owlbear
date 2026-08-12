@@ -1,5 +1,5 @@
 export type WorkItemStage = 'design' | 'planning' | 'implementation' | 'completed'
-export type WorkItemScope = 'outcome' | 'change-integration'
+export type WorkItemScope = 'outcome' | 'change-publication'
 export type WorkItemNeed = 'you' | 'dependency' | 'none'
 export type WorkItemNextActor = 'you' | 'agent' | 'dependency' | 'none'
 export type WorkItemActivityState = 'idle' | 'ready' | 'working' | 'repairing'
@@ -8,25 +8,20 @@ export type WorkItemActionKind =
   | 'answer-request'
   | 'clear-block'
   | 'recover-claim'
-  | 'integrate-change'
-  | 'retry-integration'
+  | 'reconcile-checkpoint'
+  | 'mark-ready'
+  | 'observe-acceptance'
   | 'start-orchestration'
-export type WorkItemProgressKind = 'tasks' | 'design-return' | 'plan' | 'integration'
-export type WorkItemChangeLifecycle = 'in-delivery' | 'integration'
-export type DeliveryWorkerRole = 'planner' | 'builder' | 'integration-repairer'
-export type DeliveryIntegrationAttentionDisposition = 'retryable' | 'repair-required' | 'operator-required'
-export type DeliveryIntegrationAttentionCode =
-  | 'revision-pending'
-  | 'target-identity-mismatch'
-  | 'package-mutated'
-  | 'completed-history-mutated'
-  | 'reviewed-boundary-mismatch'
-  | 'reviewed-worktree-dirty'
-  | 'merge-conflict'
-  | 'repair-authority'
-  | 'candidate-proof-failed'
-  | 'target-cas-lost'
-  | 'external-acceptance-required'
+export type WorkItemProgressKind = 'tasks' | 'design-return' | 'plan' | 'publication'
+export type WorkItemChangeLifecycle = 'in-delivery' | 'finalization' | 'publication' | 'awaiting-merge' | 'acceptance'
+export type DeliveryWorkerRole = 'planner' | 'builder'
+export type WorkItemPublicationPhase =
+  | 'finalization-invalidated'
+  | 'ready-for-finalization'
+  | 'checkpoint-pending'
+  | 'pull-request-draft'
+  | 'awaiting-merge'
+  | 'acceptance-observed'
 
 export interface WorkItemActivity {
   state: WorkItemActivityState
@@ -48,13 +43,6 @@ export interface WorkItemProgress {
   total: number | null
 }
 
-export interface WorkItemIntegrationAttentionRef {
-  attention_id: string
-  code: DeliveryIntegrationAttentionCode
-  disposition: DeliveryIntegrationAttentionDisposition
-  superseded: boolean
-}
-
 export interface WorkItemCardView {
   item_key: string
   work_item_id: string
@@ -69,7 +57,6 @@ export interface WorkItemCardView {
   activity: WorkItemActivity
   progress: WorkItemProgress
   action: WorkItemAction
-  integration_attention: WorkItemIntegrationAttentionRef | null
 }
 
 export interface ChangeGroupView {
@@ -102,7 +89,7 @@ export interface WorkItemPortfolioTotals {
   activity: ActivityCounts
 }
 
-export type PortfolioWorkScope = 'outcome' | 'integration'
+export type PortfolioWorkScope = 'outcome' | 'publication'
 export type PortfolioGuidanceKind =
   | 'resume-design'
   | 'start-orchestration'
@@ -197,17 +184,20 @@ export interface WorkItemTaskEvidence {
   proof_boundaries: string[]
 }
 
-export interface WorkItemIntegrationView {
-  attention_id: string | null
-  code: DeliveryIntegrationAttentionCode | null
-  disposition: DeliveryIntegrationAttentionDisposition | null
-  headline: string
-  explanation: string
-  conflicted_paths: string[]
-  diagnostics: string[]
-  retry_condition: string | null
-  superseded: boolean
-  repair_active: boolean
+export interface WorkItemPublicationView {
+  phase: WorkItemPublicationPhase
+  finalization_id: string | null
+  finalized_head: string | null
+  published_head: string | null
+  pending_checkpoint_head: string | null
+  pending_checkpoint_triggers: string[]
+  invalidated_expected_head: string | null
+  invalidated_observed_head: string | null
+  repository: string | null
+  pull_request_number: number | null
+  pull_request_head: string | null
+  accepted_merge_commit: string | null
+  merged_at: string | null
 }
 
 export interface WorkItemDetailView {
@@ -249,7 +239,7 @@ export interface WorkItemDetailView {
     custody_retained: boolean
     retry_condition: string
   } | null
-  integration: WorkItemIntegrationView | null
+  publication: WorkItemPublicationView | null
 }
 
 export interface WorkItemDetailResponse {
@@ -473,9 +463,23 @@ export function previewWorkItemBackward(
   )
 }
 
-export function retryWorkItemIntegration(changeId: string): Promise<unknown> {
+export function reconcileWorkItemPublication(changeId: string): Promise<unknown> {
   return controlRequest(
-    `/api/changes/${encodeURIComponent(changeId)}/integration/retry`,
-    'ERR_WORK_ITEM_INTEGRATION_RETRY',
+    `/api/changes/${encodeURIComponent(changeId)}/publication/reconcile`,
+    'ERR_WORK_ITEM_PUBLICATION_RECONCILE',
+  )
+}
+
+export function markWorkItemPublicationReady(changeId: string): Promise<unknown> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/publication/ready`,
+    'ERR_WORK_ITEM_PUBLICATION_READY',
+  )
+}
+
+export function observeWorkItemAcceptance(changeId: string): Promise<unknown> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/acceptance/observe`,
+    'ERR_WORK_ITEM_ACCEPTANCE_OBSERVE',
   )
 }

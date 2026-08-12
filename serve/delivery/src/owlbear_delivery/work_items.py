@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import re
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -11,8 +10,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from owlbear_delivery.delivery_runtime import (
     DeliveryBlock,
     DeliveryFrontier,
-    DeliveryIntegrationAttentionCode,
-    DeliveryIntegrationAttentionDisposition,
     DeliveryOperatorMove,
     DeliveryRecoveryAttention,
     DeliveryRequest,
@@ -20,7 +17,6 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryStage,
     DeliveryWorkerRole,
     OutcomeAuthorityBinding,
-    integration_attention_disposition,
     parse_delivery_frontier,
 )
 from owlbear_delivery.target_contract import DeliveryCommitment, DeliveryContract, DeliveryOutcome
@@ -48,7 +44,7 @@ class WorkItemScope(StrEnum):
     """Production Work Item scopes."""
 
     OUTCOME = "outcome"
-    CHANGE_INTEGRATION = "change-integration"
+    CHANGE_PUBLICATION = "change-publication"
 
 
 class WorkItemNeed(StrEnum):
@@ -84,8 +80,9 @@ class WorkItemActionKind(StrEnum):
     ANSWER_REQUEST = "answer-request"
     CLEAR_BLOCK = "clear-block"
     RECOVER_CLAIM = "recover-claim"
-    INTEGRATE_CHANGE = "integrate-change"
-    RETRY_INTEGRATION = "retry-integration"
+    RECONCILE_CHECKPOINT = "reconcile-checkpoint"
+    MARK_READY = "mark-ready"
+    OBSERVE_ACCEPTANCE = "observe-acceptance"
     START_ORCHESTRATION = "start-orchestration"
 
 
@@ -95,14 +92,28 @@ class WorkItemProgressKind(StrEnum):
     TASKS = "tasks"
     DESIGN_RETURN = "design-return"
     PLAN = "plan"
-    INTEGRATION = "integration"
+    PUBLICATION = "publication"
 
 
 class WorkItemChangeLifecycle(StrEnum):
     """Change-level lifecycle shown by the portfolio group."""
 
     IN_DELIVERY = "in-delivery"
-    INTEGRATION = "integration"
+    FINALIZATION = "finalization"
+    PUBLICATION = "publication"
+    AWAITING_MERGE = "awaiting-merge"
+    ACCEPTANCE = "acceptance"
+
+
+class WorkItemPublicationPhase(StrEnum):
+    """Durable Change publication phase derived from exact frontier receipts."""
+
+    FINALIZATION_INVALIDATED = "finalization-invalidated"
+    READY_FOR_FINALIZATION = "ready-for-finalization"
+    CHECKPOINT_PENDING = "checkpoint-pending"
+    PULL_REQUEST_DRAFT = "pull-request-draft"
+    AWAITING_MERGE = "awaiting-merge"
+    ACCEPTANCE_OBSERVED = "acceptance-observed"
 
 
 class _ProjectionModel(BaseModel):
@@ -136,30 +147,23 @@ class WorkItemDetail(_ProjectionModel):
 
 
 class DeliveryPortfolioSnapshot(_ProjectionModel):
-    """One exact contract/frontier read and current Integration target identity."""
+    """One exact contract and frontier read for portfolio projection."""
 
     contract: DeliveryContract
     frontier: DeliveryFrontier
     version: str = Field(pattern=r"^[0-9a-f]{64}$")
-    integration_target: str = Field(min_length=1)
-    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
 
     @classmethod
     def capture(
         cls,
         contract: DeliveryContract,
         frontier_bytes: bytes,
-        *,
-        integration_target: str,
-        target_head: str,
     ) -> DeliveryPortfolioSnapshot:
         """Validate one frontier read and bind its exact content digest."""
         return cls(
             contract=contract,
             frontier=parse_delivery_frontier(frontier_bytes)[0],
             version=hashlib.sha256(frontier_bytes).hexdigest(),
-            integration_target=integration_target,
-            target_head=target_head,
         )
 
     @model_validator(mode="after")
@@ -170,12 +174,6 @@ class DeliveryPortfolioSnapshot(_ProjectionModel):
             message = "Delivery snapshot bindings must match contract outcome order"
             raise ValueError(message)
         return self
-
-    @property
-    def integration_attention_superseded(self) -> bool:
-        """Return whether retained attention names an older target head."""
-        attention = self.frontier.integration_attention
-        return attention is not None and attention.target_head != self.target_head
 
 
 class WorkItemActivity(_ProjectionModel):
@@ -204,15 +202,6 @@ class WorkItemProgress(_ProjectionModel):
     total: int | None = Field(default=None, ge=0)
 
 
-class WorkItemIntegrationAttentionRef(_ProjectionModel):
-    """Bounded identity and route for one retained Integration attention."""
-
-    attention_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    code: DeliveryIntegrationAttentionCode
-    disposition: DeliveryIntegrationAttentionDisposition
-    superseded: bool
-
-
 class WorkItemCardView(_ProjectionModel):
     """One dense portfolio row derived from a Delivery snapshot."""
 
@@ -229,7 +218,6 @@ class WorkItemCardView(_ProjectionModel):
     activity: WorkItemActivity
     progress: WorkItemProgress
     action: WorkItemAction
-    integration_attention: WorkItemIntegrationAttentionRef | None = None
 
 
 class ChangeGroupView(_ProjectionModel):
@@ -284,19 +272,22 @@ class WorkItemTaskEvidence(_ProjectionModel):
     proof_boundaries: tuple[str, ...]
 
 
-class WorkItemIntegrationView(_ProjectionModel):
-    """Human-legible Integration state with retained exact diagnostics."""
+class WorkItemPublicationView(_ProjectionModel):
+    """Exact durable finalization, publication, and acceptance identities."""
 
-    attention_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
-    code: DeliveryIntegrationAttentionCode | None = None
-    disposition: DeliveryIntegrationAttentionDisposition | None = None
-    headline: str = Field(min_length=1)
-    explanation: str = Field(min_length=1)
-    conflicted_paths: tuple[str, ...] = ()
-    diagnostics: tuple[str, ...] = ()
-    retry_condition: str | None = None
-    superseded: bool = False
-    repair_active: bool = False
+    phase: WorkItemPublicationPhase
+    finalization_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    finalized_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    pending_checkpoint_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    pending_checkpoint_triggers: tuple[str, ...] = ()
+    invalidated_expected_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    invalidated_observed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    repository: str | None = None
+    pull_request_number: int | None = Field(default=None, gt=0)
+    pull_request_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    accepted_merge_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    merged_at: str | None = None
 
 
 class WorkItemDetailView(_ProjectionModel):
@@ -316,20 +307,7 @@ class WorkItemDetailView(_ProjectionModel):
     return_context: DeliveryReturnContext | None = None
     operator_moves: tuple[DeliveryOperatorMove, ...] = ()
     recovery_attention: WorkItemRecoveryView | None = None
-    integration: WorkItemIntegrationView | None = None
-
-
-_CONFLICT_PATH = re.compile(r"^CONFLICT \([^)]*\): .*? in (?P<path>.+)$")
-_STAGE_PATH = re.compile(r"^[0-7]{6} [0-9a-f]{40} [123]\t(?P<path>.+)$")
-
-
-def integration_conflict_paths(diagnostics: tuple[str, ...]) -> tuple[str, ...]:
-    """Parse retained merge-tree diagnostics without executing Git."""
-    preferred = tuple(match.group("path") for line in diagnostics if (match := _CONFLICT_PATH.match(line)) is not None)
-    candidates = preferred or tuple(
-        match.group("path") for line in diagnostics if (match := _STAGE_PATH.match(line)) is not None
-    )
-    return tuple(dict.fromkeys(candidates))
+    publication: WorkItemPublicationView | None = None
 
 
 class WorkItemProjector:
@@ -360,7 +338,7 @@ class WorkItemProjector:
         """Return one grouped Cockpit portfolio view."""
         completed = sum(binding.stage == DeliveryStage.COMPLETED for binding in self._snapshot.frontier.bindings)
         lifecycle = (
-            WorkItemChangeLifecycle.INTEGRATION
+            self._change_lifecycle()
             if completed == len(self._snapshot.frontier.bindings)
             else WorkItemChangeLifecycle.IN_DELIVERY
         )
@@ -377,14 +355,14 @@ class WorkItemProjector:
     def show_view(self, item_key: str) -> WorkItemDetailView:
         """Return semantic and operator detail for one scope-qualified key."""
         card = next(item for item in self._cards if item.item_key == item_key)
-        if card.scope == WorkItemScope.CHANGE_INTEGRATION:
+        if card.scope == WorkItemScope.CHANGE_PUBLICATION:
             return WorkItemDetailView(
                 snapshot_version=self._snapshot.version,
                 change_title=self._snapshot.contract.title,
                 card=card,
-                promise="Publish the reviewed change and completed history to the Integration target.",
+                promise="Publish the reviewed Change and observe its user-merged pull request.",
                 operator_moves=self._snapshot.frontier.operator_moves,
-                integration=self._integration_view(),
+                publication=self._publication_view(),
             )
         outcome_id = card.work_item_id
         outcome = self._outcomes[outcome_id]
@@ -414,7 +392,7 @@ class WorkItemProjector:
             for outcome in self._snapshot.contract.outcomes
         )
         if all(binding.stage == DeliveryStage.COMPLETED for binding in self._snapshot.frontier.bindings):
-            return (*cards, self._integration_card())
+            return (*cards, self._publication_card())
         return cards
 
     def _outcome_card(self, outcome: DeliveryOutcome, binding: OutcomeAuthorityBinding) -> WorkItemCardView:
@@ -517,93 +495,97 @@ class WorkItemProjector:
             total=len(binding.tasks),
         )
 
-    def _integration_card(self) -> WorkItemCardView:
-        attention = self._snapshot.frontier.integration_attention
-        superseded = self._snapshot.integration_attention_superseded
-        repair_active = self._snapshot.frontier.integration_repair_claim is not None
-        if repair_active:
-            needs, headline = WorkItemNeed.NONE, None
-            next_actor = WorkItemNextActor.AGENT
-            next_step = "Integration repair in progress"
-            activity = WorkItemActivity(
-                state=WorkItemActivityState.REPAIRING,
-                worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER,
-                started_at=self._snapshot.frontier.integration_repair_claim.started_at,
-            )
-            action = WorkItemAction()
-            progress = "Repair in progress"
-        elif superseded:
-            needs, headline = WorkItemNeed.NONE, "Integration target moved"
-            next_actor = WorkItemNextActor.AGENT
-            next_step = "Retry against the current target"
-            activity = WorkItemActivity(state=WorkItemActivityState.READY)
-            action = WorkItemAction(kind=WorkItemActionKind.RETRY_INTEGRATION, label="Retry Integration")
-            progress = "Awaiting retry against current target"
-        elif attention is None:
-            needs, headline = WorkItemNeed.NONE, None
-            next_actor = WorkItemNextActor.AGENT
-            next_step = "Integrate the reviewed Change"
-            activity = WorkItemActivity(state=WorkItemActivityState.READY)
-            action = WorkItemAction(kind=WorkItemActionKind.INTEGRATE_CHANGE, label="Integrate Change")
-            progress = "Not attempted"
+    def _publication_card(self) -> WorkItemCardView:
+        phase = self._publication_phase()
+        if phase == WorkItemPublicationPhase.FINALIZATION_INVALIDATED:
+            needs, headline, next_actor = WorkItemNeed.NONE, "Finalization invalidated", WorkItemNextActor.AGENT
+            next_step, progress, action = "Re-finalize the current Change head", "Head drift observed", WorkItemAction()
+        elif phase == WorkItemPublicationPhase.READY_FOR_FINALIZATION:
+            needs, headline, next_actor = WorkItemNeed.NONE, None, WorkItemNextActor.AGENT
+            next_step, progress, action = "Finalize the reviewed Change", "Ready for finalization", WorkItemAction()
+        elif phase == WorkItemPublicationPhase.CHECKPOINT_PENDING:
+            needs, headline, next_actor = WorkItemNeed.NONE, None, WorkItemNextActor.AGENT
+            next_step, progress = "Reconcile the final checkpoint", "Checkpoint pending"
+            action = WorkItemAction(kind=WorkItemActionKind.RECONCILE_CHECKPOINT, label="Publish checkpoint")
+        elif phase == WorkItemPublicationPhase.PULL_REQUEST_DRAFT:
+            needs, headline, next_actor = WorkItemNeed.NONE, None, WorkItemNextActor.AGENT
+            next_step, progress = "Mark the pull request ready", "Pull request is draft"
+            action = WorkItemAction(kind=WorkItemActionKind.MARK_READY, label="Mark ready")
+        elif phase == WorkItemPublicationPhase.AWAITING_MERGE:
+            needs, headline, next_actor = WorkItemNeed.YOU, "Merge pull request in GitHub", WorkItemNextActor.YOU
+            next_step, progress = headline, "Awaiting merge in GitHub"
+            action = WorkItemAction(kind=WorkItemActionKind.OBSERVE_ACCEPTANCE, label="Check GitHub acceptance")
         else:
-            disposition = integration_attention_disposition(attention.code)
-            if disposition == DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED:
-                needs, headline = WorkItemNeed.NONE, None
-                next_actor = WorkItemNextActor.AGENT
-                next_step = "Run a reviewed Integration repair"
-                activity = WorkItemActivity(
-                    state=WorkItemActivityState.READY,
-                    worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER,
-                )
-                action = WorkItemAction(
-                    kind=WorkItemActionKind.START_ORCHESTRATION,
-                    label="Run Orchestration",
-                    command="/orchestrate",
-                )
-                progress = "Merge conflict"
-            elif disposition == DeliveryIntegrationAttentionDisposition.RETRYABLE:
-                needs, headline = WorkItemNeed.NONE, "Integration retry available"
-                next_actor = WorkItemNextActor.AGENT
-                next_step = "Retry against the current target"
-                activity = WorkItemActivity(state=WorkItemActivityState.READY)
-                action = WorkItemAction(kind=WorkItemActionKind.RETRY_INTEGRATION, label="Retry Integration")
-                progress = "Awaiting retry against current target"
-            else:
-                needs, headline = WorkItemNeed.YOU, _integration_headline(attention.code)
-                next_actor = WorkItemNextActor.YOU
-                next_step = headline
-                activity = WorkItemActivity(state=WorkItemActivityState.IDLE)
-                action = WorkItemAction()
-                progress = (
-                    "Awaiting external acceptance"
-                    if attention.code == DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED
-                    else "Attempt failed"
-                )
+            needs, headline, next_actor = WorkItemNeed.NONE, None, WorkItemNextActor.AGENT
+            next_step, progress = "Record accepted completion", "Merge observed"
+            action = WorkItemAction(kind=WorkItemActionKind.OBSERVE_ACCEPTANCE, label="Complete accepted Change")
+        activity = WorkItemActivity(
+            state=WorkItemActivityState.IDLE if next_actor == WorkItemNextActor.YOU else WorkItemActivityState.READY
+        )
         return WorkItemCardView(
-            item_key="integration",
+            item_key="publication",
             work_item_id=self._snapshot.contract.change_id,
             change_id=self._snapshot.contract.change_id,
-            scope=WorkItemScope.CHANGE_INTEGRATION,
-            title="Integration",
+            scope=WorkItemScope.CHANGE_PUBLICATION,
+            title="Change publication",
             stage=None,
             needs=needs,
             needs_headline=headline,
             next_actor=next_actor,
             next_step=next_step,
             activity=activity,
-            progress=WorkItemProgress(kind=WorkItemProgressKind.INTEGRATION, label=progress),
+            progress=WorkItemProgress(kind=WorkItemProgressKind.PUBLICATION, label=progress),
             action=action,
-            integration_attention=(
-                WorkItemIntegrationAttentionRef(
-                    attention_id=attention.attention_id,
-                    code=attention.code,
-                    disposition=integration_attention_disposition(attention.code),
-                    superseded=superseded,
-                )
-                if attention is not None
-                else None
-            ),
+        )
+
+    def _change_lifecycle(self) -> WorkItemChangeLifecycle:
+        phase = self._publication_phase()
+        if phase in {
+            WorkItemPublicationPhase.FINALIZATION_INVALIDATED,
+            WorkItemPublicationPhase.READY_FOR_FINALIZATION,
+        }:
+            return WorkItemChangeLifecycle.FINALIZATION
+        if phase in {WorkItemPublicationPhase.CHECKPOINT_PENDING, WorkItemPublicationPhase.PULL_REQUEST_DRAFT}:
+            return WorkItemChangeLifecycle.PUBLICATION
+        if phase == WorkItemPublicationPhase.AWAITING_MERGE:
+            return WorkItemChangeLifecycle.AWAITING_MERGE
+        return WorkItemChangeLifecycle.ACCEPTANCE
+
+    def _publication_phase(self) -> WorkItemPublicationPhase:
+        frontier = self._snapshot.frontier
+        if frontier.finalization_invalidation is not None:
+            return WorkItemPublicationPhase.FINALIZATION_INVALIDATED
+        if frontier.finalization is None:
+            return WorkItemPublicationPhase.READY_FOR_FINALIZATION
+        if frontier.pending_checkpoint is not None or frontier.published_head != frontier.finalization.exact_head:
+            return WorkItemPublicationPhase.CHECKPOINT_PENDING
+        if frontier.ready is None:
+            return WorkItemPublicationPhase.PULL_REQUEST_DRAFT
+        if frontier.merged_pull_request_latch is None:
+            return WorkItemPublicationPhase.AWAITING_MERGE
+        return WorkItemPublicationPhase.ACCEPTANCE_OBSERVED
+
+    def _publication_view(self) -> WorkItemPublicationView:
+        frontier = self._snapshot.frontier
+        finalization = frontier.finalization
+        pending = frontier.pending_checkpoint
+        invalidation = frontier.finalization_invalidation
+        ready = frontier.ready
+        merged = frontier.merged_pull_request_latch
+        return WorkItemPublicationView(
+            phase=self._publication_phase(),
+            finalization_id=finalization.finalization_id if finalization is not None else None,
+            finalized_head=finalization.exact_head if finalization is not None else None,
+            published_head=frontier.published_head,
+            pending_checkpoint_head=pending.head if pending is not None else None,
+            pending_checkpoint_triggers=tuple(trigger.kind.value for trigger in pending.triggers) if pending else (),
+            invalidated_expected_head=invalidation.expected_head if invalidation is not None else None,
+            invalidated_observed_head=invalidation.observed_head if invalidation is not None else None,
+            repository=ready.repository if ready is not None else merged.repository if merged is not None else None,
+            pull_request_number=ready.number if ready is not None else merged.number if merged is not None else None,
+            pull_request_head=ready.head_sha if ready is not None else merged.head_sha if merged is not None else None,
+            accepted_merge_commit=merged.accepted_merge_commit if merged is not None else None,
+            merged_at=merged.merged_at.isoformat() if merged is not None else None,
         )
 
     def _compatibility_projection(self, card: WorkItemCardView) -> WorkItemProjection:
@@ -628,7 +610,7 @@ class WorkItemProjector:
             title=outcome.title if outcome is not None else self._snapshot.contract.title,
             promise=outcome.promise
             if outcome is not None
-            else "Publish the reviewed change and completed history to the Integration target.",
+            else "Publish the reviewed Change and observe its user-merged pull request.",
             stage=card.stage or WorkItemStage.COMPLETED,
             attention=attention,
             dependency_ready=card.needs != WorkItemNeed.DEPENDENCY,
@@ -689,61 +671,3 @@ class WorkItemProjector:
             )
             for task in binding.tasks
         )
-
-    def _integration_view(self) -> WorkItemIntegrationView:
-        attention = self._snapshot.frontier.integration_attention
-        repair_active = self._snapshot.frontier.integration_repair_claim is not None
-        if attention is None:
-            return WorkItemIntegrationView(
-                headline="Ready to integrate",
-                explanation=(
-                    f"Every Outcome is complete and the Change can publish to {self._snapshot.integration_target}."
-                ),
-            )
-        superseded = self._snapshot.integration_attention_superseded
-        paths = integration_conflict_paths(attention.diagnostics)
-        disposition = integration_attention_disposition(attention.code)
-        headline = "Integration target moved" if superseded else _integration_headline(attention.code)
-        explanation = (
-            "The Integration target changed after the previous attempt."
-            if superseded
-            else (
-                f"{len(paths)} conflicting files require a reviewed repair."
-                if disposition == DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED and paths
-                else "Integration is ready to retry against the current target."
-                if disposition == DeliveryIntegrationAttentionDisposition.RETRYABLE
-                else "Integration retained evidence that requires your review."
-            )
-        )
-        return WorkItemIntegrationView(
-            attention_id=attention.attention_id,
-            code=attention.code,
-            disposition=disposition,
-            headline=headline,
-            explanation=explanation,
-            conflicted_paths=paths,
-            diagnostics=attention.diagnostics,
-            retry_condition=(
-                "Retry Integration against the current target head; the previous verdict is stale."
-                if superseded
-                else attention.retry_condition
-            ),
-            superseded=superseded,
-            repair_active=repair_active,
-        )
-
-
-def _integration_headline(code: DeliveryIntegrationAttentionCode) -> str:
-    return {
-        DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED: "External acceptance required",
-        DeliveryIntegrationAttentionCode.MERGE_CONFLICT: "Merge conflict",
-        DeliveryIntegrationAttentionCode.REPAIR_AUTHORITY: "Authority revision required",
-        DeliveryIntegrationAttentionCode.TARGET_CAS_LOST: "Integration retry available",
-        DeliveryIntegrationAttentionCode.REVISION_PENDING: "Revision pending",
-        DeliveryIntegrationAttentionCode.TARGET_IDENTITY_MISMATCH: "Target identity changed",
-        DeliveryIntegrationAttentionCode.PACKAGE_MUTATED: "Delivery package changed",
-        DeliveryIntegrationAttentionCode.COMPLETED_HISTORY_MUTATED: "Completed history changed",
-        DeliveryIntegrationAttentionCode.REVIEWED_BOUNDARY_MISMATCH: "Reviewed boundary changed",
-        DeliveryIntegrationAttentionCode.REVIEWED_WORKTREE_DIRTY: "Reviewed worktree has uncommitted changes",
-        DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED: "Candidate verification failed",
-    }[code]

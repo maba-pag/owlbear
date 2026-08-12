@@ -22,11 +22,8 @@ from owlbear_delivery.acceptance import (
 from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator
 from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
-    DeliveryActiveClaim,
     DeliveryBlock,
     DeliveryFrontier,
-    DeliveryIntegrationAttention,
-    DeliveryIntegrationAttentionCode,
     DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryRequest,
@@ -38,7 +35,6 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
-    DeliveryWorkerRole,
     OutcomeAuthorityBinding,
 )
 from owlbear_delivery.design_package import CompletionPackageManifest, DesignPackageManifest, DesignPackageStore
@@ -246,11 +242,11 @@ def _write_current_delivery(runtime_root: Path, head: str) -> None:
     (change_root / "frontier.json").write_bytes(_canonical(frontier))
 
 
-def _write_repair_delivery(runtime_root: Path, head: str) -> None:
+def _write_publication_delivery(runtime_root: Path, head: str) -> None:
     contract = _contract(
-        "repair-e2e",
-        "Repair release",
-        (_outcome("OUT-001", "Verify repaired release", "Publish the reviewed repair."),),
+        "publication-e2e",
+        "Publication release",
+        (_outcome("OUT-001", "Verify publication release", "Publish the reviewed Change."),),
     )
     task = _task("OUT-001", 1)
     frontier = DeliveryFrontier(
@@ -262,29 +258,6 @@ def _write_repair_delivery(runtime_root: Path, head: str) -> None:
                 tasks=(task,),
                 results=(_result(contract, task, head),),
             ),
-        ),
-        integration_attention=DeliveryIntegrationAttention(
-            attention_id=hashlib.sha256(b"repair-e2e-integration-attention").hexdigest(),
-            code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
-            change_id=contract.change_id,
-            change_head=head,
-            target_head=head,
-            integration_target="main",
-            diagnostics=(
-                f"100644 {'1' * 40} 1\tproduct.txt",
-                f"100644 {'2' * 40} 2\tproduct.txt",
-                f"100644 {'3' * 40} 3\tproduct.txt",
-                "CONFLICT (content): Merge conflict in product.txt",
-            ),
-            retry_condition="Admit the independently reviewed repair.",
-        ),
-        integration_repair_claim=DeliveryActiveClaim(
-            attempt_id="repair-attempt-work-e2e",
-            claim_id="repair-claim-work-e2e",
-            owner_id="repair-owner-work-e2e",
-            process_id="repair-process-work-e2e",
-            started_at="2026-08-04T12:05:00Z",
-            worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER,
         ),
     )
     change_root = runtime_root / "changes" / contract.change_id
@@ -423,11 +396,11 @@ def seed_delivery(workspace: Path) -> None:
         b"# Design\n\nKeep roadmap authority separate from admitted Changes.\n",
     )
     _write_current_delivery(runtime_root, head)
-    _write_repair_delivery(runtime_root, head)
+    _write_publication_delivery(runtime_root, head)
     coordinator = PortfolioCoordinator(runtime_root, capacity=2)
     workspace_manager = ChangeWorkspaceManager(repository, worktrees, coordinator, "main")
     workspace_manager.create("work-e2e")
-    workspace_manager.create("repair-e2e")
+    workspace_manager.create("publication-e2e")
     _write_config(workspace)
 
 

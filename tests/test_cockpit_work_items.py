@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-import threading
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -18,12 +16,6 @@ from owlbear_cockpit.target_context import load_target_context
 from owlbear_delivery_github import GitHubCliPublicationProvider
 from owlbear_delivery.delivery_application_loader import DeliveryApplicationLoadError
 from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
-from owlbear_delivery.delivery_runtime import (
-    DeliveryIntegrationAttention,
-    DeliveryIntegrationAttentionCode,
-    DeliveryIntegrationAttentionDisposition,
-    DeliveryWorkerRole,
-)
 from owlbear_delivery.portfolio_operating import (
     PortfolioGuidance,
     PortfolioGuidanceKind,
@@ -34,17 +26,17 @@ from owlbear_delivery.portfolio_operating import (
 from owlbear_delivery.work_items import (
     ChangeGroupView,
     WorkItemAction,
-    WorkItemActionKind,
     WorkItemActivity,
     WorkItemActivityState,
     WorkItemCardView,
     WorkItemChangeLifecycle,
     WorkItemDetailView,
-    WorkItemIntegrationView,
     WorkItemNeed,
     WorkItemNextActor,
     WorkItemProgress,
     WorkItemProgressKind,
+    WorkItemPublicationPhase,
+    WorkItemPublicationView,
     WorkItemScope,
     WorkItemStage,
 )
@@ -72,11 +64,6 @@ def _card(change_id: str, outcome_id: str, needs: WorkItemNeed) -> WorkItemCardV
 class _DeliveryApplicationFake:
     def __init__(self) -> None:
         self.calls: list[tuple[str, tuple[object, ...]]] = []
-        self.integration_attention: DeliveryIntegrationAttention | None = None
-        self.integration_superseded = False
-        self.integration_repair_active = False
-        self.integration_started: threading.Event | None = None
-        self.integration_release: threading.Event | None = None
 
     def list_work_item_groups(self) -> tuple[ChangeGroupView, ...]:
         self.calls.append(("list", ()))
@@ -105,7 +92,7 @@ class _DeliveryApplicationFake:
                 change_id="change-b",
                 title="Change B",
                 snapshot_version="b" * 64,
-                lifecycle=WorkItemChangeLifecycle.INTEGRATION,
+                lifecycle=WorkItemChangeLifecycle.FINALIZATION,
                 outcome_total=1,
                 outcome_completed=1,
                 items=(
@@ -117,19 +104,19 @@ class _DeliveryApplicationFake:
                         }
                     ),
                     WorkItemCardView(
-                        item_key="integration",
+                        item_key="publication",
                         work_item_id="change-b",
                         change_id="change-b",
-                        scope=WorkItemScope.CHANGE_INTEGRATION,
-                        title="Integration",
+                        scope=WorkItemScope.CHANGE_PUBLICATION,
+                        title="Change publication",
                         stage=None,
                         needs=WorkItemNeed.NONE,
                         next_actor=WorkItemNextActor.AGENT,
-                        next_step="Integrate the reviewed Change",
-                        activity=WorkItemActivity(state=WorkItemActivityState.IDLE),
+                        next_step="Finalize the reviewed Change",
+                        activity=WorkItemActivity(state=WorkItemActivityState.READY),
                         progress=WorkItemProgress(
-                            kind=WorkItemProgressKind.INTEGRATION,
-                            label="Ready to integrate",
+                            kind=WorkItemProgressKind.PUBLICATION,
+                            label="Ready for finalization",
                         ),
                         action=WorkItemAction(),
                     ),
@@ -143,15 +130,9 @@ class _DeliveryApplicationFake:
 
     @staticmethod
     def _portfolio_operating_view() -> PortfolioOperatingView:
-        queued = PortfolioWorkReference(
-            change_id="change-b",
-            item_key="integration",
-            scope=PortfolioWorkScope.INTEGRATION,
-        )
         return PortfolioOperatingView(
             unfinished_change_count=2,
             completed_change_count=0,
-            queued_for_orchestration=(queued,),
             interventions=(
                 PortfolioWorkReference(
                     change_id="change-a",
@@ -163,11 +144,6 @@ class _DeliveryApplicationFake:
                 PortfolioGuidance(
                     kind=PortfolioGuidanceKind.INTERVENE,
                     change_ids=("change-a",),
-                    work_count=1,
-                ),
-                PortfolioGuidance(
-                    kind=PortfolioGuidanceKind.START_ORCHESTRATION,
-                    change_ids=("change-b",),
                     work_count=1,
                 ),
             ),
@@ -184,51 +160,31 @@ class _DeliveryApplicationFake:
 
     def show_work_item_view(self, change_id: str, item_key: str) -> WorkItemDetailView:
         self.calls.append(("show", (change_id, item_key)))
-        if item_key == "integration":
+        if item_key == "publication":
             card = WorkItemCardView(
-                item_key="integration",
+                item_key="publication",
                 work_item_id=change_id,
                 change_id=change_id,
-                scope=WorkItemScope.CHANGE_INTEGRATION,
-                title="Integration",
+                scope=WorkItemScope.CHANGE_PUBLICATION,
+                title="Change publication",
                 stage=None,
                 needs=WorkItemNeed.NONE,
                 next_actor=WorkItemNextActor.AGENT,
-                next_step="Run a reviewed Integration repair"
-                if self.integration_attention
-                else "Integrate the reviewed Change",
-                activity=WorkItemActivity(
-                    state=WorkItemActivityState.READY,
-                    worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER if self.integration_attention else None,
-                ),
+                next_step="Finalize the reviewed Change",
+                activity=WorkItemActivity(state=WorkItemActivityState.READY),
                 progress=WorkItemProgress(
-                    kind=WorkItemProgressKind.INTEGRATION,
-                    label="Merge conflict" if self.integration_attention else "Not attempted",
+                    kind=WorkItemProgressKind.PUBLICATION,
+                    label="Ready for finalization",
                 ),
-                action=WorkItemAction(
-                    kind=WorkItemActionKind.START_ORCHESTRATION,
-                    label="Run Orchestration",
-                    command="/orchestrate",
-                )
-                if self.integration_attention
-                else WorkItemAction(),
+                action=WorkItemAction(),
             )
             return WorkItemDetailView(
                 snapshot_version="a" * 64,
                 change_title=f"Change {change_id}",
                 card=card,
                 promise="Publish the reviewed Change.",
-                integration=WorkItemIntegrationView(
-                    code=self.integration_attention.code if self.integration_attention else None,
-                    disposition=DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED
-                    if self.integration_attention
-                    else None,
-                    headline="Integration target moved" if self.integration_superseded else "Merge conflict",
-                    explanation="Retry against the current target."
-                    if self.integration_superseded
-                    else "One conflict requires repair.",
-                    superseded=self.integration_superseded,
-                    repair_active=self.integration_repair_active,
+                publication=WorkItemPublicationView(
+                    phase=WorkItemPublicationPhase.READY_FOR_FINALIZATION,
                 ),
             )
         return WorkItemDetailView(
@@ -278,16 +234,17 @@ class _DeliveryApplicationFake:
             "invalidated_outcome_ids": [args[1]],
         }
 
-    def show_integration_attention(self, *args: object) -> DeliveryIntegrationAttention | None:
-        self.calls.append(("integration-attention", args))
-        return self.integration_attention
+    def reconcile_change_checkpoint(self, *args: object) -> dict[str, object]:
+        self.calls.append(("publication-reconcile", args))
+        return {"change_id": args[0], "reconciled": True}
 
-    def integrate_ready_change(self, *args: object) -> dict[str, object]:
-        self.calls.append(("integration-retry", args))
-        if self.integration_started is not None and self.integration_release is not None:
-            self.integration_started.set()
-            self.integration_release.wait(timeout=2)
-        return {"change_id": args[0], "replayed": False}
+    def mark_current_change_ready(self, *args: object) -> dict[str, object]:
+        self.calls.append(("publication-ready", args))
+        return {"change_id": args[0], "draft": False}
+
+    def observe_acceptance(self, *args: object) -> dict[str, object]:
+        self.calls.append(("acceptance-observe", args))
+        return {"change_id": args[0], "completion_id": "f" * 64}
 
     def list_completed_changes(self, *args: object) -> dict[str, object]:
         self.calls.append(("completed-list", args))
@@ -398,7 +355,7 @@ def test_list_and_detail_expose_current_bounded_delivery_state() -> None:
         "total": 3,
         "complete": 1,
         "needs": {"you": 1, "dependency": 0, "none": 2},
-        "activity": {"idle": 1, "ready": 2, "working": 0, "repairing": 0},
+        "activity": {"idle": 0, "ready": 3, "working": 0, "repairing": 0},
     }
     assert portfolio.json()["operating"] == {
         "unfinished_change_count": 2,
@@ -406,12 +363,11 @@ def test_list_and_detail_expose_current_bounded_delivery_state() -> None:
         "draft_design_change_ids": [],
         "design_required_change_ids": [],
         "claimed": [],
-        "queued_for_orchestration": [{"change_id": "change-b", "item_key": "integration", "scope": "integration"}],
+        "queued_for_orchestration": [],
         "interventions": [{"change_id": "change-a", "item_key": "outcome:OUT-001", "scope": "outcome"}],
         "dependency_waits": [],
         "guidance": [
             {"kind": "intervene", "change_ids": ["change-a"], "work_count": 1},
-            {"kind": "start-orchestration", "change_ids": ["change-b"], "work_count": 1},
         ],
     }
     first = portfolio.json()["groups"][0]["items"][0]
@@ -496,129 +452,27 @@ def test_expired_claim_recovery_delegates_to_delivery_once() -> None:
     assert application.calls == [("recover-expired", ())]
 
 
-def test_integration_and_completed_history_routes_delegate_exactly_once() -> None:
+def test_publication_and_completed_history_routes_delegate_exactly_once() -> None:
     client, application = _client()
 
     responses = (
-        client.get("/api/changes/change-a/integration-attention"),
-        client.post("/api/changes/change-a/integration/retry"),
+        client.post("/api/changes/change-a/publication/reconcile"),
+        client.post("/api/changes/change-a/publication/ready"),
+        client.post("/api/changes/change-a/acceptance/observe"),
         client.get("/api/work-items/completed", params={"limit": 25}),
         client.get("/api/work-items/completed/search", params={"query": "delivery", "limit": 5}),
         client.get("/api/work-items/completed/change-a", params={"completion_id": "a" * 64}),
     )
 
-    assert [response.status_code for response in responses] == [200, 202, 200, 200, 200]
-    assert responses[1].json() == {"status": "started"}
+    assert [response.status_code for response in responses] == [200, 200, 200, 200, 200, 200]
     assert application.calls == [
-        ("integration-attention", ("change-a",)),
-        ("integration-attention", ("change-a",)),
-        ("show", ("change-a", "integration")),
-        ("integration-retry", ("change-a",)),
+        ("publication-reconcile", ("change-a",)),
+        ("publication-ready", ("change-a",)),
+        ("acceptance-observe", ("change-a",)),
         ("completed-list", (None, 25)),
         ("completed-search", ("delivery", None, 5)),
         ("completed-show", ("change-a", "a" * 64)),
     ]
-
-
-def test_merge_conflict_retry_is_rejected_without_integration_mutation() -> None:
-    client, application = _client()
-    application.integration_attention = DeliveryIntegrationAttention(
-        attention_id="a" * 64,
-        code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
-        change_id="change-a",
-        change_head="b" * 40,
-        target_head="c" * 40,
-        integration_target="dev",
-        diagnostics=("conflict",),
-        retry_condition="Admit a reviewed Integration repair, then retry.",
-    )
-
-    response = client.post("/api/changes/change-a/integration/retry")
-
-    assert response.status_code == 409
-    assert response.json() == {
-        "code": "ERR_DELIVERY_INTEGRATION_ACTION_REQUIRED",
-        "detail": "Admit a reviewed Integration repair, then retry.",
-        "authority": "delivery",
-        "retry_safe": False,
-    }
-    assert application.calls == [
-        ("integration-attention", ("change-a",)),
-        ("show", ("change-a", "integration")),
-    ]
-
-
-def test_superseded_integration_attention_can_retry() -> None:
-    client, application = _client()
-    application.integration_attention = DeliveryIntegrationAttention(
-        attention_id="a" * 64,
-        code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
-        change_id="change-a",
-        change_head="b" * 40,
-        target_head="c" * 40,
-        integration_target="dev",
-        diagnostics=("conflict",),
-        retry_condition="Admit a reviewed Integration repair, then retry.",
-    )
-    application.integration_superseded = True
-
-    response = client.post("/api/changes/change-a/integration/retry")
-
-    assert response.status_code == 202
-    assert response.json() == {"status": "started"}
-    assert [name for name, _args in application.calls] == [
-        "integration-attention",
-        "show",
-        "integration-retry",
-    ]
-
-
-def test_active_integration_repair_rejects_retry_after_target_moves() -> None:
-    client, application = _client()
-    application.integration_attention = DeliveryIntegrationAttention(
-        attention_id="a" * 64,
-        code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
-        change_id="change-a",
-        change_head="b" * 40,
-        target_head="c" * 40,
-        integration_target="dev",
-        diagnostics=("conflict",),
-        retry_condition="Admit a reviewed Integration repair, then retry.",
-    )
-    application.integration_superseded = True
-    application.integration_repair_active = True
-
-    response = client.post("/api/changes/change-a/integration/retry")
-
-    assert response.status_code == 409
-    assert response.json() == {
-        "code": "ERR_DELIVERY_INTEGRATION_ACTION_REQUIRED",
-        "detail": "A reviewed Integration repair is already in progress.",
-        "authority": "delivery",
-        "retry_safe": False,
-    }
-    assert [name for name, _args in application.calls] == ["integration-attention", "show"]
-
-
-def test_integration_retry_is_single_flight_per_change() -> None:
-    application = _DeliveryApplicationFake()
-    application.integration_started = threading.Event()
-    application.integration_release = threading.Event()
-    app = assemble_target_app(application)  # type: ignore[arg-type]
-
-    with TestClient(app) as first_client, TestClient(app) as second_client, ThreadPoolExecutor() as executor:
-        first = executor.submit(first_client.post, "/api/changes/change-a/integration/retry")
-        assert application.integration_started.wait(timeout=1)
-
-        duplicate = second_client.post("/api/changes/change-a/integration/retry")
-        application.integration_release.set()
-        started = first.result(timeout=2)
-
-    assert started.status_code == 202
-    assert started.json() == {"status": "started"}
-    assert duplicate.status_code == 202
-    assert duplicate.json() == {"status": "running"}
-    assert [name for name, _args in application.calls].count("integration-retry") == 1
 
 
 def test_malformed_body_fails_before_application_mutation() -> None:

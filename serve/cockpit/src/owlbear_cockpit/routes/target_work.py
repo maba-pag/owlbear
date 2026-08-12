@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import logging
-import threading
 import uuid
 from typing import TYPE_CHECKING, Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -30,12 +28,10 @@ from owlbear_delivery.change_workspace import CoordinationConflictError
 from owlbear_delivery.completed_history import CompletedHistoryError, CompletedHistoryMissingError
 from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
-    DeliveryIntegrationAttentionDisposition,
     DeliveryRequestResolution,
     DeliveryRuntimeConflictError,
     DeliveryRuntimeReferenceError,
     DeliveryStage,
-    integration_attention_disposition,
 )
 from owlbear_delivery.design_package import DesignPackageConflictError
 from owlbear_delivery.portfolio_application import PortfolioApplication, PortfolioApplicationError
@@ -49,40 +45,6 @@ from owlbear_delivery.work_items import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-_LOGGER = logging.getLogger(__name__)
-_REGISTRY_INITIALIZATION_LOCK = threading.Lock()
-
-
-class _IntegrationAttemptRegistry:
-    """App-scoped single-flight ownership for long Integration attempts."""
-
-    def __init__(self) -> None:
-        self._active: set[str] = set()
-        self._lock = threading.Lock()
-
-    def begin(self, change_id: str) -> bool:
-        with self._lock:
-            if change_id in self._active:
-                return False
-            self._active.add(change_id)
-            return True
-
-    def finish(self, change_id: str) -> None:
-        with self._lock:
-            self._active.discard(change_id)
-
-
-def _integration_attempts(request: Request) -> _IntegrationAttemptRegistry:
-    registry = getattr(request.app.state, "delivery_integration_attempts", None)
-    if registry is not None:
-        return registry
-    with _REGISTRY_INITIALIZATION_LOCK:
-        registry = getattr(request.app.state, "delivery_integration_attempts", None)
-        if registry is None:
-            registry = _IntegrationAttemptRegistry()
-            request.app.state.delivery_integration_attempts = registry
-    return registry
 
 
 class TargetCockpitService:
@@ -186,37 +148,17 @@ class TargetCockpitService:
             )
         )
 
-    def show_integration_attention(self, change_id: str) -> object:
-        """Return current typed Integration attention."""
-        return self._invoke(lambda: self._application.show_integration_attention(change_id))
+    def reconcile_checkpoint(self, change_id: str) -> object:
+        """Reconcile the current engine-derived Change checkpoint."""
+        return self._invoke(lambda: self._application.reconcile_change_checkpoint(change_id))
 
-    def authorize_integration_retry(self, change_id: str) -> None:
-        """Reject Integration attempts that require a different operator route."""
-        attention = self._invoke(lambda: self._application.show_integration_attention(change_id))
-        detail = self._invoke(lambda: self._application.show_work_item_view(change_id, "integration"))
-        if detail.integration is not None and detail.integration.repair_active:
-            _http_error(
-                409,
-                "ERR_DELIVERY_INTEGRATION_ACTION_REQUIRED",
-                "A reviewed Integration repair is already in progress.",
-                retry_safe=False,
-            )
-        superseded = detail.integration is not None and detail.integration.superseded
-        if (
-            attention is not None
-            and not superseded
-            and integration_attention_disposition(attention.code) != DeliveryIntegrationAttentionDisposition.RETRYABLE
-        ):
-            _http_error(
-                409,
-                "ERR_DELIVERY_INTEGRATION_ACTION_REQUIRED",
-                attention.retry_condition,
-                retry_safe=False,
-            )
+    def mark_ready(self, change_id: str) -> object:
+        """Mark the current exact finalized pull request ready."""
+        return self._invoke(lambda: self._application.mark_current_change_ready(change_id))
 
-    def run_integration(self, change_id: str) -> object:
-        """Run one authorized Integration attempt."""
-        return self._invoke(lambda: self._application.integrate_ready_change(change_id))
+    def observe_acceptance(self, change_id: str) -> object:
+        """Observe provider acceptance without merge authority."""
+        return self._invoke(lambda: self._application.observe_acceptance(change_id))
 
     def list_completed(self, cursor: str | None, limit: int) -> object:
         """List one bounded page of completed change history."""
@@ -256,19 +198,6 @@ def _get_target_service(
 
 
 _TargetService = Annotated[TargetCockpitService, Depends(_get_target_service)]
-
-
-def _run_integration_attempt(
-    service: TargetCockpitService,
-    registry: _IntegrationAttemptRegistry,
-    change_id: str,
-) -> None:
-    try:
-        service.run_integration(change_id)
-    except Exception:
-        _LOGGER.exception("Cockpit Integration attempt failed for %s", change_id)
-    finally:
-        registry.finish(change_id)
 
 
 def assemble_target_app(application: PortfolioApplication) -> FastAPI:
@@ -381,23 +310,17 @@ def _register_controls(router: APIRouter) -> None:
     ) -> object:
         return service.preview_backward_move(change_id, outcome_id, body)
 
-    @router.get("/changes/{change_id}/integration-attention")
-    def show_integration_attention(change_id: str, service: _TargetService) -> object:
-        return service.show_integration_attention(change_id)
+    @router.post("/changes/{change_id}/publication/reconcile")
+    def reconcile_checkpoint(change_id: str, service: _TargetService) -> object:
+        return service.reconcile_checkpoint(change_id)
 
-    @router.post("/changes/{change_id}/integration/retry", status_code=status.HTTP_202_ACCEPTED)
-    def retry_integration(
-        change_id: str,
-        request: Request,
-        background_tasks: BackgroundTasks,
-        service: _TargetService,
-    ) -> dict[str, str]:
-        service.authorize_integration_retry(change_id)
-        registry = _integration_attempts(request)
-        if not registry.begin(change_id):
-            return {"status": "running"}
-        background_tasks.add_task(_run_integration_attempt, service, registry, change_id)
-        return {"status": "started"}
+    @router.post("/changes/{change_id}/publication/ready")
+    def mark_change_ready(change_id: str, service: _TargetService) -> object:
+        return service.mark_ready(change_id)
+
+    @router.post("/changes/{change_id}/acceptance/observe")
+    def observe_acceptance(change_id: str, service: _TargetService) -> object:
+        return service.observe_acceptance(change_id)
 
 
 def _portfolio_totals(groups: tuple[ChangeGroupView, ...]) -> WorkItemPortfolioTotals:

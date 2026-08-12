@@ -184,7 +184,9 @@ function SelectedWorkItemDetail({
       onRecoverClaim={selectedDetail.recoverClaim}
       onPreviewBackward={selectedDetail.previewBackward}
       onMoveBackward={selectedDetail.moveBackward}
-      onRetryIntegration={selectedDetail.retryIntegration}
+      onReconcilePublication={selectedDetail.reconcilePublication}
+      onMarkPublicationReady={selectedDetail.markPublicationReady}
+      onObserveAcceptance={selectedDetail.observeAcceptance}
     />
   )
   if (selectedDetail.detail.isLoading) return <p role="status">Loading Work Item details...</p>

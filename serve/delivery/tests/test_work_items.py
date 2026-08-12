@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import UTC, datetime
 
@@ -7,9 +8,14 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryActiveClaim,
     DeliveryBlock,
     DeliveryFrontier,
-    DeliveryIntegrationAttention,
-    DeliveryIntegrationAttentionCode,
-    DeliveryIntegrationAttentionDisposition,
+    DeliveryCheckpointTrigger,
+    DeliveryCheckpointTriggerKind,
+    DeliveryFinalization,
+    DeliveryFinalizationInvalidation,
+    DeliveryFinalizationInvalidationReceipt,
+    DeliveryFinalizationReceipt,
+    DeliveryMergedPullRequestLatch,
+    DeliveryPendingCheckpoint,
     DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryOperatorMove,
@@ -24,6 +30,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryWorkerRole,
     OutcomeAuthorityBinding,
 )
+from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCommitmentClass,
@@ -38,9 +45,9 @@ from owlbear_delivery.work_items import (
     WorkItemAttention,
     WorkItemNeed,
     WorkItemNextActor,
+    WorkItemPublicationPhase,
     WorkItemProjector,
     WorkItemStage,
-    integration_conflict_paths,
 )
 
 
@@ -183,24 +190,82 @@ def _binding(
 def _snapshot(
     bindings: tuple[OutcomeAuthorityBinding, OutcomeAuthorityBinding],
     *,
-    attention: DeliveryIntegrationAttention | None = None,
-    repair_claim: DeliveryActiveClaim | None = None,
     operator_moves: tuple[DeliveryOperatorMove, ...] = (),
-    target_head: str = "2" * 40,
+    frontier_updates: dict[str, object] | None = None,
 ) -> DeliveryPortfolioSnapshot:
     frontier = DeliveryFrontier(
         bindings=bindings,
         operator_moves=operator_moves,
-        integration_attention=attention,
-        integration_repair_claim=repair_claim,
     )
+    if frontier_updates:
+        frontier = frontier.model_copy(update=frontier_updates)
     content = (json.dumps(frontier.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
     return DeliveryPortfolioSnapshot.capture(
         _contract(),
         content,
-        integration_target="dev",
-        target_head=target_head,
     )
+
+
+def _finalization(exact_head: str = "3" * 40) -> DeliveryFinalizationReceipt:
+    observed_at = datetime(2026, 8, 11, 13, tzinfo=UTC)
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id="portfolio-change",
+            task_or_finalization_id="finalize-portfolio-change",
+            exact_commit=exact_head,
+            observation_kind="pytest",
+            command_or_procedure="work-item finalization validation",
+            exit_status_or_artifact_locator="exit:0",
+            observer_or_runner_identity="pytest",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit=exact_head,
+            author_id="Work item finalization author",
+            reviewer_id="Work item finalization reviewer",
+            evidence=("The exact Change head satisfies finalization authority.",),
+            reviewed_at=observed_at,
+        )
+    )
+    return DeliveryFinalizationReceipt.create(
+        DeliveryFinalization(
+            operation_id="finalize-portfolio-change",
+            change_id="portfolio-change",
+            exact_head=exact_head,
+            authority_digest="c" * 64,
+            result_digests=("d" * 64,),
+            observations=(observation,),
+            review=review,
+            finalized_at=observed_at,
+        )
+    )
+
+
+def _ready(finalization: DeliveryFinalizationReceipt) -> PullRequestReadyReceipt:
+    values = {
+        "schema_version": 1,
+        "operation_id": "ready-portfolio-change",
+        "change_id": "portfolio-change",
+        "finalization_id": finalization.finalization_id,
+        "repository": "example/project",
+        "number": 42,
+        "node_id": "PR_portfolio_42",
+        "head_sha": finalization.exact_head,
+        "draft": False,
+        "observed_at": datetime(2026, 8, 11, 14, tzinfo=UTC),
+        "provider_evidence_digest": "e" * 64,
+    }
+    candidate = PullRequestReadyReceipt.model_construct(receipt_id="0" * 64, **values)
+    receipt_id = hashlib.sha256(
+        json.dumps(
+            candidate.model_dump(mode="json", exclude={"receipt_id"}),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    return PullRequestReadyReceipt(receipt_id=receipt_id, **values)
 
 
 def test_design_return_is_user_owned_and_not_projected_as_planning() -> None:
@@ -363,228 +428,133 @@ def test_completed_outcome_progress_and_detail_contain_result_evidence() -> None
     assert detail.tasks[0].completed_commit == "1" * 40
 
 
-def test_target_movement_supersedes_attention_and_offers_retry() -> None:
-    attention = DeliveryIntegrationAttention(
-        attention_id="a" * 64,
-        code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
-        change_id="portfolio-change",
-        change_head="1" * 40,
-        target_head="2" * 40,
-        integration_target="dev",
-        diagnostics=("CONFLICT (content): Merge conflict in file.py",),
-        retry_condition="Admit a reviewed repair.",
+def test_completed_outcomes_project_ready_for_finalization() -> None:
+    projector = WorkItemProjector(
+        _snapshot((_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)))
+    )
+
+    group = projector.group_view()
+    card = group.items[-1]
+    detail = projector.show_view("publication")
+
+    assert group.lifecycle == "finalization"
+    assert (card.scope, card.progress.label, card.action.kind) == (
+        "change-publication",
+        "Ready for finalization",
+        WorkItemActionKind.NONE,
+    )
+    assert detail.publication is not None
+    assert detail.publication.phase == WorkItemPublicationPhase.READY_FOR_FINALIZATION
+
+
+def test_head_drift_projects_exact_finalization_invalidation() -> None:
+    finalization = _finalization()
+    invalidation = DeliveryFinalizationInvalidationReceipt.create(
+        DeliveryFinalizationInvalidation(
+            change_id="portfolio-change",
+            finalization_id=finalization.finalization_id,
+            expected_head=finalization.exact_head,
+            observed_head="4" * 40,
+            invalidated_at=datetime(2026, 8, 11, 15, tzinfo=UTC),
+        )
     )
     projector = WorkItemProjector(
         _snapshot(
-            (
-                _binding("OUT-001", DeliveryStage.COMPLETED),
-                _binding("OUT-002", DeliveryStage.COMPLETED),
-            ),
-            attention=attention,
-            target_head="3" * 40,
+            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
+            frontier_updates={"finalization_invalidation": invalidation},
         )
     )
 
     card = projector.group_view().items[-1]
-    detail = projector.show_view("integration")
+    detail = projector.show_view("publication")
 
-    assert card.progress.label == "Awaiting retry against current target"
-    assert card.action.kind == WorkItemActionKind.RETRY_INTEGRATION
-    assert (card.next_actor, card.next_step) == (
-        WorkItemNextActor.AGENT,
-        "Retry against the current target",
-    )
-    assert detail.integration is not None
-    assert card.integration_attention is not None
-    assert card.integration_attention.attention_id == attention.attention_id
-    assert card.integration_attention.superseded
-    assert detail.integration.attention_id == attention.attention_id
-    assert detail.integration.superseded
-    assert detail.integration.conflicted_paths == ("file.py",)
-    assert detail.integration.retry_condition == (
-        "Retry Integration against the current target head; the previous verdict is stale."
-    )
+    assert card.progress.label == "Head drift observed"
+    assert detail.publication is not None
+    assert detail.publication.invalidated_expected_head == finalization.exact_head
+    assert detail.publication.invalidated_observed_head == "4" * 40
 
 
-def test_retryable_integration_attention_is_ready_for_orchestration() -> None:
-    attention = DeliveryIntegrationAttention(
-        attention_id="a" * 64,
-        code=DeliveryIntegrationAttentionCode.TARGET_CAS_LOST,
-        change_id="portfolio-change",
-        change_head="1" * 40,
-        target_head="2" * 40,
-        integration_target="dev",
-        diagnostics=("Integration target changed during publication.",),
-        retry_condition="Retry against the current target.",
+def test_finalization_projects_checkpoint_then_pull_request_draft() -> None:
+    finalization = _finalization()
+    bindings = (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED))
+    pending = DeliveryPendingCheckpoint(
+        head=finalization.exact_head,
+        triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FINALIZATION),),
     )
+    checkpoint = WorkItemProjector(
+        _snapshot(bindings, frontier_updates={"finalization": finalization, "pending_checkpoint": pending})
+    )
+    draft = WorkItemProjector(
+        _snapshot(bindings, frontier_updates={"finalization": finalization, "published_head": finalization.exact_head})
+    )
+
+    assert checkpoint.group_view().lifecycle == "publication"
+    assert checkpoint.group_view().items[-1].action.kind == WorkItemActionKind.RECONCILE_CHECKPOINT
+    assert draft.group_view().items[-1].progress.label == "Pull request is draft"
+    assert draft.group_view().items[-1].action.kind == WorkItemActionKind.MARK_READY
+
+
+def test_ready_pull_request_waits_for_user_merge_without_merge_control() -> None:
+    finalization = _finalization()
+    ready = _ready(finalization)
     projector = WorkItemProjector(
         _snapshot(
-            (
-                _binding("OUT-001", DeliveryStage.COMPLETED),
-                _binding("OUT-002", DeliveryStage.COMPLETED),
-            ),
-            attention=attention,
-            target_head="2" * 40,
+            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
+            frontier_updates={
+                "finalization": finalization,
+                "published_head": finalization.exact_head,
+                "ready": ready,
+            },
         )
     )
 
     card = projector.group_view().items[-1]
-    detail = projector.show_view("integration")
+    detail = projector.show_view("publication")
 
-    assert card.activity.state == WorkItemActivityState.READY
-    assert card.progress.label == "Awaiting retry against current target"
-    assert card.next_actor == WorkItemNextActor.AGENT
-    assert card.action.kind == WorkItemActionKind.RETRY_INTEGRATION
-    assert detail.integration is not None
-    assert detail.integration.explanation == "Integration is ready to retry against the current target."
-
-
-def test_external_acceptance_attention_projects_operator_waiting_state() -> None:
-    attention = DeliveryIntegrationAttention(
-        attention_id="a" * 64,
-        code=DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED,
-        change_id="portfolio-change",
-        change_head="1" * 40,
-        target_head="2" * 40,
-        integration_target="dev",
-        diagnostics=("Reviewed candidate commit: " + "3" * 40,),
-        retry_condition="Publish the reviewed Change through the provider and observe external acceptance.",
-    )
-    projector = WorkItemProjector(
-        _snapshot(
-            (
-                _binding("OUT-001", DeliveryStage.COMPLETED),
-                _binding("OUT-002", DeliveryStage.COMPLETED),
-            ),
-            attention=attention,
-            target_head="2" * 40,
-        )
-    )
-
-    card = projector.group_view().items[-1]
-    detail = projector.show_view("integration")
-
-    assert card.needs_headline == "External acceptance required"
-    assert card.progress.label == "Awaiting external acceptance"
-    assert (card.next_actor, card.next_step) == (
+    assert projector.group_view().lifecycle == "awaiting-merge"
+    assert (card.needs, card.next_actor, card.action.kind) == (
+        WorkItemNeed.YOU,
         WorkItemNextActor.YOU,
-        "External acceptance required",
+        WorkItemActionKind.OBSERVE_ACCEPTANCE,
     )
-    assert detail.integration is not None
-    assert detail.integration.headline == "External acceptance required"
-    assert detail.integration.retry_condition == attention.retry_condition
+    assert card.action.label == "Check GitHub acceptance"
+    assert detail.publication is not None
+    assert detail.publication.pull_request_number == 42
 
 
-def test_repair_activity_and_conflict_paths_use_retained_evidence() -> None:
-    diagnostics = (
-        "100644 " + "1" * 40 + " 1\tshare/agent.md",
-        "100644 " + "2" * 40 + " 2\tshare/agent.md",
-        "100644 " + "3" * 40 + " 3\tshare/agent.md",
-        "CONFLICT (content): Merge conflict in share/agent.md",
-    )
-    attention = DeliveryIntegrationAttention(
-        attention_id="a" * 64,
-        code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
+def test_merged_latch_projects_distinct_finalized_and_accepted_heads() -> None:
+    finalization = _finalization()
+    ready = _ready(finalization)
+    merged = DeliveryMergedPullRequestLatch(
         change_id="portfolio-change",
-        change_head="1" * 40,
-        target_head="2" * 40,
-        integration_target="dev",
-        diagnostics=diagnostics,
-        retry_condition="Admit a reviewed repair.",
-    )
-    repair_claim = DeliveryActiveClaim(
-        attempt_id="repair-attempt",
-        claim_id="repair-claim",
-        owner_id="repairer",
-        process_id="repair-process",
-        started_at="2026-08-08T10:00:00Z",
-        worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER,
+        finalization_id=finalization.finalization_id,
+        ready_receipt_id=ready.receipt_id,
+        acceptance_observation_id="5" * 64,
+        provider_evidence_digest="6" * 64,
+        repository=ready.repository,
+        number=ready.number,
+        node_id=ready.node_id,
+        base_branch="main",
+        head_sha=finalization.exact_head,
+        accepted_merge_commit="7" * 40,
+        merged_at=datetime(2026, 8, 11, 16, tzinfo=UTC),
     )
     projector = WorkItemProjector(
         _snapshot(
-            (
-                _binding("OUT-001", DeliveryStage.COMPLETED),
-                _binding("OUT-002", DeliveryStage.COMPLETED),
-            ),
-            attention=attention,
-            repair_claim=repair_claim,
+            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
+            frontier_updates={
+                "finalization": finalization,
+                "published_head": finalization.exact_head,
+                "ready": ready,
+                "merged_pull_request_latch": merged,
+            },
         )
     )
 
-    card = projector.group_view().items[-1]
-    detail = projector.show_view("integration")
+    detail = projector.show_view("publication")
 
-    assert card.stage is None
-    assert card.needs == WorkItemNeed.NONE
-    assert card.needs_headline is None
-    assert card.activity.state == WorkItemActivityState.REPAIRING
-    assert card.action.kind == WorkItemActionKind.NONE
-    assert detail.integration is not None
-    assert detail.integration.conflicted_paths == ("share/agent.md",)
-    assert integration_conflict_paths(("unparseable raw evidence",)) == ()
-    assert integration_conflict_paths(("CONFLICT (content): Merge conflict in docs/a in b.md",)) == ("docs/a in b.md",)
-
-
-def test_merge_conflict_is_ready_for_orchestrated_repair() -> None:
-    attention = DeliveryIntegrationAttention(
-        attention_id="a" * 64,
-        code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
-        change_id="portfolio-change",
-        change_head="1" * 40,
-        target_head="2" * 40,
-        integration_target="dev",
-        diagnostics=("CONFLICT (content): Merge conflict in share/agent.md",),
-        retry_condition="Admit a reviewed repair.",
-    )
-    projector = WorkItemProjector(
-        _snapshot(
-            (
-                _binding("OUT-001", DeliveryStage.COMPLETED),
-                _binding("OUT-002", DeliveryStage.COMPLETED),
-            ),
-            attention=attention,
-        )
-    )
-
-    card = projector.group_view().items[-1]
-
-    assert card.needs == WorkItemNeed.NONE
-    assert card.next_actor == WorkItemNextActor.AGENT
-    assert card.activity.state == WorkItemActivityState.READY
-    assert card.activity.worker_role == DeliveryWorkerRole.INTEGRATION_REPAIRER
-    assert card.progress.label == "Merge conflict"
-    assert card.action.kind == WorkItemActionKind.START_ORCHESTRATION
-    assert card.action.command == "/orchestrate"
-
-
-def test_candidate_proof_failure_requires_operator_correction() -> None:
-    attention = DeliveryIntegrationAttention(
-        attention_id="a" * 64,
-        code=DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED,
-        change_id="portfolio-change",
-        change_head="1" * 40,
-        target_head="2" * 40,
-        integration_target="dev",
-        diagnostics=("verification step timed out",),
-        retry_condition="Resolve the condition, then retry.",
-    )
-    projector = WorkItemProjector(
-        _snapshot(
-            (
-                _binding("OUT-001", DeliveryStage.COMPLETED),
-                _binding("OUT-002", DeliveryStage.COMPLETED),
-            ),
-            attention=attention,
-        )
-    )
-
-    card = projector.group_view().items[-1]
-
-    assert card.needs == WorkItemNeed.YOU
-    assert card.needs_headline == "Candidate verification failed"
-    assert card.action.kind == WorkItemActionKind.NONE
-    assert card.integration_attention is not None
-    assert card.integration_attention.attention_id == attention.attention_id
-    assert card.integration_attention.code == DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED
-    assert card.integration_attention.disposition == DeliveryIntegrationAttentionDisposition.OPERATOR_REQUIRED
-    assert not card.integration_attention.superseded
+    assert projector.group_view().lifecycle == "acceptance"
+    assert detail.publication is not None
+    assert detail.publication.finalized_head == finalization.exact_head
+    assert detail.publication.accepted_merge_commit == "7" * 40
+    assert detail.publication.finalized_head != detail.publication.accepted_merge_commit

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import {
   PButton,
-  PButtonPure,
   PHeading,
   PIcon,
   PInputText,
@@ -15,16 +14,12 @@ import {
   type BackwardMovePreview,
   type DeliveryRequest,
   type DeliveryRequestResolution,
-  type WorkItemCardView,
   type WorkItemDetailResponse,
+  type WorkItemPublicationPhase,
   type WorkItemStage,
   type DeliveryWorkerRole,
 } from '../api/workItems'
-import CopyCommand from './CopyCommand'
 import {
-  canHandOffIntegration,
-  hasOptionalManualAction,
-  integrationHandoffPrompt,
   PROGRESS_STAGE_LABELS,
   workItemStatusLabel,
 } from './workItemPresentation'
@@ -46,13 +41,14 @@ interface WorkItemDetailProps {
   onRecoverClaim: (attemptId: string, claimId: string) => Promise<void>
   onPreviewBackward: (target: WorkItemStage) => Promise<BackwardMovePreview | null>
   onMoveBackward: (target: WorkItemStage, reason: string, snapshotVersion: string) => Promise<void>
-  onRetryIntegration: () => Promise<void>
+  onReconcilePublication: () => Promise<void>
+  onMarkPublicationReady: () => Promise<void>
+  onObserveAcceptance: () => Promise<void>
 }
 
 const WORKER_ROLE_LABELS: Record<DeliveryWorkerRole, string> = {
   planner: 'Planner',
   builder: 'Builder',
-  'integration-repairer': 'Integration repairer',
 }
 
 const REQUEST_KIND_LABELS: Record<DeliveryRequest['kind'], string> = {
@@ -74,9 +70,9 @@ function DetailHeader({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
         <span className="text-xs text-contrast-medium">
           <strong className="text-primary">{detail.item.change_title}</strong>
           {' / '}
-          {card.scope === 'outcome' ? <code>{card.work_item_id}</code> : 'Change Integration'}
+          {card.scope === 'outcome' ? <code>{card.work_item_id}</code> : 'Change publication'}
         </span>
-        <PHeading id="work-detail-heading" tag="h2" size="lg">{card.scope === 'outcome' ? card.title : 'Integration'}</PHeading>
+        <PHeading id="work-detail-heading" tag="h2" size="lg">{card.scope === 'outcome' ? card.title : 'Publication'}</PHeading>
       </div>
       <div className="flex flex-wrap gap-static-xs">
         <PTag compact>{workItemStatusLabel(card)}</PTag>
@@ -364,85 +360,53 @@ function SemanticDetail({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
   )
 }
 
-function ConflictedPaths({ paths }: { paths: string[] }) {
-  return <ul className="mt-static-xs grid list-disc gap-static-xs pl-static-lg font-mono text-xs text-contrast-medium">{paths.map((path) => <li key={path}>{path}</li>)}</ul>
+const PUBLICATION_PHASE_LABELS: Record<WorkItemPublicationPhase, string> = {
+  'finalization-invalidated': 'Finalization invalidated',
+  'ready-for-finalization': 'Ready for finalization',
+  'checkpoint-pending': 'Checkpoint pending',
+  'pull-request-draft': 'Pull request draft',
+  'awaiting-merge': 'Awaiting merge in GitHub',
+  'acceptance-observed': 'Acceptance observed',
 }
 
-function Diagnostics({ lines }: { lines: string[] }) {
-  return (
-    <div className="mt-static-sm min-w-0 max-w-full overflow-x-auto rounded-sm bg-canvas p-static-sm" data-testid="integration-diagnostics-scroll">
-      <pre className="m-0 w-max min-w-full whitespace-pre text-xs text-contrast-medium">{lines.join('\n')}</pre>
-    </div>
-  )
+function IdentityRow({ label, value }: { label: string; value: string | number | null }) {
+  if (value === null) return null
+  return <><dt className="text-contrast-medium">{label}</dt><dd className="min-w-0 break-all font-mono text-xs">{value}</dd></>
 }
 
-function IntegrationAgentHandoff({ card }: { card: WorkItemCardView }) {
-  const command = integrationHandoffPrompt(card)
+function PublicationSection(props: WorkItemDetailProps) {
+  const publication = props.detail.item.publication
+  if (!publication) return null
+  const action = props.detail.item.card.action
+  const control = action.kind === 'reconcile-checkpoint'
+    ? props.onReconcilePublication
+    : action.kind === 'mark-ready'
+      ? props.onMarkPublicationReady
+      : action.kind === 'observe-acceptance'
+        ? props.onObserveAcceptance
+        : null
+  const pending = action.kind === 'reconcile-checkpoint'
+    ? props.pendingAction === 'publication-reconcile'
+    : action.kind === 'mark-ready'
+      ? props.pendingAction === 'publication-ready'
+      : props.pendingAction === 'acceptance-observe'
   return (
-    <div className="mt-static-md min-w-0 border-t border-contrast-low pt-static-md">
-      <h4 className="text-xs font-semibold uppercase text-contrast-medium">Copilot resolver</h4>
-      <p className="mt-static-xs max-w-[72ch] text-sm leading-relaxed">Copy this command into a new Copilot chat.</p>
-      <CopyCommand command={command} className="mt-static-sm" />
-    </div>
-  )
-}
-
-function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkItemDetailProps) {
-  const integration = detail.item.integration
-  if (!integration) return null
-  const action = detail.item.card.action
-  const canIntegrate = action.kind === 'integrate-change' || action.kind === 'retry-integration'
-  const operatorRequired = integration.disposition === 'operator-required' && !integration.superseded
-  const agentHandoff = canHandOffIntegration(detail.item.card) && !integration.repair_active
-  const manualOption = hasOptionalManualAction(detail.item.card)
-  return (
-    <section className={operatorRequired ? 'min-w-0 border-l-4 border-warning bg-surface p-static-md' : 'min-w-0 border-l border-contrast-low bg-surface p-static-md'} aria-labelledby="work-integration-heading">
-      {operatorRequired && !integration.repair_active ? (
-        <p className="text-xs font-semibold uppercase text-contrast-medium">Integration requires your attention</p>
-      ) : null}
-      <PHeading id="work-integration-heading" tag="h3" size="md">{integration.repair_active ? 'Integration repair' : integration.headline}</PHeading>
-      <p className="mt-static-xs text-sm leading-relaxed">{integration.repair_active ? 'A reviewed Integration repair is currently in progress.' : integration.explanation}</p>
-      {!integration.superseded && integration.conflicted_paths.length > 0 ? (
-        <div className="mt-static-sm">
-          <p className="text-xs font-semibold">Conflicting files</p>
-          <ConflictedPaths paths={integration.conflicted_paths} />
-        </div>
-      ) : null}
-      {!canIntegrate && !integration.repair_active && integration.retry_condition && (!action.command || agentHandoff) ? (
-        <p className="mt-static-sm text-sm leading-relaxed">Next: {integration.retry_condition}</p>
-      ) : null}
-      {action.command && !agentHandoff ? (
-        <div className="mt-static-sm flex min-w-0 flex-wrap items-baseline gap-static-xs text-xs text-contrast-medium">
-          <span>Next:</span>
-          <CopyCommand command={action.command} />
-        </div>
-      ) : null}
-      {agentHandoff ? <IntegrationAgentHandoff card={detail.item.card} /> : null}
-      {canIntegrate && manualOption ? (
-        <div className="mt-static-md flex flex-wrap items-center gap-x-static-md gap-y-static-xs">
-          <p className="text-sm">Start it now, or leave it for the next Orchestration session.</p>
-          <PButtonPure type="button" size="xs" color="contrast-medium" icon={action.kind === 'retry-integration' ? 'refresh' : undefined} disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
-            {pendingAction === 'integration' ? 'Working...' : action.kind === 'retry-integration' ? 'Retry now' : 'Integrate now'}
-          </PButtonPure>
-        </div>
-      ) : canIntegrate ? (
-        <PButton className="mt-static-md" type="button" compact icon={action.kind === 'retry-integration' ? 'refresh' : undefined} disabled={pendingAction !== null} onClick={() => void onRetryIntegration()}>
-          {pendingAction === 'integration' ? 'Working...' : action.label}
-        </PButton>
-      ) : null}
-      {integration.superseded && integration.diagnostics.length > 0 ? (
-        <details className="mt-static-md min-w-0 max-w-full">
-          <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Previous attempt (stale)</summary>
-          <p className="mt-static-sm text-xs text-primary">The previous target produced this evidence. It is retained for context but no longer describes the current Integration attempt.</p>
-          {integration.conflicted_paths.length > 0 ? <ConflictedPaths paths={integration.conflicted_paths} /> : null}
-          <Diagnostics lines={integration.diagnostics} />
-        </details>
-      ) : !integration.superseded && integration.diagnostics.length > 0 ? (
-        <details className="mt-static-md min-w-0 max-w-full">
-          <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Technical evidence</summary>
-          <Diagnostics lines={integration.diagnostics} />
-        </details>
-      ) : null}
+    <section className="min-w-0 border-l border-contrast-low bg-surface p-static-md" aria-labelledby="work-publication-heading">
+      <PHeading id="work-publication-heading" tag="h3" size="md">{PUBLICATION_PHASE_LABELS[publication.phase]}</PHeading>
+      <p className="mt-static-xs text-sm leading-relaxed">{props.detail.item.card.next_step}</p>
+      <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs text-sm">
+        <IdentityRow label="Repository" value={publication.repository} />
+        <IdentityRow label="Pull request" value={publication.pull_request_number} />
+        <IdentityRow label="Finalized head" value={publication.finalized_head} />
+        <IdentityRow label="Published head" value={publication.published_head} />
+        <IdentityRow label="Pull request head" value={publication.pull_request_head} />
+        <IdentityRow label="Accepted merge commit" value={publication.accepted_merge_commit} />
+        <IdentityRow label="Expected head" value={publication.invalidated_expected_head} />
+        <IdentityRow label="Observed head" value={publication.invalidated_observed_head} />
+        <IdentityRow label="Merged at" value={publication.merged_at} />
+      </dl>
+      {publication.pending_checkpoint_triggers.length > 0 ? <p className="mt-static-sm text-xs text-contrast-medium">Checkpoint triggers: {publication.pending_checkpoint_triggers.join(', ')}</p> : null}
+      {control && action.label ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null} onClick={() => void control()}>{pending ? 'Working...' : action.label}</PButton> : null}
     </section>
   )
 }
@@ -470,7 +434,7 @@ export default function WorkItemDetail(props: WorkItemDetailProps) {
         <ActionFeedback error={props.actionError} result={props.actionResult} />
         <BlockSection {...props} />
         <RequestsSection {...props} />
-        <IntegrationSection {...props} />
+        <PublicationSection {...props} />
         <CourseChangesSection detail={props.detail} />
         <SemanticDetail detail={props.detail} />
         <ClaimSection {...props} />

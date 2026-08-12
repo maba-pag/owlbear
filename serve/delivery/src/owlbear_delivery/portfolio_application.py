@@ -153,8 +153,8 @@ _MAX_PULL_REQUEST_TITLE_LENGTH = 256
 
 
 def _operating_scope(scope: WorkItemScope) -> PortfolioWorkScope:
-    if scope == WorkItemScope.CHANGE_INTEGRATION:
-        return PortfolioWorkScope.INTEGRATION
+    if scope == WorkItemScope.CHANGE_PUBLICATION:
+        return PortfolioWorkScope.PUBLICATION
     return PortfolioWorkScope.OUTCOME
 
 
@@ -714,6 +714,22 @@ class PortfolioApplication:
             receipt = self._draft_pull_request_publisher.mark_ready(request)
             return runtime.mark_awaiting_merge(receipt)
 
+    def mark_current_change_ready(self, change_id: str) -> PullRequestReadyReceipt:
+        """Mark the current exact finalization ready without caller-supplied authority."""
+        finalization = self._runtime(change_id).finalization()
+        if finalization is None:
+            message = "pull-request readiness requires current finalization authority"
+            raise PortfolioApplicationError(message)
+        return self.mark_change_ready(
+            change_id,
+            MarkChangePullRequestReady(
+                change_id=change_id,
+                operation_id=f"ready-{finalization.finalization_id}",
+                finalization_id=finalization.finalization_id,
+                exact_head=finalization.exact_head,
+            ),
+        )
+
     def observe_acceptance(self, change_id: str) -> CompletionReceipt:
         """Complete one Change from a fresh exact merged-PR observation."""
         if self._draft_pull_request_publisher is None:
@@ -1005,7 +1021,7 @@ class PortfolioApplication:
                 and not self._snapshot_has_active_claims(snapshot)
                 and (
                     attention is None
-                    or snapshot.integration_attention_superseded
+                    or self._integration_attention_is_superseded(snapshot.contract.change_id, attention)
                     or integration_attention_disposition(attention.code)
                     == DeliveryIntegrationAttentionDisposition.RETRYABLE
                 )
@@ -1021,7 +1037,7 @@ class PortfolioApplication:
             if (
                 attention is None
                 or snapshot.frontier.integration_repair_claim is not None
-                or snapshot.integration_attention_superseded
+                or self._integration_attention_is_superseded(snapshot.contract.change_id, attention)
             ):
                 continue
             disposition = integration_attention_disposition(attention.code)
@@ -1036,6 +1052,17 @@ class PortfolioApplication:
                 )
             )
         return tuple(statuses)
+
+    def _integration_attention_is_superseded(
+        self,
+        change_id: str,
+        attention: DeliveryIntegrationAttention,
+    ) -> bool:
+        try:
+            context = self._workspace_manager.integration_context(change_id)
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            self._fail(f"current Integration target is unavailable for {change_id}", exc)
+        return attention.target_head != context.target_head
 
     def show_integration_attention(self, change_id: str) -> DeliveryIntegrationAttention | None:
         """Return current typed Integration attention without mutating runtime state."""
@@ -1168,38 +1195,13 @@ class PortfolioApplication:
                 for binding in snapshot.frontier.bindings
                 if binding.active_claim is not None
             )
-            if snapshot.frontier.integration_repair_claim is not None:
-                claimed.append(
-                    PortfolioWorkReference(
-                        change_id=snapshot.contract.change_id,
-                        item_key="integration",
-                        scope=PortfolioWorkScope.INTEGRATION,
-                    )
-                )
         return tuple(claimed)
 
     def _queued_work(
         self,
         snapshots: tuple[DeliveryPortfolioSnapshot, ...],
     ) -> tuple[PortfolioWorkReference, ...]:
-        queued = list(self._queued_outcome_work(snapshots))
-        integration_ids = tuple(
-            dict.fromkeys(
-                (
-                    *self._integration_ready_change_ids(snapshots),
-                    *self._repair_candidate_ids(snapshots),
-                )
-            )
-        )
-        queued.extend(
-            PortfolioWorkReference(
-                change_id=change_id,
-                item_key="integration",
-                scope=PortfolioWorkScope.INTEGRATION,
-            )
-            for change_id in integration_ids
-        )
-        return tuple(queued)
+        return self._queued_outcome_work(snapshots)
 
     def _queued_outcome_work(
         self,
@@ -1348,26 +1350,9 @@ class PortfolioApplication:
         return tuple(self._delivery_snapshot(runtime) for _change_id, runtime in sorted(self._runtimes.items()))
 
     def _delivery_snapshot(self, runtime: DeliveryRuntime) -> DeliveryPortfolioSnapshot:
-        change_id = runtime.contract.change_id
-        coordination = self._workspace_manager.show(change_id)
-        frontier_bytes = runtime.frontier_bytes()
-        snapshot = DeliveryPortfolioSnapshot.capture(
-            runtime.contract,
-            frontier_bytes,
-            integration_target=coordination.integration_target,
-            target_head=coordination.target_head,
-        )
-        if self._snapshot_change_stage(snapshot) != DeliveryChangeStage.INTEGRATION:
-            return snapshot
-        try:
-            context = self._workspace_manager.integration_context(change_id)
-        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
-            self._fail(f"current Integration target is unavailable for {change_id}", exc)
         return DeliveryPortfolioSnapshot.capture(
             runtime.contract,
-            frontier_bytes,
-            integration_target=context.integration_target,
-            target_head=context.target_head,
+            runtime.frontier_bytes(),
         )
 
     @staticmethod
@@ -2138,7 +2123,7 @@ class PortfolioApplication:
                 or attention is None
                 or integration_attention_disposition(attention.code)
                 != DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED
-                or snapshot.integration_attention_superseded
+                or self._integration_attention_is_superseded(snapshot.contract.change_id, attention)
             ):
                 continue
             candidates.append(snapshot.contract.change_id)

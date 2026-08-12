@@ -28,7 +28,6 @@ function card(overrides: Partial<WorkItemCardView> = {}): WorkItemCardView {
     activity: { state: 'working', worker_role: 'builder', started_at: '2026-08-08T10:00:00Z', task_id: 'TASK-001' },
     progress: { kind: 'tasks', label: '1 of 2 Delivery tasks reviewed', done: 1, total: 2 },
     action: { kind: 'none', label: null, command: null },
-    integration_attention: null,
     ...overrides,
   }
 }
@@ -66,7 +65,7 @@ function portfolio(groups: ChangeGroupView[] = [group()]): WorkItemPortfolioResp
   const reference = (item: WorkItemCardView) => ({
     change_id: item.change_id,
     item_key: item.item_key,
-    scope: item.scope === 'change-integration' ? 'integration' as const : 'outcome' as const,
+    scope: item.scope === 'change-publication' ? 'publication' as const : 'outcome' as const,
   })
   const claimed = items.filter((item) => ['working', 'repairing'].includes(item.activity.state)).map(reference)
   const queued = items.filter((item) => item.activity.state === 'ready').map(reference)
@@ -139,7 +138,7 @@ function detail(overrides: Partial<WorkItemDetailResponse['item']> = {}): WorkIt
       return_context: null,
       operator_moves: [],
       recovery_attention: null,
-      integration: null,
+      publication: null,
       ...overrides,
     },
   }
@@ -182,7 +181,7 @@ const receiptCompleted: CompletedChangeRecord = {
 
 let currentPortfolio: WorkItemPortfolioResponse
 let currentDetail: WorkItemDetailResponse
-let portfolioAfterIntegration: WorkItemPortfolioResponse | null
+let portfolioAfterPublication: WorkItemPortfolioResponse | null
 let portfolioFailure: boolean
 let detailFailure: boolean
 let completedRecords: CompletedChangeRecord[]
@@ -257,8 +256,12 @@ function installFetch() {
     if (method === 'POST' && url.endsWith('/move-backward')) {
       return response({ invalidated_outcome_ids: ['OUT-002'], move: {} })
     }
-    if (method === 'POST' && url.endsWith('/integration/retry')) {
-      if (portfolioAfterIntegration) currentPortfolio = portfolioAfterIntegration
+    if (method === 'POST' && (
+      url.endsWith('/publication/reconcile')
+      || url.endsWith('/publication/ready')
+      || url.endsWith('/acceptance/observe')
+    )) {
+      if (portfolioAfterPublication) currentPortfolio = portfolioAfterPublication
       return response({})
     }
     return response({ detail: 'Not found' }, 404)
@@ -294,7 +297,7 @@ function renderPage(path = '/delivery') {
 beforeEach(() => {
   currentPortfolio = portfolio()
   currentDetail = detail()
-  portfolioAfterIntegration = null
+  portfolioAfterPublication = null
   portfolioFailure = false
   detailFailure = false
   completedRecords = [completed]
@@ -304,16 +307,16 @@ beforeEach(() => {
 
 it('summarizes all current Change phases and nonzero operating states', () => {
   const outcome = { change_id: 'delivery-change', item_key: 'outcome:OUT-001', scope: 'outcome' as const }
-  const integration = { change_id: 'integration-change', item_key: 'integration', scope: 'integration' as const }
+  const publication = { change_id: 'publication-change', item_key: 'publication', scope: 'publication' as const }
   const operating: PortfolioOperatingView = {
     unfinished_change_count: 3,
     completed_change_count: 8,
     draft_design_change_ids: ['draft-change'],
     design_required_change_ids: ['design-reentry'],
     claimed: [outcome],
-    queued_for_orchestration: [integration],
+    queued_for_orchestration: [publication],
     interventions: [outcome],
-    dependency_waits: [integration],
+    dependency_waits: [publication],
     guidance: [],
   }
   const totals: WorkItemPortfolioResponse['totals'] = {
@@ -592,314 +595,163 @@ it('keeps claim recovery and backward movement explicit and confirmable', async 
   expect(await screen.findByText('Moved backward. Reset: OUT-002.')).toBeInTheDocument()
 })
 
-it('routes Integration repair through Orchestration while keeping raw diagnostics collapsed', async () => {
-  const writeText = vi.fn().mockResolvedValue(undefined)
-  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
-  const integrationCard = card({
-    item_key: 'integration',
+it('reconciles a pending publication checkpoint from the Change publication view', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
     work_item_id: 'change-alpha',
-    scope: 'change-integration',
-    title: 'Integration',
+    scope: 'change-publication',
+    title: 'Change publication',
     stage: null,
     needs: 'none',
     needs_headline: null,
     next_actor: 'agent',
-    next_step: 'Run a reviewed Integration repair',
-    activity: { state: 'ready', worker_role: 'integration-repairer', started_at: null, task_id: null },
-    progress: { kind: 'integration', label: 'Merge conflict', done: null, total: null },
-    action: { kind: 'start-orchestration', label: 'Run Orchestration', command: '/orchestrate' },
+    next_step: 'Reconcile the final checkpoint',
+    activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Checkpoint pending', done: null, total: null },
+    action: { kind: 'reconcile-checkpoint', label: 'Publish checkpoint', command: null },
   })
   currentDetail = detail({
-    card: integrationCard,
+    card: publicationCard,
     promise: 'Publish the reviewed Change.',
     acceptance: [],
     commitments: [],
     tasks: [],
-    integration: {
-      attention_id: null,
-      code: 'merge-conflict',
-      disposition: 'repair-required',
-      headline: 'Merge conflict',
-      explanation: 'One conflicting file requires a reviewed repair.',
-      conflicted_paths: ['serve/delivery/work_items.py'],
-      diagnostics: ['CONFLICT (content): Merge conflict in serve/delivery/work_items.py'],
-      retry_condition: 'Admit a reviewed repair.',
-      superseded: false,
-      repair_active: false,
+    publication: {
+      phase: 'checkpoint-pending',
+      finalization_id: 'f'.repeat(64),
+      finalized_head: '1'.repeat(40),
+      published_head: null,
+      pending_checkpoint_head: '1'.repeat(40),
+      pending_checkpoint_triggers: ['finalization'],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: null,
+      pull_request_number: null,
+      pull_request_head: null,
+      accepted_merge_commit: null,
+      merged_at: null,
     },
   })
-  currentPortfolio = portfolio([group({ lifecycle: 'integration', outcome_completed: 2, items: [integrationCard] })])
-  renderPage('/delivery/change-alpha/integration')
+  currentPortfolio = portfolio([group({ lifecycle: 'publication', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
 
   const inspector = await screen.findByTestId('work-item-detail')
-  const integrationRow = screen.getByLabelText('Change Integration for Portfolio redesign')
-  expect(within(integrationRow).getAllByRole('term').map((term) => term.textContent)).toEqual(['Work', 'Progress', 'Status'])
-  expect(within(integrationRow).getAllByRole('definition')).toHaveLength(3)
-  expect(inspector).toHaveTextContent('Merge conflict')
-  expect(inspector).toHaveTextContent('Conflicting files')
-  expect(inspector).toHaveTextContent('serve/delivery/work_items.py')
+  const publicationRow = screen.getByLabelText('Change publication for Portfolio redesign')
+  expect(within(publicationRow).getAllByRole('term').map((term) => term.textContent)).toEqual(['Work', 'Progress', 'Status'])
+  expect(within(publicationRow).getAllByRole('definition')).toHaveLength(3)
+  expect(inspector).toHaveTextContent('Checkpoint pending')
+  expect(inspector).toHaveTextContent('Finalized head')
+  expect(inspector).toHaveTextContent('1'.repeat(40))
+  expect(inspector).toHaveTextContent('Checkpoint triggers: finalization')
   expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('1Ready')
-  expect(integrationRow).toHaveTextContent('Ready for Integration repair')
-  const orchestrationCommand = within(integrationRow).getByRole('button', { name: 'Copy command /orchestrate' })
-  fireEvent.click(orchestrationCommand)
-  await waitFor(() => expect(writeText).toHaveBeenCalledWith('/orchestrate'))
-  expect(within(inspector).getByRole('button', { name: 'Copy command /orchestrate' })).toBeInTheDocument()
-  expect(inspector).not.toHaveTextContent('Admit a reviewed repair.')
-  expect(inspector).not.toHaveTextContent('/integration-repair')
-  expect(screen.getByText('Technical evidence').closest('details')).not.toHaveAttribute('open')
-  expect(screen.queryByText('Retry Integration')).not.toBeInTheDocument()
-  expect(inspector).not.toHaveTextContent('Complete')
+  expect(publicationRow).toHaveTextContent('Checkpoint pending')
+  fireEvent.click(within(inspector).getByText('Publish checkpoint'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/publication/reconcile',
+    method: 'POST',
+    body: null,
+  }))
+  expect(await screen.findByText('Publication checkpoint reconciled.')).toBeInTheDocument()
 })
 
-it('separates current Integration retry guidance from stale attempt evidence', async () => {
-  const integrationCard = card({
-    item_key: 'integration',
+it('keeps invalidated finalization heads distinct and offers no publication control', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
     work_item_id: 'change-alpha',
-    scope: 'change-integration',
-    title: 'Integration',
+    scope: 'change-publication',
+    title: 'Change publication',
     stage: null,
     needs: 'none',
-    needs_headline: 'Integration target moved',
+    needs_headline: 'Finalization invalidated',
     next_actor: 'agent',
-    next_step: 'Retry against the current target',
+    next_step: 'Re-finalize the current Change head',
     activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
-    progress: { kind: 'integration', label: 'Awaiting retry against current target', done: null, total: null },
-    action: { kind: 'retry-integration', label: 'Retry Integration', command: null },
+    progress: { kind: 'publication', label: 'Head drift observed', done: null, total: null },
+    action: { kind: 'none', label: null, command: null },
   })
   currentDetail = detail({
-    card: integrationCard,
+    card: publicationCard,
     promise: 'Publish the reviewed Change.',
     acceptance: [],
     commitments: [],
     tasks: [],
-    integration: {
-      attention_id: null,
-      code: 'merge-conflict',
-      disposition: 'repair-required',
-      headline: 'Integration target moved',
-      explanation: 'The Integration target moved since this attempt; retry against the current target.',
-      conflicted_paths: ['serve/delivery/work_items.py'],
-      diagnostics: ['CONFLICT (content): Merge conflict in serve/delivery/work_items.py'],
-      retry_condition: 'Retry Integration against the current target head; the previous verdict is stale.',
-      superseded: true,
-      repair_active: false,
+    publication: {
+      phase: 'finalization-invalidated',
+      finalization_id: null,
+      finalized_head: null,
+      published_head: null,
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: '1'.repeat(40),
+      invalidated_observed_head: '2'.repeat(40),
+      repository: null,
+      pull_request_number: null,
+      pull_request_head: null,
+      accepted_merge_commit: null,
+      merged_at: null,
     },
   })
-  renderPage('/delivery/change-alpha/integration')
+  renderPage('/delivery/change-alpha/publication')
 
   const inspector = await screen.findByTestId('work-item-detail')
-  expect(within(inspector).getByRole('region', { name: 'Integration target moved' })).toBeInTheDocument()
-  expect(inspector).not.toHaveTextContent('Integration requires your attention')
-  expect(inspector).toHaveTextContent('The Integration target moved since this attempt; retry against the current target.')
-  expect(inspector).toHaveTextContent('Start it now, or leave it for the next Orchestration session.')
-  expect(inspector).not.toHaveTextContent('automatically')
-  expect(inspector).not.toHaveTextContent('Waiting for Orchestration.')
-  expect(inspector).not.toHaveTextContent('Optional now')
-  const retryControl = within(inspector).getByText('Retry now').closest('p-button-pure') as HTMLElement & { color: string; icon: string; size: string }
-  expect(retryControl.color).toBe('contrast-medium')
-  expect(retryControl.icon).toBe('refresh')
-  expect(retryControl.size).toBe('xs')
-  expect(inspector).toHaveTextContent('ProgressAwaiting retry against current target')
-  const staleEvidence = screen.getByText('Previous attempt (stale)').closest('details')
-  expect(staleEvidence).not.toHaveAttribute('open')
-  expect(staleEvidence).toHaveTextContent('serve/delivery/work_items.py')
-  expect(screen.getByTestId('integration-diagnostics-scroll')).toHaveClass('min-w-0', 'max-w-full', 'overflow-x-auto')
-  expect(inspector).not.toHaveTextContent('Next: Retry Integration')
-  expect(inspector).not.toHaveTextContent('Resolve with an agent session')
+  expect(within(inspector).getByRole('region', { name: 'Finalization invalidated' })).toBeInTheDocument()
+  expect(inspector).toHaveTextContent(`Expected head${'1'.repeat(40)}`)
+  expect(inspector).toHaveTextContent(`Observed head${'2'.repeat(40)}`)
+  expect(inspector).toHaveTextContent('Re-finalize the current Change head')
+  expect(within(inspector).queryByRole('button')).not.toBeInTheDocument()
 })
 
-it('states the specific operator-required Integration headline with its instruction', async () => {
-  const integrationCard = card({
-    item_key: 'integration',
+it('shows GitHub merge as user-owned work with observation as the only Cockpit control', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
     work_item_id: 'change-alpha',
-    scope: 'change-integration',
-    title: 'Integration',
+    scope: 'change-publication',
+    title: 'Change publication',
     stage: null,
     needs: 'you',
-    needs_headline: 'Revision pending',
+    needs_headline: 'Merge pull request in GitHub',
     next_actor: 'you',
-    next_step: 'Revision pending',
+    next_step: 'Merge pull request in GitHub',
     activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
-    progress: { kind: 'integration', label: 'Attempt failed', done: null, total: null },
-    action: { kind: 'none', label: null, command: null },
-    integration_attention: {
-      attention_id: 'b'.repeat(64),
-      code: 'revision-pending',
-      disposition: 'operator-required',
-      superseded: false,
-    },
+    progress: { kind: 'publication', label: 'Awaiting merge in GitHub', done: null, total: null },
+    action: { kind: 'observe-acceptance', label: 'Check GitHub acceptance', command: null },
   })
   currentDetail = detail({
-    card: integrationCard,
+    card: publicationCard,
     promise: 'Publish the reviewed Change.',
     acceptance: [],
     commitments: [],
     tasks: [],
-    integration: {
-      attention_id: 'b'.repeat(64),
-      code: 'revision-pending',
-      disposition: 'operator-required',
-      headline: 'Revision pending',
-      explanation: 'Integration retained evidence that requires your review.',
-      conflicted_paths: [],
-      diagnostics: [],
-      retry_condition: 'Publish a corrected revision.',
-      superseded: false,
-      repair_active: false,
+    publication: {
+      phase: 'awaiting-merge',
+      finalization_id: 'f'.repeat(64),
+      finalized_head: '1'.repeat(40),
+      published_head: '1'.repeat(40),
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: 'owlbear/example',
+      pull_request_number: 42,
+      pull_request_head: '1'.repeat(40),
+      accepted_merge_commit: null,
+      merged_at: null,
     },
   })
-  renderPage('/delivery/change-alpha/integration')
+  currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
 
   const inspector = await screen.findByTestId('work-item-detail')
-  expect(within(inspector).getByRole('region', { name: 'Revision pending' })).toBeInTheDocument()
-  expect(within(inspector).getAllByText('Integration requires your attention')).toHaveLength(1)
-  expect(inspector).toHaveTextContent('Next: Publish a corrected revision.')
-})
-
-it('copies exact operator-required Integration resolution command from the overview', async () => {
-  const writeText = vi.fn().mockResolvedValue(undefined)
-  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
-  const attentionId = 'c'.repeat(64)
-  const integrationCard = card({
-    item_key: 'integration',
-    work_item_id: 'change-alpha',
-    scope: 'change-integration',
-    title: 'Integration',
-    stage: null,
-    needs: 'you',
-    needs_headline: 'Reviewed worktree is dirty',
-    next_actor: 'you',
-    next_step: 'Reviewed worktree is dirty',
-    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
-    progress: { kind: 'integration', label: 'Attempt failed', done: null, total: null },
-    action: { kind: 'none', label: null, command: null },
-    integration_attention: {
-      attention_id: attentionId,
-      code: 'reviewed-worktree-dirty',
-      disposition: 'operator-required',
-      superseded: false,
-    },
-  })
-  currentPortfolio = portfolio([group({ lifecycle: 'integration', outcome_completed: 2, items: [integrationCard] })])
-  renderPage()
-
-  const command = `/resolve-delivery-attention change-alpha ${attentionId}`
-  fireEvent.click(await screen.findByRole('button', { name: `Copy command ${command}` }))
-
-  await waitFor(() => expect(writeText).toHaveBeenCalledWith(command))
-  expect(screen.queryByTestId('work-item-detail')).not.toBeInTheDocument()
-})
-
-it('hands operator-required Integration to the same exact agent resolution command', async () => {
-  const writeText = vi.fn().mockResolvedValue(undefined)
-  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
-  const attentionId = 'c'.repeat(64)
-  const integrationCard = card({
-    item_key: 'integration',
-    work_item_id: 'change-alpha',
-    scope: 'change-integration',
-    title: 'Integration',
-    stage: null,
-    needs: 'you',
-    needs_headline: 'Reviewed worktree is dirty',
-    next_actor: 'you',
-    next_step: 'Reviewed worktree is dirty',
-    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
-    progress: { kind: 'integration', label: 'Attempt failed', done: null, total: null },
-    action: { kind: 'none', label: null, command: null },
-    integration_attention: {
-      attention_id: attentionId,
-      code: 'reviewed-worktree-dirty',
-      disposition: 'operator-required',
-      superseded: false,
-    },
-  })
-  currentDetail = detail({
-    card: integrationCard,
-    promise: 'Publish the reviewed Change.',
-    acceptance: [],
-    commitments: [],
-    tasks: [],
-    integration: {
-      attention_id: attentionId,
-      code: 'reviewed-worktree-dirty',
-      disposition: 'operator-required',
-      headline: 'Reviewed worktree is dirty',
-      explanation: 'Integration stopped because the reviewed boundary no longer matches the worktree.',
-      conflicted_paths: [],
-      diagnostics: ['change worktree is not clean at its reviewed boundary'],
-      retry_condition: 'Restore the reviewed boundary, then let Orchestration integrate again.',
-      superseded: false,
-      repair_active: false,
-    },
-  })
-  renderPage('/delivery/change-alpha/integration')
-
-  const inspector = await screen.findByTestId('work-item-detail')
-  expect(inspector).toHaveTextContent('Copy this command into a new Copilot chat')
-  expect(inspector).toHaveTextContent('Next: Restore the reviewed boundary, then let Orchestration integrate again.')
-  expect(inspector).not.toHaveTextContent('Resolved when:')
-
-  fireEvent.click(within(inspector).getByRole('button', { name: `Copy command /resolve-delivery-attention change-alpha ${attentionId}` }))
-
-  await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
-  const prompt = writeText.mock.calls[0][0] as string
-  expect(prompt).toBe(`/resolve-delivery-attention change-alpha ${attentionId}`)
-  expect(inspector).not.toHaveTextContent('Engine resume condition:')
-})
-
-it('presents external acceptance as operator-required Integration attention', async () => {
-  const attentionId = 'd'.repeat(64)
-  const integrationCard = card({
-    item_key: 'integration',
-    work_item_id: 'change-alpha',
-    scope: 'change-integration',
-    title: 'Integration',
-    stage: null,
-    needs: 'you',
-    needs_headline: 'External acceptance required',
-    next_actor: 'you',
-    next_step: 'External acceptance required',
-    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
-    progress: { kind: 'integration', label: 'Awaiting external acceptance', done: null, total: null },
-    action: { kind: 'none', label: null, command: null },
-    integration_attention: {
-      attention_id: attentionId,
-      code: 'external-acceptance-required',
-      disposition: 'operator-required',
-      superseded: false,
-    },
-  })
-  currentDetail = detail({
-    card: integrationCard,
-    promise: 'Publish the reviewed Change.',
-    acceptance: [],
-    commitments: [],
-    tasks: [],
-    integration: {
-      attention_id: attentionId,
-      code: 'external-acceptance-required',
-      disposition: 'operator-required',
-      headline: 'External acceptance required',
-      explanation: 'Local target publication is disabled; completion requires externally observed acceptance.',
-      conflicted_paths: [],
-      diagnostics: ['local target publication is disabled; completion requires externally observed acceptance'],
-      retry_condition: 'Publish the reviewed Change through the provider and observe external acceptance.',
-      superseded: false,
-      repair_active: false,
-    },
-  })
-  currentPortfolio = portfolio([group({ lifecycle: 'integration', outcome_completed: 2, items: [integrationCard] })])
-  renderPage('/delivery/change-alpha/integration')
-
-  const inspector = await screen.findByTestId('work-item-detail')
-  expect(within(inspector).getByRole('region', { name: 'External acceptance required' })).toBeInTheDocument()
-  expect(inspector).toHaveTextContent('Local target publication is disabled; completion requires externally observed acceptance.')
-  expect(inspector).toHaveTextContent('Next: Publish the reviewed Change through the provider and observe external acceptance.')
-  expect(inspector).toHaveTextContent('ProgressAwaiting external acceptance')
-  expect(within(inspector).getByRole('button', { name: `Copy command /resolve-delivery-attention change-alpha ${attentionId}` })).toBeInTheDocument()
-  expect(within(inspector).queryByText('Retry now')).not.toBeInTheDocument()
-  expect(inspector).not.toHaveTextContent('Engine resume condition:')
+  expect(within(inspector).getByRole('region', { name: 'Awaiting merge in GitHub' })).toBeInTheDocument()
+  expect(inspector).toHaveTextContent('owlbear/example')
+  expect(inspector).toHaveTextContent('42')
+  expect(within(inspector).queryByText(/merge now/i)).not.toBeInTheDocument()
+  fireEvent.click(within(inspector).getByText('Check GitHub acceptance'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/acceptance/observe',
+    method: 'POST',
+    body: null,
+  }))
 })
 
 it('uses the Done status tag without leaking the internal Stage field', async () => {
@@ -922,32 +774,28 @@ it('uses the Done status tag without leaking the internal Stage field', async ()
   expect(inspector).not.toHaveTextContent('Complete — no action needed')
 })
 
-it('presents Integration retry as an optional alternative to Orchestration', async () => {
-  const integrationCard = card({
-    item_key: 'integration',
+it('presents a draft pull request as publication work', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
     work_item_id: 'change-alpha',
-    scope: 'change-integration',
-    title: 'Integration',
+    scope: 'change-publication',
+    title: 'Change publication',
     stage: null,
     next_actor: 'agent',
-    next_step: 'Retry against the current target',
+    next_step: 'Mark the pull request ready',
     activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
-    progress: { kind: 'integration', label: 'Awaiting retry against current target', done: null, total: null },
-    action: { kind: 'retry-integration', label: 'Retry Integration', command: null },
+    progress: { kind: 'publication', label: 'Pull request is draft', done: null, total: null },
+    action: { kind: 'mark-ready', label: 'Mark ready', command: null },
   })
-  currentPortfolio = portfolio([group({ lifecycle: 'integration', outcome_completed: 2, items: [integrationCard] })])
+  currentPortfolio = portfolio([group({ lifecycle: 'publication', outcome_completed: 2, items: [publicationCard] })])
   renderPage()
 
   const table = await screen.findByTestId('work-portfolio-table')
   expect(table).toHaveTextContent('Change: Portfolio redesign')
-  expect(table).toHaveTextContent('Ready for Integration retry')
-  expect(table).toHaveTextContent('Review retry')
-  expect(table).not.toHaveTextContent('Optional now')
-  expect(table).not.toHaveTextContent('Optional now: Retry Integration')
-  const retryLink = within(table).getByText('Review retry').closest('p-link-pure') as HTMLElement & { href: string; color: string; size: string }
-  expect(retryLink.href).toBe('/delivery/change-alpha/integration')
-  expect(retryLink.color).toBe('contrast-medium')
-  expect(retryLink.size).toBe('xs')
+  expect(table).toHaveTextContent('Pull request is draft')
+  expect(table).toHaveTextContent('Mark ready')
+  const readyLink = within(table).getByText('Mark ready').closest('p-link-pure') as HTMLElement & { href: string }
+  expect(readyLink.href).toBe('/delivery/change-alpha/publication')
   expect(screen.getByLabelText('Delivery portfolio status')).not.toHaveTextContent('need you')
 })
 
@@ -1019,86 +867,90 @@ it('does not prescribe Design for a return to Planning', async () => {
   expect(inspector).not.toHaveTextContent('/design')
 })
 
-it('shows active Integration repair state without instructing a duplicate repair', async () => {
-  const integrationCard = card({
-    item_key: 'integration',
+it('shows finalized and accepted merge heads as distinct identities', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
     work_item_id: 'change-alpha',
-    scope: 'change-integration',
-    title: 'Integration',
+    scope: 'change-publication',
+    title: 'Change publication',
     stage: null,
     needs: 'none',
     needs_headline: null,
     next_actor: 'agent',
-    next_step: 'Integration repair in progress',
-    activity: { state: 'repairing', worker_role: 'integration-repairer', started_at: '2026-08-08T10:00:00Z', task_id: null },
-    progress: { kind: 'integration', label: 'Repair in progress', done: null, total: null },
-    action: { kind: 'none', label: null, command: null },
+    next_step: 'Record accepted completion',
+    activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Merge observed', done: null, total: null },
+    action: { kind: 'observe-acceptance', label: 'Complete accepted Change', command: null },
   })
   currentDetail = detail({
-    card: integrationCard,
+    card: publicationCard,
     promise: 'Publish the reviewed Change.',
     acceptance: [],
     commitments: [],
     tasks: [],
-    integration: {
-      attention_id: null,
-      code: 'merge-conflict',
-      disposition: 'repair-required',
-      headline: 'Merge conflict',
-      explanation: 'One conflicting file requires a reviewed repair.',
-      conflicted_paths: ['serve/delivery/work_items.py'],
-      diagnostics: [],
-      retry_condition: 'Admit a reviewed repair.',
-      superseded: false,
-      repair_active: true,
+    publication: {
+      phase: 'acceptance-observed',
+      finalization_id: 'f'.repeat(64),
+      finalized_head: '1'.repeat(40),
+      published_head: '1'.repeat(40),
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: 'owlbear/example',
+      pull_request_number: 42,
+      pull_request_head: '1'.repeat(40),
+      accepted_merge_commit: '2'.repeat(40),
+      merged_at: '2026-08-11T12:00:00Z',
     },
   })
-  currentPortfolio = portfolio([group({ lifecycle: 'integration', outcome_completed: 2, items: [integrationCard] })])
-  renderPage('/delivery/change-alpha/integration')
+  currentPortfolio = portfolio([group({ lifecycle: 'acceptance', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
 
-  expect(await screen.findByLabelText('Delivery portfolio status')).toHaveTextContent('1Running')
   const detailView = await screen.findByTestId('work-item-detail')
-  expect(detailView).toHaveTextContent('Repair in progress')
-  expect(detailView).toHaveTextContent('A reviewed Integration repair is currently in progress.')
-  expect(detailView).not.toHaveTextContent('Repair required')
-  expect(detailView).not.toHaveTextContent('Admit a reviewed repair.')
+  expect(detailView).toHaveTextContent(`Finalized head${'1'.repeat(40)}`)
+  expect(detailView).toHaveTextContent(`Accepted merge commit${'2'.repeat(40)}`)
+  expect(detailView).not.toHaveTextContent(/ancestor|descendant|merge method/i)
 })
 
 it('moves a completed selected Change into completed history instead of leaving a dead route', async () => {
-  const integrationCard = card({
-    item_key: 'integration',
+  const publicationCard = card({
+    item_key: 'publication',
     work_item_id: 'change-alpha',
-    scope: 'change-integration',
-    title: 'Integration',
+    scope: 'change-publication',
+    title: 'Change publication',
     stage: null,
     activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
-    progress: { kind: 'integration', label: 'Not attempted', done: null, total: null },
-    action: { kind: 'integrate-change', label: 'Integrate Change', command: null },
+    progress: { kind: 'publication', label: 'Merge observed', done: null, total: null },
+    action: { kind: 'observe-acceptance', label: 'Complete accepted Change', command: null },
   })
-  currentPortfolio = portfolio([group({ lifecycle: 'integration', outcome_completed: 2, items: [integrationCard] })])
+  currentPortfolio = portfolio([group({ lifecycle: 'acceptance', outcome_completed: 2, items: [publicationCard] })])
   currentDetail = detail({
-    card: integrationCard,
+    card: publicationCard,
     promise: 'Publish the reviewed Change.',
     acceptance: [],
     commitments: [],
     tasks: [],
-    integration: {
-      attention_id: null,
-      code: null,
-      disposition: null,
-      headline: 'Ready to integrate',
-      explanation: 'Every Outcome is complete.',
-      conflicted_paths: [],
-      diagnostics: [],
-      retry_condition: null,
-      superseded: false,
-      repair_active: false,
+    publication: {
+      phase: 'acceptance-observed',
+      finalization_id: 'f'.repeat(64),
+      finalized_head: '1'.repeat(40),
+      published_head: '1'.repeat(40),
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: 'owlbear/example',
+      pull_request_number: 42,
+      pull_request_head: '1'.repeat(40),
+      accepted_merge_commit: '2'.repeat(40),
+      merged_at: '2026-08-11T12:00:00Z',
     },
   })
-  portfolioAfterIntegration = portfolio([])
-  renderPage('/delivery/change-alpha/integration')
+  portfolioAfterPublication = portfolio([])
+  renderPage('/delivery/change-alpha/publication')
   const inspector = await screen.findByTestId('work-item-detail')
-  fireEvent.click(within(inspector).getByText('Integrate now'))
+  fireEvent.click(within(inspector).getByText('Complete accepted Change'))
 
   expect(await screen.findByTestId('completed-history-workspace')).toHaveTextContent('Completed changes')
   expect(await screen.findByText('Portfolio redesign')).toBeInTheDocument()
@@ -1134,41 +986,44 @@ it('presents receipt completion identities without graph claims', async () => {
   expect(detailView).not.toHaveTextContent(/ancestor|descendant|merged into|merge method/i)
 })
 
-it('keeps current delivery open when only the selected Integration card disappears', async () => {
-  const integrationCard = card({
-    item_key: 'integration',
+it('keeps current delivery open when only the selected publication card disappears', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
     work_item_id: 'change-alpha',
-    scope: 'change-integration',
-    title: 'Integration',
+    scope: 'change-publication',
+    title: 'Change publication',
     stage: null,
     activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
-    progress: { kind: 'integration', label: 'Not attempted', done: null, total: null },
-    action: { kind: 'integrate-change', label: 'Integrate Change', command: null },
+    progress: { kind: 'publication', label: 'Merge observed', done: null, total: null },
+    action: { kind: 'observe-acceptance', label: 'Complete accepted Change', command: null },
   })
-  currentPortfolio = portfolio([group({ lifecycle: 'integration', outcome_completed: 2, items: [integrationCard] })])
+  currentPortfolio = portfolio([group({ lifecycle: 'acceptance', outcome_completed: 2, items: [publicationCard] })])
   currentDetail = detail({
-    card: integrationCard,
+    card: publicationCard,
     promise: 'Publish the reviewed Change.',
     acceptance: [],
     commitments: [],
     tasks: [],
-    integration: {
-      attention_id: null,
-      code: null,
-      disposition: null,
-      headline: 'Ready to integrate',
-      explanation: 'Every Outcome is complete.',
-      conflicted_paths: [],
-      diagnostics: [],
-      retry_condition: null,
-      superseded: false,
-      repair_active: false,
+    publication: {
+      phase: 'acceptance-observed',
+      finalization_id: 'f'.repeat(64),
+      finalized_head: '1'.repeat(40),
+      published_head: '1'.repeat(40),
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: 'owlbear/example',
+      pull_request_number: 42,
+      pull_request_head: '1'.repeat(40),
+      accepted_merge_commit: '2'.repeat(40),
+      merged_at: '2026-08-11T12:00:00Z',
     },
   })
-  portfolioAfterIntegration = portfolio([group({ items: [card({ title: 'Returned outcome' })] })])
-  renderPage('/delivery/change-alpha/integration')
+  portfolioAfterPublication = portfolio([group({ items: [card({ title: 'Returned outcome' })] })])
+  renderPage('/delivery/change-alpha/publication')
   const inspector = await screen.findByTestId('work-item-detail')
-  fireEvent.click(within(inspector).getByText('Integrate now'))
+  fireEvent.click(within(inspector).getByText('Complete accepted Change'))
 
   expect(await screen.findByTestId('work-portfolio-table')).toHaveTextContent('Returned outcome')
   expect(screen.queryByTestId('completed-history-workspace')).not.toBeInTheDocument()

@@ -80,7 +80,7 @@ test.describe('assembled Delivery portfolio', () => {
       await expect(table.getByRole('columnheader', { name: column }).first()).toBeVisible()
     }
     await expect(table).toContainText('Decision required')
-    await expect(table).toContainText('Integration repairer working')
+    await expect(table).toContainText('Ready for finalization')
     await expect(table).toContainText('Waiting on OUT-002')
     await expect(table).toContainText('Done')
     await expect(table).not.toContainText('Reviewed')
@@ -89,7 +89,7 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(summary).toContainText('3Changes')
     await expect(summary).toContainText('2Design')
     await expect(summary).toContainText('1Delivery')
-    await expect(summary).toContainText('1Running')
+    await expect(summary).toContainText('2Ready')
     await expect(summary).toContainText('2Needs you')
 
     const needsYou = summary.getByRole('button', { name: 'Filter to 2 work items: Needs you' })
@@ -103,9 +103,8 @@ test.describe('assembled Delivery portfolio', () => {
 
     const guidance = page.getByLabel('Session suggestions')
     await expect(guidance).toContainText('Review 2 items that need you')
-    await expect(guidance).toContainText('/orchestrate is already working')
+    await expect(guidance).toContainText('No session action needed.')
     await expect(guidance).toContainText('Continue Design with:')
-    await expect(guidance.getByText('/orchestrate', { exact: true })).toHaveCSS('font-family', /mono/i)
     await expect(guidance.getByText('/design design-operations-roadmap', { exact: true })).toBeVisible()
     const tableBox = await table.boundingBox()
     const guidanceBox = await guidance.boundingBox()
@@ -113,14 +112,12 @@ test.describe('assembled Delivery portfolio', () => {
     expect(guidanceBox).not.toBeNull()
     expect(guidanceBox!.y).toBeGreaterThanOrEqual(tableBox!.y + tableBox!.height)
 
-    const integrationRow = (await visibleRows(page)).filter({ hasText: 'Integration' })
-    await expect(integrationRow).toContainText('Integration')
-    await expect(integrationRow).toContainText('Change: Repair release')
-    await expect(integrationRow).toContainText('Repair in progress')
-    await expect(integrationRow).toContainText('Integration repairer working')
-    await expect(integrationRow).not.toContainText('Manual option:')
-    await expect(integrationRow.locator('dt')).toHaveText(['Work', 'Progress', 'Status'])
-    await expect(integrationRow.locator('dd')).toHaveCount(3)
+    const publicationRow = page.getByLabel('Change publication for Publication release')
+    await expect(publicationRow).toContainText('Publication')
+    await expect(publicationRow).toContainText('Change: Publication release')
+    await expect(publicationRow).toContainText('Ready for finalization')
+    await expect(publicationRow.locator('dt')).toHaveText(['Work', 'Progress', 'Status'])
+    await expect(publicationRow.locator('dd')).toHaveCount(3)
 
     const normalOutcome = (await visibleRows(page)).filter({ hasText: 'Publish operator guide' }).locator('td').first()
     await expect(normalOutcome).toHaveCSS('border-left-width', '4px')
@@ -128,12 +125,12 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(normalOutcome).toHaveCSS('border-top-left-radius', '8px')
     const interventionOutcome = (await visibleRows(page)).filter({ hasText: 'Choose release mode' }).locator('td').first()
     await expect(interventionOutcome).toHaveCSS('border-left-width', '4px')
-    await expect(integrationRow).toHaveCSS('border-left-width', '4px')
+    await expect(publicationRow).toHaveCSS('border-left-width', '4px')
 
-    const integrationTrigger = integrationRow.getByRole('link', { name: 'Integration', exact: true })
-    const integrationStatusBox = await integrationRow.getByText('Integration repairer working', { exact: true }).boundingBox()
-    expect(integrationStatusBox).not.toBeNull()
-    const integrationHitTarget = await page.evaluate(({ x, y }) => {
+    const publicationTrigger = publicationRow.getByRole('link', { name: 'Publication', exact: true })
+    const publicationStatusBox = await publicationRow.getByText('Ready for finalization', { exact: true }).last().boundingBox()
+    expect(publicationStatusBox).not.toBeNull()
+    const publicationHitTarget = await page.evaluate(({ x, y }) => {
       const element = document.elementFromPoint(x, y)
       const link = element?.closest('a')
       return {
@@ -141,31 +138,31 @@ test.describe('assembled Delivery portfolio', () => {
         href: link?.getAttribute('href') ?? null,
       }
     }, {
-      x: integrationStatusBox!.x + integrationStatusBox!.width / 2,
-      y: integrationStatusBox!.y + integrationStatusBox!.height / 2,
+      x: publicationStatusBox!.x + publicationStatusBox!.width / 2,
+      y: publicationStatusBox!.y + publicationStatusBox!.height / 2,
     })
-    expect(integrationHitTarget.cursor).toBe('pointer')
-    expect(integrationHitTarget.href).toBe('/delivery/repair-e2e/integration')
+    expect(publicationHitTarget.cursor).toBe('pointer')
+    expect(publicationHitTarget.href).toBe('/delivery/publication-e2e/publication')
     await page.mouse.click(
-      integrationStatusBox!.x + integrationStatusBox!.width / 2,
-      integrationStatusBox!.y + integrationStatusBox!.height / 2,
+      publicationStatusBox!.x + publicationStatusBox!.width / 2,
+      publicationStatusBox!.y + publicationStatusBox!.height / 2,
     )
-    await expect(page.getByTestId('work-item-detail').getByRole('heading', { name: 'Integration', exact: true })).toBeVisible()
-    const integrationFlyoutBox = await flyoutPanelBox(page)
-    expect(integrationFlyoutBox).not.toBeNull()
-    await page.mouse.click(integrationFlyoutBox!.x / 2, integrationFlyoutBox!.y + integrationFlyoutBox!.height / 2)
+    await expect(page.getByTestId('work-item-detail').getByRole('heading', { name: 'Publication', exact: true })).toBeVisible()
+    const publicationFlyoutBox = await flyoutPanelBox(page)
+    expect(publicationFlyoutBox).not.toBeNull()
+    await page.mouse.click(publicationFlyoutBox!.x / 2, publicationFlyoutBox!.y + publicationFlyoutBox!.height / 2)
     await expect(page.getByTestId('work-item-detail')).not.toBeVisible()
-    await expect(integrationTrigger).toBeFocused()
-    await expect.poll(() => integrationTrigger.evaluate((element) => element.matches(':focus-visible'))).toBe(false)
+    await expect(publicationTrigger).toBeFocused()
+    await expect.poll(() => publicationTrigger.evaluate((element) => element.matches(':focus-visible'))).toBe(false)
 
-    await integrationTrigger.focus()
+    await publicationTrigger.focus()
     await page.keyboard.press('Enter')
-    await expect(page.getByTestId('work-item-detail').getByRole('heading', { name: 'Integration', exact: true })).toBeVisible()
+    await expect(page.getByTestId('work-item-detail').getByRole('heading', { name: 'Publication', exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Dismiss flyout' }).focus()
     await page.keyboard.press('Enter')
     await expect(page.getByTestId('work-item-detail')).not.toBeVisible()
-    await expect(integrationTrigger).toBeFocused()
-    await expect.poll(() => integrationTrigger.evaluate((element) => element.matches(':focus-visible'))).toBe(true)
+    await expect(publicationTrigger).toBeFocused()
+    await expect.poll(() => publicationTrigger.evaluate((element) => element.matches(':focus-visible'))).toBe(true)
 
     const designSection = page.getByTestId('design-work-section')
     await expect(designSection).toContainText('Design Operations Roadmap')
@@ -328,14 +325,11 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(inspected.detail).toContainText('Safe rollout')
     await returnToPortfolio(page, inspected.trigger)
 
-    inspected = await inspect(page, 'Integration')
-    await expect(inspected.detail).toContainText('Repair in progress')
-    await expect(inspected.detail).toContainText('A reviewed Integration repair is currently in progress.')
-    await expect(inspected.detail).toContainText('Conflicting files')
-    await expect(inspected.detail).toContainText('product.txt')
-    await expect(inspected.detail).not.toContainText('Admit the independently reviewed repair.')
-    await expect(inspected.detail).not.toContainText('Complete')
-    await page.screenshot({ path: testInfo.outputPath('delivery-wide-repair-detail.png'), fullPage: true })
+    inspected = await inspect(page, 'Publication')
+    await expect(inspected.detail).toContainText('Ready for finalization')
+    await expect(inspected.detail).toContainText('Finalize the reviewed Change')
+    await expect(inspected.detail).not.toContainText(/merge now/i)
+    await page.screenshot({ path: testInfo.outputPath('delivery-wide-publication-detail.png'), fullPage: true })
     await returnToPortfolio(page, inspected.trigger)
 
     inspected = await inspect(page, 'Build operator controls')
@@ -426,11 +420,11 @@ test.describe('assembled Delivery portfolio', () => {
 
     const rows = await visibleRows(page)
     await expect(rows).toHaveCount(8)
-    const integrationRow = rows.filter({ hasText: 'Integration' })
+    const publicationRow = page.getByLabel('Change publication for Publication release')
     for (const field of ['Progress', 'Status']) {
-      await expect(integrationRow.getByText(field, { exact: true })).toBeVisible()
+      await expect(publicationRow.getByText(field, { exact: true })).toBeVisible()
     }
-    await expect(integrationRow).toHaveAttribute('aria-label', 'Change Integration for Repair release')
+    await expect(publicationRow).toHaveAttribute('aria-label', 'Change publication for Publication release')
     await expectNoHorizontalOverflow(page)
     const accessibility = await new AxeBuilder({ page }).analyze()
     const blocking = accessibility.violations.filter((violation) =>

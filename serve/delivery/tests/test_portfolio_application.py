@@ -598,7 +598,7 @@ def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Pat
     runtimes["change-a"].record_checkpoint_branch_publication(checkpoint, exact_head)
     runtimes["change-a"].acknowledge_checkpoint_publication(checkpoint.pending_checkpoint, exact_head)
 
-    ready = application.mark_change_ready("change-a", ready_request)
+    ready = application.mark_current_change_ready("change-a")
 
     assert ready.finalization_id == receipt.finalization_id
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.AWAITING_MERGE
@@ -1827,7 +1827,7 @@ def test_integration_queries_are_stable_bounded_and_read_only(tmp_path: Path) ->
     assert runtimes["change-a"].frontier_bytes() == attention_bytes
 
 
-def test_work_item_queries_resolve_live_target_once_per_portfolio_capture(
+def test_work_item_queries_do_not_resolve_integration_target(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1863,7 +1863,7 @@ def test_work_item_queries_resolve_live_target_once_per_portfolio_capture(
     assert shown.acceptance == ("The launch is observable.",)
     assert grouped[0].change_id == "change-a"
     assert detailed.card.work_item_id == "OUT-001"
-    assert resolved == ["change-b", "change-b"]
+    assert resolved == []
     assert "internal semantic body sentinel" not in serialized
     assert "internal completion body sentinel" not in serialized
 
@@ -2827,12 +2827,12 @@ def test_integration_merge_conflict_retains_clean_heads_and_typed_attention(tmp_
         == repair_launch
     )
     assert acquired.integration_attention == ()
-    integration_card = next(item for item in application.list_work_items() if item.work_item_id == "change-a")
+    publication_card = next(item for item in application.list_work_items() if item.work_item_id == "change-a")
     operator = application.show_operator_context("change-a", "change-a")
-    assert (integration_card.scope, integration_card.attention.value, integration_card.next_action) == (
-        "change-integration",
+    assert (publication_card.scope, publication_card.attention.value, publication_card.next_action) == (
+        "change-publication",
         "agent",
-        "Repair in progress",
+        "Ready for finalization",
     )
     assert operator.integration_attention is not None
     assert operator.integration_attention.disposition.value == "repair-required"
@@ -2852,7 +2852,7 @@ def test_integration_merge_conflict_retains_clean_heads_and_typed_attention(tmp_
     assert coordinator.show("change-a").writer is None
 
 
-def test_target_advance_projects_stale_conflict_as_queued_retry_without_refresh(tmp_path: Path) -> None:
+def test_target_advance_keeps_legacy_retry_out_of_publication_projection(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
@@ -2872,13 +2872,12 @@ def test_target_advance_projects_stale_conflict_as_queued_retry_without_refresh(
     _git(repository, "commit", "-m", "advance target after attention")
 
     view = application.portfolio_read_view()
-    integration = view.groups[0].items[-1]
+    publication = view.groups[0].items[-1]
 
-    assert integration.progress.label == "Awaiting retry against current target"
-    assert integration.action.kind is not None
-    assert integration.action.kind.value == "retry-integration"
-    assert tuple(item.change_id for item in view.operating.queued_for_orchestration) == ("change-a",)
-    assert tuple(item.kind.value for item in view.operating.guidance) == ("start-orchestration",)
+    assert publication.progress.label == "Ready for finalization"
+    assert publication.action.kind.value == "none"
+    assert view.operating.queued_for_orchestration == ()
+    assert view.operating.guidance == ()
     assert application.list_integration_ready_changes() == ("change-a",)
     assert application.list_integration_attention() == ()
     assert runtimes["change-a"].integration_attention() == failed.attention
