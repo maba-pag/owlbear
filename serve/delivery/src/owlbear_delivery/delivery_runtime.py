@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
-from owlbear_delivery.acceptance import CompletionReceipt, CompletionReceiptStore
+from owlbear_delivery.acceptance import CompletionDisplayMetadata, CompletionReceipt, CompletionReceiptStore
 from owlbear_delivery.draft_pull_request import (
     PublicationPullRequestObservationReceipt,
     PullRequestReadyReceipt,
@@ -1178,17 +1178,23 @@ class DeliveryRuntime:
     def completion_receipt(self) -> CompletionReceipt | None:
         """Return the exact terminal receipt while rejecting partial completion state."""
         frontier, _content = self._read()
-        stored = CompletionReceiptStore(self._target_root).read(self._contract.change_id)
+        store = CompletionReceiptStore(self._target_root)
+        stored = store.read(self._contract.change_id)
+        display = store.read_display(self._contract.change_id)
         if frontier.change_completion is None:
-            if stored is not None:
+            if stored is not None or display is not None:
                 _conflict("completion receipt exists without terminal frontier state")
             return None
         if (
             stored is None
+            or display is None
             or stored.completion_id != frontier.change_completion.completion_id
             or stored.completed_at != frontier.change_completion.completed_at
+            or display.completion_id != stored.completion_id
+            or display.title != self._contract.title
+            or display.outcome_titles != tuple(outcome.title for outcome in self._contract.outcomes)
         ):
-            _conflict("terminal frontier state does not match its completion receipt")
+            _conflict("terminal frontier state does not match its completion record")
         return stored
 
     def merged_pull_request_latch(self) -> DeliveryMergedPullRequestLatch | None:
@@ -1294,11 +1300,22 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         store = CompletionReceiptStore(self._target_root)
         existing = store.read(self._contract.change_id)
+        display = CompletionDisplayMetadata.create(
+            change_id=self._contract.change_id,
+            completion_id=receipt.completion_id,
+            title=self._contract.title,
+            outcome_titles=tuple(outcome.title for outcome in self._contract.outcomes),
+        )
+        existing_display = store.read_display(self._contract.change_id)
         if frontier.change_completion is not None:
-            if existing == receipt and frontier.change_completion.completion_id == receipt.completion_id:
+            if (
+                existing == receipt
+                and existing_display == display
+                and frontier.change_completion.completion_id == receipt.completion_id
+            ):
                 return receipt
             _conflict("Delivery Change is already completed with different authority")
-        if existing is not None:
+        if existing is not None or existing_display is not None:
             _conflict("completion receipt exists without terminal frontier state")
         finalization = frontier.finalization
         ready = frontier.ready
@@ -1325,17 +1342,20 @@ class DeliveryRuntime:
         )
         replacement = _model_content(frontier.model_copy(update={"change_completion": projection}))
         completion_participant = store.participant(receipt)
+        display_participant = store.display_participant(display)
         frontier_participant = ReplacementTransactionParticipant(
             self._target_root,
             self._frontier_path.relative_to(self._target_root),
             previous,
             replacement,
         )
-        transaction_id = hashlib.sha256(completion_participant.content + previous + replacement).hexdigest()
+        transaction_id = hashlib.sha256(
+            completion_participant.content + display_participant.content + previous + replacement
+        ).hexdigest()
         RuntimeTransaction(
             self._target_root,
             f"delivery-completion-{transaction_id}",
-            (completion_participant, frontier_participant),
+            (completion_participant, display_participant, frontier_participant),
         ).commit()
         return receipt
 

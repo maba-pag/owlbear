@@ -28,6 +28,46 @@ class CompletionPullRequestIdentity(_AcceptanceModel):
     node_id: str = Field(min_length=1)
 
 
+class CompletionDisplayMetadata(_AcceptanceModel):
+    """Content-validated presentation text captured from admitted Change authority."""
+
+    schema_version: Literal[1] = 1
+    display_id: str = Field(pattern=_DIGEST_PATTERN)
+    change_id: str = Field(pattern=_CHANGE_ID_PATTERN)
+    completion_id: str = Field(pattern=_DIGEST_PATTERN)
+    title: str = Field(min_length=1)
+    outcome_titles: tuple[str, ...] = Field(min_length=1)
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        change_id: str,
+        completion_id: str,
+        title: str,
+        outcome_titles: tuple[str, ...],
+    ) -> CompletionDisplayMetadata:
+        """Create display metadata without adding presentation text to acceptance evidence."""
+        payload = {
+            "schema_version": 1,
+            "change_id": change_id,
+            "completion_id": completion_id,
+            "title": title,
+            "outcome_titles": outcome_titles,
+        }
+        return cls(display_id=_digest(payload), **payload)
+
+    @model_validator(mode="after")
+    def _validate_display(self) -> CompletionDisplayMetadata:
+        if any(not title for title in self.outcome_titles):
+            message = "completion display Outcome titles must be nonempty"
+            raise ValueError(message)
+        if self.display_id != _digest(self.model_dump(mode="json", exclude={"display_id"})):
+            message = "completion display metadata identity is invalid"
+            raise ValueError(message)
+        return self
+
+
 class CompletionEvidence(_AcceptanceModel):
     """Exact accepted facts and durable evidence selected for one completion."""
 
@@ -144,7 +184,7 @@ class CompletionReceiptStore:
             return None
         if not root.is_dir():
             raise CompletionReceiptConflictError
-        paths = tuple(sorted(root.glob("*.json")))
+        paths = tuple(sorted(path for path in root.glob("*.json") if path.name != "display.json"))
         if len(paths) != 1 or paths[0].is_symlink():
             raise CompletionReceiptConflictError
         try:
@@ -155,12 +195,38 @@ class CompletionReceiptStore:
             raise CompletionReceiptConflictError
         return receipt
 
+    def read_display(self, change_id: str) -> CompletionDisplayMetadata | None:
+        """Read display metadata bound to the unique completion receipt for one Change."""
+        root = self._runtime_root / "completions" / change_id
+        path = root / "display.json"
+        if root.is_symlink() or path.is_symlink():
+            raise CompletionReceiptConflictError
+        if not root.exists():
+            return None
+        if not root.is_dir() or not path.is_file():
+            return None
+        try:
+            display = CompletionDisplayMetadata.model_validate_json(path.read_bytes())
+        except (OSError, ValidationError) as exc:
+            raise CompletionReceiptConflictError from exc
+        if display.change_id != change_id:
+            raise CompletionReceiptConflictError
+        return display
+
     def participant(self, receipt: CompletionReceipt) -> TransactionParticipant:
         """Prepare one runtime-rooted immutable completion participant."""
         return TransactionParticipant(
             self._runtime_root,
             Path("completions") / receipt.change_id / f"{receipt.completion_id}.json",
             _model_content(receipt),
+        )
+
+    def display_participant(self, display: CompletionDisplayMetadata) -> TransactionParticipant:
+        """Prepare one runtime-rooted immutable display-metadata participant."""
+        return TransactionParticipant(
+            self._runtime_root,
+            Path("completions") / display.change_id / "display.json",
+            _model_content(display),
         )
 
 
@@ -173,6 +239,7 @@ def _model_content(model: BaseModel) -> bytes:
 
 
 __all__ = [
+    "CompletionDisplayMetadata",
     "CompletionEvidence",
     "CompletionPullRequestIdentity",
     "CompletionReceipt",

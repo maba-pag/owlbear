@@ -18,6 +18,7 @@ from owlbear_delivery import (
     BlockDelivery,
     ChangeWorkspaceManager,
     ChangeWriter,
+    CompletionDisplayMetadata,
     CompletionEvidence,
     CompletionPullRequestIdentity,
     CompletionReceipt,
@@ -607,8 +608,22 @@ def test_completion_receipt_and_terminal_frontier_publish_atomically(tmp_path: P
     assert runtime.complete_change(receipt) == receipt
     completion_path = tmp_path / "completions/delivery-runtime" / f"{receipt.completion_id}.json"
     assert CompletionReceipt.model_validate_json(completion_path.read_bytes()) == receipt
+    display_path = tmp_path / "completions/delivery-runtime/display.json"
+    display = CompletionDisplayMetadata.model_validate_json(display_path.read_bytes())
+    assert display.completion_id == receipt.completion_id
+    assert display.title == runtime.contract.title
+    assert display.outcome_titles == tuple(outcome.title for outcome in runtime.contract.outcomes)
     with pytest.raises(DeliveryRuntimeConflictError, match="terminal"):
         runtime.reconcile_finalization_head("4" * 40, datetime(2026, 8, 11, 19, tzinfo=UTC))
+
+
+def test_terminal_completion_rejects_missing_display_metadata(tmp_path: Path) -> None:
+    runtime = _awaiting_merge_runtime(tmp_path)
+    runtime.complete_change(_completion_receipt(runtime))
+    (tmp_path / "completions/delivery-runtime/display.json").unlink()
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="completion record"):
+        runtime.completion_receipt()
 
 
 def test_completion_transaction_recovers_after_receipt_publication(tmp_path: Path) -> None:

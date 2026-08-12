@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from owlbear_delivery.acceptance import (
+    CompletionDisplayMetadata,
     CompletionEvidence,
     CompletionPullRequestIdentity,
     CompletionReceipt,
@@ -332,6 +333,7 @@ __all__ = [
     "CompletedHistoryMissingError",
     "CompletedHistoryStaleError",
     "CompletionCapture",
+    "CompletionDisplayMetadata",
     "CompletionEvidence",
     "CompletionPackageManifest",
     "CompletionPackageSnapshot",
