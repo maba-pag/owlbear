@@ -296,7 +296,12 @@ def _compose_application(
         coordinator=coordinator,
         workspace_manager=workspace_manager,
         integration_verifier=integration_verifier,
-        completed_history_catalog=CompletedHistoryCatalog(paths.repository_root, config.target_branch),
+        completed_history_catalog=CompletedHistoryCatalog(
+            paths.repository_root,
+            config.target_branch,
+            f"refs/remotes/{config.remote}/{config.target_branch}",
+            paths.runtime_root,
+        ),
         change_branch_publisher=ChangeBranchPublisher(
             paths.repository_root,
             coordinator,

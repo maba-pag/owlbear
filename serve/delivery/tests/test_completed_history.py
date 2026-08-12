@@ -9,10 +9,20 @@ from pathlib import Path
 
 import pytest
 
+from owlbear_delivery.acceptance import (
+    CompletionDisplayMetadata,
+    CompletionEvidence,
+    CompletionPullRequestIdentity,
+    CompletionReceipt,
+    CompletionReceiptStore,
+)
 from owlbear_delivery.completed_history import (
     CompletedHistoryCatalog,
     CompletedHistoryDiagnosticCode,
     CompletedHistoryError,
+    CompletedHistoryReceiptSetAdvancedError,
+    LegacyCompletedChangeRecord,
+    ReceiptCompletedChangeRecord,
 )
 from owlbear_delivery.delivery_runtime import (
     DeliveryFrontier,
@@ -214,6 +224,11 @@ def _repository(root: Path) -> tuple[Path, dict[str, str]]:
     baseline = _git(root, "rev-parse", "HEAD")
     first = _publish(root, "change-a", "Alpha delivery", baseline)
     second = _publish(root, "change-b", "Beta search", first)
+    legacy_root = root / ".owlbear/legacy"
+    legacy_root.mkdir()
+    (root / ".owlbear/completed").rename(legacy_root / "completed")
+    _git(root, "add", "-A", ".owlbear/completed", ".owlbear/legacy/completed")
+    _git(root, "commit", "-m", "move completed packages to legacy history")
     return root, {"baseline": baseline, "first": first, "second": second}
 
 
@@ -227,6 +242,55 @@ def _publish(repository: Path, change_id: str, title: str, reviewed_head: str) -
     return _git(repository, "rev-parse", "HEAD")
 
 
+def _receipt_digest(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()
+
+
+def _receipt_commit(value: str) -> str:
+    return _receipt_digest(value)[:40]
+
+
+def _publish_receipt(
+    runtime_root: Path,
+    change_id: str,
+    title: str,
+    *,
+    pull_request_number: int,
+) -> CompletionReceipt:
+    merged_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
+    receipt = CompletionReceipt.create(
+        CompletionEvidence(
+            change_id=change_id,
+            finalization_receipt_id=_receipt_digest(f"finalization:{change_id}"),
+            finalized_change_head=_receipt_commit(f"finalized:{change_id}"),
+            repository_identity="example/project",
+            pull_request_identity=CompletionPullRequestIdentity(
+                number=pull_request_number,
+                node_id=f"PR_node_{pull_request_number}",
+            ),
+            accepted_target_ref="main",
+            accepted_merge_commit=_receipt_commit(f"accepted:{change_id}"),
+            merged_at=merged_at,
+            acceptance_observation_id=_receipt_digest(f"acceptance:{change_id}"),
+            check_observation_ids=(_receipt_digest(f"checks:{change_id}"),),
+            review_receipt_ids=(_receipt_digest(f"review:{change_id}"),),
+            completed_at=datetime(2026, 8, 11, 13, tzinfo=UTC),
+        )
+    )
+    display = CompletionDisplayMetadata.create(
+        change_id=change_id,
+        completion_id=receipt.completion_id,
+        title=title,
+        outcome_titles=(f"Ship {title}",),
+    )
+    store = CompletionReceiptStore(runtime_root)
+    for participant in (store.participant(receipt), store.display_participant(display)):
+        destination = participant.destination()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(participant.content)
+    return receipt
+
+
 def _stale_target_binding(path: Path) -> int:
     manifest = CompletionPackageManifest.model_validate_json(path.read_bytes())
     stale = manifest.model_copy(update={"integration_target": "other-target"})
@@ -235,7 +299,7 @@ def _stale_target_binding(path: Path) -> int:
 
 def test_catalog_pages_searches_and_shows_verified_sibling_history(tmp_path: Path) -> None:
     repository, commits = _repository(tmp_path / "repository")
-    catalog = CompletedHistoryCatalog(repository, "main")
+    catalog = CompletedHistoryCatalog(repository, "main", "main", tmp_path / "runtime")
     target_before = _git(repository, "rev-parse", "main")
 
     first_page = catalog.list(limit=1)
@@ -250,9 +314,11 @@ def test_catalog_pages_searches_and_shows_verified_sibling_history(tmp_path: Pat
     assert first_page.next_cursor is not None
     assert second_page.next_cursor is None
     assert search.records == (shown,)
+    assert isinstance(shown, LegacyCompletedChangeRecord)
     assert shown.introducing_target_commit == commits["second"]
     assert shown.source_target_commit == commits["first"]
-    assert shown.completion_path == ".owlbear/completed/change-b"
+    assert shown.completion_path == ".owlbear/legacy/completed/change-b"
+    assert shown.historical_completion_locator == ".owlbear/completed/change-b"
     projection = shown.model_dump_json()
     assert "intent body sentinel" not in projection
     assert "design body sentinel" not in projection
@@ -276,14 +342,14 @@ def test_catalog_reports_corrupt_history_without_mutating_target(
     expected: CompletedHistoryDiagnosticCode,
 ) -> None:
     repository, _commits = _repository(tmp_path / "repository")
-    completion = repository / ".owlbear/completed/change-a/completion.json"
+    completion = repository / ".owlbear/legacy/completed/change-a/completion.json"
     corrupt(completion)
-    _git(repository, "add", ".owlbear/completed/change-a")
+    _git(repository, "add", ".owlbear/legacy/completed/change-a")
     _git(repository, "commit", "-m", "corrupt completed history")
     target_before = _git(repository, "rev-parse", "main")
 
     with pytest.raises(CompletedHistoryError) as raised:
-        CompletedHistoryCatalog(repository, "main").list()
+        CompletedHistoryCatalog(repository, "main", "main", tmp_path / "runtime").list()
 
     assert raised.value.diagnostic.code == expected
     assert _git(repository, "rev-parse", "main") == target_before
@@ -291,7 +357,7 @@ def test_catalog_reports_corrupt_history_without_mutating_target(
 
 def test_catalog_reports_missing_and_stale_queries_without_mutating_target(tmp_path: Path) -> None:
     repository, _commits = _repository(tmp_path / "repository")
-    catalog = CompletedHistoryCatalog(repository, "main")
+    catalog = CompletedHistoryCatalog(repository, "main", "main", tmp_path / "runtime")
     cursor = catalog.list(limit=1).next_cursor
     (repository / "product.txt").write_text("new target state\n", encoding="utf-8")
     _git(repository, "add", "product.txt")
@@ -309,3 +375,57 @@ def test_catalog_reports_missing_and_stale_queries_without_mutating_target(tmp_p
     assert exact_missing.value.diagnostic.code == CompletedHistoryDiagnosticCode.MISSING
     assert stale.value.diagnostic.code == CompletedHistoryDiagnosticCode.STALE
     assert _git(repository, "rev-parse", "main") == target_before
+
+
+def test_catalog_combines_legacy_and_receipt_history_without_false_graph_claims(tmp_path: Path) -> None:
+    repository, _commits = _repository(tmp_path / "repository")
+    runtime_root = tmp_path / "runtime"
+    replacement = _publish_receipt(runtime_root, "change-b", "Beta accepted", pull_request_number=7)
+    added = _publish_receipt(runtime_root, "change-c", "Gamma accepted", pull_request_number=8)
+    catalog = CompletedHistoryCatalog(repository, "main", "main", runtime_root)
+
+    page = catalog.list()
+    search = catalog.search("beta accepted")
+    shown = catalog.show("change-c", added.completion_id)
+
+    assert tuple((record.change_id, record.record_kind) for record in page.records) == (
+        ("change-a", "legacy-package"),
+        ("change-b", "completion-receipt"),
+        ("change-c", "completion-receipt"),
+    )
+    assert search.records[0].completion_id == replacement.completion_id
+    assert isinstance(shown, ReceiptCompletedChangeRecord)
+    assert shown.finalized_change_head == added.finalized_change_head
+    assert shown.accepted_merge_commit == added.accepted_merge_commit
+    assert shown.finalized_change_head != shown.accepted_merge_commit
+    projection = shown.model_dump(mode="json")
+    assert "merge_method" not in projection
+    assert "source_target_commit" not in projection
+    assert "introducing_target_commit" not in projection
+    assert "completion_path" not in projection
+
+
+def test_catalog_reports_receipt_growth_separately_from_target_staleness(tmp_path: Path) -> None:
+    repository, _commits = _repository(tmp_path / "repository")
+    runtime_root = tmp_path / "runtime"
+    catalog = CompletedHistoryCatalog(repository, "main", "main", runtime_root)
+    cursor = catalog.list(limit=1).next_cursor
+    assert cursor is not None
+    _publish_receipt(runtime_root, "change-c", "Gamma accepted", pull_request_number=8)
+
+    with pytest.raises(CompletedHistoryReceiptSetAdvancedError) as advanced:
+        catalog.list(cursor=cursor, limit=1)
+
+    assert advanced.value.diagnostic.code == CompletedHistoryDiagnosticCode.RECEIPT_SET_ADVANCED
+
+
+def test_catalog_fails_closed_for_malformed_receipt_display_metadata(tmp_path: Path) -> None:
+    repository, _commits = _repository(tmp_path / "repository")
+    runtime_root = tmp_path / "runtime"
+    _publish_receipt(runtime_root, "change-c", "Gamma accepted", pull_request_number=8)
+    (runtime_root / "completions/change-c/display.json").write_bytes(b"not-json\n")
+
+    with pytest.raises(CompletedHistoryError) as malformed:
+        CompletedHistoryCatalog(repository, "main", "main", runtime_root).list()
+
+    assert malformed.value.diagnostic.code == CompletedHistoryDiagnosticCode.MALFORMED

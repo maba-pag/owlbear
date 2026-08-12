@@ -455,7 +455,7 @@ def _portfolio(  # noqa: PLR0913
             coordinator=coordinator,
             workspace_manager=manager,
             integration_verifier=CallbackVerifier(),
-            completed_history_catalog=CompletedHistoryCatalog(repository, "main"),
+            completed_history_catalog=CompletedHistoryCatalog(repository, "main", "main", state_root),
         ),
         PortfolioApplicationConfig(
             package_root=package_root,
@@ -2041,6 +2041,16 @@ def _seed_legacy_completed_history(
     return completion
 
 
+def _migrate_legacy_completed_history(repository: Path) -> None:
+    _git(repository, "reset", "--hard", "main")
+    source = repository / ".owlbear/completed"
+    destination = repository / ".owlbear/legacy/completed"
+    destination.parent.mkdir(parents=True)
+    source.rename(destination)
+    _git(repository, "add", "-A", ".owlbear/completed", ".owlbear/legacy/completed")
+    _git(repository, "commit", "-m", "move completed packages to legacy history")
+
+
 def _prepare_reviewed_integration_repair(tmp_path: Path):
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
@@ -2735,6 +2745,7 @@ def test_completed_history_queries_are_bounded_and_separate_from_active_projecti
     repository = tmp_path / "repository"
     _seed_legacy_completed_history(application, runtimes, coordinator, "change-a")
     _seed_legacy_completed_history(application, runtimes, coordinator, "change-b")
+    _migrate_legacy_completed_history(repository)
     target_before = _git(repository, "rev-parse", "main")
 
     first = application.search_completed_changes("delivery", limit=1)

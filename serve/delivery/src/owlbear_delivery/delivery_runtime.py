@@ -10,7 +10,12 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
-from owlbear_delivery.acceptance import CompletionDisplayMetadata, CompletionReceipt, CompletionReceiptStore
+from owlbear_delivery.acceptance import (
+    CompletionDisplayMetadata,
+    CompletionReceipt,
+    CompletionReceiptConflictError,
+    CompletionReceiptStore,
+)
 from owlbear_delivery.draft_pull_request import (
     PublicationPullRequestObservationReceipt,
     PullRequestReadyReceipt,
@@ -1179,16 +1184,20 @@ class DeliveryRuntime:
         """Return the exact terminal receipt while rejecting partial completion state."""
         frontier, _content = self._read()
         store = CompletionReceiptStore(self._target_root)
-        stored = store.read(self._contract.change_id)
-        display = store.read_display(self._contract.change_id)
+        try:
+            record = store.read_bundle(self._contract.change_id)
+        except CompletionReceiptConflictError:
+            _conflict("terminal frontier state does not match its completion record")
         if frontier.change_completion is None:
-            if stored is not None or display is not None:
+            if record is not None:
                 _conflict("completion receipt exists without terminal frontier state")
             return None
+        if record is None:
+            _conflict("terminal frontier state does not match its completion record")
+        stored = record.receipt
+        display = record.display
         if (
-            stored is None
-            or display is None
-            or stored.completion_id != frontier.change_completion.completion_id
+            stored.completion_id != frontier.change_completion.completion_id
             or stored.completed_at != frontier.change_completion.completed_at
             or display.completion_id != stored.completion_id
             or display.title != self._contract.title
@@ -1299,23 +1308,26 @@ class DeliveryRuntime:
         """Atomically publish one terminal receipt and its minimal frontier projection."""
         frontier, previous = self._read()
         store = CompletionReceiptStore(self._target_root)
-        existing = store.read(self._contract.change_id)
+        try:
+            existing_record = store.read_bundle(self._contract.change_id)
+        except CompletionReceiptConflictError:
+            _conflict("completion record exists with malformed authority")
         display = CompletionDisplayMetadata.create(
             change_id=self._contract.change_id,
             completion_id=receipt.completion_id,
             title=self._contract.title,
             outcome_titles=tuple(outcome.title for outcome in self._contract.outcomes),
         )
-        existing_display = store.read_display(self._contract.change_id)
         if frontier.change_completion is not None:
             if (
-                existing == receipt
-                and existing_display == display
+                existing_record is not None
+                and existing_record.receipt == receipt
+                and existing_record.display == display
                 and frontier.change_completion.completion_id == receipt.completion_id
             ):
                 return receipt
             _conflict("Delivery Change is already completed with different authority")
-        if existing is not None or existing_display is not None:
+        if existing_record is not None:
             _conflict("completion receipt exists without terminal frontier state")
         finalization = frontier.finalization
         ready = frontier.ready

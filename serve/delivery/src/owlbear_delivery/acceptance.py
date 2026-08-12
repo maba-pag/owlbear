@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -163,6 +164,20 @@ class CompletionReceipt(CompletionEvidence):
         return self
 
 
+class CompletionReceiptBundle(_AcceptanceModel):
+    """One exact receipt and its non-authoritative display projection."""
+
+    receipt: CompletionReceipt
+    display: CompletionDisplayMetadata
+
+    @model_validator(mode="after")
+    def _validate_binding(self) -> CompletionReceiptBundle:
+        if self.receipt.change_id != self.display.change_id or self.receipt.completion_id != self.display.completion_id:
+            message = "completion receipt and display metadata identities differ"
+            raise ValueError(message)
+        return self
+
+
 class CompletionReceiptConflictError(RuntimeError):
     """Completion history is absent, duplicated, or inconsistent with frontier state."""
 
@@ -213,6 +228,56 @@ class CompletionReceiptStore:
             raise CompletionReceiptConflictError
         return display
 
+    def read_bundle(self, change_id: str) -> CompletionReceiptBundle | None:
+        """Read one complete receipt/display record and reject partial or extra content."""
+        root = self._runtime_root / "completions" / change_id
+        receipt = self.read(change_id)
+        display = self.read_display(change_id)
+        if receipt is None and display is None:
+            return None
+        if receipt is None or display is None:
+            raise CompletionReceiptConflictError
+        try:
+            entries = tuple(root.iterdir())
+        except OSError as exc:
+            raise CompletionReceiptConflictError from exc
+        expected_names = {f"{receipt.completion_id}.json", "display.json"}
+        if {path.name for path in entries} != expected_names or any(
+            path.is_symlink() or not path.is_file() for path in entries
+        ):
+            raise CompletionReceiptConflictError
+        try:
+            return CompletionReceiptBundle(receipt=receipt, display=display)
+        except ValidationError as exc:
+            raise CompletionReceiptConflictError from exc
+
+    def list(self) -> tuple[CompletionReceiptBundle, ...]:
+        """List complete receipt/display records in stable Change identity order."""
+        root = self._runtime_root / "completions"
+        if root.is_symlink():
+            raise CompletionReceiptConflictError
+        if not root.exists():
+            return ()
+        if not root.is_dir():
+            raise CompletionReceiptConflictError
+        try:
+            change_roots = tuple(sorted(root.iterdir(), key=lambda path: path.name))
+        except OSError as exc:
+            raise CompletionReceiptConflictError from exc
+        records = []
+        for change_root in change_roots:
+            if (
+                change_root.is_symlink()
+                or not change_root.is_dir()
+                or re.fullmatch(_CHANGE_ID_PATTERN, change_root.name) is None
+            ):
+                raise CompletionReceiptConflictError
+            record = self.read_bundle(change_root.name)
+            if record is None:
+                raise CompletionReceiptConflictError
+            records.append(record)
+        return tuple(records)
+
     def participant(self, receipt: CompletionReceipt) -> TransactionParticipant:
         """Prepare one runtime-rooted immutable completion participant."""
         return TransactionParticipant(
@@ -243,6 +308,7 @@ __all__ = [
     "CompletionEvidence",
     "CompletionPullRequestIdentity",
     "CompletionReceipt",
+    "CompletionReceiptBundle",
     "CompletionReceiptConflictError",
     "CompletionReceiptStore",
 ]

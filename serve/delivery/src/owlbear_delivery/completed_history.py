@@ -8,11 +8,18 @@ import hashlib
 import json
 import re
 import subprocess
+from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Never
+from typing import TYPE_CHECKING, Annotated, Literal, Never
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
+from owlbear_delivery.acceptance import (
+    CompletionPullRequestIdentity,
+    CompletionReceiptBundle,
+    CompletionReceiptConflictError,
+    CompletionReceiptStore,
+)
 from owlbear_delivery.delivery_runtime import (
     DeliveryFrontier,
     DeliveryStage,
@@ -31,7 +38,8 @@ from owlbear_delivery.target_contract import DeliveryContract
 if TYPE_CHECKING:
     from pathlib import Path
 
-_COMPLETED_ROOT = ".owlbear/completed"
+_LEGACY_COMPLETED_ROOT = ".owlbear/legacy/completed"
+_HISTORICAL_COMPLETED_ROOT = ".owlbear/completed"
 _COMPLETION_NAMES = {
     "authority.json",
     "completion.json",
@@ -57,6 +65,7 @@ class CompletedHistoryDiagnosticCode(StrEnum):
     MISSING = "completed-history-missing"
     MALFORMED = "completed-history-malformed"
     STALE = "completed-history-stale"
+    RECEIPT_SET_ADVANCED = "completed-history-receipt-set-advanced"
     DIGEST_MISMATCH = "completed-history-digest-mismatch"
 
 
@@ -89,21 +98,55 @@ class CompletedHistoryStaleError(CompletedHistoryError):
     """A cursor or persisted target binding names another target state."""
 
 
+class CompletedHistoryReceiptSetAdvancedError(CompletedHistoryError):
+    """Append-only receipt history advanced beyond one pagination cursor."""
+
+
 class CompletedHistoryDigestMismatchError(CompletedHistoryError):
     """Persisted completed package bytes differ from their digest bindings."""
 
 
-class CompletedChangeRecord(_CompletedHistoryModel):
-    """Bounded immutable semantic projection of one completed package."""
-
+class _CompletedChangeRecordBase(_CompletedHistoryModel):
+    schema_version: Literal[2] = 2
     change_id: ChangeId
     completion_id: Digest
-    completion_path: str = Field(pattern=r"^\.owlbear/completed/[a-z0-9]+(?:-[a-z0-9]+)*$")
+    title: str = Field(min_length=1)
+    semantic_summary: str = Field(min_length=1)
+
+
+class LegacyCompletedChangeRecord(_CompletedChangeRecordBase):
+    """Verified legacy package with historical target-ancestry semantics."""
+
+    record_kind: Literal["legacy-package"] = "legacy-package"
+    completion_path: str = Field(pattern=r"^\.owlbear/legacy/completed/[a-z0-9]+(?:-[a-z0-9]+)*$")
+    historical_completion_locator: str = Field(pattern=r"^\.owlbear/completed/[a-z0-9]+(?:-[a-z0-9]+)*$")
     package_id: Digest
     introducing_target_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     source_target_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
-    title: str = Field(min_length=1)
-    semantic_summary: str = Field(min_length=1)
+
+
+class ReceiptCompletedChangeRecord(_CompletedChangeRecordBase):
+    """Receipt-backed completion facts without graph or target-reachability claims."""
+
+    record_kind: Literal["completion-receipt"] = "completion-receipt"
+    finalization_receipt_id: Digest
+    finalized_change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    repository_identity: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    pull_request_identity: CompletionPullRequestIdentity
+    accepted_target_ref: str = Field(min_length=1)
+    accepted_merge_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    merged_at: datetime
+    acceptance_observation_id: Digest
+    check_observation_ids: tuple[Digest, ...]
+    review_receipt_ids: tuple[Digest, ...]
+    acceptance_evidence_digest: Digest
+    completed_at: datetime
+
+
+type CompletedChangeRecord = Annotated[
+    LegacyCompletedChangeRecord | ReceiptCompletedChangeRecord,
+    Field(discriminator="record_kind"),
+]
 
 
 class CompletedChangePage(_CompletedHistoryModel):
@@ -114,9 +157,17 @@ class CompletedChangePage(_CompletedHistoryModel):
 
 
 class _Cursor(_CompletedHistoryModel):
-    source_target_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    schema_version: Literal[2] = 2
+    legacy_source_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    receipt_set_digest: Digest
     query_digest: Digest
     offset: int = Field(ge=0)
+
+
+class _CatalogSnapshot(_CompletedHistoryModel):
+    legacy_source_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    receipt_set_digest: Digest
+    records: tuple[CompletedChangeRecord, ...]
 
 
 def _decode_cursor(cursor: str) -> _Cursor:
@@ -146,58 +197,118 @@ def _query_digest(query: str) -> str:
 
 
 class CompletedHistoryCatalog:
-    """Rebuild bounded completed-package records from one configured Git target."""
+    """Rebuild bounded legacy-package and receipt-backed completion records."""
 
-    def __init__(self, repository: Path, integration_target: str) -> None:
-        if not integration_target:
-            message = "integration target must be nonempty"
+    def __init__(
+        self,
+        repository: Path,
+        target_branch: str,
+        legacy_source_ref: str,
+        runtime_root: Path,
+    ) -> None:
+        if not target_branch or not legacy_source_ref:
+            message = "target branch and legacy source ref must be nonempty"
             raise ValueError(message)
         self._repository = repository.resolve()
-        self._integration_target = integration_target
+        self._target_branch = target_branch
+        self._legacy_source_ref = legacy_source_ref
+        self._completion_store = CompletionReceiptStore(runtime_root)
 
     def list(self, cursor: str | None = None, limit: int = 100) -> CompletedChangePage:
         """List one stable identity-ordered page from completed history."""
-        source_commit, records = self._rebuild()
-        return self._page(records, source_commit, "", cursor, limit)
+        return self._page(self._rebuild(), "", cursor, limit)
 
     def search(self, query: str, cursor: str | None = None, limit: int = 100) -> CompletedChangePage:
         """Search semantic summaries and return one stable bounded page."""
         normalized = query.strip().casefold()
         if not normalized:
             self._malformed("completed-history search query must be nonempty")
-        source_commit, records = self._rebuild()
-        matches = tuple(record for record in records if normalized in record.semantic_summary.casefold())
-        return self._page(matches, source_commit, normalized, cursor, limit)
+        snapshot = self._rebuild()
+        matches = tuple(record for record in snapshot.records if normalized in self._search_text(record))
+        return self._page(snapshot.model_copy(update={"records": matches}), normalized, cursor, limit)
 
     def show(self, change_id: str, completion_id: str | None = None) -> CompletedChangeRecord:
         """Show one verified completion by change and optional exact completion identity."""
-        records = self._rebuild()[1]
-        for record in records:
+        for record in self._rebuild().records:
             if record.change_id == change_id and completion_id in {None, record.completion_id}:
                 return record
         return self._missing("completed change is absent", change_id, completion_id)
 
-    def _rebuild(self) -> tuple[str, tuple[CompletedChangeRecord, ...]]:
+    def _rebuild(self) -> _CatalogSnapshot:
         target_commit = self._resolve_target()
-        records = tuple(self._record(target_commit, path) for path in self._completion_paths(target_commit))
-        return target_commit, tuple(sorted(records, key=lambda item: (item.change_id, item.completion_id)))
+        legacy_records = tuple(
+            self._legacy_record(target_commit, path) for path in self._completion_paths(target_commit)
+        )
+        try:
+            bundles = self._completion_store.list()
+        except CompletionReceiptConflictError as exc:
+            self._malformed("completion receipt history is malformed", cause=exc)
+        receipt_records = tuple(self._receipt_record(bundle) for bundle in bundles)
+        receipt_change_ids = {record.change_id for record in receipt_records}
+        records = (
+            *receipt_records,
+            *(record for record in legacy_records if record.change_id not in receipt_change_ids),
+        )
+        receipt_set_digest = _receipt_set_digest(bundles)
+        return _CatalogSnapshot(
+            legacy_source_commit=target_commit,
+            receipt_set_digest=receipt_set_digest,
+            records=tuple(sorted(records, key=lambda item: (item.change_id, item.record_kind, item.completion_id))),
+        )
 
-    def _record(self, target_commit: str, path: str) -> CompletedChangeRecord:
+    def _legacy_record(self, target_commit: str, path: str) -> LegacyCompletedChangeRecord:
         snapshot = self._snapshot(target_commit, path)
         contract = self._verify_design_package(target_commit, path, snapshot)
         self._verify_runtime_capture(target_commit, path, snapshot, contract)
-        introducing_commit, source_commit = self._introduction(target_commit, path, snapshot)
+        introducing_commit, source_commit = self._introduction(target_commit, snapshot)
         summary = " | ".join((contract.title, *(outcome.title for outcome in contract.outcomes)))
-        return CompletedChangeRecord(
+        return LegacyCompletedChangeRecord(
             change_id=snapshot.manifest.change_id,
             completion_id=snapshot.completion_id,
             completion_path=path,
+            historical_completion_locator=snapshot.manifest.completion_path,
             package_id=snapshot.package_id,
             introducing_target_commit=introducing_commit,
             source_target_commit=source_commit,
             title=contract.title,
             semantic_summary=summary,
         )
+
+    @staticmethod
+    def _receipt_record(bundle: CompletionReceiptBundle) -> ReceiptCompletedChangeRecord:
+        receipt = bundle.receipt
+        display = bundle.display
+        return ReceiptCompletedChangeRecord(
+            change_id=receipt.change_id,
+            completion_id=receipt.completion_id,
+            title=display.title,
+            semantic_summary=" | ".join((display.title, *display.outcome_titles)),
+            finalization_receipt_id=receipt.finalization_receipt_id,
+            finalized_change_head=receipt.finalized_change_head,
+            repository_identity=receipt.repository_identity,
+            pull_request_identity=receipt.pull_request_identity,
+            accepted_target_ref=receipt.accepted_target_ref,
+            accepted_merge_commit=receipt.accepted_merge_commit,
+            merged_at=receipt.merged_at,
+            acceptance_observation_id=receipt.acceptance_observation_id,
+            check_observation_ids=receipt.check_observation_ids,
+            review_receipt_ids=receipt.review_receipt_ids,
+            acceptance_evidence_digest=receipt.acceptance_evidence_digest,
+            completed_at=receipt.completed_at,
+        )
+
+    @staticmethod
+    def _search_text(record: CompletedChangeRecord) -> str:
+        fields = [record.change_id, record.title, record.semantic_summary]
+        if isinstance(record, ReceiptCompletedChangeRecord):
+            fields.extend(
+                (
+                    record.repository_identity,
+                    record.accepted_target_ref,
+                    str(record.pull_request_identity.number),
+                )
+            )
+        return "\n".join(fields).casefold()
 
     def _snapshot(self, commit: str, path: str) -> CompletionPackageSnapshot:
         self._require_completion_names(commit, path)
@@ -322,22 +433,22 @@ class CompletedHistoryCatalog:
     def _introduction(
         self,
         target_commit: str,
-        path: str,
         snapshot: CompletionPackageSnapshot,
     ) -> tuple[str, str]:
+        historical_path = snapshot.manifest.completion_path
         output = self._git(
             "log",
             "--reverse",
             "--format=%H",
             target_commit,
             "--",
-            f"{path}/completion.json",
+            f"{historical_path}/completion.json",
         ).decode()
         commits = tuple(line for line in output.splitlines() if line)
         if not commits:
             self._malformed("completion has no introducing target commit", snapshot.manifest.change_id)
         introducing = commits[0]
-        introduced_tree = self._git("rev-parse", f"{introducing}:{path}").decode().strip()
+        introduced_tree = self._git("rev-parse", f"{introducing}:{historical_path}").decode().strip()
         if introduced_tree != snapshot.package_tree:
             self._stale("completed package changed after its introduction", snapshot)
         parents = self._git("rev-list", "--parents", "-n", "1", introducing).decode().split()
@@ -352,7 +463,7 @@ class CompletedHistoryCatalog:
             self._stale("reviewed change head is not in completion ancestry", snapshot)
 
     def _completion_paths(self, target_commit: str) -> tuple[str, ...]:
-        root = f"{target_commit}:{_COMPLETED_ROOT}"
+        root = f"{target_commit}:{_LEGACY_COMPLETED_ROOT}"
         kind = self._run_git("cat-file", "-t", root, check=False)
         if kind.returncode != 0:
             return ()
@@ -375,7 +486,7 @@ class CompletedHistoryCatalog:
             or not _SAFE_CHANGE_ID.fullmatch(change_id)
         ):
             self._malformed("completed-history entry is not a valid change tree", change_id)
-        return f"{_COMPLETED_ROOT}/{change_id}"
+        return f"{_LEGACY_COMPLETED_ROOT}/{change_id}"
 
     def _require_completion_names(self, commit: str, path: str) -> None:
         content = self._git("ls-tree", "--name-only", "-z", f"{commit}:{path}")
@@ -388,49 +499,69 @@ class CompletedHistoryCatalog:
 
     def _require_snapshot_binding(self, path: str, snapshot: CompletionPackageSnapshot) -> None:
         manifest = snapshot.manifest
-        if manifest.completion_path != path or path != f"{_COMPLETED_ROOT}/{manifest.change_id}":
+        if (
+            manifest.completion_path != f"{_HISTORICAL_COMPLETED_ROOT}/{manifest.change_id}"
+            or path != f"{_LEGACY_COMPLETED_ROOT}/{manifest.change_id}"
+        ):
             self._stale("completion manifest path or change identity is stale", snapshot)
-        if manifest.integration_target != self._integration_target:
+        if manifest.integration_target != self._target_branch:
             self._stale("completion manifest names another integration target", snapshot)
 
     def _page(
         self,
-        records: tuple[CompletedChangeRecord, ...],
-        source_commit: str,
+        snapshot: _CatalogSnapshot,
         query: str,
         cursor: str | None,
         limit: int,
     ) -> CompletedChangePage:
         if not 1 <= limit <= _MAX_PAGE_SIZE:
             self._malformed("completed-history limit must be between 1 and 100")
-        offset = self._cursor_offset(cursor, source_commit, query)
-        selected = records[offset : offset + limit]
+        offset = self._cursor_offset(
+            cursor,
+            snapshot.legacy_source_commit,
+            snapshot.receipt_set_digest,
+            query,
+        )
+        selected = snapshot.records[offset : offset + limit]
         next_offset = offset + len(selected)
         next_cursor = None
-        if next_offset < len(records):
+        if next_offset < len(snapshot.records):
             next_cursor = _encode_cursor(
                 _Cursor(
-                    source_target_commit=source_commit,
+                    legacy_source_commit=snapshot.legacy_source_commit,
+                    receipt_set_digest=snapshot.receipt_set_digest,
                     query_digest=_query_digest(query),
                     offset=next_offset,
                 )
             )
         return CompletedChangePage(records=selected, next_cursor=next_cursor)
 
-    def _cursor_offset(self, cursor: str | None, source_commit: str, query: str) -> int:
+    def _cursor_offset(
+        self,
+        cursor: str | None,
+        source_commit: str,
+        receipt_set_digest: str,
+        query: str,
+    ) -> int:
         if cursor is None:
             return 0
         decoded = _decode_cursor(cursor)
-        if decoded.source_target_commit != source_commit or decoded.query_digest != _query_digest(query):
+        if decoded.legacy_source_commit != source_commit or decoded.query_digest != _query_digest(query):
             diagnostic = CompletedHistoryDiagnostic(
                 code=CompletedHistoryDiagnosticCode.STALE,
                 detail="completed-history cursor does not match this target snapshot and query",
             )
             raise CompletedHistoryStaleError(diagnostic)
+        if decoded.receipt_set_digest != receipt_set_digest:
+            diagnostic = CompletedHistoryDiagnostic(
+                code=CompletedHistoryDiagnosticCode.RECEIPT_SET_ADVANCED,
+                detail="completed-history receipts advanced beyond this cursor",
+            )
+            raise CompletedHistoryReceiptSetAdvancedError(diagnostic)
         return decoded.offset
 
     def _resolve_target(self) -> str:
-        result = self._run_git("rev-parse", "--verify", f"{self._integration_target}^{{commit}}", check=False)
+        result = self._run_git("rev-parse", "--verify", f"{self._legacy_source_ref}^{{commit}}", check=False)
         if result.returncode != 0:
             self._missing("configured integration target is absent")
         return result.stdout.decode().strip()
@@ -497,6 +628,13 @@ class CompletedHistoryCatalog:
 def _canonical_model(model: BaseModel) -> bytes:
     payload = model.model_dump(mode="json")
     return f"{json.dumps(payload, sort_keys=True, separators=(',', ':'))}\n".encode()
+
+
+def _receipt_set_digest(bundles: tuple[CompletionReceiptBundle, ...]) -> str:
+    identities = tuple(
+        (bundle.receipt.change_id, bundle.receipt.completion_id, bundle.display.display_id) for bundle in bundles
+    )
+    return hashlib.sha256(json.dumps(identities, separators=(",", ":")).encode()).hexdigest()
 
 
 def _canonical_results(results: tuple[DeliveryTaskResult, ...]) -> bytes:
