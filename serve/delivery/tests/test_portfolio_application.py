@@ -500,6 +500,7 @@ def test_finalization_uses_managed_head_and_invalidates_observed_drift(tmp_path:
     assert invalidation.expected_head == exact_head
     assert invalidation.observed_head == observed_head
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
+    assert application.list_integration_ready_changes() == ()
 
 
 def _fail_once_then_set_draft_state(pull_requests: list[PublicationPullRequest]):
