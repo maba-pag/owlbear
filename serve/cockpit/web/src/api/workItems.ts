@@ -274,16 +274,45 @@ export interface BackwardMovePreview {
   invalidated_outcome_ids: string[]
 }
 
-export interface CompletedChangeRecord {
+interface CompletedChangeRecordBase {
+  schema_version: 2
   change_id: string
   completion_id: string
-  completion_path: string
-  package_id: string
-  introducing_target_commit: string
-  source_target_commit: string
   title: string
   semantic_summary: string
 }
+
+export interface LegacyCompletedChangeRecord extends CompletedChangeRecordBase {
+  record_kind: 'legacy-package'
+  completion_path: string
+  historical_completion_locator: string
+  package_id: string
+  introducing_target_commit: string
+  source_target_commit: string
+}
+
+export interface CompletionPullRequestIdentity {
+  number: number
+  node_id: string
+}
+
+export interface ReceiptCompletedChangeRecord extends CompletedChangeRecordBase {
+  record_kind: 'completion-receipt'
+  finalization_receipt_id: string
+  finalized_change_head: string
+  repository_identity: string
+  pull_request_identity: CompletionPullRequestIdentity
+  accepted_target_ref: string
+  accepted_merge_commit: string
+  merged_at: string
+  acceptance_observation_id: string
+  check_observation_ids: string[]
+  review_receipt_ids: string[]
+  acceptance_evidence_digest: string
+  completed_at: string
+}
+
+export type CompletedChangeRecord = LegacyCompletedChangeRecord | ReceiptCompletedChangeRecord
 
 export interface CompletedChangePage {
   records: CompletedChangeRecord[]

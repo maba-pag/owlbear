@@ -7,10 +7,18 @@ import argparse
 import hashlib
 import json
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import BaseModel
 
+from owlbear_delivery.acceptance import (
+    CompletionDisplayMetadata,
+    CompletionEvidence,
+    CompletionPullRequestIdentity,
+    CompletionReceipt,
+    CompletionReceiptStore,
+)
 from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator
 from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
@@ -19,10 +27,14 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryFrontier,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
+    DeliveryObservation,
+    DeliveryObservationReceipt,
     DeliveryRequest,
     DeliveryRequestKind,
     DeliveryRequestOption,
     DeliveryReturnContext,
+    DeliveryReview,
+    DeliveryReviewReceipt,
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
@@ -112,6 +124,28 @@ def _task(outcome_id: str, index: int) -> DeliveryTaskDefinition:
 
 
 def _result(contract: DeliveryContract, task: DeliveryTaskDefinition, head: str) -> DeliveryTaskResult:
+    observed_at = datetime(2026, 8, 11, 12, tzinfo=UTC)
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id=contract.change_id,
+            task_or_finalization_id=task.task_id,
+            exact_commit=head,
+            observation_kind="playwright",
+            command_or_procedure="Assembled Cockpit fixture validation",
+            exit_status_or_artifact_locator="fixture:passed",
+            observer_or_runner_identity="work-portfolio-e2e",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit=head,
+            author_id="work-portfolio-e2e-author",
+            reviewer_id="work-portfolio-e2e-reviewer",
+            evidence=("The assembled fixture commit satisfies its task authority.",),
+            reviewed_at=observed_at,
+        )
+    )
     return DeliveryTaskResult(
         result_id=f"result-{task.task_id.lower()}",
         change_id=contract.change_id,
@@ -119,6 +153,8 @@ def _result(contract: DeliveryContract, task: DeliveryTaskDefinition, head: str)
         task_id=task.task_id,
         task_digest=task.digest,
         completed_commit=head,
+        observations=(observation,),
+        review=review,
     )
 
 
@@ -318,10 +354,48 @@ def _seed_repository(repository: Path) -> str:
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "baseline")
     _git(repository, "remote", "add", "origin", "https://github.com/example/project.git")
-    _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
     baseline = _git(repository, "rev-parse", "HEAD")
     first = _publish_completion(repository, "completed-alpha", "Alpha delivery", baseline)
-    return _publish_completion(repository, "completed-beta", "Beta search", first)
+    _publish_completion(repository, "completed-beta", "Beta search", first)
+    legacy_root = repository / ".owlbear/legacy"
+    legacy_root.mkdir()
+    (repository / ".owlbear/completed").rename(legacy_root / "completed")
+    _git(repository, "add", "-A", ".owlbear/completed", ".owlbear/legacy/completed")
+    _git(repository, "commit", "-m", "move completed packages to legacy history")
+    head = _git(repository, "rev-parse", "HEAD")
+    _git(repository, "update-ref", "refs/remotes/origin/main", head)
+    return head
+
+
+def _write_completion_receipt(runtime_root: Path) -> None:
+    change_id = "completed-beta"
+    receipt = CompletionReceipt.create(
+        CompletionEvidence(
+            change_id=change_id,
+            finalization_receipt_id=hashlib.sha256(b"completed-beta-finalization").hexdigest(),
+            finalized_change_head=hashlib.sha256(b"completed-beta-finalized-head").hexdigest()[:40],
+            repository_identity="example/project",
+            pull_request_identity=CompletionPullRequestIdentity(number=42, node_id="PR_completed_beta_42"),
+            accepted_target_ref="main",
+            accepted_merge_commit=hashlib.sha256(b"completed-beta-accepted-merge").hexdigest()[:40],
+            merged_at=datetime(2026, 8, 11, 12, tzinfo=UTC),
+            acceptance_observation_id=hashlib.sha256(b"completed-beta-acceptance").hexdigest(),
+            check_observation_ids=(hashlib.sha256(b"completed-beta-checks").hexdigest(),),
+            review_receipt_ids=(hashlib.sha256(b"completed-beta-review").hexdigest(),),
+            completed_at=datetime(2026, 8, 11, 13, tzinfo=UTC),
+        )
+    )
+    display = CompletionDisplayMetadata.create(
+        change_id=change_id,
+        completion_id=receipt.completion_id,
+        title="Beta search",
+        outcome_titles=("Ship Beta search",),
+    )
+    store = CompletionReceiptStore(runtime_root)
+    for participant in (store.participant(receipt), store.display_participant(display)):
+        destination = participant.destination()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(participant.content)
 
 
 def _write_config(workspace: Path) -> None:
@@ -342,6 +416,7 @@ def seed_delivery(workspace: Path) -> None:
     runtime_root = workspace / ".owlbear/delivery/runtime"
     worktrees = workspace / ".owlbear/delivery/worktrees"
     head = _seed_repository(repository)
+    _write_completion_receipt(runtime_root)
     DesignPackageStore(workspace / ".owlbear/delivery/packages", repository).create(
         "design-operations-roadmap",
         b"# Design Operations Roadmap\n\nCoordinate the next focused Delivery change.\n",

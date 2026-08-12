@@ -146,9 +146,12 @@ function detail(overrides: Partial<WorkItemDetailResponse['item']> = {}): WorkIt
 }
 
 const completed: CompletedChangeRecord = {
+  schema_version: 2,
+  record_kind: 'legacy-package',
   change_id: 'change-alpha',
   completion_id: 'b'.repeat(64),
-  completion_path: '.owlbear/completed/change-alpha',
+  completion_path: '.owlbear/legacy/completed/change-alpha',
+  historical_completion_locator: '.owlbear/completed/change-alpha',
   package_id: 'c'.repeat(64),
   introducing_target_commit: 'd'.repeat(40),
   source_target_commit: 'e'.repeat(40),
@@ -156,11 +159,33 @@ const completed: CompletedChangeRecord = {
   semantic_summary: 'Shipped the grouped Delivery workspace.',
 }
 
+const receiptCompleted: CompletedChangeRecord = {
+  schema_version: 2,
+  record_kind: 'completion-receipt',
+  change_id: 'change-receipt',
+  completion_id: '1'.repeat(64),
+  title: 'Receipt-backed delivery',
+  semantic_summary: 'Accepted through a merged pull request.',
+  finalization_receipt_id: '2'.repeat(64),
+  finalized_change_head: '3'.repeat(40),
+  repository_identity: 'owlbear/example',
+  pull_request_identity: { number: 42, node_id: 'PR_example_42' },
+  accepted_target_ref: 'main',
+  accepted_merge_commit: '4'.repeat(40),
+  merged_at: '2026-08-11T12:00:00Z',
+  acceptance_observation_id: '5'.repeat(64),
+  check_observation_ids: ['6'.repeat(64)],
+  review_receipt_ids: ['7'.repeat(64)],
+  acceptance_evidence_digest: '8'.repeat(64),
+  completed_at: '2026-08-11T13:00:00Z',
+}
+
 let currentPortfolio: WorkItemPortfolioResponse
 let currentDetail: WorkItemDetailResponse
 let portfolioAfterIntegration: WorkItemPortfolioResponse | null
 let portfolioFailure: boolean
 let detailFailure: boolean
+let completedRecords: CompletedChangeRecord[]
 let requests: Array<{ url: string; method: string; body: unknown }>
 
 function response(payload: unknown, status = 200): Response {
@@ -196,9 +221,12 @@ function installFetch() {
       })
     }
     if (method === 'GET' && url === '/api/work-items/completed') {
-      return response({ records: [completed], next_cursor: null })
+      return response({ records: completedRecords, next_cursor: null })
     }
-    if (method === 'GET' && url.startsWith('/api/work-items/completed/change-alpha')) return response(completed)
+    if (method === 'GET' && url.startsWith('/api/work-items/completed/')) {
+      const selected = completedRecords.find((record) => url.includes(record.completion_id))
+      return selected ? response(selected) : response({ detail: 'Not found' }, 404)
+    }
 
     if (method === 'POST' && url.includes('/requests/')) {
       const requestId = url.split('/requests/')[1].split('/')[0]
@@ -269,6 +297,7 @@ beforeEach(() => {
   portfolioAfterIntegration = null
   portfolioFailure = false
   detailFailure = false
+  completedRecords = [completed]
   requests = []
   installFetch()
 })
@@ -1073,6 +1102,36 @@ it('moves a completed selected Change into completed history instead of leaving 
 
   expect(await screen.findByTestId('completed-history-workspace')).toHaveTextContent('Completed changes')
   expect(await screen.findByText('Portfolio redesign')).toBeInTheDocument()
+})
+
+it('presents legacy completion package provenance explicitly', async () => {
+  renderPage()
+  fireEvent.click(screen.getByText('Completed history'))
+  const record = await screen.findByTestId('completed-change-record')
+  fireEvent.click(within(record).getByText('Inspect'))
+
+  const detailView = await screen.findByTestId('completed-change-detail')
+  expect(detailView).toHaveTextContent('Legacy package')
+  expect(detailView).toHaveTextContent('.owlbear/legacy/completed/change-alpha')
+  expect(detailView).toHaveTextContent('.owlbear/completed/change-alpha')
+})
+
+it('presents receipt completion identities without graph claims', async () => {
+  completedRecords = [receiptCompleted]
+  renderPage()
+  fireEvent.click(screen.getByText('Completed history'))
+  const record = await screen.findByTestId('completed-change-record')
+  fireEvent.click(within(record).getByText('Inspect'))
+
+  const detailView = await screen.findByTestId('completed-change-detail')
+  expect(detailView).toHaveTextContent('Completion receipt')
+  expect(detailView).toHaveTextContent('owlbear/example')
+  expect(detailView).toHaveTextContent('#42')
+  expect(detailView).toHaveTextContent('Finalized Change head')
+  expect(detailView).toHaveTextContent('3'.repeat(40))
+  expect(detailView).toHaveTextContent('Accepted merge commit')
+  expect(detailView).toHaveTextContent('4'.repeat(40))
+  expect(detailView).not.toHaveTextContent(/ancestor|descendant|merged into|merge method/i)
 })
 
 it('keeps current delivery open when only the selected Integration card disappears', async () => {

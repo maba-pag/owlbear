@@ -58,6 +58,9 @@ function CompletedDetail({ record, onClose }: { record: CompletedChangeRecord; o
       </div>
       <PHeading tag="h3" size="small" className="mt-static-md">{record.title}</PHeading>
       <p className="mt-static-sm text-sm leading-relaxed">{record.semantic_summary}</p>
+      <PTag compact className="mt-static-md">
+        {record.record_kind === 'completion-receipt' ? 'Completion receipt' : 'Legacy package'}
+      </PTag>
       <dl className="mt-static-lg grid gap-static-sm text-sm">
         <div>
           <dt className="font-semibold">Change</dt>
@@ -67,6 +70,45 @@ function CompletedDetail({ record, onClose }: { record: CompletedChangeRecord; o
           <dt className="font-semibold">Completion</dt>
           <dd className="break-all font-mono text-xs text-contrast-medium">{record.completion_id}</dd>
         </div>
+        {record.record_kind === 'completion-receipt' ? (
+          <>
+            <div>
+              <dt className="font-semibold">Repository</dt>
+              <dd className="break-words text-contrast-medium">{record.repository_identity}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold">Pull request</dt>
+              <dd className="text-contrast-medium">#{record.pull_request_identity.number}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold">Accepted target ref</dt>
+              <dd className="break-words font-mono text-xs text-contrast-medium">{record.accepted_target_ref}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold">Finalized Change head</dt>
+              <dd className="break-all font-mono text-xs text-contrast-medium">{record.finalized_change_head}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold">Accepted merge commit</dt>
+              <dd className="break-all font-mono text-xs text-contrast-medium">{record.accepted_merge_commit}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold">Completed at</dt>
+              <dd className="break-words text-contrast-medium"><time dateTime={record.completed_at}>{record.completed_at}</time></dd>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <dt className="font-semibold">Package path</dt>
+              <dd className="break-all font-mono text-xs text-contrast-medium">{record.completion_path}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold">Historical locator</dt>
+              <dd className="break-all font-mono text-xs text-contrast-medium">{record.historical_completion_locator}</dd>
+            </div>
+          </>
+        )}
       </dl>
     </aside>
   )

@@ -493,7 +493,20 @@ test.describe('assembled Delivery portfolio', () => {
     expect((await historyResponse).status()).toBe(200)
     await expect(page.getByTestId('completed-change-record')).toHaveCount(2)
     await expect(page.getByText('Alpha delivery', { exact: true })).toBeVisible()
+    const receiptRecord = page.getByTestId('completed-change-record').filter({ hasText: 'Beta search' })
+    await receiptRecord.getByRole('button', { name: 'Inspect' }).click()
+    const completionDetail = page.getByTestId('completed-change-detail')
+    await expect(completionDetail).toContainText('Completion receipt')
+    await expect(completionDetail).toContainText('Finalized Change head')
+    await expect(completionDetail).toContainText('Accepted merge commit')
+    await expect(completionDetail).toContainText('#42')
+    await expectNoHorizontalOverflow(page)
     await page.screenshot({ path: testInfo.outputPath('delivery-completed-history.png'), fullPage: true })
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect(completionDetail).toBeVisible()
+    await expectNoHorizontalOverflow(page)
+    await page.screenshot({ path: testInfo.outputPath('delivery-completed-history-mobile.png'), fullPage: true })
   })
 
   test('unknown paths render the global Not Found view', async ({ page }, testInfo) => {
