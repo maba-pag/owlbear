@@ -1,7 +1,6 @@
 {
   // For local markdownlint runs. Keep aligned with FILTER_REGEX_EXCLUDE in .mega-linter.yml.
   "ignores": [
-    ".owlbear/completed/**",
     ".owlbear/delivery/packages/**",
     ".owlbear/delivery/runtime/**",
     ".owlbear/doc-index.md",

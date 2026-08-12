@@ -777,6 +777,7 @@ Canonical Delivery application assembly for Cockpit.
 
 - `__future__`
 - `owlbear_delivery.delivery_application_loader`
+- `owlbear_delivery_github`
 - `pydantic`
 - `typing`
 
@@ -1009,20 +1010,61 @@ OwlBear target delivery authority, runtime, and cutover package.
 ### Imports
 
 - `__future__`
+- `owlbear_delivery.acceptance`
+- `owlbear_delivery.change_publication`
 - `owlbear_delivery.change_workspace`
 - `owlbear_delivery.completed_history`
 - `owlbear_delivery.delivery_application_loader`
 - `owlbear_delivery.delivery_runtime`
 - `owlbear_delivery.design_package`
+- `owlbear_delivery.draft_pull_request`
 - `owlbear_delivery.integration_verification`
 - `owlbear_delivery.portfolio_application`
 - `owlbear_delivery.portfolio_operating`
+- `owlbear_delivery.publication_provider`
 - `owlbear_delivery.snapshot`
 - `owlbear_delivery.target_admission`
 - `owlbear_delivery.target_authority`
 - `owlbear_delivery.target_contract`
 - `owlbear_delivery.target_runtime`
 - `owlbear_delivery.work_items`
+
+## serve/delivery/src/owlbear_delivery/acceptance.py
+
+Receipt-backed completion authority for one merged Delivery Change.
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `hashlib`
+- `json`
+- `owlbear_delivery.runtime_transaction`
+- `pathlib`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class _AcceptanceModel(BaseModel)`
+- `class CompletionPullRequestIdentity(_AcceptanceModel)`
+- `class CompletionDisplayMetadata(_AcceptanceModel)`
+  - `def create(cls, *, change_id: str, completion_id: str, title: str, outcome_titles: tuple[str, ...]) -> CompletionDisplayMetadata`
+  - `def _validate_display(self) -> CompletionDisplayMetadata`
+- `class CompletionEvidence(_AcceptanceModel)`
+  - `def _validate_evidence(self) -> CompletionEvidence`
+- `class CompletionReceipt(CompletionEvidence)`
+  - `def create(cls, evidence: CompletionEvidence) -> CompletionReceipt`
+  - `def _validate_receipt(self) -> CompletionReceipt`
+- `class CompletionReceiptConflictError(RuntimeError)`
+- `class CompletionReceiptStore`
+  - `def __init__(self, runtime_root: Path) -> None`
+  - `def read(self, change_id: str) -> CompletionReceipt | None`
+  - `def read_display(self, change_id: str) -> CompletionDisplayMetadata | None`
+  - `def participant(self, receipt: CompletionReceipt) -> TransactionParticipant`
+  - `def display_participant(self, display: CompletionDisplayMetadata) -> TransactionParticipant`
+- `def _digest(payload: object) -> str`
+- `def _model_content(model: BaseModel) -> bytes`
 
 ## serve/delivery/src/owlbear_delivery/attempts.py
 
@@ -1073,6 +1115,68 @@ Immutable attempt lifecycle event contracts.
   - `def read(self, attempt_id: str, sequence: int) -> AttemptResult`
   - `def list(self) -> tuple[AttemptEvent, ...]`
 
+## serve/delivery/src/owlbear_delivery/change_publication.py
+
+Change-branch-only publication through fixed Git operations.
+
+### Imports
+
+- `__future__`
+- `contextlib`
+- `dataclasses`
+- `datetime`
+- `hashlib`
+- `json`
+- `os`
+- `owlbear_delivery.change_workspace`
+- `owlbear_delivery.git_executable`
+- `owlbear_delivery.identities`
+- `owlbear_delivery.publication_provider`
+- `owlbear_delivery.storage_io`
+- `pydantic`
+- `re`
+- `subprocess`
+- `typing`
+- `uuid`
+
+### Interfaces
+
+- `class _PublicationModel(BaseModel)`
+- `class PublishChangeBranch(_PublicationModel)`
+- `class ChangeBranchPublicationReceipt(_PublicationModel)`
+- `class _PublicationOperation(_PublicationModel)`
+- `class _PublicationAttempt`
+- `class ChangeBranchPublisher`
+  - `def __init__(self, repository: Path, coordinator: PortfolioCoordinator, *, remote: str, target_branch: str, operation_root: Path) -> None`
+  - `def publish(self, request: PublishChangeBranch) -> ChangeBranchPublicationReceipt`
+  - `def _publication_lock(self, request: PublishChangeBranch) -> Iterator[PublicationLock]`
+  - `def _publish(self, request: PublishChangeBranch, attempt: _PublicationAttempt, lock: PublicationLock) -> ChangeBranchPublicationReceipt`
+  - `def _prepare_operation(self, request: PublishChangeBranch, coordination: ChangeCoordination, owner_id: str) -> _PublicationOperation`
+  - `def _validate_prepared_operation(self, operation: _PublicationOperation, request: PublishChangeBranch, *, owner_id: str) -> None`
+  - `def _require_current_reviewed_boundary(self, operation: _PublicationOperation, request: PublishChangeBranch) -> None`
+  - `def _fetch_change_head(self, branch: str, expected_head: str, request: PublishChangeBranch) -> None`
+  - `def _remote_head(self, branch: str, request: PublishChangeBranch) -> str | None`
+  - `def _push_exact_head(self, operation: _PublicationOperation, request: PublishChangeBranch, attempt: _PublicationAttempt) -> None`
+  - `def _reconcile_failed_push(self, operation: _PublicationOperation, request: PublishChangeBranch, attempt: _PublicationAttempt, *, timed_out: bool, result: subprocess.CompletedProcess[bytes] | None) -> None`
+  - `def _require_clean_worktree(self, worktree: Path, request: PublishChangeBranch) -> None`
+  - `def _is_ancestor(self, ancestor: str, descendant: str, request: PublishChangeBranch) -> bool`
+  - `def _resolve_commit(self, revision: str, request: PublishChangeBranch, *, invalid_response: bool = False) -> str`
+  - `def _run_git(self, *arguments: str) -> subprocess.CompletedProcess[bytes]`
+  - `def _validate_configuration(self) -> None`
+  - `def _coordination(self, request: PublishChangeBranch) -> ChangeCoordination`
+  - `def _reserve_publication(self, request: PublishChangeBranch, owner_id: str, lock: PublicationLock) -> ChangeCoordination`
+  - `def _release_publication(self, operation: _PublicationOperation, owner_id: str, lock: PublicationLock) -> None`
+  - `def _release_reserved_request(self, request: PublishChangeBranch, owner_id: str, lock: PublicationLock) -> None`
+  - `def _operation_path(self, operation_id: str) -> Path`
+  - `def _read_operation(self, request: PublishChangeBranch) -> _PublicationOperation | None`
+  - `def _bind_operation(self, operation: _PublicationOperation, request: PublishChangeBranch) -> _PublicationOperation`
+  - `def _validate_replay(self, operation: _PublicationOperation, request: PublishChangeBranch) -> None`
+  - `def _parse_remote_ref(self, output: bytes, reference: str, request: PublishChangeBranch) -> str`
+  - `def _receipt(self, operation: _PublicationOperation) -> ChangeBranchPublicationReceipt`
+  - `def _conflict(request: PublishChangeBranch, detail: str, *, retry_safe: bool = False) -> NoReturn`
+  - `def _unavailable(request: PublishChangeBranch, detail: str) -> NoReturn`
+  - `def _failure(code: PublicationProviderFailureCode, request: PublishChangeBranch, detail: str, *, retry_safe: bool = False, cause: Exception | None = None) -> NoReturn`
+
 ## serve/delivery/src/owlbear_delivery/change_workspace.py
 
 Per-change writer coordination and Git workspace management.
@@ -1080,7 +1184,10 @@ Per-change writer coordination and Git workspace management.
 ### Imports
 
 - `__future__`
+- `contextlib`
+- `datetime`
 - `hashlib`
+- `itertools`
 - `json`
 - `os`
 - `owlbear_delivery.delivery_runtime`
@@ -1090,6 +1197,7 @@ Per-change writer coordination and Git workspace management.
 - `owlbear_delivery.storage_io`
 - `pathlib`
 - `pydantic`
+- `re`
 - `subprocess`
 - `typing`
 
@@ -1098,7 +1206,15 @@ Per-change writer coordination and Git workspace management.
 - `class _WorkspaceModel(BaseModel)`
 - `class WriterIdentity(_WorkspaceModel)`
 - `class ChangeWriter(WriterIdentity)`
+- `class PublicationLease(_WorkspaceModel)`
+  - `def _validate_expiry(self) -> PublicationLease`
+- `class PublicationLock`
+  - `def __init__(self, coordinator: PortfolioCoordinator, change_id: str) -> None`
+  - `def close(self) -> None`
+  - `def owns(self, coordinator: PortfolioCoordinator, change_id: str) -> bool`
 - `class ChangeCoordination(_WorkspaceModel)`
+  - `def _discard_retired_publication_reservation(cls, value: object) -> object`
+  - `def publication_expiry(self) -> datetime | None`
 - `class WorkspaceRecoverySnapshot(_WorkspaceModel)`
 - `class CapacityLedger(_WorkspaceModel)`
   - `def _validate_holders(self) -> CapacityLedger`
@@ -1117,12 +1233,20 @@ Per-change writer coordination and Git workspace management.
   - `def __init__(self, state_root: Path, capacity: int) -> None`
   - `def integration_lock(self) -> AbstractContextManager[None]`
   - `def acquisition_lock(self) -> AbstractContextManager[None]`
+  - `def publication_lock(self, change_id: str, *, blocking: bool = True) -> Iterator[PublicationLock]`
   - `def writer_capacity_available(self) -> bool`
   - `def register(self, coordination: ChangeCoordination) -> ChangeCoordination`
   - `def show(self, change_id: str) -> ChangeCoordination`
   - `def acquire(self, change_id: str, writer: ChangeWriter) -> ChangeCoordination`
+  - `def _acquire(self, change_id: str, writer: ChangeWriter) -> ChangeCoordination`
   - `def release(self, change_id: str, claim_id: str) -> ChangeCoordination`
   - `def update(self, coordination: ChangeCoordination) -> ChangeCoordination`
+  - `def _update(self, coordination: ChangeCoordination) -> ChangeCoordination`
+  - `def reserve_publication(self, change_id: str, lease: PublicationLease, lock: PublicationLock, *, now: str) -> ChangeCoordination`
+  - `def release_publication(self, change_id: str, operation_id: str, owner_id: str, lock: PublicationLock) -> ChangeCoordination`
+  - `def _validate_publication_operation_id(operation_id: str) -> None`
+  - `def _require_publication_lock(self, lock: PublicationLock, change_id: str) -> None`
+  - `def _publication_timestamp(value: str) -> datetime`
   - `def publish_finding(self, finding: IntegrationFinding) -> IntegrationFinding`
   - `def admit_integration_repair(self, repair: DeliveryIntegrationRepair | DeliveryIntegrationRepairAuthorityAttention, participants: tuple[ReplacementTransactionParticipant, ...]) -> None`
   - `def integration_repair_replacements(self, previous: ChangeCoordination, replacement: ChangeCoordination, claim_id: str) -> tuple[ReplacementTransactionParticipant, ReplacementTransactionParticipant]`
@@ -1131,7 +1255,8 @@ Per-change writer coordination and Git workspace management.
   - `def _commit(self, transaction_id: str, participants: tuple[TransactionParticipant | ReplacementTransactionParticipant, ...]) -> None`
 - `class ChangeWorkspaceManager`
   - `def __init__(self, repository: Path, worktree_root: Path, coordinator: PortfolioCoordinator, integration_target: str) -> None`
-  - `def create(self, change_id: str) -> ChangeCoordination`
+  - `def create(self, change_id: str, *, recovery_reviewed_head: str | None = None) -> ChangeCoordination`
+  - `def validate_recovery(self, change_id: str, recovery_reviewed_head: str | None) -> None`
   - `def record_reviewed(self, change_id: str, commit: str) -> ChangeCoordination`
   - `def show(self, change_id: str) -> ChangeCoordination`
   - `def refresh_integration_target(self, change_id: str) -> ChangeCoordination`
@@ -1146,6 +1271,8 @@ Per-change writer coordination and Git workspace management.
   - `def _worktree_changed_paths(self, worktree: Path) -> set[bytes]`
   - `def _require_unchanged_completed_history(self, target_head: str, repaired_tree: str) -> None`
   - `def reviewed_source_head(self, change_id: str) -> str`
+  - `def validate_finalization_head(self, change_id: str, exact_head: str, promoted_commits: tuple[str, ...]) -> ChangeCoordination`
+  - `def observed_change_head(self, change_id: str) -> str`
   - `def recovery_snapshot(self, change_id: str, attempt_id: str) -> WorkspaceRecoverySnapshot`
   - `def validate_writer_head(self, change_id: str, claim_id: str, commit: str) -> ChangeCoordination`
   - `def complete_reviewed(self, change_id: str, claim_id: str, commit: str) -> ChangeCoordination`
@@ -1194,6 +1321,7 @@ Per-change writer coordination and Git workspace management.
 - `def _replacement(root: Path, path: Path, previous: bytes, replacement: BaseModel) -> ReplacementTransactionParticipant`
 - `def _model_content(model: BaseModel) -> bytes`
 - `def _coordination_conflict(detail: str) -> Never`
+- `def _publication_timestamp(value: str) -> datetime`
 - `def _workspace_failure(detail: str) -> Never`
 
 ## serve/delivery/src/owlbear_delivery/completed_history.py
@@ -1277,10 +1405,12 @@ Transport-free Delivery application configuration and composition.
 - `__future__`
 - `dataclasses`
 - `os`
+- `owlbear_delivery.change_publication`
 - `owlbear_delivery.change_workspace`
 - `owlbear_delivery.completed_history`
 - `owlbear_delivery.delivery_runtime`
 - `owlbear_delivery.design_package`
+- `owlbear_delivery.draft_pull_request`
 - `owlbear_delivery.git_executable`
 - `owlbear_delivery.integration_verification`
 - `owlbear_delivery.portfolio_application`
@@ -1288,6 +1418,7 @@ Transport-free Delivery application configuration and composition.
 - `owlbear_delivery.target_contract`
 - `pathlib`
 - `pydantic`
+- `re`
 - `subprocess`
 - `typing`
 
@@ -1305,19 +1436,24 @@ Transport-free Delivery application configuration and composition.
 - `def _load_contracts(runtime_root: Path) -> dict[str, DeliveryContract]`
 - `def _role_policies() -> tuple[DeliveryRolePolicy, ...]`
 - `def _validate_runtime_state(runtime_root: Path, contracts: dict[str, DeliveryContract]) -> None`
-- `def _compose_application(config: DeliveryStartupConfig, paths: _DeliveryPaths, contracts: dict[str, DeliveryContract]) -> PortfolioApplication`
-- `def load_delivery_application(config: DeliveryStartupConfig, *, workspace_root: Path) -> PortfolioApplication`
+- `def _require_runtime_bindings(contract: DeliveryContract, frontier: DeliveryFrontier) -> None`
+- `def _compose_application(config: DeliveryStartupConfig, paths: _DeliveryPaths, contracts: dict[str, DeliveryContract], publication_provider: PublicationProvider | None) -> PortfolioApplication`
+- `def _composed_runtimes(runtime_root: Path, contracts: dict[str, DeliveryContract], workspace_manager: ChangeWorkspaceManager) -> dict[str, DeliveryRuntime]`
+- `def load_delivery_application(config: DeliveryStartupConfig, *, workspace_root: Path, publication_provider: PublicationProvider | None = None) -> PortfolioApplication`
 
 ## serve/delivery/src/owlbear_delivery/delivery_runtime.py
 
-Mechanical schema-v2 Delivery state and worker-owned transitions.
+Mechanical Delivery state and worker-owned transitions.
 
 ### Imports
 
 - `__future__`
+- `datetime`
 - `enum`
 - `hashlib`
 - `json`
+- `owlbear_delivery.acceptance`
+- `owlbear_delivery.draft_pull_request`
 - `owlbear_delivery.runtime_transaction`
 - `pydantic`
 - `typing`
@@ -1329,14 +1465,41 @@ Mechanical schema-v2 Delivery state and worker-owned transitions.
 - `class DeliveryOutputKind(StrEnum)`
 - `class DeliveryRequestKind(StrEnum)`
 - `class DeliveryWorkerRole(StrEnum)`
+- `class DeliveryCheckpointTriggerKind(StrEnum)`
 - `class _DeliveryModel(BaseModel)`
 - `class DeliveryOutputReference(_DeliveryModel)`
 - `class DeliveryTaskDefinition(_DeliveryModel)`
   - `def _validate_references(self) -> DeliveryTaskDefinition`
   - `def digest(self) -> str`
+- `class DeliveryObservation(_DeliveryModel)`
+- `class DeliveryObservationReceipt(DeliveryObservation)`
+  - `def create(cls, observation: DeliveryObservation) -> DeliveryObservationReceipt`
+  - `def _validate_receipt(self) -> DeliveryObservationReceipt`
+- `class DeliveryReview(_DeliveryModel)`
+- `class DeliveryReviewReceipt(DeliveryReview)`
+  - `def create(cls, review: DeliveryReview) -> DeliveryReviewReceipt`
+  - `def _validate_receipt(self) -> DeliveryReviewReceipt`
 - `class DeliveryPlanCandidate(_DeliveryModel)`
   - `def output(self) -> DeliveryOutputReference`
 - `class DeliveryTaskResult(_DeliveryModel)`
+  - `def _validate_exact_commit_evidence(self) -> DeliveryTaskResult`
+- `class DeliveryFinalization(_DeliveryModel)`
+- `class DeliveryFinalizationReceipt(DeliveryFinalization)`
+  - `def create(cls, finalization: DeliveryFinalization) -> DeliveryFinalizationReceipt`
+  - `def _validate_receipt(self) -> DeliveryFinalizationReceipt`
+- `class DeliveryFinalizationInvalidation(_DeliveryModel)`
+- `class DeliveryFinalizationInvalidationReceipt(DeliveryFinalizationInvalidation)`
+  - `def create(cls, invalidation: DeliveryFinalizationInvalidation) -> DeliveryFinalizationInvalidationReceipt`
+  - `def _validate_receipt(self) -> DeliveryFinalizationInvalidationReceipt`
+- `class DeliveryMergedPullRequestLatch(_DeliveryModel)`
+  - `def _validate_timestamp(self) -> DeliveryMergedPullRequestLatch`
+- `class DeliveryChangeCompletion(_DeliveryModel)`
+  - `def _validate_timestamp(self) -> DeliveryChangeCompletion`
+- `class DeliveryCheckpointTrigger(_DeliveryModel)`
+  - `def _validate_identity(self) -> DeliveryCheckpointTrigger`
+- `class DeliveryPendingCheckpoint(_DeliveryModel)`
+  - `def _validate_triggers(self) -> DeliveryPendingCheckpoint`
+- `class DeliveryCheckpointPublicationState(_DeliveryModel)`
 - `class DeliveryResultCandidate(_DeliveryModel)`
   - `def output(self) -> DeliveryOutputReference`
 - `class DeliveryRequestOption(_DeliveryModel)`
@@ -1370,6 +1533,7 @@ Mechanical schema-v2 Delivery state and worker-owned transitions.
   - `def active_task_id(self) -> str | None`
 - `class DeliveryFrontier(_DeliveryModel)`
   - `def _validate_identities(self) -> DeliveryFrontier`
+  - `def _validate_change_completion(self) -> DeliveryFrontier`
   - `def _validate_integration_repair_claim(self) -> DeliveryFrontier`
 - `class ActivateDeliveryClaim(_DeliveryModel)`
   - `def claim_id(self) -> str`
@@ -1377,6 +1541,8 @@ Mechanical schema-v2 Delivery state and worker-owned transitions.
 - `class PublishDeliveryOutput(_DeliveryModel)`
 - `class PublishDeliveryPlan(_DeliveryModel)`
 - `class PublishDeliveryResult(_DeliveryModel)`
+- `class FinalizeDeliveryChange(_DeliveryModel)`
+  - `def _validate_exact_commit_evidence(self) -> FinalizeDeliveryChange`
 - `class AdvanceDelivery(_DeliveryModel)`
 - `class RetryDelivery(_DeliveryModel)`
 - `class ReturnDelivery(_DeliveryModel)`
@@ -1387,7 +1553,7 @@ Mechanical schema-v2 Delivery state and worker-owned transitions.
 - `class DeliveryRuntimeConflictError(RuntimeError)`
 - `class DeliveryRuntimeReferenceError(ValueError)`
 - `class DeliveryRuntime`
-  - `def __init__(self, runtime_root: Path, contract: DeliveryContract, *, workspace_manager: ChangeWorkspaceManager | None = None) -> None`
+  - `def __init__(self, runtime_root: Path, contract: DeliveryContract, *, workspace_manager: ChangeWorkspaceManager | None = None, migration_reviewed_head: str | None = None) -> None`
   - `def authority_digest(self) -> str`
   - `def contract(self) -> DeliveryContract`
   - `def frontier_bytes(self) -> bytes`
@@ -1395,6 +1561,21 @@ Mechanical schema-v2 Delivery state and worker-owned transitions.
   - `def integration_completion(self) -> DeliveryIntegrationCompletion | None`
   - `def integration_attention(self) -> DeliveryIntegrationAttention | None`
   - `def show_binding(self, outcome_id: str) -> OutcomeAuthorityBinding`
+  - `def bindings(self) -> tuple[OutcomeAuthorityBinding, ...]`
+  - `def checkpoint_publication_state(self) -> DeliveryCheckpointPublicationState`
+  - `def record_checkpoint_branch_publication(self, expected: DeliveryCheckpointPublicationState, published_head: str) -> DeliveryCheckpointPublicationState`
+  - `def acknowledge_checkpoint_publication(self, expected: DeliveryPendingCheckpoint, published_head: str) -> DeliveryCheckpointPublicationState`
+  - `def finalization(self) -> DeliveryFinalizationReceipt | None`
+  - `def finalization_invalidation(self) -> DeliveryFinalizationInvalidationReceipt | None`
+  - `def ready_receipt(self) -> PullRequestReadyReceipt | None`
+  - `def completion_receipt(self) -> CompletionReceipt | None`
+  - `def merged_pull_request_latch(self) -> DeliveryMergedPullRequestLatch | None`
+  - `def mark_awaiting_merge(self, receipt: PullRequestReadyReceipt) -> PullRequestReadyReceipt`
+  - `def reconcile_pull_request_draft_state(self, *, provider_draft: bool) -> PullRequestReadyReceipt | None`
+  - `def latch_merged_pull_request(self, observation: PublicationPullRequestObservationReceipt) -> DeliveryMergedPullRequestLatch`
+  - `def complete_change(self, receipt: CompletionReceipt) -> CompletionReceipt`
+  - `def finalize_change(self, request: FinalizeDeliveryChange, finalized_at: datetime) -> DeliveryFinalizationReceipt`
+  - `def reconcile_finalization_head(self, observed_head: str, invalidated_at: datetime) -> DeliveryFinalizationReceipt | DeliveryFinalizationInvalidationReceipt | None`
   - `def active_claims(self) -> tuple[tuple[str, DeliveryActiveClaim], ...]`
   - `def integration_repair_claim(self) -> DeliveryActiveClaim | None`
   - `def activate_integration_repair_claim(self, claim: DeliveryActiveClaim) -> DeliveryActiveClaim`
@@ -1427,15 +1608,25 @@ Mechanical schema-v2 Delivery state and worker-owned transitions.
   - `def _block(self, binding: OutcomeAuthorityBinding, request: BlockDelivery) -> OutcomeAuthorityBinding`
   - `def _read(self) -> tuple[DeliveryFrontier, bytes]`
   - `def _replace(self, previous: bytes, frontier: DeliveryFrontier) -> None`
+  - `def _replace_content(self, previous: bytes, replacement: bytes) -> None`
   - `def _validate_frontier(self, frontier: DeliveryFrontier) -> None`
 - `def _find_binding(frontier: DeliveryFrontier, outcome_id: str) -> OutcomeAuthorityBinding`
+- `def _require_change_incomplete(frontier: DeliveryFrontier) -> None`
+- `def parse_delivery_frontier(content: bytes, *, migration_reviewed_head: str | None = None, require_checkpoint_backfill: bool = False) -> tuple[DeliveryFrontier, bytes]`
+- `def _backfill_checkpoint_state(frontier: DeliveryFrontier, reviewed_head: str | None, *, required: bool) -> DeliveryFrontier`
 - `def _find_request(frontier: DeliveryFrontier, request_id: str) -> tuple[OutcomeAuthorityBinding, DeliveryRequest]`
 - `def _replace_binding(frontier: DeliveryFrontier, previous: OutcomeAuthorityBinding, replacement: OutcomeAuthorityBinding) -> DeliveryFrontier`
+- `def _queue_promoted_result_checkpoint(replacement: DeliveryFrontier, previous: DeliveryFrontier, binding: OutcomeAuthorityBinding, updated: OutcomeAuthorityBinding) -> DeliveryFrontier`
+- `def _queue_finalization_checkpoint(frontier: DeliveryFrontier, exact_head: str) -> DeliveryFrontier`
+- `def _invalidate_finalization_checkpoint(pending: DeliveryPendingCheckpoint | None) -> DeliveryPendingCheckpoint | None`
+- `def _has_checkpoint_trigger(pending: DeliveryPendingCheckpoint | None, kind: DeliveryCheckpointTriggerKind) -> bool`
+- `def invalidate_checkpoint_publication(pending: DeliveryPendingCheckpoint | None, invalidated_outcome_ids: set[str]) -> DeliveryPendingCheckpoint | None`
 - `def _require_claim(binding: OutcomeAuthorityBinding, claim_id: str) -> None`
 - `def _reset_binding(binding: OutcomeAuthorityBinding, stage: DeliveryStage) -> OutcomeAuthorityBinding`
 - `def _completed_dependent_closure(contract: DeliveryContract, frontier: DeliveryFrontier, outcome_id: str) -> set[str]`
 - `def _administrative_move_closure(contract: DeliveryContract, frontier: DeliveryFrontier, outcome_id: str, target: DeliveryStage) -> tuple[str, ...]`
 - `def _model_content(model: BaseModel) -> bytes`
+- `def _receipt_digest(receipt: BaseModel, identity_field: str) -> str`
 - `def _canonical_content(models: tuple[BaseModel, ...]) -> bytes`
 - `def _conflict(message: str) -> None`
 - `def _reference(message: str, cause: Exception | None = None) -> None`
@@ -1500,6 +1691,111 @@ Replay-safe authored Design packages and semantic Git checkpoints.
 - `def _digest(content: bytes) -> str`
 - `def _read_contained(package_root: Path, path: Path) -> bytes`
 - `def _stdout(result: subprocess.CompletedProcess[bytes]) -> str`
+
+## serve/delivery/src/owlbear_delivery/draft_pull_request.py
+
+Idempotent draft pull-request creation for published Change branches.
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `hashlib`
+- `json`
+- `owlbear_delivery.publication_provider`
+- `owlbear_delivery.storage_io`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class _DraftPullRequestModel(BaseModel)`
+- `class CreateOrReconcileDraftPullRequest(_DraftPullRequestModel)`
+  - `def _validate_generated_summary(self) -> CreateOrReconcileDraftPullRequest`
+- `class UpdateGeneratedPullRequestSummary(_DraftPullRequestModel)`
+  - `def _validate_generated_summary(self) -> UpdateGeneratedPullRequestSummary`
+- `class ObserveChangePublicationChecks(_DraftPullRequestModel)`
+- `class ObserveChangePublicationPullRequest(_DraftPullRequestModel)`
+- `class ReadChangePublicationCheckObservations(_DraftPullRequestModel)`
+- `class _ChangePullRequestDraftStateRequest(_DraftPullRequestModel)`
+- `class MarkChangePullRequestReady(_ChangePullRequestDraftStateRequest)`
+- `class ReturnChangePullRequestToDraft(_ChangePullRequestDraftStateRequest)`
+- `class DraftPullRequestPublicationReceipt(_DraftPullRequestModel)`
+  - `def _validate_receipt_id(self) -> DraftPullRequestPublicationReceipt`
+- `class GeneratedPullRequestSummaryReceipt(_DraftPullRequestModel)`
+  - `def _validate_receipt_id(self) -> GeneratedPullRequestSummaryReceipt`
+- `class _PublicationCheckObservationPayload(_DraftPullRequestModel)`
+- `class PublicationCheckObservationReceipt(_PublicationCheckObservationPayload)`
+  - `def _validate_receipt(self) -> PublicationCheckObservationReceipt`
+- `class _PublicationPullRequestObservationPayload(_DraftPullRequestModel)`
+- `class PublicationPullRequestObservationReceipt(_PublicationPullRequestObservationPayload)`
+  - `def _validate_receipt(self) -> PublicationPullRequestObservationReceipt`
+- `class _PullRequestDraftStateReceipt(_DraftPullRequestModel)`
+  - `def _validate_receipt(self) -> _PullRequestDraftStateReceipt`
+- `class PullRequestReadyReceipt(_PullRequestDraftStateReceipt)`
+- `class PullRequestDraftReceipt(_PullRequestDraftStateReceipt)`
+- `class _DraftPullRequestOperation(_DraftPullRequestModel)`
+- `class _GeneratedSummaryOperation(_DraftPullRequestModel)`
+- `class _DraftStateOperation(_DraftPullRequestModel)`
+- `class DraftPullRequestPublisher`
+  - `def __init__(self, provider: PublicationProvider, *, repository: str, target_branch: str, state_root: Path, clock: Callable[[], datetime] = lambda: datetime.now(UTC)) -> None`
+  - `def repository(self) -> str`
+  - `def target_branch(self) -> str`
+  - `def publish(self, request: CreateOrReconcileDraftPullRequest) -> DraftPullRequestPublicationReceipt`
+  - `def update_generated_summary(self, request: UpdateGeneratedPullRequestSummary) -> GeneratedPullRequestSummaryReceipt`
+  - `def observe_checks(self, request: ObserveChangePublicationChecks) -> PublicationCheckObservationReceipt`
+  - `def observe_pull_request(self, request: ObserveChangePublicationPullRequest) -> PublicationPullRequestObservationReceipt | None`
+  - `def read_check_observations(self, request: ReadChangePublicationCheckObservations) -> tuple[PublicationCheckObservationReceipt, ...]`
+  - `def mark_ready(self, request: MarkChangePullRequestReady) -> PullRequestReadyReceipt`
+  - `def return_to_draft(self, request: ReturnChangePullRequestToDraft) -> PullRequestDraftReceipt`
+  - `def _set_draft_state(self, request: _ChangePullRequestDraftStateRequest, *, draft: bool, receipt_type: type[ReceiptT]) -> ReceiptT`
+  - `def _mutate_draft_state(self, operation: _DraftStateOperation) -> None`
+  - `def _bind_draft_state_receipt(self, operation: _DraftStateOperation, observed: PublicationPullRequest, request: _ChangePullRequestDraftStateRequest, receipt_type: type[ReceiptT], receipt_path: Path) -> ReceiptT`
+  - `def _validate_draft_state_identity(self, pull_request: PublicationPullRequest, operation: _DraftStateOperation, request: _ChangePullRequestDraftStateRequest) -> None`
+  - `def _observe_checks_locked(self, request: ObserveChangePublicationChecks) -> PublicationCheckObservationReceipt`
+  - `def _record_check_observation(self, request: ObserveChangePublicationChecks, snapshot: PublicationCheckSnapshot) -> PublicationCheckObservationReceipt`
+  - `def _validate_check_observation(self, receipt: PublicationCheckObservationReceipt, request: ObserveChangePublicationChecks, snapshot: PublicationCheckSnapshot) -> None`
+  - `def _update_generated_summary_locked(self, request: UpdateGeneratedPullRequestSummary) -> GeneratedPullRequestSummaryReceipt`
+  - `def _summary_operation(self, request: UpdateGeneratedPullRequestSummary) -> _GeneratedSummaryOperation`
+  - `def _publish_locked(self, request: CreateOrReconcileDraftPullRequest) -> DraftPullRequestPublicationReceipt`
+  - `def _operation(self, request: CreateOrReconcileDraftPullRequest) -> _DraftPullRequestOperation`
+  - `def _find(self, operation: _DraftPullRequestOperation) -> PublicationPullRequest | None`
+  - `def _create_or_reconcile(self, operation: _DraftPullRequestOperation) -> PublicationPullRequest`
+  - `def _validate_pull_request(self, pull_request: PublicationPullRequest, operation: _DraftPullRequestOperation, request: CreateOrReconcileDraftPullRequest) -> None`
+  - `def _receipt(self, operation: _DraftPullRequestOperation, pull_request: PublicationPullRequest) -> DraftPullRequestPublicationReceipt`
+  - `def _bind_operation(self, operation: _DraftPullRequestOperation, request: CreateOrReconcileDraftPullRequest) -> _DraftPullRequestOperation`
+  - `def _read_receipt(self, request: _PublicationRequest) -> DraftPullRequestPublicationReceipt | None`
+  - `def _bind_receipt(self, receipt: DraftPullRequestPublicationReceipt, request: CreateOrReconcileDraftPullRequest) -> DraftPullRequestPublicationReceipt`
+  - `def _read_summary_operation(self, request: UpdateGeneratedPullRequestSummary) -> _GeneratedSummaryOperation | None`
+  - `def _bind_summary_operation(self, operation: _GeneratedSummaryOperation, request: UpdateGeneratedPullRequestSummary) -> _GeneratedSummaryOperation`
+  - `def _read_summary_receipt(self, request: UpdateGeneratedPullRequestSummary) -> GeneratedPullRequestSummaryReceipt | None`
+  - `def _bind_summary_receipt(self, receipt: GeneratedPullRequestSummaryReceipt, request: UpdateGeneratedPullRequestSummary) -> GeneratedPullRequestSummaryReceipt`
+  - `def _read_state(self, path: Path, model_type: type[ModelT], request: _PublicationRequest) -> ModelT | None`
+  - `def _validate_summary_request(self, operation: _GeneratedSummaryOperation, request: UpdateGeneratedPullRequestSummary) -> None`
+  - `def _validate_summary_receipt(self, receipt: GeneratedPullRequestSummaryReceipt, operation: _GeneratedSummaryOperation, request: UpdateGeneratedPullRequestSummary) -> None`
+  - `def _validate_publication_identity(self, pull_request: PublicationPullRequest, publication: DraftPullRequestPublicationReceipt, request: _PublicationRequest) -> None`
+  - `def _validate_summary_pull_request(self, pull_request: PublicationPullRequest, operation: _GeneratedSummaryOperation, request: UpdateGeneratedPullRequestSummary) -> None`
+  - `def _summary_receipt(operation: _GeneratedSummaryOperation, pull_request: PublicationPullRequest) -> GeneratedPullRequestSummaryReceipt`
+  - `def _publish_or_read(self, path: Path, model: ModelT, model_type: type[ModelT], request: _PublicationRequest) -> ModelT`
+  - `def _validate_receipt(self, receipt: DraftPullRequestPublicationReceipt, operation: _DraftPullRequestOperation, request: CreateOrReconcileDraftPullRequest) -> None`
+  - `def _operation_path(self, request: CreateOrReconcileDraftPullRequest) -> Path`
+  - `def _path(self, kind: str, change_id: str) -> Path`
+  - `def _summary_path(self, kind: str, request: UpdateGeneratedPullRequestSummary) -> Path`
+  - `def _draft_state_path(self, kind: str, request: _ChangePullRequestDraftStateRequest) -> Path`
+  - `def _check_observation_path(self, request: ObserveChangePublicationChecks, evidence_digest: str) -> Path`
+  - `def _pull_request_observation_path(self, request: ObserveChangePublicationPullRequest, evidence_digest: str) -> Path`
+  - `def _require_directory(path: Path) -> None`
+  - `def _reject_symlink(path: Path, request: _PublicationRequest) -> None`
+  - `def _conflict(request: _PublicationRequest, detail: str) -> Never`
+  - `def _invalid_response(request: _PublicationRequest, detail: str, *, cause: Exception | None = None) -> Never`
+  - `def _unavailable(request: _PublicationRequest, detail: str, *, cause: Exception) -> Never`
+- `def _change_marker(change_id: str) -> str`
+- `def _require_safe_generated_summary(generated_summary: str) -> None`
+- `def _raise_conflict(request: _PublicationRequest, detail: str) -> Never`
+- `def _request_operation(request: _PublicationRequest) -> str`
+- `def _generated_block_bounds(body: str, request: _PublicationRequest) -> tuple[int, int]`
+- `def _replace_generated_block(body: str, generated_summary: str, request: UpdateGeneratedPullRequestSummary) -> str`
+- `def _digest(payload: object) -> str`
 
 ## serve/delivery/src/owlbear_delivery/git_executable.py
 
@@ -1603,10 +1899,14 @@ Deterministic portfolio acquisition and bounded worker context.
 - `enum`
 - `hashlib`
 - `json`
+- `owlbear_delivery.acceptance`
+- `owlbear_delivery.change_publication`
 - `owlbear_delivery.change_workspace`
 - `owlbear_delivery.delivery_runtime`
 - `owlbear_delivery.design_package`
+- `owlbear_delivery.draft_pull_request`
 - `owlbear_delivery.portfolio_operating`
+- `owlbear_delivery.storage_io`
 - `owlbear_delivery.target_contract`
 - `owlbear_delivery.work_items`
 - `pathlib`
@@ -1619,6 +1919,9 @@ Deterministic portfolio acquisition and bounded worker context.
 
 - `def _timestamp(value: str) -> datetime`
 - `def _operating_scope(scope: WorkItemScope) -> PortfolioWorkScope`
+- `def _checkpoint_operation_id(kind: str, *parts: str) -> str`
+- `def _checkpoint_summary(pending: DeliveryPendingCheckpoint, head: str) -> str`
+- `def _checkpoint_pull_request_title(runtime: DeliveryRuntime) -> str`
 - `def _operator_claim(claim: DeliveryActiveClaim | None) -> DeliveryOperatorClaim | None`
 - `def _operator_recovery_attention(attention: DeliveryRecoveryAttention | None) -> DeliveryOperatorRecoveryAttention | None`
 - `def _operator_integration_attention(attention: DeliveryIntegrationAttention | None) -> DeliveryOperatorIntegrationAttention | None`
@@ -1650,6 +1953,7 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def _validate_disposition(self) -> ExternalCompletionResult`
 - `class PortfolioApplicationError(RuntimeError)`
 - `class PortfolioReadView(_ApplicationModel)`
+- `class DeliveryCheckpointReconciliationResult(_ApplicationModel)`
 - `class PortfolioApplicationConfig(_ApplicationModel)`
   - `def _validate_roles(self) -> PortfolioApplicationConfig`
 - `class PortfolioApplicationDependencies`
@@ -1660,6 +1964,14 @@ Deterministic portfolio acquisition and bounded worker context.
 - `class PortfolioApplication`
   - `def __init__(self, runtimes: Mapping[str, DeliveryRuntime], dependencies: PortfolioApplicationDependencies, config: PortfolioApplicationConfig, hooks: PortfolioApplicationHooks | None = None) -> None`
   - `def create_design_session(self, change_id: str, intent_bytes: bytes, design_bytes: bytes) -> DesignPackageResult`
+  - `def observe_change_publication_checks(self, change_id: str) -> PublicationCheckObservationReceipt`
+  - `def show_change_checkpoint_publication(self, change_id: str) -> DeliveryCheckpointPublicationState`
+  - `def finalize_change(self, change_id: str, request: FinalizeDeliveryChange) -> DeliveryFinalizationReceipt`
+  - `def mark_change_ready(self, change_id: str, request: MarkChangePullRequestReady) -> PullRequestReadyReceipt`
+  - `def observe_acceptance(self, change_id: str) -> CompletionReceipt`
+  - `def reconcile_finalization_head(self, change_id: str) -> DeliveryFinalizationReceipt | DeliveryFinalizationInvalidationReceipt | None`
+  - `def reconcile_change_checkpoint(self, change_id: str) -> DeliveryCheckpointReconciliationResult`
+  - `def _reconcile_change_checkpoint(self, change_id: str, runtime: DeliveryRuntime) -> DeliveryCheckpointReconciliationResult`
   - `def read_design_session(self, change_id: str) -> VerifiedDesignPackage`
   - `def revise_design_session(self, change_id: str, expected_package_id: str, intent_bytes: bytes, design_bytes: bytes) -> VerifiedDesignPackage`
   - `def publish_design_checkpoint(self, change_id: str) -> DesignCheckpointResult`
@@ -1746,6 +2058,7 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def _validate_package_authority(self, runtime: DeliveryRuntime, package: VerifiedDesignPackage) -> None`
   - `def _dependency_depth(self, runtime: DeliveryRuntime, outcome_id: str) -> int`
   - `def _runtime(self, change_id: str) -> DeliveryRuntime`
+  - `def _checkpoint_lock_root(self, change_id: str) -> Path`
   - `def _outcome(runtime: DeliveryRuntime, outcome_id: str) -> DeliveryOutcome`
   - `def _commitments(runtime: DeliveryRuntime, commitment_ids: tuple[str, ...]) -> tuple[DeliveryCommitment, ...]`
   - `def _fail(message: str, cause: Exception | None = None) -> Never`
@@ -1773,6 +2086,45 @@ Portfolio-wide operating facts and advisory session guidance.
 - `class PortfolioOperatingView(_OperatingModel)`
 - `def derive_portfolio_guidance(facts: PortfolioGuidanceFacts) -> tuple[PortfolioGuidance, ...]`
 - `def _change_ids(references: tuple[PortfolioWorkReference, ...]) -> tuple[str, ...]`
+
+## serve/delivery/src/owlbear_delivery/publication_provider.py
+
+Transport-free publication provider contracts for Delivery.
+
+### Imports
+
+- `__future__`
+- `datetime`
+- `enum`
+- `pydantic`
+- `typing`
+
+### Interfaces
+
+- `class _ProviderModel(BaseModel)`
+- `class PublicationProviderFailureCode(StrEnum)`
+- `class PublicationProviderError(RuntimeError)`
+  - `def __init__(self, code: PublicationProviderFailureCode, operation: str, detail: str, *, retry_safe: bool) -> None`
+- `class PublicationRepository(_ProviderModel)`
+- `class PublicationPullRequest(_ProviderModel)`
+  - `def _validate_merge_state(self) -> PublicationPullRequest`
+- `class FindPublicationPullRequest(_ProviderModel)`
+- `class CreateDraftPublicationPullRequest(_ProviderModel)`
+- `class UpdatePublicationPullRequest(_ProviderModel)`
+- `class SetPublicationPullRequestDraftState(_ProviderModel)`
+- `class ObservePublicationChecks(_ProviderModel)`
+- `class PublicationCheckKind(StrEnum)`
+- `class PublicationCheck(_ProviderModel)`
+- `class PublicationCheckSnapshot(_ProviderModel)`
+  - `def _validate_check_identities(self) -> PublicationCheckSnapshot`
+- `class PublicationProvider(Protocol)`
+  - `def read_repository(self, repository: str) -> PublicationRepository`
+  - `def read_pull_request(self, repository: str, number: int) -> PublicationPullRequest`
+  - `def find_pull_request(self, request: FindPublicationPullRequest) -> PublicationPullRequest | None`
+  - `def create_draft_pull_request(self, request: CreateDraftPublicationPullRequest) -> PublicationPullRequest`
+  - `def update_pull_request(self, request: UpdatePublicationPullRequest) -> PublicationPullRequest`
+  - `def set_pull_request_draft_state(self, request: SetPublicationPullRequestDraftState) -> PublicationPullRequest`
+  - `def observe_checks(self, request: ObservePublicationChecks) -> PublicationCheckSnapshot`
 
 ## serve/delivery/src/owlbear_delivery/runtime_transaction.py
 
@@ -1919,8 +2271,8 @@ Crash-safe atomic text write utility.
 
 ### Interfaces
 
-- `def _open_lock(root_fd: int) -> int`
-- `def locked_roots(roots: Sequence[Path]) -> Iterator[None]`
+- `def _open_lock(root_fd: int, *, blocking: bool) -> int`
+- `def locked_roots(roots: Sequence[Path], *, blocking: bool = True) -> Iterator[None]`
 - `def atomic_write(target: Path, content: str) -> None`
 
 ## serve/delivery/src/owlbear_delivery/target_admission.py
@@ -2022,7 +2374,6 @@ Semantic authority for the target delivery runtime.
 - `class Outcome(_AuthorityModel)`
   - `def _validate_supersession(self) -> Outcome`
 - `class TaskPlanScope(_AuthorityModel)`
-  - `def _validate_change_assembly(self) -> TaskPlanScope`
 - `class DesignReentryBriefing(_AuthorityModel)`
 - `class SemanticUpdate(_AuthorityModel)`
 - `class CompletionSummary(_AuthorityModel)`
@@ -2278,6 +2629,107 @@ Shared ruamel.yaml round-trip factory for the Delivery package.
 
 - `def make_yaml(*, explicit_start: bool = False) -> YAML`
 
+## serve/delivery-github/src/owlbear_delivery_github/__init__.py
+
+Fixed-operation GitHub publication adapters for OwlBear Delivery.
+
+### Imports
+
+- `owlbear_delivery_github.github`
+- `owlbear_delivery_github.memory`
+
+## serve/delivery-github/src/owlbear_delivery_github/github.py
+
+Fixed-operation GitHub CLI publication provider.
+
+### Imports
+
+- `__future__`
+- `collections.abc`
+- `dataclasses`
+- `datetime`
+- `json`
+- `owlbear_delivery`
+- `pydantic`
+- `subprocess`
+- `typing`
+- `urllib.parse`
+
+### Interfaces
+
+- `class _CheckObservationState`
+- `class _GitHubModel(BaseModel)`
+- `class _RepositoryResponse(_GitHubModel)`
+- `class _PullRef(_GitHubModel)`
+- `class _PullUser(_GitHubModel)`
+- `class _PullResponse(_GitHubModel)`
+- `class _PullListItem(_GitHubModel)`
+- `class _DraftStateResponse(_GitHubModel)`
+- `class _CheckPageInfo(_GitHubModel)`
+- `class _CheckContextsResponse(_GitHubModel)`
+- `class _StatusRollupResponse(_GitHubModel)`
+- `class _CheckCommitResponse(_GitHubModel)`
+- `class _CheckCommitConnection(_GitHubModel)`
+- `class _CheckPullRequestResponse(_GitHubModel)`
+- `class _CheckRepositoryResponse(_GitHubModel)`
+- `class _CheckQueryData(_GitHubModel)`
+- `class _CheckQueryResponse(_GitHubModel)`
+- `class _CheckRunResponse(_GitHubModel)`
+- `class _StatusContextResponse(_GitHubModel)`
+- `def _subprocess_runner(arguments: tuple[str, ...], input_bytes: bytes | None, timeout_seconds: float) -> subprocess.CompletedProcess[bytes]`
+- `class GitHubCliPublicationProvider`
+  - `def __init__(self, *, timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS, runner: _CommandRunner = _subprocess_runner) -> None`
+  - `def read_repository(self, repository: str) -> PublicationRepository`
+  - `def read_pull_request(self, repository: str, number: int) -> PublicationPullRequest`
+  - `def find_pull_request(self, request: FindPublicationPullRequest) -> PublicationPullRequest | None`
+  - `def create_draft_pull_request(self, request: CreateDraftPublicationPullRequest) -> PublicationPullRequest`
+  - `def update_pull_request(self, request: UpdatePublicationPullRequest) -> PublicationPullRequest`
+  - `def set_pull_request_draft_state(self, request: SetPublicationPullRequestDraftState) -> PublicationPullRequest`
+  - `def observe_checks(self, request: ObservePublicationChecks) -> PublicationCheckSnapshot`
+  - `def _record_check_page(self, state: _CheckObservationState, rollup: _StatusRollupResponse, head_sha: str, operation: str) -> None`
+  - `def _next_check_cursor(self, state: _CheckObservationState, page_info: _CheckPageInfo, seen_cursors: set[str], operation: str) -> str | None`
+  - `def _observe_check_page(self, request: ObservePublicationChecks, owner: str, name: str, cursor: str | None, operation: str) -> _StatusRollupResponse | None`
+  - `def _check_page_identity(self, response: _CheckQueryResponse, request: ObservePublicationChecks, operation: str) -> _CheckCommitResponse`
+  - `def _publication_checks(self, nodes: list[dict[str, _JsonValue] | None], head_sha: str, operation: str) -> tuple[PublicationCheck, ...]`
+  - `def _timestamp(self, value: str | None, operation: str) -> datetime | None`
+  - `def _duration(self, started_at: datetime | None, completed_at: datetime | None, operation: str) -> float | None`
+  - `def _require_open_head(self, repository: str, number: int, expected_head_sha: str, operation: str) -> PublicationPullRequest`
+  - `def _require_matching_head(self, pull_request: PublicationPullRequest, expected_head_sha: str, operation: str) -> None`
+  - `def _rest(self, operation: str, method: str, endpoint: str, *, body: _JsonObject | None = None, write: bool = False) -> _JsonValue`
+  - `def _graphql(self, operation: str, body: _JsonObject) -> _JsonValue`
+  - `def _graphql_query(self, operation: str, body: _JsonObject) -> _JsonValue`
+  - `def _execute(self, operation: str, arguments: tuple[str, ...], body: _JsonObject | None, *, write: bool) -> _JsonValue`
+  - `def _raise_command_failure(operation: str, stderr: str, *, write: bool) -> None`
+  - `def _pull_request(self, repository: str, payload: _JsonValue, operation: str, *, retry_safe: bool = False) -> PublicationPullRequest`
+  - `def _validate(self, model: type[Model], payload: _JsonValue, operation: str, *, retry_safe: bool = False) -> Model`
+  - `def _draft_state(self, payload: _JsonValue, operation_name: str, operation: str) -> _DraftStateResponse`
+  - `def _invalid_response(operation: str, detail: str, *, retry_safe: bool = False, cause: Exception | None = None) -> NoReturn`
+  - `def _conflict(operation: str, detail: str) -> NoReturn`
+- `def _repository_endpoint(repository: str) -> str`
+
+## serve/delivery-github/src/owlbear_delivery_github/memory.py
+
+Deterministic in-memory publication provider for Delivery tests.
+
+### Imports
+
+- `__future__`
+- `dataclasses`
+- `owlbear_delivery.publication_provider`
+
+### Interfaces
+
+- `class InMemoryPublicationProvider`
+  - `def add_repository(self, repository: PublicationRepository) -> None`
+  - `def read_repository(self, repository: str) -> PublicationRepository`
+  - `def read_pull_request(self, repository: str, number: int) -> PublicationPullRequest`
+  - `def find_pull_request(self, request: FindPublicationPullRequest) -> PublicationPullRequest | None`
+  - `def create_draft_pull_request(self, request: CreateDraftPublicationPullRequest) -> PublicationPullRequest`
+  - `def update_pull_request(self, request: UpdatePublicationPullRequest) -> PublicationPullRequest`
+  - `def set_pull_request_draft_state(self, request: SetPublicationPullRequestDraftState) -> PublicationPullRequest`
+  - `def add_check_snapshot(self, snapshot: PublicationCheckSnapshot) -> None`
+  - `def observe_checks(self, request: ObservePublicationChecks) -> PublicationCheckSnapshot`
+
 ## serve/delivery-mcp/src/owlbear_delivery_mcp/__init__.py
 
 OwlBear MCP delivery package.
@@ -2305,6 +2757,7 @@ Live OwlBear MCP server for target delivery.
 - `contextlib`
 - `mcp.server`
 - `owlbear_delivery`
+- `owlbear_delivery_github`
 - `owlbear_delivery_mcp.target_models`
 - `owlbear_delivery_mcp.target_server`
 - `pathlib`
@@ -2332,6 +2785,7 @@ Protocol models for the target delivery MCP surface.
 - `json`
 - `owlbear_delivery.delivery_application_loader`
 - `owlbear_delivery.delivery_runtime`
+- `owlbear_delivery.draft_pull_request`
 - `owlbear_delivery.identities`
 - `owlbear_delivery.target_admission`
 - `pydantic`
@@ -2354,6 +2808,8 @@ Protocol models for the target delivery MCP surface.
 - `class AdmitDeliveryChangeParams(_TargetProtocolModel)`
 - `class PublishDeliveryPlanParams(ChangeParams)`
 - `class PublishDeliveryResultParams(ChangeParams)`
+- `class FinalizeDeliveryChangeParams(ChangeParams)`
+- `class MarkChangeReadyParams(_TargetProtocolModel)`
 - `class DeliveryPlanPublication(_TargetProtocolModel)`
   - `def from_candidate(cls, candidate: DeliveryPlanCandidate) -> DeliveryPlanPublication`
 - `class DeliveryResultPublication(_TargetProtocolModel)`
@@ -2381,11 +2837,13 @@ Strict MCPServer adapter for the Delivery portfolio application.
 - `mcp.server`
 - `mcp.server.mcpserver.exceptions`
 - `mcp.types`
+- `owlbear_delivery.acceptance`
 - `owlbear_delivery.change_workspace`
 - `owlbear_delivery.completed_history`
 - `owlbear_delivery.delivery_runtime`
 - `owlbear_delivery.design_package`
 - `owlbear_delivery.portfolio_application`
+- `owlbear_delivery.publication_provider`
 - `owlbear_delivery.runtime_transaction`
 - `owlbear_delivery.target_admission`
 - `owlbear_delivery_mcp.target_models`
@@ -2415,6 +2873,12 @@ Strict MCPServer adapter for the Delivery portfolio application.
   - `async def create_integration_repair_candidate(self, request: RepairClaimContextRequest) -> dict[str, object]`
   - `async def publish_delivery_plan(self, request: PublishDeliveryPlanRequest) -> DeliveryPlanPublication`
   - `async def publish_delivery_result(self, request: PublishDeliveryResultRequest) -> DeliveryResultPublication`
+  - `async def finalize_change(self, request: FinalizeDeliveryChangeRequest) -> dict[str, object]`
+  - `async def mark_change_ready(self, request: MarkChangeReadyRequest) -> dict[str, object]`
+  - `async def reconcile_finalization_head(self, request: ChangeRequest) -> dict[str, object] | None`
+  - `async def reconcile_change_checkpoint(self, request: ChangeRequest) -> dict[str, object]`
+  - `async def observe_change_publication_checks(self, request: ChangeRequest) -> dict[str, object]`
+  - `async def observe_acceptance(self, request: ChangeRequest) -> dict[str, object]`
   - `async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]`
   - `async def recover_claim(self, request: ClaimContextRequest) -> dict[str, object]`
   - `async def recover_integration_repair_claim(self, request: RepairClaimContextRequest) -> dict[str, object]`
@@ -3886,6 +4350,7 @@ Project setup, diagnostics, dependency, and maintenance commands.
 - `owlbear_tools.commands`
 - `owlbear_tools.megalinter`
 - `pathlib`
+- `re`
 - `shutil`
 - `subprocess`
 - `sys`
@@ -3898,10 +4363,12 @@ Project setup, diagnostics, dependency, and maintenance commands.
 - `def hooks_install() -> None`
 - `def setup_project() -> None`
 - `def _load_json(path: Path) -> dict[str, object]`
-- `def _git_branch_exists(root: Path, branch: str) -> bool`
+- `def _remote_target_exists(root: Path, remote: str, branch: str) -> bool`
+- `def _remote_github_repository(root: Path, remote: str) -> str | None`
+- `def _delivery_config_status(root: Path) -> tuple[list[str], str | None]`
 - `def _legacy_delivery_blockers(root: Path) -> list[str]`
 - `def _delivery_blockers(root: Path) -> list[str]`
-- `def integration_target() -> None`
+- `def target_branch() -> None`
 - `def doctor() -> None`
 - `def deps_status() -> None`
 - `def deps_sync() -> None`
@@ -4027,6 +4494,7 @@ OwlBear workspace initialiser — setup/init.py.
 - `shutil`
 - `subprocess`
 - `sys`
+- `tempfile`
 - `warnings`
 
 ### Interfaces
@@ -4040,9 +4508,11 @@ OwlBear workspace initialiser — setup/init.py.
 - `def _write_mcp(src: Path, dest: Path, replacements: dict[str, str]) -> None`
 - `def _write_seed_file(src: Path, dest: Path, replacements: dict[str, str]) -> None`
 - `def _current_branch(target_dir: Path) -> str | None`
-- `def _branch_exists(target_dir: Path, branch: str) -> bool`
-- `def _select_integration_target(target_dir: Path, requested: str | None, *, interactive: bool) -> str`
-- `def _write_delivery_config(target_dir: Path, integration_target: str | None, *, interactive: bool) -> None`
+- `def _valid_branch_name(target_dir: Path, branch: str) -> bool`
+- `def _select_target_branch(target_dir: Path, requested: str | None, *, interactive: bool) -> str`
+- `def _github_repository_from_remote(target_dir: Path, remote: str) -> str | None`
+- `def _select_github_repository(target_dir: Path, remote: str, requested: str | None, *, interactive: bool) -> str`
+- `def _write_delivery_config(target_dir: Path, remote: str, target_branch: str | None, github_repository: str | None, *, interactive: bool) -> None`
 - `def _verification_steps(target_dir: Path) -> list[dict[str, object]]`
 - `def _write_verification_profile(target_dir: Path) -> None`
 - `def _hook_files_match(src: Path, dest: Path) -> bool`
@@ -4050,4 +4520,4 @@ OwlBear workspace initialiser — setup/init.py.
 - `def _should_replace_hook_file(dest: Path, *, src: Path, replace_hooks: bool, interactive: bool) -> bool`
 - `def _hook_diff(src: Path, dest: Path) -> str`
 - `def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None`
-- `def init(target_dir: Path, owlbear_dir: Path, *, replace_hooks: bool = False, interactive: bool | None = None, integration_target: str | None = None) -> None`
+- `def init(target_dir: Path, owlbear_dir: Path, *, replace_hooks: bool = False, interactive: bool | None = None, remote: str = 'origin', target_branch: str | None = None, github_repository: str | None = None) -> None`

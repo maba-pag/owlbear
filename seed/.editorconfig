@@ -30,8 +30,8 @@ max_line_length = unset
 [.owlbear/delivery/packages/**]
 max_line_length = unset
 
-# Completed Delivery history is canonical machine-managed evidence; do not reformat it
-[.owlbear/completed/**]
+# Legacy records are preserved machine-managed state; do not reformat them
+[.owlbear/legacy/**]
 max_line_length = unset
 
 # Keep data files minified — do not reformat

@@ -84,57 +84,6 @@
 - ### `Status quo`
 - ### `Proposal`
 
-## .owlbear/completed/knowledge-source-contract-alignment/design.md
-- # `Knowledge Source Contract Alignment Design`
-- ## `Ownership And Evidence`
-- ## `Architecture`
-- ## `Proof`
-- ## `Known Limits`
-- ## `Delivery Shape`
-- ## `Unresolved Gates`
-
-## .owlbear/completed/knowledge-source-contract-alignment/intent.md
-- # `Knowledge Source Contract Alignment`
-- ## `Problem`
-- ## `Product Promise`
-- ## `Scope`
-- ## `Accepted Exclusions`
-- ## `Preserved Behavior`
-- ## `Success`
-- ## `Grounding And Decisions`
-- ## `Technically Done But Wrong`
-- ## `Delivery Contract`
-
-## .owlbear/completed/memory-universal-recall-and-review-clarity/design.md
-- # `Design: Memory Universal Recall and Review Clarity`
-- ## `Current Ownership`
-- ## `Architecture`
-- ### `Memory-derived identity`
-- ### `Intake and curation`
-- ### `Scope and lifecycle`
-- ### `Authority ownership`
-- ### `Cockpit`
-- ## `Changed Interfaces`
-- ## `Planning Scopes`
-- ## `Migration And Failure Semantics`
-- ## `Tradeoffs And Known Limits`
-- ## `Delivery Proof`
-- ## `Pre-Implementation Baselines`
-- ## `Review Resolution`
-
-## .owlbear/completed/memory-universal-recall-and-review-clarity/intent.md
-- # `Memory Universal Recall and Review Clarity`
-- ## `Problem`
-- ## `Product Promise`
-- ## `Workflows`
-- ## `Preserved Behavior`
-- ## `Accepted Exclusions And Risks`
-- ## `Success Evidence`
-- ## `Technically Done But Wrong`
-- ## `Confirmed Decisions`
-- ## `Superseded Decisions`
-- ## `Delivery Contract`
-
 ## .owlbear/instructions/architecture.instructions.md
 - ## `Architecture Overview`
 - ## `Dependency Rules`
@@ -917,6 +866,15 @@
 - ## `Technically Done but Wrong`
 - ## `Non-goals`
 
+## serve/delivery-github/README.md
+- # `owlbear-delivery-github — GitHub Publication Adapter`
+- ## `Launch / Usage`
+- ## `Configuration`
+- ## `Dependencies`
+
+### Outbound links
+- [README.md](../../README.md)
+
 ## serve/delivery-mcp/README.md
 - # `owlbear-delivery-mcp — Target Delivery MCP Server`
 - ## `Launch / Usage`
@@ -1061,6 +1019,7 @@
 - # `OwlBear Setup Guide`
 - ## `Prerequisites`
 - ## `Quick Start`
+- ## `Browser-backed tests`
 - ## `What Setup Creates`
 - ## `Shared vs Copied`
 - ## `Target Delivery Workflow`

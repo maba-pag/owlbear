@@ -22,7 +22,6 @@
 exclude: |
   (?x)^(
     \.owlbear/doc-index\.md$
-    |\.owlbear/completed/
     |\.owlbear/delivery/packages/
     |\.owlbear/kanban/(archive|decisions|tasks)/
     |\.owlbear/(legacy|memory|research|sources|target)/
