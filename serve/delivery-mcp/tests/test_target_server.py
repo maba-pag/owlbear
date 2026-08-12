@@ -71,6 +71,7 @@ DELIVERY_TOOLS = {
     "reconcile_finalization_head",
     "reconcile_change_checkpoint",
     "observe_change_publication_checks",
+    "observe_acceptance",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
@@ -175,6 +176,18 @@ class _BlockingIntegrationApplication(_RecordingApplication):
         self._started.set()
         self._release.wait(timeout=2)
         return _Result(operation="integrate_ready_change")
+
+
+class _BlockingAcceptanceApplication(_RecordingApplication):
+    def __init__(self, started: threading.Event, release: threading.Event) -> None:
+        super().__init__()
+        self._started = started
+        self._release = release
+
+    def observe_acceptance(self, _change_id: str) -> _Result:
+        self._started.set()
+        self._release.wait(timeout=2)
+        return _Result(operation="observe_acceptance")
 
 
 def _git(repository: Path, *arguments: str) -> None:
@@ -398,6 +411,9 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
     reconciliation_schema = tools["reconcile_finalization_head"].input_schema
     reconciliation_request = reconciliation_schema["$defs"]["ChangeParams"]
     assert set(reconciliation_request["properties"]) == {"change_id"}
+    acceptance_schema = tools["observe_acceptance"].input_schema
+    acceptance_request = acceptance_schema["$defs"]["ChangeParams"]
+    assert set(acceptance_request["properties"]) == {"change_id"}
     assert transition_definitions["DeliveryTransition"]["discriminator"]["propertyName"] == "action"
     assert "output" in tools["publish_delivery_plan"].output_schema["required"]
     assert "output" in tools["publish_delivery_result"].output_schema["required"]
@@ -430,6 +446,26 @@ async def test_integration_verification_yields_the_mcp_event_loop() -> None:
 
     assert elapsed < 0.5
     assert result == {"operation": "integrate_ready_change"}
+
+
+@pytest.mark.asyncio
+async def test_acceptance_observation_yields_the_mcp_event_loop() -> None:
+    started = threading.Event()
+    release = threading.Event()
+    fallback_release = threading.Timer(1, release.set)
+    fallback_release.start()
+    adapter = TargetMCPAdapter(_BlockingAcceptanceApplication(started, release))  # type: ignore[arg-type]
+    launched_at = time.monotonic()
+
+    task = asyncio.create_task(adapter.observe_acceptance({"change_id": "change-a"}))
+    assert await asyncio.to_thread(started.wait, 2)
+    elapsed = time.monotonic() - launched_at
+    release.set()
+    result = await task
+    fallback_release.cancel()
+
+    assert elapsed < 0.5
+    assert result == {"operation": "observe_acceptance"}
 
 
 MISSING_FIELDS = [

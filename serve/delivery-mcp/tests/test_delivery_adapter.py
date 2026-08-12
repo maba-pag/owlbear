@@ -10,6 +10,7 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict
 
+from owlbear_delivery.acceptance import CompletionReceiptConflictError
 from owlbear_delivery.change_workspace import CoordinationConflictError
 from owlbear_delivery.completed_history import (
     CompletedHistoryDiagnostic,
@@ -236,6 +237,7 @@ def _requests() -> dict[str, dict[str, object]]:
         "reconcile_finalization_head": change,
         "reconcile_change_checkpoint": change,
         "observe_change_publication_checks": change,
+        "observe_acceptance": change,
         "transition_delivery": {
             **change,
             "request": {
@@ -286,7 +288,7 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
     if operation_name == "mark_change_ready":
         assert application.calls[0][1][0] == CHANGE
         assert isinstance(application.calls[0][1][1], MarkChangePullRequestReady)
-    if operation_name == "reconcile_finalization_head":
+    if operation_name in {"reconcile_finalization_head", "observe_acceptance"}:
         assert application.calls[0][1] == (CHANGE,)
     tuple_results = {"list_work_items", "list_integration_ready_changes"}
     publication_results = {
@@ -418,6 +420,12 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             ),
             "rate_limited",
             True,
+        ),
+        (
+            "observe_acceptance",
+            CompletionReceiptConflictError("completion receipt is inconsistent"),
+            "ERR_COMPLETION_RECEIPT_CONFLICT",
+            False,
         ),
         ("integrate_ready_change", TransactionPathError(), "ERR_TRANSACTION_PATH_UNSAFE", False),
     )

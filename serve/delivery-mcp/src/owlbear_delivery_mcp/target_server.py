@@ -14,6 +14,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, ValidationError
 
+from owlbear_delivery.acceptance import CompletionReceiptConflictError
 from owlbear_delivery.change_workspace import CoordinationConflictError
 from owlbear_delivery.completed_history import CompletedHistoryError, CompletedHistoryStaleError
 from owlbear_delivery.delivery_runtime import (
@@ -99,6 +100,7 @@ DELIVERY_OPERATION_NAMES = (
     "reconcile_finalization_head",
     "reconcile_change_checkpoint",
     "observe_change_publication_checks",
+    "observe_acceptance",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
@@ -334,6 +336,15 @@ class TargetMCPAdapter:
             lambda: self._application.observe_change_publication_checks(params.change_id),
         )
 
+    async def observe_acceptance(self, request: ChangeRequest) -> dict[str, object]:
+        """Complete one Change from engine-derived merged pull-request evidence."""
+        params = self._validate(ChangeParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.observe_acceptance(params.change_id),
+        )
+
     async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]:
         """Apply one worker-owned Delivery transition."""
         params = self._validate(TransitionDeliveryParams, request)
@@ -531,6 +542,7 @@ class TargetMCPAdapter:
 
 
 _NAMED_DELIVERY_ERRORS = (
+    CompletionReceiptConflictError,
     CoordinationConflictError,
     DeliveryRuntimeConflictError,
     DeliveryRuntimeReferenceError,
