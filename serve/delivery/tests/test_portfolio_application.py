@@ -484,6 +484,7 @@ def test_finalization_uses_managed_head_and_invalidates_observed_drift(tmp_path:
     assert isinstance(receipt, DeliveryFinalizationReceipt)
     assert application.finalize_change("change-a", request) == receipt
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.FINALIZED
+    assert application.list_integration_ready_changes() == ()
     publication = application.show_change_checkpoint_publication("change-a")
     assert publication.pending_checkpoint is not None
     assert publication.pending_checkpoint.head == exact_head
@@ -600,8 +601,11 @@ def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Pat
 
     ready = application.mark_current_change_ready("change-a")
 
-    assert ready.finalization_id == receipt.finalization_id
-    assert runtimes["change-a"].change_stage() == DeliveryChangeStage.AWAITING_MERGE
+    assert (
+        ready.finalization_id,
+        runtimes["change-a"].change_stage(),
+        application.list_integration_ready_changes(),
+    ) == (receipt.finalization_id, DeliveryChangeStage.AWAITING_MERGE, ())
     assert pull_requests[0].draft is False
     provider.observe_checks.assert_called_once()
     pull_requests[0] = pull_requests[0].model_copy(update={"head_sha": "f" * 40})

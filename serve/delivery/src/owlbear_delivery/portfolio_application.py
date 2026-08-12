@@ -1359,10 +1359,14 @@ class PortfolioApplication:
     def _snapshot_change_stage(snapshot: DeliveryPortfolioSnapshot) -> DeliveryChangeStage:
         if snapshot.frontier.change_completion is not None or snapshot.frontier.integration_result_id is not None:
             return DeliveryChangeStage.COMPLETED
+        if snapshot.frontier.ready is not None:
+            return DeliveryChangeStage.AWAITING_MERGE
+        if snapshot.frontier.finalization is not None:
+            return DeliveryChangeStage.FINALIZED
         stages = {binding.stage for binding in snapshot.frontier.bindings}
         if DeliveryStage.DESIGN in stages:
             return DeliveryChangeStage.DESIGN
-        if stages == {DeliveryStage.COMPLETED}:
+        if stages == {DeliveryStage.COMPLETED} and snapshot.frontier.finalization_invalidation is None:
             return DeliveryChangeStage.INTEGRATION
         return DeliveryChangeStage.ACTIVE_DELIVERY
 
