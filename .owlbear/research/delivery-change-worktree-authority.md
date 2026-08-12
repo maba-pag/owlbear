@@ -147,7 +147,7 @@ Git administration rather than Delivery-authored product state.
 | `.owlbear/delivery/runtime/claims/**` | Shared fenced mutation-claim coordination | Host-local and ignored |
 | `.owlbear/delivery/runtime/transactions/**` | Append-only transaction journals and recovery state | Host-local and ignored |
 | `.owlbear/delivery/runtime/publications/**` | Checkpoint, remote-head, PR, check-observation, and acceptance-observation receipts | Host-local and ignored |
-| `.owlbear/delivery/runtime/completions/**` | Receipt-backed completion history | Host-local and ignored |
+| `.owlbear/delivery/runtime/completions/**` | Receipt-backed completion history plus non-authoritative display metadata captured atomically from admitted Change authority | Host-local and ignored |
 | `.owlbear/delivery/runtime/capacity.json` | Host-local cross-Change execution capacity | Host-local and ignored |
 | `.owlbear/delivery/worktrees/<change-id>/` | The one linked Change worktree | Host-local and ignored |
 | `.owlbear/legacy/briefs/**` | Retired ideation-blackboard artifacts | Tracked, read-only legacy evidence; no new writes |
@@ -394,6 +394,13 @@ translate the Change graph when accepting a pull request. Completed-history proj
 finalized Change head and accepted merge commit as separate exact identities, assert no ancestry or
 target reachability between them, and record no merge method.
 
+Because acceptance evidence intentionally contains no presentation text, completion atomically stores
+content-validated display metadata beside the receipt. That sidecar contains the Change title and
+Outcome titles captured from the admitted contract. It is not acceptance evidence, does not contribute
+to `completion_id` or `acceptance_evidence_digest`, and cannot authorize completion. Missing or invalid
+display metadata makes the completed-history record malformed; projections never invent replacement
+text or read mutable active-package state to repair it.
+
 ## 6. Operations
 
 Every external-write operation accepts a stable `operation_id`, reconciles before retry, and returns
@@ -461,6 +468,17 @@ repository and PR identity, base, head, state, merged state, merge timestamp, re
 nullable merge actor, and observation time. Missing provider response keys are invalid; a present
 nullable actor is observed absence. The receipt is appended under
 `.owlbear/delivery/runtime/publications/**` before latch or completion state changes.
+
+Completed-history records use an explicitly versioned discriminated schema. Legacy-package records
+retain their historical package, target-commit, and ancestry semantics. Completion-receipt records
+bind the receipt and its display sidecar, expose finalized Change head and provider-reported accepted
+merge commit as separate identities, and make no ancestry, reachability, topology, or merge-method
+claim. A receipt suppresses a legacy record with the same `change_id`. Any malformed source record
+fails the bounded query rather than silently omitting history.
+
+Completed-history cursors are versioned and bind the query, exact legacy target snapshot, and digest of
+the ordered receipt identities. Target movement remains stale-cursor evidence; append-only receipt-set
+growth has its own typed cursor-advanced diagnostic so callers can restart pagination intentionally.
 
 ### 6.3 GitHub Actions
 
@@ -651,7 +669,8 @@ CompletionReceiptStore
 ```
 
 `CompletionReceiptStore` writes under `.owlbear/delivery/runtime/completions/**` in the canonical
-workspace root. `ChangeWorktreeStore` writes only under `.owlbear/delivery/worktrees/**`. Provider write
+workspace root. Its completion transaction also writes the non-authoritative display sidecar described
+in Section 5.7. `ChangeWorktreeStore` writes only under `.owlbear/delivery/worktrees/**`. Provider write
 implementations expose fixed operations only; no generic provider request or merge method is part of
 the interface.
 
@@ -898,9 +917,10 @@ through local target observation.
 2. Add ready/draft transitions.
 3. Add read-only merged-PR acceptance observation, a monotonic merged-state latch, and completion
   receipts bound to content-addressed evidence identities.
-4. Version completed-history records and cursors so one page can project legacy
-  `.owlbear/legacy/completed/**` packages and new `.owlbear/delivery/runtime/completions/**` receipts
-  without false ancestry.
+4. After D.1.7 has moved and verified legacy packages, version completed-history records and cursors so
+  one page can project legacy `.owlbear/legacy/completed/**` packages and new
+  `.owlbear/delivery/runtime/completions/**` receipts without false ancestry. Atomically capture the
+  non-authoritative display sidecar required for receipt-era title and search projection.
 5. Replace Integration Cockpit/MCP/agent surfaces with publication and acceptance surfaces.
 
 ## D.5 Deletion and Proof
