@@ -32,9 +32,11 @@ from owlbear_delivery.change_workspace import (
     ChangeWriter,
     CoordinationConflictError,
     ExternalCompletionProposal,
+    FinalizationTargetProvenance,
     IntegrationContext,
     IntegrationRepairCandidate,
     PortfolioCoordinator,
+    PublicationLease,
     WorkspaceRecoverySnapshot,
 )
 from owlbear_delivery.delivery_runtime import (
@@ -69,6 +71,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryTaskResult,
     DeliveryTransition,
     DeliveryWorkerRole,
+    FinalizationVerificationScope,
     FinalizeDeliveryChange,
     OutcomeAuthorityBinding,
     PublishDeliveryPlan,
@@ -96,6 +99,16 @@ from owlbear_delivery.draft_pull_request import (
     ReturnChangePullRequestToDraft,
     UpdateGeneratedPullRequestSummary,
 )
+from owlbear_delivery.finalization_verification import (
+    FinalizationVerificationReceipt,
+    FinalizationVerificationStatus,
+    FinalizationVerificationStore,
+    FinalizationVerifier,
+)
+from owlbear_delivery.integration_verification import (
+    IntegrationVerificationProfile,
+    read_target_verification_profile,
+)
 from owlbear_delivery.portfolio_operating import (
     PortfolioGuidanceFacts,
     PortfolioOperatingView,
@@ -116,6 +129,7 @@ from owlbear_delivery.work_items import (
     WorkItemDetailView,
     WorkItemNeed,
     WorkItemProjector,
+    WorkItemPublicationPhase,
     WorkItemScope,
 )
 
@@ -384,6 +398,30 @@ class DeliveryBuildContext(_ApplicationModel):
     recovery_attention: DeliveryRecoveryAttention | None = None
 
 
+class DeliveryFinalizationContext(_ApplicationModel):
+    """Engine-resolved read context for exact Change finalization."""
+
+    change_id: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    worktree_path: Path
+    change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    reviewed_change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    target_remote: str = Field(min_length=1)
+    target_branch: str = Field(min_length=1)
+    target_ref: str = Field(min_length=1)
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    target_provenance: FinalizationTargetProvenance
+    target_observed_at: datetime
+    proof_scope: FinalizationVerificationScope
+    profile_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    profile: IntegrationVerificationProfile
+    publication_phase: WorkItemPublicationPhase
+    ready_for_finalization: bool
+    readiness_diagnostics: tuple[str, ...]
+    finalization_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    finalized_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+
+
 class DeliveryIntegrationRepairContext(_ApplicationModel):
     """Current claim-bound source and conflict authority for Integration repair."""
 
@@ -623,6 +661,11 @@ class PortfolioApplication:
         self._coordinator = dependencies.coordinator
         self._workspace_manager = dependencies.workspace_manager
         self._integration_verifier = dependencies.integration_verifier
+        self._finalization_verification_store = FinalizationVerificationStore(self._target_root)
+        self._finalization_verifier = FinalizationVerifier(
+            self._workspace_manager.repository,
+            self._finalization_verification_store,
+        )
         self._completed_history_catalog = dependencies.completed_history_catalog
         self._change_branch_publisher = dependencies.change_branch_publisher
         self._draft_pull_request_publisher = dependencies.draft_pull_request_publisher
@@ -665,6 +708,99 @@ class PortfolioApplication:
         """Return the durable checkpoint queue for one admitted Change."""
         return self._runtime(change_id).checkpoint_publication_state()
 
+    def show_finalization_context(self, change_id: str) -> DeliveryFinalizationContext:
+        """Return engine-resolved finalization context without changing Delivery state."""
+        runtime = self._runtime(change_id)
+        coordination = self._workspace_manager.show(change_id)
+        try:
+            source = self._workspace_manager.integration_context(change_id)
+            target = self._workspace_manager.finalization_target_context(change_id)
+            profile = read_target_verification_profile(self._workspace_manager.repository, target.target_head)
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            self._fail("finalization context could not resolve target verification authority", exc)
+        ready, diagnostics = runtime.finalization_readiness()
+        finalization = runtime.finalization()
+        if ready:
+            try:
+                self._workspace_manager.validate_finalization_head(
+                    change_id,
+                    source.change_head,
+                    tuple(result.completed_commit for binding in runtime.bindings() for result in binding.results),
+                )
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                ready = False
+                diagnostics = (str(exc),)
+        return DeliveryFinalizationContext(
+            change_id=change_id,
+            branch=coordination.branch,
+            worktree_path=coordination.worktree_path,
+            change_head=source.change_head,
+            reviewed_change_head=source.reviewed_change_head,
+            target_remote=target.remote,
+            target_branch=target.target_branch,
+            target_ref=target.target_ref,
+            target_head=target.target_head,
+            target_provenance=target.target_provenance,
+            target_observed_at=target.target_observed_at,
+            proof_scope=FinalizationVerificationScope.CHANGE_HEAD_PROFILE,
+            profile_digest=profile.profile_digest,
+            profile=profile.profile,
+            publication_phase=self._work_item_projector(runtime).publication_phase(),
+            ready_for_finalization=ready,
+            readiness_diagnostics=diagnostics,
+            finalization_id=finalization.finalization_id if finalization is not None else None,
+            finalized_head=finalization.exact_head if finalization is not None else None,
+        )
+
+    def run_finalization_verification(self, change_id: str) -> FinalizationVerificationReceipt:
+        """Run target-governed finalization proof under the existing publication lease."""
+        context = self.show_finalization_context(change_id)
+        if not context.ready_for_finalization:
+            self._fail(
+                "finalization proof requires a ready exact Change context",
+                ValueError("; ".join(context.readiness_diagnostics)),
+            )
+        operation_id = f"finalization-proof-{change_id}-{context.change_head[:12]}"
+        owner_id = operation_id
+        now = datetime.now(UTC)
+        lease = PublicationLease(
+            operation_id=operation_id,
+            owner_id=owner_id,
+            expires_at=(now + timedelta(minutes=10)).isoformat(),
+        )
+        with self._coordinator.publication_lock(change_id) as lock:
+            self._coordinator.reserve_publication(change_id, lease, lock, now=now.isoformat())
+            try:
+                current = self.show_finalization_context(change_id)
+                if (
+                    not current.ready_for_finalization
+                    or current.change_head != context.change_head
+                    or current.target_ref != context.target_ref
+                    or current.target_head != context.target_head
+                    or current.target_provenance != context.target_provenance
+                    or current.proof_scope != context.proof_scope
+                    or current.profile_digest != context.profile_digest
+                ):
+                    self._fail(
+                        "finalization proof context changed before execution",
+                        ValueError("; ".join(current.readiness_diagnostics)),
+                    )
+                return self._finalization_verifier.run(
+                    change_id=change_id,
+                    worktree=current.worktree_path,
+                    branch=current.branch,
+                    exact_head=current.change_head,
+                    target_ref=current.target_ref,
+                    target_head=current.target_head,
+                    target_provenance=current.target_provenance,
+                    target_observed_at=current.target_observed_at,
+                    proof_scope=current.proof_scope,
+                    profile_digest=current.profile_digest,
+                    profile=current.profile,
+                )
+            finally:
+                self._coordinator.release_publication(change_id, operation_id, owner_id, lock)
+
     def finalize_change(
         self,
         change_id: str,
@@ -672,6 +808,84 @@ class PortfolioApplication:
     ) -> DeliveryFinalizationReceipt:
         """Finalize one exact clean reviewed Change head and queue its checkpoint."""
         runtime = self._runtime(change_id)
+        existing = runtime.finalization()
+        if existing is not None:
+            if (
+                existing.operation_id == request.operation_id
+                and existing.exact_head == request.exact_head
+                and existing.verification_run_id == request.verification_run_id
+                and existing.target_ref == request.target_ref
+                and existing.target_head == request.target_head
+                and existing.profile_digest == request.profile_digest
+                and existing.observations == request.observations
+                and existing.review == request.review
+            ):
+                return existing
+            self._fail(
+                "Delivery Change is already finalized with different authority",
+                ValueError("finalization request is not an exact replay"),
+            )
+        context = self.show_finalization_context(change_id)
+        if not context.ready_for_finalization:
+            self._fail(
+                "finalization requires a ready exact Change context",
+                ValueError("; ".join(context.readiness_diagnostics)),
+            )
+        if (
+            request.exact_head != context.change_head
+            or request.target_ref != context.target_ref
+            or request.target_head != context.target_head
+            or request.target_provenance != context.target_provenance
+            or request.proof_scope != context.proof_scope
+            or request.profile_digest != context.profile_digest
+        ):
+            self._fail(
+                "finalization request does not match current target authority",
+                ValueError("Change head, target ref, target head, or profile digest changed"),
+            )
+        proof = self._finalization_verification_store.read(request.verification_run_id)
+        if proof is None:
+            self._fail(
+                "finalization request requires one persisted engine proof run",
+                ValueError("verification run was not found"),
+            )
+        if (
+            proof.status != FinalizationVerificationStatus.PASSED
+            or not proof.clean
+            or proof.observed_head != request.exact_head
+            or proof.change_id != change_id
+            or proof.exact_head != request.exact_head
+            or proof.target_ref != request.target_ref
+            or proof.target_head != request.target_head
+            or proof.target_provenance != request.target_provenance
+            or proof.target_observed_at != request.target_observed_at
+            or proof.proof_scope != request.proof_scope
+            or proof.profile_digest != request.profile_digest
+            or proof.declared_step_ids != tuple(step.step_id for step in context.profile.steps)
+            or tuple(step.step_id for step in proof.steps) != proof.declared_step_ids
+            or any(step.status.value != "passed" for step in proof.steps)
+            or tuple((step.argv, step.cwd, step.timeout_seconds) for step in proof.steps)
+            != tuple((step.argv, step.cwd, step.timeout_seconds) for step in context.profile.steps)
+        ):
+            self._fail(
+                "finalization request does not match a passing engine proof run",
+                ValueError("persisted profile evidence is incomplete or stale"),
+            )
+        if len(request.observations) != len(proof.steps):
+            self._fail(
+                "finalization observations do not cover the engine proof run",
+                ValueError("one Delivery observation is required per passing profile step"),
+            )
+        for observation, step in zip(request.observations, proof.steps, strict=True):
+            if (
+                observation.step_id != step.step_id
+                or observation.command_or_procedure != " ".join(step.argv)
+                or observation.exit_status_or_artifact_locator != "exit:0"
+            ):
+                self._fail(
+                    "finalization observation does not match engine proof evidence",
+                    ValueError(f"profile step {step.step_id} evidence differs"),
+                )
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             results = tuple(result for binding in runtime.bindings() for result in binding.results)
             self._workspace_manager.validate_finalization_head(
@@ -2479,6 +2693,7 @@ __all__ = [
     "DeliveryBuildContext",
     "DeliveryClaimRecoveryResult",
     "DeliveryClaimRecoveryStatus",
+    "DeliveryFinalizationContext",
     "DeliveryIntegrationAttentionStatus",
     "DeliveryIntegrationResult",
     "DeliveryLaunchPackage",

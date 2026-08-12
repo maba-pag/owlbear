@@ -278,6 +278,7 @@ def _compose_application(
         paths.worktree_root,
         coordinator,
         config.target_branch,
+        config.remote,
     )
     integration_verifier = IntegrationVerifier(
         paths.repository_root,

@@ -73,6 +73,12 @@ class DeliveryWorkerRole(StrEnum):
     INTEGRATION_REPAIRER = "integration-repairer"
 
 
+class FinalizationVerificationScope(StrEnum):
+    """Bounded proof boundary for exact Change finalization."""
+
+    CHANGE_HEAD_PROFILE = "change-head-profile"
+
+
 class DeliveryCheckpointTriggerKind(StrEnum):
     """Delivery-owned reasons that require Change checkpoint publication."""
 
@@ -133,6 +139,7 @@ class DeliveryObservation(_DeliveryModel):
     schema_version: Literal[1] = 1
     change_id: str = Field(min_length=1)
     task_or_finalization_id: str = Field(min_length=1)
+    step_id: str | None = Field(default=None, min_length=1)
     exact_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     observation_kind: str = Field(min_length=1)
     command_or_procedure: str = Field(min_length=1)
@@ -267,6 +274,13 @@ class DeliveryFinalization(_DeliveryModel):
     operation_id: str = Field(min_length=1)
     change_id: str = Field(min_length=1)
     exact_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    verification_run_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    target_ref: str = Field(min_length=1)
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    target_provenance: Literal["cached-remote-tracking"]
+    target_observed_at: datetime
+    proof_scope: FinalizationVerificationScope
+    profile_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     authority_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     result_digests: tuple[str, ...] = Field(min_length=1)
     observations: tuple[DeliveryObservationReceipt, ...] = Field(min_length=1)
@@ -917,11 +931,21 @@ class FinalizeDeliveryChange(_DeliveryModel):
 
     operation_id: str = Field(min_length=1)
     exact_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    verification_run_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    target_ref: str = Field(min_length=1)
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    target_provenance: Literal["cached-remote-tracking"]
+    target_observed_at: datetime
+    proof_scope: FinalizationVerificationScope
+    profile_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     observations: tuple[DeliveryObservationReceipt, ...] = Field(min_length=1)
     review: DeliveryReviewReceipt
 
     @model_validator(mode="after")
     def _validate_exact_commit_evidence(self) -> FinalizeDeliveryChange:
+        if self.target_observed_at.tzinfo is None:
+            message = "Delivery finalization target observation time must include a timezone"
+            raise ValueError(message)
         observation_ids = tuple(observation.observation_id for observation in self.observations)
         if len(observation_ids) != len(set(observation_ids)):
             message = "Delivery finalization observations must be unique"
@@ -1112,6 +1136,28 @@ class DeliveryRuntime:
     def bindings(self) -> tuple[OutcomeAuthorityBinding, ...]:
         """Return current outcome bindings in admitted authority order."""
         return self._read()[0].bindings
+
+    def finalization_readiness(self) -> tuple[bool, tuple[str, ...]]:
+        """Return the same lifecycle readiness conditions enforced by finalization mutation."""
+        frontier, _content = self._read()
+        diagnostics: list[str] = []
+        if frontier.finalization is not None:
+            diagnostics.append("Delivery Change is already finalized")
+        if frontier.change_completion is not None:
+            diagnostics.append("Delivery Change is already completed")
+        if any(binding.stage != DeliveryStage.COMPLETED for binding in frontier.bindings):
+            diagnostics.append("every Outcome must be completed")
+        if any(binding.active_claim is not None for binding in frontier.bindings):
+            diagnostics.append("finalization cannot overlap an active Outcome claim")
+        if frontier.integration_repair_claim is not None:
+            diagnostics.append("finalization cannot overlap an Integration repair claim")
+        if frontier.integration_completion is not None:
+            diagnostics.append("completed legacy Integration cannot be finalized as a Change")
+        if any(
+            tuple(result.task_id for result in binding.results) != binding.task_ids for binding in frontier.bindings
+        ):
+            diagnostics.append("every Task result must be present in authority order")
+        return not diagnostics, tuple(diagnostics)
 
     def checkpoint_publication_state(self) -> DeliveryCheckpointPublicationState:
         """Return the Change-level checkpoint queue without provider identity."""
@@ -1384,6 +1430,13 @@ class DeliveryRuntime:
             if (
                 existing.operation_id == request.operation_id
                 and existing.exact_head == request.exact_head
+                and existing.verification_run_id == request.verification_run_id
+                and existing.target_ref == request.target_ref
+                and existing.target_head == request.target_head
+                and existing.target_provenance == request.target_provenance
+                and existing.target_observed_at == request.target_observed_at
+                and existing.proof_scope == request.proof_scope
+                and existing.profile_digest == request.profile_digest
                 and existing.observations == request.observations
                 and existing.review == request.review
             ):
@@ -1407,6 +1460,13 @@ class DeliveryRuntime:
             operation_id=request.operation_id,
             change_id=self._contract.change_id,
             exact_head=request.exact_head,
+            verification_run_id=request.verification_run_id,
+            target_ref=request.target_ref,
+            target_head=request.target_head,
+            target_provenance=request.target_provenance,
+            target_observed_at=request.target_observed_at,
+            proof_scope=request.proof_scope,
+            profile_digest=request.profile_digest,
             authority_digest=self._authority_digest,
             result_digests=tuple(hashlib.sha256(_model_content(result)).hexdigest() for result in results),
             observations=request.observations,

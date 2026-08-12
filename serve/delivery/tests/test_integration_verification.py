@@ -13,6 +13,7 @@ from owlbear_delivery.integration_verification import (
     IntegrationVerificationStatus,
     IntegrationVerificationStore,
     IntegrationVerifier,
+    read_target_verification_profile,
 )
 
 
@@ -163,6 +164,19 @@ def test_verification_rejects_candidate_profile_change_without_execution(tmp_pat
 
     assert receipt.status == IntegrationVerificationStatus.PROFILE_CHANGED
     assert not marker.exists()
+
+
+def test_target_profile_resolution_ignores_change_head_profile(tmp_path: Path) -> None:
+    repository, target_head, _candidate_commit = _repository(tmp_path, (sys.executable, "-c", "raise SystemExit(0)"))
+    profile_path = repository / INTEGRATION_VERIFICATION_PROFILE_PATH
+    profile_path.write_bytes(_profile((sys.executable, "-c", "raise SystemExit(3)")))
+    _git(repository, "add", INTEGRATION_VERIFICATION_PROFILE_PATH)
+    _git(repository, "commit", "-m", "change verification authority")
+
+    resolved = read_target_verification_profile(repository, target_head)
+
+    assert resolved.target_commit == target_head
+    assert resolved.profile.steps[0].argv == (sys.executable, "-c", "raise SystemExit(0)")
 
 
 def test_verification_failure_keeps_bounded_process_evidence(tmp_path: Path) -> None:

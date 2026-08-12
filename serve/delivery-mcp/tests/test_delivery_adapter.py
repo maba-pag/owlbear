@@ -188,6 +188,13 @@ def _finalization() -> dict[str, object]:
     return {
         "operation_id": operation_id,
         "exact_head": COMMIT,
+        "verification_run_id": DIGEST,
+        "target_ref": "refs/remotes/origin/main",
+        "target_head": COMMIT,
+        "target_provenance": "cached-remote-tracking",
+        "target_observed_at": observed_at.isoformat(),
+        "proof_scope": "change-head-profile",
+        "profile_digest": DIGEST,
         "observations": [observation.model_dump(mode="json")],
         "review": review.model_dump(mode="json"),
     }
@@ -215,6 +222,8 @@ def _requests() -> dict[str, dict[str, object]]:
         "acquire_frontier_work": {},
         "show_plan_context": claim,
         "show_build_context": claim,
+        "show_finalization_context": change,
+        "run_finalization_verification": change,
         "show_integration_repair_context": repair_claim,
         "create_integration_repair_candidate": repair_claim,
         "publish_delivery_plan": {
@@ -332,6 +341,7 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         "show_work_item",
         "show_plan_context",
         "show_build_context",
+        "show_finalization_context",
         "show_integration_repair_context",
         "list_integration_ready_changes",
         "show_integration_attention",

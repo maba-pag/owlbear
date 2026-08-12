@@ -8,6 +8,7 @@ export type WorkItemActionKind =
   | 'answer-request'
   | 'clear-block'
   | 'recover-claim'
+  | 'finalize'
   | 'reconcile-checkpoint'
   | 'mark-ready'
   | 'observe-acceptance'

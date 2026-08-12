@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 INTEGRATION_VERIFICATION_PROFILE_PATH = ".owlbear/delivery/verification.json"
 _OUTPUT_LIMIT = 8_192
 _DIAGNOSTIC_LIMIT = 1_024
+_COMMIT_LENGTH = 40
 
 
 class _VerificationModel(BaseModel):
@@ -83,6 +84,14 @@ class IntegrationVerificationProfileState(StrEnum):
     CHANGED = "changed"
 
 
+class TargetVerificationProfile(_VerificationModel):
+    """Validated verification authority read only from one exact target commit."""
+
+    target_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    profile_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    profile: IntegrationVerificationProfile
+
+
 class IntegrationVerificationProfileBinding(_VerificationModel):
     """Target and candidate profile identities bound before execution."""
 
@@ -91,6 +100,37 @@ class IntegrationVerificationProfileBinding(_VerificationModel):
     profile_state: IntegrationVerificationProfileState
     profile: IntegrationVerificationProfile | None = None
     profile_diagnostic: str | None = Field(default=None, max_length=1_024)
+
+
+def read_target_verification_profile(repository: Path, target_commit: str) -> TargetVerificationProfile:
+    """Read and validate verification authority from the engine-selected target commit."""
+    if len(target_commit) != _COMMIT_LENGTH or any(character not in "0123456789abcdef" for character in target_commit):
+        message = "target verification profile requires one exact commit"
+        raise ValueError(message)
+    result = subprocess.run(  # noqa: S603 - fixed executable and argument vector.
+        (
+            resolve_git_executable(),
+            "-C",
+            str(repository.resolve()),
+            "show",
+            f"{target_commit}:{INTEGRATION_VERIFICATION_PROFILE_PATH}",
+        ),
+        check=False,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        message = "target verification profile is missing"
+        raise ValueError(message)
+    try:
+        profile = IntegrationVerificationProfile.model_validate_json(result.stdout)
+    except ValidationError as exc:
+        message = "target verification profile is invalid"
+        raise ValueError(message) from exc
+    return TargetVerificationProfile(
+        target_commit=target_commit,
+        profile_digest=hashlib.sha256(result.stdout).hexdigest(),
+        profile=profile,
+    )
 
 
 class IntegrationVerificationRequest(_VerificationModel):
@@ -483,4 +523,6 @@ __all__ = [
     "IntegrationVerificationStepStatus",
     "IntegrationVerificationStore",
     "IntegrationVerifier",
+    "TargetVerificationProfile",
+    "read_target_verification_profile",
 ]

@@ -28,6 +28,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryWorkerRole,
+    FinalizationVerificationScope,
     OutcomeAuthorityBinding,
 )
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
@@ -234,6 +235,13 @@ def _finalization(exact_head: str = "3" * 40) -> DeliveryFinalizationReceipt:
             operation_id="finalize-portfolio-change",
             change_id="portfolio-change",
             exact_head=exact_head,
+            verification_run_id="a" * 64,
+            target_ref="refs/remotes/origin/main",
+            target_head="2" * 40,
+            target_provenance="cached-remote-tracking",
+            target_observed_at=observed_at,
+            proof_scope=FinalizationVerificationScope.CHANGE_HEAD_PROFILE,
+            profile_digest="e" * 64,
             authority_digest="c" * 64,
             result_digests=("d" * 64,),
             observations=(observation,),
@@ -441,8 +449,10 @@ def test_completed_outcomes_project_ready_for_finalization() -> None:
     assert (card.scope, card.progress.label, card.action.kind) == (
         "change-publication",
         "Ready for finalization",
-        WorkItemActionKind.NONE,
+        WorkItemActionKind.FINALIZE,
     )
+    assert card.action.label == "Finalize Change"
+    assert card.action.command == "/finalize-change portfolio-change"
     assert detail.publication is not None
     assert detail.publication.phase == WorkItemPublicationPhase.READY_FOR_FINALIZATION
 
@@ -469,6 +479,9 @@ def test_head_drift_projects_exact_finalization_invalidation() -> None:
     detail = projector.show_view("publication")
 
     assert card.progress.label == "Head drift observed"
+    assert card.action.kind == WorkItemActionKind.FINALIZE
+    assert card.action.label == "Re-finalize Change"
+    assert card.action.command == "/finalize-change portfolio-change"
     assert detail.publication is not None
     assert detail.publication.invalidated_expected_head == finalization.exact_head
     assert detail.publication.invalidated_observed_head == "4" * 40

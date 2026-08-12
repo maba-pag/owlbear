@@ -80,6 +80,7 @@ class WorkItemActionKind(StrEnum):
     ANSWER_REQUEST = "answer-request"
     CLEAR_BLOCK = "clear-block"
     RECOVER_CLAIM = "recover-claim"
+    FINALIZE = "finalize"
     RECONCILE_CHECKPOINT = "reconcile-checkpoint"
     MARK_READY = "mark-ready"
     OBSERVE_ACCEPTANCE = "observe-acceptance"
@@ -352,6 +353,10 @@ class WorkItemProjector:
             items=self._cards,
         )
 
+    def publication_phase(self) -> WorkItemPublicationPhase:
+        """Return the Change publication phase from the captured frontier."""
+        return self._publication_phase()
+
     def show_view(self, item_key: str) -> WorkItemDetailView:
         """Return semantic and operator detail for one scope-qualified key."""
         card = next(item for item in self._cards if item.item_key == item_key)
@@ -499,10 +504,24 @@ class WorkItemProjector:
         phase = self._publication_phase()
         if phase == WorkItemPublicationPhase.FINALIZATION_INVALIDATED:
             needs, headline, next_actor = WorkItemNeed.NONE, "Finalization invalidated", WorkItemNextActor.AGENT
-            next_step, progress, action = "Re-finalize the current Change head", "Head drift observed", WorkItemAction()
+            next_step, progress = "Re-finalize the current Change head", "Head drift observed"
+            action = WorkItemAction(
+                kind=WorkItemActionKind.FINALIZE,
+                label="Re-finalize Change",
+                command=f"/finalize-change {self._snapshot.contract.change_id}",
+            )
         elif phase == WorkItemPublicationPhase.READY_FOR_FINALIZATION:
             needs, headline, next_actor = WorkItemNeed.NONE, None, WorkItemNextActor.AGENT
-            next_step, progress, action = "Finalize the reviewed Change", "Ready for finalization", WorkItemAction()
+            next_step, progress = "Finalize the reviewed Change", "Ready for finalization"
+            action = (
+                WorkItemAction(
+                    kind=WorkItemActionKind.FINALIZE,
+                    label="Finalize Change",
+                    command=f"/finalize-change {self._snapshot.contract.change_id}",
+                )
+                if self._finalization_action_available()
+                else WorkItemAction()
+            )
         elif phase == WorkItemPublicationPhase.CHECKPOINT_PENDING:
             needs, headline, next_actor = WorkItemNeed.NONE, None, WorkItemNextActor.AGENT
             next_step, progress = "Reconcile the final checkpoint", "Checkpoint pending"
@@ -536,6 +555,17 @@ class WorkItemProjector:
             activity=activity,
             progress=WorkItemProgress(kind=WorkItemProgressKind.PUBLICATION, label=progress),
             action=action,
+        )
+
+    def _finalization_action_available(self) -> bool:
+        """Keep legacy Integration attention out of the finalization command surface."""
+        frontier = self._snapshot.frontier
+        return (
+            all(binding.stage == DeliveryStage.COMPLETED for binding in frontier.bindings)
+            and all(binding.active_claim is None for binding in frontier.bindings)
+            and frontier.integration_repair_claim is None
+            and frontier.integration_completion is None
+            and frontier.integration_attention is None
         )
 
     def _change_lifecycle(self) -> WorkItemChangeLifecycle:

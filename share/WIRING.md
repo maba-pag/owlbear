@@ -50,7 +50,8 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | planner-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
 | orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, memory-curator, Explore | Reports and acquires portfolio work, dispatches task and repair claims, recovers exact failed claims, forwards task transitions, and integrates ready changes; no repository write tools |
 | builder | GPT-5.6 Terra | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; task Build returns a lifecycle transition; claimed Integration repair creates its candidate through Delivery's claim-bound operation and returns admission, authority attention, or exact dispatch failure; `SessionStart`: repository context; `PostToolUse`: lint changed files |
-| build-reviewer | Claude Sonnet 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or Integration-repair review with read-only Git; `PreToolUse`: deny writes except scratch and terminal mutation |
+| build-reviewer | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result, Integration-repair, or finalization review with read-only Git; `PreToolUse`: deny writes except scratch and terminal mutation |
+| finalizer | GPT-5.6 Terra | `w-change-finalization`, `h-codebase-orientation` | build-reviewer | User-invoked exact Change proof and finalization; `PreToolUse`: deny writes and terminal mutation |
 | test-curator | GPT-5.6 Terra | `w-test-curation` | None | `PreToolUse`: deny source writes |
 | memory-curator | GPT-5.6 Terra | `w-mem-curation` | None | None |
 | knowledge-ingestor | GPT-5.6 Luna | `h-knowledge-ops` | None | None |
@@ -65,6 +66,7 @@ Tool allowlists remain in agent frontmatter; they are not duplicated here.
 | `ideate` | `prompt` -> designer in discovery mode | Agent required-reading loads `w-design-session`; selects or creates one target Design session |
 | `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same target Design session |
 | `orchestrate` | `prompt` -> orchestrator | Agent required-reading loads `w-orchestration` |
+| `finalize-change` | `prompt` -> finalizer | Agent required-reading loads `w-change-finalization`; engine proof and exact reviewed finalization |
 | `resolve-delivery-attention` | Current agent directed by prompt | Loads `w-delivery-attention-resolution`; binds one exact Integration attention before interactive diagnosis |
 | `test-curation` | `prompt` -> test-curator | Agent required-reading loads `w-test-curation` |
 | `kb-ingest` | `prompt` -> knowledge-ingestor | Agent required-reading loads `h-knowledge-ops` |
@@ -110,6 +112,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | `r-workspace-governance` | builder |
 | `h-ac-quality` | planner-challenger |
 | `w-orchestration` | orchestrator |
+| `w-change-finalization` | finalizer |
 | `w-test-curation` | test-curator |
 | `w-mem-curation` | memory-curator |
 | `h-knowledge-ops` | knowledge-ingestor, knowledge-enricher |
@@ -125,6 +128,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | planner-challenger | planner | A proposed Delivery task chain cannot receive independent advisory evidence |
 | builder | orchestrator | An acquired Build or Integration repair launch cannot produce its exact-commit result; a dispatch failure instead triggers the matching exact claim recovery |
 | build-reviewer | builder | An exact-commit task result or Integration repair cannot receive advisory pass or finding evidence |
+| build-reviewer | finalizer | An exact finalization proof cannot receive advisory pass or finding evidence |
 | memory-curator | orchestrator | Periodic memory housekeeping is skipped |
 | Explore | designer, planner, orchestrator | Broad read-only orientation must be performed by the caller or omitted |
 
@@ -136,7 +140,7 @@ The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignmen
 | Control | Attached roles | Enforcement job |
 |---------|----------------|-----------------|
 | Agent `tools:` allowlist | Every agent | Limits runtime capabilities exposed to the role |
-| `deny-writes.py` | designer, planner, conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer | Rejects writes outside the configured scratch/research boundary; designer, planner, and build-reviewer also enable terminal read-only mode |
+| `deny-writes.py` | designer, planner, conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer, finalizer | Rejects writes outside the configured scratch/research boundary; read-only terminal mode is enabled for reviewers, planner, and finalizer inspection |
 | `deny-src-writes.py` | test-curator | Restricts writes to tests and scratch |
 | `session-context.py` | builder | Adds repository context at session start |
 | `lint-changed.py` | builder | Runs changed-file checks after tool use |

@@ -55,6 +55,7 @@ from owlbear_delivery import (
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryWorkerRole,
+    FinalizationVerificationScope,
     FinalizeDeliveryChange,
     OutcomeAuthorityBinding,
     PortfolioCoordinator,
@@ -412,6 +413,13 @@ def _finalization_request(exact_head: str) -> FinalizeDeliveryChange:
     return FinalizeDeliveryChange(
         operation_id=operation_id,
         exact_head=exact_head,
+        verification_run_id="a" * 64,
+        target_ref="refs/remotes/origin/main",
+        target_head="b" * 40,
+        target_provenance="cached-remote-tracking",
+        target_observed_at=observed_at,
+        proof_scope=FinalizationVerificationScope.CHANGE_HEAD_PROFILE,
+        profile_digest="c" * 64,
         observations=(observation,),
         review=review,
     )

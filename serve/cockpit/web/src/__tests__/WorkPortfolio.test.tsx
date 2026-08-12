@@ -654,7 +654,52 @@ it('reconciles a pending publication checkpoint from the Change publication view
   expect(await screen.findByText('Publication checkpoint reconciled.')).toBeInTheDocument()
 })
 
-it('keeps invalidated finalization heads distinct and offers no publication control', async () => {
+it('offers the finalization command from the Change publication row and detail view', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'none',
+    needs_headline: null,
+    next_actor: 'agent',
+    next_step: 'Finalize the reviewed Change',
+    activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Ready for finalization', done: null, total: null },
+    action: { kind: 'finalize', label: 'Finalize Change', command: '/finalize-change change-alpha' },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    promise: 'Publish the reviewed Change.',
+    acceptance: [],
+    commitments: [],
+    tasks: [],
+    publication: {
+      phase: 'ready-for-finalization',
+      finalization_id: null,
+      finalized_head: null,
+      published_head: null,
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: null,
+      pull_request_number: null,
+      pull_request_head: null,
+      accepted_merge_commit: null,
+      merged_at: null,
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'finalization', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(within(inspector).getByLabelText('Copy command /finalize-change change-alpha')).toBeInTheDocument()
+  expect(screen.getAllByLabelText('Copy command /finalize-change change-alpha')).toHaveLength(2)
+})
+
+it('keeps invalidated finalization heads distinct and offers re-finalization', async () => {
   const publicationCard = card({
     item_key: 'publication',
     work_item_id: 'change-alpha',
@@ -667,7 +712,7 @@ it('keeps invalidated finalization heads distinct and offers no publication cont
     next_step: 'Re-finalize the current Change head',
     activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
     progress: { kind: 'publication', label: 'Head drift observed', done: null, total: null },
-    action: { kind: 'none', label: null, command: null },
+    action: { kind: 'finalize', label: 'Re-finalize Change', command: '/finalize-change change-alpha' },
   })
   currentDetail = detail({
     card: publicationCard,
@@ -698,7 +743,7 @@ it('keeps invalidated finalization heads distinct and offers no publication cont
   expect(inspector).toHaveTextContent(`Expected head${'1'.repeat(40)}`)
   expect(inspector).toHaveTextContent(`Observed head${'2'.repeat(40)}`)
   expect(inspector).toHaveTextContent('Re-finalize the current Change head')
-  expect(within(inspector).queryByRole('button')).not.toBeInTheDocument()
+  expect(within(inspector).getByLabelText('Copy command /finalize-change change-alpha')).toBeInTheDocument()
 })
 
 it('shows GitHub merge as user-owned work with observation as the only Cockpit control', async () => {

@@ -23,6 +23,7 @@ import {
   PROGRESS_STAGE_LABELS,
   workItemStatusLabel,
 } from './workItemPresentation'
+import CopyCommand from './CopyCommand'
 
 type FieldValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }
 
@@ -406,7 +407,8 @@ function PublicationSection(props: WorkItemDetailProps) {
         <IdentityRow label="Merged at" value={publication.merged_at} />
       </dl>
       {publication.pending_checkpoint_triggers.length > 0 ? <p className="mt-static-sm text-xs text-contrast-medium">Checkpoint triggers: {publication.pending_checkpoint_triggers.join(', ')}</p> : null}
-      {control && action.label ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null} onClick={() => void control()}>{pending ? 'Working...' : action.label}</PButton> : null}
+      {action.command ? <CopyCommand command={action.command} className="mt-static-md" /> : null}
+      {!action.command && control && action.label ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null} onClick={() => void control()}>{pending ? 'Working...' : action.label}</PButton> : null}
     </section>
   )
 }

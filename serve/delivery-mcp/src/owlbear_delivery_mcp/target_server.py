@@ -91,6 +91,8 @@ DELIVERY_OPERATION_NAMES = (
     "acquire_frontier_work",
     "show_plan_context",
     "show_build_context",
+    "show_finalization_context",
+    "run_finalization_verification",
     "show_integration_repair_context",
     "create_integration_repair_candidate",
     "publish_delivery_plan",
@@ -123,6 +125,7 @@ _DELIVERY_READS = frozenset(
         "show_work_item",
         "show_plan_context",
         "show_build_context",
+        "show_finalization_context",
         "show_integration_repair_context",
         "list_integration_ready_changes",
         "show_integration_attention",
@@ -248,6 +251,20 @@ class TargetMCPAdapter:
         """Show bounded Build context for one claim."""
         params = self._validate(ClaimContextParams, request)
         return self._call(params, lambda: self._application.show_build_context(**params.model_dump()))
+
+    async def show_finalization_context(self, request: ChangeRequest) -> dict[str, object]:
+        """Show engine-resolved context for one exact Change finalization."""
+        params = self._validate(ChangeParams, request)
+        return self._call(params, lambda: self._application.show_finalization_context(params.change_id))
+
+    async def run_finalization_verification(self, request: ChangeRequest) -> dict[str, object]:
+        """Run target-governed finalization proof under the managed Change publication lease."""
+        params = self._validate(ChangeParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.run_finalization_verification(params.change_id),
+        )
 
     async def show_integration_repair_context(self, request: RepairClaimContextRequest) -> dict[str, object]:
         """Show bounded Integration repair context for one claim."""

@@ -24,6 +24,7 @@ _EXPECTED_AGENTS = {
     "conceptual-design-reviewer",
     "designer",
     "designer-challenger",
+    "finalizer",
     "knowledge-enricher",
     "knowledge-ingestor",
     "memory-curator",
@@ -87,6 +88,11 @@ _TARGET_ROLE_TOOLS = {
         "recover_integration_repair_claim",
         "publish_integration_repair_authority_attention",
         "integrate_ready_change",
+    },
+    "finalizer": {
+        "show_finalization_context",
+        "run_finalization_verification",
+        "finalize_change",
     },
 }
 _RETIRED_DELIVERY_TOOLS = {
