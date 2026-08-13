@@ -1928,8 +1928,6 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def recover_claim(self, change_id: str, outcome_id: str, attempt_id: str, claim_id: str) -> DeliveryClaimRecoveryResult`
   - `def recover_expired_claims(self) -> DeliveryExpiredClaimRecoveries`
   - `def recover_integration_repair_claim(self, change_id: str, attempt_id: str, claim_id: str) -> DeliveryIntegrationRepairRecoveryResult`
-  - `def _recover_active_claims(self) -> tuple[DeliveryClaimRecoveryResult, ...]`
-  - `def _recover_active_repair_claims(self) -> tuple[DeliveryIntegrationRepairRecoveryResult, ...]`
   - `def _recover_integration_repair_claim(self, change_id: str, attempt_id: str, claim_id: str) -> DeliveryIntegrationRepairRecoveryResult`
   - `def _recover_claim(self, change_id: str, outcome_id: str, attempt_id: str, claim_id: str) -> DeliveryClaimRecoveryResult`
   - `def admit_reviewed_integration_repair(self, attempt_id: str, claim_id: str, repair: DeliveryIntegrationRepair) -> DeliveryIntegrationRepair`

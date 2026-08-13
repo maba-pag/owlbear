@@ -1577,21 +1577,6 @@ class PortfolioApplication:
         with self._coordinator.acquisition_lock():
             return self._recover_integration_repair_claim(change_id, attempt_id, claim_id)
 
-    def _recover_active_claims(self) -> tuple[DeliveryClaimRecoveryResult, ...]:
-        return tuple(
-            self._recover_claim(change_id, outcome_id, claim.attempt_id, claim.claim_id)
-            for change_id, runtime in sorted(self._runtimes.items())
-            for outcome_id, claim in runtime.active_claims()
-        )
-
-    def _recover_active_repair_claims(self) -> tuple[DeliveryIntegrationRepairRecoveryResult, ...]:
-        return tuple(
-            self._recover_integration_repair_claim(change_id, claim.attempt_id, claim.claim_id)
-            for change_id, runtime in sorted(self._runtimes.items())
-            for claim in (runtime.integration_repair_claim(),)
-            if claim is not None
-        )
-
     def _recover_integration_repair_claim(
         self,
         change_id: str,
