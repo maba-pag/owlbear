@@ -243,14 +243,33 @@ def _fixture(tmp_path: Path, *, with_worktree: bool = False) -> tuple[Path, dict
     )
 
 
-def _publication_artifacts(delivery_root: Path) -> tuple[Path, Path]:
+def _publication_artifacts(delivery_root: Path) -> tuple[Path, ...]:
     receipt = delivery_root / "runtime/publications/pull-requests/receipts/change-a.json"
     branch_operation = delivery_root / "runtime/publications/change-branches/operations/branch-operation.json"
     receipt.parent.mkdir(parents=True, exist_ok=True)
     branch_operation.parent.mkdir(parents=True, exist_ok=True)
     receipt.write_bytes(_canonical({"change_id": "change-a", "operation_id": "draft-operation"}))
     branch_operation.write_bytes(_canonical({"change_id": "change-a", "operation_id": "branch-operation"}))
-    return receipt, branch_operation
+    check_observation = (
+        delivery_root / "runtime/publications/pull-requests/check-observations/change-a" / ("a" * 64 + ".json")
+    )
+    pull_request_observation = (
+        delivery_root / "runtime/publications/pull-requests/pull-request-observations/change-a" / ("b" * 64 + ".json")
+    )
+    for path, operation_id in (
+        (check_observation, "check-observation"),
+        (pull_request_observation, "pull-request-observation"),
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(_canonical({"change_id": "change-a", "operation_id": operation_id}))
+    lock_paths = (
+        delivery_root / "runtime/publications/checkpoints/locks/change-a",
+        delivery_root / "runtime/publications/pull-requests/locks/change-a",
+    )
+    for path in lock_paths:
+        path.mkdir(parents=True, exist_ok=True)
+        (path / ".storage.lock").touch()
+    return receipt, branch_operation, check_observation, pull_request_observation, *lock_paths
 
 
 def test_retirement_plans_legacy_frontier_and_preserves_catalog_snapshot(tmp_path: Path) -> None:
@@ -285,13 +304,12 @@ def test_retirement_ignores_completionless_legacy_frontier(tmp_path: Path) -> No
 
 def test_retirement_removes_per_change_publication_state(tmp_path: Path) -> None:
     repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
-    receipt, branch_operation = _publication_artifacts(delivery_root)
+    artifacts = _publication_artifacts(delivery_root)
     plan = plan_delivery_integration_retirement(repository)
 
     apply_delivery_integration_retirement(plan)
 
-    assert not receipt.exists()
-    assert not branch_operation.exists()
+    assert all(not path.exists() for path in artifacts)
 
 
 def test_retirement_apply_on_empty_workspace_is_idempotent(tmp_path: Path) -> None:
@@ -384,7 +402,7 @@ def test_retirement_recovers_staged_state_after_removal_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     repository, commits, delivery_root, _archive, _branch = _fixture(tmp_path, with_worktree=True)
-    receipt, branch_operation = _publication_artifacts(delivery_root)
+    artifacts = _publication_artifacts(delivery_root)
     plan = plan_delivery_integration_retirement(repository)
 
     def fail_removal(_journal: object) -> None:
@@ -401,8 +419,7 @@ def test_retirement_recovers_staged_state_after_removal_failure(
     worktree = delivery_root / "worktrees" / "change-a"
     assert worktree.is_dir()
     assert _git(worktree, "rev-parse", "HEAD") == commits["baseline"]
-    assert receipt.is_file()
-    assert branch_operation.is_file()
+    assert all(path.exists() for path in artifacts)
     assert not (repository / ".owlbear/delivery/integration-retirement.json").exists()
     assert not (repository / ".owlbear/scratch/delivery-integration-retirement").exists()
 
@@ -419,6 +436,28 @@ def test_retirement_releases_publication_lock_before_unlinking(tmp_path: Path, m
         nonlocal released
         change = journal.changes[0]
         with delivery_integration_retirement.locked_roots((change.publication_lock_path,), blocking=False):
+            released = True
+        original_remove(journal)
+
+    monkeypatch.setattr(delivery_integration_retirement, "_remove_publication_locks", observe_release)
+
+    apply_delivery_integration_retirement(plan)
+
+    assert released
+
+
+def test_retirement_releases_checkpoint_lock_before_unlinking(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
+    checkpoint_lock_path = delivery_root / "runtime/publications/checkpoints/locks/change-a"
+    checkpoint_lock_path.mkdir(parents=True)
+    plan = plan_delivery_integration_retirement(repository)
+    original_remove = delivery_integration_retirement._remove_publication_locks
+    released = False
+
+    def observe_release(journal: object) -> None:
+        nonlocal released
+        change = journal.changes[0]
+        with delivery_integration_retirement.locked_roots((change.publication_state_lock_paths[0],), blocking=False):
             released = True
         original_remove(journal)
 
@@ -510,3 +549,38 @@ def test_retirement_replays_cleanup_phase_after_staging_cleanup_failure(
     assert not journal_path.exists()
     assert not staging_root.exists()
     assert not (delivery_root / "claims/publication-locks/change-a").exists()
+
+
+def test_retirement_recovers_after_cleanup_tree_removed_before_journal_unlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
+    artifacts = _publication_artifacts(delivery_root)
+    plan = plan_delivery_integration_retirement(repository)
+    original_rmtree = delivery_integration_retirement.shutil.rmtree
+    staging_parent = repository / ".owlbear/scratch/delivery-integration-retirement"
+    injected = False
+
+    def remove_then_fail(path: str | Path, *args: object, **kwargs: object) -> None:
+        nonlocal injected
+        if not injected and Path(path).is_relative_to(staging_parent):
+            injected = True
+            original_rmtree(path, *args, **kwargs)
+            message = "injected post-cleanup interruption"
+            raise OSError(message)
+        original_rmtree(path, *args, **kwargs)
+
+    monkeypatch.setattr(delivery_integration_retirement.shutil, "rmtree", remove_then_fail)
+    with pytest.raises(DeliveryIntegrationRetirementError, match="staging cleanup failed"):
+        apply_delivery_integration_retirement(plan)
+
+    journal_path = repository / ".owlbear/delivery/integration-retirement.json"
+    assert journal_path.is_file()
+    assert json.loads(journal_path.read_text(encoding="utf-8"))["phase"] == "cleanup"
+    assert all(not path.exists() for path in artifacts[:4])
+
+    monkeypatch.setattr(delivery_integration_retirement.shutil, "rmtree", original_rmtree)
+    apply_delivery_integration_retirement(plan)
+
+    assert not journal_path.exists()
+    assert not staging_parent.exists()
