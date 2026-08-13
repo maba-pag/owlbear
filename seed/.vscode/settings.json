@@ -68,7 +68,6 @@
     "{{owlbear_abs_path}}"
   ],
   "github.copilot.chat.agent.autoFix": true,
-  "github.copilot.chat.agent.currentEditorContext.enabled": false,
   "github.copilot.chat.anthropic.contextEditing.mode": "clear-tooluse",
   "github.copilot.chat.cli.sessionController.enabled": true,
   "github.copilot.chat.executionSubagent.enabled": true,
