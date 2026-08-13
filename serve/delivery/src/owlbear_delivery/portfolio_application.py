@@ -631,7 +631,6 @@ class _PreparedSource:
 
 @dataclass(frozen=True)
 class _PreparedIntegration:
-    context: IntegrationContext
     candidate: DeliveryIntegrationCandidate
     preparation: AtomicIntegrationPreparation
 
@@ -2051,7 +2050,7 @@ class PortfolioApplication:
     ) -> _PreparedIntegration:
         candidate = self._integration_candidate(runtime, context, snapshot)
         preparation = self._workspace_manager.prepare_integration_candidate(candidate)
-        return _PreparedIntegration(context, candidate, preparation)
+        return _PreparedIntegration(candidate, preparation)
 
     def _revalidate_for_external_acceptance(
         self,
@@ -2587,11 +2586,6 @@ def _canonical(payload: object) -> bytes:
 def _integration_retry_condition(code: DeliveryIntegrationAttentionCode) -> str:
     if code == DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED:
         return "Publish the reviewed Change through the provider and observe external acceptance."
-    if code == DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED:
-        return (
-            "Correct the Integration profile or failing candidate verification step, "
-            "then re-run Integration through Delivery orchestration."
-        )
     disposition = integration_attention_disposition(code)
     if disposition == DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED:
         return "Admit a reviewed Integration repair for this attention, then retry Integration."
