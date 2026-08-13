@@ -184,9 +184,6 @@ class RetainedChangeWorktreeResponse(_TargetProtocolModel):
         return cls(**values)
 
 
-type RetainedChangeWorktreeList = tuple[RetainedChangeWorktreeResponse, ...]
-
-
 class DeliveryResultPublication(_TargetProtocolModel):
     """Build publication response with its transition-ready output reference."""
 
@@ -318,7 +315,6 @@ __all__ = [
     "PublishDeliveryResultRequest",
     "RepairClaimContextParams",
     "RepairClaimContextRequest",
-    "RetainedChangeWorktreeList",
     "RetainedChangeWorktreeResponse",
     "ReviseDesignSessionParams",
     "ReviseDesignSessionRequest",

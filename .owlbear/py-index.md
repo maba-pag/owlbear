@@ -1271,6 +1271,7 @@ Per-change writer coordination and Git workspace management.
   - `def _registered_worktrees(self) -> dict[str, _RegisteredGitWorktree]`
   - `def _change_branch_heads(self) -> dict[str, str]`
   - `def _filesystem_change_ids(self) -> set[str]`
+  - `def _worktree_present(expected_path: Path) -> bool`
   - `def _coordination_attention(change_id: str, coordination: ChangeCoordination | None, expected_path: Path) -> set[ChangeWorktreeAttentionCode]`
   - `def _registered_attention(registered: _RegisteredGitWorktree | None, expected_branch: str) -> set[ChangeWorktreeAttentionCode]`
   - `def _retained_attention(self, change_id: str, coordination: ChangeCoordination | None, registered: _RegisteredGitWorktree | None, branch_head: str | None, expected_path: Path) -> set[ChangeWorktreeAttentionCode]`

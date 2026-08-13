@@ -41,6 +41,7 @@ _INVENTORY_FUNCTIONS = frozenset(
         "_registered_attention",
         "_retained_attention",
         "_retained_worktree",
+        "_worktree_present",
     }
 )
 _MUTATING_GIT_COMMANDS = frozenset(

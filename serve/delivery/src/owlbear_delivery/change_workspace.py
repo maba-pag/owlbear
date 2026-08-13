@@ -929,6 +929,10 @@ class ChangeWorkspaceManager:
         return {entry.name for entry in self._worktree_root.iterdir() if _is_change_id(entry.name)}
 
     @staticmethod
+    def _worktree_present(expected_path: Path) -> bool:
+        return expected_path.exists() and expected_path.is_dir() and not expected_path.is_symlink()
+
+    @staticmethod
     def _coordination_attention(
         change_id: str,
         coordination: ChangeCoordination | None,
@@ -973,7 +977,7 @@ class ChangeWorkspaceManager:
         expected_branch = f"owlbear/change/{change_id}"
         attention = self._coordination_attention(change_id, coordination, expected_path)
         attention.update(self._registered_attention(registered, expected_branch))
-        worktree_present = expected_path.exists() and expected_path.is_dir() and not expected_path.is_symlink()
+        worktree_present = self._worktree_present(expected_path)
         if not worktree_present:
             attention.add(ChangeWorktreeAttentionCode.WORKTREE_MISSING)
         if branch_head is None:
@@ -989,7 +993,7 @@ class ChangeWorkspaceManager:
     ) -> RetainedChangeWorktree:
         expected_branch = f"owlbear/change/{change_id}"
         expected_path = self._worktree_root / change_id
-        worktree_present = expected_path.exists() and expected_path.is_dir() and not expected_path.is_symlink()
+        worktree_present = self._worktree_present(expected_path)
         attention = self._retained_attention(change_id, coordination, registered, branch_head, expected_path)
         return RetainedChangeWorktree(
             change_id=change_id,

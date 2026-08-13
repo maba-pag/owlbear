@@ -227,9 +227,6 @@ class TargetMCPAdapter:
 
         def project() -> tuple[RetainedChangeWorktreeResponse, ...]:
             projections = self._application.list_retained_change_worktrees()
-            if not isinstance(projections, tuple):
-                message = f"unsupported structured output: {type(projections).__name__}"
-                raise TypeError(message)
             return tuple(RetainedChangeWorktreeResponse.from_projection(item) for item in projections)
 
         return cast("list[object]", self._call(params, project))
