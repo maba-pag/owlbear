@@ -72,6 +72,10 @@ def _literal_string(node: ast.AST) -> str | None:
     return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None
 
 
+def _scope_name(scope: list[str]) -> str:
+    return scope[-1] if scope else "<module>"
+
+
 def _sequence_contains_worktree_add(node: ast.AST) -> bool:
     if isinstance(node, ast.Starred):
         return _sequence_contains_worktree_add(node.value)
@@ -147,12 +151,7 @@ class _ManagedWorktreeRegistrationVisitor(ast.NodeVisitor):
         self._visit_function(node)
 
     def visit_Call(self, node: ast.Call) -> None:
-        if (
-            isinstance(node.func, ast.Attribute)
-            and node.func.attr == "_register_worktree"
-            and self.classes
-            and self.functions
-        ):
+        if isinstance(node.func, ast.Attribute) and node.func.attr == "_register_worktree":
             self.matches.append((node.lineno, tuple(self.classes), tuple(self.functions)))
         self.generic_visit(node)
 
@@ -263,26 +262,60 @@ def test_worktree_registration_has_only_named_lifecycle_callers() -> None:
         visitor.scan()
         matches.extend((path, lineno, classes, functions) for lineno, classes, functions in visitor.matches)
 
-    actual = {(classes[-1], functions[-1]) for _path, _line, classes, functions in matches}
+    actual = {
+        (_scope_name(list(classes)), _scope_name(list(functions))) for _path, _line, classes, functions in matches
+    }
     assert actual == _REGISTER_WORKTREE_CALLERS, "Unexpected worktree registration callers: " + repr(matches)
 
 
-def test_completion_has_one_provider_acceptance_callsite() -> None:
+def _is_none_guard(node: ast.AST, name: str) -> bool:
+    return (
+        isinstance(node, ast.Compare)
+        and isinstance(node.left, ast.Name)
+        and node.left.id == name
+        and len(node.ops) == 1
+        and isinstance(node.ops[0], ast.Is)
+        and len(node.comparators) == 1
+        and isinstance(node.comparators[0], ast.Constant)
+        and node.comparators[0].value is None
+    )
+
+
+def test_completion_has_one_application_callsite_and_merged_latch_guard() -> None:
     matches: list[tuple[Path, int, tuple[str, ...], tuple[str, ...]]] = []
     for path in _source_files():
         visitor = _CompletionCallVisitor(path)
         visitor.scan()
         matches.extend((path, lineno, classes, functions) for lineno, classes, functions in visitor.matches)
 
-    actual = {(classes[-1], functions[-1]) for _path, _line, classes, functions in matches}
+    actual = {
+        (_scope_name(list(classes)), _scope_name(list(functions))) for _path, _line, classes, functions in matches
+    }
     assert actual == _COMPLETION_CALLERS, "Unexpected completion callsites: " + repr(matches)
 
     runtime = _REPO_ROOT / "serve/delivery/src/owlbear_delivery/delivery_runtime.py"
-    source = runtime.read_text(encoding="utf-8")
-    completion_start = source.index("    def complete_change(")
-    completion_end = source.index("\n    def ", completion_start + 1)
-    completion_body = source[completion_start:completion_end]
-    assert "merged_pull_request_latch" in completion_body
+    module = ast.parse(runtime.read_text(encoding="utf-8"), filename=str(runtime))
+    runtime_class = next(
+        node for node in module.body if isinstance(node, ast.ClassDef) and node.name == "DeliveryRuntime"
+    )
+    completion = next(
+        node
+        for node in runtime_class.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "complete_change"
+    )
+    assert any(
+        isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "latch" for target in node.targets)
+        and isinstance(node.value, ast.Attribute)
+        and isinstance(node.value.value, ast.Name)
+        and node.value.value.id == "frontier"
+        and node.value.attr == "merged_pull_request_latch"
+        for node in ast.walk(completion)
+    )
+    assert any(
+        isinstance(node, ast.If) and any(_is_none_guard(test, "latch") for test in ast.walk(node.test))
+        for node in ast.walk(completion)
+    )
 
 
 def test_delivery_source_has_no_retired_local_integration_producers() -> None:
