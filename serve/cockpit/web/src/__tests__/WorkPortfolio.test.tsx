@@ -321,7 +321,7 @@ it('summarizes all current Change phases and nonzero operating states', () => {
   const totals: WorkItemPortfolioResponse['totals'] = {
     total: 3,
     complete: 0,
-    needs: { you: 1, dependency: 1, none: 2 },
+    needs: { you: 1, dependency: 1, none: 1 },
     activity: { idle: 1, ready: 1, working: 1 },
   }
   const onNeedsFilter = vi.fn()
