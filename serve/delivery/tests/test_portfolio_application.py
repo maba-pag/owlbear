@@ -2079,6 +2079,51 @@ def _publish_merge_conflict_attention(
     return attention
 
 
+def _activate_legacy_integration_repair(
+    application: PortfolioApplication,
+    runtimes: dict[str, DeliveryRuntime],
+    coordinator: PortfolioCoordinator,
+    change_id: str,
+):
+    claim = application._new_claim(DeliveryWorkerRole.INTEGRATION_REPAIRER, None)  # noqa: SLF001
+    runtimes[change_id].activate_integration_repair_claim(claim)
+    writer = ChangeWriter(
+        attempt_id=claim.attempt_id,
+        claim_id=claim.claim_id,
+        actor_id=claim.owner_id,
+        process_id=claim.process_id,
+        claimed_at=claim.started_at,
+        job_id=1,
+        kind="repair",
+    )
+    coordination = coordinator.acquire(change_id, writer)
+    assert coordination.writer == writer
+    return application.show_integration_repair_context(change_id, claim.attempt_id, claim.claim_id).launch
+
+
+def test_acquisition_does_not_create_integration_repair_claim(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    _target_before, reviewed = _review_product_change(coordinator, "change-a", "change side\n")
+    repository = tmp_path / "repository"
+    (repository / "product.txt").write_text("target side\n", encoding="utf-8")
+    _git(repository, "add", "product.txt")
+    _git(repository, "commit", "-m", "concurrent target")
+    target_head = _git(repository, "rev-parse", "main")
+    application._workspace_manager.refresh_integration_target("change-a")  # noqa: SLF001
+    _publish_merge_conflict_attention(runtimes, state_root, "change-a", reviewed, target_head)
+
+    acquired = application.acquire_frontier_work()
+
+    assert acquired.repair_launch_packages == ()
+    assert acquired.repair_failures == ()
+    assert acquired.integration_attention[0].code == DeliveryIntegrationAttentionCode.MERGE_CONFLICT
+    assert runtimes["change-a"].integration_repair_claim() is None
+    assert coordinator.show("change-a").writer is None
+
+
 def _prepare_reviewed_integration_repair(tmp_path: Path):
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
@@ -2090,10 +2135,9 @@ def _prepare_reviewed_integration_repair(tmp_path: Path):
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "concurrent target")
     target_head = _git(repository, "rev-parse", "main")
+    application._workspace_manager.refresh_integration_target("change-a")  # noqa: SLF001
     attention = _publish_merge_conflict_attention(runtimes, state_root, "change-a", reviewed, target_head)
-    acquired = application.acquire_frontier_work()
-    assert len(acquired.repair_launch_packages) == 1
-    launch = acquired.repair_launch_packages[0]
+    launch = _activate_legacy_integration_repair(application, runtimes, coordinator, "change-a")
     worktree = coordinator.show("change-a").worktree_path
     (worktree / "product.txt").write_text("target side\n", encoding="utf-8")
     candidate = application.create_integration_repair_candidate(
@@ -2133,8 +2177,9 @@ def test_integration_repair_candidate_serializes_independent_applications(  # no
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "concurrent target")
     target_head = _git(repository, "rev-parse", "main")
+    application_a._workspace_manager.refresh_integration_target("change-a")  # noqa: SLF001
     attention = _publish_merge_conflict_attention(runtimes, state_root, "change-a", reviewed, target_head)
-    launch = application_a.acquire_frontier_work().repair_launch_packages[0]
+    launch = _activate_legacy_integration_repair(application_a, runtimes, coordinator_a, "change-a")
     worktree = coordinator_a.show("change-a").worktree_path
     (worktree / "product.txt").write_text("target side\n", encoding="utf-8")
     application_b, coordinator_b, manager_b = _reopen_portfolio(tmp_path, state_root, runtimes)
@@ -2214,7 +2259,7 @@ def test_integration_repair_candidate_serializes_independent_applications(  # no
     assert attention.change_head == reviewed
 
 
-def test_repair_recovery_preserves_worktree_for_next_claim(tmp_path: Path) -> None:
+def test_repair_recovery_preserves_worktree_without_reacquisition(tmp_path: Path) -> None:
     application, _runtimes, coordinator, _state_root, repair, first_claim = _prepare_reviewed_integration_repair(
         tmp_path
     )
@@ -2229,17 +2274,12 @@ def test_repair_recovery_preserves_worktree_for_next_claim(tmp_path: Path) -> No
             first_claim.claim_id,
         )
         acquired = application.acquire_frontier_work()
-        assert len(acquired.repair_launch_packages) == 1
-        second_launch = acquired.repair_launch_packages[0]
-        context = application.show_integration_repair_context(
-            "change-a",
-            second_launch.claim.attempt_id,
-            second_launch.claim.claim_id,
-        )
 
         assert recovered.preserved_commit == repair.reviewed_repair_commit
         assert os.path.samestat(worktree.stat(), original_directory)
-        assert context.launch == second_launch
+        assert _git(worktree, "rev-parse", "HEAD") == repair.prior_change_head
+        assert acquired.repair_launch_packages == ()
+        assert acquired.repair_failures == ()
     finally:
         os.close(directory_fd)
 
@@ -2693,7 +2733,7 @@ def test_reviewed_integration_repair_advances_boundary_without_local_completion(
     assert {path.name: path.read_bytes() for path in (tmp_path / "packages/change-a").iterdir()} == package_bytes
 
 
-def test_repair_authority_attention_releases_claim_and_is_not_reacquired(tmp_path: Path) -> None:
+def test_repair_authority_attention_releases_claim_and_leaves_attention_visible(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
@@ -2704,9 +2744,9 @@ def test_repair_authority_attention_releases_claim_and_is_not_reacquired(tmp_pat
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "concurrent target")
     target_head = _git(repository, "rev-parse", "main")
+    application._workspace_manager.refresh_integration_target("change-a")  # noqa: SLF001
     merge_attention = _publish_merge_conflict_attention(runtimes, state_root, "change-a", reviewed, target_head)
-    acquired = application.acquire_frontier_work()
-    launch = acquired.repair_launch_packages[0]
+    launch = _activate_legacy_integration_repair(application, runtimes, coordinator, "change-a")
 
     attention = application.publish_integration_repair_authority_attention(
         launch.claim.attempt_id,
@@ -2726,6 +2766,7 @@ def test_repair_authority_attention_releases_claim_and_is_not_reacquired(tmp_pat
     assert CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes()).change_ids == ()
     refreshed = application.acquire_frontier_work()
     assert refreshed.repair_launch_packages == ()
+    assert refreshed.repair_failures == ()
     assert refreshed.integration_attention[0].code == DeliveryIntegrationAttentionCode.REPAIR_AUTHORITY
 
 
@@ -2740,8 +2781,9 @@ def test_repair_authority_attention_preserves_claim_when_worktree_is_dirty(tmp_p
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "concurrent target")
     target_head = _git(repository, "rev-parse", "main")
+    application._workspace_manager.refresh_integration_target("change-a")  # noqa: SLF001
     _publish_merge_conflict_attention(runtimes, _state_root, "change-a", reviewed, target_head)
-    launch = application.acquire_frontier_work().repair_launch_packages[0]
+    launch = _activate_legacy_integration_repair(application, runtimes, coordinator, "change-a")
     (launch.worktree_path / "owned-edit.txt").write_text("uncommitted\n", encoding="utf-8")
     request = DeliveryIntegrationRepairAuthorityAttention(
         attention_id=launch.attention.attention_id,

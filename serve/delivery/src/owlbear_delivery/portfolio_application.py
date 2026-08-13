@@ -1392,18 +1392,7 @@ class PortfolioApplication:
             )
             available = max(self._execution_capacity - occupied, 0)
             launches: list[DeliveryLaunchPackage] = []
-            repair_launches: list[DeliveryIntegrationRepairLaunchPackage] = []
             failures: list[DeliveryAcquisitionFailure] = []
-            repair_failures: list[DeliveryIntegrationRepairAcquisitionFailure] = []
-            for change_id in self._repair_candidates():
-                if available == 0 or not self._coordinator.writer_capacity_available():
-                    break
-                launch = self._activate_repair_candidate(change_id)
-                available -= 1
-                if isinstance(launch, DeliveryIntegrationRepairAcquisitionFailure):
-                    repair_failures.append(launch)
-                    continue
-                repair_launches.append(launch)
             for candidate in self._candidates():
                 if available == 0:
                     break
@@ -1425,10 +1414,8 @@ class PortfolioApplication:
                 launches.append(launch)
             return DeliveryAcquisitionResult(
                 launch_packages=tuple(launches),
-                repair_launch_packages=tuple(repair_launches),
                 integration_attention=self.list_integration_attention(),
                 failures=tuple(failures),
-                repair_failures=tuple(repair_failures),
             )
 
     def show_plan_context(
@@ -1719,29 +1706,6 @@ class PortfolioApplication:
             )
         return _PreparedSource(package, coordination, source_head)
 
-    def _repair_candidates(self) -> tuple[str, ...]:
-        return self._repair_candidate_ids(self._portfolio_snapshots())
-
-    def _repair_candidate_ids(
-        self,
-        snapshots: tuple[DeliveryPortfolioSnapshot, ...],
-    ) -> tuple[str, ...]:
-        candidates = []
-        for snapshot in snapshots:
-            attention = snapshot.frontier.integration_attention
-            if (
-                self._snapshot_change_stage(snapshot) != DeliveryChangeStage.INTEGRATION
-                or self._snapshot_has_active_claims(snapshot)
-                or snapshot.frontier.integration_repair_claim is not None
-                or attention is None
-                or integration_attention_disposition(attention.code)
-                != DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED
-                or self._integration_attention_is_superseded(snapshot.contract.change_id, attention)
-            ):
-                continue
-            candidates.append(snapshot.contract.change_id)
-        return tuple(candidates)
-
     def _prepare_repair_source(
         self,
         change_id: str,
@@ -1760,42 +1724,6 @@ class PortfolioApplication:
                 retry_condition="Restore the admitted package and clean reviewed repair boundary.",
             )
         return _PreparedSource(package, coordination, source_head)
-
-    def _activate_repair_candidate(
-        self,
-        change_id: str,
-    ) -> DeliveryIntegrationRepairLaunchPackage | DeliveryIntegrationRepairAcquisitionFailure:
-        runtime = self._runtime(change_id)
-        source = self._prepare_repair_source(change_id, runtime)
-        if isinstance(source, DeliveryIntegrationRepairAcquisitionFailure):
-            return source
-        claim = self._new_claim(DeliveryWorkerRole.INTEGRATION_REPAIRER, None)
-        runtime.activate_integration_repair_claim(claim)
-        try:
-            coordination = self._coordinator.acquire(
-                change_id,
-                ChangeWriter(
-                    attempt_id=claim.attempt_id,
-                    claim_id=claim.claim_id,
-                    actor_id=claim.owner_id,
-                    process_id=claim.process_id,
-                    claimed_at=claim.started_at,
-                    job_id=1,
-                    kind="repair",
-                ),
-            )
-        except CoordinationConflictError as exc:
-            return DeliveryIntegrationRepairAcquisitionFailure(
-                change_id=change_id,
-                attempt_id=claim.attempt_id,
-                claim_id=claim.claim_id,
-                code=exc.code,
-                detail=str(exc),
-                retry_condition="Recover the exact failed repair claim after reconciling writer custody.",
-            )
-        if coordination.writer is None:
-            self._fail("repair writer acquisition did not publish custody")
-        return self._repair_launch_package(change_id, runtime, claim, source, coordination.writer)
 
     def _current_repair_launch(
         self,
