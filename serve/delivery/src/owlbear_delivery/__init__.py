@@ -517,7 +517,6 @@ __all__ = [
     "TargetRuntimeReferenceError",
     "TargetRuntimeState",
     "TargetTask",
-    "TargetVerificationProfile",
     "TaskPlanScope",
     "UpdateGeneratedPullRequestSummary",
     "UpdatePublicationPullRequest",
