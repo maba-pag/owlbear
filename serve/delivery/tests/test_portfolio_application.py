@@ -500,7 +500,7 @@ def test_finalization_uses_managed_head_and_invalidates_observed_drift(tmp_path:
     assert isinstance(invalidation, DeliveryFinalizationInvalidationReceipt)
     assert invalidation.expected_head == exact_head
     assert invalidation.observed_head == observed_head
-    assert runtimes["change-a"].change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
+    assert runtimes["change-a"].change_stage() == DeliveryChangeStage.BUILDING
     assert application.list_integration_attention() == ()
 
 
@@ -693,7 +693,7 @@ def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Pat
     assert invalidation.expected_head == exact_head
     assert invalidation.observed_head == "f" * 40
     assert application._workspace_manager.observed_change_head("change-a") == exact_head  # noqa: SLF001
-    assert runtimes["change-a"].change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
+    assert runtimes["change-a"].change_stage() == DeliveryChangeStage.BUILDING
     assert pull_requests[0].draft is True
     assert provider.set_pull_request_draft_state.call_count == 3
 
@@ -1912,6 +1912,30 @@ def test_work_item_queries_do_not_resolve_integration_target(
     assert resolved == []
     assert "internal semantic body sentinel" not in serialized
     assert "internal completion body sentinel" not in serialized
+
+
+def test_change_level_legacy_context_requires_completed_building_change(tmp_path: Path) -> None:
+    completed_root = tmp_path / "completed"
+    completed_root.mkdir()
+    completed_application, _runtimes, _coordinator, _state_root = _portfolio(
+        completed_root,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+
+    context = completed_application.show_operator_context("change-a", "change-a")
+
+    assert context.stage == DeliveryStage.COMPLETED
+    assert completed_application.acquire_frontier_work().launch_packages == ()
+    assert completed_application.portfolio_operating_view().queued_for_orchestration == ()
+
+    in_flight_root = tmp_path / "in-flight"
+    in_flight_root.mkdir()
+    in_flight_application, _runtimes, _coordinator, _state_root = _portfolio(
+        in_flight_root,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    with pytest.raises(PortfolioApplicationError, match="legacy attention context"):
+        in_flight_application.show_operator_context("change-a", "change-a")
 
 
 def test_operator_request_resolution_updates_context_and_resumed_plan(tmp_path: Path) -> None:

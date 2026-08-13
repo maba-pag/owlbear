@@ -568,7 +568,7 @@ def test_finalization_binds_exact_head_and_invalidates_on_head_drift(tmp_path: P
     assert runtime.finalization() is None
     assert runtime.ready_receipt() is None
     assert runtime.finalization_invalidation() == invalidation
-    assert runtime.change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
+    assert runtime.change_stage() == DeliveryChangeStage.BUILDING
     assert runtime.checkpoint_publication_state().pending_checkpoint is None
 
 
@@ -602,6 +602,16 @@ def test_merged_pull_request_latch_is_monotonic_and_rejects_regression(tmp_path:
         runtime.latch_merged_pull_request(_pull_request_observation(merged=False))
 
     assert runtime.merged_pull_request_latch() == first
+
+
+def test_unfinalized_completed_change_uses_building_stage(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+
+    assert runtime.change_stage() == DeliveryChangeStage.BUILDING
+    assert DeliveryChangeStage.BUILDING.value == "building"
 
 
 def test_completion_receipt_and_terminal_frontier_publish_atomically(tmp_path: Path) -> None:
@@ -1489,7 +1499,6 @@ def test_administrative_backward_move_invalidates_completed_dependents_only(tmp_
     )
     path.write_bytes(_canonical(frontier.model_copy(update={"pending_checkpoint": pending})))
     runtime = DeliveryRuntime(tmp_path, _contract())
-    assert runtime.change_stage() == DeliveryChangeStage.INTEGRATION
     before = runtime.frontier_bytes()
     preview = runtime.preview_administrative_move("OUT-001", DeliveryStage.PLANNING)
 
@@ -1516,7 +1525,7 @@ def test_administrative_backward_move_invalidates_completed_dependents_only(tmp_
     assert retained is not None
     assert retained.head is None
     assert retained.triggers == (pending.triggers[0], pending.triggers[2])
-    assert runtime.change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
+    assert runtime.change_stage() == DeliveryChangeStage.BUILDING
 
 
 def test_administrative_move_retires_integration_attention(tmp_path: Path) -> None:
@@ -1547,7 +1556,7 @@ def test_administrative_move_retires_integration_attention(tmp_path: Path) -> No
     )
 
     assert runtime.integration_attention() is None
-    assert runtime.change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
+    assert runtime.change_stage() == DeliveryChangeStage.BUILDING
 
 
 def test_administrative_move_rejects_active_integration_repair(tmp_path: Path) -> None:

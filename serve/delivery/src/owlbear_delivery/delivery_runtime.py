@@ -42,8 +42,7 @@ class DeliveryChangeStage(StrEnum):
     """Change lifecycle derived from canonical outcome state."""
 
     DESIGN = "design"
-    ACTIVE_DELIVERY = "active-delivery"
-    INTEGRATION = "integration"
+    BUILDING = "building"
     FINALIZED = "finalized"
     AWAITING_MERGE = "awaiting-merge"
     COMPLETED = "completed"
@@ -1539,9 +1538,7 @@ class DeliveryRuntime:
         stages = {binding.stage for binding in frontier.bindings}
         if DeliveryStage.DESIGN in stages:
             return DeliveryChangeStage.DESIGN
-        if stages == {DeliveryStage.COMPLETED} and frontier.finalization_invalidation is None:
-            return DeliveryChangeStage.INTEGRATION
-        return DeliveryChangeStage.ACTIVE_DELIVERY
+        return DeliveryChangeStage.BUILDING
 
     def activate_claim(self, request: ActivateDeliveryClaim) -> OutcomeAuthorityBinding:
         """Bind one fresh claim to a currently claimable outcome."""

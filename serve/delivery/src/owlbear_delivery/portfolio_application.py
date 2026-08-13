@@ -1135,9 +1135,9 @@ class PortfolioApplication:
         self,
         snapshot: DeliveryPortfolioSnapshot,
     ) -> tuple[int, int, int, str, PortfolioWorkReference] | None:
-        if self._snapshot_change_stage(
+        if self._snapshot_change_stage(snapshot) != DeliveryChangeStage.BUILDING or self._snapshot_has_active_claims(
             snapshot
-        ) != DeliveryChangeStage.ACTIVE_DELIVERY or self._snapshot_has_active_claims(snapshot):
+        ):
             return None
         completed = {
             binding.outcome_id for binding in snapshot.frontier.bindings if binding.stage == DeliveryStage.COMPLETED
@@ -1200,8 +1200,12 @@ class PortfolioApplication:
         """Show current bounded operator state from one exact runtime binding."""
         runtime = self._runtime(change_id)
         if outcome_id == change_id:
-            if runtime.change_stage() != DeliveryChangeStage.INTEGRATION:
-                self._fail("change work item is not in Integration")
+            if (
+                runtime.change_stage() != DeliveryChangeStage.BUILDING
+                or any(binding.stage != DeliveryStage.COMPLETED for binding in runtime.bindings())
+                or runtime.finalization_invalidation() is not None
+            ):
+                self._fail("change work item is not eligible for retained legacy attention context")
             return DeliveryOperatorContext(
                 change_id=change_id,
                 outcome_id=outcome_id,
@@ -1285,9 +1289,7 @@ class PortfolioApplication:
         stages = {binding.stage for binding in snapshot.frontier.bindings}
         if DeliveryStage.DESIGN in stages:
             return DeliveryChangeStage.DESIGN
-        if stages == {DeliveryStage.COMPLETED} and snapshot.frontier.finalization_invalidation is None:
-            return DeliveryChangeStage.INTEGRATION
-        return DeliveryChangeStage.ACTIVE_DELIVERY
+        return DeliveryChangeStage.BUILDING
 
     @staticmethod
     def _snapshot_has_active_claims(snapshot: DeliveryPortfolioSnapshot) -> bool:
@@ -1506,7 +1508,7 @@ class PortfolioApplication:
     def _candidates(self) -> tuple[_Candidate, ...]:
         candidates = []
         for change_id, runtime in self._runtimes.items():
-            if runtime.active_claims() or runtime.change_stage() != DeliveryChangeStage.ACTIVE_DELIVERY:
+            if runtime.active_claims() or runtime.change_stage() != DeliveryChangeStage.BUILDING:
                 continue
             claimable = set(runtime.claimable_outcome_ids())
             ranked = []
