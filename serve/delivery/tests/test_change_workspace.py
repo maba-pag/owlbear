@@ -480,6 +480,7 @@ def test_restart_recovers_from_each_git_interruption(tmp_path: Path, interruptio
 
     assert _git(repository, "rev-parse", recovered.branch) == initial
     assert _git(recovered.worktree_path, "rev-parse", "HEAD") == initial
+    assert recovered.last_reviewed_commit == initial
     assert recovered.writer is None
 
 

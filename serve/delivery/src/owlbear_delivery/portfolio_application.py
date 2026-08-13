@@ -142,7 +142,6 @@ if TYPE_CHECKING:
         CompletedHistoryCatalog,
     )
     from owlbear_delivery.design_package import DesignPackageStore, VerifiedDesignPackage
-    from owlbear_delivery.integration_verification import IntegrationVerificationReceipt, IntegrationVerifier
     from owlbear_delivery.target_admission import (
         DeliveryAdmissionRequest,
         DeliveryAdmissionResult,
@@ -600,7 +599,6 @@ class PortfolioApplicationDependencies:
     authority_registry: DeliveryAuthorityRegistry
     coordinator: PortfolioCoordinator
     workspace_manager: ChangeWorkspaceManager
-    integration_verifier: IntegrationVerifier
     completed_history_catalog: CompletedHistoryCatalog | None = None
     change_branch_publisher: ChangeBranchPublisher | None = None
     draft_pull_request_publisher: DraftPullRequestPublisher | None = None
@@ -660,7 +658,6 @@ class PortfolioApplication:
         self._package_root = config.package_root.resolve()
         self._coordinator = dependencies.coordinator
         self._workspace_manager = dependencies.workspace_manager
-        self._integration_verifier = dependencies.integration_verifier
         self._finalization_verification_store = FinalizationVerificationStore(self._target_root)
         self._finalization_verifier = FinalizationVerifier(
             self._workspace_manager.repository,
@@ -1919,8 +1916,6 @@ class PortfolioApplication:
                 self._workspace_manager.discard_stale_integration_candidate(change_id)
                 return self._revalidate_for_external_acceptance(runtime, context, prepared)
 
-        receipt = self._integration_verifier.verify(prepared.candidate, prepared.preparation)
-
         with self._coordinator.integration_lock():
             runtime = self._runtime(change_id)
             existing = runtime.integration_completion()
@@ -1928,17 +1923,7 @@ class PortfolioApplication:
                 self._workspace_manager.discard_stale_integration_candidate(change_id)
                 self._cleanup_integration(change_id, existing)
                 return DeliveryIntegrationResult(change_id=change_id, completion=existing, replayed=True)
-            # Evidence stays bound to the heads that produced the receipt; publication revalidates current heads.
-            if not receipt.passed:
-                result = self._integration_attention(
-                    runtime,
-                    prepared.context,
-                    DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED,
-                    self._verification_diagnostics(receipt),
-                    candidate=prepared.candidate,
-                )
-            else:
-                result = self._publish_verified_integration(runtime, prepared.context, prepared)
+            result = self._revalidate_for_external_acceptance(runtime, prepared.context, prepared)
             self._workspace_manager.discard_integration_candidate(prepared.preparation)
             if result.completion is not None:
                 self._cleanup_integration(change_id, result.completion)
@@ -2082,43 +2067,6 @@ class PortfolioApplication:
         preparation = self._workspace_manager.prepare_integration_candidate(candidate)
         return _PreparedIntegration(context, capture, snapshot, candidate, preparation)
 
-    def _publish_verified_integration(
-        self,
-        runtime: DeliveryRuntime,
-        context: IntegrationContext,
-        prepared: _PreparedIntegration,
-    ) -> DeliveryIntegrationResult:
-        runtime_bytes, result_history_bytes = runtime.completion_capture_bytes()
-        if (
-            runtime_bytes != prepared.capture.runtime_bytes
-            or result_history_bytes != prepared.capture.result_history_bytes
-        ):
-            return self._integration_attention(
-                runtime,
-                context,
-                DeliveryIntegrationAttentionCode.PACKAGE_MUTATED,
-                ("Delivery runtime changed during candidate verification",),
-                candidate=prepared.candidate,
-            )
-        try:
-            return self._package_store.capture_completion(
-                prepared.capture,
-                validation_callback=lambda snapshot: self._require_verified_snapshot(prepared, snapshot),
-                publication_callback=lambda verified: self._revalidate_for_external_acceptance(
-                    runtime,
-                    context,
-                    verified,
-                ),
-            )
-        except DesignPackageConflictError as exc:
-            return self._integration_attention(
-                runtime,
-                context,
-                DeliveryIntegrationAttentionCode.PACKAGE_MUTATED,
-                (str(exc),),
-                candidate=prepared.candidate,
-            )
-
     def _revalidate_for_external_acceptance(
         self,
         runtime: DeliveryRuntime,
@@ -2149,27 +2097,6 @@ class PortfolioApplication:
             ("local target publication is disabled; completion requires externally observed acceptance",),
             candidate=prepared.candidate,
         )
-
-    @staticmethod
-    def _require_verified_snapshot(
-        prepared: _PreparedIntegration,
-        snapshot: CompletionPackageSnapshot,
-    ) -> _PreparedIntegration:
-        if snapshot != prepared.snapshot:
-            message = "completion package identity changed during candidate verification"
-            raise DesignPackageConflictError(message)
-        return prepared
-
-    @staticmethod
-    def _verification_diagnostics(receipt: IntegrationVerificationReceipt) -> tuple[str, ...]:
-        diagnostics = [f"verification {receipt.status.value}", *receipt.diagnostics]
-        for step in receipt.steps:
-            diagnostics.append(f"step {step.step_id}: {step.status.value}")
-            if step.stderr:
-                diagnostics.append(step.stderr[:1_024])
-            elif step.stdout and step.status.value != "passed":
-                diagnostics.append(step.stdout[:1_024])
-        return tuple(diagnostics[:16])
 
     def _integration_candidate(
         self,

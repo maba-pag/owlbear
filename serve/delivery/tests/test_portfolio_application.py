@@ -18,7 +18,6 @@ import pytest
 
 from owlbear_delivery import (
     AdministrativeDeliveryMove,
-    AtomicIntegrationPreparation,
     CapacityLedger,
     ChangeBranchPublicationReceipt,
     ChangeBranchPublisher,
@@ -46,7 +45,6 @@ from owlbear_delivery import (
     DeliveryFinalizationReceipt,
     DeliveryFrontier,
     DeliveryIntegrationAttentionCode,
-    DeliveryIntegrationCandidate,
     DeliveryIntegrationCompletion,
     DeliveryIntegrationRepair,
     DeliveryIntegrationRepairAuthorityAttention,
@@ -96,9 +94,6 @@ from owlbear_delivery import (
 )
 from owlbear_delivery.integration_verification import (
     INTEGRATION_VERIFICATION_PROFILE_PATH,
-    IntegrationVerificationReceipt,
-    IntegrationVerificationStatus,
-    IntegrationVerifier,
 )
 from owlbear_delivery.publication_provider import (
     PublicationProviderError,
@@ -445,7 +440,6 @@ def _portfolio(  # noqa: PLR0913
     *,
     writer_capacity: int = 1,
     execution_capacity: int = 3,
-    candidate_proof: Callable[[DeliveryIntegrationCandidate, str], tuple[str, ...]] | None = None,
     clock: Callable[[], str] = lambda: "2026-08-04T00:00:00Z",
 ):
     repository = tmp_path / "repository"
@@ -473,26 +467,6 @@ def _portfolio(  # noqa: PLR0913
         runtimes[change_id] = _runtime(state_root, contract, manager, stage, coordination.last_reviewed_commit)
     identities = (f"identity-{index:03}" for index in itertools.count(1))
 
-    class CallbackVerifier:
-        def verify(
-            self,
-            candidate: DeliveryIntegrationCandidate,
-            preparation: AtomicIntegrationPreparation,
-        ) -> IntegrationVerificationReceipt:
-            assert preparation.candidate_commit is not None
-            diagnostics = (
-                candidate_proof(candidate, preparation.candidate_commit)
-                if candidate_proof is not None
-                else ("candidate proof dependency is not configured",)
-            )
-            return IntegrationVerificationReceipt(
-                request_id=candidate.candidate_id,
-                candidate_commit=preparation.candidate_commit,
-                profile_digest="0" * 64,
-                status=(IntegrationVerificationStatus.FAILED if diagnostics else IntegrationVerificationStatus.PASSED),
-                diagnostics=diagnostics,
-            )
-
     application = PortfolioApplication(
         dict(reversed(tuple(runtimes.items()))),
         PortfolioApplicationDependencies(
@@ -501,7 +475,6 @@ def _portfolio(  # noqa: PLR0913
             authority_registry=authority_registry,
             coordinator=coordinator,
             workspace_manager=manager,
-            integration_verifier=CallbackVerifier(),
             completed_history_catalog=CompletedHistoryCatalog(repository, "main", "main", state_root),
         ),
         PortfolioApplicationConfig(
@@ -1522,7 +1495,6 @@ def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path
         workspace_root=repository,
     )
     assert application.list_work_items() == ()
-    assert isinstance(application._integration_verifier, IntegrationVerifier)  # noqa: SLF001
     assert (runtime_root / "capacity.json").is_file()
     assert not (repository / ".owlbear/target").exists()
     assert not (repository / ".owlbear/worktrees").exists()
@@ -2278,7 +2250,6 @@ def _prepare_reviewed_integration_repair(tmp_path: Path):
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
-        candidate_proof=lambda _candidate, _commit: (),
     )
     _target_before, reviewed = _review_product_change(coordinator, "change-a", "change side\n")
     repository = tmp_path / "repository"
@@ -2823,7 +2794,6 @@ def test_integration_requires_external_acceptance_without_target_mutation(tmp_pa
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
-        candidate_proof=lambda _candidate, _commit: (),
     )
     target_before, reviewed = _review_product_change(coordinator, "change-a", "reviewed product\n")
     active_root = tmp_path / "packages/change-a"
@@ -2848,7 +2818,6 @@ def test_external_completion_proposal_never_treats_local_ref_move_as_acceptance(
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
-        candidate_proof=lambda _candidate, _commit: (),
     )
     _target_before, reviewed = _review_product_change(coordinator, "change-a", "reviewed product\n")
     repository = tmp_path / "repository"
@@ -2887,7 +2856,6 @@ def test_integration_retry_never_treats_local_ref_move_as_acceptance(tmp_path: P
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
-        candidate_proof=lambda _candidate, _commit: (),
     )
     _target_before, reviewed = _review_product_change(coordinator, "change-a", "reviewed product\n")
     repository = tmp_path / "repository"
@@ -2913,36 +2881,10 @@ def test_integration_retry_never_treats_local_ref_move_as_acceptance(tmp_path: P
     assert coordinator.show("change-a").worktree_path.exists()
 
 
-def test_integration_proof_failure_retains_heads_and_publishes_attention(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-    target_before, reviewed = _review_product_change(coordinator, "change-a", "reviewed product\n")
-
-    failed = application.integrate_ready_change("change-a")
-
-    assert failed.attention is not None
-    assert failed.attention.code == DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED
-    assert failed.attention.retry_condition == (
-        "Correct the Integration profile or failing candidate verification step, "
-        "then re-run Integration through Delivery orchestration."
-    )
-    assert failed.attention.change_head == reviewed
-    assert failed.attention.target_head == target_before
-    assert _git(tmp_path / "repository", "rev-parse", "main") == target_before
-    assert _git(tmp_path / "repository", "rev-parse", coordinator.show("change-a").branch) == reviewed
-    assert runtimes["change-a"].change_stage().value == "integration"
-    assert not _git_ref_exists(tmp_path / "repository", "refs/owlbear/integration-candidates/change-a")
-    assert (tmp_path / "packages/change-a").is_dir()
-    assert not _git(coordinator.show("change-a").worktree_path, "status", "--porcelain")
-
-
 def test_integration_target_identity_mismatch_is_typed_attention(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
-        candidate_proof=lambda _candidate, _commit: (),
     )
     repository = tmp_path / "repository"
     target_head = _git(repository, "rev-parse", "main")
@@ -2963,7 +2905,6 @@ def test_completed_history_queries_are_bounded_and_separate_from_active_projecti
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED, "change-b": DeliveryStage.COMPLETED},
-        candidate_proof=lambda _candidate, _commit: (),
     )
     repository = tmp_path / "repository"
     _seed_legacy_completed_history(application, runtimes, coordinator, "change-a")
@@ -2988,7 +2929,6 @@ def test_integration_rejects_reviewed_sibling_completed_history_mutation(tmp_pat
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED, "change-b": DeliveryStage.COMPLETED},
-        candidate_proof=lambda _candidate, _commit: (),
     )
     repository = tmp_path / "repository"
     sibling = _seed_legacy_completed_history(application, runtimes, coordinator, "change-b")
@@ -3017,7 +2957,6 @@ def test_integration_merge_conflict_retains_clean_heads_and_typed_attention(tmp_
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
-        candidate_proof=lambda _candidate, _commit: (),
     )
     _target_before, reviewed = _review_product_change(coordinator, "change-a", "change side\n")
     repository = tmp_path / "repository"
@@ -3079,7 +3018,6 @@ def test_target_advance_keeps_legacy_retry_out_of_publication_projection(tmp_pat
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
-        candidate_proof=lambda _candidate, _commit: (),
     )
     _target_before, _reviewed = _review_product_change(coordinator, "change-a", "change side\n")
     repository = tmp_path / "repository"
@@ -3136,7 +3074,6 @@ def test_repair_authority_attention_releases_claim_and_is_not_reacquired(tmp_pat
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
-        candidate_proof=lambda _candidate, _commit: (),
     )
     _target_before, reviewed = _review_product_change(coordinator, "change-a", "change side\n")
     repository = tmp_path / "repository"
@@ -3174,7 +3111,6 @@ def test_repair_authority_attention_preserves_claim_when_worktree_is_dirty(tmp_p
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
-        candidate_proof=lambda _candidate, _commit: (),
     )
     _review_product_change(coordinator, "change-a", "change side\n")
     repository = tmp_path / "repository"
@@ -3321,23 +3257,29 @@ def test_interrupted_integration_repair_admission_converges_before_retry(tmp_pat
     assert retried.attention.code == DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED
 
 
-def test_integration_target_cas_loss_publishes_attention_without_own_commit(tmp_path: Path) -> None:
+def test_integration_target_cas_loss_publishes_attention_without_own_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     repository = tmp_path / "repository"
     concurrent_head = ""
 
-    def advance_target(_candidate: DeliveryIntegrationCandidate, _commit: str) -> tuple[str, ...]:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+
+    original_validate = application._workspace_manager.validate_prepared_integration  # noqa: SLF001
+
+    def advance_target(preparation: object) -> object:
         nonlocal concurrent_head
         (repository / "concurrent.txt").write_text("concurrent\n", encoding="utf-8")
         _git(repository, "add", "concurrent.txt")
         _git(repository, "commit", "-m", "concurrent target")
         concurrent_head = _git(repository, "rev-parse", "HEAD")
-        return ()
+        return original_validate(preparation)
 
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-        candidate_proof=advance_target,
-    )
+    monkeypatch.setattr(application._workspace_manager, "validate_prepared_integration", advance_target)  # noqa: SLF001
     target_before, reviewed = _review_product_change(coordinator, "change-a", "reviewed product\n")
 
     failed = application.integrate_ready_change("change-a")
@@ -3355,7 +3297,6 @@ def test_integration_rejects_revision_pending_and_source_mutation_before_visibil
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
-        candidate_proof=lambda _candidate, _commit: (),
     )
     repository = tmp_path / "repository"
     target_head = _git(repository, "rev-parse", "main")
@@ -3394,56 +3335,6 @@ def test_integration_rejects_revision_pending_and_source_mutation_before_visibil
 
     assert source_mutated.attention is not None
     assert source_mutated.attention.code == DeliveryIntegrationAttentionCode.PACKAGE_MUTATED
-    assert _git(repository, "rev-parse", "main") == target_head
-    assert runtimes["change-a"].change_stage().value == "integration"
-
-
-def test_integration_revalidates_package_after_candidate_proof_before_target_cas(tmp_path: Path) -> None:
-    package_root = tmp_path / "packages/change-a"
-
-    def mutate_package(_candidate: DeliveryIntegrationCandidate, _commit: str) -> tuple[str, ...]:
-        (package_root / "design.md").write_text("mutated during proof\n", encoding="utf-8")
-        return ()
-
-    application, runtimes, _coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-        candidate_proof=mutate_package,
-    )
-    repository = tmp_path / "repository"
-    target_head = _git(repository, "rev-parse", "main")
-
-    failed = application.integrate_ready_change("change-a")
-
-    assert failed.attention is not None
-    assert failed.attention.code == DeliveryIntegrationAttentionCode.PACKAGE_MUTATED
-    assert _git(repository, "rev-parse", "main") == target_head
-    assert runtimes["change-a"].change_stage().value == "integration"
-
-
-def test_integration_revalidates_reviewed_branch_after_candidate_proof(tmp_path: Path) -> None:
-    worktree: Path | None = None
-
-    def advance_change(_candidate: DeliveryIntegrationCandidate, _commit: str) -> tuple[str, ...]:
-        assert worktree is not None
-        (worktree / "late.txt").write_text("late change\n", encoding="utf-8")
-        _git(worktree, "add", "late.txt")
-        _git(worktree, "commit", "-m", "unreviewed late change")
-        return ()
-
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-        candidate_proof=advance_change,
-    )
-    worktree = coordinator.show("change-a").worktree_path
-    repository = tmp_path / "repository"
-    target_head = _git(repository, "rev-parse", "main")
-
-    failed = application.integrate_ready_change("change-a")
-
-    assert failed.attention is not None
-    assert failed.attention.code == DeliveryIntegrationAttentionCode.REVIEWED_BOUNDARY_MISMATCH
     assert _git(repository, "rev-parse", "main") == target_head
     assert runtimes["change-a"].change_stage().value == "integration"
 

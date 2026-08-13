@@ -681,9 +681,7 @@ class ChangeWorkspaceManager:
                 _coordination_conflict("existing Change branch requires an exact recovery reviewed head")
             self._require_ancestor(recovery_reviewed_head, branch_head)
             last_reviewed_commit = recovery_reviewed_head
-        if not worktree.exists():
-            worktree.parent.mkdir(parents=True, exist_ok=True)
-            self._git("worktree", "add", str(worktree), branch)
+        self._register_worktree(worktree, branch)
         self._require_worktree(worktree, branch, branch_head)
         coordination = ChangeCoordination(
             change_id=change_id,
@@ -722,6 +720,12 @@ class ChangeWorkspaceManager:
         self._require_ancestor(commit, branch_head)
         updated = coordination.model_copy(update={"last_reviewed_commit": commit})
         return self._coordinator.update(updated)
+
+    def _register_worktree(self, worktree: Path, branch: str) -> None:
+        if worktree.exists():
+            return
+        worktree.parent.mkdir(parents=True, exist_ok=True)
+        self._git("worktree", "add", str(worktree), branch)
 
     def show(self, change_id: str) -> ChangeCoordination:
         """Return current workspace coordination for transition validation."""
@@ -1104,8 +1108,7 @@ class ChangeWorkspaceManager:
             attempt_id,
             rejected_head,
         )
-        if not worktree.exists():
-            self._git("worktree", "add", str(worktree), coordination.branch)
+        self._register_worktree(worktree, coordination.branch)
         self._require_worktree(worktree, coordination.branch, coordination.last_reviewed_commit)
         return self._coordinator.release(change_id, coordination.writer.claim_id)
 

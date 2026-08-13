@@ -27,7 +27,6 @@ from owlbear_delivery.delivery_runtime import (
 from owlbear_delivery.design_package import DesignPackageStore
 from owlbear_delivery.draft_pull_request import DraftPullRequestPublisher
 from owlbear_delivery.git_executable import resolve_git_executable
-from owlbear_delivery.integration_verification import IntegrationVerificationStore, IntegrationVerifier
 from owlbear_delivery.portfolio_application import (
     DeliveryRolePolicy,
     PortfolioApplication,
@@ -280,11 +279,6 @@ def _compose_application(
         config.target_branch,
         config.remote,
     )
-    integration_verifier = IntegrationVerifier(
-        paths.repository_root,
-        paths.worktree_root / "integration-verification",
-        IntegrationVerificationStore(paths.runtime_root),
-    )
     runtimes = _composed_runtimes(paths.runtime_root, contracts, workspace_manager)
     dependencies = PortfolioApplicationDependencies(
         target_root=paths.runtime_root,
@@ -296,7 +290,6 @@ def _compose_application(
         ),
         coordinator=coordinator,
         workspace_manager=workspace_manager,
-        integration_verifier=integration_verifier,
         completed_history_catalog=CompletedHistoryCatalog(
             paths.repository_root,
             config.target_branch,
