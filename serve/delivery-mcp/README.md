@@ -1,7 +1,8 @@
 # owlbear-delivery-mcp — Target Delivery MCP Server
 
-MCP server for authored Design, Delivery planning and execution, reviewed Integration, and completed
-change history. It is registered in VS Code as `owlbear-delivery` and composes the Delivery portfolio from
+MCP server for authored Design, Delivery planning and execution, reviewed Integration repair,
+provider-observed acceptance, and completed change history. It is registered in VS Code as
+`owlbear-delivery` and composes the Delivery portfolio from
 explicit startup configuration.
 
 → Parent: [README.md](../../README.md)
@@ -18,7 +19,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 ### Tools
 
-The server exposes 34 tools:
+The server exposes 33 tools:
 
 | Area | Tools |
 |------|-------|
@@ -26,7 +27,7 @@ The server exposes 34 tools:
 | Portfolio | `list_work_items`, `show_work_item`, `acquire_frontier_work`, `show_plan_context`, `show_build_context`, `show_integration_repair_context`, `create_integration_repair_candidate` |
 | Delivery | `publish_delivery_plan`, `publish_delivery_result`, `finalize_change`, `mark_change_ready`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `observe_acceptance`, `transition_delivery`, `recover_claim`, `recover_integration_repair_claim` |
 | Publication | `observe_change_publication_checks` |
-| Integration | `list_integration_ready_changes`, `show_integration_attention`, `integrate_ready_change`, `prepare_external_completion`, `admit_reviewed_integration_repair`, `publish_integration_repair_authority_attention` |
+| Integration | `show_integration_attention`, `admit_reviewed_integration_repair`, `publish_integration_repair_authority_attention` |
 | Completed changes | `list_completed_changes`, `search_completed_changes`, `show_completed_change` |
 
 ## Configuration

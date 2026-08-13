@@ -85,9 +85,9 @@ Only an independent `pass` may construct one `DeliveryIntegrationRepair` with:
   identity, and that same exact candidate commit.
 
 Call `admit_reviewed_integration_repair` once with the launch's exact `attempt_id`, `claim_id`, and
-that typed repair. Treat the returned repair as the only successful result. Never call
-`integrate_ready_change`, retry Integration, move the target, publish a Build result, or select a
-Delivery transition from this workflow.
+that typed repair. Treat the returned repair as the only successful result. Never perform local
+Integration or completion, retry outside the claimed repair route, move the target, publish a Build
+result, or select a Delivery transition from this workflow.
 
 Only when three-way attribution proves that admitted change authority and current target behavior
 require mutually exclusive observable semantics may the repair return authority attention. Make no

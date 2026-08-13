@@ -21,7 +21,6 @@ from owlbear_delivery.change_workspace import (
 from owlbear_delivery.delivery_runtime import (
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
-    DeliveryIntegrationCandidate,
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
 from owlbear_delivery.target_authority import Outcome, PlanScopeKind, TargetAuthority, TaskPlanScope
@@ -295,47 +294,6 @@ def test_finalization_rejects_divergent_promoted_task_history(tmp_path: Path) ->
 
     with pytest.raises(RuntimeError, match="not an ancestor"):
         manager.validate_finalization_head(coordination.change_id, exact_head, (first, second))
-
-
-def test_external_completion_proposal_preserves_dirty_checked_out_target(tmp_path: Path) -> None:
-    repository, _initial = _repository(tmp_path)
-    _coordinator, manager = _manager(tmp_path, repository)
-    coordination = manager.create("externally-merged")
-    reviewed = _commit_new_file(coordination.worktree_path, "product.txt", "reviewed\n", "reviewed product")
-    manager.record_reviewed(coordination.change_id, reviewed)
-    _git(repository, "checkout", "release")
-    _git(repository, "merge", "--ff-only", reviewed)
-    target_head = _git(repository, "rev-parse", "release")
-    (repository / "shared.txt").write_text("user work\n", encoding="utf-8")
-    empty_tree = _git(repository, "mktree")
-    candidate = DeliveryIntegrationCandidate(
-        candidate_id="1" * 64,
-        completion_id="2" * 64,
-        change_id=coordination.change_id,
-        package_id="3" * 64,
-        authority_digest="4" * 64,
-        runtime_digest="5" * 64,
-        result_history_digest="6" * 64,
-        reviewed_change_head=reviewed,
-        integration_target="release",
-        target_head=target_head,
-        completion_path=".owlbear/completed/externally-merged",
-        package_tree=empty_tree,
-    )
-
-    proposal = manager.prepare_external_completion_proposal(candidate)
-    replayed = manager.prepare_external_completion_proposal(candidate)
-
-    assert replayed == proposal
-    assert proposal.proposal_commit != target_head
-    assert _git(repository, "rev-list", "--parents", "-n", "1", proposal.proposal_commit).split() == [
-        proposal.proposal_commit,
-        target_head,
-    ]
-    assert _git(repository, "rev-parse", "release") == target_head
-    assert _git(repository, "rev-parse", "HEAD") == target_head
-    assert (repository / "shared.txt").read_text(encoding="utf-8") == "user work\n"
-    assert _git(repository, "status", "--porcelain") == "M shared.txt"
 
 
 def test_workspace_recovery_requires_and_preserves_exact_reviewed_head(tmp_path: Path) -> None:

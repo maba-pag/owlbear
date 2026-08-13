@@ -9,6 +9,8 @@ user-invocable: false
 Resolve one exact retained Integration attention outside the portfolio worker chain. This is an
 interactive operator session: inspect current evidence, explain materially different remedies, ask
 the user to choose, and perform only a selected operation that current Delivery authority permits.
+Local Integration execution and completion-proposal operations are retired; completion is recorded
+only from a fresh provider observation bound to finalized Delivery authority.
 
 ## Step 0 - Bind The Exact Current Attention
 
@@ -16,7 +18,7 @@ Parse the supplied value as exactly one lowercase-hyphenated `change_id` followe
 lowercase hexadecimal `attention_id`. Reject missing, extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
-`OwlBear Delivery show_integration_attention integrate_ready_change prepare_external_completion list_work_items`. Call
+`OwlBear Delivery show_integration_attention observe_change_publication_checks observe_acceptance list_work_items show_completed_change`. Call
 `show_integration_attention(change_id)` and require a current attention whose change and attention
 identities equal the supplied values. If no attention exists, its identity differs, or Delivery
 reports that the retained condition is superseded, report the current state and stop without
@@ -73,17 +75,18 @@ route. Abort if the attention, heads, target, worktree state, or relevant eviden
 
 Use only an existing operation whose contract owns the selected result:
 
-- retryable or superseded Integration: `integrate_ready_change(change_id)` only when current Delivery
-  state authorizes retry;
-- external acceptance required: call `prepare_external_completion(change_id)` at most once to
-  create or re-read the detached proposal. Report `authority-gap` until Delivery can read provider
-  evidence for one merged pull request bound to that exact proposal, repository, base, and accepted
-  target commit. Local target ancestry, a raw Git ref move, or user confirmation alone cannot record
-  completion. Never merge the proposal or advance the target inside this workflow;
+- provider acceptance required: after re-reading the exact finalization, ready receipt, reconciled
+  checkpoint, and publication evidence, call `observe_acceptance(change_id)` once. This operation
+  reads the current provider pull request and creates the receipt-backed completion record only when
+  repository, pull request, base branch, finalized head, merged state, merge commit, and merge time
+  all match. It does not create a proposal, merge a pull request, move a target ref, or infer
+  completion from local Git state;
 - Design or admitted-authority revision: hand off with `/design <change_id>` and explain the exact
   revision required;
 - reviewed merge conflict: hand off with `/orchestrate`; the claimed Integration repair workflow
   owns edits, proof, review, and admission;
+- target, publication, or finalization prerequisite: hand off to the owning Delivery workflow and
+  report the exact missing authority rather than inventing a local Integration route;
 - claim recovery: use the exact claim-bound recovery operation only when current context supplies
   its attempt and claim identities.
 

@@ -609,23 +609,6 @@ def integration_attention_disposition(
     return DeliveryIntegrationAttentionDisposition.OPERATOR_REQUIRED
 
 
-class DeliveryIntegrationCandidate(_DeliveryModel):
-    """Immutable candidate for one atomic product and completion publication."""
-
-    candidate_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    completion_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    change_id: str = Field(min_length=1)
-    package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    authority_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    runtime_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    result_history_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    reviewed_change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    integration_target: str = Field(min_length=1)
-    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    completion_path: str = Field(min_length=1)
-    package_tree: str = Field(pattern=r"^[0-9a-f]{40}$")
-
-
 class DeliveryIntegrationCompletion(_DeliveryModel):
     """Committed identity of one atomic Integration publication."""
 
@@ -2587,7 +2570,6 @@ __all__ = [
     "DeliveryFrontier",
     "DeliveryIntegrationAttention",
     "DeliveryIntegrationAttentionCode",
-    "DeliveryIntegrationCandidate",
     "DeliveryIntegrationCompletion",
     "DeliveryMergedPullRequestLatch",
     "DeliveryObservation",

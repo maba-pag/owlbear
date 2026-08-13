@@ -106,10 +106,7 @@ DELIVERY_OPERATION_NAMES = (
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
-    "list_integration_ready_changes",
     "show_integration_attention",
-    "integrate_ready_change",
-    "prepare_external_completion",
     "admit_reviewed_integration_repair",
     "publish_integration_repair_authority_attention",
     "list_completed_changes",
@@ -127,7 +124,6 @@ _DELIVERY_READS = frozenset(
         "show_build_context",
         "show_finalization_context",
         "show_integration_repair_context",
-        "list_integration_ready_changes",
         "show_integration_attention",
         "observe_change_publication_checks",
         "list_completed_changes",
@@ -383,29 +379,10 @@ class TargetMCPAdapter:
             lambda: self._application.recover_integration_repair_claim(**params.model_dump()),
         )
 
-    async def list_integration_ready_changes(self, request: EmptyRequest) -> list[object]:
-        """List changes ready for Integration."""
-        params = self._validate(EmptyParams, request)
-        return self._call(params, self._application.list_integration_ready_changes)
-
     async def show_integration_attention(self, request: ChangeRequest) -> dict[str, object] | None:
         """Show current typed Integration attention."""
         params = self._validate(ChangeParams, request)
         return self._call(params, lambda: self._application.show_integration_attention(params.change_id))
-
-    async def integrate_ready_change(self, request: ChangeRequest) -> dict[str, object]:
-        """Integrate one ready Delivery change."""
-        params = self._validate(ChangeParams, request)
-        return await asyncio.to_thread(
-            self._call,
-            params,
-            lambda: self._application.integrate_ready_change(params.change_id),
-        )
-
-    async def prepare_external_completion(self, request: ChangeRequest) -> dict[str, object]:
-        """Prepare a completion proposal or retain provider-acceptance attention."""
-        params = self._validate(ChangeParams, request)
-        return self._call(params, lambda: self._application.prepare_external_completion(params.change_id))
 
     async def admit_reviewed_integration_repair(self, request: IntegrationRepairRequest) -> dict[str, object]:
         """Admit one independently reviewed Integration repair."""

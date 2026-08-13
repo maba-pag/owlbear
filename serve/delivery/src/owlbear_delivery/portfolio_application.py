@@ -25,15 +25,11 @@ from owlbear_delivery.change_publication import (
     PublishChangeBranch,
 )
 from owlbear_delivery.change_workspace import (
-    AtomicIntegrationPreparation,
-    AtomicIntegrationResult,
     ChangeCoordination,
     ChangeWorkspaceManager,
     ChangeWriter,
     CoordinationConflictError,
-    ExternalCompletionProposal,
     FinalizationTargetProvenance,
-    IntegrationContext,
     IntegrationRepairCandidate,
     PortfolioCoordinator,
     PublicationLease,
@@ -54,8 +50,6 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
-    DeliveryIntegrationCandidate,
-    DeliveryIntegrationCompletion,
     DeliveryIntegrationRepair,
     DeliveryIntegrationRepairAuthorityAttention,
     DeliveryPendingCheckpoint,
@@ -77,13 +71,6 @@ from owlbear_delivery.delivery_runtime import (
     PublishDeliveryPlan,
     PublishDeliveryResult,
     integration_attention_disposition,
-)
-from owlbear_delivery.design_package import (
-    CompletionCapture,
-    CompletionPackageSnapshot,
-    DesignCheckpointResult,
-    DesignPackageConflictError,
-    DesignPackageResult,
 )
 from owlbear_delivery.draft_pull_request import (
     CreateOrReconcileDraftPullRequest,
@@ -141,7 +128,12 @@ if TYPE_CHECKING:
         CompletedChangeRecord,
         CompletedHistoryCatalog,
     )
-    from owlbear_delivery.design_package import DesignPackageStore, VerifiedDesignPackage
+    from owlbear_delivery.design_package import (
+        DesignCheckpointResult,
+        DesignPackageResult,
+        DesignPackageStore,
+        VerifiedDesignPackage,
+    )
     from owlbear_delivery.target_admission import (
         DeliveryAdmissionRequest,
         DeliveryAdmissionResult,
@@ -158,10 +150,6 @@ def _timestamp(value: str) -> datetime:
     return parsed.astimezone(UTC)
 
 
-_COMPLETED_ROOT = ".owlbear/completed"
-_PROVIDER_ACCEPTANCE_REQUIRED = (
-    "local target ancestry is not provider acceptance evidence; completion requires an observed merged pull request"
-)
 _MAX_PULL_REQUEST_TITLE_LENGTH = 256
 
 
@@ -507,47 +495,6 @@ class DeliveryIntegrationRepairRecoveryResult(_ApplicationModel):
     preserved_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
 
 
-class DeliveryIntegrationResult(_ApplicationModel):
-    """One committed atomic publication or retained typed Integration attention."""
-
-    change_id: str = Field(min_length=1)
-    candidate: DeliveryIntegrationCandidate | None = None
-    completion: DeliveryIntegrationCompletion | None = None
-    attention: DeliveryIntegrationAttention | None = None
-    replayed: bool = False
-
-    @model_validator(mode="after")
-    def _validate_disposition(self) -> DeliveryIntegrationResult:
-        if (self.completion is None) == (self.attention is None):
-            message = "Integration result requires completion or attention"
-            raise ValueError(message)
-        if self.attention is not None and self.replayed:
-            message = "Integration attention cannot be a completed replay"
-            raise ValueError(message)
-        return self
-
-
-class ExternalCompletionResult(_ApplicationModel):
-    """One detached completion proposal, acknowledged completion, or typed attention."""
-
-    change_id: str = Field(min_length=1)
-    proposal: ExternalCompletionProposal | None = None
-    completion: DeliveryIntegrationCompletion | None = None
-    attention: DeliveryIntegrationAttention | None = None
-    replayed: bool = False
-
-    @model_validator(mode="after")
-    def _validate_disposition(self) -> ExternalCompletionResult:
-        dispositions = (self.proposal, self.completion, self.attention)
-        if sum(disposition is not None for disposition in dispositions) != 1:
-            message = "external completion requires one proposal, completion, or attention"
-            raise ValueError(message)
-        if self.completion is None and self.replayed:
-            message = "only external completion acknowledgment can replay"
-            raise ValueError(message)
-        return self
-
-
 class PortfolioApplicationError(RuntimeError):
     """Portfolio preparation or scoped context validation failed closed."""
 
@@ -627,12 +574,6 @@ class _PreparedSource:
     package: VerifiedDesignPackage
     coordination: ChangeCoordination
     source_head: str
-
-
-@dataclass(frozen=True)
-class _PreparedIntegration:
-    candidate: DeliveryIntegrationCandidate
-    preparation: AtomicIntegrationPreparation
 
 
 class PortfolioApplication:
@@ -1213,30 +1154,6 @@ class PortfolioApplication:
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             return runtime.transition(request)
 
-    def list_integration_ready_changes(self) -> tuple[str, ...]:
-        """List unclaimed Integration changes that are ready or safe to retry."""
-        return self._integration_ready_change_ids(self._portfolio_snapshots())
-
-    def _integration_ready_change_ids(
-        self,
-        snapshots: tuple[DeliveryPortfolioSnapshot, ...],
-    ) -> tuple[str, ...]:
-        ready = []
-        for snapshot in snapshots:
-            attention = snapshot.frontier.integration_attention
-            if (
-                self._snapshot_change_stage(snapshot) == DeliveryChangeStage.INTEGRATION
-                and not self._snapshot_has_active_claims(snapshot)
-                and (
-                    attention is None
-                    or self._integration_attention_is_superseded(snapshot.contract.change_id, attention)
-                    or integration_attention_disposition(attention.code)
-                    == DeliveryIntegrationAttentionDisposition.RETRYABLE
-                )
-            ):
-                ready.append(snapshot.contract.change_id)
-        return tuple(ready)
-
     def list_integration_attention(self) -> tuple[DeliveryIntegrationAttentionStatus, ...]:
         """List non-retryable Integration attention in stable identity order."""
         statuses = []
@@ -1624,7 +1541,6 @@ class PortfolioApplication:
                 self._workspace_manager.refresh_integration_target(change_id)
             recoveries = self._recover_active_claims()
             repair_recoveries = self._recover_active_repair_claims()
-            integration_ready = self.list_integration_ready_changes()
             occupied = sum(
                 len(runtime.active_claims()) + int(runtime.integration_repair_claim() is not None)
                 for runtime in self._runtimes.values()
@@ -1665,7 +1581,7 @@ class PortfolioApplication:
             return DeliveryAcquisitionResult(
                 launch_packages=tuple(launches),
                 repair_launch_packages=tuple(repair_launches),
-                integration_ready_change_ids=integration_ready,
+                integration_ready_change_ids=(),
                 integration_attention=self.list_integration_attention(),
                 failures=tuple(failures),
                 repair_failures=tuple(repair_failures),
@@ -1889,70 +1805,6 @@ class PortfolioApplication:
             rejected_head,
         )
 
-    def integrate_ready_change(self, change_id: str) -> DeliveryIntegrationResult:
-        """Validate one reviewed candidate and retain external-acceptance attention."""
-        with self._coordinator.integration_lock():
-            runtime = self._runtime(change_id)
-            self._workspace_manager.refresh_integration_target(change_id)
-            context = self._workspace_manager.integration_context(change_id)
-            existing = runtime.integration_completion()
-            if existing is not None:
-                self._workspace_manager.discard_stale_integration_candidate(change_id)
-                self._cleanup_integration(change_id, existing)
-                return DeliveryIntegrationResult(
-                    change_id=change_id,
-                    completion=existing,
-                    replayed=True,
-                )
-            if runtime.change_stage() != DeliveryChangeStage.INTEGRATION:
-                self._fail("change is not ready for Integration")
-            prepared = self._capture_ready_integration(change_id, runtime, context)
-            if isinstance(prepared, DeliveryIntegrationResult):
-                return prepared
-            if prepared.preparation.result is not None:
-                self._workspace_manager.discard_stale_integration_candidate(change_id)
-                return self._revalidate_for_external_acceptance(runtime, context, prepared)
-            result = self._revalidate_for_external_acceptance(runtime, context, prepared)
-            self._workspace_manager.discard_integration_candidate(prepared.preparation)
-            return result
-
-    def prepare_external_completion(self, change_id: str) -> ExternalCompletionResult:
-        """Prepare a detached proposal without inferring acceptance from local Git state."""
-        with self._coordinator.integration_lock():
-            runtime = self._runtime(change_id)
-            self._workspace_manager.refresh_integration_target(change_id)
-            context = self._workspace_manager.integration_context(change_id)
-            existing = runtime.integration_completion()
-            if existing is not None:
-                self._cleanup_integration(change_id, existing)
-                return ExternalCompletionResult(change_id=change_id, completion=existing, replayed=True)
-            if runtime.change_stage() != DeliveryChangeStage.INTEGRATION:
-                self._fail("change is not ready for Integration")
-            captured = self._capture_ready_integration(change_id, runtime, context)
-            if isinstance(captured, DeliveryIntegrationResult):
-                return ExternalCompletionResult(change_id=change_id, attention=captured.attention)
-            prepared = self._workspace_manager.prepare_external_completion_proposal(captured.candidate)
-            self._workspace_manager.discard_integration_candidate(captured.preparation)
-            if isinstance(prepared, AtomicIntegrationResult):
-                if prepared.target_commit is None:
-                    failed = self._integration_attention(
-                        runtime,
-                        context,
-                        prepared.code,
-                        prepared.diagnostics,
-                        candidate=captured.candidate,
-                    )
-                    return ExternalCompletionResult(change_id=change_id, attention=failed.attention)
-                waiting = self._integration_attention(
-                    runtime,
-                    context,
-                    DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED,
-                    (_PROVIDER_ACCEPTANCE_REQUIRED,),
-                    candidate=captured.candidate,
-                )
-                return ExternalCompletionResult(change_id=change_id, attention=waiting.attention)
-            return ExternalCompletionResult(change_id=change_id, proposal=prepared)
-
     def admit_reviewed_integration_repair(
         self,
         attempt_id: str,
@@ -1997,181 +1849,6 @@ class PortfolioApplication:
                 (*workspace_replacements, runtime_replacement),
             )
             return attention
-
-    def _capture_ready_integration(
-        self,
-        change_id: str,
-        runtime: DeliveryRuntime,
-        context: IntegrationContext,
-    ) -> DeliveryIntegrationResult | _PreparedIntegration:
-        try:
-            package = self._package_store.read_verified(change_id)
-            attention_code = self._package_attention_code(runtime, package)
-            if attention_code is not None:
-                return self._integration_attention(
-                    runtime,
-                    context,
-                    attention_code,
-                    ("active package does not match admitted completed Delivery authority",),
-                )
-            runtime_bytes, result_history_bytes = runtime.completion_capture_bytes()
-            capture = CompletionCapture(
-                change_id=change_id,
-                expected_package_id=package.package_id,
-                authority_digest=runtime.authority_digest,
-                runtime_bytes=runtime_bytes,
-                result_history_bytes=result_history_bytes,
-                reviewed_change_head=context.reviewed_change_head,
-                integration_target=context.integration_target,
-                completion_path=f"{_COMPLETED_ROOT}/{change_id}",
-            )
-            return self._package_store.capture_completion(
-                capture,
-                validation_callback=lambda snapshot: self._prepare_integration_snapshot(
-                    runtime,
-                    context,
-                    snapshot,
-                ),
-                publication_callback=lambda prepared: prepared,
-            )
-        except DesignPackageConflictError as exc:
-            return self._integration_attention(
-                runtime,
-                context,
-                DeliveryIntegrationAttentionCode.PACKAGE_MUTATED,
-                (str(exc),),
-            )
-
-    def _prepare_integration_snapshot(
-        self,
-        runtime: DeliveryRuntime,
-        context: IntegrationContext,
-        snapshot: CompletionPackageSnapshot,
-    ) -> _PreparedIntegration:
-        candidate = self._integration_candidate(runtime, context, snapshot)
-        preparation = self._workspace_manager.prepare_integration_candidate(candidate)
-        return _PreparedIntegration(candidate, preparation)
-
-    def _revalidate_for_external_acceptance(
-        self,
-        runtime: DeliveryRuntime,
-        context: IntegrationContext,
-        prepared: _PreparedIntegration,
-    ) -> DeliveryIntegrationResult:
-        invalid = self._workspace_manager.validate_prepared_integration(prepared.preparation)
-        if invalid is not None:
-            if invalid.code is None:
-                return self._integration_attention(
-                    runtime,
-                    context,
-                    DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED,
-                    (_PROVIDER_ACCEPTANCE_REQUIRED,),
-                    candidate=prepared.candidate,
-                )
-            return self._integration_attention(
-                runtime,
-                context,
-                invalid.code,
-                invalid.diagnostics,
-                candidate=prepared.candidate,
-            )
-        return self._integration_attention(
-            runtime,
-            context,
-            DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED,
-            ("local target publication is disabled; completion requires externally observed acceptance",),
-            candidate=prepared.candidate,
-        )
-
-    def _integration_candidate(
-        self,
-        runtime: DeliveryRuntime,
-        context: IntegrationContext,
-        snapshot: CompletionPackageSnapshot,
-    ) -> DeliveryIntegrationCandidate:
-        payload = {
-            "completion_id": snapshot.completion_id,
-            "package_id": snapshot.package_id,
-            "package_tree": snapshot.package_tree,
-            "reviewed_change_head": context.reviewed_change_head,
-            "integration_target": context.integration_target,
-        }
-        candidate_id = hashlib.sha256(_canonical(payload)).hexdigest()
-        return DeliveryIntegrationCandidate(
-            candidate_id=candidate_id,
-            completion_id=snapshot.completion_id,
-            change_id=runtime.contract.change_id,
-            package_id=snapshot.package_id,
-            authority_digest=runtime.authority_digest,
-            runtime_digest=snapshot.manifest.runtime_sha256,
-            result_history_digest=snapshot.manifest.result_history_sha256,
-            reviewed_change_head=context.reviewed_change_head,
-            integration_target=context.integration_target,
-            target_head=context.target_head,
-            completion_path=snapshot.manifest.completion_path,
-            package_tree=snapshot.package_tree,
-        )
-
-    def _integration_attention(
-        self,
-        runtime: DeliveryRuntime,
-        context: IntegrationContext,
-        code: DeliveryIntegrationAttentionCode,
-        diagnostics: tuple[str, ...],
-        *,
-        candidate: DeliveryIntegrationCandidate | None = None,
-    ) -> DeliveryIntegrationResult:
-        payload = {
-            "code": code.value,
-            "change_id": runtime.contract.change_id,
-            "change_head": context.change_head,
-            "target_head": context.target_head,
-            "integration_target": context.integration_target,
-            "diagnostics": diagnostics,
-        }
-        attention = DeliveryIntegrationAttention(
-            attention_id=hashlib.sha256(_canonical(payload)).hexdigest(),
-            code=code,
-            change_id=runtime.contract.change_id,
-            change_head=context.change_head,
-            target_head=context.target_head,
-            integration_target=context.integration_target,
-            diagnostics=diagnostics,
-            retry_condition=_integration_retry_condition(code),
-        )
-        runtime.publish_integration_attention(attention)
-        return DeliveryIntegrationResult(
-            change_id=runtime.contract.change_id,
-            candidate=candidate,
-            attention=attention,
-        )
-
-    def _cleanup_integration(
-        self,
-        change_id: str,
-        completion: DeliveryIntegrationCompletion,
-    ) -> None:
-        self._package_store.cleanup_completed(change_id, completion.package_id)
-        self._workspace_manager.cleanup_integrated_worktree(
-            change_id,
-            completion.completion_path,
-            completion.completion_id,
-        )
-
-    @staticmethod
-    def _package_attention_code(
-        runtime: DeliveryRuntime,
-        package: VerifiedDesignPackage,
-    ) -> DeliveryIntegrationAttentionCode | None:
-        if hashlib.sha256(package.authority_bytes).hexdigest() != runtime.authority_digest:
-            return DeliveryIntegrationAttentionCode.REVISION_PENDING
-        source_digests = {binding.source_name: binding.sha256 for binding in runtime.contract.source_bindings}
-        if source_digests != {
-            "intent.md": package.manifest.intent_sha256,
-            "design.md": package.manifest.design_sha256,
-        }:
-            return DeliveryIntegrationAttentionCode.PACKAGE_MUTATED
-        return None
 
     def _candidates(self) -> tuple[_Candidate, ...]:
         candidates = []
@@ -2579,21 +2256,6 @@ class PortfolioApplication:
         raise PortfolioApplicationError(message) from cause
 
 
-def _canonical(payload: object) -> bytes:
-    return f"{json.dumps(payload, sort_keys=True, separators=(',', ':'))}\n".encode()
-
-
-def _integration_retry_condition(code: DeliveryIntegrationAttentionCode) -> str:
-    if code == DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED:
-        return "Publish the reviewed Change through the provider and observe external acceptance."
-    disposition = integration_attention_disposition(code)
-    if disposition == DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED:
-        return "Admit a reviewed Integration repair for this attention, then retry Integration."
-    if disposition == DeliveryIntegrationAttentionDisposition.RETRYABLE:
-        return "Retry Integration against the current target head."
-    return "Resolve the reported Integration condition, then retry this exact change."
-
-
 __all__ = [
     "DeliveryAcquisitionFailure",
     "DeliveryAcquisitionResult",
@@ -2602,11 +2264,9 @@ __all__ = [
     "DeliveryClaimRecoveryStatus",
     "DeliveryFinalizationContext",
     "DeliveryIntegrationAttentionStatus",
-    "DeliveryIntegrationResult",
     "DeliveryLaunchPackage",
     "DeliveryPlanContext",
     "DeliveryRolePolicy",
-    "ExternalCompletionResult",
     "PortfolioApplication",
     "PortfolioApplicationConfig",
     "PortfolioApplicationDependencies",

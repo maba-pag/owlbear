@@ -32,7 +32,6 @@ from owlbear_delivery.delivery_runtime import (
 from owlbear_delivery.design_package import DesignPackageConflictError
 from owlbear_delivery.draft_pull_request import MarkChangePullRequestReady
 from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
-from owlbear_delivery.runtime_transaction import TransactionPathError
 from owlbear_delivery_mcp.target_server import (
     DELIVERY_OPERATION_ANNOTATIONS,
     DELIVERY_OPERATION_NAMES,
@@ -61,7 +60,7 @@ class _RecordingApplication:
             failure = self.failures.get(name)
             if failure is not None:
                 raise failure
-            if name in {"list_work_items", "list_integration_ready_changes"}:
+            if name == "list_work_items":
                 return (_Result(operation=name),)
             if name == "publish_delivery_plan":
                 request = args[1]
@@ -268,10 +267,7 @@ def _requests() -> dict[str, dict[str, object]]:
         },
         "recover_claim": claim,
         "recover_integration_repair_claim": repair_claim,
-        "list_integration_ready_changes": {},
         "show_integration_attention": change,
-        "integrate_ready_change": change,
-        "prepare_external_completion": change,
         "admit_reviewed_integration_repair": {**repair_claim, "repair": _repair()},
         "publish_integration_repair_authority_attention": {
             **repair_claim,
@@ -299,7 +295,7 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
         assert isinstance(application.calls[0][1][1], MarkChangePullRequestReady)
     if operation_name in {"reconcile_finalization_head", "observe_acceptance"}:
         assert application.calls[0][1] == (CHANGE,)
-    tuple_results = {"list_work_items", "list_integration_ready_changes"}
+    tuple_results = {"list_work_items"}
     publication_results = {
         "publish_delivery_plan": {"candidate_id": "plan", "claim_id": "claim"},
         "publish_delivery_result": {"candidate_id": "result", "claim_id": "claim"},
@@ -343,7 +339,6 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         "show_build_context",
         "show_finalization_context",
         "show_integration_repair_context",
-        "list_integration_ready_changes",
         "show_integration_attention",
         "observe_change_publication_checks",
         "list_completed_changes",
@@ -437,7 +432,6 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             "ERR_COMPLETION_RECEIPT_CONFLICT",
             False,
         ),
-        ("integrate_ready_change", TransactionPathError(), "ERR_TRANSACTION_PATH_UNSAFE", False),
     )
     for operation_name, failure, code, retry_safe in cases:
         application = _RecordingApplication({operation_name: failure})

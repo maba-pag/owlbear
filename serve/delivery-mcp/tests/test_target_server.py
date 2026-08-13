@@ -77,10 +77,7 @@ DELIVERY_TOOLS = {
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
-    "list_integration_ready_changes",
     "show_integration_attention",
-    "integrate_ready_change",
-    "prepare_external_completion",
     "admit_reviewed_integration_repair",
     "publish_integration_repair_authority_attention",
     "list_completed_changes",
@@ -97,7 +94,6 @@ READ_TOOLS = {
     "show_build_context",
     "show_finalization_context",
     "show_integration_repair_context",
-    "list_integration_ready_changes",
     "show_integration_attention",
     "observe_change_publication_checks",
     "list_completed_changes",
@@ -167,18 +163,6 @@ class _PublicationApplication(_RecordingApplication):
         self.calls.append("transition_delivery")
         self.transition = request
         return _Result(operation="transition_delivery")
-
-
-class _BlockingIntegrationApplication(_RecordingApplication):
-    def __init__(self, started: threading.Event, release: threading.Event) -> None:
-        super().__init__()
-        self._started = started
-        self._release = release
-
-    def integrate_ready_change(self, _change_id: str) -> _Result:
-        self._started.set()
-        self._release.wait(timeout=2)
-        return _Result(operation="integrate_ready_change")
 
 
 class _BlockingAcceptanceApplication(_RecordingApplication):
@@ -429,26 +413,6 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
     }
     assert transitioned.structured_content == {"operation": "transition_delivery"}
     assert application.calls == ["publish_delivery_result", "transition_delivery"]
-
-
-@pytest.mark.asyncio
-async def test_integration_verification_yields_the_mcp_event_loop() -> None:
-    started = threading.Event()
-    release = threading.Event()
-    fallback_release = threading.Timer(1, release.set)
-    fallback_release.start()
-    adapter = TargetMCPAdapter(_BlockingIntegrationApplication(started, release))  # type: ignore[arg-type]
-    launched_at = time.monotonic()
-
-    task = asyncio.create_task(adapter.integrate_ready_change({"change_id": "change-a"}))
-    assert await asyncio.to_thread(started.wait, 2)
-    elapsed = time.monotonic() - launched_at
-    release.set()
-    result = await task
-    fallback_release.cancel()
-
-    assert elapsed < 0.5
-    assert result == {"operation": "integrate_ready_change"}
 
 
 @pytest.mark.asyncio

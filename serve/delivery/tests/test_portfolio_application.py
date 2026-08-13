@@ -44,8 +44,8 @@ from owlbear_delivery import (
     DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
     DeliveryFrontier,
+    DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
-    DeliveryIntegrationCompletion,
     DeliveryIntegrationRepair,
     DeliveryIntegrationRepairAuthorityAttention,
     DeliveryIntegrationRepairReview,
@@ -504,7 +504,7 @@ def test_finalization_uses_managed_head_and_invalidates_observed_drift(tmp_path:
     assert isinstance(receipt, DeliveryFinalizationReceipt)
     assert application.finalize_change("change-a", request) == receipt
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.FINALIZED
-    assert application.list_integration_ready_changes() == ()
+    assert application.list_integration_attention() == ()
     publication = application.show_change_checkpoint_publication("change-a")
     assert publication.pending_checkpoint is not None
     assert publication.pending_checkpoint.head == exact_head
@@ -520,7 +520,7 @@ def test_finalization_uses_managed_head_and_invalidates_observed_drift(tmp_path:
     assert invalidation.expected_head == exact_head
     assert invalidation.observed_head == observed_head
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.ACTIVE_DELIVERY
-    assert application.list_integration_ready_changes() == ()
+    assert application.list_integration_attention() == ()
 
 
 def test_finalization_context_binds_profile_to_engine_resolved_target(tmp_path: Path) -> None:
@@ -796,7 +796,7 @@ def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Pat
     assert (
         ready.finalization_id,
         runtimes["change-a"].change_stage(),
-        application.list_integration_ready_changes(),
+        application.list_integration_attention(),
     ) == (receipt.finalization_id, DeliveryChangeStage.AWAITING_MERGE, ())
     assert pull_requests[0].draft is False
     provider.observe_checks.assert_called_once()
@@ -924,7 +924,7 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(tmp_p
     assert provider.read_pull_request.call_count == provider_calls
     assert runtime.change_stage() == DeliveryChangeStage.COMPLETED
     assert application.list_work_items() == ()
-    assert application.list_integration_ready_changes() == ()
+    assert application.list_integration_attention() == ()
     assert receipt.accepted_merge_commit == "f" * 40
     assert receipt.check_observation_ids
     assert receipt.review_receipt_ids == (finalization.review.review_id,)
@@ -1999,29 +1999,6 @@ def test_delivery_publication_and_transition_delegate_to_exact_runtimes(tmp_path
     assert blocked.block.request_id == request.request_id
 
 
-def test_integration_queries_are_stable_bounded_and_read_only(tmp_path: Path) -> None:
-    application, runtimes, _coordinator, _state_root = _portfolio(
-        tmp_path,
-        {
-            "change-b": DeliveryStage.COMPLETED,
-            "change-a": DeliveryStage.COMPLETED,
-            "change-c": DeliveryStage.PLANNING,
-        },
-    )
-    before = {change_id: runtime.frontier_bytes() for change_id, runtime in runtimes.items()}
-
-    assert application.list_integration_ready_changes() == ("change-a", "change-b")
-    assert application.show_integration_attention("change-a") is None
-    assert {change_id: runtime.frontier_bytes() for change_id, runtime in runtimes.items()} == before
-    assert all(runtime.active_claims() == () for runtime in runtimes.values())
-
-    failed = application.integrate_ready_change("change-a")
-    assert failed.attention is not None
-    attention_bytes = runtimes["change-a"].frontier_bytes()
-    assert application.show_integration_attention("change-a") == failed.attention
-    assert runtimes["change-a"].frontier_bytes() == attention_bytes
-
-
 def test_work_item_queries_do_not_resolve_integration_target(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2193,57 +2170,24 @@ def _review_product_change(coordinator: PortfolioCoordinator, change_id: str, co
     return target_head, reviewed
 
 
-def _seed_legacy_completed_history(
-    application: PortfolioApplication,
+def _publish_merge_conflict_attention(
     runtimes: dict[str, DeliveryRuntime],
-    coordinator: PortfolioCoordinator,
     change_id: str,
-) -> DeliveryIntegrationCompletion:
-    coordination = coordinator.show(change_id)
-    current_target = _git(coordination.worktree_path, "rev-parse", coordination.integration_target)
-    reviewed = coordination.last_reviewed_commit
-    if _git_ref_exists(coordination.worktree_path, reviewed):
-        ancestor = (
-            subprocess.run(
-                ("git", "-C", str(coordination.worktree_path), "merge-base", "--is-ancestor", reviewed, current_target),
-                check=False,
-                capture_output=True,
-            ).returncode
-            == 0
-        )
-        if not ancestor:
-            _git(coordination.worktree_path, "update-ref", f"refs/heads/{coordination.integration_target}", reviewed)
-    attempted = application.integrate_ready_change(change_id)
-    assert attempted.candidate is not None
-    prepared = application.prepare_external_completion(change_id)
-    assert prepared.proposal is not None
-    proposal = prepared.proposal
-    _git(
-        coordination.worktree_path,
-        "update-ref",
-        f"refs/heads/{coordination.integration_target}",
-        proposal.proposal_commit,
-        proposal.target_head,
+    change_head: str,
+    target_head: str,
+) -> DeliveryIntegrationAttention:
+    attention = DeliveryIntegrationAttention(
+        attention_id="a" * 64,
+        code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
+        change_id=change_id,
+        change_head=change_head,
+        target_head=target_head,
+        integration_target="main",
+        diagnostics=("merge conflict",),
+        retry_condition="Admit a reviewed Integration repair for this attention, then retry Integration.",
     )
-    completion = DeliveryIntegrationCompletion(
-        completion_id=proposal.completion_id,
-        candidate_id=attempted.candidate.candidate_id,
-        package_id=attempted.candidate.package_id,
-        target_commit=proposal.proposal_commit,
-        completion_path=proposal.completion_path,
-    )
-    runtimes[change_id].publish_integration_completion(completion)
-    return completion
-
-
-def _migrate_legacy_completed_history(repository: Path) -> None:
-    _git(repository, "reset", "--hard", "main")
-    source = repository / ".owlbear/completed"
-    destination = repository / ".owlbear/legacy/completed"
-    destination.parent.mkdir(parents=True)
-    source.rename(destination)
-    _git(repository, "add", "-A", ".owlbear/completed", ".owlbear/legacy/completed")
-    _git(repository, "commit", "-m", "move completed packages to legacy history")
+    runtimes[change_id].publish_integration_attention(attention)
+    return attention
 
 
 def _prepare_reviewed_integration_repair(tmp_path: Path):
@@ -2257,8 +2201,7 @@ def _prepare_reviewed_integration_repair(tmp_path: Path):
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "concurrent target")
     target_head = _git(repository, "rev-parse", "main")
-    failed = application.integrate_ready_change("change-a")
-    assert failed.attention is not None
+    attention = _publish_merge_conflict_attention(runtimes, "change-a", reviewed, target_head)
     acquired = application.acquire_frontier_work()
     assert len(acquired.repair_launch_packages) == 1
     launch = acquired.repair_launch_packages[0]
@@ -2271,7 +2214,7 @@ def _prepare_reviewed_integration_repair(tmp_path: Path):
     )
     repair_commit = candidate.candidate_commit
     repair = DeliveryIntegrationRepair(
-        attention_id=failed.attention.attention_id,
+        attention_id=attention.attention_id,
         change_id="change-a",
         integration_target="main",
         prior_change_head=reviewed,
@@ -2412,7 +2355,7 @@ def _invalid_integration_repair(
     return repair
 
 
-def test_acquisition_returns_bounded_stage_packages_and_unclaimed_integration(tmp_path: Path) -> None:
+def test_acquisition_returns_bounded_stage_packages_without_integration_work(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {
@@ -2432,7 +2375,7 @@ def test_acquisition_returns_bounded_stage_packages_and_unclaimed_integration(tm
         DeliveryWorkerRole.PLANNER,
         DeliveryWorkerRole.BUILDER,
     )
-    assert acquired.integration_ready_change_ids == ("change-d",)
+    assert acquired.integration_ready_change_ids == ()
     assert acquired.failures == ()
     assert runtimes["change-d"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
@@ -2790,262 +2733,7 @@ def test_mismatched_build_custody_retains_current_writer_and_attention(tmp_path:
     assert ledger.change_ids == ("change-a",)
 
 
-def test_integration_requires_external_acceptance_without_target_mutation(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-    target_before, reviewed = _review_product_change(coordinator, "change-a", "reviewed product\n")
-    active_root = tmp_path / "packages/change-a"
-    worktree_path = coordinator.show("change-a").worktree_path
-
-    result = application.integrate_ready_change("change-a")
-
-    assert result.completion is None
-    assert result.attention is not None
-    assert result.attention.code == DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED
-    assert result.candidate is not None
-    assert result.candidate.reviewed_change_head == reviewed
-    assert _git(tmp_path / "repository", "rev-parse", "main") == target_before
-    assert _git(tmp_path / "repository", "rev-parse", coordinator.show("change-a").branch) == reviewed
-    assert runtimes["change-a"].change_stage().value == "integration"
-    assert not _git_ref_exists(tmp_path / "repository", "refs/owlbear/integration-candidates/change-a")
-    assert active_root.is_dir()
-    assert worktree_path.is_dir()
-
-
-def test_external_completion_proposal_never_treats_local_ref_move_as_acceptance(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-    _target_before, reviewed = _review_product_change(coordinator, "change-a", "reviewed product\n")
-    repository = tmp_path / "repository"
-    _git(repository, "update-ref", "refs/heads/main", reviewed)
-    active_root = tmp_path / "packages/change-a"
-    worktree_path = coordinator.show("change-a").worktree_path
-
-    prepared = application.prepare_external_completion("change-a")
-
-    assert prepared.proposal is not None
-    proposal = prepared.proposal
-    assert not _git_ref_exists(repository, "refs/owlbear/integration-candidates/change-a")
-    assert _git_ref_exists(repository, proposal.proposal_ref)
-    assert _git(repository, "rev-parse", "main") == reviewed
-    assert _git(repository, "rev-list", "--parents", "-n", "1", proposal.proposal_commit).split() == [
-        proposal.proposal_commit,
-        reviewed,
-    ]
-    assert active_root.exists()
-    assert worktree_path.exists()
-
-    _git(repository, "update-ref", "refs/heads/main", proposal.proposal_commit, reviewed)
-    waiting = application.prepare_external_completion("change-a")
-
-    assert waiting.completion is None
-    assert waiting.attention is not None
-    assert waiting.attention.code == DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED
-    assert "not provider acceptance evidence" in waiting.attention.diagnostics[0]
-    assert runtimes["change-a"].integration_completion() is None
-    assert _git_ref_exists(repository, proposal.proposal_ref)
-    assert active_root.exists()
-    assert worktree_path.exists()
-
-
-def test_integration_retry_never_treats_local_ref_move_as_acceptance(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-    _target_before, reviewed = _review_product_change(coordinator, "change-a", "reviewed product\n")
-    repository = tmp_path / "repository"
-    _git(repository, "update-ref", "refs/heads/main", reviewed)
-
-    attempted = application.integrate_ready_change("change-a")
-    prepared = application.prepare_external_completion("change-a")
-
-    assert attempted.attention is not None
-    assert attempted.attention.code == DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED
-    assert prepared.proposal is not None
-    proposal = prepared.proposal
-    _git(repository, "update-ref", "refs/heads/main", proposal.proposal_commit, proposal.target_head)
-
-    waiting = application.integrate_ready_change("change-a")
-
-    assert waiting.completion is None
-    assert waiting.attention is not None
-    assert waiting.attention.code == DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED
-    assert "not provider acceptance evidence" in waiting.attention.diagnostics[0]
-    assert runtimes["change-a"].integration_completion() is None
-    assert _git_ref_exists(repository, proposal.proposal_ref)
-    assert coordinator.show("change-a").worktree_path.exists()
-
-
-def test_integration_target_identity_mismatch_is_typed_attention(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-    repository = tmp_path / "repository"
-    target_head = _git(repository, "rev-parse", "main")
-    _git(repository, "branch", "other-target", target_head)
-    coordination = coordinator.show("change-a")
-    coordinator.update(coordination.model_copy(update={"integration_target": "other-target"}))
-
-    failed = application.integrate_ready_change("change-a")
-
-    assert failed.attention is not None
-    assert failed.attention.code == DeliveryIntegrationAttentionCode.TARGET_IDENTITY_MISMATCH
-    assert _git(repository, "rev-parse", "main") == target_head
-    assert _git(repository, "rev-parse", "other-target") == target_head
-    assert runtimes["change-a"].change_stage().value == "integration"
-
-
-def test_completed_history_queries_are_bounded_and_separate_from_active_projections(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED, "change-b": DeliveryStage.COMPLETED},
-    )
-    repository = tmp_path / "repository"
-    _seed_legacy_completed_history(application, runtimes, coordinator, "change-a")
-    _seed_legacy_completed_history(application, runtimes, coordinator, "change-b")
-    _migrate_legacy_completed_history(repository)
-    target_before = _git(repository, "rev-parse", "main")
-
-    first = application.search_completed_changes("delivery", limit=1)
-    second = application.search_completed_changes("delivery", first.next_cursor, 1)
-    shown = application.show_completed_change("change-b", second.records[0].completion_id)
-
-    assert tuple(item.change_id for item in (*first.records, *second.records)) == ("change-a", "change-b")
-    assert shown == second.records[0]
-    assert application.list_completed_changes(limit=100).records == (*first.records, *second.records)
-    assert application.list_work_items() == ()
-    assert application.list_integration_ready_changes() == ()
-    assert "intent prose sentinel" not in shown.model_dump_json()
-    assert _git(repository, "rev-parse", "main") == target_before
-
-
-def test_integration_rejects_reviewed_sibling_completed_history_mutation(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED, "change-b": DeliveryStage.COMPLETED},
-    )
-    repository = tmp_path / "repository"
-    sibling = _seed_legacy_completed_history(application, runtimes, coordinator, "change-b")
-    target_head = sibling.target_commit
-    coordination = coordinator.show("change-a")
-    _git(coordination.worktree_path, "reset", "--hard", target_head)
-    sibling_completion = coordination.worktree_path / ".owlbear/completed/change-b/completion.json"
-    sibling_completion.write_text('{"mutated":true}\n', encoding="utf-8")
-    _git(coordination.worktree_path, "add", str(sibling_completion))
-    _git(coordination.worktree_path, "commit", "-m", "mutate sibling completion")
-    reviewed = _git(coordination.worktree_path, "rev-parse", "HEAD")
-    coordinator.update(coordination.model_copy(update={"last_reviewed_commit": reviewed}))
-    completed_binding = runtimes["change-a"].show_binding("OUT-001")
-
-    failed = application.integrate_ready_change("change-a")
-
-    assert failed.attention is not None
-    assert failed.attention.code == DeliveryIntegrationAttentionCode.COMPLETED_HISTORY_MUTATED
-    assert _git(repository, "rev-parse", "main") == target_head
-    assert runtimes["change-a"].show_binding("OUT-001") == completed_binding
-    assert runtimes["change-a"].change_stage().value == "integration"
-    assert (tmp_path / "packages/change-a").is_dir()
-
-
-def test_integration_merge_conflict_retains_clean_heads_and_typed_attention(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-    _target_before, reviewed = _review_product_change(coordinator, "change-a", "change side\n")
-    repository = tmp_path / "repository"
-    (repository / "product.txt").write_text("target side\n", encoding="utf-8")
-    _git(repository, "add", "product.txt")
-    _git(repository, "commit", "-m", "concurrent target")
-    target_head = _git(repository, "rev-parse", "main")
-
-    failed = application.integrate_ready_change("change-a")
-
-    assert failed.attention is not None
-    assert failed.attention.code == DeliveryIntegrationAttentionCode.MERGE_CONFLICT
-    assert failed.attention.change_head == reviewed
-    assert failed.attention.target_head == target_head
-    assert _git(repository, "rev-parse", "main") == target_head
-    assert _git(repository, "rev-parse", coordinator.show("change-a").branch) == reviewed
-    assert not _git(coordinator.show("change-a").worktree_path, "status", "--porcelain")
-    assert runtimes["change-a"].change_stage().value == "integration"
-    acquired = application.acquire_frontier_work()
-    assert acquired.integration_ready_change_ids == ()
-    assert len(acquired.repair_launch_packages) == 1
-    repair_launch = acquired.repair_launch_packages[0]
-    assert repair_launch.attention == failed.attention
-    assert (
-        application.show_integration_repair_context(
-            repair_launch.change_id,
-            repair_launch.claim.attempt_id,
-            repair_launch.claim.claim_id,
-        ).launch
-        == repair_launch
-    )
-    assert acquired.integration_attention == ()
-    publication_card = next(item for item in application.list_work_items() if item.work_item_id == "change-a")
-    operator = application.show_operator_context("change-a", "change-a")
-    assert (publication_card.scope, publication_card.attention.value, publication_card.next_action) == (
-        "change-publication",
-        "agent",
-        "Ready for finalization",
-    )
-    assert operator.integration_attention is not None
-    assert operator.integration_attention.disposition.value == "repair-required"
-    assert operator.integration_attention.retry_condition == (
-        "Admit a reviewed Integration repair for this attention, then retry Integration."
-    )
-
-    (repository / "after-attention.txt").write_text("target advanced\n", encoding="utf-8")
-    _git(repository, "add", "after-attention.txt")
-    _git(repository, "commit", "-m", "advance target after attention")
-    refreshed = application.acquire_frontier_work()
-    assert refreshed.integration_ready_change_ids == ("change-a",)
-    assert refreshed.integration_attention == ()
-    assert len(refreshed.repair_recoveries) == 1
-    assert refreshed.repair_recoveries[0].claim_id == repair_launch.claim.claim_id
-    assert runtimes["change-a"].integration_repair_claim() is None
-    assert coordinator.show("change-a").writer is None
-
-
-def test_target_advance_keeps_legacy_retry_out_of_publication_projection(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-    _target_before, _reviewed = _review_product_change(coordinator, "change-a", "change side\n")
-    repository = tmp_path / "repository"
-    (repository / "product.txt").write_text("target side\n", encoding="utf-8")
-    _git(repository, "add", "product.txt")
-    _git(repository, "commit", "-m", "concurrent target")
-    failed = application.integrate_ready_change("change-a")
-    assert failed.attention is not None
-    persisted_target = coordinator.show("change-a").target_head
-
-    (repository / "after-attention.txt").write_text("target advanced\n", encoding="utf-8")
-    _git(repository, "add", "after-attention.txt")
-    _git(repository, "commit", "-m", "advance target after attention")
-
-    view = application.portfolio_read_view()
-    publication = view.groups[0].items[-1]
-
-    assert publication.progress.label == "Ready for finalization"
-    assert publication.action.kind.value == "none"
-    assert view.operating.queued_for_orchestration == ()
-    assert view.operating.guidance == ()
-    assert application.list_integration_ready_changes() == ("change-a",)
-    assert application.list_integration_attention() == ()
-    assert runtimes["change-a"].integration_attention() == failed.attention
-    assert coordinator.show("change-a").target_head == persisted_target
-
-
-def test_reviewed_integration_repair_advances_boundary_and_retries_publication(tmp_path: Path) -> None:
+def test_reviewed_integration_repair_advances_boundary_without_local_completion(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root, repair, claim = _prepare_reviewed_integration_repair(tmp_path)
     repository = tmp_path / "repository"
     target_head = repair.prior_target_head
@@ -3062,12 +2750,7 @@ def test_reviewed_integration_repair_advances_boundary_and_retries_publication(t
     assert runtimes["change-a"].show_binding("OUT-001") == completed_binding
     assert _git(repository, "rev-parse", "main") == target_head
     assert {path.name: path.read_bytes() for path in (tmp_path / "packages/change-a").iterdir()} == package_bytes
-
-    retried = application.integrate_ready_change("change-a")
-
-    assert retried.attention is not None
-    assert retried.attention.code == DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED
-    assert _git(repository, "rev-parse", "main") == target_head
+    assert application.acquire_frontier_work().integration_ready_change_ids == ()
 
 
 def test_repair_authority_attention_releases_claim_and_is_not_reacquired(tmp_path: Path) -> None:
@@ -3080,7 +2763,8 @@ def test_repair_authority_attention_releases_claim_and_is_not_reacquired(tmp_pat
     (repository / "product.txt").write_text("target side\n", encoding="utf-8")
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "concurrent target")
-    failed = application.integrate_ready_change("change-a")
+    target_head = _git(repository, "rev-parse", "main")
+    merge_attention = _publish_merge_conflict_attention(runtimes, "change-a", reviewed, target_head)
     acquired = application.acquire_frontier_work()
     launch = acquired.repair_launch_packages[0]
 
@@ -3088,14 +2772,13 @@ def test_repair_authority_attention_releases_claim_and_is_not_reacquired(tmp_pat
         launch.claim.attempt_id,
         launch.claim.claim_id,
         DeliveryIntegrationRepairAuthorityAttention(
-            attention_id=launch.attention.attention_id,
+            attention_id=merge_attention.attention_id,
             change_id="change-a",
             reason="The admitted authorities require incompatible public behavior.",
             locators=("product.txt",),
         ),
     )
 
-    assert failed.attention is not None
     assert attention.code == DeliveryIntegrationAttentionCode.REPAIR_AUTHORITY
     assert attention.change_head == reviewed
     assert runtimes["change-a"].integration_repair_claim() is None
@@ -3112,12 +2795,13 @@ def test_repair_authority_attention_preserves_claim_when_worktree_is_dirty(tmp_p
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
     )
-    _review_product_change(coordinator, "change-a", "change side\n")
+    _target_before, reviewed = _review_product_change(coordinator, "change-a", "change side\n")
     repository = tmp_path / "repository"
     (repository / "product.txt").write_text("target side\n", encoding="utf-8")
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "concurrent target")
-    application.integrate_ready_change("change-a")
+    target_head = _git(repository, "rev-parse", "main")
+    _publish_merge_conflict_attention(runtimes, "change-a", reviewed, target_head)
     launch = application.acquire_frontier_work().repair_launch_packages[0]
     (launch.worktree_path / "owned-edit.txt").write_text("uncommitted\n", encoding="utf-8")
     request = DeliveryIntegrationRepairAuthorityAttention(
@@ -3222,7 +2906,7 @@ def test_integration_repair_requires_exact_independent_review_binding(invalid_re
         DeliveryIntegrationRepair.model_validate(payload)
 
 
-def test_interrupted_integration_repair_admission_converges_before_retry(tmp_path: Path) -> None:
+def test_interrupted_integration_repair_admission_converges_without_local_retry(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root, repair, claim = _prepare_reviewed_integration_repair(tmp_path)
     repository = tmp_path / "repository"
     package_root = tmp_path / "packages/change-a"
@@ -3248,180 +2932,7 @@ def test_interrupted_integration_repair_admission_converges_before_retry(tmp_pat
 
     assert coordinator.show("change-a").last_reviewed_commit == repair.reviewed_repair_commit
     assert runtimes["change-a"].integration_attention() is None
+    assert runtimes["change-a"].integration_repair_claim() is None
+    assert coordinator.show("change-a").writer is None
     assert _git(repository, "rev-parse", "main") == repair.prior_target_head
     assert _file_bytes(package_root) == package_before
-
-    retried = application.integrate_ready_change("change-a")
-
-    assert retried.attention is not None
-    assert retried.attention.code == DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED
-
-
-def test_integration_target_cas_loss_publishes_attention_without_own_commit(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    repository = tmp_path / "repository"
-    concurrent_head = ""
-
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-
-    original_validate = application._workspace_manager.validate_prepared_integration  # noqa: SLF001
-
-    def advance_target(preparation: object) -> object:
-        nonlocal concurrent_head
-        (repository / "concurrent.txt").write_text("concurrent\n", encoding="utf-8")
-        _git(repository, "add", "concurrent.txt")
-        _git(repository, "commit", "-m", "concurrent target")
-        concurrent_head = _git(repository, "rev-parse", "HEAD")
-        return original_validate(preparation)
-
-    monkeypatch.setattr(application._workspace_manager, "validate_prepared_integration", advance_target)  # noqa: SLF001
-    target_before, reviewed = _review_product_change(coordinator, "change-a", "reviewed product\n")
-
-    failed = application.integrate_ready_change("change-a")
-
-    assert failed.attention is not None
-    assert failed.attention.code == DeliveryIntegrationAttentionCode.TARGET_CAS_LOST
-    assert failed.attention.target_head == target_before
-    assert _git(repository, "rev-parse", "main") == concurrent_head
-    assert _git(repository, "rev-parse", coordinator.show("change-a").branch) == reviewed
-    assert runtimes["change-a"].change_stage().value == "integration"
-    assert (tmp_path / "packages/change-a").is_dir()
-
-
-def test_integration_revalidates_reviewed_branch_after_candidate_capture(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-    _target_before, reviewed = _review_product_change(coordinator, "change-a", "reviewed product\n")
-    worktree = coordinator.show("change-a").worktree_path
-    repository = tmp_path / "repository"
-    target_head = _git(repository, "rev-parse", "main")
-    original_validate = application._workspace_manager.validate_prepared_integration  # noqa: SLF001
-
-    def advance_change(preparation: object) -> object:
-        (worktree / "late.txt").write_text("late change\n", encoding="utf-8")
-        _git(worktree, "add", "late.txt")
-        _git(worktree, "commit", "-m", "unreviewed late change")
-        return original_validate(preparation)
-
-    monkeypatch.setattr(application._workspace_manager, "validate_prepared_integration", advance_change)  # noqa: SLF001
-
-    failed = application.integrate_ready_change("change-a")
-
-    assert failed.attention is not None
-    assert failed.attention.code == DeliveryIntegrationAttentionCode.REVIEWED_BOUNDARY_MISMATCH
-    assert failed.attention.change_head == reviewed
-    assert failed.attention.target_head == target_head
-    assert _git(repository, "rev-parse", "main") == target_head
-    assert runtimes["change-a"].change_stage().value == "integration"
-
-
-def test_integration_reports_package_mutation_during_completion_capture(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    application, runtimes, _coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-    package_root = tmp_path / "packages/change-a"
-    repository = tmp_path / "repository"
-    target_head = _git(repository, "rev-parse", "main")
-    original_prepare = ChangeWorkspaceManager.prepare_integration_candidate
-    called = False
-
-    def mutate_package(manager: ChangeWorkspaceManager, candidate: object) -> object:
-        nonlocal called
-        called = True
-        intent = b"mutated during completion validation\n"
-        design = (package_root / "design.md").read_bytes()
-        authority = (package_root / "authority.json").read_bytes()
-        manifest = DesignPackageManifest.from_content("change-a", intent, design, authority)
-        (package_root / "intent.md").write_bytes(intent)
-        (package_root / "manifest.json").write_bytes(manifest.canonical_bytes())
-        return original_prepare(manager, candidate)
-
-    monkeypatch.setattr(ChangeWorkspaceManager, "prepare_integration_candidate", mutate_package)
-
-    failed = application.integrate_ready_change("change-a")
-
-    assert called is True
-    assert failed.attention is not None
-    assert failed.attention.code == DeliveryIntegrationAttentionCode.PACKAGE_MUTATED
-    assert "changed during completion validation" in failed.attention.diagnostics[0]
-    assert _git(repository, "rev-parse", "main") == target_head
-    assert runtimes["change-a"].change_stage().value == "integration"
-
-
-def test_integration_rejects_revision_pending_and_source_mutation_before_visibility(tmp_path: Path) -> None:
-    application, runtimes, _coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-    repository = tmp_path / "repository"
-    target_head = _git(repository, "rev-parse", "main")
-    package_root = tmp_path / "packages/change-a"
-    intent_bytes = (package_root / "intent.md").read_bytes()
-    design_bytes = (package_root / "design.md").read_bytes()
-    authority_bytes = (package_root / "authority.json").read_bytes()
-    revised_authority = b'{"revision":"pending"}\n'
-    (package_root / "authority.json").write_bytes(revised_authority)
-    pending_manifest = DesignPackageManifest.from_content(
-        "change-a",
-        intent_bytes,
-        design_bytes,
-        revised_authority,
-    )
-    (package_root / "manifest.json").write_bytes(pending_manifest.canonical_bytes())
-
-    revision_pending = application.integrate_ready_change("change-a")
-
-    assert revision_pending.attention is not None
-    assert revision_pending.attention.code == DeliveryIntegrationAttentionCode.REVISION_PENDING
-    assert _git(repository, "rev-parse", "main") == target_head
-
-    changed_intent = b"changed intent\n"
-    (package_root / "authority.json").write_bytes(authority_bytes)
-    (package_root / "intent.md").write_bytes(changed_intent)
-    mutated_manifest = DesignPackageManifest.from_content(
-        "change-a",
-        changed_intent,
-        design_bytes,
-        authority_bytes,
-    )
-    (package_root / "manifest.json").write_bytes(mutated_manifest.canonical_bytes())
-
-    source_mutated = application.integrate_ready_change("change-a")
-
-    assert source_mutated.attention is not None
-    assert source_mutated.attention.code == DeliveryIntegrationAttentionCode.PACKAGE_MUTATED
-    assert _git(repository, "rev-parse", "main") == target_head
-    assert runtimes["change-a"].change_stage().value == "integration"
-
-
-def test_integration_reports_dirty_reviewed_worktree_separately(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-    worktree = coordinator.show("change-a").worktree_path
-    repository = tmp_path / "repository"
-    target_head = _git(repository, "rev-parse", "main")
-    (worktree / "uncommitted.txt").write_text("uncommitted\n", encoding="utf-8")
-
-    failed = application.integrate_ready_change("change-a")
-
-    assert failed.attention is not None
-    assert failed.attention.code == DeliveryIntegrationAttentionCode.REVIEWED_WORKTREE_DIRTY
-    assert failed.attention.diagnostics == ("change worktree is not clean at its reviewed boundary",)
-    assert _git(repository, "rev-parse", "main") == target_head
-    assert runtimes["change-a"].change_stage().value == "integration"

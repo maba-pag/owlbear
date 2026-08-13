@@ -87,7 +87,6 @@ _TARGET_ROLE_TOOLS = {
         "recover_claim",
         "recover_integration_repair_claim",
         "publish_integration_repair_authority_attention",
-        "integrate_ready_change",
     },
     "finalizer": {
         "show_finalization_context",
@@ -110,6 +109,9 @@ _RETIRED_DELIVERY_TOOLS = {
     "show_job",
     "show_receipt",
     "start_job",
+    "list_integration_ready_changes",
+    "integrate_ready_change",
+    "prepare_external_completion",
 }
 
 
