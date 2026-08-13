@@ -6,12 +6,10 @@ import json
 import os
 import shutil
 import subprocess
-from contextlib import contextmanager
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
-from time import monotonic
 from threading import Event
 from unittest.mock import Mock, patch, sentinel
 
@@ -46,9 +44,6 @@ from owlbear_delivery import (
     DeliveryFrontier,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
-    DeliveryIntegrationRepair,
-    DeliveryIntegrationRepairAuthorityAttention,
-    DeliveryIntegrationRepairReview,
     DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryOutcome,
@@ -97,7 +92,6 @@ from owlbear_delivery.publication_provider import (
     PublicationPullRequest,
     PublicationRepository,
 )
-from owlbear_delivery.runtime_transaction import RuntimeTransaction
 
 
 def _git(repository: Path, *arguments: str) -> str:
@@ -357,11 +351,6 @@ def _policies() -> tuple[DeliveryRolePolicy, ...]:
         ),
         DeliveryRolePolicy(
             worker_role=DeliveryWorkerRole.BUILDER,
-            worker_agent="builder",
-            reviewer_agent="build-reviewer",
-        ),
-        DeliveryRolePolicy(
-            worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER,
             worker_agent="builder",
             reviewer_agent="build-reviewer",
         ),
@@ -2070,7 +2059,7 @@ def _publish_merge_conflict_attention(
         target_head=target_head,
         integration_target="main",
         diagnostics=("merge conflict",),
-        retry_condition="Admit a reviewed Integration repair for this attention, then retry Integration.",
+        retry_condition="Repair admission is retired; resolve the retained attention or recover the exact legacy claim.",
     )
     runtime = runtimes[change_id]
     frontier_path = state_root / "changes" / change_id / "frontier.json"
@@ -2083,10 +2072,14 @@ def _activate_legacy_integration_repair(
     application: PortfolioApplication,
     runtimes: dict[str, DeliveryRuntime],
     coordinator: PortfolioCoordinator,
+    state_root: Path,
     change_id: str,
 ):
     claim = application._new_claim(DeliveryWorkerRole.INTEGRATION_REPAIRER, None)  # noqa: SLF001
-    runtimes[change_id].activate_integration_repair_claim(claim)
+    runtime = runtimes[change_id]
+    frontier_path = state_root / "changes" / change_id / "frontier.json"
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    frontier_path.write_bytes(_canonical(frontier.model_copy(update={"integration_repair_claim": claim})))
     writer = ChangeWriter(
         attempt_id=claim.attempt_id,
         claim_id=claim.claim_id,
@@ -2098,7 +2091,7 @@ def _activate_legacy_integration_repair(
     )
     coordination = coordinator.acquire(change_id, writer)
     assert coordination.writer == writer
-    return application.show_integration_repair_context(change_id, claim.attempt_id, claim.claim_id).launch
+    return claim
 
 
 def test_acquisition_does_not_create_integration_repair_claim(tmp_path: Path) -> None:
@@ -2117,14 +2110,12 @@ def test_acquisition_does_not_create_integration_repair_claim(tmp_path: Path) ->
 
     acquired = application.acquire_frontier_work()
 
-    assert acquired.repair_launch_packages == ()
-    assert acquired.repair_failures == ()
     assert acquired.integration_attention[0].code == DeliveryIntegrationAttentionCode.MERGE_CONFLICT
     assert runtimes["change-a"].integration_repair_claim() is None
     assert coordinator.show("change-a").writer is None
 
 
-def _prepare_reviewed_integration_repair(tmp_path: Path):
+def _prepare_legacy_integration_repair(tmp_path: Path):
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
@@ -2136,131 +2127,13 @@ def _prepare_reviewed_integration_repair(tmp_path: Path):
     _git(repository, "commit", "-m", "concurrent target")
     target_head = _git(repository, "rev-parse", "main")
     application._workspace_manager.refresh_integration_target("change-a")  # noqa: SLF001
-    attention = _publish_merge_conflict_attention(runtimes, state_root, "change-a", reviewed, target_head)
-    launch = _activate_legacy_integration_repair(application, runtimes, coordinator, "change-a")
-    worktree = coordinator.show("change-a").worktree_path
-    (worktree / "product.txt").write_text("target side\n", encoding="utf-8")
-    candidate = application.create_integration_repair_candidate(
-        "change-a",
-        launch.claim.attempt_id,
-        launch.claim.claim_id,
-    )
-    repair_commit = candidate.candidate_commit
-    repair = DeliveryIntegrationRepair(
-        attention_id=attention.attention_id,
-        change_id="change-a",
-        integration_target="main",
-        prior_change_head=reviewed,
-        prior_target_head=target_head,
-        reviewed_repair_commit=repair_commit,
-        owner_id=launch.claim.owner_id,
-        review=DeliveryIntegrationRepairReview(
-            review_id="repair-review-001",
-            reviewer_id="independent-reviewer",
-            candidate_commit=repair_commit,
-        ),
-    )
-    return application, runtimes, coordinator, state_root, repair, launch.claim
-
-
-def test_integration_repair_candidate_serializes_independent_applications(  # noqa: PLR0915
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    application_a, runtimes, coordinator_a, state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-    _target_before, reviewed = _review_product_change(coordinator_a, "change-a", "change side\n")
-    repository = tmp_path / "repository"
-    (repository / "product.txt").write_text("target side\n", encoding="utf-8")
-    _git(repository, "add", "product.txt")
-    _git(repository, "commit", "-m", "concurrent target")
-    target_head = _git(repository, "rev-parse", "main")
-    application_a._workspace_manager.refresh_integration_target("change-a")  # noqa: SLF001
-    attention = _publish_merge_conflict_attention(runtimes, state_root, "change-a", reviewed, target_head)
-    launch = _activate_legacy_integration_repair(application_a, runtimes, coordinator_a, "change-a")
-    worktree = coordinator_a.show("change-a").worktree_path
-    (worktree / "product.txt").write_text("target side\n", encoding="utf-8")
-    application_b, coordinator_b, manager_b = _reopen_portfolio(tmp_path, state_root, runtimes)
-
-    manager_a = application_a._workspace_manager  # noqa: SLF001 - test authority setup.
-    original_a_create = manager_a.create_integration_repair_candidate
-    original_b_create = manager_b.create_integration_repair_candidate
-    original_a_lock = coordinator_a.integration_lock
-    original_b_lock = coordinator_b.integration_lock
-    a_entered = Event()
-    b_attempted = Event()
-    b_reached = Event()
-    allow_b = Event()
-    intervals: dict[str, float] = {}
-
-    @contextmanager
-    def observed_a_lock():
-        with original_a_lock():
-            intervals["a_enter"] = monotonic()
-            a_entered.set()
-            try:
-                yield
-            finally:
-                intervals["a_exit"] = monotonic()
-
-    @contextmanager
-    def observed_b_lock():
-        b_attempted.set()
-        with original_b_lock():
-            intervals["b_enter"] = monotonic()
-            try:
-                yield
-            finally:
-                intervals["b_exit"] = monotonic()
-
-    def create_a(attention_value, writer):
-        if not b_attempted.wait(timeout=2):
-            message = "second Integration caller did not attempt the shared lock"
-            raise AssertionError(message)
-        b_reached.wait(timeout=0.25)
-        return original_a_create(attention_value, writer)
-
-    def create_b(attention_value, writer):
-        b_reached.set()
-        if not allow_b.wait(timeout=2):
-            message = "second Integration caller did not receive release"
-            raise AssertionError(message)
-        return original_b_create(attention_value, writer)
-
-    monkeypatch.setattr(coordinator_a, "integration_lock", observed_a_lock)
-    monkeypatch.setattr(coordinator_b, "integration_lock", observed_b_lock)
-    monkeypatch.setattr(manager_a, "create_integration_repair_candidate", create_a)
-    monkeypatch.setattr(manager_b, "create_integration_repair_candidate", create_b)
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        first = executor.submit(
-            application_a.create_integration_repair_candidate,
-            "change-a",
-            launch.claim.attempt_id,
-            launch.claim.claim_id,
-        )
-        assert a_entered.wait(timeout=2)
-        second = executor.submit(
-            application_b.create_integration_repair_candidate,
-            "change-a",
-            launch.claim.attempt_id,
-            launch.claim.claim_id,
-        )
-        assert b_attempted.wait(timeout=2)
-        first_result = first.result(timeout=3)
-        assert b_reached.wait(timeout=2)
-        allow_b.set()
-        second_result = second.result(timeout=3)
-
-    assert first_result.candidate_commit == second_result.candidate_commit
-    assert intervals["a_exit"] <= intervals["b_enter"]
-    assert _git(repository, "rev-parse", "main") == target_head
-    assert attention.change_head == reviewed
+    _publish_merge_conflict_attention(runtimes, state_root, "change-a", reviewed, target_head)
+    claim = _activate_legacy_integration_repair(application, runtimes, coordinator, state_root, "change-a")
+    return application, runtimes, coordinator, state_root, reviewed, claim
 
 
 def test_repair_recovery_preserves_worktree_without_reacquisition(tmp_path: Path) -> None:
-    application, _runtimes, coordinator, _state_root, repair, first_claim = _prepare_reviewed_integration_repair(
+    application, runtimes, coordinator, _state_root, reviewed, first_claim = _prepare_legacy_integration_repair(
         tmp_path
     )
     worktree = coordinator.show("change-a").worktree_path
@@ -2275,108 +2148,18 @@ def test_repair_recovery_preserves_worktree_without_reacquisition(tmp_path: Path
         )
         acquired = application.acquire_frontier_work()
 
-        assert recovered.preserved_commit == repair.reviewed_repair_commit
+        assert recovered.preserved_commit == reviewed
         assert os.path.samestat(worktree.stat(), original_directory)
-        assert _git(worktree, "rev-parse", "HEAD") == repair.prior_change_head
-        assert acquired.repair_launch_packages == ()
-        assert acquired.repair_failures == ()
+        assert _git(worktree, "rev-parse", "HEAD") == reviewed
+        assert acquired.launch_packages == ()
+        assert acquired.integration_attention[0].code == DeliveryIntegrationAttentionCode.MERGE_CONFLICT
+        assert runtimes["change-a"].integration_repair_claim() is None
     finally:
         os.close(directory_fd)
 
 
-def test_repair_candidate_rejects_mismatched_claim(tmp_path: Path) -> None:
-    application, _runtimes, coordinator, _state_root, repair, claim = _prepare_reviewed_integration_repair(tmp_path)
-
-    with pytest.raises(DeliveryRuntimeConflictError, match="execution identity"):
-        application.create_integration_repair_candidate(
-            "change-a",
-            claim.attempt_id,
-            "another-claim",
-        )
-
-    assert _git(coordinator.show("change-a").worktree_path, "rev-parse", "HEAD") == repair.reviewed_repair_commit
-
-
-def test_repair_candidate_rejects_mismatched_writer_custody(tmp_path: Path) -> None:
-    application, _runtimes, coordinator, _state_root, repair, claim = _prepare_reviewed_integration_repair(tmp_path)
-    coordination = coordinator.show("change-a")
-    assert coordination.writer is not None
-    coordinator.release("change-a", claim.claim_id)
-    coordinator.acquire(
-        "change-a",
-        coordination.writer.model_copy(update={"actor_id": "another-builder"}),
-    )
-
-    with pytest.raises(PortfolioApplicationError, match="exact active writer custody"):
-        application.create_integration_repair_candidate(
-            "change-a",
-            claim.attempt_id,
-            claim.claim_id,
-        )
-
-    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == repair.reviewed_repair_commit
-
-
-def _with_reviewed_commit(repair: DeliveryIntegrationRepair, commit: str) -> DeliveryIntegrationRepair:
-    return repair.model_copy(
-        update={
-            "reviewed_repair_commit": commit,
-            "review": repair.review.model_copy(update={"candidate_commit": commit}),
-        }
-    )
-
-
 def _file_bytes(root: Path) -> dict[str, bytes]:
     return {str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()}
-
-
-def _invalid_integration_repair(
-    invalid_case: str,
-    repair: DeliveryIntegrationRepair,
-    worktree: Path,
-) -> DeliveryIntegrationRepair:
-    identity_updates = {
-        "stale-attention": {"attention_id": "0" * 64},
-        "change-identity": {"change_id": "change-b"},
-        "target-identity": {"integration_target": "other-target"},
-        "stale-change-head": {"prior_change_head": "0" * 40},
-        "stale-target-head": {"prior_target_head": "0" * 40},
-    }
-    if invalid_case in identity_updates:
-        return repair.model_copy(update=identity_updates[invalid_case])
-    if invalid_case == "multi-commit":
-        (worktree / "second.txt").write_text("second\n", encoding="utf-8")
-        _git(worktree, "add", "second.txt")
-        _git(worktree, "commit", "-m", "second repair commit")
-        return _with_reviewed_commit(repair, _git(worktree, "rev-parse", "HEAD"))
-    if invalid_case == "non-child":
-        _git(worktree, "reset", "--hard", repair.prior_target_head)
-        (worktree / "non-child.txt").write_text("non-child\n", encoding="utf-8")
-        _git(worktree, "add", "non-child.txt")
-        _git(worktree, "commit", "-m", "unrelated repair ancestry")
-        return _with_reviewed_commit(repair, _git(worktree, "rev-parse", "HEAD"))
-    if invalid_case == "dirty-worktree":
-        (worktree / "dirty.txt").write_text("dirty\n", encoding="utf-8")
-    elif invalid_case == "detached-worktree":
-        _git(worktree, "checkout", "--detach", repair.reviewed_repair_commit)
-    elif invalid_case == "branch-head-mismatch":
-        (worktree / "later.txt").write_text("later\n", encoding="utf-8")
-        _git(worktree, "add", "later.txt")
-        _git(worktree, "commit", "-m", "move branch after review")
-    elif invalid_case in {"completed-history", "non-conflict-path"}:
-        _git(worktree, "reset", "--hard", repair.prior_change_head)
-        (worktree / "product.txt").write_text("target side\n", encoding="utf-8")
-        extra = (
-            worktree / ".owlbear/completed/change-z/results.json"
-            if invalid_case == "completed-history"
-            else worktree / "unrelated.txt"
-        )
-        extra.parent.mkdir(parents=True, exist_ok=True)
-        extra.write_text("changed\n", encoding="utf-8")
-        _git(worktree, "add", "product.txt", str(extra))
-        _git(worktree, "commit", "-m", f"invalid {invalid_case} repair")
-        return _with_reviewed_commit(repair, _git(worktree, "rev-parse", "HEAD"))
-    return repair
 
 
 def test_acquisition_returns_bounded_stage_packages_without_integration_work(tmp_path: Path) -> None:
@@ -2712,208 +2495,3 @@ def test_mismatched_build_custody_retains_current_writer_and_attention(tmp_path:
     assert coordinator.show("change-a").writer == mismatched
     ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
     assert ledger.change_ids == ("change-a",)
-
-
-def test_reviewed_integration_repair_advances_boundary_without_local_completion(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root, repair, claim = _prepare_reviewed_integration_repair(tmp_path)
-    repository = tmp_path / "repository"
-    target_head = repair.prior_target_head
-    repair_commit = repair.reviewed_repair_commit
-    package_bytes = {path.name: path.read_bytes() for path in (tmp_path / "packages/change-a").iterdir()}
-    completed_binding = runtimes["change-a"].show_binding("OUT-001")
-
-    admitted = application.admit_reviewed_integration_repair(claim.attempt_id, claim.claim_id, repair)
-
-    assert admitted == repair
-    assert coordinator.show("change-a").last_reviewed_commit == repair_commit
-    assert runtimes["change-a"].integration_attention() is None
-    assert runtimes["change-a"].change_stage().value == "integration"
-    assert runtimes["change-a"].show_binding("OUT-001") == completed_binding
-    assert _git(repository, "rev-parse", "main") == target_head
-    assert {path.name: path.read_bytes() for path in (tmp_path / "packages/change-a").iterdir()} == package_bytes
-
-
-def test_repair_authority_attention_releases_claim_and_leaves_attention_visible(tmp_path: Path) -> None:
-    application, runtimes, coordinator, state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-    _target_before, reviewed = _review_product_change(coordinator, "change-a", "change side\n")
-    repository = tmp_path / "repository"
-    (repository / "product.txt").write_text("target side\n", encoding="utf-8")
-    _git(repository, "add", "product.txt")
-    _git(repository, "commit", "-m", "concurrent target")
-    target_head = _git(repository, "rev-parse", "main")
-    application._workspace_manager.refresh_integration_target("change-a")  # noqa: SLF001
-    merge_attention = _publish_merge_conflict_attention(runtimes, state_root, "change-a", reviewed, target_head)
-    launch = _activate_legacy_integration_repair(application, runtimes, coordinator, "change-a")
-
-    attention = application.publish_integration_repair_authority_attention(
-        launch.claim.attempt_id,
-        launch.claim.claim_id,
-        DeliveryIntegrationRepairAuthorityAttention(
-            attention_id=merge_attention.attention_id,
-            change_id="change-a",
-            reason="The admitted authorities require incompatible public behavior.",
-            locators=("product.txt",),
-        ),
-    )
-
-    assert attention.code == DeliveryIntegrationAttentionCode.REPAIR_AUTHORITY
-    assert attention.change_head == reviewed
-    assert runtimes["change-a"].integration_repair_claim() is None
-    assert coordinator.show("change-a").writer is None
-    assert CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes()).change_ids == ()
-    refreshed = application.acquire_frontier_work()
-    assert refreshed.repair_launch_packages == ()
-    assert refreshed.repair_failures == ()
-    assert refreshed.integration_attention[0].code == DeliveryIntegrationAttentionCode.REPAIR_AUTHORITY
-
-
-def test_repair_authority_attention_preserves_claim_when_worktree_is_dirty(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-    _target_before, reviewed = _review_product_change(coordinator, "change-a", "change side\n")
-    repository = tmp_path / "repository"
-    (repository / "product.txt").write_text("target side\n", encoding="utf-8")
-    _git(repository, "add", "product.txt")
-    _git(repository, "commit", "-m", "concurrent target")
-    target_head = _git(repository, "rev-parse", "main")
-    application._workspace_manager.refresh_integration_target("change-a")  # noqa: SLF001
-    _publish_merge_conflict_attention(runtimes, _state_root, "change-a", reviewed, target_head)
-    launch = _activate_legacy_integration_repair(application, runtimes, coordinator, "change-a")
-    (launch.worktree_path / "owned-edit.txt").write_text("uncommitted\n", encoding="utf-8")
-    request = DeliveryIntegrationRepairAuthorityAttention(
-        attention_id=launch.attention.attention_id,
-        change_id="change-a",
-        reason="The admitted authorities conflict.",
-        locators=("product.txt",),
-    )
-
-    with pytest.raises(RuntimeError, match="worktree is not clean"):
-        application.publish_integration_repair_authority_attention(
-            launch.claim.attempt_id,
-            launch.claim.claim_id,
-            request,
-        )
-
-    assert runtimes["change-a"].integration_repair_claim() == launch.claim
-    assert coordinator.show("change-a").writer == launch.writer
-    assert runtimes["change-a"].integration_attention() == launch.attention
-
-
-@pytest.mark.parametrize(
-    "invalid_case",
-    [
-        "stale-attention",
-        "change-identity",
-        "target-identity",
-        "stale-change-head",
-        "stale-target-head",
-        "multi-commit",
-        "non-child",
-        "dirty-worktree",
-        "detached-worktree",
-        "branch-head-mismatch",
-        "completed-history",
-        "non-conflict-path",
-    ],
-)
-def test_reviewed_integration_repair_rejection_preserves_all_state(
-    tmp_path: Path,
-    invalid_case: str,
-) -> None:
-    application, runtimes, coordinator, state_root, repair, claim = _prepare_reviewed_integration_repair(tmp_path)
-    coordination = coordinator.show("change-a")
-    worktree = coordination.worktree_path
-    repository = tmp_path / "repository"
-    repair = _invalid_integration_repair(invalid_case, repair, worktree)
-
-    coordination_path = state_root / "claims/changes/change-a.json"
-    frontier_path = state_root / "changes/change-a/frontier.json"
-    package_root = tmp_path / "packages/change-a"
-    persisted_before = (coordination_path.read_bytes(), frontier_path.read_bytes())
-    refs_before = (
-        _git(repository, "rev-parse", "main"),
-        _git(repository, "rev-parse", coordination.branch),
-        _git(worktree, "rev-parse", "HEAD"),
-        _git(worktree, "status", "--porcelain"),
-    )
-    package_before = _file_bytes(package_root)
-    binding_before = runtimes["change-a"].show_binding("OUT-001")
-    attention_before = runtimes["change-a"].integration_attention()
-
-    with pytest.raises(RuntimeError):
-        application.admit_reviewed_integration_repair(claim.attempt_id, claim.claim_id, repair)
-
-    assert (coordination_path.read_bytes(), frontier_path.read_bytes()) == persisted_before
-    assert (
-        _git(repository, "rev-parse", "main"),
-        _git(repository, "rev-parse", coordination.branch),
-        _git(worktree, "rev-parse", "HEAD"),
-        _git(worktree, "status", "--porcelain"),
-    ) == refs_before
-    assert _file_bytes(package_root) == package_before
-    assert runtimes["change-a"].show_binding("OUT-001") == binding_before
-    assert runtimes["change-a"].integration_attention() == attention_before
-
-
-@pytest.mark.parametrize("invalid_review", ["missing", "commit-mismatch", "not-independent"])
-def test_integration_repair_requires_exact_independent_review_binding(invalid_review: str) -> None:
-    payload = {
-        "attention_id": "a" * 64,
-        "change_id": "change-a",
-        "integration_target": "main",
-        "prior_change_head": "b" * 40,
-        "prior_target_head": "c" * 40,
-        "reviewed_repair_commit": "d" * 40,
-        "owner_id": "repair-builder",
-        "review": {
-            "review_id": "review-001",
-            "reviewer_id": "independent-reviewer",
-            "candidate_commit": "d" * 40,
-        },
-    }
-    if invalid_review == "missing":
-        payload.pop("review")
-    elif invalid_review == "commit-mismatch":
-        payload["review"]["candidate_commit"] = "e" * 40
-    else:
-        payload["review"]["reviewer_id"] = payload["owner_id"]
-
-    with pytest.raises(ValueError):
-        DeliveryIntegrationRepair.model_validate(payload)
-
-
-def test_interrupted_integration_repair_admission_converges_without_local_retry(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root, repair, claim = _prepare_reviewed_integration_repair(tmp_path)
-    repository = tmp_path / "repository"
-    package_root = tmp_path / "packages/change-a"
-    package_before = _file_bytes(package_root)
-    original_commit = RuntimeTransaction.commit
-
-    def interrupt(stage: str) -> None:
-        if stage == "after-first-publication":
-            message = "interrupted repair admission"
-            raise RuntimeError(message)
-
-    def commit_with_interruption(transaction: RuntimeTransaction) -> None:
-        original_commit(transaction, failure=interrupt)
-
-    with (
-        patch.object(RuntimeTransaction, "commit", commit_with_interruption),
-        pytest.raises(
-            RuntimeError,
-            match="interrupted repair admission",
-        ),
-    ):
-        application.admit_reviewed_integration_repair(claim.attempt_id, claim.claim_id, repair)
-
-    assert coordinator.show("change-a").last_reviewed_commit == repair.reviewed_repair_commit
-    assert runtimes["change-a"].integration_attention() is None
-    assert runtimes["change-a"].integration_repair_claim() is None
-    assert coordinator.show("change-a").writer is None
-    assert _git(repository, "rev-parse", "main") == repair.prior_target_head
-    assert _file_bytes(package_root) == package_before

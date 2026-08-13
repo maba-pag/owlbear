@@ -187,13 +187,12 @@ package, reviewed source, target identity, and completed-history boundary before
 product tree and recoverable package snapshot atomically to the configured target.
 
 Failure preserves completed outcomes and publishes typed Integration attention with unchanged
-heads and a retry condition. Use Cockpit to inspect the attention and retry conditions that do not
-require source repair. For `merge-conflict`, invoke `/integration-repair <change-id>`: Builder may
-create one additive repair commit limited to the original conflict paths, obtain independent review,
-and admit only a pass. Repair admission advances the reviewed source boundary; it does not update
-the target. Run normal `/orchestrate <change-id>` afterward so the runtime owns the Integration
-retry. Cockpit and the MCP completed-change tools provide bounded list, search, and exact lookup of
-published history.
+heads and a retry condition. Use Cockpit or `/resolve-delivery-attention <change-id> <attention-id>`
+to inspect the exact attention. New Integration repair claims, candidates, reviews, and admissions
+are retired. Treat a merge conflict without a current legacy claim as an authority gap; if persisted
+legacy claim context supplies exact attempt and claim identities, use the exact recovery operation
+and preserve its evidence. Do not edit the target or worktree directly. Cockpit and the MCP
+completed-change tools provide bounded list, search, and exact lookup of published history.
 
 ### Current Manual Boundaries
 
@@ -202,8 +201,8 @@ published history.
   operation. An unexpected Assembly launch is recovered by exact claim identity rather than run.
 - Design return persists structured successor context, but reopening and revising the Specification
   currently starts with a manual `/design` invocation.
-- Merge-conflict repair is deliberately user-invoked; neither Orchestrator nor Integration edits
-  source automatically.
+- Merge-conflict repair production is retired; attention resolution reports the authority gap or
+  recovers an exact persisted legacy claim when its identities are available.
 - Files under `.owlbear/research/` are frozen comparison evidence, not operational or runtime
   authority. Files under `.owlbear/legacy/` are immutable historical evidence only.
 

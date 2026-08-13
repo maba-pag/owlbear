@@ -680,17 +680,19 @@ Target interfaces expose worktree claim/release, Task promotion, checkpoint publ
 reconciliation, target synchronization, finalization, ready/draft state, check observation, acceptance
 observation, attention resolution, deferral, resume, and abandonment.
 
-Integration interfaces are absent, including:
+New Integration production and mutation interfaces are absent, including:
 
 ```text
-list_integration_ready_changes
-show_integration_attention
-integrate_ready_change
-prepare_external_completion
 admit_reviewed_integration_repair
 publish_integration_repair_authority_attention
 show_integration_repair_context
 create_integration_repair_candidate
+```
+
+Compatibility visibility and recovery remain available for persisted legacy state:
+
+```text
+show_integration_attention
 recover_integration_repair_claim
 ```
 

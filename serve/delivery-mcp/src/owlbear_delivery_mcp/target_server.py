@@ -49,10 +49,6 @@ from owlbear_delivery_mcp.target_models import (
     EmptyRequest,
     FinalizeDeliveryChangeParams,
     FinalizeDeliveryChangeRequest,
-    IntegrationRepairAuthorityAttentionParams,
-    IntegrationRepairAuthorityAttentionRequest,
-    IntegrationRepairParams,
-    IntegrationRepairRequest,
     MarkChangeReadyParams,
     MarkChangeReadyRequest,
     PublishDeliveryPlanParams,
@@ -92,8 +88,6 @@ DELIVERY_OPERATION_NAMES = (
     "show_plan_context",
     "show_build_context",
     "show_finalization_context",
-    "show_integration_repair_context",
-    "create_integration_repair_candidate",
     "publish_delivery_plan",
     "publish_delivery_result",
     "finalize_change",
@@ -106,8 +100,6 @@ DELIVERY_OPERATION_NAMES = (
     "recover_claim",
     "recover_integration_repair_claim",
     "show_integration_attention",
-    "admit_reviewed_integration_repair",
-    "publish_integration_repair_authority_attention",
     "list_completed_changes",
     "search_completed_changes",
     "show_completed_change",
@@ -122,7 +114,6 @@ _DELIVERY_READS = frozenset(
         "show_plan_context",
         "show_build_context",
         "show_finalization_context",
-        "show_integration_repair_context",
         "show_integration_attention",
         "observe_change_publication_checks",
         "list_completed_changes",
@@ -252,25 +243,6 @@ class TargetMCPAdapter:
         params = self._validate(ChangeParams, request)
         return self._call(params, lambda: self._application.show_finalization_context(params.change_id))
 
-    async def show_integration_repair_context(self, request: RepairClaimContextRequest) -> dict[str, object]:
-        """Show bounded Integration repair context for one claim."""
-        params = self._validate(RepairClaimContextParams, request)
-        return self._call(
-            params,
-            lambda: self._application.show_integration_repair_context(**params.model_dump()),
-        )
-
-    async def create_integration_repair_candidate(
-        self,
-        request: RepairClaimContextRequest,
-    ) -> dict[str, object]:
-        """Create and prove one exact claim-bound Integration repair candidate."""
-        params = self._validate(RepairClaimContextParams, request)
-        return self._call(
-            params,
-            lambda: self._application.create_integration_repair_candidate(**params.model_dump()),
-        )
-
     async def publish_delivery_plan(self, request: PublishDeliveryPlanRequest) -> DeliveryPlanPublication:
         """Publish one claim-scoped Delivery plan."""
         params = self._validate(PublishDeliveryPlanParams, request)
@@ -373,33 +345,6 @@ class TargetMCPAdapter:
         """Show current typed Integration attention."""
         params = self._validate(ChangeParams, request)
         return self._call(params, lambda: self._application.show_integration_attention(params.change_id))
-
-    async def admit_reviewed_integration_repair(self, request: IntegrationRepairRequest) -> dict[str, object]:
-        """Admit one independently reviewed Integration repair."""
-        params = self._validate(IntegrationRepairParams, request)
-        return self._call(
-            params,
-            lambda: self._application.admit_reviewed_integration_repair(
-                params.attempt_id,
-                params.claim_id,
-                params.repair,
-            ),
-        )
-
-    async def publish_integration_repair_authority_attention(
-        self,
-        request: IntegrationRepairAuthorityAttentionRequest,
-    ) -> dict[str, object]:
-        """Publish one claim-bound non-claimable repair authority attention."""
-        params = self._validate(IntegrationRepairAuthorityAttentionParams, request)
-        return self._call(
-            params,
-            lambda: self._application.publish_integration_repair_authority_attention(
-                params.attempt_id,
-                params.claim_id,
-                params.attention,
-            ),
-        )
 
     async def list_completed_changes(self, request: CompletedPageRequest) -> dict[str, object]:
         """List one bounded completed-history page."""

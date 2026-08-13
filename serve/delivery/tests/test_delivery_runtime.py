@@ -315,10 +315,13 @@ def test_integration_repair_claim_is_change_scoped_and_exact(tmp_path: Path) -> 
         worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER,
     )
 
-    assert runtime.activate_integration_repair_claim(claim) == claim
+    _persist_frontier(
+        tmp_path,
+        runtime,
+        integration_attention=attention,
+        integration_repair_claim=claim,
+    )
     assert runtime.require_integration_repair_claim("repair-attempt", "repair-claim") == claim
-    with pytest.raises(DeliveryRuntimeConflictError, match="already claimed"):
-        runtime.activate_integration_repair_claim(claim)
     with pytest.raises(DeliveryRuntimeConflictError, match="execution identity"):
         runtime.require_integration_repair_claim("other-attempt", "repair-claim")
     assert runtime.remove_integration_repair_claim("repair-attempt", "repair-claim") == claim
@@ -1563,15 +1566,18 @@ def test_administrative_move_rejects_active_integration_repair(tmp_path: Path) -
         retry_condition="Admit an independently reviewed repair.",
     )
     _persist_frontier(tmp_path, runtime, integration_attention=attention)
-    runtime.activate_integration_repair_claim(
-        DeliveryActiveClaim(
+    _persist_frontier(
+        tmp_path,
+        runtime,
+        integration_attention=attention,
+        integration_repair_claim=DeliveryActiveClaim(
             attempt_id="repair-attempt",
             claim_id="repair-claim",
             owner_id="repair-owner",
             process_id="repair-process",
             started_at="2026-08-04T00:00:00Z",
             worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER,
-        )
+        ),
     )
     before = runtime.frontier_bytes()
 

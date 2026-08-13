@@ -10,8 +10,6 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
-    DeliveryIntegrationRepair,
-    DeliveryIntegrationRepairAuthorityAttention,
     DeliveryOutputReference,
     DeliveryPlanCandidate,
     DeliveryResultCandidate,
@@ -172,18 +170,6 @@ class TransitionDeliveryParams(ChangeParams):
     request: DeliveryTransition
 
 
-class IntegrationRepairParams(RepairClaimContextParams):
-    """Validate one independently reviewed Integration repair."""
-
-    repair: DeliveryIntegrationRepair
-
-
-class IntegrationRepairAuthorityAttentionParams(RepairClaimContextParams):
-    """Validate one claim-bound Integration repair authority escalation."""
-
-    attention: DeliveryIntegrationRepairAuthorityAttention
-
-
 class CompletedPageParams(_TargetProtocolModel):
     """Validate one bounded completed-history page request."""
 
@@ -228,14 +214,6 @@ type CreateDesignSessionRequest = Annotated[
     BeforeValidator(partial(_parse_json_model, CreateDesignSessionParams)),
 ]
 type EmptyRequest = Annotated[EmptyParams, BeforeValidator(partial(_parse_json_model, EmptyParams))]
-type IntegrationRepairRequest = Annotated[
-    IntegrationRepairParams,
-    BeforeValidator(partial(_parse_json_model, IntegrationRepairParams)),
-]
-type IntegrationRepairAuthorityAttentionRequest = Annotated[
-    IntegrationRepairAuthorityAttentionParams,
-    BeforeValidator(partial(_parse_json_model, IntegrationRepairAuthorityAttentionParams)),
-]
 type FinalizeDeliveryChangeRequest = Annotated[
     FinalizeDeliveryChangeParams,
     BeforeValidator(partial(_parse_json_model, FinalizeDeliveryChangeParams)),
@@ -294,10 +272,6 @@ __all__ = [
     "EmptyRequest",
     "FinalizeDeliveryChangeParams",
     "FinalizeDeliveryChangeRequest",
-    "IntegrationRepairAuthorityAttentionParams",
-    "IntegrationRepairAuthorityAttentionRequest",
-    "IntegrationRepairParams",
-    "IntegrationRepairRequest",
     "MarkChangeReadyParams",
     "MarkChangeReadyRequest",
     "PublishDeliveryPlanParams",

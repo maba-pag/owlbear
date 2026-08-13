@@ -51,6 +51,7 @@ _RETIRED_SKILLS = {
     "w-task-repair",
     "w-node-acceptance",
     "w-whole-change-audit",
+    "w-integration-repair",
 }
 _GENERIC_TASK_TOOLS = {
     "owlbear-delivery/create_task",
@@ -75,10 +76,7 @@ _TARGET_ROLE_TOOLS = {
     "planner": {"show_plan_context", "publish_delivery_plan"},
     "builder": {
         "show_build_context",
-        "show_integration_repair_context",
-        "create_integration_repair_candidate",
         "publish_delivery_result",
-        "admit_reviewed_integration_repair",
     },
     "orchestrator": {
         "list_work_items",
@@ -86,7 +84,6 @@ _TARGET_ROLE_TOOLS = {
         "transition_delivery",
         "recover_claim",
         "recover_integration_repair_claim",
-        "publish_integration_repair_authority_attention",
     },
     "finalizer": {
         "show_finalization_context",
@@ -111,6 +108,10 @@ _RETIRED_DELIVERY_TOOLS = {
     "list_integration_ready_changes",
     "integrate_ready_change",
     "prepare_external_completion",
+    "show_integration_repair_context",
+    "create_integration_repair_candidate",
+    "admit_reviewed_integration_repair",
+    "publish_integration_repair_authority_attention",
 }
 
 

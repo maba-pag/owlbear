@@ -8,14 +8,14 @@ user-invocable: false
 
 Run the portfolio until acquisition is quiescent or bounded attention requires a user/operator.
 Delivery owns readiness, capacity, claims, identities, reviewer policy, writer custody, transitions,
-provider-observed acceptance, and Integration repair. Orchestrator performs only the mechanical
+provider-observed acceptance, and retained Integration attention. Orchestrator performs only the mechanical
 dispatch loop around that authority.
 
 ## Step 1 - Acquire One Current Batch
 
 If target tools are deferred, load them once with `tool_search` using:
 
-`OwlBear Delivery target portfolio list_work_items acquire_frontier_work transition_delivery recover_claim recover_integration_repair_claim publish_integration_repair_authority_attention`
+`OwlBear Delivery target portfolio list_work_items acquire_frontier_work transition_delivery recover_claim recover_integration_repair_claim`
 
 Before calling `acquire_frontier_work`, require callable bindings for `transition_delivery`,
 `recover_claim`, and `recover_integration_repair_claim`. Run one focused `tool_search` for each
@@ -25,26 +25,13 @@ are required dispatch safety authority, not optional operations to discover afte
 acquired.
 
 Call `list_work_items` only for bounded portfolio reporting. Call `acquire_frontier_work` once for the
-current cycle. Its `DeliveryAcquisitionResult` is the sole source of task and repair launch order,
+current cycle. Its `DeliveryAcquisitionResult` is the sole source of task launch order,
 typed `integration_attention`, and acquisition failures. Active claims remain occupied; an
 interrupted claim is recovered only through its exact recovery operation after a failed dispatch.
 Report Integration and recovery attention unchanged. Do not filter
 for capacity, infer readiness, create identities, or reserve writer custody.
 
 ## Step 2 - Dispatch Or Recover Each Launch
-
-Process `repair_launch_packages` in returned order before `launch_packages`. Dispatch exactly
-`launch.policy.worker_agent` with only the serialized `DeliveryIntegrationRepairLaunchPackage`.
-Require either `integration_repair_admitted` bound to the launch's change, attempt, claim, and
-attention identities, `authority_attention` carrying those same outer identities and an attention
-payload bound to the launch attention and change, or a claim-bound `dispatch_failure`. Forward valid
-authority attention unchanged to `publish_integration_repair_authority_attention`. On admission,
-perform no transition and let the next acquisition cycle own Integration retry. If the authority
-attention publication operation is unavailable or rejects the valid worker result, call
-`recover_integration_repair_claim` with the launch's exact change, attempt, and claim IDs, report the
-handoff failure and recovery result, and end the session after the current acquired batch rather
-than reacquiring the same repair. On malformed output, dispatch failure, or agent failure, use that
-same exact recovery call and report its result unchanged.
 
 Process `launch_packages` in returned order. For worker role `planner` or `builder`, dispatch exactly
 `launch.policy.worker_agent` and pass only the serialized `DeliveryLaunchPackage`. The selected
@@ -89,10 +76,10 @@ before session completion.
 
 ## Step 4 - Preserve Typed Integration Attention
 
-Do not call a local Integration or completion operation from the orchestration loop. Acquisition has
-already classified `integration_attention` as requiring reviewed repair or operator action. Repair
-launches follow Step 2; other attention is reported unchanged and resolved through its owning
-attention or provider-acceptance workflow. Never infer completion from work-item stages, worker
+Do not call a local Integration or completion operation from the orchestration loop. Acquisition
+returns `integration_attention` as retained evidence for the owning attention or provider-acceptance
+workflow. A legacy repair condition is visibility only: do not create a new repair claim, dispatch a
+repair worker, or synthesize a repair result. Never infer completion from work-item stages, worker
 prose, branch state, or cached results.
 
 Continue independent task work when possible, then report the exact attention as bounded action at
@@ -101,8 +88,8 @@ the end of the cycle.
 ## Step 5 - Refresh
 
 Finish the current acquired batch, discard it, and call `acquire_frontier_work` again. Continue
-independent changes when one outcome returns or blocks. Stop when task and repair launch packages
-are empty, or when a fail-closed diagnostic requires user/operator action.
+independent changes when one outcome returns or blocks. Stop when launch packages are empty, or when
+a fail-closed diagnostic requires user/operator action.
 Non-empty `integration_attention` is bounded action, not quiescence.
 
 Before reporting portfolio quiescence after an empty acquisition, call `list_work_items`. Quiescence

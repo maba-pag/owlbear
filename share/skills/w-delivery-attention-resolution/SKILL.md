@@ -83,8 +83,8 @@ Use only an existing operation whose contract owns the selected result:
   completion from local Git state;
 - Design or admitted-authority revision: hand off with `/design <change_id>` and explain the exact
   revision required;
-- reviewed merge conflict: hand off with `/orchestrate`; the claimed Integration repair workflow
-  owns edits, proof, review, and admission;
+- reviewed merge conflict: report `authority-gap` unless the current context supplies an exact
+  legacy repair claim for recovery; do not create a new claim, candidate, review, or admission;
 - target, publication, or finalization prerequisite: hand off to the owning Delivery workflow and
   report the exact missing authority rather than inventing a local Integration route;
 - claim recovery: use the exact claim-bound recovery operation only when current context supplies

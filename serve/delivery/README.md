@@ -24,7 +24,7 @@ The main public areas are:
 | Operational Delivery | `DeliveryRuntime` and `PortfolioApplication` outcome stages, launch acquisition, typed role contexts, publication, worker transitions, requests, and exact-claim recovery |
 | Work projection | Portfolio work items with dependency readiness, typed attention, requests, blocks, and task progress |
 | Coordination | Per-change writers, separate execution/writer capacity, warm worktrees, and reviewed source boundaries |
-| Integration and history | Atomic target publication, typed Integration attention, reviewed additive repair admission, and bounded completed lookup |
+| Integration and history | Atomic target publication, typed Integration attention, exact legacy claim recovery, and bounded completed lookup |
 | Legacy Target evidence | `TargetRuntime`, `list_frontier`, target snapshots, mutation authorization, receipts, and legacy verification remain public for historical consumers |
 
 Assembly remains a live stage, projection, and required role-policy configuration type. Current

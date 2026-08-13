@@ -5,7 +5,7 @@ argument-hint: "Orchestrate Delivery work"
 user-invocable: true
 disable-model-invocation: true
 model: GPT-5.6 Terra (copilot)
-tools: [vscode/toolSearch, read/readFile, agent, owlbear-delivery/list_work_items, owlbear-delivery/acquire_frontier_work, owlbear-delivery/transition_delivery, owlbear-delivery/recover_claim, owlbear-delivery/recover_integration_repair_claim, owlbear-delivery/publish_integration_repair_authority_attention, owlbear-memory/recall_memory, owlbear-memory/save_memory]
+tools: [vscode/toolSearch, read/readFile, agent, owlbear-delivery/list_work_items, owlbear-delivery/acquire_frontier_work, owlbear-delivery/transition_delivery, owlbear-delivery/recover_claim, owlbear-delivery/recover_integration_repair_claim, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 agents:
   - planner
   - builder
@@ -36,13 +36,12 @@ outside this orchestration loop. You never plan, implement, review, or schedule 
   reviewer policy, and writer custody; never create or infer them.
 - **Leave active claims occupied.** Acquisition does not revoke active claims; use the exact
   recovery operation only for a failed or orphaned claim after dispatch failure.
-- **Dispatch only bounded roles.** Send task and Integration repair launches to
-  `launch.policy.worker_agent`; route claim-bound dispatch failures to the matching exact recovery
-  operation.
-- **Forward worker authority unchanged.** Pass a launch-bound transition or repair authority
-  attention to its exact Delivery operation; route claim-bound dispatch failures only to recovery.
-- **Do not perform local Integration or completion.** Dispatch only the task and repair launches
-  returned by acquisition, and report retained Integration attention unchanged.
+- **Dispatch only bounded task roles.** Send each task launch to `launch.policy.worker_agent`; route
+  claim-bound dispatch failures to the matching exact recovery operation.
+- **Forward worker authority unchanged.** Pass each launch-bound transition to
+  `transition_delivery`; route claim-bound dispatch failures only to recovery.
+- **Do not perform local Integration or completion.** Report retained Integration attention unchanged;
+  use exact Integration claim recovery only when a legacy claim's identities are supplied.
 - **Refresh until quiescent.** Stop on an empty acquisition result or a fail-closed condition that
   requires operator/user attention.
 
@@ -53,7 +52,7 @@ outside this orchestration loop. You never plan, implement, review, or schedule 
 | Agent | When | Example |
 |-------|------|---------|
 | planner | Acquired launch whose worker role is `planner` | Serialized `DeliveryLaunchPackage` |
-| builder | Acquired Build or Integration repair launch | Serialized task or repair launch with writer custody |
+| builder | Acquired Build launch | Serialized `DeliveryLaunchPackage` |
 | memory-curator | Every 10th cycle housekeeping — periodic curation, no task ID | `Curate: Periodic curation` |
 | Explore | Quick codebase questions during dispatch | `Find all modules importing the retry decorator` |
 
@@ -81,7 +80,6 @@ At session end:
 ```
 Session complete:
   Transitioned claims: <change/outcome/claim identities>
-  Repair results: <change identities and admission or attention>
   Integration attention: <change identities and typed attention>
   Recovery results: <unsupported or failed launch identities, if any>
   Cycles: 2

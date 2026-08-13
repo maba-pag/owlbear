@@ -11,7 +11,6 @@ from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict
 
 from owlbear_delivery.acceptance import CompletionReceiptConflictError
-from owlbear_delivery.change_workspace import CoordinationConflictError
 from owlbear_delivery.completed_history import (
     CompletedHistoryDiagnostic,
     CompletedHistoryDiagnosticCode,
@@ -138,28 +137,6 @@ def _result() -> dict[str, object]:
     }
 
 
-def _repair() -> dict[str, object]:
-    return {
-        "attention_id": DIGEST,
-        "change_id": CHANGE,
-        "integration_target": "main",
-        "prior_change_head": COMMIT,
-        "prior_target_head": COMMIT,
-        "reviewed_repair_commit": COMMIT,
-        "owner_id": "owner",
-        "review": {"review_id": "review", "reviewer_id": "reviewer", "candidate_commit": COMMIT},
-    }
-
-
-def _repair_authority_attention() -> dict[str, object]:
-    return {
-        "attention_id": DIGEST,
-        "change_id": CHANGE,
-        "reason": "Reviewed and target behavior cannot both be preserved.",
-        "locators": ["product.txt"],
-    }
-
-
 def _finalization() -> dict[str, object]:
     operation_id = "finalize-one"
     observed_at = datetime(2026, 8, 11, 13, tzinfo=UTC)
@@ -215,8 +192,6 @@ def _requests() -> dict[str, dict[str, object]]:
         "show_plan_context": claim,
         "show_build_context": claim,
         "show_finalization_context": change,
-        "show_integration_repair_context": repair_claim,
-        "create_integration_repair_candidate": repair_claim,
         "publish_delivery_plan": {
             **change,
             "request": {"outcome_id": "OUT-001", "claim_id": "claim", "tasks": [_task()]},
@@ -260,11 +235,6 @@ def _requests() -> dict[str, dict[str, object]]:
         "recover_claim": claim,
         "recover_integration_repair_claim": repair_claim,
         "show_integration_attention": change,
-        "admit_reviewed_integration_repair": {**repair_claim, "repair": _repair()},
-        "publish_integration_repair_authority_attention": {
-            **repair_claim,
-            "attention": _repair_authority_attention(),
-        },
         "list_completed_changes": {"limit": 25},
         "search_completed_changes": {"query": "delivery", "limit": 25},
         "show_completed_change": {**change, "completion_id": DIGEST},
@@ -330,7 +300,6 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         "show_plan_context",
         "show_build_context",
         "show_finalization_context",
-        "show_integration_repair_context",
         "show_integration_attention",
         "observe_change_publication_checks",
         "list_completed_changes",
@@ -395,12 +364,6 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             False,
         ),
         ("list_completed_changes", catalog_error, "completed-history-missing", False),
-        (
-            "admit_reviewed_integration_repair",
-            CoordinationConflictError("repair authority is stale"),
-            "ERR_TARGET_COORDINATION_CONFLICT",
-            True,
-        ),
         (
             "revise_design_session",
             DesignPackageConflictError("package identity is stale"),
