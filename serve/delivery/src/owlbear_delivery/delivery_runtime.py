@@ -270,17 +270,10 @@ class DeliveryTaskResult(_DeliveryModel):
 class DeliveryFinalization(_DeliveryModel):
     """Exact reviewed Change head and evidence prepared for finalization."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     operation_id: str = Field(min_length=1)
     change_id: str = Field(min_length=1)
     exact_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    verification_run_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    target_ref: str = Field(min_length=1)
-    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    target_provenance: Literal["cached-remote-tracking"]
-    target_observed_at: datetime
-    proof_scope: FinalizationVerificationScope
-    profile_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     authority_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     result_digests: tuple[str, ...] = Field(min_length=1)
     observations: tuple[DeliveryObservationReceipt, ...] = Field(min_length=1)
@@ -914,21 +907,11 @@ class FinalizeDeliveryChange(_DeliveryModel):
 
     operation_id: str = Field(min_length=1)
     exact_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    verification_run_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    target_ref: str = Field(min_length=1)
-    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    target_provenance: Literal["cached-remote-tracking"]
-    target_observed_at: datetime
-    proof_scope: FinalizationVerificationScope
-    profile_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     observations: tuple[DeliveryObservationReceipt, ...] = Field(min_length=1)
     review: DeliveryReviewReceipt
 
     @model_validator(mode="after")
     def _validate_exact_commit_evidence(self) -> FinalizeDeliveryChange:
-        if self.target_observed_at.tzinfo is None:
-            message = "Delivery finalization target observation time must include a timezone"
-            raise ValueError(message)
         observation_ids = tuple(observation.observation_id for observation in self.observations)
         if len(observation_ids) != len(set(observation_ids)):
             message = "Delivery finalization observations must be unique"
@@ -1413,13 +1396,6 @@ class DeliveryRuntime:
             if (
                 existing.operation_id == request.operation_id
                 and existing.exact_head == request.exact_head
-                and existing.verification_run_id == request.verification_run_id
-                and existing.target_ref == request.target_ref
-                and existing.target_head == request.target_head
-                and existing.target_provenance == request.target_provenance
-                and existing.target_observed_at == request.target_observed_at
-                and existing.proof_scope == request.proof_scope
-                and existing.profile_digest == request.profile_digest
                 and existing.observations == request.observations
                 and existing.review == request.review
             ):
@@ -1443,13 +1419,6 @@ class DeliveryRuntime:
             operation_id=request.operation_id,
             change_id=self._contract.change_id,
             exact_head=request.exact_head,
-            verification_run_id=request.verification_run_id,
-            target_ref=request.target_ref,
-            target_head=request.target_head,
-            target_provenance=request.target_provenance,
-            target_observed_at=request.target_observed_at,
-            proof_scope=request.proof_scope,
-            profile_digest=request.profile_digest,
             authority_digest=self._authority_digest,
             result_digests=tuple(hashlib.sha256(_model_content(result)).hexdigest() for result in results),
             observations=request.observations,
