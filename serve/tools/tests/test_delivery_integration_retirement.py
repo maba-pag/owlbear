@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -257,6 +258,20 @@ def test_retirement_plans_legacy_frontier_and_preserves_catalog_snapshot(tmp_pat
     assert catalog.list() == before
 
 
+def test_retirement_ignores_completionless_legacy_frontier(tmp_path: Path) -> None:
+    repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
+    frontier_path = delivery_root / "runtime/changes/change-a/frontier.json"
+    frontier = json.loads(frontier_path.read_bytes())
+    frontier["integration_completion"] = None
+    frontier["integration_result_id"] = None
+    frontier_path.write_bytes(_canonical(frontier))
+
+    plan = plan_delivery_integration_retirement(repository)
+
+    assert plan.already_retired
+    assert plan.changes == ()
+
+
 def test_retirement_apply_on_empty_workspace_is_idempotent(tmp_path: Path) -> None:
     repository = tmp_path / "repository"
     repository.mkdir()
@@ -268,6 +283,34 @@ def test_retirement_apply_on_empty_workspace_is_idempotent(tmp_path: Path) -> No
     assert plan.already_retired
     assert plan_delivery_integration_retirement(repository).already_retired
     assert not (repository / ".owlbear").exists()
+
+
+def test_retirement_rejects_target_drift_between_plan_and_apply(tmp_path: Path) -> None:
+    repository, commits, delivery_root, _archive, _branch = _fixture(tmp_path)
+    plan = plan_delivery_integration_retirement(repository)
+    (repository / "README.md").write_text("target moved\n", encoding="utf-8")
+    _git(repository, "add", "README.md")
+    _git(repository, "commit", "-m", "move target")
+    moved_target = _git(repository, "rev-parse", "HEAD")
+    _git(repository, "update-ref", "refs/remotes/origin/dev", moved_target)
+
+    with pytest.raises(DeliveryIntegrationRetirementError, match="target differs"):
+        apply_delivery_integration_retirement(plan)
+
+    assert _git(repository, "rev-parse", "refs/remotes/origin/dev") == moved_target
+    assert (delivery_root / "runtime/changes/change-a/frontier.json").is_file()
+    assert commits["target"] != moved_target
+
+
+def test_retirement_rejects_change_set_drift_between_plan_and_apply(tmp_path: Path) -> None:
+    repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
+    plan = plan_delivery_integration_retirement(repository)
+    altered_plan = replace(plan, changes=(), already_retired=True)
+
+    with pytest.raises(DeliveryIntegrationRetirementError, match="Change set differs"):
+        apply_delivery_integration_retirement(altered_plan)
+
+    assert (delivery_root / "runtime/changes/change-a/frontier.json").is_file()
 
 
 @pytest.mark.parametrize("worktree_mode", ["absent", "present"])
@@ -378,3 +421,4 @@ def test_retirement_replays_cleanup_phase_after_staging_cleanup_failure(
 
     assert not journal_path.exists()
     assert not staging_root.exists()
+    assert not (delivery_root / "claims/publication-locks/change-a").exists()

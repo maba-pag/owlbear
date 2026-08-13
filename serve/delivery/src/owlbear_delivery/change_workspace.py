@@ -241,8 +241,9 @@ class PortfolioCoordinator:
     def publication_lock(self, change_id: str, *, blocking: bool = True) -> Iterator[PublicationLock]:
         """Serialize bounded publication attempts for one Change across processes."""
         self._coordination_path(change_id)
-        lock_root = self._state_root / "claims" / "publication-locks" / change_id
-        with locked_roots((lock_root,), blocking=blocking):
+        namespace_root = self._state_root / "claims" / "publication-locks"
+        lock_root = namespace_root / change_id
+        with locked_roots((namespace_root, lock_root), blocking=blocking):
             lock = PublicationLock(self, change_id)
             try:
                 yield lock
@@ -642,16 +643,25 @@ class ChangeWorkspaceManager:
     def restore_worktree(cls, repository: Path, worktree: Path, branch: str) -> None:
         """Restore one absent managed worktree from its retained branch."""
         resolved_repository = repository.resolve()
+        cls._register_worktree(
+            worktree,
+            branch,
+            lambda *arguments: cls._run_managed_git(resolved_repository, *arguments),
+        )
 
-        def run_git(*arguments: str) -> str:
-            result = subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
-                (resolve_git_executable(), "-C", str(resolved_repository), *arguments),
-                check=True,
-                capture_output=True,
-            )
-            return result.stdout.decode().strip()
+    @classmethod
+    def remove_worktree(cls, repository: Path, worktree: Path) -> None:
+        """Remove one managed worktree without forcing Git registration cleanup."""
+        cls._run_managed_git(repository.resolve(), "worktree", "remove", str(worktree))
 
-        cls._register_worktree(worktree, branch, run_git)
+    @staticmethod
+    def _run_managed_git(repository: Path, *arguments: str) -> str:
+        result = subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
+            (resolve_git_executable(), "-C", str(repository), *arguments),
+            check=True,
+            capture_output=True,
+        )
+        return result.stdout.decode().strip()
 
     @staticmethod
     def _register_worktree(worktree: Path, branch: str, git: Callable[..., str]) -> None:

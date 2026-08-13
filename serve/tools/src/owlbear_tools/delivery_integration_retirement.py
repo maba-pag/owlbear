@@ -280,7 +280,7 @@ def _legacy_retirement_frontier(payload: dict[str, object]) -> _RetirementFronti
         raise ValueError
     raw_bindings = payload.get("bindings")
     completion_payload = payload.get("integration_completion")
-    if not isinstance(raw_bindings, list) or completion_payload is None:
+    if not isinstance(raw_bindings, list):
         raise TypeError
     bindings = tuple(_legacy_retirement_binding(raw_binding) for raw_binding in raw_bindings)
     completion: DeliveryIntegrationCompletion | None = None
@@ -791,7 +791,14 @@ def _stage(journal: _RetirementJournal) -> None:
 def _remove_worktrees(root: Path, journal: _RetirementJournal) -> None:
     for change in journal.changes:
         if change.worktree_path is not None:
-            _git(root, "worktree", "remove", str(change.worktree_path))
+            if change.branch is None or change.worktree_head is None:
+                _fail(f"Integration retirement worktree identity is incomplete: {change.change_id}")
+            _require_branch(root, change.branch, change.worktree_head)
+            try:
+                ChangeWorkspaceManager.remove_worktree(root, change.worktree_path)
+            except subprocess.CalledProcessError as exc:
+                detail = exc.stderr.decode(errors="replace").strip() or "Git worktree removal failed"
+                _fail(detail)
 
 
 def _remove_publication_lock(path: Path) -> None:
@@ -896,6 +903,7 @@ def _recover_retirement(root: Path) -> _RetirementJournal | None:
         if journal.staging_root.exists():
             shutil.rmtree(journal.staging_root)
         _remove_empty_staging_parent(journal.staging_root)
+        _remove_publication_locks(journal)
         journal_path.unlink()
         return journal
     for change in journal.changes:
@@ -965,10 +973,17 @@ def _retirement_change_ids(root: Path) -> tuple[str, ...]:
 def _retirement_lock_roots(root: Path) -> tuple[Path, ...]:
     runtime_root = root / _RUNTIME_RELATIVE
     publication_root = runtime_root / _PUBLICATION_LOCKS_RELATIVE
+    journal_path = root / RETIREMENT_JOURNAL_RELATIVE
+    if journal_path.exists():
+        journal = _load_journal(root)
+        change_ids = () if journal.phase == "cleanup" else tuple(change.change_id for change in journal.changes)
+    else:
+        change_ids = _retirement_change_ids(root)
     return (
         runtime_root / _ACQUISITION_LOCK_RELATIVE,
         runtime_root / _INTEGRATION_LOCK_RELATIVE,
-        *(publication_root / change_id for change_id in _retirement_change_ids(root)),
+        publication_root,
+        *(publication_root / change_id for change_id in change_ids),
     )
 
 
@@ -1045,9 +1060,8 @@ def _apply_delivery_integration_retirement(
 ) -> DeliveryIntegrationRetirementPlan:
     repository_root = root.expanduser().resolve()
     runtime_root = repository_root / _RUNTIME_RELATIVE
-    worktree_root = repository_root / _WORKTREES_RELATIVE
     journal_path = repository_root / RETIREMENT_JOURNAL_RELATIVE
-    if not journal_path.exists() and not runtime_root.exists() and not worktree_root.exists():
+    if not journal_path.exists() and not runtime_root.exists():
         plan = plan_delivery_integration_retirement(repository_root)
         _require_expected_plan(plan, expected_target_commit, expected_change_ids)
         return plan
