@@ -3293,6 +3293,38 @@ def test_integration_target_cas_loss_publishes_attention_without_own_commit(
     assert (tmp_path / "packages/change-a").is_dir()
 
 
+def test_integration_revalidates_reviewed_branch_after_candidate_capture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    _target_before, reviewed = _review_product_change(coordinator, "change-a", "reviewed product\n")
+    worktree = coordinator.show("change-a").worktree_path
+    repository = tmp_path / "repository"
+    target_head = _git(repository, "rev-parse", "main")
+    original_validate = application._workspace_manager.validate_prepared_integration  # noqa: SLF001
+
+    def advance_change(preparation: object) -> object:
+        (worktree / "late.txt").write_text("late change\n", encoding="utf-8")
+        _git(worktree, "add", "late.txt")
+        _git(worktree, "commit", "-m", "unreviewed late change")
+        return original_validate(preparation)
+
+    monkeypatch.setattr(application._workspace_manager, "validate_prepared_integration", advance_change)  # noqa: SLF001
+
+    failed = application.integrate_ready_change("change-a")
+
+    assert failed.attention is not None
+    assert failed.attention.code == DeliveryIntegrationAttentionCode.REVIEWED_BOUNDARY_MISMATCH
+    assert failed.attention.change_head == reviewed
+    assert failed.attention.target_head == target_head
+    assert _git(repository, "rev-parse", "main") == target_head
+    assert runtimes["change-a"].change_stage().value == "integration"
+
+
 def test_integration_rejects_revision_pending_and_source_mutation_before_visibility(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,

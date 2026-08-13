@@ -52,13 +52,11 @@ Planner, Builder, and reviewer routing. Startup validates the configured remote,
 remote URL. It does not require or inspect a local target branch.
 
 The tracked `.owlbear/delivery/verification.json` profile declares ordered argv, working directory,
-timeout, and environment-name allowlist for exact-candidate verification. `integrate_ready_change`
-anchors the merged candidate, runs that profile in a disposable detached worktree outside the MCP
-event loop, persists bounded request and receipt evidence, then revalidates package, source, target,
-and candidate identities before compare-and-swap publication. A passing receipt is replayed after an
-interruption. Missing, invalid, changed, timed-out, or failing verification is reported as typed
-Integration attention without moving the target. See [setup-guide.md](../../setup/setup-guide.md) for
-profile scaffolding and ownership.
+timeout, and environment-name allowlist for finalization verification. `show_finalization_context`
+resolves that profile from the exact engine-selected target commit, and finalization runs it against
+the managed Change worktree at its exact reviewed head. Integration does not execute a second detached
+candidate checkout or infer external acceptance from local Git state. See
+[setup-guide.md](../../setup/setup-guide.md) for profile scaffolding and ownership.
 
 Delivery has no environment configuration. The server must be launched with the consuming workspace
 as its current directory. Startup fails closed when nonempty retired `.owlbear/target` or

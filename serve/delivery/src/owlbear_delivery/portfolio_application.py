@@ -632,8 +632,6 @@ class _PreparedSource:
 @dataclass(frozen=True)
 class _PreparedIntegration:
     context: IntegrationContext
-    capture: CompletionCapture
-    snapshot: CompletionPackageSnapshot
     candidate: DeliveryIntegrationCandidate
     preparation: AtomicIntegrationPreparation
 
@@ -1915,18 +1913,8 @@ class PortfolioApplication:
             if prepared.preparation.result is not None:
                 self._workspace_manager.discard_stale_integration_candidate(change_id)
                 return self._revalidate_for_external_acceptance(runtime, context, prepared)
-
-        with self._coordinator.integration_lock():
-            runtime = self._runtime(change_id)
-            existing = runtime.integration_completion()
-            if existing is not None:
-                self._workspace_manager.discard_stale_integration_candidate(change_id)
-                self._cleanup_integration(change_id, existing)
-                return DeliveryIntegrationResult(change_id=change_id, completion=existing, replayed=True)
-            result = self._revalidate_for_external_acceptance(runtime, prepared.context, prepared)
+            result = self._revalidate_for_external_acceptance(runtime, context, prepared)
             self._workspace_manager.discard_integration_candidate(prepared.preparation)
-            if result.completion is not None:
-                self._cleanup_integration(change_id, result.completion)
             return result
 
     def prepare_external_completion(self, change_id: str) -> ExternalCompletionResult:
@@ -2043,7 +2031,6 @@ class PortfolioApplication:
                 validation_callback=lambda snapshot: self._prepare_integration_snapshot(
                     runtime,
                     context,
-                    capture,
                     snapshot,
                 ),
                 publication_callback=lambda prepared: prepared,
@@ -2060,12 +2047,11 @@ class PortfolioApplication:
         self,
         runtime: DeliveryRuntime,
         context: IntegrationContext,
-        capture: CompletionCapture,
         snapshot: CompletionPackageSnapshot,
     ) -> _PreparedIntegration:
         candidate = self._integration_candidate(runtime, context, snapshot)
         preparation = self._workspace_manager.prepare_integration_candidate(candidate)
-        return _PreparedIntegration(context, capture, snapshot, candidate, preparation)
+        return _PreparedIntegration(context, candidate, preparation)
 
     def _revalidate_for_external_acceptance(
         self,

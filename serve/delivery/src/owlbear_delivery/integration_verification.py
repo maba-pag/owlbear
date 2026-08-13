@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import subprocess
-from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal
 
@@ -60,15 +59,6 @@ class IntegrationVerificationProfile(_VerificationModel):
         return self
 
 
-class IntegrationVerificationProfileState(StrEnum):
-    """Authority state observed while binding a verification request."""
-
-    CONFIGURED = "configured"
-    UNCONFIGURED = "unconfigured"
-    INVALID = "invalid"
-    CHANGED = "changed"
-
-
 class TargetVerificationProfile(_VerificationModel):
     """Validated verification authority read only from one exact target commit."""
 
@@ -111,7 +101,6 @@ def read_target_verification_profile(repository: Path, target_commit: str) -> Ta
 __all__ = [
     "INTEGRATION_VERIFICATION_PROFILE_PATH",
     "IntegrationVerificationProfile",
-    "IntegrationVerificationProfileState",
     "IntegrationVerificationStep",
     "TargetVerificationProfile",
     "read_target_verification_profile",

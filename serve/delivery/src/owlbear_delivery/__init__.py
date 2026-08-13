@@ -157,7 +157,6 @@ from owlbear_delivery.finalization_verification import (
 from owlbear_delivery.integration_verification import (
     INTEGRATION_VERIFICATION_PROFILE_PATH,
     IntegrationVerificationProfile,
-    IntegrationVerificationProfileState,
     IntegrationVerificationStep,
     TargetVerificationProfile,
     read_target_verification_profile,
@@ -469,7 +468,6 @@ __all__ = [
     "IntegrationRepairCandidate",
     "IntegrationResult",
     "IntegrationVerificationProfile",
-    "IntegrationVerificationProfileState",
     "IntegrationVerificationStep",
     "LegacyActiveItem",
     "LegacyCompletedChangeRecord",
