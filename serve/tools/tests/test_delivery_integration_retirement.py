@@ -180,6 +180,7 @@ def _fixture(tmp_path: Path, *, with_worktree: bool = False) -> tuple[Path, dict
         (package_root / name).write_bytes(content)
     _git(repository, "add", ".owlbear/completed")
     _git(repository, "commit", "-m", "publish legacy completion")
+
     package_commit = _git(repository, "rev-parse", "HEAD")
     legacy_root = repository / ".owlbear/legacy"
     legacy_root.mkdir()
@@ -242,6 +243,16 @@ def _fixture(tmp_path: Path, *, with_worktree: bool = False) -> tuple[Path, dict
     )
 
 
+def _publication_artifacts(delivery_root: Path) -> tuple[Path, Path]:
+    receipt = delivery_root / "runtime/publications/pull-requests/receipts/change-a.json"
+    branch_operation = delivery_root / "runtime/publications/change-branches/operations/branch-operation.json"
+    receipt.parent.mkdir(parents=True, exist_ok=True)
+    branch_operation.parent.mkdir(parents=True, exist_ok=True)
+    receipt.write_bytes(_canonical({"change_id": "change-a", "operation_id": "draft-operation"}))
+    branch_operation.write_bytes(_canonical({"change_id": "change-a", "operation_id": "branch-operation"}))
+    return receipt, branch_operation
+
+
 def test_retirement_plans_legacy_frontier_and_preserves_catalog_snapshot(tmp_path: Path) -> None:
     repository, commits, delivery_root, _archive, _branch = _fixture(tmp_path)
     catalog = CompletedHistoryCatalog(repository, "dev", "refs/remotes/origin/dev", delivery_root / "runtime")
@@ -272,6 +283,17 @@ def test_retirement_ignores_completionless_legacy_frontier(tmp_path: Path) -> No
     assert plan.changes == ()
 
 
+def test_retirement_removes_per_change_publication_state(tmp_path: Path) -> None:
+    repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
+    receipt, branch_operation = _publication_artifacts(delivery_root)
+    plan = plan_delivery_integration_retirement(repository)
+
+    apply_delivery_integration_retirement(plan)
+
+    assert not receipt.exists()
+    assert not branch_operation.exists()
+
+
 def test_retirement_apply_on_empty_workspace_is_idempotent(tmp_path: Path) -> None:
     repository = tmp_path / "repository"
     repository.mkdir()
@@ -283,6 +305,32 @@ def test_retirement_apply_on_empty_workspace_is_idempotent(tmp_path: Path) -> No
     assert plan.already_retired
     assert plan_delivery_integration_retirement(repository).already_retired
     assert not (repository / ".owlbear").exists()
+
+
+def test_retirement_rejects_managed_worktrees_without_runtime(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    (repository / ".owlbear/delivery/worktrees/orphaned-change").mkdir(parents=True)
+
+    with pytest.raises(DeliveryIntegrationRetirementError, match="runtime is missing"):
+        plan_delivery_integration_retirement(repository)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("requests", [{"request_id": "pending-request"}]), ("finalization", {"finalization_id": "pending"})],
+)
+def test_retirement_rejects_unresolved_legacy_authority(tmp_path: Path, field: str, value: object) -> None:
+    repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
+    frontier_path = delivery_root / "runtime/changes/change-a/frontier.json"
+    frontier = json.loads(frontier_path.read_bytes())
+    if field == "requests":
+        frontier["bindings"][0][field] = value
+    else:
+        frontier[field] = value
+    frontier_path.write_bytes(_canonical(frontier))
+
+    with pytest.raises(DeliveryIntegrationRetirementError, match="frontier is invalid"):
+        plan_delivery_integration_retirement(repository)
 
 
 def test_retirement_rejects_target_drift_between_plan_and_apply(tmp_path: Path) -> None:
@@ -336,6 +384,7 @@ def test_retirement_recovers_staged_state_after_removal_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     repository, commits, delivery_root, _archive, _branch = _fixture(tmp_path, with_worktree=True)
+    receipt, branch_operation = _publication_artifacts(delivery_root)
     plan = plan_delivery_integration_retirement(repository)
 
     def fail_removal(_journal: object) -> None:
@@ -352,8 +401,32 @@ def test_retirement_recovers_staged_state_after_removal_failure(
     worktree = delivery_root / "worktrees" / "change-a"
     assert worktree.is_dir()
     assert _git(worktree, "rev-parse", "HEAD") == commits["baseline"]
+    assert receipt.is_file()
+    assert branch_operation.is_file()
     assert not (repository / ".owlbear/delivery/integration-retirement.json").exists()
     assert not (repository / ".owlbear/scratch/delivery-integration-retirement").exists()
+
+
+def test_retirement_releases_publication_lock_before_unlinking(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
+    lock_path = delivery_root / "runtime/claims/publication-locks/change-a"
+    lock_path.mkdir(parents=True)
+    plan = plan_delivery_integration_retirement(repository)
+    original_remove = delivery_integration_retirement._remove_publication_locks
+    released = False
+
+    def observe_release(journal: object) -> None:
+        nonlocal released
+        change = journal.changes[0]
+        with delivery_integration_retirement.locked_roots((change.publication_lock_path,), blocking=False):
+            released = True
+        original_remove(journal)
+
+    monkeypatch.setattr(delivery_integration_retirement, "_remove_publication_locks", observe_release)
+
+    apply_delivery_integration_retirement(plan)
+
+    assert released
 
 
 def test_retirement_rejects_forged_journal_lock_path(tmp_path: Path) -> None:
@@ -370,6 +443,21 @@ def test_retirement_rejects_forged_journal_lock_path(tmp_path: Path) -> None:
         delivery_integration_retirement._retirement_lock_roots(repository)
 
     assert not (tmp_path / "outside-lock").exists()
+
+
+def test_retirement_rejects_extra_journal_fields(tmp_path: Path) -> None:
+    repository, _commits, _delivery_root, _archive, _branch = _fixture(tmp_path)
+    plan = plan_delivery_integration_retirement(repository)
+    staging_root = repository / ".owlbear/scratch/delivery-integration-retirement/operation"
+    journal = delivery_integration_retirement._journal_for_plan(plan, staging_root)
+    payload = journal.model_dump(mode="json")
+    payload["unexpected"] = True
+    journal_path = repository / ".owlbear/delivery/integration-retirement.json"
+    journal_path.parent.mkdir(parents=True, exist_ok=True)
+    journal_path.write_bytes(_canonical(payload))
+
+    with pytest.raises(DeliveryIntegrationRetirementError, match="invalid Delivery retirement authority"):
+        delivery_integration_retirement._load_journal(repository)
 
 
 def test_retirement_rejects_forged_journal_worktree_path_before_write(tmp_path: Path) -> None:

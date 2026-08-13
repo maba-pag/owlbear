@@ -9,11 +9,12 @@ import os
 import re
 import shutil
 import subprocess
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from owlbear_delivery.change_workspace import CapacityLedger, ChangeCoordination, ChangeWorkspaceManager
 from owlbear_delivery.completed_history import (
@@ -45,7 +46,17 @@ _INTEGRATION_LOCK_RELATIVE = Path("claims/integration-lock")
 _LEGACY_FRONTIER_SCHEMAS = frozenset(range(1, 9))
 _SAFE_CHANGE_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _SAFE_COMMIT = re.compile(r"^[0-9a-f]{40}$")
+_SAFE_DIGEST = re.compile(r"^[0-9a-f]{64}$")
 _VERIFICATION_PATH_PARTS = 2
+_PUBLICATION_PATH_PARTS = 4
+_PUBLICATION_OPERATION_ROOTS = (
+    Path("publications/change-branches/operations"),
+    Path("publications/pull-requests/operations"),
+    Path("publications/pull-requests/summary-operations"),
+    Path("publications/pull-requests/summary-receipts"),
+    Path("publications/pull-requests/draft-state-operations"),
+    Path("publications/pull-requests/draft-state-receipts"),
+)
 
 
 class DeliveryIntegrationRetirementError(RuntimeError):
@@ -85,6 +96,43 @@ class _RetirementFrontier:
     integration_repair_claim: object | None
 
 
+def _publication_payload(path: Path) -> dict[str, object]:
+    try:
+        payload = json.loads(path.read_bytes())
+    except (OSError, json.JSONDecodeError) as exc:
+        _fail(f"Delivery publication record is malformed: {path}")
+        raise AssertionError from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get("change_id"), str):
+        _fail(f"Delivery publication record has no Change identity: {path}")
+    return payload
+
+
+def _require_publication_file(path: Path) -> None:
+    if path.is_symlink() or not path.is_file():
+        _fail(f"Delivery publication record is missing or unsafe: {path}")
+
+
+def _publication_paths(runtime_root: Path, change_id: str) -> tuple[Path, ...]:
+    publication_root = runtime_root / "publications"
+    paths: list[Path] = []
+    receipt = publication_root / "pull-requests/receipts" / f"{change_id}.json"
+    if receipt.exists():
+        _require_publication_file(receipt)
+        if _publication_payload(receipt)["change_id"] != change_id:
+            _fail(f"Delivery publication record identity differs from its path: {receipt}")
+        paths.append(receipt)
+    for relative_root in _PUBLICATION_OPERATION_ROOTS:
+        operation_root = runtime_root / relative_root
+        if not operation_root.exists():
+            continue
+        _require_directory(operation_root)
+        for path in sorted(operation_root.glob("*.json")):
+            _require_publication_file(path)
+            if _publication_payload(path).get("change_id") == change_id:
+                paths.append(path)
+    return tuple(paths)
+
+
 @dataclass(frozen=True)
 class _RetirementChange:
     change_id: str
@@ -96,6 +144,7 @@ class _RetirementChange:
     coordination_bytes: bytes
     worktree: _RegisteredWorktree | None
     verification_paths: tuple[Path, ...]
+    publication_paths: tuple[Path, ...]
     publication_lock_path: Path
 
 
@@ -112,7 +161,11 @@ class DeliveryIntegrationRetirementPlan:
     already_retired: bool = False
 
 
-class _JournalChange(BaseModel):
+class _RetirementModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+
+class _JournalChange(_RetirementModel):
     change_id: str
     runtime_change_root: Path
     coordination_path: Path
@@ -125,10 +178,13 @@ class _JournalChange(BaseModel):
     worktree_path: Path | None
     branch: str | None
     worktree_head: str | None
+    publication_paths: tuple[Path, ...] = ()
+    stage_publication_paths: tuple[Path, ...] = ()
+    publication_sha256: tuple[str, ...] = ()
     publication_lock_path: Path
 
 
-class _RetirementJournal(BaseModel):
+class _RetirementJournal(_RetirementModel):
     schema_version: Literal[1] = 1
     phase: Literal["staged", "cleanup"] = "staged"
     repository_root: Path
@@ -258,6 +314,8 @@ def _legacy_retirement_binding(raw_binding: object) -> _RetirementBinding:
     raw_results = raw_binding.get("results", [])
     if not isinstance(raw_results, list):
         raise TypeError
+    if raw_binding.get("requests"):
+        raise ValueError
     if any(not isinstance(result, dict) or "observations" in result or "review" in result for result in raw_results):
         raise ValueError
     try:
@@ -277,6 +335,8 @@ def _legacy_retirement_binding(raw_binding: object) -> _RetirementBinding:
 def _legacy_retirement_frontier(payload: dict[str, object]) -> _RetirementFrontier:
     schema_version = payload.get("schema_version")
     if schema_version not in _LEGACY_FRONTIER_SCHEMAS:
+        raise ValueError
+    if payload.get("finalization") is not None:
         raise ValueError
     raw_bindings = payload.get("bindings")
     completion_payload = payload.get("integration_completion")
@@ -586,6 +646,7 @@ def _journal_for_plan(plan: DeliveryIntegrationRetirementPlan, staging_root: Pat
     journal_changes = []
     for change in plan.changes:
         relative_verification = tuple(path.relative_to(plan.runtime_root) for path in change.verification_paths)
+        relative_publication = tuple(path.relative_to(plan.runtime_root) for path in change.publication_paths)
         journal_changes.append(
             _JournalChange(
                 change_id=change.change_id,
@@ -602,6 +663,9 @@ def _journal_for_plan(plan: DeliveryIntegrationRetirementPlan, staging_root: Pat
                 worktree_path=change.worktree.path if change.worktree is not None else None,
                 branch=change.worktree.branch if change.worktree is not None else None,
                 worktree_head=change.worktree.head if change.worktree is not None else None,
+                publication_paths=change.publication_paths,
+                stage_publication_paths=tuple(staging_root / "runtime" / relative for relative in relative_publication),
+                publication_sha256=tuple(_digest(path.read_bytes()) for path in change.publication_paths),
                 publication_lock_path=change.publication_lock_path,
             )
         )
@@ -661,6 +725,45 @@ def _validate_journal_verification(
         _require_journal_path(staged, staging_root / "runtime" / relative)
 
 
+def _validate_journal_publication(
+    change: _JournalChange,
+    runtime_root: Path,
+    staging_root: Path,
+) -> None:
+    if not (len(change.publication_paths) == len(change.stage_publication_paths) == len(change.publication_sha256)):
+        _fail("Integration retirement journal publication inventory is invalid")
+    for actual, staged, digest in zip(
+        change.publication_paths,
+        change.stage_publication_paths,
+        change.publication_sha256,
+        strict=True,
+    ):
+        relative = _journal_relative(actual, runtime_root, "Integration retirement journal publication path is unsafe")
+        if len(relative.parts) != _PUBLICATION_PATH_PARTS or relative.parts[0] != "publications":
+            _fail("Integration retirement journal publication path is unsafe")
+        if relative.parts[1:] not in (
+            ("change-branches", "operations", relative.parts[3]),
+            ("pull-requests", "receipts", relative.parts[3]),
+            ("pull-requests", "operations", relative.parts[3]),
+            ("pull-requests", "summary-operations", relative.parts[3]),
+            ("pull-requests", "summary-receipts", relative.parts[3]),
+            ("pull-requests", "draft-state-operations", relative.parts[3]),
+            ("pull-requests", "draft-state-receipts", relative.parts[3]),
+        ):
+            _fail("Integration retirement journal publication path is unsafe")
+        if not _SAFE_DIGEST.fullmatch(digest):
+            _fail("Integration retirement journal publication digest is invalid")
+        _require_journal_path(staged, staging_root / "runtime" / relative)
+        if relative.parts[1:3] == ("pull-requests", "receipts"):
+            if relative.parts[3] != f"{change.change_id}.json":
+                _fail("Integration retirement journal publication identity is invalid")
+        else:
+            source = actual if actual.exists() else staged
+            _require_publication_file(source)
+            if _publication_payload(source).get("change_id") != change.change_id:
+                _fail("Integration retirement journal publication identity is invalid")
+
+
 def _validate_journal_change(
     change: _JournalChange,
     runtime_root: Path,
@@ -679,6 +782,7 @@ def _validate_journal_change(
         _require_journal_path(actual, expected)
     _validate_journal_worktree(change, worktree_root)
     _validate_journal_verification(change, verification_root, staging_root)
+    _validate_journal_publication(change, runtime_root, staging_root)
 
 
 def _validate_journal(root: Path, journal: _RetirementJournal) -> None:
@@ -781,10 +885,15 @@ def _stage(journal: _RetirementJournal) -> None:
             _fail(f"Delivery frontier changed before retirement: {change.change_id}")
         if _digest(change.coordination_path.read_bytes()) != change.coordination_sha256:
             _fail(f"Delivery coordination changed before retirement: {change.change_id}")
+        for path, digest in zip(change.publication_paths, change.publication_sha256, strict=True):
+            if _digest(path.read_bytes()) != digest:
+                _fail(f"Delivery publication record changed before retirement: {change.change_id}")
     for change in journal.changes:
         _move(change.runtime_change_root, change.stage_change_root)
         _move(change.coordination_path, change.stage_coordination_path)
         for source, target in zip(change.verification_paths, change.stage_verification_paths, strict=True):
+            _move(source, target)
+        for source, target in zip(change.publication_paths, change.stage_publication_paths, strict=True):
             _move(source, target)
 
 
@@ -846,6 +955,8 @@ def _validate_postconditions(root: Path, journal: _RetirementJournal) -> None:
             _fail(f"retired Delivery state remains present: {change.change_id}")
         if any(path.exists() for path in change.verification_paths):
             _fail(f"retired Integration verification remains present: {change.change_id}")
+        if any(path.exists() for path in change.publication_paths):
+            _fail(f"retired Delivery publication state remains present: {change.change_id}")
         if change.worktree_path is not None and change.worktree_path in registrations:
             _fail(f"retired Delivery worktree remains registered: {change.change_id}")
         if change.publication_lock_path.exists():
@@ -876,6 +987,14 @@ def _restore_worktree(root: Path, change: _JournalChange) -> None:
     ChangeWorkspaceManager.restore_worktree(root, change.worktree_path, change.branch)
 
 
+def _recover_staged_paths(sources: tuple[Path, ...], staged_paths: tuple[Path, ...], kind: str) -> None:
+    for source, staged in zip(sources, staged_paths, strict=True):
+        if source.exists() and staged.exists():
+            _fail(f"Integration retirement recovery found both {kind} states: {source}")
+        if staged.exists():
+            _move(staged, source)
+
+
 def _recover_change(root: Path, change: _JournalChange) -> None:
     if change.runtime_change_root.exists() and change.stage_change_root.exists():
         _fail(f"Integration retirement recovery found both runtime and staged Change state: {change.change_id}")
@@ -885,11 +1004,8 @@ def _recover_change(root: Path, change: _JournalChange) -> None:
         _fail(f"Integration retirement recovery found both coordination states: {change.change_id}")
     if change.stage_coordination_path.exists():
         _move(change.stage_coordination_path, change.coordination_path)
-    for source, staged in zip(change.verification_paths, change.stage_verification_paths, strict=True):
-        if source.exists() and staged.exists():
-            _fail(f"Integration retirement recovery found both verification states: {source}")
-        if staged.exists():
-            _move(staged, source)
+    _recover_staged_paths(change.verification_paths, change.stage_verification_paths, "verification")
+    _recover_staged_paths(change.publication_paths, change.stage_publication_paths, "publication")
     _restore_worktree(root, change)
     change.publication_lock_path.mkdir(parents=True, exist_ok=True)
 
@@ -921,12 +1037,29 @@ def _execute_retirement(repository_root: Path, journal: _RetirementJournal) -> N
         _require_target_snapshot(repository_root, journal.target_ref, journal.target_commit)
         _remove_worktrees(repository_root, journal)
         _require_target_snapshot(repository_root, journal.target_ref, journal.target_commit)
+    except _RETIREMENT_FAILURES:
+        _recover_retirement(repository_root)
+        raise
+
+
+def _execute_retirement_cleanup(repository_root: Path, journal: _RetirementJournal) -> None:
+    try:
         _remove_publication_locks(journal)
         _require_target_snapshot(repository_root, journal.target_ref, journal.target_commit)
         _validate_postconditions(repository_root, journal)
     except _RETIREMENT_FAILURES:
         _recover_retirement(repository_root)
         raise
+
+
+def _validate_post_retirement_startup(repository_root: Path) -> None:
+    try:
+        load_delivery_application(
+            _load_startup_config(repository_root),
+            workspace_root=repository_root,
+        )
+    except Exception as exc:  # noqa: BLE001 - startup failure must be reported after retirement.
+        _fail(f"Delivery startup validation failed after Integration retirement: {exc}")
 
 
 def _complete_retirement(repository_root: Path, journal: _RetirementJournal) -> None:
@@ -945,13 +1078,7 @@ def _complete_retirement(repository_root: Path, journal: _RetirementJournal) -> 
     except OSError as exc:
         _fail(f"Integration retirement journal cleanup failed: {journal_path}")
         raise AssertionError from exc
-    try:
-        load_delivery_application(
-            _load_startup_config(repository_root),
-            workspace_root=repository_root,
-        )
-    except Exception as exc:  # noqa: BLE001 - startup failure must be reported after retirement.
-        _fail(f"Delivery startup validation failed after Integration retirement: {exc}")
+    _validate_post_retirement_startup(repository_root)
 
 
 def _retirement_change_ids(root: Path) -> tuple[str, ...]:
@@ -975,16 +1102,24 @@ def _retirement_lock_roots(root: Path) -> tuple[Path, ...]:
     publication_root = runtime_root / _PUBLICATION_LOCKS_RELATIVE
     journal_path = root / RETIREMENT_JOURNAL_RELATIVE
     if journal_path.exists():
-        journal = _load_journal(root)
-        change_ids = () if journal.phase == "cleanup" else tuple(change.change_id for change in journal.changes)
-    else:
-        change_ids = _retirement_change_ids(root)
+        _load_journal(root)
     return (
         runtime_root / _ACQUISITION_LOCK_RELATIVE,
         runtime_root / _INTEGRATION_LOCK_RELATIVE,
         publication_root,
-        *(publication_root / change_id for change_id in change_ids),
     )
+
+
+def _retirement_publication_lock_roots(root: Path) -> tuple[Path, ...]:
+    publication_root = root / _RUNTIME_RELATIVE / _PUBLICATION_LOCKS_RELATIVE
+    roots = []
+    for change_id in _retirement_change_ids(root):
+        path = publication_root / change_id
+        if path.exists():
+            if path.is_symlink() or not path.is_dir():
+                _fail(f"Integration publication-lock path is unsafe: {path}")
+            roots.append(path)
+    return tuple(roots)
 
 
 def plan_delivery_integration_retirement(root: Path) -> DeliveryIntegrationRetirementPlan:
@@ -995,7 +1130,9 @@ def plan_delivery_integration_retirement(root: Path) -> DeliveryIntegrationRetir
     runtime_root = repository_root / _RUNTIME_RELATIVE
     worktree_root = repository_root / _WORKTREES_RELATIVE
     _require_ordering(repository_root, runtime_root)
-    if not runtime_root.exists() and not worktree_root.exists():
+    if not runtime_root.exists():
+        if _has_entries(worktree_root):
+            _fail("Delivery runtime is missing while managed worktrees remain")
         return DeliveryIntegrationRetirementPlan(
             repository_root=repository_root,
             runtime_root=runtime_root,
@@ -1027,6 +1164,7 @@ def plan_delivery_integration_retirement(root: Path) -> DeliveryIntegrationRetir
         _require_history_proof(history_context, change_id, frontier)
         coordination = coordinations[change_id]
         worktree = _change_worktree(repository_root, coordination, registrations)
+        publication_paths = _publication_paths(runtime_root, change_id)
         changes.append(
             _RetirementChange(
                 change_id=change_id,
@@ -1038,6 +1176,7 @@ def plan_delivery_integration_retirement(root: Path) -> DeliveryIntegrationRetir
                 coordination_bytes=coordination_bytes[change_id],
                 worktree=worktree,
                 verification_paths=verification[change_id],
+                publication_paths=publication_paths,
                 publication_lock_path=runtime_root / _PUBLICATION_LOCKS_RELATIVE / change_id,
             )
         )
@@ -1066,28 +1205,35 @@ def _apply_delivery_integration_retirement(
         _require_expected_plan(plan, expected_target_commit, expected_change_ids)
         return plan
     delivery_root = repository_root / ".owlbear/delivery"
-    coordination_roots = _retirement_lock_roots(repository_root)
-    with locked_roots(coordination_roots), locked_roots((delivery_root, runtime_root)):
-        recovered_cleanup = _recover_retirement(repository_root)
-        plan = plan_delivery_integration_retirement(repository_root)
-        if recovered_cleanup is not None and plan.already_retired:
-            _require_recovered_cleanup(recovered_cleanup, expected_target_commit, expected_change_ids)
+    with locked_roots(_retirement_lock_roots(repository_root)):
+        entry_journal = _load_journal(repository_root) if journal_path.exists() else None
+        with ExitStack() as publication_locks:
+            if entry_journal is None or entry_journal.phase != "cleanup":
+                publication_locks.enter_context(locked_roots(_retirement_publication_lock_roots(repository_root)))
+            with locked_roots((delivery_root, runtime_root)):
+                recovered_cleanup = _recover_retirement(repository_root)
+                plan = plan_delivery_integration_retirement(repository_root)
+                if recovered_cleanup is not None and plan.already_retired:
+                    _require_recovered_cleanup(recovered_cleanup, expected_target_commit, expected_change_ids)
+                    _validate_post_retirement_startup(repository_root)
+                    return plan
+                _require_expected_plan(plan, expected_target_commit, expected_change_ids)
+                if plan.already_retired:
+                    return plan
+                _require_target_snapshot(repository_root, plan.target_ref, plan.target_commit)
+                operation_id = _digest(
+                    f"{plan.target_commit}:{','.join(change.change_id for change in plan.changes)}".encode()
+                )[:32]
+                staging_root = repository_root / _STAGING_RELATIVE / operation_id
+                if staging_root.exists():
+                    _fail(f"stale Integration retirement staging path requires inspection: {staging_root}")
+                journal = _journal_for_plan(plan, staging_root)
+                _write_journal(journal)
+                _execute_retirement(repository_root, journal)
+        with locked_roots((delivery_root, runtime_root)):
+            _execute_retirement_cleanup(repository_root, journal)
+            _complete_retirement(repository_root, journal)
             return plan
-        _require_expected_plan(plan, expected_target_commit, expected_change_ids)
-        if plan.already_retired:
-            return plan
-        _require_target_snapshot(repository_root, plan.target_ref, plan.target_commit)
-        operation_id = _digest(
-            f"{plan.target_commit}:{','.join(change.change_id for change in plan.changes)}".encode()
-        )[:32]
-        staging_root = repository_root / _STAGING_RELATIVE / operation_id
-        if staging_root.exists():
-            _fail(f"stale Integration retirement staging path requires inspection: {staging_root}")
-        journal = _journal_for_plan(plan, staging_root)
-        _write_journal(journal)
-        _execute_retirement(repository_root, journal)
-        _complete_retirement(repository_root, journal)
-        return plan
 
 
 def apply_delivery_integration_retirement(plan: DeliveryIntegrationRetirementPlan) -> None:

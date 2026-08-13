@@ -160,6 +160,11 @@ COMMANDS = (
         "uv run migrate-delivery-state [PATH] [--apply]",
         "Preview or apply the one-way Delivery live-state migration.",
     ),
+    _internal_command(
+        "retire-delivery-integration",
+        "uv run retire-delivery-integration [PATH] [--apply]",
+        "Preview or apply terminal legacy Integration retirement.",
+    ),
     _internal_command("semble", "uv run semble [OPTIONS]", "Run the assembly utility."),
     _internal_command("eslint-fix", "uv run eslint-fix [OPTIONS]", "Run the Cockpit ESLint hook."),
     _internal_command("megalint-hook", "uv run megalint-hook", "Run the MegaLinter hook implementation."),

@@ -7,7 +7,7 @@ import json
 import os
 import re
 import subprocess
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from datetime import UTC, datetime
 from itertools import pairwise
 from pathlib import Path
@@ -243,7 +243,9 @@ class PortfolioCoordinator:
         self._coordination_path(change_id)
         namespace_root = self._state_root / "claims" / "publication-locks"
         lock_root = namespace_root / change_id
-        with locked_roots((namespace_root, lock_root), blocking=blocking):
+        with ExitStack() as child_locks:
+            with locked_roots((namespace_root,), blocking=blocking):
+                child_locks.enter_context(locked_roots((lock_root,), blocking=blocking))
             lock = PublicationLock(self, change_id)
             try:
                 yield lock

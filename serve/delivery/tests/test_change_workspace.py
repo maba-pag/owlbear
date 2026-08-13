@@ -137,6 +137,18 @@ def test_publication_reservation_excludes_writers_and_boundary_updates(tmp_path:
         coordinator.release_publication("publish-change", "operation-1", "owner-1", lock)
 
 
+def test_publication_locks_allow_independent_changes_concurrently(tmp_path: Path) -> None:
+    coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
+    coordinator.register(_coordination(tmp_path, "change-a"))
+    coordinator.register(_coordination(tmp_path, "change-b"))
+
+    with (
+        coordinator.publication_lock("change-a", blocking=False),
+        coordinator.publication_lock("change-b", blocking=False),
+    ):
+        pass
+
+
 def test_publication_lease_rejects_concurrent_owner_and_allows_expired_takeover(tmp_path: Path) -> None:
     coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
     coordinator.register(_coordination(tmp_path, "lease-change"))
