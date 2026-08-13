@@ -111,6 +111,9 @@ store/audit/
 
 # Host-local Delivery worktrees and mutable capacity ledger
 /.owlbear/worktrees/
+/.owlbear/delivery/migration.json
+/.owlbear/delivery/integration-retirement.json
+/.owlbear/scratch/delivery-integration-retirement/
 /.owlbear/target/target-runtime/capacity.json
 /.owlbear/target/target-runtime/integration-verification/
 

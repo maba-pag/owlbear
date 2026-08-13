@@ -32,7 +32,7 @@ from owlbear_delivery.runtime_transaction import (
 from owlbear_delivery.storage_io import locked_roots
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
     from contextlib import AbstractContextManager
 
 _TREE_ENTRY_PARTS = 3
@@ -598,7 +598,7 @@ class ChangeWorkspaceManager:
                 _coordination_conflict("existing Change branch requires an exact recovery reviewed head")
             self._require_ancestor(recovery_reviewed_head, branch_head)
             last_reviewed_commit = recovery_reviewed_head
-        self._register_worktree(worktree, branch)
+        self._register_worktree(worktree, branch, self._git)
         self._require_worktree(worktree, branch, branch_head)
         coordination = ChangeCoordination(
             change_id=change_id,
@@ -638,11 +638,27 @@ class ChangeWorkspaceManager:
         updated = coordination.model_copy(update={"last_reviewed_commit": commit})
         return self._coordinator.update(updated)
 
-    def _register_worktree(self, worktree: Path, branch: str) -> None:
+    @classmethod
+    def restore_worktree(cls, repository: Path, worktree: Path, branch: str) -> None:
+        """Restore one absent managed worktree from its retained branch."""
+        resolved_repository = repository.resolve()
+
+        def run_git(*arguments: str) -> str:
+            result = subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
+                (resolve_git_executable(), "-C", str(resolved_repository), *arguments),
+                check=True,
+                capture_output=True,
+            )
+            return result.stdout.decode().strip()
+
+        cls._register_worktree(worktree, branch, run_git)
+
+    @staticmethod
+    def _register_worktree(worktree: Path, branch: str, git: Callable[..., str]) -> None:
         if worktree.exists():
             return
         worktree.parent.mkdir(parents=True, exist_ok=True)
-        self._git("worktree", "add", str(worktree), branch)
+        git("worktree", "add", str(worktree), branch)
 
     def show(self, change_id: str) -> ChangeCoordination:
         """Return current workspace coordination for transition validation."""
@@ -1006,7 +1022,7 @@ class ChangeWorkspaceManager:
             attempt_id,
             rejected_head,
         )
-        self._register_worktree(worktree, coordination.branch)
+        self._register_worktree(worktree, coordination.branch, self._git)
         self._require_worktree(worktree, coordination.branch, coordination.last_reviewed_commit)
         return self._coordinator.release(change_id, coordination.writer.claim_id)
 

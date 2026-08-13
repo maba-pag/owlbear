@@ -75,5 +75,8 @@ playwright-report/
 # Host-local Delivery runtime and linked worktrees
 /.owlbear/delivery/runtime/
 /.owlbear/delivery/worktrees/
+/.owlbear/delivery/migration.json
+/.owlbear/delivery/integration-retirement.json
+/.owlbear/scratch/delivery-integration-retirement/
 
 .coverage.*

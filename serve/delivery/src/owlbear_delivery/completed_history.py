@@ -12,7 +12,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Annotated, Literal, Never
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
 from owlbear_delivery.acceptance import (
     CompletionPullRequestIdentity,
@@ -23,6 +23,7 @@ from owlbear_delivery.acceptance import (
 from owlbear_delivery.delivery_runtime import (
     DeliveryFrontier,
     DeliveryStage,
+    DeliveryTaskDefinition,
     DeliveryTaskResult,
     parse_delivery_frontier,
 )
@@ -57,6 +58,68 @@ _RESULT_HISTORY = TypeAdapter(tuple[DeliveryTaskResult, ...])
 
 class _CompletedHistoryModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+
+class _LegacyTaskResult(_CompletedHistoryModel):
+    """Pre-evidence result identity retained by schema-one packages."""
+
+    authority_digest: Digest
+    change_id: ChangeId
+    completed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    result_id: str = Field(min_length=1)
+    task_digest: Digest
+    task_id: str = Field(min_length=1)
+
+
+class _LegacyRuntimeBinding(_CompletedHistoryModel):
+    """Strict terminal binding shape used by the retired schema-one runtime."""
+
+    active_claim: None
+    assembly_required: Literal[False]
+    block: None
+    candidate: None
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    output: None
+    plan_scope_id: str = Field(pattern=r"^SCOPE-[0-9]{3}$")
+    recovery_attention: None
+    requests: tuple[object, ...]
+    result_candidate: None
+    results: tuple[_LegacyTaskResult, ...]
+    return_context: None
+    stage: Literal["completed"]
+    tasks: tuple[DeliveryTaskDefinition, ...]
+
+    @model_validator(mode="after")
+    def _validate_task_results(self) -> _LegacyRuntimeBinding:
+        task_ids = tuple(task.task_id for task in self.tasks)
+        result_ids = tuple(result.result_id for result in self.results)
+        if len(task_ids) != len(set(task_ids)) or len(result_ids) != len(set(result_ids)):
+            message = "legacy Delivery task and result identities must be unique"
+            raise ValueError(message)
+        if any(result.task_id not in task_ids for result in self.results):
+            message = "legacy Delivery results must bind task authority"
+            raise ValueError(message)
+        for result in self.results:
+            task = next(task for task in self.tasks if task.task_id == result.task_id)
+            if result.task_digest != task.digest:
+                message = "legacy Delivery result must bind task digest"
+                raise ValueError(message)
+        return self
+
+
+class _LegacyRuntimeFrontier(_CompletedHistoryModel):
+    """Strict top-level shape for a schema-one historical runtime capture."""
+
+    bindings: tuple[_LegacyRuntimeBinding, ...]
+    integration_attention: None
+    integration_completion: None
+    integration_repair_claim: None
+    integration_result_id: None
+    operator_moves: tuple[object, ...]
+    schema_version: Literal[1]
+
+
+_LEGACY_RESULT_HISTORY = TypeAdapter(tuple[_LegacyTaskResult, ...])
 
 
 class CompletedHistoryDiagnosticCode(StrEnum):
@@ -394,10 +457,49 @@ class CompletedHistoryCatalog:
             frontier = parse_delivery_frontier(runtime_bytes)[0]
             results = _RESULT_HISTORY.validate_json(results_bytes)
         except (TypeError, ValidationError, ValueError) as exc:
-            self._malformed("completed runtime capture is malformed", snapshot.manifest.change_id, cause=exc)
+            self._verify_legacy_runtime_capture(runtime_bytes, results_bytes, snapshot, contract, cause=exc)
+            return
         self._require_capture_shape(snapshot, contract, frontier, results)
         if runtime_bytes != _canonical_model(frontier) or results_bytes != _canonical_results(results):
             self._malformed("completed runtime capture is not canonical", snapshot.manifest.change_id)
+
+    def _verify_legacy_runtime_capture(
+        self,
+        runtime_bytes: bytes,
+        results_bytes: bytes,
+        snapshot: CompletionPackageSnapshot,
+        contract: DeliveryContract,
+        *,
+        cause: Exception,
+    ) -> None:
+        try:
+            frontier = _LegacyRuntimeFrontier.model_validate_json(runtime_bytes)
+            results = _LEGACY_RESULT_HISTORY.validate_json(results_bytes)
+        except (TypeError, ValidationError, ValueError) as exc:
+            self._malformed("completed runtime capture is malformed", snapshot.manifest.change_id, cause=exc)
+        self._require_legacy_capture_shape(snapshot, contract, frontier, results)
+        if runtime_bytes != _canonical_model(frontier) or results_bytes != _canonical_results(results):
+            self._malformed("completed runtime capture is not canonical", snapshot.manifest.change_id, cause=cause)
+
+    def _require_legacy_capture_shape(
+        self,
+        snapshot: CompletionPackageSnapshot,
+        contract: DeliveryContract,
+        frontier: _LegacyRuntimeFrontier,
+        results: tuple[_LegacyTaskResult, ...],
+    ) -> None:
+        bindings = frontier.bindings
+        flattened = tuple(result for binding in bindings for result in binding.results)
+        if tuple(binding.outcome_id for binding in bindings) != tuple(item.outcome_id for item in contract.outcomes):
+            self._stale("completed runtime does not match authority outcomes", snapshot)
+        if results != flattened:
+            self._stale("completed runtime is not a complete immutable capture", snapshot)
+        if any(
+            result.authority_digest != snapshot.manifest.authority_digest
+            or result.change_id != snapshot.manifest.change_id
+            for result in results
+        ):
+            self._digest_mismatch("result history does not bind completed authority", snapshot)
 
     def _require_capture_digests(
         self,
@@ -637,6 +739,6 @@ def _receipt_set_digest(bundles: tuple[CompletionReceiptBundle, ...]) -> str:
     return hashlib.sha256(json.dumps(identities, separators=(",", ":")).encode()).hexdigest()
 
 
-def _canonical_results(results: tuple[DeliveryTaskResult, ...]) -> bytes:
+def _canonical_results(results: tuple[BaseModel, ...]) -> bytes:
     payload = [result.model_dump(mode="json") for result in results]
     return f"{json.dumps(payload, sort_keys=True, separators=(',', ':'))}\n".encode()

@@ -93,6 +93,11 @@ def _derive_paths(workspace_root: Path) -> _DeliveryPaths:
         field = "runtime_root"
         detail = "interrupted Delivery migration must be recovered before startup"
         raise _load_error(field, detail)
+    retirement_journal = delivery_root / "integration-retirement.json"
+    if retirement_journal.exists():
+        field = "runtime_root"
+        detail = "interrupted Integration retirement must be recovered before startup"
+        raise _load_error(field, detail)
     for field, legacy_root in (
         ("runtime_root", repository_root / ".owlbear/target"),
         ("worktree_root", repository_root / ".owlbear/worktrees"),

@@ -24,6 +24,7 @@ _RUNTIME_RELATIVE = Path(".owlbear/delivery/runtime")
 _WORKTREES_RELATIVE = Path(".owlbear/delivery/worktrees")
 _PRESERVED_WORKTREES_RELATIVE = Path(".owlbear/scratch/delivery-state-migration-worktrees")
 _JOURNAL_RELATIVE = Path(".owlbear/delivery/migration.json")
+RETIREMENT_JOURNAL_RELATIVE = Path(".owlbear/delivery/integration-retirement.json")
 
 
 class DeliveryStateMigrationError(RuntimeError):
@@ -243,6 +244,8 @@ def _migration_changes(
 def plan_delivery_state_migration(root: Path) -> DeliveryStateMigrationPlan:
     """Validate one migration without changing files or Git registrations."""
     repository_root = root.expanduser().resolve()
+    if (repository_root / RETIREMENT_JOURNAL_RELATIVE).exists():
+        _fail("interrupted Integration retirement requires recovery before path migration")
     if (repository_root / _JOURNAL_RELATIVE).exists():
         _fail("interrupted Delivery migration requires recovery with --apply")
     registered = _registered_worktrees(repository_root)
