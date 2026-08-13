@@ -92,7 +92,6 @@ DELIVERY_OPERATION_NAMES = (
     "show_plan_context",
     "show_build_context",
     "show_finalization_context",
-    "run_finalization_verification",
     "show_integration_repair_context",
     "create_integration_repair_candidate",
     "publish_delivery_plan",
@@ -252,15 +251,6 @@ class TargetMCPAdapter:
         """Show engine-resolved context for one exact Change finalization."""
         params = self._validate(ChangeParams, request)
         return self._call(params, lambda: self._application.show_finalization_context(params.change_id))
-
-    async def run_finalization_verification(self, request: ChangeRequest) -> dict[str, object]:
-        """Run target-governed finalization proof under the managed Change publication lease."""
-        params = self._validate(ChangeParams, request)
-        return await asyncio.to_thread(
-            self._call,
-            params,
-            lambda: self._application.run_finalization_verification(params.change_id),
-        )
 
     async def show_integration_repair_context(self, request: RepairClaimContextRequest) -> dict[str, object]:
         """Show bounded Integration repair context for one claim."""

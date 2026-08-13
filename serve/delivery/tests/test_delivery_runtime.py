@@ -688,7 +688,7 @@ def test_runtime_migrates_reducible_assembly_metadata_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 8
+    assert canonical["schema_version"] == 9
     assert all("assembly_required" not in binding for binding in canonical["bindings"])
     assert json.loads(path.read_bytes()) == canonical
 
@@ -705,10 +705,28 @@ def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 8
+    assert canonical["schema_version"] == 9
     assert canonical["published_head"] is None
     assert canonical["pending_checkpoint"] is None
     assert json.loads(path.read_bytes()) == canonical
+
+
+def test_runtime_rejects_legacy_embedded_finalization_authority(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    exact_head = runtime.bindings()[0].results[0].completed_commit
+    runtime.finalize_change(
+        _finalization_request(exact_head),
+        datetime(2026, 8, 11, 14, tzinfo=UTC),
+    )
+    payload = json.loads(runtime.frontier_bytes())
+    payload["schema_version"] = 8
+    payload["finalization"]["schema_version"] = 1
+
+    with pytest.raises(ValueError, match="explicit re-finalization"):
+        parse_delivery_frontier(json.dumps(payload).encode())
 
 
 @pytest.mark.parametrize("schema_version", [3, 4, 5, 6, 7])
@@ -741,7 +759,7 @@ def test_runtime_migrates_prior_schema_without_rewriting_finalization_checkpoint
     )
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 8
+    assert canonical["schema_version"] == 9
     assert canonical["pending_checkpoint"] == expected_checkpoint
     assert canonical["pending_checkpoint"]["head"] == exact_head
     assert canonical["pending_checkpoint"]["triggers"][-1] == {

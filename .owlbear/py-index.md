@@ -1013,8 +1013,6 @@ OwlBear target delivery authority, runtime, and cutover package.
 - `owlbear_delivery.delivery_runtime`
 - `owlbear_delivery.design_package`
 - `owlbear_delivery.draft_pull_request`
-- `owlbear_delivery.finalization_verification`
-- `owlbear_delivery.integration_verification`
 - `owlbear_delivery.portfolio_application`
 - `owlbear_delivery.portfolio_operating`
 - `owlbear_delivery.publication_provider`
@@ -1225,9 +1223,6 @@ Per-change writer coordination and Git workspace management.
   - `def _require_one_result(self) -> IntegrationResult`
 - `class IntegrationRepairCandidate(_WorkspaceModel)`
 - `class IntegrationContext(_WorkspaceModel)`
-- `class FinalizationTargetProvenance(StrEnum)`
-- `class FinalizationTargetContext(_WorkspaceModel)`
-  - `def _validate_observation_time(self) -> FinalizationTargetContext`
 - `class CoordinationConflictError(RuntimeError)`
 - `class PortfolioCoordinator`
   - `def __init__(self, state_root: Path, capacity: int) -> None`
@@ -1263,7 +1258,6 @@ Per-change writer coordination and Git workspace management.
   - `def show(self, change_id: str) -> ChangeCoordination`
   - `def refresh_integration_target(self, change_id: str) -> ChangeCoordination`
   - `def integration_context(self, change_id: str) -> IntegrationContext`
-  - `def finalization_target_context(self, change_id: str) -> FinalizationTargetContext`
   - `def integration_repair_replacement(self, repair: DeliveryIntegrationRepair, claim_id: str) -> tuple[ReplacementTransactionParticipant, ReplacementTransactionParticipant]`
   - `def create_integration_repair_candidate(self, attention: DeliveryIntegrationAttention, writer: ChangeWriter) -> IntegrationRepairCandidate`
   - `def integration_repair_authority_replacements(self, request: DeliveryIntegrationRepairAuthorityAttention, claim_id: str) -> tuple[ReplacementTransactionParticipant, ReplacementTransactionParticipant]`
@@ -1453,7 +1447,6 @@ Mechanical Delivery state and worker-owned transitions.
 - `class DeliveryOutputKind(StrEnum)`
 - `class DeliveryRequestKind(StrEnum)`
 - `class DeliveryWorkerRole(StrEnum)`
-- `class FinalizationVerificationScope(StrEnum)`
 - `class DeliveryCheckpointTriggerKind(StrEnum)`
 - `class _DeliveryModel(BaseModel)`
 - `class DeliveryOutputReference(_DeliveryModel)`
@@ -1781,53 +1774,6 @@ Idempotent draft pull-request creation for published Change branches.
 - `def _replace_generated_block(body: str, generated_summary: str, request: UpdateGeneratedPullRequestSummary) -> str`
 - `def _digest(payload: object) -> str`
 
-## serve/delivery/src/owlbear_delivery/finalization_verification.py
-
-Engine-owned finalization profile execution in the managed Change worktree.
-
-### Imports
-
-- `__future__`
-- `contextlib`
-- `datetime`
-- `enum`
-- `hashlib`
-- `json`
-- `os`
-- `owlbear_delivery.change_workspace`
-- `owlbear_delivery.delivery_runtime`
-- `owlbear_delivery.git_executable`
-- `owlbear_delivery.runtime_transaction`
-- `pathlib`
-- `pydantic`
-- `signal`
-- `subprocess`
-- `typing`
-
-### Interfaces
-
-- `class _FinalizationModel(BaseModel)`
-- `class FinalizationVerificationStepStatus(StrEnum)`
-- `class FinalizationVerificationStatus(StrEnum)`
-- `class FinalizationVerificationStepReceipt(_FinalizationModel)`
-- `class FinalizationVerificationReceipt(_FinalizationModel)`
-  - `def _validate_identity(self) -> FinalizationVerificationReceipt`
-- `class FinalizationVerificationStore`
-  - `def __init__(self, target_root: Path) -> None`
-  - `def publish(self, receipt: FinalizationVerificationReceipt) -> FinalizationVerificationReceipt`
-  - `def read(self, run_id: str) -> FinalizationVerificationReceipt | None`
-- `class FinalizationVerifier`
-  - `def __init__(self, repository: Path, store: FinalizationVerificationStore) -> None`
-  - `def run(self, *, change_id: str, worktree: Path, branch: str, exact_head: str, target_ref: str, target_head: str, profile_digest: str, profile: IntegrationVerificationProfile, target_provenance: FinalizationTargetProvenance = FinalizationTargetProvenance.CACHED_REMOTE_TRACKING, target_observed_at: datetime | None = None, proof_scope: FinalizationVerificationScope = FinalizationVerificationScope.CHANGE_HEAD_PROFILE) -> FinalizationVerificationReceipt`
-  - `def _execute_step(self, worktree: Path, step: IntegrationVerificationStep, environment_names: tuple[str, ...]) -> FinalizationVerificationStepReceipt`
-  - `def _workspace_state(self, worktree: Path) -> tuple[str | None, str, bool]`
-  - `def _resolve_target_head(self, target_ref: str) -> str | None`
-  - `def _run_git(self, *arguments: str, check: bool = True) -> subprocess.CompletedProcess[bytes]`
-  - `def _failure_receipt(*, run_id: str, change_id: str, exact_head: str, target_ref: str, target_head: str, target_provenance: FinalizationTargetProvenance, target_observed_at: datetime, proof_scope: FinalizationVerificationScope, profile_digest: str, declared_step_ids: tuple[str, ...], steps: Sequence[FinalizationVerificationStepReceipt], status: FinalizationVerificationStatus, observed_head: str | None, clean: bool, diagnostics: tuple[str, ...]) -> FinalizationVerificationReceipt`
-- `def _run_id(change_id: str, exact_head: str, target_ref: str, target_head: str, target_provenance: FinalizationTargetProvenance, proof_scope: FinalizationVerificationScope, profile_digest: str, step_ids: tuple[str, ...]) -> str`
-- `def _bounded_text(value: bytes) -> str`
-- `def _bounded_diagnostic(value: str) -> str`
-
 ## serve/delivery/src/owlbear_delivery/git_executable.py
 
 Validated Git executable discovery for Delivery subprocesses.
@@ -1852,30 +1798,6 @@ Constrained identities shared by target delivery modules.
 - `pydantic`
 - `typing`
 
-## serve/delivery/src/owlbear_delivery/integration_verification.py
-
-Target-bound verification profile authority.
-
-### Imports
-
-- `__future__`
-- `hashlib`
-- `owlbear_delivery.git_executable`
-- `pathlib`
-- `pydantic`
-- `subprocess`
-- `typing`
-
-### Interfaces
-
-- `class _VerificationModel(BaseModel)`
-- `class IntegrationVerificationStep(_VerificationModel)`
-  - `def _validate_cwd(self) -> IntegrationVerificationStep`
-- `class IntegrationVerificationProfile(_VerificationModel)`
-  - `def _validate_unique_values(self) -> IntegrationVerificationProfile`
-- `class TargetVerificationProfile(_VerificationModel)`
-- `def read_target_verification_profile(repository: Path, target_commit: str) -> TargetVerificationProfile`
-
 ## serve/delivery/src/owlbear_delivery/portfolio_application.py
 
 Deterministic portfolio acquisition and bounded worker context.
@@ -1893,8 +1815,6 @@ Deterministic portfolio acquisition and bounded worker context.
 - `owlbear_delivery.change_workspace`
 - `owlbear_delivery.delivery_runtime`
 - `owlbear_delivery.draft_pull_request`
-- `owlbear_delivery.finalization_verification`
-- `owlbear_delivery.integration_verification`
 - `owlbear_delivery.portfolio_operating`
 - `owlbear_delivery.storage_io`
 - `owlbear_delivery.target_contract`
@@ -1953,7 +1873,6 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def observe_change_publication_checks(self, change_id: str) -> PublicationCheckObservationReceipt`
   - `def show_change_checkpoint_publication(self, change_id: str) -> DeliveryCheckpointPublicationState`
   - `def show_finalization_context(self, change_id: str) -> DeliveryFinalizationContext`
-  - `def run_finalization_verification(self, change_id: str) -> FinalizationVerificationReceipt`
   - `def finalize_change(self, change_id: str, request: FinalizeDeliveryChange) -> DeliveryFinalizationReceipt`
   - `def mark_change_ready(self, change_id: str, request: MarkChangePullRequestReady) -> PullRequestReadyReceipt`
   - `def mark_current_change_ready(self, change_id: str) -> PullRequestReadyReceipt`
@@ -2844,7 +2763,6 @@ Strict MCPServer adapter for the Delivery portfolio application.
   - `async def show_plan_context(self, request: ClaimContextRequest) -> dict[str, object]`
   - `async def show_build_context(self, request: ClaimContextRequest) -> dict[str, object]`
   - `async def show_finalization_context(self, request: ChangeRequest) -> dict[str, object]`
-  - `async def run_finalization_verification(self, request: ChangeRequest) -> dict[str, object]`
   - `async def show_integration_repair_context(self, request: RepairClaimContextRequest) -> dict[str, object]`
   - `async def create_integration_repair_candidate(self, request: RepairClaimContextRequest) -> dict[str, object]`
   - `async def publish_delivery_plan(self, request: PublishDeliveryPlanRequest) -> DeliveryPlanPublication`
@@ -4486,8 +4404,6 @@ OwlBear workspace initialiser — setup/init.py.
 - `def _github_repository_from_remote(target_dir: Path, remote: str) -> str | None`
 - `def _select_github_repository(target_dir: Path, remote: str, requested: str | None, *, interactive: bool) -> str`
 - `def _write_delivery_config(target_dir: Path, remote: str, target_branch: str | None, github_repository: str | None, *, interactive: bool) -> None`
-- `def _verification_steps(target_dir: Path) -> list[dict[str, object]]`
-- `def _write_verification_profile(target_dir: Path) -> None`
 - `def _hook_files_match(src: Path, dest: Path) -> bool`
 - `def _is_interactive_session() -> bool`
 - `def _should_replace_hook_file(dest: Path, *, src: Path, replace_hooks: bool, interactive: bool) -> bool`

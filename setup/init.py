@@ -73,7 +73,6 @@ _RETIRED_OWLBEAR_GITIGNORE_LINES = frozenset(
 _HOOKS_REL_PREFIX = ".owlbear/hooks/"
 _DELIVERY_CONFIG_PATH = Path(".owlbear/delivery/config.json")
 _DELIVERY_CONFIG_SCHEMA_VERSION = 2
-_VERIFICATION_PROFILE_PATH = Path(".owlbear/delivery/verification.json")
 
 # Regex: match // line-comments outside of strings.  Handles the common JSONC
 # patterns VS Code uses (trailing comments like `true, // old value`).  Does
@@ -364,65 +363,6 @@ def _write_delivery_config(
     temporary_path.replace(path)
 
 
-def _verification_steps(target_dir: Path) -> list[dict[str, object]]:
-    """Detect supported test surfaces once while scaffolding tracked policy."""
-    steps: list[dict[str, object]] = []
-    if (target_dir / "pyproject.toml").is_file() and (target_dir / "tests").is_dir():
-        steps.append(
-            {
-                "step_id": "python-tests",
-                "argv": ["uv", "run", "--locked", "pytest"],
-                "cwd": ".",
-                "timeout_seconds": 1800,
-            }
-        )
-    package_path = target_dir / "package.json"
-    try:
-        package = json.loads(package_path.read_text(encoding="utf-8")) if package_path.is_file() else {}
-    except OSError, json.JSONDecodeError:
-        package = {}
-    if isinstance(package.get("scripts"), dict) and isinstance(package["scripts"].get("test"), str):
-        if (target_dir / "package-lock.json").is_file():
-            steps.append(
-                {
-                    "step_id": "node-install",
-                    "argv": ["npm", "ci"],
-                    "cwd": ".",
-                    "timeout_seconds": 1800,
-                }
-            )
-        steps.append(
-            {
-                "step_id": "node-tests",
-                "argv": ["npm", "test"],
-                "cwd": ".",
-                "timeout_seconds": 1800,
-            }
-        )
-    return steps
-
-
-def _write_verification_profile(target_dir: Path) -> None:
-    """Scaffold tracked Integration policy once from supported manifests."""
-    path = target_dir / _VERIFICATION_PROFILE_PATH
-    if path.exists():
-        return
-    steps = _verification_steps(target_dir)
-    if not steps:
-        warnings.warn(
-            "No supported test surface was detected; create .owlbear/delivery/verification.json before Integration.",
-            stacklevel=2,
-        )
-        return
-    content = {
-        "schema_version": 1,
-        "pass_environment": ["PATH", "HOME", "TMPDIR", "UV_CACHE_DIR", "NPM_CONFIG_CACHE", "CI"],
-        "steps": steps,
-    }
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(content, indent=2) + "\n", encoding="utf-8")
-
-
 def _hook_files_match(src: Path, dest: Path) -> bool:
     """Return True when the existing hook file already matches the seed file."""
     return dest.exists() and src.read_bytes() == dest.read_bytes()
@@ -604,7 +544,6 @@ def init(  # noqa: C901, PLR0913
         github_repository,
         interactive=interactive_mode,
     )
-    _write_verification_profile(target_dir)
 
 
 # ---------------------------------------------------------------------------

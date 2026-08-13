@@ -73,12 +73,6 @@ class DeliveryWorkerRole(StrEnum):
     INTEGRATION_REPAIRER = "integration-repairer"
 
 
-class FinalizationVerificationScope(StrEnum):
-    """Bounded proof boundary for exact Change finalization."""
-
-    CHANGE_HEAD_PROFILE = "change-head-profile"
-
-
 class DeliveryCheckpointTriggerKind(StrEnum):
     """Delivery-owned reasons that require Change checkpoint publication."""
 
@@ -768,7 +762,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 class DeliveryFrontier(_DeliveryModel):
     """Canonical outcome and Change checkpoint state persisted beside authority."""
 
-    schema_version: Literal[8] = 8
+    schema_version: Literal[9] = 9
     bindings: tuple[OutcomeAuthorityBinding, ...]
     published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint: DeliveryPendingCheckpoint | None = None
@@ -1027,8 +1021,11 @@ _STAGE_ORDER = {
     DeliveryStage.IMPLEMENTATION: 2,
     DeliveryStage.COMPLETED: 3,
 }
-_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7})
-_FRONTIER_SCHEMA_VERSION = 8
+_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7, 8})
+_FRONTIER_SCHEMA_VERSION = 9
+_FINALIZATION_SCHEMA_VERSION = 2
+_LEGACY_FINALIZATION_MESSAGE = "legacy finalization authority requires explicit re-finalization"
+_CHECKPOINT_BACKFILL_SCHEMA_VERSIONS = frozenset({1, 2})
 _RETURN_TARGETS = {
     DeliveryStage.PLANNING: {DeliveryStage.DESIGN},
     DeliveryStage.IMPLEMENTATION: {DeliveryStage.PLANNING, DeliveryStage.DESIGN},
@@ -2253,32 +2250,48 @@ def parse_delivery_frontier(
     payload = json.loads(content)
     if not isinstance(payload, dict):
         raise TypeError
-    schema_version = payload.get("schema_version")
-    if schema_version == 1:
-        bindings = payload.get("bindings")
-        if not isinstance(bindings, list):
-            raise ValueError
-        for binding in bindings:
-            if not isinstance(binding, dict) or binding.get("stage") == "assembly":
-                raise ValueError
-            assembly_required = binding.pop("assembly_required", False)
-            if assembly_required is not False:
-                raise ValueError
-        payload["schema_version"] = _FRONTIER_SCHEMA_VERSION
-    elif schema_version in _PREVIOUS_FRONTIER_SCHEMA_VERSIONS:
-        payload["schema_version"] = _FRONTIER_SCHEMA_VERSION
-    elif schema_version != _FRONTIER_SCHEMA_VERSION:
-        raise ValueError
+    schema_version = _normalize_frontier_schema(payload)
+    _reject_legacy_finalization(payload)
     frontier = DeliveryFrontier.model_validate_json(
         json.dumps(payload, sort_keys=True, separators=(",", ":")),
     )
-    if schema_version in {1, 2}:
+    if schema_version in _CHECKPOINT_BACKFILL_SCHEMA_VERSIONS:
         frontier = _backfill_checkpoint_state(
             frontier,
             migration_reviewed_head,
             required=require_checkpoint_backfill,
         )
     return frontier, _model_content(frontier)
+
+
+def _normalize_frontier_schema(payload: dict[str, object]) -> int:
+    schema_version = payload.get("schema_version")
+    if schema_version == 1:
+        _normalize_schema_one_bindings(payload)
+    elif schema_version in _PREVIOUS_FRONTIER_SCHEMA_VERSIONS:
+        payload["schema_version"] = _FRONTIER_SCHEMA_VERSION
+    elif schema_version != _FRONTIER_SCHEMA_VERSION:
+        raise ValueError
+    return schema_version
+
+
+def _normalize_schema_one_bindings(payload: dict[str, object]) -> None:
+    bindings = payload.get("bindings")
+    if not isinstance(bindings, list):
+        raise TypeError
+    for binding in bindings:
+        if not isinstance(binding, dict) or binding.get("stage") == "assembly":
+            raise ValueError
+        assembly_required = binding.pop("assembly_required", False)
+        if assembly_required is not False:
+            raise ValueError
+    payload["schema_version"] = _FRONTIER_SCHEMA_VERSION
+
+
+def _reject_legacy_finalization(payload: dict[str, object]) -> None:
+    finalization = payload.get("finalization")
+    if isinstance(finalization, dict) and finalization.get("schema_version") != _FINALIZATION_SCHEMA_VERSION:
+        raise ValueError(_LEGACY_FINALIZATION_MESSAGE)
 
 
 def _backfill_checkpoint_state(

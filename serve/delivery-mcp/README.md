@@ -52,12 +52,10 @@ Planner, Builder, and reviewer routing. Startup validates the configured remote,
 `refs/remotes/<remote>/<target_branch>` commit, and the GitHub `owner/name` identity parsed from that
 remote URL. It does not require or inspect a local target branch.
 
-The tracked `.owlbear/delivery/verification.json` profile declares ordered argv, working directory,
-timeout, and environment-name allowlist for finalization verification. `show_finalization_context`
-resolves that profile from the exact engine-selected target commit, and finalization runs it against
-the managed Change worktree at its exact reviewed head. Integration does not execute a second detached
-candidate checkout or infer external acceptance from local Git state. See
-[setup-guide.md](../../setup/setup-guide.md) for profile scaffolding and ownership.
+Finalization is bound to the exact reviewed Change head in its managed worktree. The finalizer records
+typed observations for the relevant maintained checks and obtains an independent exact-commit review;
+Delivery does not resolve or execute a target-bound verification profile. This evidence does not claim
+that GitHub can merge the Change or that the merged result passes.
 
 Delivery has no environment configuration. The server must be launched with the consuming workspace
 as its current directory. Startup fails closed when nonempty retired `.owlbear/target` or

@@ -304,7 +304,7 @@ def test_init_interactive_target_defaults_to_checked_out_branch(
     assert config["target_branch"] == "develop"
 
 
-def test_init_scaffolds_and_preserves_detected_verification_profile(
+def test_init_does_not_scaffold_retired_verification_profile(
     tmp_path: Path,
     init_module: types.ModuleType,
 ) -> None:
@@ -322,15 +322,7 @@ def test_init_scaffolds_and_preserves_detected_verification_profile(
     )
 
     profile_path = target_dir / ".owlbear/delivery/verification.json"
-    profile = json.loads(profile_path.read_text(encoding="utf-8"))
-    assert [step["step_id"] for step in profile["steps"]] == [
-        "python-tests",
-        "node-install",
-        "node-tests",
-    ]
-    assert profile["steps"][0]["argv"] == ["uv", "run", "--locked", "pytest"]
-    profile["steps"][0]["timeout_seconds"] = 42
-    profile_path.write_text(json.dumps(profile), encoding="utf-8")
+    assert not profile_path.exists()
 
     init_module.init(
         target_dir,
@@ -339,5 +331,4 @@ def test_init_scaffolds_and_preserves_detected_verification_profile(
         github_repository="example/project",
     )
 
-    preserved = json.loads(profile_path.read_text(encoding="utf-8"))
-    assert preserved["steps"][0]["timeout_seconds"] == 42
+    assert not profile_path.exists()

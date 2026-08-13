@@ -9,7 +9,6 @@ import re
 import subprocess
 from contextlib import contextmanager
 from datetime import UTC, datetime
-from enum import StrEnum
 from itertools import pairwise
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Never
@@ -208,30 +207,6 @@ class IntegrationContext(_WorkspaceModel):
     reviewed_change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     integration_target: str = Field(min_length=1)
     target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-
-
-class FinalizationTargetProvenance(StrEnum):
-    """Source class for the target identity used by Change finalization."""
-
-    CACHED_REMOTE_TRACKING = "cached-remote-tracking"
-
-
-class FinalizationTargetContext(_WorkspaceModel):
-    """Remote-tracking target identity used only by Change finalization."""
-
-    remote: str = Field(min_length=1)
-    target_branch: str = Field(min_length=1)
-    target_ref: str = Field(min_length=1)
-    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    target_provenance: FinalizationTargetProvenance
-    target_observed_at: datetime
-
-    @model_validator(mode="after")
-    def _validate_observation_time(self) -> FinalizationTargetContext:
-        if self.target_observed_at.tzinfo is None:
-            message = "finalization target observation time must include a timezone"
-            raise ValueError(message)
-        return self
 
 
 class CoordinationConflictError(RuntimeError):
@@ -690,25 +665,6 @@ class ChangeWorkspaceManager:
             reviewed_change_head=coordination.last_reviewed_commit,
             integration_target=coordination.integration_target,
             target_head=self._resolve(coordination.integration_target),
-        )
-
-    def finalization_target_context(self, change_id: str) -> FinalizationTargetContext:
-        """Return the configured remote-tracking target identity without fetching or mutation."""
-        coordination = self._coordinator.show(change_id)
-        target_ref = f"refs/remotes/{self._remote}/{coordination.integration_target}"
-        target_head = self._resolve(target_ref)
-        local_target_head = self._resolve(coordination.integration_target)
-        if local_target_head != target_head:
-            _coordination_conflict(
-                "finalization target authority diverges between local target and cached remote-tracking ref"
-            )
-        return FinalizationTargetContext(
-            remote=self._remote,
-            target_branch=coordination.integration_target,
-            target_ref=target_ref,
-            target_head=target_head,
-            target_provenance=FinalizationTargetProvenance.CACHED_REMOTE_TRACKING,
-            target_observed_at=datetime.now(UTC),
         )
 
     def integration_repair_replacement(

@@ -22,8 +22,6 @@ from owlbear_delivery.change_workspace import (
     ChangeWorkspaceManager,
     ChangeWriter,
     CoordinationConflictError,
-    FinalizationTargetContext,
-    FinalizationTargetProvenance,
     IntegrationContext,
     IntegrationFinding,
     IntegrationRepairCandidate,
@@ -105,7 +103,6 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryTaskResult,
     DeliveryTransition,
     DeliveryWorkerRole,
-    FinalizationVerificationScope,
     FinalizeDeliveryChange,
     OutcomeAuthorityBinding,
     PublishDeliveryOutput,
@@ -140,21 +137,6 @@ from owlbear_delivery.draft_pull_request import (
     ReadChangePublicationCheckObservations,
     ReturnChangePullRequestToDraft,
     UpdateGeneratedPullRequestSummary,
-)
-from owlbear_delivery.finalization_verification import (
-    FinalizationVerificationReceipt,
-    FinalizationVerificationStatus,
-    FinalizationVerificationStepReceipt,
-    FinalizationVerificationStepStatus,
-    FinalizationVerificationStore,
-    FinalizationVerifier,
-)
-from owlbear_delivery.integration_verification import (
-    INTEGRATION_VERIFICATION_PROFILE_PATH,
-    IntegrationVerificationProfile,
-    IntegrationVerificationStep,
-    TargetVerificationProfile,
-    read_target_verification_profile,
 )
 from owlbear_delivery.portfolio_application import (
     DeliveryAcquisitionFailure,
@@ -305,7 +287,6 @@ from owlbear_delivery.work_items import (
 
 __all__ = [
     "DELIVERY_TRANSITION_ADAPTER",
-    "INTEGRATION_VERIFICATION_PROFILE_PATH",
     "ActivateDeliveryClaim",
     "AdministrativeDeliveryMove",
     "AdministrativeDeliveryMovePreview",
@@ -435,15 +416,6 @@ __all__ = [
     "DesignReentryBriefing",
     "DraftPullRequestPublicationReceipt",
     "DraftPullRequestPublisher",
-    "FinalizationTargetContext",
-    "FinalizationTargetProvenance",
-    "FinalizationVerificationReceipt",
-    "FinalizationVerificationScope",
-    "FinalizationVerificationStatus",
-    "FinalizationVerificationStepReceipt",
-    "FinalizationVerificationStepStatus",
-    "FinalizationVerificationStore",
-    "FinalizationVerifier",
     "FinalizeDeliveryChange",
     "FindPublicationPullRequest",
     "FinishTargetJobRequest",
@@ -453,8 +425,6 @@ __all__ = [
     "IntegrationFinding",
     "IntegrationRepairCandidate",
     "IntegrationResult",
-    "IntegrationVerificationProfile",
-    "IntegrationVerificationStep",
     "LegacyActiveItem",
     "LegacyCompletedChangeRecord",
     "LegacyDisposition",
@@ -564,6 +534,5 @@ __all__ = [
     "integration_attention_disposition",
     "inventory_legacy_source",
     "load_delivery_application",
-    "read_target_verification_profile",
     "verify_legacy_snapshot",
 ]

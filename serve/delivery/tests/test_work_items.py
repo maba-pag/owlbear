@@ -30,7 +30,6 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryWorkerRole,
-    FinalizationVerificationScope,
     OutcomeAuthorityBinding,
 )
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
@@ -237,13 +236,6 @@ def _finalization(exact_head: str = "3" * 40) -> DeliveryFinalizationReceipt:
             operation_id="finalize-portfolio-change",
             change_id="portfolio-change",
             exact_head=exact_head,
-            verification_run_id="a" * 64,
-            target_ref="refs/remotes/origin/main",
-            target_head="2" * 40,
-            target_provenance="cached-remote-tracking",
-            target_observed_at=observed_at,
-            proof_scope=FinalizationVerificationScope.CHANGE_HEAD_PROFILE,
-            profile_digest="e" * 64,
             authority_digest="c" * 64,
             result_digests=("d" * 64,),
             observations=(observation,),

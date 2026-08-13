@@ -39,12 +39,11 @@ naming the owning boundary. You never repair or route the candidate.
   `DeliveryBuildContext`, task boundary, complete diff, changed paths, proof, and prior evidence. For
   an Integration repair, require current attention, exact coordination identities, original conflict
   paths, complete diff, changed paths, Builder owner identity, proof, and prior evidence.
-- **For finalization, require** the fresh `DeliveryFinalizationContext`, exact Change head, target ref
-  and head, `cached-remote-tracking` provenance, `change-head-profile` scope, profile digest, persisted engine proof receipt,
-  complete finalization diff boundary, and the proof run's exact observed head, clean status, and
-  declared step evidence. Review the proof as Change-head profile execution, not as evidence of a
-  successful merge or current GitHub state. Never accept a client-authored proof as a substitute for
-  the engine receipt.
+- **For finalization, require** the fresh `DeliveryFinalizationContext`, exact Change head, reviewed
+  head, clean managed worktree, complete finalization diff boundary, heterogeneous exact-head
+  observations, and the finalizer's independent review request. Inspect the exact commit and
+  observations as Change evidence; do not require target refs, target profiles, or a separate engine
+  proof receipt, and do not treat them as evidence of a successful merge or current GitHub state.
 - **Choose one advisory disposition:** `pass` or `finding`. A finding names exactly one earliest
   boundary: `implementation`, `planning`, or `design`.
 - **Identify the reviewer.** Return `reviewer_id: build-reviewer` so the caller can bind independent

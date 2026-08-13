@@ -63,7 +63,6 @@ DELIVERY_TOOLS = {
     "show_plan_context",
     "show_build_context",
     "show_finalization_context",
-    "run_finalization_verification",
     "show_integration_repair_context",
     "create_integration_repair_candidate",
     "publish_delivery_plan",

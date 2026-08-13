@@ -29,7 +29,6 @@ _FINALIZATION_IMPORT_MODULES: frozenset[str] = frozenset(
     {
         "owlbear_delivery",
         "owlbear_delivery.delivery_runtime",
-        "owlbear_delivery.finalization_verification",
         "owlbear_delivery.portfolio_application",
     }
 )
@@ -38,10 +37,6 @@ _FINALIZATION_IMPORT_NAMES: frozenset[str] = frozenset(
         "DeliveryFinalization",
         "DeliveryFinalizationReceipt",
         "FinalizeDeliveryChange",
-        "FinalizationVerificationReceipt",
-        "FinalizationVerificationStore",
-        "FinalizationVerifier",
-        "run_finalization_verification",
         "finalize_change",
     }
 )

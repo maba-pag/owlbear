@@ -6,7 +6,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
@@ -68,7 +67,6 @@ from owlbear_delivery import (
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryWorkerRole,
-    FinalizationVerificationScope,
     FinalizeDeliveryChange,
     DesignPackageManifest,
     DesignPackageConflictError,
@@ -91,9 +89,6 @@ from owlbear_delivery import (
     PublishDeliveryResult,
     RetryDelivery,
     load_delivery_application,
-)
-from owlbear_delivery.integration_verification import (
-    INTEGRATION_VERIFICATION_PROFILE_PATH,
 )
 from owlbear_delivery.publication_provider import (
     PublicationProviderError,
@@ -266,55 +261,24 @@ def _task_result(
 
 
 def _finalization_request(
-    application: PortfolioApplication,
     change_id: str,
     exact_head: str,
-    *,
-    script: str = "pass",
 ) -> FinalizeDeliveryChange:
-    repository = application._workspace_manager.repository  # noqa: SLF001 - test authority setup.
-    profile_path = repository / INTEGRATION_VERIFICATION_PROFILE_PATH
-    profile_path.parent.mkdir(parents=True, exist_ok=True)
-    profile_path.write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "pass_environment": [],
-                "steps": [
-                    {
-                        "step_id": "finalization-check",
-                        "argv": [sys.executable, "-c", script],
-                        "cwd": ".",
-                        "timeout_seconds": 5,
-                    }
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-    _git(repository, "add", INTEGRATION_VERIFICATION_PROFILE_PATH)
-    _git(repository, "commit", "-m", "add finalization verification authority")
-    target_head = _git(repository, "rev-parse", "main")
-    _git(repository, "update-ref", "refs/remotes/origin/main", target_head)
-    context = application.show_finalization_context(change_id)
-    proof = application.run_finalization_verification(change_id)
     operation_id = f"finalize-{change_id}"
     observed_at = datetime(2026, 8, 11, 13, tzinfo=UTC)
-    observations = tuple(
+    observations = (
         DeliveryObservationReceipt.create(
             DeliveryObservation(
                 change_id=change_id,
                 task_or_finalization_id=operation_id,
-                step_id=step.step_id,
                 exact_commit=exact_head,
-                observation_kind="engine-finalization-proof",
-                command_or_procedure=" ".join(step.argv),
-                exit_status_or_artifact_locator="exit:0",
-                observer_or_runner_identity="engine",
+                observation_kind="finalization-observation",
+                command_or_procedure="Portfolio finalization exact-head check",
+                exit_status_or_artifact_locator="observed:clean-reviewed-head",
+                observer_or_runner_identity="Portfolio test observer",
                 observed_at=observed_at,
             )
-        )
-        for step in proof.steps
+        ),
     )
     review = DeliveryReviewReceipt.create(
         DeliveryReview(
@@ -328,13 +292,6 @@ def _finalization_request(
     return FinalizeDeliveryChange(
         operation_id=operation_id,
         exact_head=exact_head,
-        verification_run_id=proof.run_id,
-        target_ref=context.target_ref,
-        target_head=context.target_head,
-        target_provenance=context.target_provenance,
-        target_observed_at=proof.target_observed_at,
-        proof_scope=proof.proof_scope,
-        profile_digest=context.profile_digest,
         observations=observations,
         review=review,
     )
@@ -497,7 +454,7 @@ def test_finalization_uses_managed_head_and_invalidates_observed_drift(tmp_path:
     )
     coordination = coordinator.show("change-a")
     exact_head = coordination.last_reviewed_commit
-    request = _finalization_request(application, "change-a", exact_head)
+    request = _finalization_request("change-a", exact_head)
 
     receipt = application.finalize_change("change-a", request)
 
@@ -523,47 +480,17 @@ def test_finalization_uses_managed_head_and_invalidates_observed_drift(tmp_path:
     assert application.list_integration_attention() == ()
 
 
-def test_finalization_context_binds_profile_to_engine_resolved_target(tmp_path: Path) -> None:
+def test_finalization_context_uses_managed_change_head(tmp_path: Path) -> None:
     application, _runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
     )
-    repository = tmp_path / "repository"
-    profile_path = repository / INTEGRATION_VERIFICATION_PROFILE_PATH
-    profile_path.parent.mkdir(parents=True, exist_ok=True)
-    profile_path.write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "pass_environment": ["PATH"],
-                "steps": [
-                    {
-                        "step_id": "target-tests",
-                        "argv": ["python", "-m", "pytest"],
-                        "cwd": ".",
-                        "timeout_seconds": 60,
-                    }
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-    _git(repository, "add", INTEGRATION_VERIFICATION_PROFILE_PATH)
-    _git(repository, "commit", "-m", "add target verification authority")
-    target_head = _git(repository, "rev-parse", "main")
-    _git(repository, "update-ref", "refs/remotes/origin/main", target_head)
     change_head = coordinator.show("change-a").last_reviewed_commit
 
     context = application.show_finalization_context("change-a")
 
     assert context.change_head == change_head
     assert context.reviewed_change_head == change_head
-    assert context.target_branch == "main"
-    assert context.target_ref == "refs/remotes/origin/main"
-    assert context.target_head == target_head
-    assert context.proof_scope is FinalizationVerificationScope.CHANGE_HEAD_PROFILE
-    assert context.profile.steps[0].step_id == "target-tests"
-    assert context.profile_digest == hashlib.sha256(profile_path.read_bytes()).hexdigest()
     assert context.publication_phase.value == "ready-for-finalization"
 
 
@@ -573,7 +500,7 @@ def test_finalization_context_reports_existing_exact_finalization_head(tmp_path:
         {"change-a": DeliveryStage.COMPLETED},
     )
     exact_head = coordinator.show("change-a").last_reviewed_commit
-    request = _finalization_request(application, "change-a", exact_head)
+    request = _finalization_request("change-a", exact_head)
     receipt = application.finalize_change("change-a", request)
 
     context = application.show_finalization_context("change-a")
@@ -581,114 +508,37 @@ def test_finalization_context_reports_existing_exact_finalization_head(tmp_path:
     assert context.finalization_id == receipt.finalization_id
     assert context.finalized_head == exact_head
     assert context.change_head == exact_head
-    assert context.target_provenance.value == "cached-remote-tracking"
-    assert context.proof_scope is FinalizationVerificationScope.CHANGE_HEAD_PROFILE
-    proof = application._finalization_verification_store.read(request.verification_run_id)  # noqa: SLF001
-    assert proof is not None
-    assert proof.target_provenance.value == "cached-remote-tracking"
-    assert proof.proof_scope is FinalizationVerificationScope.CHANGE_HEAD_PROFILE
-    assert proof.target_observed_at == request.target_observed_at
-    assert receipt.target_provenance == "cached-remote-tracking"
-    assert receipt.target_observed_at == request.target_observed_at
 
 
-def test_finalization_rejects_divergent_local_and_cached_target(tmp_path: Path) -> None:
+def test_finalization_rejects_change_head_drift_before_persistence(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
     )
-    repository = application._workspace_manager.repository  # noqa: SLF001 - test authority setup.
-    profile_path = repository / INTEGRATION_VERIFICATION_PROFILE_PATH
-    profile_path.parent.mkdir(parents=True, exist_ok=True)
-    profile_path.write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "pass_environment": [],
-                "steps": [
-                    {
-                        "step_id": "finalization-check",
-                        "argv": [sys.executable, "-c", "pass"],
-                        "cwd": ".",
-                        "timeout_seconds": 5,
-                    }
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-    _git(repository, "add", INTEGRATION_VERIFICATION_PROFILE_PATH)
-    _git(repository, "commit", "-m", "add finalization verification authority")
-    cached_target = _git(repository, "rev-parse", "main")
-    _git(repository, "update-ref", "refs/remotes/origin/main", cached_target)
-    (repository / "local-only-target.txt").write_text("local target moved\n", encoding="utf-8")
-    _git(repository, "add", "local-only-target.txt")
-    _git(repository, "commit", "-m", "move local target only")
+    coordination = application._workspace_manager.show("change-a")  # noqa: SLF001 - test authority setup.
+    exact_head = coordination.last_reviewed_commit
+    request = _finalization_request("change-a", exact_head)
+    (coordination.worktree_path / "unreviewed.txt").write_text("unreviewed\n", encoding="utf-8")
+    _git(coordination.worktree_path, "add", "unreviewed.txt")
+    _git(coordination.worktree_path, "commit", "-m", "unreviewed Change head")
 
-    with pytest.raises(PortfolioApplicationError, match="finalization context"):
-        application.show_finalization_context("change-a")
+    with pytest.raises(PortfolioApplicationError, match="finalization"):
+        application.finalize_change("change-a", request)
 
     assert runtimes["change-a"].finalization() is None
 
 
-def test_finalization_rejects_target_move_after_engine_proof(tmp_path: Path) -> None:
+def test_finalization_rejects_exact_head_mismatch(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
     )
     exact_head = runtimes["change-a"].bindings()[0].results[0].completed_commit
-    request = _finalization_request(application, "change-a", exact_head)
-    repository = application._workspace_manager.repository  # noqa: SLF001 - test authority setup.
-    (repository / "target-moved.txt").write_text("target moved\n", encoding="utf-8")
-    _git(repository, "add", "target-moved.txt")
-    _git(repository, "commit", "-m", "move target after proof")
-    _git(repository, "update-ref", "refs/remotes/origin/main", "main")
-
-    with pytest.raises(PortfolioApplicationError, match="current target authority"):
-        application.finalize_change("change-a", request)
-
-    assert runtimes["change-a"].finalization() is None
-
-
-def test_finalization_rejects_target_authority_mismatch(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-    exact_head = coordinator.show("change-a").last_reviewed_commit
-    request = _finalization_request(application, "change-a", exact_head).model_copy(update={"target_head": "f" * 40})
-
-    with pytest.raises(PortfolioApplicationError, match="current target authority"):
-        application.finalize_change("change-a", request)
-
-    assert runtimes["change-a"].finalization() is None
-
-
-def test_finalization_rejects_missing_engine_proof_receipt(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-    exact_head = coordinator.show("change-a").last_reviewed_commit
-    request = _finalization_request(application, "change-a", exact_head).model_copy(
-        update={"verification_run_id": "d" * 64}
+    request = _finalization_request("change-a", exact_head).model_copy(
+        update={"exact_head": "f" * 40},
     )
 
-    with pytest.raises(PortfolioApplicationError, match="persisted engine proof run"):
-        application.finalize_change("change-a", request)
-
-    assert runtimes["change-a"].finalization() is None
-
-
-def test_finalization_rejects_failed_engine_proof(tmp_path: Path) -> None:
-    application, runtimes, coordinator, _state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-    exact_head = coordinator.show("change-a").last_reviewed_commit
-    request = _finalization_request(application, "change-a", exact_head, script="raise SystemExit(1)")
-
-    with pytest.raises(PortfolioApplicationError, match="passing engine proof run"):
+    with pytest.raises(PortfolioApplicationError, match="current Change head"):
         application.finalize_change("change-a", request)
 
     assert runtimes["change-a"].finalization() is None
@@ -719,7 +569,7 @@ def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Pat
         {"change-a": DeliveryStage.COMPLETED},
     )
     exact_head = coordinator.show("change-a").last_reviewed_commit
-    receipt = application.finalize_change("change-a", _finalization_request(application, "change-a", exact_head))
+    receipt = application.finalize_change("change-a", _finalization_request("change-a", exact_head))
     provider = Mock()
     provider.read_repository.return_value = PublicationRepository(
         repository="example/project",
@@ -833,7 +683,7 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(tmp_p
     exact_head = coordinator.show("change-a").last_reviewed_commit
     finalization = application.finalize_change(
         "change-a",
-        _finalization_request(application, "change-a", exact_head),
+        _finalization_request("change-a", exact_head),
     )
     pull_request = PublicationPullRequest(
         repository="example/project",
@@ -1587,7 +1437,7 @@ dependencies: []
     assert recovered.replayed
     assert coordinator.show("change-a").last_reviewed_commit == reviewed_head
     assert application.show_change_checkpoint_publication("change-a").pending_checkpoint is not None
-    assert json.loads(frontier_path.read_bytes())["schema_version"] == 8
+    assert json.loads(frontier_path.read_bytes())["schema_version"] == 9
 
 
 def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
@@ -1638,7 +1488,7 @@ def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_pa
 
     assert state.pending_checkpoint is not None
     assert state.pending_checkpoint.head == coordination.last_reviewed_commit
-    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 8
+    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 9
 
 
 def test_delivery_loader_injects_publication_provider_and_derives_check_head(tmp_path: Path) -> None:

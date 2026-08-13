@@ -83,7 +83,6 @@ Running `init.py` writes the following files into your project directory:
 | `.vscode/settings.json` | Points VS Code at owlbear agents, skills, and instructions; enables `mermaid-chat.enabled` for Mermaid diagram rendering in chat | Merged (owlbear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 5 MCP servers (4 owlbear stdio, including browser access, + markitdown) | Merged (owlbear servers as defaults; your existing servers are preserved) |
 | `.owlbear/delivery/config.json` | Declares the Git remote, pull-request target branch, and exact GitHub `owner/name` identity; roots, capacity, agent routing, and models come from workspace conventions and agent definitions | Tracked in Git; exact schema-1 policy is migrated once and schema-2 project edits are preserved on rerun |
-| `.owlbear/delivery/verification.json` | Declares ordered commands that must pass against the exact managed Change head during finalization | Detected once from root Python tests and the root npm `test` script; tracked in Git and preserved on rerun |
 | `.owlbear/hooks/allow-stances-only.py` | Restricts ideation agents to approved stance outputs | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-src-writes.py` | Constrains test-only roles to `tests/`, `__tests__/`, and scratch surfaces | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-writes.py` | Constrains read-only roles to scratch workspace writes only | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
@@ -101,24 +100,14 @@ Running `init.py` writes the following files into your project directory:
 | `.markdownlintignore` | Markdown lint exclusion patterns | Skipped if file already exists |
 | `.yamllint.yml` | YAML linting configuration | Always written |
 
-For a fresh workspace, `init.py` writes tracked Delivery policy and verification configuration. It
-does not create mutable Delivery runtime, worktrees, or retired task, decision, board, accept, or
+For a fresh workspace, `init.py` writes tracked Delivery configuration. It does not create mutable
+Delivery runtime, worktrees, verification profiles, or retired task, decision, board, accept, or
 audit stores. Existing legacy state is preserved unchanged.
 
-Commit `.owlbear/delivery/verification.json` after reviewing its generated commands. Setup adds
-`uv run --locked pytest` when a root `pyproject.toml` and `tests/` directory are present. It adds `npm ci`
-when a root lockfile exists and `npm test` when the root package declares that script. If setup
-detects neither surface, it warns and leaves the profile absent; create the file before Integration.
-Each command runs without a shell, from its declared candidate-relative directory, with only the
-listed environment variables. A change that edits its own verification profile is rejected; land
-policy changes on the Integration target before they govern later candidates.
-
-Verification is not a security sandbox. Commands run with the current user's filesystem permissions,
-so review the profile and project test code before enabling Integration for untrusted repositories.
-
-For an existing OwlBear workspace, rerun setup, review the generated profile, and commit it directly
-to the Integration target before retrying Delivery Integration. This one-time bootstrap is required
-because a candidate is never allowed to introduce or rewrite the policy that authorizes itself.
+Finalization evidence is collected for the exact reviewed Change head in its managed worktree. The
+checks and procedures may differ by Change; Delivery retains their typed observations and an
+independent exact-commit review. This evidence does not claim that GitHub can merge the Change or
+that the merged result passes.
 
 ## Shared vs Copied
 

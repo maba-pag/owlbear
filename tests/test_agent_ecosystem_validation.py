@@ -90,7 +90,6 @@ _TARGET_ROLE_TOOLS = {
     },
     "finalizer": {
         "show_finalization_context",
-        "run_finalization_verification",
         "finalize_change",
     },
 }
