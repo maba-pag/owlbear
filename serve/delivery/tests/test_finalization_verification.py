@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
+import time
 from datetime import UTC, datetime
 from pathlib import Path
+
+import pytest
 
 from owlbear_delivery.finalization_verification import (
     FinalizationVerificationStatus,
@@ -36,7 +40,12 @@ def _repository(tmp_path: Path) -> tuple[Path, str]:
     return repository, _git(repository, "rev-parse", "HEAD")
 
 
-def _profile(script: str) -> IntegrationVerificationProfile:
+def _profile(
+    script: str,
+    *,
+    timeout_seconds: int = 5,
+    cwd: str = ".",
+) -> IntegrationVerificationProfile:
     return IntegrationVerificationProfile(
         schema_version=1,
         pass_environment=("FINALIZATION_TEST_ENV",),
@@ -44,8 +53,8 @@ def _profile(script: str) -> IntegrationVerificationProfile:
             IntegrationVerificationStep(
                 step_id="proof",
                 argv=(sys.executable, "-c", script),
-                cwd=".",
-                timeout_seconds=5,
+                cwd=cwd,
+                timeout_seconds=timeout_seconds,
             ),
         ),
     )
@@ -206,3 +215,97 @@ def test_finalization_verification_replay_preserves_observation_and_scope(tmp_pa
     assert replay == first
     assert replay.target_observed_at == observed_at
     assert replay.proof_scope.value == "change-head-profile"
+
+
+def test_finalization_verifier_records_failed_step_with_bounded_output(tmp_path: Path) -> None:
+    repository, head = _repository(tmp_path)
+
+    _verifier, receipt = _run(
+        repository,
+        head,
+        _profile("import sys; print('a' * 9000); print('b' * 9000, file=sys.stderr); raise SystemExit(3)"),
+    )
+
+    step = receipt.steps[0]
+    assert receipt.status == FinalizationVerificationStatus.FAILED
+    assert receipt.clean is True
+    assert step.status.value == "failed"
+    assert step.exit_code == 3
+    assert step.stdout == "a" * 8192
+    assert step.stderr == "b" * 8192
+    assert receipt.diagnostics == ("finalization step proof failed",)
+
+
+def test_finalization_verifier_timeout_kills_the_entire_process_group(tmp_path: Path) -> None:
+    repository, head = _repository(tmp_path)
+    pid_path = tmp_path / "grandchild.pid"
+    grandchild = "import time; time.sleep(30)"
+    parent = (
+        "import subprocess, sys, time; "
+        f"child = subprocess.Popen([sys.executable, '-c', {grandchild!r}], "
+        "stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); "
+        f"from pathlib import Path; Path({str(pid_path)!r}).write_text(str(child.pid)); "
+        "time.sleep(30)"
+    )
+
+    _verifier, receipt = _run(
+        repository,
+        head,
+        _profile(parent, timeout_seconds=2),
+    )
+
+    step = receipt.steps[0]
+    assert receipt.status == FinalizationVerificationStatus.TIMED_OUT
+    assert receipt.clean is True
+    assert step.status.value == "timed-out"
+    assert step.exit_code is None
+    assert receipt.diagnostics == ("finalization step proof timed-out",)
+
+    deadline = time.monotonic() + 5
+    while not pid_path.exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert pid_path.exists(), "timed-out step did not record its child PID"
+    grandchild_pid = int(pid_path.read_text(encoding="utf-8"))
+    deadline = time.monotonic() + 5
+    while True:
+        try:
+            os.kill(grandchild_pid, 0)
+        except ProcessLookupError:
+            break
+        except PermissionError:
+            pass
+        if time.monotonic() >= deadline:
+            pytest.fail("timed-out finalization process group left its child alive")
+        time.sleep(0.05)
+
+
+def test_finalization_verifier_rejects_symlink_escape_without_execution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, _initial_head = _repository(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (repository / "escape").symlink_to(outside, target_is_directory=True)
+    _git(repository, "add", "escape")
+    _git(repository, "commit", "-m", "add escaping symlink")
+    head = _git(repository, "rev-parse", "HEAD")
+    _git(repository, "update-ref", "refs/remotes/origin/main", head)
+
+    real_popen = subprocess.Popen
+
+    def unexpected_process(arguments: object, *args: object, **kwargs: object) -> subprocess.Popen:
+        if isinstance(arguments, (list, tuple)) and arguments and Path(str(arguments[0])).name == "git":
+            return real_popen(arguments, *args, **kwargs)
+        message = "escaping verification step must not spawn a process"
+        raise AssertionError(message)
+
+    monkeypatch.setattr("owlbear_delivery.finalization_verification.subprocess.Popen", unexpected_process)
+    _verifier, receipt = _run(repository, head, _profile("raise SystemExit(1)", cwd="escape"))
+
+    step = receipt.steps[0]
+    assert receipt.status == FinalizationVerificationStatus.EXECUTION_ERROR
+    assert receipt.clean is True
+    assert step.status.value == "execution-error"
+    assert step.stdout == ""
+    assert step.stderr == "verification cwd escaped the managed Change worktree"

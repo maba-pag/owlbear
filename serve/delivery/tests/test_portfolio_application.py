@@ -3325,6 +3325,43 @@ def test_integration_revalidates_reviewed_branch_after_candidate_capture(
     assert runtimes["change-a"].change_stage().value == "integration"
 
 
+def test_integration_reports_package_mutation_during_completion_capture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    package_root = tmp_path / "packages/change-a"
+    repository = tmp_path / "repository"
+    target_head = _git(repository, "rev-parse", "main")
+    original_prepare = ChangeWorkspaceManager.prepare_integration_candidate
+    called = False
+
+    def mutate_package(manager: ChangeWorkspaceManager, candidate: object) -> object:
+        nonlocal called
+        called = True
+        intent = b"mutated during completion validation\n"
+        design = (package_root / "design.md").read_bytes()
+        authority = (package_root / "authority.json").read_bytes()
+        manifest = DesignPackageManifest.from_content("change-a", intent, design, authority)
+        (package_root / "intent.md").write_bytes(intent)
+        (package_root / "manifest.json").write_bytes(manifest.canonical_bytes())
+        return original_prepare(manager, candidate)
+
+    monkeypatch.setattr(ChangeWorkspaceManager, "prepare_integration_candidate", mutate_package)
+
+    failed = application.integrate_ready_change("change-a")
+
+    assert called is True
+    assert failed.attention is not None
+    assert failed.attention.code == DeliveryIntegrationAttentionCode.PACKAGE_MUTATED
+    assert "changed during completion validation" in failed.attention.diagnostics[0]
+    assert _git(repository, "rev-parse", "main") == target_head
+    assert runtimes["change-a"].change_stage().value == "integration"
+
+
 def test_integration_rejects_revision_pending_and_source_mutation_before_visibility(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
