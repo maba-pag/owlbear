@@ -1,5 +1,4 @@
 ---
-
 name: w-change-finalization
 description: "Workflow: Prove and finalize one exact reviewed Change head"
 user-invocable: false

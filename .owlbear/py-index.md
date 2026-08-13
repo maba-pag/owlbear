@@ -1185,7 +1185,6 @@ Per-change writer coordination and Git workspace management.
 - `__future__`
 - `contextlib`
 - `datetime`
-- `enum`
 - `hashlib`
 - `itertools`
 - `json`
@@ -1595,6 +1594,9 @@ Mechanical Delivery state and worker-owned transitions.
 - `def _find_binding(frontier: DeliveryFrontier, outcome_id: str) -> OutcomeAuthorityBinding`
 - `def _require_change_incomplete(frontier: DeliveryFrontier) -> None`
 - `def parse_delivery_frontier(content: bytes, *, migration_reviewed_head: str | None = None, require_checkpoint_backfill: bool = False) -> tuple[DeliveryFrontier, bytes]`
+- `def _normalize_frontier_schema(payload: dict[str, object]) -> int`
+- `def _normalize_schema_one_bindings(payload: dict[str, object]) -> None`
+- `def _reject_legacy_finalization(payload: dict[str, object]) -> None`
 - `def _backfill_checkpoint_state(frontier: DeliveryFrontier, reviewed_head: str | None, *, required: bool) -> DeliveryFrontier`
 - `def _find_request(frontier: DeliveryFrontier, request_id: str) -> tuple[OutcomeAuthorityBinding, DeliveryRequest]`
 - `def _replace_binding(frontier: DeliveryFrontier, previous: OutcomeAuthorityBinding, replacement: OutcomeAuthorityBinding) -> DeliveryFrontier`
