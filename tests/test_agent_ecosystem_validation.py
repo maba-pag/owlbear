@@ -331,6 +331,18 @@ async def test_declared_mcp_tools_exist_in_live_registries() -> None:
         assert declared == expected
 
 
+def test_retired_delivery_operations_are_absent_from_agent_prose() -> None:
+    """Retired MCP mutations must not survive in agent instructions or examples."""
+    for agent_path in _AGENTS_ROOT.glob("*.agent.md"):
+        content = agent_path.read_text(encoding="utf-8")
+        for operation in _RETIRED_DELIVERY_TOOLS:
+            assert operation not in content, f"{agent_path.name} mentions retired Delivery operation {operation}"
+
+    orchestrator = (_AGENTS_ROOT / "orchestrator.agent.md").read_text(encoding="utf-8")
+    assert "repair result" not in orchestrator
+    assert "repair-authority attention" not in orchestrator
+
+
 def test_memory_curator_identity_deferral_reporting_split() -> None:
     """Periodic curation keeps identity-only uncertainty pending without reporting it."""
     workflow = (_SKILLS_ROOT / "w-mem-curation/SKILL.md").read_text(encoding="utf-8")

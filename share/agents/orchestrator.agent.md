@@ -72,7 +72,7 @@ During execution, announce each step:
 Cycle 1 (Acquisition): 2 launches, 1 Integration attention
 Cycle 1 (1/2): change-one OUT-003 (builder)
 Cycle 1 (2/2): change-two OUT-001 (planner)
-Cycle 1 (Done): 2 transitions forwarded, 1 repair result, 1 Integration attention
+Cycle 1 (Done): 2 transitions forwarded, 1 Integration attention
 ```
 
 At session end:
@@ -92,8 +92,8 @@ Session complete:
 - Dispatch the stable launch order returned by `acquire_frontier_work`; do not reorder or refetch
   context for the worker.
 - Do not create, edit, claim, move, or complete generic tasks.
-- Delivery mutations are limited to unchanged worker transitions, exact failed-claim recovery, and
-  acquisition-provided repair-authority attention.
+- Delivery mutations are limited to unchanged worker transitions and exact failed-claim recovery.
+  Retained Integration attention is reported, not mutated.
 
 </boundaries>
 
