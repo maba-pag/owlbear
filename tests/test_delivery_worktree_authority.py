@@ -7,6 +7,13 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).parent.parent
 _SOURCE_ROOTS = tuple(sorted(path for path in (_REPO_ROOT / "serve").glob("*/src") if path.is_dir()))
+_RETIRED_PRODUCER_NAMES = frozenset(
+    {
+        "list_integration_ready_changes",
+        "integrate_ready_change",
+        "prepare_external_completion",
+    }
+)
 
 
 def _source_files() -> tuple[Path, ...]:
@@ -79,6 +86,44 @@ def _worktree_add_matches() -> list[tuple[Path, int, tuple[str, ...], tuple[str,
     return matches
 
 
+class _RetiredProducerVisitor(ast.NodeVisitor):
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.classes: list[str] = []
+        self.functions: list[str] = []
+        self.matches: list[tuple[int, str, tuple[str, ...], tuple[str, ...]]] = []
+
+    def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        if node.name in _RETIRED_PRODUCER_NAMES:
+            self.matches.append((node.lineno, node.name, tuple(self.classes), tuple(self.functions)))
+        self.functions.append(node.name)
+        self.generic_visit(node)
+        self.functions.pop()
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self.classes.append(node.name)
+        self.generic_visit(node)
+        self.classes.pop()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._visit_function(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._visit_function(node)
+
+    def scan(self) -> None:
+        self.visit(ast.parse(self.path.read_text(encoding="utf-8"), filename=str(self.path)))
+
+
+def _retired_producer_definitions() -> list[tuple[Path, int, str, tuple[str, ...], tuple[str, ...]]]:
+    matches: list[tuple[Path, int, str, tuple[str, ...], tuple[str, ...]]] = []
+    for path in _source_files():
+        visitor = _RetiredProducerVisitor(path)
+        visitor.scan()
+        matches.extend((path, lineno, name, classes, functions) for lineno, name, classes, functions in visitor.matches)
+    return matches
+
+
 def test_delivery_source_has_one_managed_worktree_add_implementation() -> None:
     matches = _worktree_add_matches()
 
@@ -90,3 +135,11 @@ def test_delivery_source_has_one_managed_worktree_add_implementation() -> None:
     assert classes == ("ChangeWorkspaceManager",)
     assert functions == ("_register_worktree",)
     assert "--detach" not in source
+
+
+def test_delivery_source_has_no_retired_local_integration_producers() -> None:
+    matches = _retired_producer_definitions()
+
+    assert not matches, "Retired local Integration producers were reintroduced:\n" + "\n".join(
+        f"{path.relative_to(_REPO_ROOT)}:{lineno} {name}" for path, lineno, name, _classes, _functions in matches
+    )
