@@ -20,6 +20,7 @@ from owlbear_delivery import (
     CapacityLedger,
     ChangeBranchPublicationReceipt,
     ChangeBranchPublisher,
+    ChangeWorktreeAttentionCode,
     AdvanceDelivery,
     BlockDelivery,
     CompletedHistoryCatalog,
@@ -44,6 +45,7 @@ from owlbear_delivery import (
     DeliveryFrontier,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
+    DeliveryIntegrationCompletion,
     DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryOutcome,
@@ -80,9 +82,11 @@ from owlbear_delivery import (
     PortfolioApplicationError,
     PortfolioApplicationHooks,
     PortfolioCoordinator,
+    PublicationLease,
     PublicationCheckSnapshot,
     PublishDeliveryPlan,
     PublishDeliveryResult,
+    DeliveryRetainedWorktreeCleanupBlockReason,
     RetryDelivery,
     load_delivery_application,
 )
@@ -802,6 +806,141 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(tmp_p
     assert receipt.accepted_merge_commit == "f" * 40
     assert receipt.check_observation_ids
     assert receipt.review_receipt_ids == (finalization.review.review_id,)
+    retained = application.list_retained_change_worktrees()
+    assert len(retained) == 1
+    assert retained[0].cleanup_eligible is True
+    assert retained[0].cleanup_blocked_reason is None
+
+
+def test_retained_inventory_blocks_legacy_integration_completion(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    runtime = runtimes["change-a"]
+    legacy = DeliveryIntegrationCompletion(
+        completion_id="a" * 64,
+        candidate_id="b" * 64,
+        package_id="c" * 64,
+        target_commit="d" * 40,
+        completion_path="legacy/completion.json",
+    )
+    path = state_root / "changes/change-a/frontier.json"
+    frontier = DeliveryFrontier.model_validate_json(path.read_bytes())
+    path.write_bytes(
+        _canonical(
+            frontier.model_copy(
+                update={
+                    "integration_result_id": legacy.completion_id,
+                    "integration_completion": legacy,
+                }
+            )
+        )
+    )
+
+    row = application.list_retained_change_worktrees()[0]
+
+    assert runtime.change_stage() == DeliveryChangeStage.COMPLETED
+    assert row.lifecycle == DeliveryChangeStage.COMPLETED
+    assert row.cleanup_eligible is False
+    assert row.cleanup_blocked_reason is DeliveryRetainedWorktreeCleanupBlockReason.LEGACY_INTEGRATION_COMPLETION
+
+
+def test_retained_inventory_turns_completion_conflict_into_typed_attention(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    runtime = runtimes["change-a"]
+
+    with patch.object(
+        runtime,
+        "completion_receipt",
+        side_effect=DeliveryRuntimeConflictError("completion receipt is inconsistent"),
+    ):
+        row = application.list_retained_change_worktrees()[0]
+
+    assert row.cleanup_eligible is False
+    assert row.cleanup_blocked_reason is DeliveryRetainedWorktreeCleanupBlockReason.COMPLETION_STATE_INCONSISTENT
+
+
+def test_retained_inventory_blocks_active_writer_and_publication_lease(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    runtime = runtimes["change-a"]
+    with (
+        patch.object(runtime, "change_stage", return_value=DeliveryChangeStage.COMPLETED),
+        patch.object(runtime, "completion_receipt", return_value=object()),
+    ):
+        writer = ChangeWriter(
+            attempt_id="attempt-change-a",
+            claim_id="claim-change-a",
+            actor_id="builder",
+            process_id="process-change-a",
+            claimed_at="2026-08-04T00:00:00Z",
+            job_id=1,
+            kind="build",
+        )
+        coordinator.acquire("change-a", writer)
+        writer_row = application.list_retained_change_worktrees()[0]
+        assert writer_row.cleanup_blocked_reason is DeliveryRetainedWorktreeCleanupBlockReason.ACTIVE_WRITER
+
+    released = coordinator.release("change-a", "claim-change-a")
+    assert released.writer is None
+    with coordinator.publication_lock("change-a") as lock:
+        coordinator.reserve_publication(
+            "change-a",
+            PublicationLease(
+                operation_id="publication-change-a",
+                owner_id="owner-change-a",
+                expires_at="2026-08-04T00:05:00Z",
+            ),
+            lock,
+            now="2026-08-04T00:00:00Z",
+        )
+    with (
+        patch.object(runtime, "change_stage", return_value=DeliveryChangeStage.COMPLETED),
+        patch.object(runtime, "completion_receipt", return_value=object()),
+    ):
+        lease_row = application.list_retained_change_worktrees()[0]
+
+    assert lease_row.cleanup_blocked_reason is DeliveryRetainedWorktreeCleanupBlockReason.ACTIVE_PUBLICATION_LEASE
+
+
+def test_retained_inventory_reports_orphans_nonterminal_and_worktree_attention(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.PLANNING,
+            "change-b": DeliveryStage.COMPLETED,
+            "change-c": DeliveryStage.PLANNING,
+        },
+    )
+    del application._runtimes["change-a"]  # noqa: SLF001 - test an orphaned retained runtime row.
+    attention_coordination = application._workspace_manager.show("change-b")  # noqa: SLF001
+    _git(
+        application._workspace_manager.repository,  # noqa: SLF001
+        "worktree",
+        "remove",
+        "--force",
+        str(attention_coordination.worktree_path),
+    )
+    runtime = runtimes["change-b"]
+    with (
+        patch.object(runtime, "change_stage", return_value=DeliveryChangeStage.COMPLETED),
+        patch.object(runtime, "completion_receipt", return_value=object()),
+    ):
+        rows = application.list_retained_change_worktrees()
+
+    by_id = {row.change_id: row for row in rows}
+    assert by_id["change-a"].orphan is True
+    assert by_id["change-a"].cleanup_blocked_reason is DeliveryRetainedWorktreeCleanupBlockReason.ORPHAN
+    assert by_id["change-b"].orphan is False
+    assert by_id["change-b"].cleanup_blocked_reason is DeliveryRetainedWorktreeCleanupBlockReason.WORKTREE_ATTENTION
+    assert ChangeWorktreeAttentionCode.WORKTREE_MISSING in by_id["change-b"].attention
+    assert by_id["change-c"].cleanup_blocked_reason is DeliveryRetainedWorktreeCleanupBlockReason.NONTERMINAL
 
 
 def test_portfolio_operating_view_recommends_creation_when_no_work_exists(tmp_path: Path) -> None:

@@ -27,9 +27,11 @@ from owlbear_delivery.change_publication import (
 from owlbear_delivery.change_workspace import (
     ChangeCoordination,
     ChangeWorkspaceManager,
+    ChangeWorktreeAttentionCode,
     ChangeWriter,
     CoordinationConflictError,
     PortfolioCoordinator,
+    RetainedChangeWorktree,
     WorkspaceRecoverySnapshot,
 )
 from owlbear_delivery.delivery_runtime import (
@@ -55,6 +57,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryResultCandidate,
     DeliveryReturnContext,
     DeliveryRuntime,
+    DeliveryRuntimeConflictError,
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
@@ -329,6 +332,40 @@ class DeliveryFinalizationContext(_ApplicationModel):
     finalized_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
 
 
+class DeliveryRetainedWorktreeCleanupBlockReason(StrEnum):
+    """Why one retained Change worktree cannot yet be cleaned up."""
+
+    ORPHAN = "orphan"
+    COMPLETION_STATE_INCONSISTENT = "completion-state-inconsistent"
+    LEGACY_INTEGRATION_COMPLETION = "legacy-integration-completion"
+    NONTERMINAL = "nonterminal"
+    ACTIVE_WRITER = "active-writer"
+    ACTIVE_PUBLICATION_LEASE = "active-publication-lease"
+    WORKTREE_ATTENTION = "worktree-attention"
+
+
+class DeliveryRetainedChangeWorktree(_ApplicationModel):
+    """Bounded retained-worktree inventory row for Delivery consumers."""
+
+    change_id: str = Field(min_length=1)
+    worktree_path: Path
+    branch: str = Field(min_length=1)
+    branch_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    coordination_registered: bool
+    git_registered: bool
+    worktree_present: bool
+    worktree_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    worktree_branch: str | None = None
+    worktree_locked: bool = False
+    worktree_prunable: bool = False
+    worktree_bare: bool = False
+    attention: tuple[ChangeWorktreeAttentionCode, ...] = ()
+    lifecycle: DeliveryChangeStage | None = None
+    orphan: bool
+    cleanup_eligible: bool
+    cleanup_blocked_reason: DeliveryRetainedWorktreeCleanupBlockReason | None = None
+
+
 class DeliveryOperatorClaim(_ApplicationModel):
     """Bounded active-claim identity required for explicit operator recovery."""
 
@@ -550,6 +587,10 @@ class PortfolioApplication:
     def show_change_checkpoint_publication(self, change_id: str) -> DeliveryCheckpointPublicationState:
         """Return the durable checkpoint queue for one admitted Change."""
         return self._runtime(change_id).checkpoint_publication_state()
+
+    def list_retained_change_worktrees(self) -> tuple[DeliveryRetainedChangeWorktree, ...]:
+        """List retained Change worktrees and exact cleanup eligibility facts."""
+        return tuple(self._retained_change_worktree_view(item) for item in self._workspace_manager.list_retained())
 
     def show_finalization_context(self, change_id: str) -> DeliveryFinalizationContext:
         """Return engine-resolved finalization context without changing Delivery state."""
@@ -1277,6 +1318,79 @@ class PortfolioApplication:
             runtime.contract,
             runtime.frontier_bytes(),
         )
+
+    def _retained_change_worktree_view(
+        self,
+        retained: RetainedChangeWorktree,
+    ) -> DeliveryRetainedChangeWorktree:
+        runtime = self._runtimes.get(retained.change_id)
+        lifecycle: DeliveryChangeStage | None = None
+        completion: CompletionReceipt | None = None
+        completion_state_inconsistent = False
+        if runtime is not None:
+            try:
+                lifecycle = runtime.change_stage()
+            except OSError, ValueError, DeliveryRuntimeConflictError:
+                completion_state_inconsistent = True
+            if not completion_state_inconsistent:
+                try:
+                    completion = runtime.completion_receipt()
+                except OSError, ValueError, DeliveryRuntimeConflictError:
+                    completion_state_inconsistent = True
+        reason = self._retained_cleanup_block_reason(
+            retained,
+            runtime,
+            lifecycle,
+            completion,
+            completion_state_inconsistent=completion_state_inconsistent,
+        )
+        return DeliveryRetainedChangeWorktree(
+            change_id=retained.change_id,
+            worktree_path=retained.worktree_path,
+            branch=retained.branch,
+            branch_head=retained.branch_head,
+            coordination_registered=retained.coordination_registered,
+            git_registered=retained.git_registered,
+            worktree_present=retained.worktree_present,
+            worktree_head=retained.worktree_head,
+            worktree_branch=retained.worktree_branch,
+            worktree_locked=retained.worktree_locked,
+            worktree_prunable=retained.worktree_prunable,
+            worktree_bare=retained.worktree_bare,
+            attention=retained.attention,
+            lifecycle=lifecycle,
+            orphan=runtime is None,
+            cleanup_eligible=reason is None,
+            cleanup_blocked_reason=reason,
+        )
+
+    def _retained_cleanup_block_reason(
+        self,
+        retained: RetainedChangeWorktree,
+        runtime: DeliveryRuntime | None,
+        lifecycle: DeliveryChangeStage | None,
+        completion: CompletionReceipt | None,
+        *,
+        completion_state_inconsistent: bool,
+    ) -> DeliveryRetainedWorktreeCleanupBlockReason | None:
+        reason: DeliveryRetainedWorktreeCleanupBlockReason | None = None
+        if runtime is None:
+            reason = DeliveryRetainedWorktreeCleanupBlockReason.ORPHAN
+        elif completion_state_inconsistent:
+            reason = DeliveryRetainedWorktreeCleanupBlockReason.COMPLETION_STATE_INCONSISTENT
+        elif completion is None:
+            reason = (
+                DeliveryRetainedWorktreeCleanupBlockReason.LEGACY_INTEGRATION_COMPLETION
+                if lifecycle == DeliveryChangeStage.COMPLETED
+                else DeliveryRetainedWorktreeCleanupBlockReason.NONTERMINAL
+            )
+        elif retained.writer is not None:
+            reason = DeliveryRetainedWorktreeCleanupBlockReason.ACTIVE_WRITER
+        elif retained.publication_expiry is not None and retained.publication_expiry > _timestamp(self._clock()):
+            reason = DeliveryRetainedWorktreeCleanupBlockReason.ACTIVE_PUBLICATION_LEASE
+        elif retained.attention:
+            reason = DeliveryRetainedWorktreeCleanupBlockReason.WORKTREE_ATTENTION
+        return reason
 
     @staticmethod
     def _snapshot_change_stage(snapshot: DeliveryPortfolioSnapshot) -> DeliveryChangeStage:

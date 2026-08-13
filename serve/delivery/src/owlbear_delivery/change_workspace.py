@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import subprocess
 from contextlib import ExitStack, contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from itertools import pairwise
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Never
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.identities import ChangeId
@@ -31,6 +34,18 @@ if TYPE_CHECKING:
 _OCC_RETRY_LIMIT = 8
 _PUBLICATION_LEASE_MAX_SECONDS = 600
 _PUBLICATION_OPERATION_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+_CHANGE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+@dataclass(frozen=True)
+class _RegisteredGitWorktree:
+    """Parsed Git registration for one managed worktree path."""
+
+    head: str | None
+    branch: str | None
+    locked: bool
+    prunable: bool
+    bare: bool
 
 
 class _WorkspaceModel(BaseModel):
@@ -134,6 +149,40 @@ class WorkspaceRecoverySnapshot(_WorkspaceModel):
     writer: ChangeWriter | None = None
 
 
+class ChangeWorktreeAttentionCode(StrEnum):
+    """Typed evidence that one retained Change worktree needs reconciliation."""
+
+    COORDINATION_MISSING = "coordination-missing"
+    GIT_REGISTRATION_MISSING = "git-registration-missing"
+    WORKTREE_MISSING = "worktree-missing"
+    BRANCH_MISSING = "branch-missing"
+    BRANCH_MISMATCH = "branch-mismatch"
+    DETACHED = "detached"
+    PRUNABLE = "prunable"
+    BARE = "bare"
+    COORDINATION_PATH_MISMATCH = "coordination-path-mismatch"
+
+
+class RetainedChangeWorktree(_WorkspaceModel):
+    """Read-only Git, filesystem, and coordination facts for one Change."""
+
+    change_id: ChangeId
+    worktree_path: Path
+    branch: str = Field(min_length=1)
+    branch_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    coordination_registered: bool
+    git_registered: bool
+    worktree_present: bool
+    worktree_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    worktree_branch: str | None = None
+    worktree_locked: bool = False
+    worktree_prunable: bool = False
+    worktree_bare: bool = False
+    attention: tuple[ChangeWorktreeAttentionCode, ...] = ()
+    writer: ChangeWriter | None = None
+    publication_expiry: datetime | None = None
+
+
 class CapacityLedger(_WorkspaceModel):
     """Global writer capacity without serializing independent changes."""
 
@@ -228,6 +277,25 @@ class PortfolioCoordinator:
         except FileNotFoundError as exc:
             msg = f"change workspace is not registered: {change_id}"
             raise CoordinationConflictError(msg) from exc
+
+    def list_registered(self) -> tuple[ChangeCoordination, ...]:
+        """Return all registered Change coordination records in stable order."""
+        if not self._coordination_root.exists():
+            return ()
+        if self._coordination_root.is_symlink() or not self._coordination_root.is_dir():
+            _coordination_conflict("change coordination root is not a safe directory")
+        records = []
+        for path in sorted(self._coordination_root.iterdir(), key=lambda item: item.name):
+            if path.name.startswith(".") or path.suffix != ".json":
+                continue
+            try:
+                coordination = ChangeCoordination.model_validate_json(path.read_bytes())
+            except OSError, ValidationError:
+                _coordination_conflict(f"change coordination record is invalid: {path}")
+            if path.stem != coordination.change_id:
+                _coordination_conflict(f"change coordination record identity is invalid: {path}")
+            records.append(coordination)
+        return tuple(sorted(records, key=lambda item: item.change_id))
 
     def acquire(self, change_id: str, writer: ChangeWriter) -> ChangeCoordination:
         """Atomically bind one writer and one global capacity slot."""
@@ -580,6 +648,23 @@ class ChangeWorkspaceManager:
         """Return current workspace coordination for transition validation."""
         return self._coordinator.show(change_id)
 
+    def list_retained(self) -> tuple[RetainedChangeWorktree, ...]:
+        """Inspect every retained Change worktree without changing Git or custody."""
+        coordinations = {item.change_id: item for item in self._coordinator.list_registered()}
+        registered = self._registered_worktrees()
+        branch_heads = self._change_branch_heads()
+        filesystem_ids = self._filesystem_change_ids()
+        change_ids = sorted(set(coordinations) | set(registered) | set(branch_heads) | filesystem_ids)
+        return tuple(
+            self._retained_worktree(
+                change_id,
+                coordinations.get(change_id),
+                registered.get(change_id),
+                branch_heads.get(change_id),
+            )
+            for change_id in change_ids
+        )
+
     def refresh_integration_target(self, change_id: str) -> ChangeCoordination:
         """Persist the current target head at an operational Git boundary."""
         coordination = self._coordinator.show(change_id)
@@ -789,6 +874,141 @@ class ChangeWorkspaceManager:
         if current != branch:
             _workspace_failure("change worktree is attached to another branch")
 
+    def _registered_worktrees(self) -> dict[str, _RegisteredGitWorktree]:
+        completed = self._run_git("worktree", "list", "--porcelain", "-z")
+        records: dict[str, _RegisteredGitWorktree] = {}
+        for raw_record in completed.stdout.split(b"\0\0"):
+            fields = tuple(field for field in raw_record.split(b"\0") if field)
+            values = {field.partition(b" ")[0]: field.partition(b" ")[2] for field in fields}
+            raw_path = values.get(b"worktree")
+            if raw_path is None:
+                continue
+            path = Path(os.fsdecode(raw_path)).resolve()
+            try:
+                relative = path.relative_to(self._worktree_root)
+            except ValueError:
+                continue
+            if len(relative.parts) != 1 or not _is_change_id(relative.name):
+                continue
+            change_id = relative.name
+            if change_id in records:
+                _workspace_failure(f"multiple Git worktrees are registered for Change {change_id}")
+            records[change_id] = _RegisteredGitWorktree(
+                head=_decode_optional(values.get(b"HEAD")),
+                branch=_branch_name(values.get(b"branch")),
+                locked=b"locked" in values,
+                prunable=b"prunable" in values,
+                bare=b"bare" in values,
+            )
+        return records
+
+    def _change_branch_heads(self) -> dict[str, str]:
+        prefix = "refs/heads/owlbear/change/"
+        completed = self._run_git(
+            "for-each-ref",
+            "--format=%(refname)%00%(objectname)",
+            "refs/heads/owlbear/change",
+        )
+        heads: dict[str, str] = {}
+        for record in completed.stdout.splitlines():
+            raw_ref, separator, raw_head = record.partition(b"\0")
+            if not separator:
+                continue
+            ref = os.fsdecode(raw_ref)
+            change_id = ref.removeprefix(prefix)
+            if not ref.startswith(prefix) or not _is_change_id(change_id):
+                continue
+            heads[change_id] = os.fsdecode(raw_head)
+        return heads
+
+    def _filesystem_change_ids(self) -> set[str]:
+        if not self._worktree_root.exists():
+            return set()
+        if self._worktree_root.is_symlink() or not self._worktree_root.is_dir():
+            _workspace_failure("Change worktree root is not a safe directory")
+        return {entry.name for entry in self._worktree_root.iterdir() if _is_change_id(entry.name)}
+
+    @staticmethod
+    def _coordination_attention(
+        change_id: str,
+        coordination: ChangeCoordination | None,
+        expected_path: Path,
+    ) -> set[ChangeWorktreeAttentionCode]:
+        expected_branch = f"owlbear/change/{change_id}"
+        if coordination is None:
+            return {ChangeWorktreeAttentionCode.COORDINATION_MISSING}
+        attention: set[ChangeWorktreeAttentionCode] = set()
+        if coordination.branch != expected_branch:
+            attention.add(ChangeWorktreeAttentionCode.BRANCH_MISMATCH)
+        if coordination.worktree_path.resolve() != expected_path.resolve():
+            attention.add(ChangeWorktreeAttentionCode.COORDINATION_PATH_MISMATCH)
+        return attention
+
+    @staticmethod
+    def _registered_attention(
+        registered: _RegisteredGitWorktree | None,
+        expected_branch: str,
+    ) -> set[ChangeWorktreeAttentionCode]:
+        if registered is None:
+            return {ChangeWorktreeAttentionCode.GIT_REGISTRATION_MISSING}
+        attention: set[ChangeWorktreeAttentionCode] = set()
+        if registered.bare:
+            attention.add(ChangeWorktreeAttentionCode.BARE)
+        if registered.prunable:
+            attention.add(ChangeWorktreeAttentionCode.PRUNABLE)
+        if registered.branch is None and not registered.bare:
+            attention.add(ChangeWorktreeAttentionCode.DETACHED)
+        elif registered.branch != expected_branch:
+            attention.add(ChangeWorktreeAttentionCode.BRANCH_MISMATCH)
+        return attention
+
+    def _retained_attention(
+        self,
+        change_id: str,
+        coordination: ChangeCoordination | None,
+        registered: _RegisteredGitWorktree | None,
+        branch_head: str | None,
+        expected_path: Path,
+    ) -> set[ChangeWorktreeAttentionCode]:
+        expected_branch = f"owlbear/change/{change_id}"
+        attention = self._coordination_attention(change_id, coordination, expected_path)
+        attention.update(self._registered_attention(registered, expected_branch))
+        worktree_present = expected_path.exists() and expected_path.is_dir() and not expected_path.is_symlink()
+        if not worktree_present:
+            attention.add(ChangeWorktreeAttentionCode.WORKTREE_MISSING)
+        if branch_head is None:
+            attention.add(ChangeWorktreeAttentionCode.BRANCH_MISSING)
+        return attention
+
+    def _retained_worktree(
+        self,
+        change_id: str,
+        coordination: ChangeCoordination | None,
+        registered: _RegisteredGitWorktree | None,
+        branch_head: str | None,
+    ) -> RetainedChangeWorktree:
+        expected_branch = f"owlbear/change/{change_id}"
+        expected_path = self._worktree_root / change_id
+        worktree_present = expected_path.exists() and expected_path.is_dir() and not expected_path.is_symlink()
+        attention = self._retained_attention(change_id, coordination, registered, branch_head, expected_path)
+        return RetainedChangeWorktree(
+            change_id=change_id,
+            worktree_path=expected_path,
+            branch=expected_branch,
+            branch_head=branch_head,
+            coordination_registered=coordination is not None,
+            git_registered=registered is not None,
+            worktree_present=worktree_present,
+            worktree_head=registered.head if registered is not None else None,
+            worktree_branch=registered.branch if registered is not None else None,
+            worktree_locked=registered.locked if registered is not None else False,
+            worktree_prunable=registered.prunable if registered is not None else False,
+            worktree_bare=registered.bare if registered is not None else False,
+            attention=tuple(code for code in ChangeWorktreeAttentionCode if code in attention),
+            writer=coordination.writer if coordination is not None else None,
+            publication_expiry=coordination.publication_expiry if coordination is not None else None,
+        )
+
     def _require_ancestor(self, commit: str, descendant: str) -> None:
         if not self._is_ancestor(commit, descendant, cwd=self._repository):
             _workspace_failure("reviewed commit is not an ancestor of the change head")
@@ -868,3 +1088,16 @@ def _publication_timestamp(value: str) -> datetime:
 
 def _workspace_failure(detail: str) -> Never:
     raise RuntimeError(detail)
+
+
+def _is_change_id(value: str) -> bool:
+    return _CHANGE_ID_PATTERN.fullmatch(value) is not None
+
+
+def _decode_optional(value: bytes | None) -> str | None:
+    return None if value is None else os.fsdecode(value)
+
+
+def _branch_name(value: bytes | None) -> str | None:
+    branch = _decode_optional(value)
+    return None if branch is None else branch.removeprefix("refs/heads/")

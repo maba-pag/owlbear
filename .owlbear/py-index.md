@@ -1183,10 +1183,13 @@ Per-change writer coordination and Git workspace management.
 
 - `__future__`
 - `contextlib`
+- `dataclasses`
 - `datetime`
+- `enum`
 - `hashlib`
 - `itertools`
 - `json`
+- `os`
 - `owlbear_delivery.git_executable`
 - `owlbear_delivery.identities`
 - `owlbear_delivery.runtime_transaction`
@@ -1199,6 +1202,7 @@ Per-change writer coordination and Git workspace management.
 
 ### Interfaces
 
+- `class _RegisteredGitWorktree`
 - `class _WorkspaceModel(BaseModel)`
 - `class WriterIdentity(_WorkspaceModel)`
 - `class ChangeWriter(WriterIdentity)`
@@ -1212,6 +1216,8 @@ Per-change writer coordination and Git workspace management.
   - `def _discard_retired_publication_reservation(cls, value: object) -> object`
   - `def publication_expiry(self) -> datetime | None`
 - `class WorkspaceRecoverySnapshot(_WorkspaceModel)`
+- `class ChangeWorktreeAttentionCode(StrEnum)`
+- `class RetainedChangeWorktree(_WorkspaceModel)`
 - `class CapacityLedger(_WorkspaceModel)`
   - `def _validate_holders(self) -> CapacityLedger`
 - `class IntegrationContext(_WorkspaceModel)`
@@ -1223,6 +1229,7 @@ Per-change writer coordination and Git workspace management.
   - `def writer_capacity_available(self) -> bool`
   - `def register(self, coordination: ChangeCoordination) -> ChangeCoordination`
   - `def show(self, change_id: str) -> ChangeCoordination`
+  - `def list_registered(self) -> tuple[ChangeCoordination, ...]`
   - `def acquire(self, change_id: str, writer: ChangeWriter) -> ChangeCoordination`
   - `def _acquire(self, change_id: str, writer: ChangeWriter) -> ChangeCoordination`
   - `def release(self, change_id: str, claim_id: str) -> ChangeCoordination`
@@ -1247,6 +1254,7 @@ Per-change writer coordination and Git workspace management.
   - `def _run_managed_git(repository: Path, *arguments: str) -> str`
   - `def _register_worktree(worktree: Path, branch: str, git: Callable[..., str]) -> None`
   - `def show(self, change_id: str) -> ChangeCoordination`
+  - `def list_retained(self) -> tuple[RetainedChangeWorktree, ...]`
   - `def refresh_integration_target(self, change_id: str) -> ChangeCoordination`
   - `def integration_context(self, change_id: str) -> IntegrationContext`
   - `def reviewed_source_head(self, change_id: str) -> str`
@@ -1260,6 +1268,13 @@ Per-change writer coordination and Git workspace management.
   - `def _validate_released_restart(self, coordination: ChangeCoordination, rejected_head: str, branch_head: str, preserved: str | None) -> ChangeCoordination`
   - `def _prepare_active_restart(self, coordination: ChangeCoordination, attempt_id: str, rejected_head: str) -> None`
   - `def _require_worktree(self, worktree: Path, branch: str, expected_head: str) -> None`
+  - `def _registered_worktrees(self) -> dict[str, _RegisteredGitWorktree]`
+  - `def _change_branch_heads(self) -> dict[str, str]`
+  - `def _filesystem_change_ids(self) -> set[str]`
+  - `def _coordination_attention(change_id: str, coordination: ChangeCoordination | None, expected_path: Path) -> set[ChangeWorktreeAttentionCode]`
+  - `def _registered_attention(registered: _RegisteredGitWorktree | None, expected_branch: str) -> set[ChangeWorktreeAttentionCode]`
+  - `def _retained_attention(self, change_id: str, coordination: ChangeCoordination | None, registered: _RegisteredGitWorktree | None, branch_head: str | None, expected_path: Path) -> set[ChangeWorktreeAttentionCode]`
+  - `def _retained_worktree(self, change_id: str, coordination: ChangeCoordination | None, registered: _RegisteredGitWorktree | None, branch_head: str | None) -> RetainedChangeWorktree`
   - `def _require_ancestor(self, commit: str, descendant: str) -> None`
   - `def _is_ancestor(ancestor: str, descendant: str, *, cwd: Path) -> bool`
   - `def _resolve(self, revision: str, *, cwd: Path | None = None, missing_ok: bool = False) -> str | None`
@@ -1270,6 +1285,9 @@ Per-change writer coordination and Git workspace management.
 - `def _coordination_conflict(detail: str) -> Never`
 - `def _publication_timestamp(value: str) -> datetime`
 - `def _workspace_failure(detail: str) -> Never`
+- `def _is_change_id(value: str) -> bool`
+- `def _decode_optional(value: bytes | None) -> str | None`
+- `def _branch_name(value: bytes | None) -> str | None`
 
 ## serve/delivery/src/owlbear_delivery/completed_history.py
 
@@ -1816,6 +1834,8 @@ Deterministic portfolio acquisition and bounded worker context.
 - `class DeliveryPlanContext(_ApplicationModel)`
 - `class DeliveryBuildContext(_ApplicationModel)`
 - `class DeliveryFinalizationContext(_ApplicationModel)`
+- `class DeliveryRetainedWorktreeCleanupBlockReason(StrEnum)`
+- `class DeliveryRetainedChangeWorktree(_ApplicationModel)`
 - `class DeliveryOperatorClaim(_ApplicationModel)`
 - `class DeliveryOperatorRecoveryAttention(_ApplicationModel)`
 - `class DeliveryOperatorIntegrationAttention(_ApplicationModel)`
@@ -1838,6 +1858,7 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def create_design_session(self, change_id: str, intent_bytes: bytes, design_bytes: bytes) -> DesignPackageResult`
   - `def observe_change_publication_checks(self, change_id: str) -> PublicationCheckObservationReceipt`
   - `def show_change_checkpoint_publication(self, change_id: str) -> DeliveryCheckpointPublicationState`
+  - `def list_retained_change_worktrees(self) -> tuple[DeliveryRetainedChangeWorktree, ...]`
   - `def show_finalization_context(self, change_id: str) -> DeliveryFinalizationContext`
   - `def finalize_change(self, change_id: str, request: FinalizeDeliveryChange) -> DeliveryFinalizationReceipt`
   - `def mark_change_ready(self, change_id: str, request: MarkChangePullRequestReady) -> PullRequestReadyReceipt`
@@ -1878,6 +1899,8 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def _work_item_projector(self, runtime: DeliveryRuntime) -> WorkItemProjector`
   - `def _portfolio_snapshots(self) -> tuple[DeliveryPortfolioSnapshot, ...]`
   - `def _delivery_snapshot(self, runtime: DeliveryRuntime) -> DeliveryPortfolioSnapshot`
+  - `def _retained_change_worktree_view(self, retained: RetainedChangeWorktree) -> DeliveryRetainedChangeWorktree`
+  - `def _retained_cleanup_block_reason(self, retained: RetainedChangeWorktree, runtime: DeliveryRuntime | None, lifecycle: DeliveryChangeStage | None, completion: CompletionReceipt | None, *, completion_state_inconsistent: bool) -> DeliveryRetainedWorktreeCleanupBlockReason | None`
   - `def _snapshot_change_stage(snapshot: DeliveryPortfolioSnapshot) -> DeliveryChangeStage`
   - `def _snapshot_has_active_claims(snapshot: DeliveryPortfolioSnapshot) -> bool`
   - `def _snapshot_dependency_depth(snapshot: DeliveryPortfolioSnapshot, outcome_id: str) -> int`
@@ -2629,10 +2652,12 @@ Protocol models for the target delivery MCP surface.
 - `__future__`
 - `functools`
 - `json`
+- `owlbear_delivery.change_workspace`
 - `owlbear_delivery.delivery_application_loader`
 - `owlbear_delivery.delivery_runtime`
 - `owlbear_delivery.draft_pull_request`
 - `owlbear_delivery.identities`
+- `owlbear_delivery.portfolio_application`
 - `owlbear_delivery.target_admission`
 - `pydantic`
 - `typing`
@@ -2658,6 +2683,8 @@ Protocol models for the target delivery MCP surface.
 - `class MarkChangeReadyParams(_TargetProtocolModel)`
 - `class DeliveryPlanPublication(_TargetProtocolModel)`
   - `def from_candidate(cls, candidate: DeliveryPlanCandidate) -> DeliveryPlanPublication`
+- `class RetainedChangeWorktreeResponse(_TargetProtocolModel)`
+  - `def from_projection(cls, projection: DeliveryRetainedChangeWorktree) -> RetainedChangeWorktreeResponse`
 - `class DeliveryResultPublication(_TargetProtocolModel)`
   - `def from_candidate(cls, candidate: DeliveryResultCandidate) -> DeliveryResultPublication`
 - `class TransitionDeliveryParams(ChangeParams)`
@@ -2709,6 +2736,7 @@ Strict MCPServer adapter for the Delivery portfolio application.
   - `async def validate_delivery_contract(self, request: ChangeRequest) -> dict[str, object]`
   - `async def admit_delivery_change(self, request: AdmitDeliveryChangeRequest) -> dict[str, object]`
   - `async def list_work_items(self, request: EmptyRequest) -> list[object]`
+  - `async def list_retained_change_worktrees(self, request: EmptyRequest) -> list[object]`
   - `async def show_work_item(self, request: WorkItemRequest) -> dict[str, object]`
   - `async def acquire_frontier_work(self, request: EmptyRequest) -> dict[str, object]`
   - `async def show_plan_context(self, request: ClaimContextRequest) -> dict[str, object]`

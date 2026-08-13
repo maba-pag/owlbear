@@ -57,6 +57,7 @@ from owlbear_delivery_mcp.target_models import (
     PublishDeliveryResultRequest,
     RepairClaimContextParams,
     RepairClaimContextRequest,
+    RetainedChangeWorktreeResponse,
     ReviseDesignSessionParams,
     ReviseDesignSessionRequest,
     SearchCompletedParams,
@@ -83,6 +84,7 @@ DELIVERY_OPERATION_NAMES = (
     "validate_delivery_contract",
     "admit_delivery_change",
     "list_work_items",
+    "list_retained_change_worktrees",
     "show_work_item",
     "acquire_frontier_work",
     "show_plan_context",
@@ -110,6 +112,7 @@ _DELIVERY_READS = frozenset(
         "derive_delivery_contract",
         "validate_delivery_contract",
         "list_work_items",
+        "list_retained_change_worktrees",
         "show_work_item",
         "show_plan_context",
         "show_build_context",
@@ -217,6 +220,19 @@ class TargetMCPAdapter:
         """List bounded work-item projections."""
         params = self._validate(EmptyParams, request)
         return self._call(params, self._application.list_work_items)
+
+    async def list_retained_change_worktrees(self, request: EmptyRequest) -> list[object]:
+        """List retained Change worktrees and their cleanup eligibility."""
+        params = self._validate(EmptyParams, request)
+
+        def project() -> tuple[RetainedChangeWorktreeResponse, ...]:
+            projections = self._application.list_retained_change_worktrees()
+            if not isinstance(projections, tuple):
+                message = f"unsupported structured output: {type(projections).__name__}"
+                raise TypeError(message)
+            return tuple(RetainedChangeWorktreeResponse.from_projection(item) for item in projections)
+
+        return cast("list[object]", self._call(params, project))
 
     async def show_work_item(self, request: WorkItemRequest) -> dict[str, object]:
         """Show one exact bounded work item."""

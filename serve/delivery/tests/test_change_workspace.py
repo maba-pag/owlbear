@@ -12,6 +12,7 @@ from owlbear_delivery.change_workspace import (
     CapacityLedger,
     ChangeWorkspaceManager,
     ChangeCoordination,
+    ChangeWorktreeAttentionCode,
     ChangeWriter,
     CoordinationConflictError,
     PortfolioCoordinator,
@@ -254,6 +255,17 @@ def _git(repository: Path, *arguments: str) -> str:
     ).stdout.strip()
 
 
+def _git_ref_exists(repository: Path, reference: str) -> bool:
+    return (
+        subprocess.run(
+            ("git", "-C", str(repository), "rev-parse", "--verify", reference),
+            check=False,
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+
+
 def _repository(tmp_path: Path, *, target: str = "release") -> tuple[Path, str]:
     repository = tmp_path / "repository"
     repository.mkdir()
@@ -272,6 +284,130 @@ def _manager(tmp_path: Path, repository: Path, *, target: str = "release"):
     coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
     manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, target)
     return coordinator, manager
+
+
+def test_list_retained_worktrees_is_sorted_and_batches_git_reads(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    first = manager.create("change-b")
+    second = manager.create("change-a")
+    _git(repository, "update-ref", "refs/heads/owlbear/change/nested-only/s1", initial)
+    before_coordination = tuple(
+        sorted((path.name, path.read_bytes()) for path in (tmp_path / "state/claims/changes").iterdir())
+    )
+    before_worktrees = _git(repository, "worktree", "list", "--porcelain")
+    original_run_git = manager._run_git
+
+    with patch.object(manager, "_run_git", wraps=original_run_git) as run_git:
+        retained = manager.list_retained()
+
+    assert [item.change_id for item in retained] == ["change-a", "change-b"]
+    assert all(item.coordination_registered and item.git_registered and item.worktree_present for item in retained)
+    assert retained[0].worktree_path == second.worktree_path.resolve()
+    assert retained[1].worktree_path == first.worktree_path.resolve()
+    assert retained[0].branch_head == initial
+    assert retained[0].worktree_head == initial
+    assert retained[0].worktree_branch == "owlbear/change/change-a"
+    assert all("/s1" not in item.branch for item in retained)
+    assert [call.args[:3] for call in run_git.call_args_list] == [
+        ("worktree", "list", "--porcelain"),
+        ("for-each-ref", "--format=%(refname)%00%(objectname)", "refs/heads/owlbear/change"),
+    ]
+    assert before_worktrees == _git(repository, "worktree", "list", "--porcelain")
+    assert before_coordination == tuple(
+        sorted((path.name, path.read_bytes()) for path in (tmp_path / "state/claims/changes").iterdir())
+    )
+
+
+def test_list_retained_worktrees_returns_empty_without_coordination_store(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator = PortfolioCoordinator(tmp_path / "state", capacity=1)
+    manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "release")
+    assert coordinator.list_registered() == ()
+    assert manager.list_retained() == ()
+
+
+def test_list_registered_ignores_runtime_transaction_temp_files(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    manager.create("stable-change")
+    coordination_root = tmp_path / "state/claims/changes"
+    (coordination_root / ".tmp-deadbeef-stable-change.json").write_text("not json", encoding="utf-8")
+
+    assert [item.change_id for item in coordinator.list_registered()] == ["stable-change"]
+
+
+def test_list_registered_rejects_malformed_or_misnamed_records(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    manager.create("valid-change")
+    coordination_root = tmp_path / "state/claims/changes"
+    (coordination_root / "broken.json").write_text("{", encoding="utf-8")
+
+    with pytest.raises(CoordinationConflictError, match="record is invalid"):
+        coordinator.list_registered()
+
+    (coordination_root / "broken.json").unlink()
+    payload = _coordination(tmp_path, "valid-change").model_dump(mode="json")
+    (coordination_root / "wrong-name.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(CoordinationConflictError, match="identity is invalid"):
+        coordinator.list_registered()
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_attention"),
+    [
+        ("missing-directory", ChangeWorktreeAttentionCode.WORKTREE_MISSING),
+        ("missing-registration", ChangeWorktreeAttentionCode.GIT_REGISTRATION_MISSING),
+        ("missing-branch", ChangeWorktreeAttentionCode.BRANCH_MISSING),
+        ("detached", ChangeWorktreeAttentionCode.DETACHED),
+        ("branch-mismatch", ChangeWorktreeAttentionCode.BRANCH_MISMATCH),
+    ],
+)
+def test_list_retained_worktrees_reports_independent_degraded_facts(
+    tmp_path: Path,
+    mutation: str,
+    expected_attention: ChangeWorktreeAttentionCode,
+) -> None:
+    repository, _initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.create(f"degraded-{mutation}")
+    if mutation == "missing-directory":
+        _git(repository, "worktree", "remove", "--force", str(coordination.worktree_path))
+    elif mutation == "missing-registration":
+        _git(repository, "worktree", "remove", "--force", str(coordination.worktree_path))
+        coordination.worktree_path.mkdir(parents=True)
+    elif mutation == "missing-branch":
+        _git(repository, "worktree", "remove", "--force", str(coordination.worktree_path))
+        if _git_ref_exists(repository, coordination.branch):
+            _git(repository, "update-ref", "-d", f"refs/heads/{coordination.branch}")
+    elif mutation == "detached":
+        _git(coordination.worktree_path, "checkout", "--detach", "HEAD")
+    elif mutation == "branch-mismatch":
+        _git(coordination.worktree_path, "checkout", "-b", f"other-{mutation}")
+
+    retained = manager.list_retained()
+    row = next(item for item in retained if item.change_id == coordination.change_id)
+
+    assert expected_attention in row.attention
+    assert row.coordination_registered
+    assert row.worktree_present is (mutation not in {"missing-directory", "missing-branch"})
+    assert row.git_registered is (mutation not in {"missing-directory", "missing-registration", "missing-branch"})
+
+
+def test_list_retained_worktrees_reports_orphaned_registration(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.create("orphaned-change")
+    (tmp_path / "state/claims/changes/orphaned-change.json").unlink()
+
+    row = next(item for item in manager.list_retained() if item.change_id == coordination.change_id)
+
+    assert row.coordination_registered is False
+    assert row.git_registered is True
+    assert row.worktree_present is True
+    assert ChangeWorktreeAttentionCode.COORDINATION_MISSING in row.attention
 
 
 def _commit_file(worktree: Path, content: str, message: str) -> str:

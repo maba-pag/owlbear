@@ -29,6 +29,30 @@ _RETIRED_PRODUCER_SYMBOLS = frozenset(
     }
 )
 _RETIRED_PRODUCER_CLASS_NAMES = frozenset({"IntegrationFinding", "IntegrationResult"})
+_INVENTORY_FUNCTIONS = frozenset(
+    {
+        "list_registered",
+        "list_retained",
+        "list_retained_change_worktrees",
+        "_registered_worktrees",
+        "_change_branch_heads",
+        "_coordination_attention",
+        "_filesystem_change_ids",
+        "_registered_attention",
+        "_retained_attention",
+        "_retained_worktree",
+    }
+)
+_MUTATING_GIT_COMMANDS = frozenset(
+    {
+        ("worktree", "add"),
+        ("worktree", "remove"),
+        ("branch",),
+        ("reset",),
+        ("checkout",),
+        ("update-ref",),
+    }
+)
 
 
 def _source_files() -> tuple[Path, ...]:
@@ -159,4 +183,49 @@ def test_delivery_source_has_no_retired_local_integration_producers() -> None:
 
     assert not matches, "Retired local Integration producers were reintroduced:\n" + "\n".join(
         f"{path.relative_to(_REPO_ROOT)}:{lineno} {name}" for path, lineno, name, _classes, _functions in matches
+    )
+
+
+class _InventoryMutationVisitor(ast.NodeVisitor):
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.functions: list[str] = []
+        self.matches: list[tuple[int, str]] = []
+
+    def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        if node.name in _INVENTORY_FUNCTIONS:
+            self.functions.append(node.name)
+            self.generic_visit(node)
+            self.functions.pop()
+            return
+        self.generic_visit(node)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._visit_function(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._visit_function(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        if self.functions:
+            literals = tuple(_literal_string(argument) for argument in node.args)
+            for command in _MUTATING_GIT_COMMANDS:
+                if literals[: len(command)] == command:
+                    self.matches.append((node.lineno, f"{command!r}: {ast.get_source_segment(self._source, node)}"))
+        self.generic_visit(node)
+
+    def scan(self) -> None:
+        self._source = self.path.read_text(encoding="utf-8")
+        self.visit(ast.parse(self._source, filename=str(self.path)))
+
+
+def test_retained_inventory_path_is_structurally_read_only() -> None:
+    matches: list[tuple[Path, int, str]] = []
+    for path in _source_files():
+        visitor = _InventoryMutationVisitor(path)
+        visitor.scan()
+        matches.extend((path, lineno, source) for lineno, source in visitor.matches)
+
+    assert not matches, "Retained worktree inventory references Git mutation operations:\n" + "\n".join(
+        f"{path.relative_to(_REPO_ROOT)}:{lineno} {source}" for path, lineno, source in matches
     )

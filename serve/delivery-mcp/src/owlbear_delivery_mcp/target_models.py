@@ -8,8 +8,10 @@ from typing import Annotated
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
+from owlbear_delivery.change_workspace import ChangeWorktreeAttentionCode
 from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
+    DeliveryChangeStage,
     DeliveryOutputReference,
     DeliveryPlanCandidate,
     DeliveryResultCandidate,
@@ -22,6 +24,10 @@ from owlbear_delivery.delivery_runtime import (
 )
 from owlbear_delivery.draft_pull_request import MarkChangePullRequestReady
 from owlbear_delivery.identities import ChangeId
+from owlbear_delivery.portfolio_application import (
+    DeliveryRetainedChangeWorktree,
+    DeliveryRetainedWorktreeCleanupBlockReason,
+)
 from owlbear_delivery.target_admission import DeliveryAdmissionRequest
 
 
@@ -147,6 +153,38 @@ class DeliveryPlanPublication(_TargetProtocolModel):
     def from_candidate(cls, candidate: DeliveryPlanCandidate) -> DeliveryPlanPublication:
         """Project one domain candidate into its complete MCP response."""
         return cls(**candidate.model_dump(), output=candidate.output)
+
+
+class RetainedChangeWorktreeResponse(_TargetProtocolModel):
+    """Strict MCP row for one retained Change worktree."""
+
+    change_id: ChangeId
+    worktree_path: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    branch_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    coordination_registered: bool
+    git_registered: bool
+    worktree_present: bool
+    worktree_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    worktree_branch: str | None = None
+    worktree_locked: bool = False
+    worktree_prunable: bool = False
+    worktree_bare: bool = False
+    attention: tuple[ChangeWorktreeAttentionCode, ...] = ()
+    lifecycle: DeliveryChangeStage | None = None
+    orphan: bool
+    cleanup_eligible: bool
+    cleanup_blocked_reason: DeliveryRetainedWorktreeCleanupBlockReason | None = None
+
+    @classmethod
+    def from_projection(cls, projection: DeliveryRetainedChangeWorktree) -> RetainedChangeWorktreeResponse:
+        """Convert one application projection into the transport contract."""
+        values = projection.model_dump(mode="python")
+        values["worktree_path"] = str(projection.worktree_path)
+        return cls(**values)
+
+
+type RetainedChangeWorktreeList = tuple[RetainedChangeWorktreeResponse, ...]
 
 
 class DeliveryResultPublication(_TargetProtocolModel):
@@ -280,6 +318,8 @@ __all__ = [
     "PublishDeliveryResultRequest",
     "RepairClaimContextParams",
     "RepairClaimContextRequest",
+    "RetainedChangeWorktreeList",
+    "RetainedChangeWorktreeResponse",
     "ReviseDesignSessionParams",
     "ReviseDesignSessionRequest",
     "SearchCompletedParams",

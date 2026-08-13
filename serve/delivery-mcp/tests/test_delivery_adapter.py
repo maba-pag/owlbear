@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict
 
+from owlbear_delivery import DeliveryRetainedChangeWorktree
 from owlbear_delivery.acceptance import CompletionReceiptConflictError
 from owlbear_delivery.completed_history import (
     CompletedHistoryDiagnostic,
@@ -40,6 +42,7 @@ from owlbear_delivery_mcp.target_server import (
 CHANGE = "change-a"
 DIGEST = "a" * 64
 COMMIT = "b" * 40
+WORKTREE_PATH = Path(__file__).resolve().parent / "fixture-worktree" / CHANGE
 
 
 class _Result(BaseModel):
@@ -61,6 +64,23 @@ class _RecordingApplication:
                 raise failure
             if name == "list_work_items":
                 return (_Result(operation=name),)
+            if name == "list_retained_change_worktrees":
+                return (
+                    DeliveryRetainedChangeWorktree(
+                        change_id=CHANGE,
+                        worktree_path=WORKTREE_PATH,
+                        branch="owlbear/change/change-a",
+                        branch_head=COMMIT,
+                        coordination_registered=True,
+                        git_registered=True,
+                        worktree_present=True,
+                        worktree_head=COMMIT,
+                        worktree_branch="owlbear/change/change-a",
+                        lifecycle=None,
+                        orphan=False,
+                        cleanup_eligible=True,
+                    ),
+                )
             if name == "publish_delivery_plan":
                 request = args[1]
                 assert hasattr(request, "tasks")
@@ -187,6 +207,7 @@ def _requests() -> dict[str, dict[str, object]]:
         "validate_delivery_contract": change,
         "admit_delivery_change": {"request": {"change_id": CHANGE, "active_claim_ids": []}},
         "list_work_items": {},
+        "list_retained_change_worktrees": {},
         "show_work_item": {**change, "work_item_id": "OUT-001"},
         "acquire_frontier_work": {},
         "show_plan_context": claim,
@@ -257,12 +278,16 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
         assert isinstance(application.calls[0][1][1], MarkChangePullRequestReady)
     if operation_name in {"reconcile_finalization_head", "observe_acceptance"}:
         assert application.calls[0][1] == (CHANGE,)
-    tuple_results = {"list_work_items"}
+    tuple_results = {"list_work_items", "list_retained_change_worktrees"}
     publication_results = {
         "publish_delivery_plan": {"candidate_id": "plan", "claim_id": "claim"},
         "publish_delivery_result": {"candidate_id": "result", "claim_id": "claim"},
     }
-    if operation_name in publication_results:
+    if operation_name == "list_retained_change_worktrees":
+        assert len(result) == 1
+        assert result[0]["change_id"] == CHANGE
+        assert result[0]["worktree_path"] == str(WORKTREE_PATH)
+    elif operation_name in publication_results:
         assert result.candidate_id == publication_results[operation_name]["candidate_id"]
         assert result.claim_id == publication_results[operation_name]["claim_id"]
         assert result.output.output_id == result.candidate_id
@@ -296,6 +321,7 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
         "derive_delivery_contract",
         "validate_delivery_contract",
         "list_work_items",
+        "list_retained_change_worktrees",
         "show_work_item",
         "show_plan_context",
         "show_build_context",
