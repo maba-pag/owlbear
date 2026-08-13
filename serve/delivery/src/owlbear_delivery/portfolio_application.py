@@ -343,11 +343,10 @@ class DeliveryIntegrationAttentionStatus(_ApplicationModel):
 
 
 class DeliveryAcquisitionResult(_ApplicationModel):
-    """Launchable claims and unclaimed Integration-ready changes from one refresh."""
+    """Launchable task and repair claims plus typed attention from one refresh."""
 
     launch_packages: tuple[DeliveryLaunchPackage, ...]
     repair_launch_packages: tuple[DeliveryIntegrationRepairLaunchPackage, ...] = ()
-    integration_ready_change_ids: tuple[str, ...]
     integration_attention: tuple[DeliveryIntegrationAttentionStatus, ...] = ()
     failures: tuple[DeliveryAcquisitionFailure, ...] = ()
     repair_failures: tuple[DeliveryIntegrationRepairAcquisitionFailure, ...] = ()
@@ -1581,7 +1580,6 @@ class PortfolioApplication:
             return DeliveryAcquisitionResult(
                 launch_packages=tuple(launches),
                 repair_launch_packages=tuple(repair_launches),
-                integration_ready_change_ids=(),
                 integration_attention=self.list_integration_attention(),
                 failures=tuple(failures),
                 repair_failures=tuple(repair_failures),

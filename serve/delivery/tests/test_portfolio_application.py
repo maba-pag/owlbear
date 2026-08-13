@@ -2375,7 +2375,6 @@ def test_acquisition_returns_bounded_stage_packages_without_integration_work(tmp
         DeliveryWorkerRole.PLANNER,
         DeliveryWorkerRole.BUILDER,
     )
-    assert acquired.integration_ready_change_ids == ()
     assert acquired.failures == ()
     assert runtimes["change-d"].active_claims() == ()
     assert coordinator.show("change-a").writer is None
@@ -2750,7 +2749,6 @@ def test_reviewed_integration_repair_advances_boundary_without_local_completion(
     assert runtimes["change-a"].show_binding("OUT-001") == completed_binding
     assert _git(repository, "rev-parse", "main") == target_head
     assert {path.name: path.read_bytes() for path in (tmp_path / "packages/change-a").iterdir()} == package_bytes
-    assert application.acquire_frontier_work().integration_ready_change_ids == ()
 
 
 def test_repair_authority_attention_releases_claim_and_is_not_reacquired(tmp_path: Path) -> None:
@@ -2786,7 +2784,6 @@ def test_repair_authority_attention_releases_claim_and_is_not_reacquired(tmp_pat
     assert CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes()).change_ids == ()
     refreshed = application.acquire_frontier_work()
     assert refreshed.repair_launch_packages == ()
-    assert refreshed.integration_ready_change_ids == ()
     assert refreshed.integration_attention[0].code == DeliveryIntegrationAttentionCode.REPAIR_AUTHORITY
 
 
