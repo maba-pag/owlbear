@@ -2156,16 +2156,20 @@ def test_integration_repair_candidate_serializes_independent_applications(  # no
         with original_a_lock():
             intervals["a_enter"] = monotonic()
             a_entered.set()
-            yield
-            intervals["a_exit"] = monotonic()
+            try:
+                yield
+            finally:
+                intervals["a_exit"] = monotonic()
 
     @contextmanager
     def observed_b_lock():
         b_attempted.set()
         with original_b_lock():
             intervals["b_enter"] = monotonic()
-            yield
-            intervals["b_exit"] = monotonic()
+            try:
+                yield
+            finally:
+                intervals["b_exit"] = monotonic()
 
     def create_a(attention_value, writer):
         if not b_attempted.wait(timeout=2):

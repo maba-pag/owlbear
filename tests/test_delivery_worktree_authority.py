@@ -20,6 +20,7 @@ _RETIRED_PRODUCER_SYMBOLS = frozenset(
         ("ChangeWorkspaceManager", "_publish_integration_finding"),
     }
 )
+_RETIRED_PRODUCER_CLASS_NAMES = frozenset({"IntegrationFinding", "IntegrationResult"})
 
 
 def _source_files() -> tuple[Path, ...]:
@@ -56,6 +57,8 @@ class _WorktreeAddVisitor(ast.NodeVisitor):
         self.matches: list[tuple[int, tuple[str, ...], tuple[str, ...], str]] = []
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        if node.name in _RETIRED_PRODUCER_CLASS_NAMES:
+            self.matches.append((node.lineno, node.name, tuple(self.classes), tuple(self.functions)))
         self.classes.append(node.name)
         self.generic_visit(node)
         self.classes.pop()

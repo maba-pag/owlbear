@@ -92,6 +92,7 @@ def test_publishes_and_replays_exact_change_branch_without_mutating_target_or_us
     coordinator, manager = _change_workspace(tmp_path, repository)
     worktree, reviewed = _reviewed_change(manager, "publish-change")
     worktree_status = _git(worktree, "status", "--porcelain").stdout
+    _git(repository, "branch", "release", initial)
     publisher = ChangeBranchPublisher(
         repository,
         coordinator,
@@ -115,6 +116,7 @@ def test_publishes_and_replays_exact_change_branch_without_mutating_target_or_us
     assert _head(remote, "refs/heads/owlbear/change/publish-change") == reviewed
     assert _head(remote, "refs/heads/main") == initial
     assert _head(repository, "refs/heads/main") == initial
+    assert _head(repository, "refs/heads/release") == initial
     assert _head(repository) == initial
     assert _git(repository, "show-ref", "--verify", "--quiet", "refs/remotes/origin/main", check=False).returncode == 1
     assert (repository / "user.txt").read_text(encoding="utf-8") == "uncommitted user work\n"

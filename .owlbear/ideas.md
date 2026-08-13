@@ -201,6 +201,8 @@ repair-candidate and reviewed-repair admission flow used by
 `PortfolioApplication.create_integration_repair_candidate()` and
 `PortfolioApplication.admit_reviewed_integration_repair()`.
 There are no production callers of the old method or its result types.
+This closure also removes the legacy runtime completion-capture and Integration attention/completion
+writers; persisted frontier readers and reviewed-repair transformations remain for compatibility.
 
 Delete by exact symbol closure, not by an `Integration*` name sweep. Candidate dead symbols are:
 
@@ -209,6 +211,9 @@ Delete by exact symbol closure, not by an `Integration*` name sweep. Candidate d
 - `PortfolioCoordinator.publish_finding`
 - `ChangeWorkspaceManager.integrate`
 - `ChangeWorkspaceManager._publish_integration_finding`
+- `DeliveryRuntime.completion_capture_bytes`
+- `DeliveryRuntime.publish_integration_completion`
+- `DeliveryRuntime.publish_integration_attention`
 - private helpers proven by reference search to serve only that closure
 
 Keep the live symbols:
@@ -218,7 +223,7 @@ Keep the live symbols:
 - `create_integration_repair_candidate`
 - `admit_reviewed_integration_repair`
 - `publish_integration_repair_authority_attention`
-- Integration attention and reviewed-repair operations
+- Integration attention readers and reviewed-repair operations
 
 **Pros:**
 
@@ -226,7 +231,7 @@ Keep the live symbols:
   `ChangeWorkspaceManager` before any decomposition decision.
 - Makes the candidate/proof/CAS path the single Integration implementation.
 - Removes tests specific to unreachable merge/finding behavior after any still-live invariant proof
-  has been re-parented to the current Integration path.
+  has been preserved on the current Integration path.
 
 **Cons:**
 
@@ -238,17 +243,21 @@ does not promise backward compatibility, but the surface change must still be ex
 
 **Prerequisites:**
 
-1. Add a contention regression for two independently constructed
+1. Completed: add a contention regression for two independently constructed
   `PortfolioApplication.create_integration_repair_candidate()` callers over one runtime root. The
   proof must record disjoint intervals for the shared `integration_lock()` and preserve the separate
   no-target-mutation proof in
   `test_publishes_and_replays_exact_change_branch_without_mutating_target_or_user_checkout`.
-2. Disposition legacy finding records: neither the historical
+2. Closed: neither the historical
   `.owlbear/target/target-runtime/integration-findings/*.json` path nor the current host-local
   `.owlbear/delivery/runtime/claims/integration-findings/**` path exists in this workspace. The current
   runtime is gitignored, `delivery_migration.py` does not migrate either namespace, and no reader
   remains after producer removal. They are inert historical bytes, so no retirement inventory or
   cleanup authority is added; the retirement tool continues to handle only known authoritative paths.
+
+The first prerequisite is now covered by the independent-application contention regression. No local
+Integration producer remains; a future GitHub-backed acceptance slice must establish the external
+source of any new attention or completion state.
 
 **Acceptance evidence:**
 
