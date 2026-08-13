@@ -192,19 +192,21 @@ should expose typed return context rather than synthesizing target-v1 semantic e
 - The returned item's own `dependency_ready` is false; this discriminates the corrected
   user-attention state from today's Planning/agent projection.
 
-### Priority 1 — delete the confirmed dead Integration API
+### Priority 1 — retire the confirmed dead Integration API
 
 **Finding: confirmed source-and-test-only path. Confidence: 0.96 inside this repository.**
 
-`ChangeWorkspaceManager.integrate()` implements an older merge/finding workflow alongside the live
+The former `ChangeWorkspaceManager.integrate()` implemented an older merge/finding workflow alongside the live
 repair-candidate and reviewed-repair admission flow used by
 `PortfolioApplication.create_integration_repair_candidate()` and
 `PortfolioApplication.admit_reviewed_integration_repair()`.
-There are no production callers of the old method or its result types.
-This closure also removes the legacy runtime completion-capture and Integration attention/completion
-writers; persisted frontier readers and reviewed-repair transformations remain for compatibility.
+There were no production callers of the old method or its result types. The old method and its result
+types are now removed. This closure also removes the legacy runtime completion-capture and Integration
+attention/completion writers; persisted frontier readers and reviewed-repair transformations remain for
+compatibility.
 
-Delete by exact symbol closure, not by an `Integration*` name sweep. Candidate dead symbols are:
+The retirement was performed by exact symbol closure, not by an `Integration*` name sweep. Removed
+symbols are:
 
 - `IntegrationFinding`
 - `IntegrationResult`
@@ -227,10 +229,10 @@ Keep the live symbols:
 
 **Pros:**
 
-- Removes a parallel Integration vocabulary and a substantial portion of
+- Removed a parallel Integration vocabulary and a substantial portion of
   `ChangeWorkspaceManager` before any decomposition decision.
-- Makes the candidate/proof/CAS path the single Integration implementation.
-- Removes tests specific to unreachable merge/finding behavior after any still-live invariant proof
+- Made the candidate/proof/CAS path the single Integration implementation.
+- Removed tests specific to unreachable merge/finding behavior after any still-live invariant proof
   has been preserved on the current Integration path.
 
 **Cons:**

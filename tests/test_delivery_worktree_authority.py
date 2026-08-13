@@ -57,8 +57,6 @@ class _WorktreeAddVisitor(ast.NodeVisitor):
         self.matches: list[tuple[int, tuple[str, ...], tuple[str, ...], str]] = []
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
-        if node.name in _RETIRED_PRODUCER_CLASS_NAMES:
-            self.matches.append((node.lineno, node.name, tuple(self.classes), tuple(self.functions)))
         self.classes.append(node.name)
         self.generic_visit(node)
         self.classes.pop()
@@ -110,6 +108,8 @@ class _RetiredProducerVisitor(ast.NodeVisitor):
         self.functions.pop()
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        if node.name in _RETIRED_PRODUCER_CLASS_NAMES:
+            self.matches.append((node.lineno, node.name, tuple(self.classes), tuple(self.functions)))
         self.classes.append(node.name)
         self.generic_visit(node)
         self.classes.pop()
