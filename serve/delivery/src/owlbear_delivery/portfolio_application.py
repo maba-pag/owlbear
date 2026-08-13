@@ -337,8 +337,6 @@ class DeliveryAcquisitionResult(_ApplicationModel):
     integration_attention: tuple[DeliveryIntegrationAttentionStatus, ...] = ()
     failures: tuple[DeliveryAcquisitionFailure, ...] = ()
     repair_failures: tuple[DeliveryIntegrationRepairAcquisitionFailure, ...] = ()
-    recoveries: tuple[DeliveryClaimRecoveryResult, ...] = ()
-    repair_recoveries: tuple[DeliveryIntegrationRepairRecoveryResult, ...] = ()
 
 
 class DeliveryExpiredClaimRecoveries(_ApplicationModel):
@@ -1393,12 +1391,10 @@ class PortfolioApplication:
         return self._completed_history_catalog
 
     def acquire_frontier_work(self) -> DeliveryAcquisitionResult:
-        """Recover interrupted claims, then start at most one ready claim."""
+        """Start at most one ready claim per available execution slot."""
         with self._coordinator.acquisition_lock():
             for change_id in self._runtimes:
                 self._workspace_manager.refresh_integration_target(change_id)
-            recoveries = self._recover_active_claims()
-            repair_recoveries = self._recover_active_repair_claims()
             occupied = sum(
                 len(runtime.active_claims()) + int(runtime.integration_repair_claim() is not None)
                 for runtime in self._runtimes.values()
@@ -1442,8 +1438,6 @@ class PortfolioApplication:
                 integration_attention=self.list_integration_attention(),
                 failures=tuple(failures),
                 repair_failures=tuple(repair_failures),
-                recoveries=recoveries,
-                repair_recoveries=repair_recoveries,
             )
 
     def show_plan_context(

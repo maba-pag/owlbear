@@ -2470,28 +2470,42 @@ def test_read_only_claim_recovery_removes_only_exact_runtime_claim(tmp_path: Pat
     assert ledger.change_ids == ()
 
 
-def test_acquisition_recovers_interrupted_planning_claim_before_relaunch(tmp_path: Path) -> None:
-    application, runtimes, _coordinator, _state_root = _portfolio(
+def test_acquisition_leaves_active_planning_claim_occupied_across_instances(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.PLANNING},
     )
     interrupted = application.acquire_frontier_work().launch_packages[0]
+    before_coordination = coordinator.show("change-a")
+    before_capacity = (state_root / "capacity.json").read_bytes()
+
+    reopened, _reopened_coordinator, _reopened_manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    resumed = reopened.acquire_frontier_work()
+
+    assert resumed.launch_packages == ()
+    assert runtimes["change-a"].active_claims() == (("OUT-001", interrupted.claim),)
+    assert coordinator.show("change-a") == before_coordination
+    assert (state_root / "capacity.json").read_bytes() == before_capacity
+
+
+def test_acquisition_leaves_dirty_build_claim_and_custody_unchanged(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    interrupted = application.acquire_frontier_work().launch_packages[0]
+    (interrupted.worktree_path / "product.txt").write_text("uncommitted attempt\n", encoding="utf-8")
+    before_coordination = coordinator.show("change-a")
+    before_capacity = (state_root / "capacity.json").read_bytes()
 
     resumed = application.acquire_frontier_work()
 
-    assert resumed.recoveries == (
-        DeliveryClaimRecoveryResult(
-            status=DeliveryClaimRecoveryStatus.RECOVERED,
-            change_id=interrupted.change_id,
-            outcome_id=interrupted.outcome_id,
-            attempt_id=interrupted.claim.attempt_id,
-            claim_id=interrupted.claim.claim_id,
-        ),
-    )
-    assert len(resumed.launch_packages) == 1
-    replacement = resumed.launch_packages[0]
-    assert replacement.claim.claim_id != interrupted.claim.claim_id
-    assert runtimes["change-a"].active_claims() == (("OUT-001", replacement.claim),)
+    assert resumed.launch_packages == ()
+    assert runtimes["change-a"].active_claims() == (("OUT-001", interrupted.claim),)
+    assert runtimes["change-a"].show_binding("OUT-001").recovery_attention is None
+    assert coordinator.show("change-a") == before_coordination
+    assert (state_root / "capacity.json").read_bytes() == before_capacity
+    assert (interrupted.worktree_path / "product.txt").read_text(encoding="utf-8") == "uncommitted attempt\n"
 
 
 def test_expired_claim_recovery_respects_lease_and_releases_writer(tmp_path: Path) -> None:
@@ -2525,29 +2539,6 @@ def test_expired_claim_recovery_respects_lease_and_releases_writer(tmp_path: Pat
     assert coordinator.show("change-a").writer is None
     ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
     assert ledger.change_ids == ()
-
-
-def test_acquisition_retains_dirty_interrupted_build_as_attention(tmp_path: Path) -> None:
-    application, runtimes, coordinator, state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.IMPLEMENTATION},
-    )
-    interrupted = application.acquire_frontier_work().launch_packages[0]
-    (interrupted.worktree_path / "product.txt").write_text("uncommitted attempt\n", encoding="utf-8")
-
-    resumed = application.acquire_frontier_work()
-
-    assert resumed.launch_packages == ()
-    assert len(resumed.recoveries) == 1
-    recovery = resumed.recoveries[0]
-    assert recovery.status == DeliveryClaimRecoveryStatus.ATTENTION
-    assert recovery.claim_id == interrupted.claim.claim_id
-    assert recovery.attention is not None
-    assert recovery.attention.custody_retained
-    assert runtimes["change-a"].active_claims() == (("OUT-001", interrupted.claim),)
-    assert coordinator.show("change-a").writer == interrupted.writer
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
-    assert ledger.change_ids == ("change-a",)
 
 
 def test_clean_build_recovery_replays_after_workspace_reset(tmp_path: Path) -> None:

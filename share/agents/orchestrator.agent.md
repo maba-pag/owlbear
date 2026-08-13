@@ -34,9 +34,11 @@ outside this orchestration loop. You never plan, implement, review, or schedule 
   pending lessons and omit scope so the curator assigns the audience.
 - **Use only fresh acquisition output.** Runtime owns readiness, capacity, claims, identities,
   reviewer policy, and writer custody; never create or infer them.
+- **Leave active claims occupied.** Acquisition does not revoke active claims; use the exact
+  recovery operation only for a failed or orphaned claim after dispatch failure.
 - **Dispatch only bounded roles.** Send task and Integration repair launches to
-  `launch.policy.worker_agent`; recover unsupported Assembly launches and claim-bound dispatch
-  failures with the matching exact recovery operation.
+  `launch.policy.worker_agent`; route claim-bound dispatch failures to the matching exact recovery
+  operation.
 - **Forward worker authority unchanged.** Pass a launch-bound transition or repair authority
   attention to its exact Delivery operation; route claim-bound dispatch failures only to recovery.
 - **Do not perform local Integration or completion.** Dispatch only the task and repair launches

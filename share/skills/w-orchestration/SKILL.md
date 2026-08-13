@@ -26,8 +26,9 @@ acquired.
 
 Call `list_work_items` only for bounded portfolio reporting. Call `acquire_frontier_work` once for the
 current cycle. Its `DeliveryAcquisitionResult` is the sole source of task and repair launch order,
-typed `integration_attention`, acquisition failures, and interrupted-claim recoveries. Report
-Integration and recovery attention unchanged. Do not filter
+typed `integration_attention`, and acquisition failures. Active claims remain occupied; an
+interrupted claim is recovered only through its exact recovery operation after a failed dispatch.
+Report Integration and recovery attention unchanged. Do not filter
 for capacity, infer readiness, create identities, or reserve writer custody.
 
 ## Step 2 - Dispatch Or Recover Each Launch
