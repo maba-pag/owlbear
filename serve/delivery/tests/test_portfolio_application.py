@@ -6,10 +6,12 @@ import json
 import os
 import shutil
 import subprocess
+from contextlib import contextmanager
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
+from time import monotonic
 from threading import Event
 from unittest.mock import Mock, patch, sentinel
 
@@ -445,6 +447,40 @@ def _portfolio(  # noqa: PLR0913
         ),
     )
     return application, runtimes, coordinator, state_root
+
+
+def _reopen_portfolio(
+    tmp_path: Path,
+    state_root: Path,
+    runtimes: dict[str, DeliveryRuntime],
+) -> tuple[PortfolioApplication, PortfolioCoordinator, ChangeWorkspaceManager]:
+    repository = tmp_path / "repository"
+    package_root = tmp_path / "packages"
+    coordinator = PortfolioCoordinator(state_root, capacity=1)
+    manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
+    store = DesignPackageStore(package_root, repository)
+    authority_registry = DeliveryAuthorityRegistry(state_root, store, integration_target="main")
+    reopened_runtimes = {
+        change_id: DeliveryRuntime(state_root, runtime.contract, workspace_manager=manager)
+        for change_id, runtime in runtimes.items()
+    }
+    application = PortfolioApplication(
+        reopened_runtimes,
+        PortfolioApplicationDependencies(
+            target_root=state_root,
+            package_store=store,
+            authority_registry=authority_registry,
+            coordinator=coordinator,
+            workspace_manager=manager,
+            completed_history_catalog=CompletedHistoryCatalog(repository, "main", "main", state_root),
+        ),
+        PortfolioApplicationConfig(
+            package_root=package_root,
+            execution_capacity=3,
+            role_policies=_policies(),
+        ),
+    )
+    return application, coordinator, manager
 
 
 def test_finalization_uses_managed_head_and_invalidates_observed_drift(tmp_path: Path) -> None:
@@ -2022,6 +2058,7 @@ def _review_product_change(coordinator: PortfolioCoordinator, change_id: str, co
 
 def _publish_merge_conflict_attention(
     runtimes: dict[str, DeliveryRuntime],
+    state_root: Path,
     change_id: str,
     change_head: str,
     target_head: str,
@@ -2036,7 +2073,10 @@ def _publish_merge_conflict_attention(
         diagnostics=("merge conflict",),
         retry_condition="Admit a reviewed Integration repair for this attention, then retry Integration.",
     )
-    runtimes[change_id].publish_integration_attention(attention)
+    runtime = runtimes[change_id]
+    frontier_path = state_root / "changes" / change_id / "frontier.json"
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    frontier_path.write_bytes(_canonical(frontier.model_copy(update={"integration_attention": attention})))
     return attention
 
 
@@ -2051,7 +2091,7 @@ def _prepare_reviewed_integration_repair(tmp_path: Path):
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "concurrent target")
     target_head = _git(repository, "rev-parse", "main")
-    attention = _publish_merge_conflict_attention(runtimes, "change-a", reviewed, target_head)
+    attention = _publish_merge_conflict_attention(runtimes, state_root, "change-a", reviewed, target_head)
     acquired = application.acquire_frontier_work()
     assert len(acquired.repair_launch_packages) == 1
     launch = acquired.repair_launch_packages[0]
@@ -2078,6 +2118,97 @@ def _prepare_reviewed_integration_repair(tmp_path: Path):
         ),
     )
     return application, runtimes, coordinator, state_root, repair, launch.claim
+
+
+def test_integration_repair_candidate_serializes_independent_applications(  # noqa: PLR0915
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    application_a, runtimes, coordinator_a, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    _target_before, reviewed = _review_product_change(coordinator_a, "change-a", "change side\n")
+    repository = tmp_path / "repository"
+    (repository / "product.txt").write_text("target side\n", encoding="utf-8")
+    _git(repository, "add", "product.txt")
+    _git(repository, "commit", "-m", "concurrent target")
+    target_head = _git(repository, "rev-parse", "main")
+    attention = _publish_merge_conflict_attention(runtimes, state_root, "change-a", reviewed, target_head)
+    launch = application_a.acquire_frontier_work().repair_launch_packages[0]
+    worktree = coordinator_a.show("change-a").worktree_path
+    (worktree / "product.txt").write_text("target side\n", encoding="utf-8")
+    application_b, coordinator_b, manager_b = _reopen_portfolio(tmp_path, state_root, runtimes)
+
+    manager_a = application_a._workspace_manager  # noqa: SLF001 - test authority setup.
+    original_a_create = manager_a.create_integration_repair_candidate
+    original_b_create = manager_b.create_integration_repair_candidate
+    original_a_lock = coordinator_a.integration_lock
+    original_b_lock = coordinator_b.integration_lock
+    a_entered = Event()
+    b_attempted = Event()
+    b_reached = Event()
+    allow_b = Event()
+    intervals: dict[str, float] = {}
+
+    @contextmanager
+    def observed_a_lock():
+        with original_a_lock():
+            intervals["a_enter"] = monotonic()
+            a_entered.set()
+            yield
+            intervals["a_exit"] = monotonic()
+
+    @contextmanager
+    def observed_b_lock():
+        b_attempted.set()
+        with original_b_lock():
+            intervals["b_enter"] = monotonic()
+            yield
+            intervals["b_exit"] = monotonic()
+
+    def create_a(attention_value, writer):
+        if not b_attempted.wait(timeout=2):
+            message = "second Integration caller did not attempt the shared lock"
+            raise AssertionError(message)
+        b_reached.wait(timeout=0.25)
+        return original_a_create(attention_value, writer)
+
+    def create_b(attention_value, writer):
+        b_reached.set()
+        if not allow_b.wait(timeout=2):
+            message = "second Integration caller did not receive release"
+            raise AssertionError(message)
+        return original_b_create(attention_value, writer)
+
+    monkeypatch.setattr(coordinator_a, "integration_lock", observed_a_lock)
+    monkeypatch.setattr(coordinator_b, "integration_lock", observed_b_lock)
+    monkeypatch.setattr(manager_a, "create_integration_repair_candidate", create_a)
+    monkeypatch.setattr(manager_b, "create_integration_repair_candidate", create_b)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(
+            application_a.create_integration_repair_candidate,
+            "change-a",
+            launch.claim.attempt_id,
+            launch.claim.claim_id,
+        )
+        assert a_entered.wait(timeout=2)
+        second = executor.submit(
+            application_b.create_integration_repair_candidate,
+            "change-a",
+            launch.claim.attempt_id,
+            launch.claim.claim_id,
+        )
+        assert b_attempted.wait(timeout=2)
+        first_result = first.result(timeout=3)
+        assert b_reached.wait(timeout=2)
+        allow_b.set()
+        second_result = second.result(timeout=3)
+
+    assert first_result.candidate_commit == second_result.candidate_commit
+    assert intervals["a_exit"] <= intervals["b_enter"]
+    assert _git(repository, "rev-parse", "main") == target_head
+    assert attention.change_head == reviewed
 
 
 def test_repair_recovery_preserves_worktree_for_next_claim(tmp_path: Path) -> None:
@@ -2612,7 +2743,7 @@ def test_repair_authority_attention_releases_claim_and_is_not_reacquired(tmp_pat
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "concurrent target")
     target_head = _git(repository, "rev-parse", "main")
-    merge_attention = _publish_merge_conflict_attention(runtimes, "change-a", reviewed, target_head)
+    merge_attention = _publish_merge_conflict_attention(runtimes, state_root, "change-a", reviewed, target_head)
     acquired = application.acquire_frontier_work()
     launch = acquired.repair_launch_packages[0]
 
@@ -2648,7 +2779,7 @@ def test_repair_authority_attention_preserves_claim_when_worktree_is_dirty(tmp_p
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "concurrent target")
     target_head = _git(repository, "rev-parse", "main")
-    _publish_merge_conflict_attention(runtimes, "change-a", reviewed, target_head)
+    _publish_merge_conflict_attention(runtimes, _state_root, "change-a", reviewed, target_head)
     launch = application.acquire_frontier_work().repair_launch_packages[0]
     (launch.worktree_path / "owned-edit.txt").write_text("uncommitted\n", encoding="utf-8")
     request = DeliveryIntegrationRepairAuthorityAttention(

@@ -197,7 +197,9 @@ should expose typed return context rather than synthesizing target-v1 semantic e
 **Finding: confirmed source-and-test-only path. Confidence: 0.96 inside this repository.**
 
 `ChangeWorkspaceManager.integrate()` implements an older merge/finding workflow alongside the live
-candidate preparation/publication flow used by `PortfolioApplication.integrate_ready_change()`.
+repair-candidate and reviewed-repair admission flow used by
+`PortfolioApplication.create_integration_repair_candidate()` and
+`PortfolioApplication.admit_reviewed_integration_repair()`.
 There are no production callers of the old method or its result types.
 
 Delete by exact symbol closure, not by an `Integration*` name sweep. Candidate dead symbols are:
@@ -206,19 +208,16 @@ Delete by exact symbol closure, not by an `Integration*` name sweep. Candidate d
 - `IntegrationResult`
 - `PortfolioCoordinator.publish_finding`
 - `ChangeWorkspaceManager.integrate`
-- `ChangeWorkspaceManager._integrate_locked`
-- `ChangeWorkspaceManager._merge_target`
 - `ChangeWorkspaceManager._publish_integration_finding`
 - private helpers proven by reference search to serve only that closure
 
 Keep the live symbols:
 
-- `AtomicIntegrationPreparation`
-- `AtomicIntegrationResult`
-- `DeliveryIntegrationCandidate`
-- `DeliveryIntegrationResult`
-- `prepare_integration_candidate`
-- `publish_prepared_integration`
+- `IntegrationContext`
+- `IntegrationRepairCandidate`
+- `create_integration_repair_candidate`
+- `admit_reviewed_integration_repair`
+- `publish_integration_repair_authority_attention`
 - Integration attention and reviewed-repair operations
 
 **Pros:**
@@ -239,19 +238,24 @@ does not promise backward compatibility, but the surface change must still be ex
 
 **Prerequisites:**
 
-1. Re-parent `test_integration_serializes_independent_managers` onto two independent
-  `PortfolioApplication.integrate_ready_change()` callers so deletion does not remove the only
-  cross-process/shared-target Integration-lock proof.
-2. Decide the disposition of any existing
-  `.owlbear/target/target-runtime/integration-findings/*.json` records. They are historical bytes,
-  not inputs to the live Integration path.
+1. Add a contention regression for two independently constructed
+  `PortfolioApplication.create_integration_repair_candidate()` callers over one runtime root. The
+  proof must record disjoint intervals for the shared `integration_lock()` and preserve the separate
+  no-target-mutation proof in
+  `test_publishes_and_replays_exact_change_branch_without_mutating_target_or_user_checkout`.
+2. Disposition legacy finding records: neither the historical
+  `.owlbear/target/target-runtime/integration-findings/*.json` path nor the current host-local
+  `.owlbear/delivery/runtime/claims/integration-findings/**` path exists in this workspace. The current
+  runtime is gitignored, `delivery_migration.py` does not migrate either namespace, and no reader
+  remains after producer removal. They are inert historical bytes, so no retirement inventory or
+  cleanup authority is added; the retirement tool continues to handle only known authoritative paths.
 
 **Acceptance evidence:**
 
 - Exhaustive reference search shows no remaining references to the deleted closure.
 - Package-root exports and public-surface tests name only the live Integration vocabulary.
-- Current Integration success, conflict attention, target-CAS loss, replay, cleanup, and reviewed
-  repair tests remain green, including the re-parented independent-manager serialization proof.
+- Current Integration attention, target-CAS loss, replay, cleanup, and reviewed repair tests remain
+  green, including the independent-application shared-lock contention proof.
 
 ### Priority 1 decision — complete or remove Assembly
 

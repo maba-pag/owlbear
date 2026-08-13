@@ -1217,9 +1217,6 @@ Per-change writer coordination and Git workspace management.
 - `class WorkspaceRecoverySnapshot(_WorkspaceModel)`
 - `class CapacityLedger(_WorkspaceModel)`
   - `def _validate_holders(self) -> CapacityLedger`
-- `class IntegrationFinding(_WorkspaceModel)`
-- `class IntegrationResult(_WorkspaceModel)`
-  - `def _require_one_result(self) -> IntegrationResult`
 - `class IntegrationRepairCandidate(_WorkspaceModel)`
 - `class IntegrationContext(_WorkspaceModel)`
 - `class CoordinationConflictError(RuntimeError)`
@@ -1241,7 +1238,6 @@ Per-change writer coordination and Git workspace management.
   - `def _validate_publication_operation_id(operation_id: str) -> None`
   - `def _require_publication_lock(self, lock: PublicationLock, change_id: str) -> None`
   - `def _publication_timestamp(value: str) -> datetime`
-  - `def publish_finding(self, finding: IntegrationFinding) -> IntegrationFinding`
   - `def admit_integration_repair(self, repair: DeliveryIntegrationRepair | DeliveryIntegrationRepairAuthorityAttention, participants: tuple[ReplacementTransactionParticipant, ...]) -> None`
   - `def integration_repair_replacements(self, previous: ChangeCoordination, replacement: ChangeCoordination, claim_id: str) -> tuple[ReplacementTransactionParticipant, ReplacementTransactionParticipant]`
   - `def _initialize_ledger(self) -> None`
@@ -1253,7 +1249,10 @@ Per-change writer coordination and Git workspace management.
   - `def create(self, change_id: str, *, recovery_reviewed_head: str | None = None) -> ChangeCoordination`
   - `def validate_recovery(self, change_id: str, recovery_reviewed_head: str | None) -> None`
   - `def record_reviewed(self, change_id: str, commit: str) -> ChangeCoordination`
-  - `def _register_worktree(self, worktree: Path, branch: str) -> None`
+  - `def restore_worktree(cls, repository: Path, worktree: Path, branch: str) -> None`
+  - `def remove_worktree(cls, repository: Path, worktree: Path) -> None`
+  - `def _run_managed_git(repository: Path, *arguments: str) -> str`
+  - `def _register_worktree(worktree: Path, branch: str, git: Callable[..., str]) -> None`
   - `def show(self, change_id: str) -> ChangeCoordination`
   - `def refresh_integration_target(self, change_id: str) -> ChangeCoordination`
   - `def integration_context(self, change_id: str) -> IntegrationContext`
@@ -1283,8 +1282,6 @@ Per-change writer coordination and Git workspace management.
   - `def _changed_paths(self, parent: str, child: str) -> set[bytes]`
   - `def _tree_entries(self, tree: str) -> dict[bytes, bytes]`
   - `def _tree_entries_at_path(self, tree: str, path: tuple[bytes, ...]) -> dict[bytes, bytes]`
-  - `def integrate(self, change_id: str, reviewed_commits: tuple[str, ...]) -> IntegrationResult`
-  - `def _publish_integration_finding(self, coordination: ChangeCoordination, change_head: str, target_head: str) -> IntegrationFinding`
   - `def _require_worktree(self, worktree: Path, branch: str, expected_head: str) -> None`
   - `def _require_ancestor(self, commit: str, descendant: str) -> None`
   - `def _is_ancestor(ancestor: str, descendant: str, *, cwd: Path) -> bool`
@@ -1324,6 +1321,10 @@ Bounded Git-backed projections of completed Delivery packages.
 ### Interfaces
 
 - `class _CompletedHistoryModel(BaseModel)`
+- `class _LegacyTaskResult(_CompletedHistoryModel)`
+- `class _LegacyRuntimeBinding(_CompletedHistoryModel)`
+  - `def _validate_task_results(self) -> _LegacyRuntimeBinding`
+- `class _LegacyRuntimeFrontier(_CompletedHistoryModel)`
 - `class CompletedHistoryDiagnosticCode(StrEnum)`
 - `class CompletedHistoryDiagnostic(_CompletedHistoryModel)`
 - `class CompletedHistoryError(RuntimeError)`
@@ -1356,6 +1357,8 @@ Bounded Git-backed projections of completed Delivery packages.
   - `def _verify_authored_digests(self, commit: str, path: str, snapshot: CompletionPackageSnapshot, manifest: DesignPackageManifest) -> None`
   - `def _contract(self, commit: str, path: str, snapshot: CompletionPackageSnapshot) -> DeliveryContract`
   - `def _verify_runtime_capture(self, commit: str, path: str, snapshot: CompletionPackageSnapshot, contract: DeliveryContract) -> None`
+  - `def _verify_legacy_runtime_capture(self, runtime_bytes: bytes, results_bytes: bytes, snapshot: CompletionPackageSnapshot, contract: DeliveryContract, *, cause: Exception) -> None`
+  - `def _require_legacy_capture_shape(self, snapshot: CompletionPackageSnapshot, contract: DeliveryContract, frontier: _LegacyRuntimeFrontier, results: tuple[_LegacyTaskResult, ...]) -> None`
   - `def _require_capture_digests(self, snapshot: CompletionPackageSnapshot, runtime_bytes: bytes, results_bytes: bytes) -> None`
   - `def _require_capture_shape(self, snapshot: CompletionPackageSnapshot, contract: DeliveryContract, frontier: DeliveryFrontier, results: tuple[DeliveryTaskResult, ...]) -> None`
   - `def _introduction(self, target_commit: str, snapshot: CompletionPackageSnapshot) -> tuple[str, str]`
@@ -1376,7 +1379,7 @@ Bounded Git-backed projections of completed Delivery packages.
   - `def _digest_mismatch(detail: str, snapshot: CompletionPackageSnapshot) -> Never`
 - `def _canonical_model(model: BaseModel) -> bytes`
 - `def _receipt_set_digest(bundles: tuple[CompletionReceiptBundle, ...]) -> str`
-- `def _canonical_results(results: tuple[DeliveryTaskResult, ...]) -> bytes`
+- `def _canonical_results(results: tuple[BaseModel, ...]) -> bytes`
 
 ## serve/delivery/src/owlbear_delivery/delivery_application_loader.py
 
@@ -1537,7 +1540,6 @@ Mechanical Delivery state and worker-owned transitions.
   - `def authority_digest(self) -> str`
   - `def contract(self) -> DeliveryContract`
   - `def frontier_bytes(self) -> bytes`
-  - `def completion_capture_bytes(self) -> tuple[bytes, bytes]`
   - `def integration_completion(self) -> DeliveryIntegrationCompletion | None`
   - `def integration_attention(self) -> DeliveryIntegrationAttention | None`
   - `def show_binding(self, outcome_id: str) -> OutcomeAuthorityBinding`
@@ -1565,8 +1567,6 @@ Mechanical Delivery state and worker-owned transitions.
   - `def require_active_claim(self, outcome_id: str, attempt_id: str, claim_id: str) -> OutcomeAuthorityBinding`
   - `def remove_active_claim(self, outcome_id: str, attempt_id: str, claim_id: str) -> OutcomeAuthorityBinding`
   - `def publish_recovery_attention(self, outcome_id: str, attention: DeliveryRecoveryAttention) -> OutcomeAuthorityBinding`
-  - `def publish_integration_completion(self, completion: DeliveryIntegrationCompletion) -> DeliveryIntegrationCompletion`
-  - `def publish_integration_attention(self, attention: DeliveryIntegrationAttention) -> DeliveryIntegrationAttention`
   - `def integration_repair_replacement(self, repair: DeliveryIntegrationRepair) -> ReplacementTransactionParticipant`
   - `def integration_repair_authority_replacement(self, request: DeliveryIntegrationRepairAuthorityAttention, attempt_id: str, claim_id: str) -> tuple[DeliveryIntegrationAttention, ReplacementTransactionParticipant]`
   - `def claimable_outcome_ids(self) -> tuple[str, ...]`
@@ -1611,7 +1611,6 @@ Mechanical Delivery state and worker-owned transitions.
 - `def _administrative_move_closure(contract: DeliveryContract, frontier: DeliveryFrontier, outcome_id: str, target: DeliveryStage) -> tuple[str, ...]`
 - `def _model_content(model: BaseModel) -> bytes`
 - `def _receipt_digest(receipt: BaseModel, identity_field: str) -> str`
-- `def _canonical_content(models: tuple[BaseModel, ...]) -> bytes`
 - `def _conflict(message: str) -> None`
 - `def _reference(message: str, cause: Exception | None = None) -> None`
 
@@ -4034,6 +4033,123 @@ Commit explicitly owned paths without disturbing an existing Git index.
 - `def _staged_paths(cwd: Path, paths: Sequence[str]) -> list[str]`
 - `def _commit_staged_paths(*, cwd: Path, message: str, owned_paths: list[str]) -> str`
 - `def commit_owned_paths(*, cwd: Path, message: str, paths: Sequence[str], staged: bool = False) -> str`
+- `def main() -> None`
+
+## serve/tools/src/owlbear_tools/delivery_integration_retirement.py
+
+Retire terminal legacy Integration state after Delivery path migration.
+
+### Imports
+
+- `__future__`
+- `argparse`
+- `contextlib`
+- `dataclasses`
+- `hashlib`
+- `json`
+- `os`
+- `owlbear_delivery.change_workspace`
+- `owlbear_delivery.completed_history`
+- `owlbear_delivery.delivery_application_loader`
+- `owlbear_delivery.delivery_runtime`
+- `owlbear_delivery.git_executable`
+- `owlbear_delivery.storage_io`
+- `owlbear_tools.delivery_migration`
+- `pathlib`
+- `pydantic`
+- `re`
+- `shutil`
+- `subprocess`
+- `typing`
+
+### Interfaces
+
+- `class DeliveryIntegrationRetirementError(RuntimeError)`
+- `class _RegisteredWorktree`
+- `class _VerificationRecord`
+- `class _RetirementBinding`
+- `class _RetirementFrontier`
+- `def _publication_payload(path: Path) -> dict[str, object]`
+- `def _require_publication_file(path: Path) -> None`
+- `def _publication_operation_paths(runtime_root: Path, change_id: str) -> tuple[Path, ...]`
+- `def _publication_nested_paths(runtime_root: Path, change_id: str) -> tuple[Path, ...]`
+- `def _publication_paths(runtime_root: Path, change_id: str) -> tuple[Path, ...]`
+- `def _publication_state_lock_paths(runtime_root: Path, change_id: str) -> tuple[Path, ...]`
+- `class _RetirementChange`
+- `class DeliveryIntegrationRetirementPlan`
+- `class _RetirementModel(BaseModel)`
+- `class _JournalChange(_RetirementModel)`
+- `class _RetirementJournal(_RetirementModel)`
+- `class _HistoryContext`
+- `def _fail(detail: str) -> None`
+- `def _digest(content: bytes) -> str`
+- `def _git(root: Path, *arguments: str, check: bool = True) -> subprocess.CompletedProcess[bytes]`
+- `def _load_model(path: Path, model_type: type[Model]) -> Model`
+- `def _has_entries(path: Path) -> bool`
+- `def _require_directory(path: Path) -> None`
+- `def _registered_worktrees(root: Path) -> tuple[_RegisteredWorktree, ...]`
+- `def _require_ordering(repository_root: Path, runtime_root: Path) -> None`
+- `def _load_startup_config(repository_root: Path) -> DeliveryStartupConfig`
+- `def _resolve_target(repository_root: Path, target_ref: str) -> str`
+- `def _modern_retirement_frontier(frontier: DeliveryFrontier) -> _RetirementFrontier`
+- `def _legacy_retirement_binding(raw_binding: object) -> _RetirementBinding`
+- `def _legacy_retirement_frontier(payload: dict[str, object]) -> _RetirementFrontier`
+- `def _parse_retirement_frontier(content: bytes) -> _RetirementFrontier`
+- `def _load_frontiers(runtime_root: Path) -> tuple[dict[str, _RetirementFrontier], dict[str, bytes], dict[str, Path]]`
+- `def _load_coordinations(runtime_root: Path, change_ids: set[str]) -> tuple[dict[str, ChangeCoordination], dict[str, bytes]]`
+- `def _require_coordination_quiescence(coordinations: dict[str, ChangeCoordination]) -> None`
+- `def _require_runtime_quiescence(runtime_root: Path) -> None`
+- `def _require_frontier_quiescence(change_id: str, frontier: _RetirementFrontier) -> None`
+- `def _require_terminal_frontier(change_id: str, frontier: _RetirementFrontier) -> None`
+- `def _require_quiescent(frontiers: dict[str, _RetirementFrontier], coordinations: dict[str, ChangeCoordination], runtime_root: Path) -> None`
+- `def _change_worktree(repository_root: Path, coordination: ChangeCoordination, registrations: tuple[_RegisteredWorktree, ...]) -> _RegisteredWorktree | None`
+- `def _verification_records(verification_root: Path, kind: str) -> dict[str, _VerificationRecord]`
+- `def _require_archived_verification(archived_root: Path, kind: str, record: _VerificationRecord) -> None`
+- `def _verification_paths(repository_root: Path, runtime_root: Path, candidates: dict[str, _RetirementFrontier]) -> dict[str, tuple[Path, ...]]`
+- `def _require_verification_archives(archived_root: Path, requests: dict[str, _VerificationRecord], receipts: dict[str, _VerificationRecord], candidates: dict[str, _RetirementFrontier]) -> None`
+- `def _candidate_verification_paths(candidates: dict[str, _RetirementFrontier], requests: dict[str, _VerificationRecord], receipts: dict[str, _VerificationRecord]) -> dict[str, tuple[Path, ...]]`
+- `def _require_history_proof(context: _HistoryContext, change_id: str, frontier: _RetirementFrontier) -> None`
+- `def _journal_for_plan(plan: DeliveryIntegrationRetirementPlan, staging_root: Path) -> _RetirementJournal`
+- `def _journal_relative(path: Path, root: Path, detail: str) -> Path`
+- `def _require_journal_path(actual: Path, expected: Path) -> None`
+- `def _validate_journal_worktree(change: _JournalChange, worktree_root: Path) -> None`
+- `def _validate_journal_verification(change: _JournalChange, verification_root: Path, staging_root: Path) -> None`
+- `def _validate_publication_relative(change: _JournalChange, relative: Path) -> None`
+- `def _validate_journal_publication_source(change: _JournalChange, actual: Path, staged: Path, digest: str, phase: Literal['staged', 'cleanup']) -> None`
+- `def _validate_journal_publication(change: _JournalChange, runtime_root: Path, staging_root: Path, phase: Literal['staged', 'cleanup']) -> None`
+- `def _validate_journal_change(change: _JournalChange, journal: _RetirementJournal) -> None`
+- `def _validate_journal(root: Path, journal: _RetirementJournal) -> None`
+- `def _require_target_snapshot(root: Path, target_ref: str, target_commit: str) -> None`
+- `def _require_expected_plan(plan: DeliveryIntegrationRetirementPlan, expected_target_commit: str | None, expected_change_ids: tuple[str, ...] | None) -> None`
+- `def _require_recovered_cleanup(journal: _RetirementJournal, expected_target_commit: str | None, expected_change_ids: tuple[str, ...] | None) -> None`
+- `def _write_journal(journal: _RetirementJournal) -> None`
+- `def _rewrite_journal(journal: _RetirementJournal) -> None`
+- `def _load_journal(root: Path) -> _RetirementJournal`
+- `def _move(source: Path, target: Path) -> None`
+- `def _stage(journal: _RetirementJournal) -> None`
+- `def _remove_worktrees(root: Path, journal: _RetirementJournal) -> None`
+- `def _remove_publication_lock(path: Path) -> None`
+- `def _remove_publication_locks(journal: _RetirementJournal) -> None`
+- `def _remove_empty_staging_parent(staging_root: Path) -> None`
+- `def _require_branch(root: Path, branch: str, head: str) -> None`
+- `def _validate_postconditions(root: Path, journal: _RetirementJournal) -> None`
+- `def _restore_worktree(root: Path, change: _JournalChange) -> None`
+- `def _recover_staged_paths(sources: tuple[Path, ...], staged_paths: tuple[Path, ...], kind: str) -> None`
+- `def _recover_change(root: Path, change: _JournalChange) -> None`
+- `def _recover_retirement(root: Path) -> _RetirementJournal | None`
+- `def _execute_retirement(repository_root: Path, journal: _RetirementJournal) -> None`
+- `def _execute_retirement_cleanup(repository_root: Path, journal: _RetirementJournal) -> None`
+- `def _validate_post_retirement_startup(repository_root: Path) -> None`
+- `def _complete_retirement(repository_root: Path, journal: _RetirementJournal) -> None`
+- `def _retirement_change_ids(root: Path) -> tuple[str, ...]`
+- `def _retirement_lock_roots(root: Path) -> tuple[Path, ...]`
+- `def _retirement_publication_namespace_root(root: Path) -> Path`
+- `def _retirement_checkpoint_lock_roots(root: Path, change_ids: tuple[str, ...]) -> tuple[Path, ...]`
+- `def _retirement_publication_lock_roots(root: Path, change_ids: tuple[str, ...] | None = None) -> tuple[Path, ...]`
+- `def _retirement_outer_locks(root: Path, change_ids: tuple[str, ...], *, preserve_unjournaled: bool) -> Iterator[ExitStack]`
+- `def plan_delivery_integration_retirement(root: Path) -> DeliveryIntegrationRetirementPlan`
+- `def _apply_delivery_integration_retirement(root: Path, *, expected_target_commit: str | None = None, expected_change_ids: tuple[str, ...] | None = None) -> DeliveryIntegrationRetirementPlan`
+- `def apply_delivery_integration_retirement(plan: DeliveryIntegrationRetirementPlan) -> None`
 - `def main() -> None`
 
 ## serve/tools/src/owlbear_tools/delivery_migration.py

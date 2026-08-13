@@ -160,31 +160,6 @@ class CapacityLedger(_WorkspaceModel):
         return self
 
 
-class IntegrationFinding(_WorkspaceModel):
-    """Immutable evidence that integration requires solution planning."""
-
-    finding_id: str = Field(min_length=1)
-    change_id: ChangeId
-    change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    integration_target: str = Field(min_length=1)
-    detail: str = Field(min_length=1)
-
-
-class IntegrationResult(_WorkspaceModel):
-    """Contain either one reviewed merge commit or one integration finding."""
-
-    merge_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
-    finding: IntegrationFinding | None = None
-
-    @model_validator(mode="after")
-    def _require_one_result(self) -> IntegrationResult:
-        if (self.merge_commit is None) == (self.finding is None):
-            msg = "integration requires either a merge commit or a finding"
-            raise ValueError(msg)
-        return self
-
-
 class IntegrationRepairCandidate(_WorkspaceModel):
     """Exact claim-bound commit and merge proof for one Integration repair."""
 
@@ -456,15 +431,6 @@ class PortfolioCoordinator:
     @staticmethod
     def _publication_timestamp(value: str) -> datetime:
         return _publication_timestamp(value)
-
-    def publish_finding(self, finding: IntegrationFinding) -> IntegrationFinding:
-        """Publish one immutable integration finding inside target evidence."""
-        relative = Path("claims/integration-findings") / f"{finding.finding_id}.json"
-        self._commit(
-            f"finding-{finding.finding_id}",
-            (TransactionParticipant(self._state_root, relative, _model_content(finding)),),
-        )
-        return finding
 
     def admit_integration_repair(
         self,
@@ -1180,28 +1146,6 @@ class ChangeWorkspaceManager:
                 raise ValueError(message)
             tree = metadata[2].decode()
         return self._tree_entries(tree)
-
-    def integrate(self, change_id: str, reviewed_commits: tuple[str, ...]) -> IntegrationResult:
-        """Reject the retired local target Integration operation."""
-        del change_id, reviewed_commits
-        _workspace_failure("local target Integration is disabled; external acceptance is required")
-
-    def _publish_integration_finding(
-        self,
-        coordination: ChangeCoordination,
-        change_head: str,
-        target_head: str,
-    ) -> IntegrationFinding:
-        identity = hashlib.sha256(f"{coordination.change_id}:{change_head}:{target_head}".encode()).hexdigest()[:16]
-        finding = IntegrationFinding(
-            finding_id=f"integration-{identity}",
-            change_id=coordination.change_id,
-            change_head=change_head,
-            target_head=target_head,
-            integration_target=coordination.integration_target,
-            detail="Change and integration target conflict; accepted change-level composition authority is required.",
-        )
-        return self._coordinator.publish_finding(finding)
 
     def _require_worktree(self, worktree: Path, branch: str, expected_head: str) -> None:
         if self._resolve("HEAD", cwd=worktree) != expected_head:

@@ -90,7 +90,8 @@ def _writer(change_id: str) -> ChangeWriter:
 def test_publishes_and_replays_exact_change_branch_without_mutating_target_or_user_checkout(tmp_path: Path) -> None:
     repository, remote, initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)
-    _worktree, reviewed = _reviewed_change(manager, "publish-change")
+    worktree, reviewed = _reviewed_change(manager, "publish-change")
+    worktree_status = _git(worktree, "status", "--porcelain").stdout
     publisher = ChangeBranchPublisher(
         repository,
         coordinator,
@@ -117,6 +118,8 @@ def test_publishes_and_replays_exact_change_branch_without_mutating_target_or_us
     assert _head(repository) == initial
     assert _git(repository, "show-ref", "--verify", "--quiet", "refs/remotes/origin/main", check=False).returncode == 1
     assert (repository / "user.txt").read_text(encoding="utf-8") == "uncommitted user work\n"
+    assert _head(worktree) == reviewed
+    assert _git(worktree, "status", "--porcelain").stdout == worktree_status
 
 
 def test_adopts_exact_reviewed_remote_head_when_durable_head_is_missing(tmp_path: Path) -> None:

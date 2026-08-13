@@ -1065,25 +1065,6 @@ class DeliveryRuntime:
         """Return current canonical frontier bytes for OCC and failure proof."""
         return self._read()[1]
 
-    def completion_capture_bytes(self) -> tuple[bytes, bytes]:
-        """Return stable completed-outcome runtime and compact result history bytes."""
-        frontier, _content = self._read()
-        if frontier.change_completion is not None:
-            _conflict("completed Change cannot enter legacy Integration capture")
-        if {binding.stage for binding in frontier.bindings} != {DeliveryStage.COMPLETED}:
-            _conflict("Integration capture requires every outcome to be completed")
-        capture = frontier.model_copy(
-            update={
-                "integration_result_id": None,
-                "integration_completion": None,
-                "integration_attention": None,
-                "published_head": None,
-                "pending_checkpoint": None,
-            }
-        )
-        results = tuple(result for binding in frontier.bindings for result in binding.results)
-        return _model_content(capture), _canonical_content(results)
-
     def integration_completion(self) -> DeliveryIntegrationCompletion | None:
         """Return the committed Integration identity when publication completed."""
         return self._read()[0].integration_completion
@@ -1580,46 +1561,6 @@ class DeliveryRuntime:
         updated = binding.model_copy(update={"recovery_attention": attention})
         self._replace(previous, _replace_binding(frontier, binding, updated))
         return updated
-
-    def publish_integration_completion(
-        self,
-        completion: DeliveryIntegrationCompletion,
-    ) -> DeliveryIntegrationCompletion:
-        """Publish one committed Integration identity and clear matching attention."""
-        frontier, previous = self._read()
-        if {binding.stage for binding in frontier.bindings} != {DeliveryStage.COMPLETED}:
-            _conflict("Integration completion requires every outcome to be completed")
-        if frontier.integration_repair_claim is not None:
-            _conflict("Integration completion cannot overlap an active repair claim")
-        if frontier.integration_completion == completion:
-            return completion
-        if frontier.integration_completion is not None:
-            _conflict("Delivery runtime already names another Integration completion")
-        completed = frontier.model_copy(
-            update={
-                "integration_result_id": completion.completion_id,
-                "integration_completion": completion,
-                "integration_attention": None,
-            }
-        )
-        self._replace(previous, completed)
-        return completion
-
-    def publish_integration_attention(
-        self,
-        attention: DeliveryIntegrationAttention,
-    ) -> DeliveryIntegrationAttention:
-        """Publish replayable Integration failure evidence without moving stage."""
-        frontier, previous = self._read()
-        if frontier.integration_completion is not None:
-            _conflict("completed Integration cannot publish attention")
-        if {binding.stage for binding in frontier.bindings} != {DeliveryStage.COMPLETED}:
-            _conflict("Integration attention requires every outcome to be completed")
-        if frontier.integration_attention == attention:
-            return attention
-        updated = frontier.model_copy(update={"integration_attention": attention})
-        self._replace(previous, updated)
-        return attention
 
     def integration_repair_replacement(
         self,
@@ -2515,11 +2456,6 @@ def _receipt_digest(receipt: BaseModel, identity_field: str) -> str:
     payload = receipt.model_dump(mode="json", exclude={identity_field})
     content = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(content).hexdigest()
-
-
-def _canonical_content(models: tuple[BaseModel, ...]) -> bytes:
-    payload = tuple(model.model_dump(mode="json") for model in models)
-    return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
 def _conflict(message: str) -> None:

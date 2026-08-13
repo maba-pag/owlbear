@@ -237,6 +237,12 @@ def _runtime(
     return DeliveryRuntime(tmp_path, contract)
 
 
+def _persist_frontier(tmp_path: Path, runtime: DeliveryRuntime, **updates: object) -> None:
+    path = tmp_path / "changes/delivery-runtime/frontier.json"
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    path.write_bytes(_canonical(frontier.model_copy(update=updates)))
+
+
 def _output(claim_id: str, stage: DeliveryStage) -> DeliveryOutputReference:
     return DeliveryOutputReference(
         output_id=f"output-{stage.value}",
@@ -289,18 +295,17 @@ def test_integration_repair_claim_is_change_scoped_and_exact(tmp_path: Path) -> 
         tmp_path,
         stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
     )
-    runtime.publish_integration_attention(
-        DeliveryIntegrationAttention(
-            attention_id="a" * 64,
-            code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
-            change_id="delivery-runtime",
-            change_head="1" * 40,
-            target_head="2" * 40,
-            integration_target="main",
-            diagnostics=("merge conflict",),
-            retry_condition="Admit an independently reviewed repair.",
-        )
+    attention = DeliveryIntegrationAttention(
+        attention_id="a" * 64,
+        code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
+        change_id="delivery-runtime",
+        change_head="1" * 40,
+        target_head="2" * 40,
+        integration_target="main",
+        diagnostics=("merge conflict",),
+        retry_condition="Admit an independently reviewed repair.",
     )
+    _persist_frontier(tmp_path, runtime, integration_attention=attention)
     claim = DeliveryActiveClaim(
         attempt_id="repair-attempt",
         claim_id="repair-claim",
@@ -813,14 +818,18 @@ def test_schema_two_completed_change_does_not_backfill_checkpoint(tmp_path: Path
         tmp_path,
         stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
     )
-    runtime.publish_integration_completion(
-        DeliveryIntegrationCompletion(
-            completion_id="a" * 64,
-            candidate_id="b" * 64,
-            package_id="c" * 64,
-            target_commit="1" * 40,
-            completion_path=".owlbear/completed/delivery-runtime.json",
-        )
+    completion = DeliveryIntegrationCompletion(
+        completion_id="a" * 64,
+        candidate_id="b" * 64,
+        package_id="c" * 64,
+        target_commit="1" * 40,
+        completion_path=".owlbear/completed/delivery-runtime.json",
+    )
+    _persist_frontier(
+        tmp_path,
+        runtime,
+        integration_result_id=completion.completion_id,
+        integration_completion=completion,
     )
     payload = json.loads(runtime.frontier_bytes())
     payload["schema_version"] = 2
@@ -834,39 +843,6 @@ def test_schema_two_completed_change_does_not_backfill_checkpoint(tmp_path: Path
     )
 
     assert migrated.pending_checkpoint is None
-
-
-def test_completion_capture_excludes_change_publication_state(tmp_path: Path) -> None:
-    runtime = _runtime(
-        tmp_path,
-        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
-    )
-    path = tmp_path / "changes/delivery-runtime/frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
-    path.write_bytes(
-        _canonical(
-            frontier.model_copy(
-                update={
-                    "published_head": "2" * 40,
-                    "pending_checkpoint": DeliveryPendingCheckpoint(
-                        head="3" * 40,
-                        triggers=(
-                            DeliveryCheckpointTrigger(
-                                kind=DeliveryCheckpointTriggerKind.FINALIZATION,
-                            ),
-                        ),
-                    ),
-                }
-            )
-        )
-    )
-    runtime = DeliveryRuntime(tmp_path, _contract())
-
-    capture_bytes, _result_bytes = runtime.completion_capture_bytes()
-    capture = DeliveryFrontier.model_validate_json(capture_bytes)
-
-    assert capture.published_head is None
-    assert capture.pending_checkpoint is None
 
 
 @pytest.mark.parametrize(
@@ -1545,18 +1521,17 @@ def test_administrative_move_retires_integration_attention(tmp_path: Path) -> No
         tmp_path,
         stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
     )
-    runtime.publish_integration_attention(
-        DeliveryIntegrationAttention(
-            attention_id="a" * 64,
-            code=DeliveryIntegrationAttentionCode.REPAIR_AUTHORITY,
-            change_id="delivery-runtime",
-            change_head="1" * 40,
-            target_head="2" * 40,
-            integration_target="main",
-            diagnostics=("The repair exceeded admitted authority.",),
-            retry_condition="Move the change to an earlier stage.",
-        )
+    attention = DeliveryIntegrationAttention(
+        attention_id="a" * 64,
+        code=DeliveryIntegrationAttentionCode.REPAIR_AUTHORITY,
+        change_id="delivery-runtime",
+        change_head="1" * 40,
+        target_head="2" * 40,
+        integration_target="main",
+        diagnostics=("The repair exceeded admitted authority.",),
+        retry_condition="Move the change to an earlier stage.",
     )
+    _persist_frontier(tmp_path, runtime, integration_attention=attention)
 
     runtime.administrative_move(
         AdministrativeDeliveryMove(
@@ -1577,18 +1552,17 @@ def test_administrative_move_rejects_active_integration_repair(tmp_path: Path) -
         tmp_path,
         stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
     )
-    runtime.publish_integration_attention(
-        DeliveryIntegrationAttention(
-            attention_id="a" * 64,
-            code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
-            change_id="delivery-runtime",
-            change_head="1" * 40,
-            target_head="2" * 40,
-            integration_target="main",
-            diagnostics=("merge conflict",),
-            retry_condition="Admit an independently reviewed repair.",
-        )
+    attention = DeliveryIntegrationAttention(
+        attention_id="a" * 64,
+        code=DeliveryIntegrationAttentionCode.MERGE_CONFLICT,
+        change_id="delivery-runtime",
+        change_head="1" * 40,
+        target_head="2" * 40,
+        integration_target="main",
+        diagnostics=("merge conflict",),
+        retry_condition="Admit an independently reviewed repair.",
     )
+    _persist_frontier(tmp_path, runtime, integration_attention=attention)
     runtime.activate_integration_repair_claim(
         DeliveryActiveClaim(
             attempt_id="repair-attempt",
@@ -1620,14 +1594,18 @@ def test_administrative_move_rejects_completed_integration(tmp_path: Path) -> No
         tmp_path,
         stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
     )
-    runtime.publish_integration_completion(
-        DeliveryIntegrationCompletion(
-            completion_id="a" * 64,
-            candidate_id="b" * 64,
-            package_id="c" * 64,
-            target_commit="1" * 40,
-            completion_path=".owlbear/completed/delivery-runtime.json",
-        )
+    completion = DeliveryIntegrationCompletion(
+        completion_id="a" * 64,
+        candidate_id="b" * 64,
+        package_id="c" * 64,
+        target_commit="1" * 40,
+        completion_path=".owlbear/completed/delivery-runtime.json",
+    )
+    _persist_frontier(
+        tmp_path,
+        runtime,
+        integration_result_id=completion.completion_id,
+        integration_completion=completion,
     )
     before = runtime.frontier_bytes()
 
@@ -1673,18 +1651,17 @@ def test_administrative_move_rejects_a_stale_preview(tmp_path: Path) -> None:
         stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
     )
     preview = runtime.preview_administrative_move("OUT-001", DeliveryStage.PLANNING)
-    runtime.publish_integration_attention(
-        DeliveryIntegrationAttention(
-            attention_id="a" * 64,
-            code=DeliveryIntegrationAttentionCode.REPAIR_AUTHORITY,
-            change_id="delivery-runtime",
-            change_head="1" * 40,
-            target_head="2" * 40,
-            integration_target="main",
-            diagnostics=("Authority changed.",),
-            retry_condition="Move backward.",
-        )
+    attention = DeliveryIntegrationAttention(
+        attention_id="a" * 64,
+        code=DeliveryIntegrationAttentionCode.REPAIR_AUTHORITY,
+        change_id="delivery-runtime",
+        change_head="1" * 40,
+        target_head="2" * 40,
+        integration_target="main",
+        diagnostics=("Authority changed.",),
+        retry_condition="Move backward.",
     )
+    _persist_frontier(tmp_path, runtime, integration_attention=attention)
 
     with pytest.raises(DeliveryRuntimeConflictError, match="preview is stale"):
         runtime.administrative_move(

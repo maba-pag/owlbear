@@ -502,26 +502,6 @@ def test_restart_recovers_missing_worktree_at_each_git_interruption(tmp_path: Pa
     assert recovered.writer is None
 
 
-def test_integration_rejects_local_target_and_checkout_mutation(tmp_path: Path) -> None:
-    repository, initial = _repository(tmp_path, target="release")
-    _coordinator, manager = _manager(tmp_path, repository, target="release")
-    coordination = manager.create("merge-change")
-    reviewed = _commit_file(coordination.worktree_path, "reviewed\n", "reviewed task")
-    manager.record_reviewed("merge-change", reviewed)
-    user_file = repository / "user-work.txt"
-    user_file.write_text("preserved\n", encoding="utf-8")
-    status_before = _git(repository, "status", "--porcelain")
-
-    with pytest.raises(RuntimeError, match="local target Integration is disabled"):
-        manager.integrate("merge-change", (reviewed,))
-
-    assert _git(repository, "rev-parse", "release") == initial
-    assert _git(repository, "rev-parse", "main") == initial
-    assert _git(repository, "status", "--porcelain") == status_before
-    assert user_file.read_text(encoding="utf-8") == "preserved\n"
-    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == reviewed
-
-
 def test_repair_candidate_commits_conflict_paths_and_replays(tmp_path: Path) -> None:
     repository, _initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)

@@ -7,11 +7,17 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).parent.parent
 _SOURCE_ROOTS = tuple(sorted(path for path in (_REPO_ROOT / "serve").glob("*/src") if path.is_dir()))
-_RETIRED_PRODUCER_NAMES = frozenset(
+_RETIRED_PRODUCER_SYMBOLS = frozenset(
     {
-        "list_integration_ready_changes",
-        "integrate_ready_change",
-        "prepare_external_completion",
+        ("TargetMCPAdapter", "list_integration_ready_changes"),
+        ("TargetMCPAdapter", "integrate_ready_change"),
+        ("TargetMCPAdapter", "prepare_external_completion"),
+        ("DeliveryRuntime", "completion_capture_bytes"),
+        ("DeliveryRuntime", "publish_integration_completion"),
+        ("DeliveryRuntime", "publish_integration_attention"),
+        ("PortfolioCoordinator", "publish_finding"),
+        ("ChangeWorkspaceManager", "integrate"),
+        ("ChangeWorkspaceManager", "_publish_integration_finding"),
     }
 )
 
@@ -94,7 +100,7 @@ class _RetiredProducerVisitor(ast.NodeVisitor):
         self.matches: list[tuple[int, str, tuple[str, ...], tuple[str, ...]]] = []
 
     def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
-        if node.name in _RETIRED_PRODUCER_NAMES:
+        if self.classes and (self.classes[-1], node.name) in _RETIRED_PRODUCER_SYMBOLS:
             self.matches.append((node.lineno, node.name, tuple(self.classes), tuple(self.functions)))
         self.functions.append(node.name)
         self.generic_visit(node)
