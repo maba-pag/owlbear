@@ -206,21 +206,6 @@ class _DeliveryApplicationFake:
         self.calls.append(("recover", args))
         return {"status": "recovered", "attempt_id": args[2], "claim_id": args[3]}
 
-    def recover_expired_claims(self) -> dict[str, object]:
-        self.calls.append(("recover-expired", ()))
-        return {
-            "recoveries": [
-                {
-                    "status": "recovered",
-                    "change_id": "change-a",
-                    "outcome_id": "OUT-001",
-                    "attempt_id": "attempt-one",
-                    "claim_id": "claim-one",
-                }
-            ],
-            "repair_recoveries": [],
-        }
-
     def administrative_move(self, *args: object) -> dict[str, object]:
         self.calls.append(("move", args))
         return {"move": args[1]}
@@ -442,14 +427,13 @@ def test_controls_require_exact_confirmation_and_delegate_once() -> None:
     assert move_request.expected_version == "a" * 64  # type: ignore[attr-defined]
 
 
-def test_expired_claim_recovery_delegates_to_delivery_once() -> None:
+def test_bulk_expired_claim_recovery_route_is_removed_without_delivery_call() -> None:
     client, application = _client()
 
     response = client.post("/api/work-items/claims/recover-expired")
 
-    assert response.status_code == 200
-    assert response.json()["recoveries"][0]["claim_id"] == "claim-one"
-    assert application.calls == [("recover-expired", ())]
+    assert response.status_code in {404, 405}
+    assert application.calls == []
 
 
 def test_publication_and_completed_history_routes_delegate_exactly_once() -> None:

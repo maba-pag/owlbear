@@ -35,7 +35,6 @@ from owlbear_delivery import (
     DeliveryAdmissionConflictError,
     DeliveryAdmissionRequest,
     DeliveryAuthorityRegistry,
-    DeliveryClaimRecoveryResult,
     DeliveryClaimRecoveryStatus,
     DeliveryChangeStage,
     DeliveryContract,
@@ -2506,39 +2505,6 @@ def test_acquisition_leaves_dirty_build_claim_and_custody_unchanged(tmp_path: Pa
     assert coordinator.show("change-a") == before_coordination
     assert (state_root / "capacity.json").read_bytes() == before_capacity
     assert (interrupted.worktree_path / "product.txt").read_text(encoding="utf-8") == "uncommitted attempt\n"
-
-
-def test_expired_claim_recovery_respects_lease_and_releases_writer(tmp_path: Path) -> None:
-    current_time = ["2026-08-04T00:00:00Z"]
-    application, runtimes, coordinator, state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.IMPLEMENTATION},
-        clock=lambda: current_time[0],
-    )
-    interrupted = application.acquire_frontier_work().launch_packages[0]
-
-    current_time[0] = "2026-08-04T00:29:59Z"
-    assert application.recover_expired_claims().recoveries == ()
-    assert runtimes["change-a"].active_claims() == (("OUT-001", interrupted.claim),)
-
-    current_time[0] = "2026-08-04T00:30:00Z"
-    recovered = application.recover_expired_claims()
-
-    assert recovered.recoveries == (
-        DeliveryClaimRecoveryResult(
-            status=DeliveryClaimRecoveryStatus.RECOVERED,
-            change_id=interrupted.change_id,
-            outcome_id=interrupted.outcome_id,
-            attempt_id=interrupted.claim.attempt_id,
-            claim_id=interrupted.claim.claim_id,
-            preserved_commit=interrupted.last_reviewed_commit,
-            preserved_ref=f"refs/owlbear/attempts/change-a/{interrupted.claim.attempt_id}",
-        ),
-    )
-    assert runtimes["change-a"].active_claims() == ()
-    assert coordinator.show("change-a").writer is None
-    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
-    assert ledger.change_ids == ()
 
 
 def test_clean_build_recovery_replays_after_workspace_reset(tmp_path: Path) -> None:

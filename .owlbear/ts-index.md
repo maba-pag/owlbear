@@ -168,11 +168,8 @@
 - `export interface MemoryHealthFinding`
 - `export interface MemoryHealthResponse`
 - `export interface IdeasHealthResponse`
-- `export interface DeliveryClaimRecovery`
-- `export interface DeliveryExpiredClaimRecoveryResponse`
 - `export const MEMORY_HEALTH_URL`
 - `export const IDEAS_HEALTH_URL`
-- `export const DELIVERY_EXPIRED_CLAIMS_URL`
 
 ## serve/cockpit/web/src/api/ideas.ts
 
@@ -675,7 +672,7 @@
 ### Imports
 
 - `import { useCallback, useMemo, useRef, useState } from 'react'`
-- `import { DELIVERY_EXPIRED_CLAIMS_URL, IDEAS_HEALTH_URL, MEMORY_HEALTH_URL, type DeliveryExpiredClaimRecoveryResponse, type IdeasHealthResponse, type MemoryHealthResponse, } from '../api/health'`
+- `import { IDEAS_HEALTH_URL, MEMORY_HEALTH_URL, type IdeasHealthResponse, type MemoryHealthResponse, } from '../api/health'`
 - `import { getResponseErrorMessage } from '../api/errorMessage'`
 
 ### Interfaces
@@ -689,7 +686,6 @@
 - `function findingLine(finding: { path?: string; code?: string; detail?: string }): string`
 - `async function fetchHealth<TPayload>(url: string, init?: RequestInit): Promise<TPayload>`
 - `function memoryModule(state: { status: WorkspaceHealthStatus; findings: string[] }): WorkspaceHealthModule`
-- `function deliveryModule(state: { status: WorkspaceHealthStatus recoveredCount: number findings: string[] }): WorkspaceHealthModule`
 - `export function useWorkspaceHealth(): UseWorkspaceHealthResult`
 
 ## serve/cockpit/web/src/pages/IdeasPage.tsx

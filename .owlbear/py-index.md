@@ -910,7 +910,6 @@ Delivery work-item and operator HTTP adapter.
   - `def answer_request(self, change_id: str, request_id: str, body: AnswerRequestBody) -> object`
   - `def clear_block(self, change_id: str, outcome_id: str, block_id: str, body: ClearBlockBody) -> object`
   - `def recover_claim(self, change_id: str, outcome_id: str, body: ConfirmLostClaimBody) -> object`
-  - `def recover_expired_claims(self) -> object`
   - `def move_backward(self, change_id: str, outcome_id: str, body: BackwardMoveBody) -> object`
   - `def preview_backward_move(self, change_id: str, outcome_id: str, body: BackwardMovePreviewBody) -> object`
   - `def reconcile_checkpoint(self, change_id: str) -> object`
@@ -1846,7 +1845,6 @@ Deterministic portfolio acquisition and bounded worker context.
 - `class DeliveryIntegrationRepairAcquisitionFailure(_ApplicationModel)`
 - `class DeliveryIntegrationAttentionStatus(_ApplicationModel)`
 - `class DeliveryAcquisitionResult(_ApplicationModel)`
-- `class DeliveryExpiredClaimRecoveries(_ApplicationModel)`
 - `class DeliveryPlanContext(_ApplicationModel)`
 - `class DeliveryBuildContext(_ApplicationModel)`
 - `class DeliveryFinalizationContext(_ApplicationModel)`
@@ -1926,7 +1924,6 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def show_integration_repair_context(self, change_id: str, attempt_id: str, claim_id: str) -> DeliveryIntegrationRepairContext`
   - `def create_integration_repair_candidate(self, change_id: str, attempt_id: str, claim_id: str) -> IntegrationRepairCandidate`
   - `def recover_claim(self, change_id: str, outcome_id: str, attempt_id: str, claim_id: str) -> DeliveryClaimRecoveryResult`
-  - `def recover_expired_claims(self) -> DeliveryExpiredClaimRecoveries`
   - `def recover_integration_repair_claim(self, change_id: str, attempt_id: str, claim_id: str) -> DeliveryIntegrationRepairRecoveryResult`
   - `def _recover_integration_repair_claim(self, change_id: str, attempt_id: str, claim_id: str) -> DeliveryIntegrationRepairRecoveryResult`
   - `def _recover_claim(self, change_id: str, outcome_id: str, attempt_id: str, claim_id: str) -> DeliveryClaimRecoveryResult`

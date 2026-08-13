@@ -1,6 +1,4 @@
-/**
- * Workspace health projections and the explicit Delivery expired-claim maintenance operation.
- */
+/** Workspace health projections for persisted workspace surfaces. */
 
 export interface MemoryHealthFinding {
   path?: string
@@ -23,23 +21,5 @@ export interface IdeasHealthResponse {
   detail?: string | null
 }
 
-export interface DeliveryClaimRecovery {
-  status: 'recovered' | 'attention'
-  change_id: string
-  outcome_id: string
-  attempt_id: string
-  claim_id: string
-  attention?: {
-    reason: string
-    retry_condition: string
-  } | null
-}
-
-export interface DeliveryExpiredClaimRecoveryResponse {
-  recoveries: DeliveryClaimRecovery[]
-  repair_recoveries: Array<{ change_id: string; attempt_id: string; claim_id: string }>
-}
-
 export const MEMORY_HEALTH_URL = '/health/memory'
 export const IDEAS_HEALTH_URL = '/health/ideas'
-export const DELIVERY_EXPIRED_CLAIMS_URL = '/api/work-items/claims/recover-expired'

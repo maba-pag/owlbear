@@ -62,10 +62,7 @@ function StatusDot({
   return <span aria-hidden="true" className={`inline-block size-2.5 shrink-0 rounded-full ${color} ${className}`} />
 }
 
-/**
- * Health control for persisted workspace surfaces. An explicit re-check also recovers Delivery
- * claims whose fixed execution lease elapsed.
- */
+/** Health control for persisted workspace surfaces. */
 export default function WorkspaceStatus({ health }: { health: UseWorkspaceHealthResult }) {
   const { status, modules, isChecking, lastCheckedAt, refresh } = health
   const [isOpen, setIsOpen] = useState(false)

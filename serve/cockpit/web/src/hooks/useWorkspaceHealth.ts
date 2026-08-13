@@ -1,9 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import {
-  DELIVERY_EXPIRED_CLAIMS_URL,
   IDEAS_HEALTH_URL,
   MEMORY_HEALTH_URL,
-  type DeliveryExpiredClaimRecoveryResponse,
   type IdeasHealthResponse,
   type MemoryHealthResponse,
 } from '../api/health'
@@ -12,7 +10,7 @@ import { getResponseErrorMessage } from '../api/errorMessage'
 export type WorkspaceHealthStatus = 'healthy' | 'attention' | 'unhealthy' | 'unavailable' | 'checking' | 'unknown'
 
 export interface WorkspaceHealthModule {
-  id: 'delivery' | 'memory' | 'ideas'
+  id: 'memory' | 'ideas'
   label: string
   status: WorkspaceHealthStatus
   /** Empty while healthy: the green status already carries that answer. */
@@ -84,36 +82,11 @@ function memoryModule(state: { status: WorkspaceHealthStatus; findings: string[]
   }
 }
 
-function deliveryModule(state: {
-  status: WorkspaceHealthStatus
-  recoveredCount: number
-  findings: string[]
-}): WorkspaceHealthModule {
-  return {
-    id: 'delivery',
-    label: 'Delivery claims',
-    status: state.status,
-    summary: state.status === 'unavailable'
-      ? 'Lease recovery did not complete'
-      : state.findings.length > 0
-        ? `${state.findings.length} expired ${state.findings.length === 1 ? 'claim needs' : 'claims need'} attention`
-        : state.recoveredCount > 0
-          ? `${state.recoveredCount} expired ${state.recoveredCount === 1 ? 'claim' : 'claims'} recovered`
-          : '',
-    findings: state.findings,
-  }
-}
-
 /**
- * Check the two health projections on explicit operator request and rank them into one signal.
+ * Check the two read-only health projections on explicit operator request and rank them into one signal.
  * A failed request means the check could not run, which is reported rather than hidden.
  */
 export function useWorkspaceHealth(): UseWorkspaceHealthResult {
-  const [delivery, setDelivery] = useState<{
-    status: WorkspaceHealthStatus
-    recoveredCount: number
-    findings: string[]
-  }>({ status: 'unknown', recoveredCount: 0, findings: [] })
   const [memory, setMemory] = useState<{ status: WorkspaceHealthStatus; findings: string[] }>({
     status: 'unknown',
     findings: [],
@@ -127,43 +100,21 @@ export function useWorkspaceHealth(): UseWorkspaceHealthResult {
   const checkingRef = useRef(false)
 
   const modules = useMemo<WorkspaceHealthModule[]>(() => [
-    deliveryModule(delivery),
     memoryModule(memory),
     { id: 'ideas', label: 'Ideas file', status: ideas.status, summary: ideas.summary, findings: [] },
-  ], [delivery, ideas.status, ideas.summary, memory])
+  ], [ideas.status, ideas.summary, memory])
 
   const refresh = useCallback(() => {
     if (checkingRef.current) return
     checkingRef.current = true
     setIsChecking(true)
-    setDelivery({ status: 'checking', recoveredCount: 0, findings: [] })
     setMemory({ status: 'checking', findings: [] })
     setIdeas({ status: 'checking', summary: '' })
 
     void Promise.allSettled([
-      fetchHealth<DeliveryExpiredClaimRecoveryResponse>(DELIVERY_EXPIRED_CLAIMS_URL, { method: 'POST' }),
       fetchHealth<MemoryHealthResponse>(MEMORY_HEALTH_URL),
       fetchHealth<IdeasHealthResponse>(IDEAS_HEALTH_URL),
-    ]).then(([deliveryResult, memoryResult, ideasResult]) => {
-      if (deliveryResult.status === 'fulfilled') {
-        const attention = deliveryResult.value.recoveries.filter((result) => result.status === 'attention')
-        setDelivery({
-          status: attention.length > 0 ? 'attention' : 'healthy',
-          recoveredCount: deliveryResult.value.recoveries.length - attention.length
-            + deliveryResult.value.repair_recoveries.length,
-          findings: attention.map((result) => [
-            `${result.change_id} / ${result.outcome_id}`,
-            result.attention?.reason,
-            result.attention?.retry_condition,
-          ].filter(Boolean).join(' — ')),
-        })
-      } else {
-        setDelivery({
-          status: 'unavailable',
-          recoveredCount: 0,
-          findings: [deliveryResult.reason instanceof Error ? deliveryResult.reason.message : 'Lease recovery failed'],
-        })
-      }
+    ]).then(([memoryResult, ideasResult]) => {
       if (memoryResult.status === 'fulfilled') {
         setMemory({
           status: toStatus(memoryResult.value.status),
