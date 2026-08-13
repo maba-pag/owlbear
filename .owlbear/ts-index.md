@@ -239,26 +239,24 @@
 ### Interfaces
 
 - `export type WorkItemStage = 'design' | 'planning' | 'implementation' | 'completed'`
-- `export type WorkItemScope = 'outcome' | 'change-integration'`
+- `export type WorkItemScope = 'outcome' | 'change-publication'`
 - `export type WorkItemNeed = 'you' | 'dependency' | 'none'`
 - `export type WorkItemNextActor = 'you' | 'agent' | 'dependency' | 'none'`
 - `export type WorkItemActivityState = 'idle' | 'ready' | 'working' | 'repairing'`
-- `export type WorkItemActionKind = | 'none' | 'answer-request' | 'clear-block' | 'recover-claim' | 'integrate-change' | 'retry-integration' | 'start-orchestration'`
-- `export type WorkItemProgressKind = 'tasks' | 'design-return' | 'plan' | 'integration'`
-- `export type WorkItemChangeLifecycle = 'in-delivery' | 'integration'`
-- `export type DeliveryWorkerRole = 'planner' | 'builder' | 'integration-repairer'`
-- `export type DeliveryIntegrationAttentionDisposition = 'retryable' | 'repair-required' | 'operator-required'`
-- `export type DeliveryIntegrationAttentionCode = | 'revision-pending' | 'target-identity-mismatch' | 'package-mutated' | 'completed-history-mutated' | 'reviewed-boundary-mismatch' | 'reviewed-worktree-dirty' | 'merge-conflict' | 'repair-authority' | 'candidate-proof-failed' | 'target-cas-lost' | 'external-acceptance-required'`
+- `export type WorkItemActionKind = | 'none' | 'answer-request' | 'clear-block' | 'recover-claim' | 'finalize' | 'reconcile-checkpoint' | 'mark-ready' | 'observe-acceptance' | 'start-orchestration'`
+- `export type WorkItemProgressKind = 'tasks' | 'design-return' | 'plan' | 'publication'`
+- `export type WorkItemChangeLifecycle = 'in-delivery' | 'finalization' | 'publication' | 'awaiting-merge' | 'acceptance'`
+- `export type DeliveryWorkerRole = 'planner' | 'builder'`
+- `export type WorkItemPublicationPhase = | 'finalization-invalidated' | 'ready-for-finalization' | 'checkpoint-pending' | 'pull-request-draft' | 'awaiting-merge' | 'acceptance-observed'`
 - `export interface WorkItemActivity`
 - `export interface WorkItemAction`
 - `export interface WorkItemProgress`
-- `export interface WorkItemIntegrationAttentionRef`
 - `export interface WorkItemCardView`
 - `export interface ChangeGroupView`
 - `export interface NeedsCounts`
 - `export interface ActivityCounts`
 - `export interface WorkItemPortfolioTotals`
-- `export type PortfolioWorkScope = 'outcome' | 'integration'`
+- `export type PortfolioWorkScope = 'outcome' | 'publication'`
 - `export type PortfolioGuidanceKind = | 'resume-design' | 'start-orchestration' | 'work-underway' | 'intervene' | 'wait' | 'create-change'`
 - `export interface PortfolioWorkReference`
 - `export interface PortfolioGuidance`
@@ -271,12 +269,16 @@
 - `export interface WorkItemCommitment`
 - `export interface WorkItemDependency`
 - `export interface WorkItemTaskEvidence`
-- `export interface WorkItemIntegrationView`
+- `export interface WorkItemPublicationView`
 - `export interface WorkItemDetailView`
 - `export interface WorkItemDetailResponse`
 - `export interface BackwardMoveResult`
 - `export interface BackwardMovePreview`
-- `export interface CompletedChangeRecord`
+- `interface CompletedChangeRecordBase`
+- `export interface LegacyCompletedChangeRecord extends CompletedChangeRecordBase`
+- `export interface CompletionPullRequestIdentity`
+- `export interface ReceiptCompletedChangeRecord extends CompletedChangeRecordBase`
+- `export type CompletedChangeRecord = LegacyCompletedChangeRecord | ReceiptCompletedChangeRecord`
 - `export interface CompletedChangePage`
 - `interface WorkItemRequestOptions extends RequestInit`
 - `export class WorkItemApiError extends Error`
@@ -299,7 +301,9 @@
 - `export function recoverWorkItemClaim( changeId: string, outcomeId: string, attemptId: string, claimId: string, ): Promise<unknown>`
 - `export function moveWorkItemBackward( changeId: string, outcomeId: string, target: WorkItemStage, reason: string, snapshotVersion: string, ): Promise<BackwardMoveResult>`
 - `export function previewWorkItemBackward( changeId: string, outcomeId: string, target: WorkItemStage, ): Promise<BackwardMovePreview>`
-- `export function retryWorkItemIntegration(changeId: string): Promise<unknown>`
+- `export function reconcileWorkItemPublication(changeId: string): Promise<unknown>`
+- `export function markWorkItemPublicationReady(changeId: string): Promise<unknown>`
+- `export function observeWorkItemAcceptance(changeId: string): Promise<unknown>`
 
 ## serve/cockpit/web/src/components/CompletedHistoryWorkspace.tsx
 
@@ -442,10 +446,10 @@
 ### Imports
 
 - `import { useState } from 'react'`
-- `import { PButton, PButtonPure, PHeading, PIcon, PInputText, PModal, PSelect, PSelectOption, PTag, } from '@porsche-design-system/components-react'`
-- `import { WorkItemApiError, type BackwardMovePreview, type DeliveryRequest, type DeliveryRequestResolution, type WorkItemCardView, type WorkItemDetailResponse, type WorkItemStage, type DeliveryWorkerRole, } from '../api/workItems'`
+- `import { PButton, PHeading, PIcon, PInputText, PModal, PSelect, PSelectOption, PTag, } from '@porsche-design-system/components-react'`
+- `import { WorkItemApiError, type BackwardMovePreview, type DeliveryRequest, type DeliveryRequestResolution, type WorkItemDetailResponse, type WorkItemPublicationPhase, type WorkItemStage, type DeliveryWorkerRole, } from '../api/workItems'`
+- `import { PROGRESS_STAGE_LABELS, workItemStatusLabel, } from './workItemPresentation'`
 - `import CopyCommand from './CopyCommand'`
-- `import { canHandOffIntegration, hasOptionalManualAction, integrationHandoffPrompt, PROGRESS_STAGE_LABELS, workItemStatusLabel, } from './workItemPresentation'`
 
 ### Interfaces
 
@@ -467,10 +471,9 @@
 - `const STAGES: WorkItemStage[]`
 - `function BackwardMoveSection({ detail, pendingAction, onPreviewBackward, onMoveBackward }: WorkItemDetailProps)`
 - `function SemanticDetail({ detail }: Pick<WorkItemDetailProps, 'detail'>)`
-- `function ConflictedPaths({ paths }: { paths: string[] })`
-- `function Diagnostics({ lines }: { lines: string[] })`
-- `function IntegrationAgentHandoff({ card }: { card: WorkItemCardView })`
-- `function IntegrationSection({ detail, pendingAction, onRetryIntegration }: WorkItemDetailProps)`
+- `const PUBLICATION_PHASE_LABELS: Record<WorkItemPublicationPhase, string>`
+- `function IdentityRow({ label, value }: { label: string; value: string | number | null })`
+- `function PublicationSection(props: WorkItemDetailProps)`
 - `function ActionFeedback({ error, result }: { error: Error | null; result: string | null })`
 - `export default function WorkItemDetail(props: WorkItemDetailProps)`
 
@@ -483,7 +486,7 @@
 - `import type { ChangeGroupView, WorkItemCardView, } from '../api/workItems'`
 - `import { workItemIdentity, type WorkItemIdentity } from '../hooks/useWorkItems'`
 - `import CopyCommand from './CopyCommand'`
-- `import { canHandOffIntegration, hasOptionalManualAction, integrationHandoffPrompt, PROGRESS_STAGE_LABELS, workItemStatusLabel } from './workItemPresentation'`
+- `import { PROGRESS_STAGE_LABELS, workItemStatusLabel } from './workItemPresentation'`
 
 ### Interfaces
 
@@ -494,11 +497,10 @@
 - `function ItemLink({ item, selected, onSelect, }: { item: WorkItemCardView selected: boolean onSelect: WorkPortfolioTableProps['onSelect'] })`
 - `function ActionLink({ item, onSelect, subdued = false }: { item: WorkItemCardView; onSelect: WorkPortfolioTableProps['onSelect']; subdued?: boolean })`
 - `function ProgressState({ item }: { item: WorkItemCardView })`
-- `function IntegrationHandoff({ item }: { item: WorkItemCardView })`
 - `function CurrentState({ item, onSelect }: { item: WorkItemCardView; onSelect: WorkPortfolioTableProps['onSelect'] })`
 - `function DesktopTable({ group, selected, onSelect }: GroupTableProps)`
 - `function CompactRows({ group, selected, onSelect }: GroupTableProps)`
-- `function IntegrationGate({ group, selected, onSelect }: GroupTableProps)`
+- `function PublicationGate({ group, selected, onSelect }: GroupTableProps)`
 - `export default function WorkPortfolioTable({ groups, selected, emptyMessage, onSelect }: WorkPortfolioTableProps)`
 
 ## serve/cockpit/web/src/components/WorkspaceHeader.tsx
@@ -579,9 +581,6 @@
 - `export const PROGRESS_STAGE_LABELS: Record<WorkItemStage, string>`
 - `const WORKER_STATUS_LABELS: Record<DeliveryWorkerRole, string>`
 - `export function workItemStatusLabel(item: WorkItemCardView): string`
-- `export function hasOptionalManualAction(item: WorkItemCardView): boolean`
-- `export function canHandOffIntegration(item: WorkItemCardView): boolean`
-- `export function integrationHandoffPrompt(item: WorkItemCardView): string`
 
 ## serve/cockpit/web/src/hooks/useCleanupFlow.ts
 
@@ -655,7 +654,7 @@
 ### Imports
 
 - `import { useEffect, useRef, useState } from 'react'`
-- `import { answerWorkItemRequest, clearWorkItemBlock, listCompletedChanges, moveWorkItemBackward, previewWorkItemBackward, recoverWorkItemClaim, retryWorkItemIntegration, searchCompletedChanges, showDesignWork, showCompletedChange, workItemDetailUrl, type CompletedChangePage, type CompletedChangeRecord, type DeliveryRequestResolution, type DesignWorkDetailResponse, type WorkItemDetailResponse, type WorkItemPortfolioResponse, type WorkItemCardView, type WorkItemStage, } from '../api/workItems'`
+- `import { answerWorkItemRequest, clearWorkItemBlock, listCompletedChanges, markWorkItemPublicationReady, moveWorkItemBackward, observeWorkItemAcceptance, previewWorkItemBackward, reconcileWorkItemPublication, recoverWorkItemClaim, searchCompletedChanges, showDesignWork, showCompletedChange, workItemDetailUrl, type CompletedChangePage, type CompletedChangeRecord, type DeliveryRequestResolution, type DesignWorkDetailResponse, type WorkItemDetailResponse, type WorkItemPortfolioResponse, type WorkItemCardView, type WorkItemStage, } from '../api/workItems'`
 - `import { usePollingFetch } from './usePollingFetch'`
 
 ### Interfaces
