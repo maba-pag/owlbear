@@ -283,12 +283,16 @@ def _legacy_retirement_frontier(payload: dict[str, object]) -> _RetirementFronti
     if not isinstance(raw_bindings, list) or completion_payload is None:
         raise TypeError
     bindings = tuple(_legacy_retirement_binding(raw_binding) for raw_binding in raw_bindings)
-    try:
-        completion = DeliveryIntegrationCompletion.model_validate(completion_payload)
-    except (TypeError, ValueError) as exc:
-        message = "legacy Delivery Integration completion is invalid"
-        raise ValueError(message) from exc
-    if payload.get("integration_result_id") != completion.completion_id:
+    completion: DeliveryIntegrationCompletion | None = None
+    if completion_payload is not None:
+        try:
+            completion = DeliveryIntegrationCompletion.model_validate(completion_payload)
+        except (TypeError, ValueError) as exc:
+            message = "legacy Delivery Integration completion is invalid"
+            raise ValueError(message) from exc
+        if payload.get("integration_result_id") != completion.completion_id:
+            raise ValueError
+    elif payload.get("integration_result_id") is not None:
         raise ValueError
     return _RetirementFrontier(
         bindings=tuple(bindings),
@@ -714,10 +718,34 @@ def _require_target_snapshot(root: Path, target_ref: str, target_commit: str) ->
         _fail(f"configured target moved during Integration retirement: {target_ref}")
 
 
+def _require_expected_plan(
+    plan: DeliveryIntegrationRetirementPlan,
+    expected_target_commit: str | None,
+    expected_change_ids: tuple[str, ...] | None,
+) -> None:
+    if expected_target_commit is not None and plan.target_commit != expected_target_commit:
+        _fail("Integration retirement target differs from its planned target snapshot")
+    if expected_change_ids is not None and tuple(change.change_id for change in plan.changes) != expected_change_ids:
+        _fail("Integration retirement Change set differs from its planned state")
+
+
+def _require_recovered_cleanup(
+    journal: _RetirementJournal,
+    expected_target_commit: str | None,
+    expected_change_ids: tuple[str, ...] | None,
+) -> None:
+    if expected_target_commit is not None and journal.target_commit != expected_target_commit:
+        _fail("Integration retirement target differs from its planned target snapshot")
+    change_ids = tuple(change.change_id for change in journal.changes)
+    if expected_change_ids is not None and change_ids != expected_change_ids:
+        _fail("Integration retirement Change set differs from its planned state")
+
+
 def _write_journal(journal: _RetirementJournal) -> None:
     path = journal.repository_root / RETIREMENT_JOURNAL_RELATIVE
     if path.exists() or path.parent.is_symlink() or not path.parent.is_dir():
         _fail("Integration retirement journal destination is unsafe")
+    _validate_journal(journal.repository_root, journal)
     atomic_write(path, journal.model_dump_json() + "\n")
 
 
@@ -859,23 +887,63 @@ def _recover_change(root: Path, change: _JournalChange) -> None:
     change.publication_lock_path.mkdir(parents=True, exist_ok=True)
 
 
-def _recover_retirement(root: Path) -> None:
+def _recover_retirement(root: Path) -> _RetirementJournal | None:
     journal_path = root / RETIREMENT_JOURNAL_RELATIVE
     if not journal_path.exists():
-        return
+        return None
     journal = _load_journal(root)
     if journal.phase == "cleanup":
         if journal.staging_root.exists():
             shutil.rmtree(journal.staging_root)
         _remove_empty_staging_parent(journal.staging_root)
         journal_path.unlink()
-        return
+        return journal
     for change in journal.changes:
         _recover_change(root, change)
     if journal.staging_root.exists():
         shutil.rmtree(journal.staging_root)
     _remove_empty_staging_parent(journal.staging_root)
     journal_path.unlink()
+    return None
+
+
+def _execute_retirement(repository_root: Path, journal: _RetirementJournal) -> None:
+    try:
+        _stage(journal)
+        _require_target_snapshot(repository_root, journal.target_ref, journal.target_commit)
+        _remove_worktrees(repository_root, journal)
+        _require_target_snapshot(repository_root, journal.target_ref, journal.target_commit)
+        _remove_publication_locks(journal)
+        _require_target_snapshot(repository_root, journal.target_ref, journal.target_commit)
+        _validate_postconditions(repository_root, journal)
+    except _RETIREMENT_FAILURES:
+        _recover_retirement(repository_root)
+        raise
+
+
+def _complete_retirement(repository_root: Path, journal: _RetirementJournal) -> None:
+    cleanup_journal = journal.model_copy(update={"phase": "cleanup"})
+    _rewrite_journal(cleanup_journal)
+    try:
+        if cleanup_journal.staging_root.exists():
+            shutil.rmtree(cleanup_journal.staging_root)
+        _remove_empty_staging_parent(cleanup_journal.staging_root)
+    except OSError as exc:
+        _fail(f"Integration retirement staging cleanup failed: {cleanup_journal.staging_root}")
+        raise AssertionError from exc
+    journal_path = repository_root / RETIREMENT_JOURNAL_RELATIVE
+    try:
+        journal_path.unlink()
+    except OSError as exc:
+        _fail(f"Integration retirement journal cleanup failed: {journal_path}")
+        raise AssertionError from exc
+    try:
+        load_delivery_application(
+            _load_startup_config(repository_root),
+            workspace_root=repository_root,
+        )
+    except Exception as exc:  # noqa: BLE001 - startup failure must be reported after retirement.
+        _fail(f"Delivery startup validation failed after Integration retirement: {exc}")
 
 
 def _retirement_change_ids(root: Path) -> tuple[str, ...]:
@@ -973,18 +1041,27 @@ def _apply_delivery_integration_retirement(
     root: Path,
     *,
     expected_target_commit: str | None = None,
+    expected_change_ids: tuple[str, ...] | None = None,
 ) -> DeliveryIntegrationRetirementPlan:
     repository_root = root.expanduser().resolve()
-    delivery_root = repository_root / ".owlbear/delivery"
     runtime_root = repository_root / _RUNTIME_RELATIVE
+    worktree_root = repository_root / _WORKTREES_RELATIVE
+    journal_path = repository_root / RETIREMENT_JOURNAL_RELATIVE
+    if not journal_path.exists() and not runtime_root.exists() and not worktree_root.exists():
+        plan = plan_delivery_integration_retirement(repository_root)
+        _require_expected_plan(plan, expected_target_commit, expected_change_ids)
+        return plan
+    delivery_root = repository_root / ".owlbear/delivery"
     coordination_roots = _retirement_lock_roots(repository_root)
     with locked_roots(coordination_roots), locked_roots((delivery_root, runtime_root)):
-        _recover_retirement(repository_root)
+        recovered_cleanup = _recover_retirement(repository_root)
         plan = plan_delivery_integration_retirement(repository_root)
+        if recovered_cleanup is not None and plan.already_retired:
+            _require_recovered_cleanup(recovered_cleanup, expected_target_commit, expected_change_ids)
+            return plan
+        _require_expected_plan(plan, expected_target_commit, expected_change_ids)
         if plan.already_retired:
             return plan
-        if expected_target_commit is not None and plan.target_commit != expected_target_commit:
-            _fail("Integration retirement target differs from its planned target snapshot")
         _require_target_snapshot(repository_root, plan.target_ref, plan.target_commit)
         operation_id = _digest(
             f"{plan.target_commit}:{','.join(change.change_id for change in plan.changes)}".encode()
@@ -994,38 +1071,8 @@ def _apply_delivery_integration_retirement(
             _fail(f"stale Integration retirement staging path requires inspection: {staging_root}")
         journal = _journal_for_plan(plan, staging_root)
         _write_journal(journal)
-        try:
-            _stage(journal)
-            _require_target_snapshot(repository_root, journal.target_ref, journal.target_commit)
-            _remove_worktrees(repository_root, journal)
-            _require_target_snapshot(repository_root, journal.target_ref, journal.target_commit)
-            _remove_publication_locks(journal)
-            _validate_postconditions(repository_root, journal)
-        except _RETIREMENT_FAILURES:
-            _recover_retirement(repository_root)
-            raise
-        cleanup_journal = journal.model_copy(update={"phase": "cleanup"})
-        _rewrite_journal(cleanup_journal)
-        try:
-            if cleanup_journal.staging_root.exists():
-                shutil.rmtree(cleanup_journal.staging_root)
-            _remove_empty_staging_parent(cleanup_journal.staging_root)
-        except OSError as exc:
-            _fail(f"Integration retirement staging cleanup failed: {cleanup_journal.staging_root}")
-            raise AssertionError from exc
-        journal_path = repository_root / RETIREMENT_JOURNAL_RELATIVE
-        try:
-            journal_path.unlink()
-        except OSError as exc:
-            _fail(f"Integration retirement journal cleanup failed: {journal_path}")
-            raise AssertionError from exc
-        try:
-            load_delivery_application(
-                _load_startup_config(repository_root),
-                workspace_root=repository_root,
-            )
-        except Exception as exc:  # noqa: BLE001 - startup failure must be reported after retirement.
-            _fail(f"Delivery startup validation failed after Integration retirement: {exc}")
+        _execute_retirement(repository_root, journal)
+        _complete_retirement(repository_root, journal)
         return plan
 
 
@@ -1034,6 +1081,7 @@ def apply_delivery_integration_retirement(plan: DeliveryIntegrationRetirementPla
     _apply_delivery_integration_retirement(
         plan.repository_root,
         expected_target_commit=plan.target_commit or None,
+        expected_change_ids=tuple(change.change_id for change in plan.changes),
     )
 
 

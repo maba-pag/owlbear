@@ -159,7 +159,7 @@ def _package_files(
     return files, completion, task
 
 
-def _fixture(tmp_path: Path) -> tuple[Path, dict[str, str], Path, Path, Path]:
+def _fixture(tmp_path: Path, *, with_worktree: bool = False) -> tuple[Path, dict[str, str], Path, Path, Path]:
     repository = tmp_path / "repository"
     repository.mkdir()
     _git(repository, "init", "-b", "dev")
@@ -230,6 +230,8 @@ def _fixture(tmp_path: Path) -> tuple[Path, dict[str, str], Path, Path, Path]:
         last_reviewed_commit=baseline,
     )
     (delivery_root / "runtime/claims/changes" / f"{change_id}.json").write_bytes(_canonical(coordination))
+    if with_worktree:
+        _git(repository, "worktree", "add", str(coordination.worktree_path), branch)
     return (
         repository,
         {"baseline": baseline, "package": package_commit, "target": target_commit},
@@ -255,8 +257,22 @@ def test_retirement_plans_legacy_frontier_and_preserves_catalog_snapshot(tmp_pat
     assert catalog.list() == before
 
 
-def test_retirement_applies_exact_cleanup_and_retains_git_history(tmp_path: Path) -> None:
-    repository, commits, delivery_root, _archive, _branch = _fixture(tmp_path)
+def test_retirement_apply_on_empty_workspace_is_idempotent(tmp_path: Path) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+
+    plan = plan_delivery_integration_retirement(repository)
+
+    apply_delivery_integration_retirement(plan)
+
+    assert plan.already_retired
+    assert plan_delivery_integration_retirement(repository).already_retired
+    assert not (repository / ".owlbear").exists()
+
+
+@pytest.mark.parametrize("worktree_mode", ["absent", "present"])
+def test_retirement_applies_exact_cleanup_and_retains_git_history(tmp_path: Path, worktree_mode: str) -> None:
+    repository, commits, delivery_root, _archive, _branch = _fixture(tmp_path, with_worktree=worktree_mode == "present")
     plan = plan_delivery_integration_retirement(repository)
 
     apply_delivery_integration_retirement(plan)
@@ -266,6 +282,7 @@ def test_retirement_applies_exact_cleanup_and_retains_git_history(tmp_path: Path
     assert not (delivery_root / "runtime/claims/publication-locks/change-a").exists()
     assert not (repository / ".owlbear/delivery/integration-retirement.json").exists()
     assert not (repository / ".owlbear/scratch/delivery-integration-retirement").exists()
+    assert not (delivery_root / "worktrees" / "change-a").exists()
     assert _git(repository, "rev-parse", "refs/remotes/origin/dev") == commits["target"]
     assert _git(repository, "rev-parse", "refs/heads/owlbear/change/change-a") == commits["baseline"]
     records = CompletedHistoryCatalog(repository, "dev", "refs/remotes/origin/dev", delivery_root / "runtime").list()
@@ -275,7 +292,7 @@ def test_retirement_applies_exact_cleanup_and_retains_git_history(tmp_path: Path
 def test_retirement_recovers_staged_state_after_removal_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
+    repository, commits, delivery_root, _archive, _branch = _fixture(tmp_path, with_worktree=True)
     plan = plan_delivery_integration_retirement(repository)
 
     def fail_removal(_journal: object) -> None:
@@ -289,6 +306,9 @@ def test_retirement_recovers_staged_state_after_removal_failure(
 
     assert (delivery_root / "runtime/changes/change-a/frontier.json").is_file()
     assert (delivery_root / "runtime/claims/changes/change-a.json").is_file()
+    worktree = delivery_root / "worktrees" / "change-a"
+    assert worktree.is_dir()
+    assert _git(worktree, "rev-parse", "HEAD") == commits["baseline"]
     assert not (repository / ".owlbear/delivery/integration-retirement.json").exists()
     assert not (repository / ".owlbear/scratch/delivery-integration-retirement").exists()
 
@@ -307,6 +327,26 @@ def test_retirement_rejects_forged_journal_lock_path(tmp_path: Path) -> None:
         delivery_integration_retirement._retirement_lock_roots(repository)
 
     assert not (tmp_path / "outside-lock").exists()
+
+
+def test_retirement_rejects_forged_journal_worktree_path_before_write(tmp_path: Path) -> None:
+    repository, _commits, _delivery_root, _archive, _branch = _fixture(tmp_path)
+    plan = plan_delivery_integration_retirement(repository)
+    staging_root = repository / ".owlbear/scratch/delivery-integration-retirement/operation"
+    journal = delivery_integration_retirement._journal_for_plan(plan, staging_root)
+    forged_change = journal.changes[0].model_copy(
+        update={
+            "worktree_path": tmp_path / "outside-worktree",
+            "branch": "owlbear/change/change-a",
+            "worktree_head": "0" * 40,
+        }
+    )
+    forged = journal.model_copy(update={"changes": (forged_change,)})
+
+    with pytest.raises(DeliveryIntegrationRetirementError, match="worktree path is unsafe"):
+        delivery_integration_retirement._write_journal(forged)
+
+    assert not (repository / ".owlbear/delivery/integration-retirement.json").exists()
 
 
 def test_retirement_replays_cleanup_phase_after_staging_cleanup_failure(
