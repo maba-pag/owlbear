@@ -14,6 +14,8 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryFinalizationInvalidation,
     DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
+    DeliveryIntegrationAttention,
+    DeliveryIntegrationAttentionCode,
     DeliveryMergedPullRequestLatch,
     DeliveryPendingCheckpoint,
     DeliveryObservation,
@@ -455,6 +457,30 @@ def test_completed_outcomes_project_ready_for_finalization() -> None:
     assert card.action.command == "/finalize-change portfolio-change"
     assert detail.publication is not None
     assert detail.publication.phase == WorkItemPublicationPhase.READY_FOR_FINALIZATION
+
+
+def test_attention_only_completed_outcomes_still_project_finalize_action() -> None:
+    attention = DeliveryIntegrationAttention(
+        attention_id="a" * 64,
+        code=DeliveryIntegrationAttentionCode.EXTERNAL_ACCEPTANCE_REQUIRED,
+        change_id="portfolio-change",
+        change_head="1" * 40,
+        target_head="2" * 40,
+        integration_target="main",
+        diagnostics=("provider acceptance is unavailable",),
+        retry_condition="observe provider acceptance",
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
+            frontier_updates={"integration_attention": attention},
+        )
+    )
+
+    card = projector.group_view().items[-1]
+
+    assert card.action.kind == WorkItemActionKind.FINALIZE
+    assert card.action.label == "Finalize Change"
 
 
 def test_head_drift_projects_exact_finalization_invalidation() -> None:

@@ -558,14 +558,13 @@ class WorkItemProjector:
         )
 
     def _finalization_action_available(self) -> bool:
-        """Keep legacy Integration attention out of the finalization command surface."""
+        """Expose finalization while retaining hard runtime custody guards."""
         frontier = self._snapshot.frontier
         return (
             all(binding.stage == DeliveryStage.COMPLETED for binding in frontier.bindings)
             and all(binding.active_claim is None for binding in frontier.bindings)
             and frontier.integration_repair_claim is None
             and frontier.integration_completion is None
-            and frontier.integration_attention is None
         )
 
     def _change_lifecycle(self) -> WorkItemChangeLifecycle:
