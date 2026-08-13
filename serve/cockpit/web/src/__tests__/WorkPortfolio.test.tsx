@@ -67,7 +67,7 @@ function portfolio(groups: ChangeGroupView[] = [group()]): WorkItemPortfolioResp
     item_key: item.item_key,
     scope: item.scope === 'change-publication' ? 'publication' as const : 'outcome' as const,
   })
-  const claimed = items.filter((item) => ['working', 'repairing'].includes(item.activity.state)).map(reference)
+  const claimed = items.filter((item) => item.activity.state === 'working').map(reference)
   const queued = items.filter((item) => item.activity.state === 'ready').map(reference)
   const interventions = items.filter((item) => item.needs === 'you').map(reference)
   const dependencyWaits = items.filter((item) => item.needs === 'dependency').map(reference)
@@ -91,7 +91,6 @@ function portfolio(groups: ChangeGroupView[] = [group()]): WorkItemPortfolioResp
         idle: items.filter((item) => item.activity.state === 'idle').length,
         ready: items.filter((item) => item.activity.state === 'ready').length,
         working: items.filter((item) => item.activity.state === 'working').length,
-        repairing: items.filter((item) => item.activity.state === 'repairing').length,
       },
     },
     operating: {
@@ -320,10 +319,10 @@ it('summarizes all current Change phases and nonzero operating states', () => {
     guidance: [],
   }
   const totals: WorkItemPortfolioResponse['totals'] = {
-    total: 4,
+    total: 3,
     complete: 0,
     needs: { you: 1, dependency: 1, none: 2 },
-    activity: { idle: 1, ready: 1, working: 1, repairing: 1 },
+    activity: { idle: 1, ready: 1, working: 1 },
   }
   const onNeedsFilter = vi.fn()
 
@@ -331,7 +330,7 @@ it('summarizes all current Change phases and nonzero operating states', () => {
 
   expect(screen.getByRole('group', { name: 'Portfolio inventory' })).toHaveTextContent('4Changes2Design·2Delivery')
   expect(screen.getByRole('group', { name: 'Attention' })).toHaveTextContent('1Needs you1Blocked')
-  expect(screen.getByRole('group', { name: 'Activity' })).toHaveTextContent('2Running1Ready')
+  expect(screen.getByRole('group', { name: 'Activity' })).toHaveTextContent('1Running1Ready')
 
   const needsYou = screen.getByRole('button', { name: 'Filter to 1 work item: Needs you' })
   expect(needsYou).toHaveAttribute('aria-pressed', 'true')

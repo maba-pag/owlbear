@@ -340,7 +340,7 @@ def test_list_and_detail_expose_current_bounded_delivery_state() -> None:
         "total": 3,
         "complete": 1,
         "needs": {"you": 1, "dependency": 0, "none": 2},
-        "activity": {"idle": 0, "ready": 3, "working": 0, "repairing": 0},
+        "activity": {"idle": 0, "ready": 3, "working": 0},
     }
     assert portfolio.json()["operating"] == {
         "unfinished_change_count": 2,

@@ -114,7 +114,7 @@ export function PortfolioHeaderSummary({ operating, totals, needsFilter, onNeeds
   const designCount = operating.draft_design_change_ids.length + operating.design_required_change_ids.length
   const deliveryCount = Math.max(0, operating.unfinished_change_count - operating.design_required_change_ids.length)
   const currentChangeCount = operating.unfinished_change_count + operating.draft_design_change_ids.length
-  const runningCount = totals.activity.working + totals.activity.repairing
+  const runningCount = totals.activity.working
 
   return (
     <>

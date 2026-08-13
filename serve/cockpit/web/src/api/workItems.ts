@@ -2,7 +2,7 @@ export type WorkItemStage = 'design' | 'planning' | 'implementation' | 'complete
 export type WorkItemScope = 'outcome' | 'change-publication'
 export type WorkItemNeed = 'you' | 'dependency' | 'none'
 export type WorkItemNextActor = 'you' | 'agent' | 'dependency' | 'none'
-export type WorkItemActivityState = 'idle' | 'ready' | 'working' | 'repairing'
+export type WorkItemActivityState = 'idle' | 'ready' | 'working'
 export type WorkItemActionKind =
   | 'none'
   | 'answer-request'
@@ -80,7 +80,6 @@ export interface ActivityCounts {
   idle: number
   ready: number
   working: number
-  repairing: number
 }
 
 export interface WorkItemPortfolioTotals {

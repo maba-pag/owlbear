@@ -70,7 +70,6 @@ class WorkItemActivityState(StrEnum):
     IDLE = "idle"
     READY = "ready"
     WORKING = "working"
-    REPAIRING = "repairing"
 
 
 class WorkItemActionKind(StrEnum):
@@ -628,7 +627,6 @@ class WorkItemProjector:
             in {
                 WorkItemActivityState.READY,
                 WorkItemActivityState.WORKING,
-                WorkItemActivityState.REPAIRING,
             }
             else WorkItemAttention.NONE,
         }[card.needs]

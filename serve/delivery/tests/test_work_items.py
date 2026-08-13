@@ -300,6 +300,14 @@ def test_design_return_is_user_owned_and_not_projected_as_planning() -> None:
     assert projector.group_view().lifecycle == "in-delivery"
 
 
+def test_work_item_activity_contract_has_no_legacy_repair_state() -> None:
+    assert set(WorkItemActivityState) == {
+        WorkItemActivityState.IDLE,
+        WorkItemActivityState.READY,
+        WorkItemActivityState.WORKING,
+    }
+
+
 def test_design_return_suppresses_preserved_request_action_until_readmission() -> None:
     request = DeliveryRequest(
         request_id="REQ-001",

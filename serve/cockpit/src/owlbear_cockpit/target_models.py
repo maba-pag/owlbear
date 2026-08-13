@@ -29,7 +29,6 @@ class ActivityCounts(_TargetHTTPModel):
     idle: int = Field(ge=0)
     ready: int = Field(ge=0)
     working: int = Field(ge=0)
-    repairing: int = Field(ge=0)
 
 
 class WorkItemPortfolioTotals(_TargetHTTPModel):

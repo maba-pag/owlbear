@@ -331,7 +331,6 @@ def _portfolio_totals(groups: tuple[ChangeGroupView, ...]) -> WorkItemPortfolioT
             idle=activity.count(WorkItemActivityState.IDLE),
             ready=activity.count(WorkItemActivityState.READY),
             working=activity.count(WorkItemActivityState.WORKING),
-            repairing=activity.count(WorkItemActivityState.REPAIRING),
         ),
     )
 

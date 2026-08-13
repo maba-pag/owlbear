@@ -15,7 +15,7 @@ const WORKER_STATUS_LABELS: Record<DeliveryWorkerRole, string> = {
 export function workItemStatusLabel(item: WorkItemCardView): string {
   if (item.needs === 'you') return item.needs_headline ?? 'Needs your intervention'
   if (item.needs === 'dependency') return item.needs_headline ?? 'Waiting on a dependency'
-  if (item.activity.state === 'working' || item.activity.state === 'repairing') {
+  if (item.activity.state === 'working') {
     return item.activity.worker_role ? WORKER_STATUS_LABELS[item.activity.worker_role] : 'Agent working'
   }
   if (item.activity.state === 'ready') {

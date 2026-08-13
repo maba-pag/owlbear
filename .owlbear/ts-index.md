@@ -239,7 +239,7 @@
 - `export type WorkItemScope = 'outcome' | 'change-publication'`
 - `export type WorkItemNeed = 'you' | 'dependency' | 'none'`
 - `export type WorkItemNextActor = 'you' | 'agent' | 'dependency' | 'none'`
-- `export type WorkItemActivityState = 'idle' | 'ready' | 'working' | 'repairing'`
+- `export type WorkItemActivityState = 'idle' | 'ready' | 'working'`
 - `export type WorkItemActionKind = | 'none' | 'answer-request' | 'clear-block' | 'recover-claim' | 'finalize' | 'reconcile-checkpoint' | 'mark-ready' | 'observe-acceptance' | 'start-orchestration'`
 - `export type WorkItemProgressKind = 'tasks' | 'design-return' | 'plan' | 'publication'`
 - `export type WorkItemChangeLifecycle = 'in-delivery' | 'finalization' | 'publication' | 'awaiting-merge' | 'acceptance'`
