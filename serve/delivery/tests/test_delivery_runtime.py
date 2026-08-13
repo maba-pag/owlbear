@@ -929,10 +929,11 @@ def _workspace(tmp_path: Path):
     (repository / "product.txt").write_text("base\n", encoding="utf-8")
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "baseline")
+    _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
     state_root = tmp_path / "state"
     coordinator = PortfolioCoordinator(state_root, capacity=1)
     manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
-    coordination = manager.create("delivery-runtime")
+    coordination = manager.ensure("delivery-runtime")
     return state_root, coordinator, manager, coordination
 
 

@@ -399,8 +399,8 @@ def seed_delivery(workspace: Path) -> None:
     _write_publication_delivery(runtime_root, head)
     coordinator = PortfolioCoordinator(runtime_root, capacity=2)
     workspace_manager = ChangeWorkspaceManager(repository, worktrees, coordinator, "main")
-    workspace_manager.create("work-e2e")
-    workspace_manager.create("publication-e2e")
+    workspace_manager.ensure("work-e2e")
+    workspace_manager.ensure("publication-e2e")
     _write_config(workspace)
 
 

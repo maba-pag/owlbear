@@ -1218,6 +1218,8 @@ Per-change writer coordination and Git workspace management.
 - `class WorkspaceRecoverySnapshot(_WorkspaceModel)`
 - `class ChangeWorktreeAttentionCode(StrEnum)`
 - `class RetainedChangeWorktree(_WorkspaceModel)`
+- `class ChangeWorktreeAttentionError(RuntimeError)`
+  - `def __init__(self, change_id: str, attention: tuple[ChangeWorktreeAttentionCode, ...]) -> None`
 - `class CapacityLedger(_WorkspaceModel)`
   - `def _validate_holders(self) -> CapacityLedger`
 - `class IntegrationContext(_WorkspaceModel)`
@@ -1246,7 +1248,8 @@ Per-change writer coordination and Git workspace management.
 - `class ChangeWorkspaceManager`
   - `def __init__(self, repository: Path, worktree_root: Path, coordinator: PortfolioCoordinator, integration_target: str, remote: str = 'origin') -> None`
   - `def repository(self) -> Path`
-  - `def create(self, change_id: str, *, recovery_reviewed_head: str | None = None) -> ChangeCoordination`
+  - `def _target_ref(self) -> str`
+  - `def ensure(self, change_id: str, *, recovery_reviewed_head: str | None = None) -> ChangeCoordination`
   - `def validate_recovery(self, change_id: str, recovery_reviewed_head: str | None) -> None`
   - `def record_reviewed(self, change_id: str, commit: str) -> ChangeCoordination`
   - `def restore_worktree(cls, repository: Path, worktree: Path, branch: str) -> None`
@@ -1267,7 +1270,11 @@ Per-change writer coordination and Git workspace management.
   - `def restart(self, change_id: str, attempt_id: str, rejected_head: str) -> ChangeCoordination`
   - `def _validate_released_restart(self, coordination: ChangeCoordination, rejected_head: str, branch_head: str, preserved: str | None) -> ChangeCoordination`
   - `def _prepare_active_restart(self, coordination: ChangeCoordination, attempt_id: str, rejected_head: str) -> None`
-  - `def _require_worktree(self, worktree: Path, branch: str, expected_head: str) -> None`
+  - `def _require_worktree(self, change_id: str, worktree: Path, branch: str, expected_head: str) -> None`
+  - `def _validate_existing_worktree(self, coordination: ChangeCoordination) -> None`
+  - `def _validate_unregistered_worktree(self, change_id: str, recovery_reviewed_head: str | None, branch_head: str | None) -> None`
+  - `def _canonical_worktree_path(self, change_id: str, worktree: Path) -> Path`
+  - `def _raise_worktree_attention(change_id: str, attention: set[ChangeWorktreeAttentionCode]) -> None`
   - `def _registered_worktrees(self) -> dict[str, _RegisteredGitWorktree]`
   - `def _change_branch_heads(self) -> dict[str, str]`
   - `def _filesystem_change_ids(self) -> set[str]`

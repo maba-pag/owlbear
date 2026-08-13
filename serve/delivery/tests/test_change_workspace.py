@@ -12,6 +12,7 @@ from owlbear_delivery.change_workspace import (
     CapacityLedger,
     ChangeWorkspaceManager,
     ChangeCoordination,
+    ChangeWorktreeAttentionError,
     ChangeWorktreeAttentionCode,
     ChangeWriter,
     CoordinationConflictError,
@@ -277,20 +278,34 @@ def _repository(tmp_path: Path, *, target: str = "release") -> tuple[Path, str]:
     _git(repository, "commit", "-m", "initial")
     initial = _git(repository, "rev-parse", "HEAD")
     _git(repository, "branch", target, initial)
+    _git(repository, "update-ref", f"refs/remotes/origin/{target}", initial)
     return repository, initial
 
 
-def _manager(tmp_path: Path, repository: Path, *, target: str = "release"):
+def _manager(tmp_path: Path, repository: Path, *, target: str = "release", remote: str = "origin"):
     coordinator = PortfolioCoordinator(tmp_path / "state", capacity=2)
-    manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, target)
+    manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, target, remote=remote)
     return coordinator, manager
+
+
+def _workspace_bytes(repository: Path, state_root: Path) -> tuple[str, str, tuple[tuple[str, bytes], ...]]:
+    state_files = tuple(
+        sorted(
+            (str(path.relative_to(state_root)), path.read_bytes()) for path in state_root.rglob("*") if path.is_file()
+        )
+    )
+    return (
+        _git(repository, "show-ref"),
+        _git(repository, "worktree", "list", "--porcelain"),
+        state_files,
+    )
 
 
 def test_list_retained_worktrees_is_sorted_and_batches_git_reads(tmp_path: Path) -> None:
     repository, initial = _repository(tmp_path)
     _coordinator, manager = _manager(tmp_path, repository)
-    first = manager.create("change-b")
-    second = manager.create("change-a")
+    first = manager.ensure("change-b")
+    second = manager.ensure("change-a")
     _git(repository, "update-ref", "refs/heads/owlbear/change/nested-only/s1", initial)
     before_coordination = tuple(
         sorted((path.name, path.read_bytes()) for path in (tmp_path / "state/claims/changes").iterdir())
@@ -319,6 +334,25 @@ def test_list_retained_worktrees_is_sorted_and_batches_git_reads(tmp_path: Path)
     )
 
 
+@pytest.mark.parametrize("remote", ["origin", "upstream"])
+def test_ensure_bases_new_changes_on_remote_tracking_target(tmp_path: Path, remote: str) -> None:
+    repository, initial = _repository(tmp_path)
+    if remote != "origin":
+        _git(repository, "update-ref", f"refs/remotes/{remote}/release", initial)
+    (repository / "shared.txt").write_text("local-only\n", encoding="utf-8")
+    _git(repository, "add", "shared.txt")
+    _git(repository, "commit", "-m", "advance local target")
+    _git(repository, "update-ref", "refs/heads/release", "HEAD")
+    local_target_head = _git(repository, "rev-parse", "refs/heads/release")
+    _coordinator, manager = _manager(tmp_path, repository, remote=remote)
+
+    coordination = manager.ensure(f"remote-target-{remote}")
+
+    assert local_target_head != initial
+    assert coordination.target_head == initial
+    assert _git(repository, "rev-parse", coordination.branch) == initial
+
+
 def test_list_retained_worktrees_returns_empty_without_coordination_store(tmp_path: Path) -> None:
     repository, _initial = _repository(tmp_path)
     coordinator = PortfolioCoordinator(tmp_path / "state", capacity=1)
@@ -330,7 +364,7 @@ def test_list_retained_worktrees_returns_empty_without_coordination_store(tmp_pa
 def test_list_registered_ignores_runtime_transaction_temp_files(tmp_path: Path) -> None:
     repository, _initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)
-    manager.create("stable-change")
+    manager.ensure("stable-change")
     coordination_root = tmp_path / "state/claims/changes"
     (coordination_root / ".tmp-deadbeef-stable-change.json").write_text("not json", encoding="utf-8")
 
@@ -340,7 +374,7 @@ def test_list_registered_ignores_runtime_transaction_temp_files(tmp_path: Path) 
 def test_list_registered_rejects_malformed_or_misnamed_records(tmp_path: Path) -> None:
     repository, _initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)
-    manager.create("valid-change")
+    manager.ensure("valid-change")
     coordination_root = tmp_path / "state/claims/changes"
     (coordination_root / "broken.json").write_text("{", encoding="utf-8")
 
@@ -353,6 +387,84 @@ def test_list_registered_rejects_malformed_or_misnamed_records(tmp_path: Path) -
 
     with pytest.raises(CoordinationConflictError, match="identity is invalid"):
         coordinator.list_registered()
+
+
+def test_ensure_replays_a_healthy_change_worktree(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    first = manager.ensure("healthy-replay")
+
+    replayed = manager.ensure("healthy-replay", recovery_reviewed_head=first.last_reviewed_commit)
+
+    assert replayed == first
+
+
+def test_ensure_rejects_invalid_change_id_before_git_access(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    before = _workspace_bytes(repository, tmp_path / "state")
+    with (
+        patch.object(manager, "_git", wraps=manager._git) as git,
+        pytest.raises(ValueError, match="safe worktree identity"),
+    ):
+        manager.ensure("../invalid")
+
+    assert git.call_count == 0
+    assert _workspace_bytes(repository, tmp_path / "state") == before
+
+
+@pytest.mark.parametrize("missing_state", ["directory", "registration"])
+def test_ensure_refuses_missing_worktree_state_without_writes(tmp_path: Path, missing_state: str) -> None:
+    repository, _initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure(f"missing-{missing_state}")
+    _git(repository, "worktree", "remove", "--force", str(coordination.worktree_path))
+    if missing_state == "registration":
+        coordination.worktree_path.mkdir(parents=True)
+        (coordination.worktree_path / "preserved.txt").write_text("preserve\n", encoding="utf-8")
+    before = _workspace_bytes(repository, tmp_path / "state")
+
+    with pytest.raises(ChangeWorktreeAttentionError) as raised:
+        manager.ensure(coordination.change_id, recovery_reviewed_head=coordination.last_reviewed_commit)
+
+    assert (
+        ChangeWorktreeAttentionCode.WORKTREE_MISSING
+        if missing_state == "directory"
+        else ChangeWorktreeAttentionCode.GIT_REGISTRATION_MISSING
+    ) in raised.value.attention
+    assert _workspace_bytes(repository, tmp_path / "state") == before
+    if missing_state == "registration":
+        assert (coordination.worktree_path / "preserved.txt").read_text(encoding="utf-8") == "preserve\n"
+
+
+def test_ensure_preserves_dirty_change_worktree(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("dirty-replay")
+    dirty_file = coordination.worktree_path / "dirty.txt"
+    dirty_file.write_text("uncommitted\n", encoding="utf-8")
+    before = _workspace_bytes(repository, tmp_path / "state")
+
+    replayed = manager.ensure(coordination.change_id)
+
+    assert replayed == coordination
+    assert dirty_file.read_text(encoding="utf-8") == "uncommitted\n"
+    assert _workspace_bytes(repository, tmp_path / "state") == before
+
+
+def test_ensure_refuses_coordination_path_mismatch_without_writes(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("path-mismatch")
+    mismatched = coordination.model_copy(update={"worktree_path": tmp_path / "elsewhere" / "path-mismatch"})
+    coordinator.update(mismatched)
+    before = _workspace_bytes(repository, tmp_path / "state")
+
+    with pytest.raises(ChangeWorktreeAttentionError) as raised:
+        manager.ensure(coordination.change_id)
+
+    assert ChangeWorktreeAttentionCode.COORDINATION_PATH_MISMATCH in raised.value.attention
+    assert _workspace_bytes(repository, tmp_path / "state") == before
 
 
 @pytest.mark.parametrize(
@@ -372,7 +484,7 @@ def test_list_retained_worktrees_reports_independent_degraded_facts(
 ) -> None:
     repository, _initial = _repository(tmp_path)
     _coordinator, manager = _manager(tmp_path, repository)
-    coordination = manager.create(f"degraded-{mutation}")
+    coordination = manager.ensure(f"degraded-{mutation}")
     if mutation == "missing-directory":
         _git(repository, "worktree", "remove", "--force", str(coordination.worktree_path))
     elif mutation == "missing-registration":
@@ -399,7 +511,7 @@ def test_list_retained_worktrees_reports_independent_degraded_facts(
 def test_list_retained_worktrees_reports_orphaned_registration(tmp_path: Path) -> None:
     repository, _initial = _repository(tmp_path)
     _coordinator, manager = _manager(tmp_path, repository)
-    coordination = manager.create("orphaned-change")
+    coordination = manager.ensure("orphaned-change")
     (tmp_path / "state/claims/changes/orphaned-change.json").unlink()
 
     row = next(item for item in manager.list_retained() if item.change_id == coordination.change_id)
@@ -427,7 +539,7 @@ def _commit_new_file(worktree: Path, name: str, content: str, message: str) -> s
 def test_finalization_rejects_divergent_promoted_task_history(tmp_path: Path) -> None:
     repository, initial = _repository(tmp_path)
     _coordinator, manager = _manager(tmp_path, repository)
-    coordination = manager.create("divergent-tasks")
+    coordination = manager.ensure("divergent-tasks")
     first = _commit_new_file(coordination.worktree_path, "first.txt", "first\n", "first task")
     _git(coordination.worktree_path, "checkout", "-b", "divergent-task", initial)
     second = _commit_new_file(coordination.worktree_path, "second.txt", "second\n", "second task")
@@ -445,16 +557,16 @@ def test_workspace_recovery_requires_and_preserves_exact_reviewed_head(tmp_path:
     state_root = tmp_path / "state"
     coordinator = PortfolioCoordinator(state_root, capacity=2)
     manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "release")
-    coordination = manager.create("recovered-change")
+    coordination = manager.ensure("recovered-change")
     reviewed = _commit_new_file(coordination.worktree_path, "product.txt", "reviewed\n", "reviewed product")
     manager.record_reviewed(coordination.change_id, reviewed)
     (state_root / "claims/changes/recovered-change.json").unlink()
     recovered_manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "release")
 
     with pytest.raises(CoordinationConflictError, match="exact recovery reviewed head"):
-        recovered_manager.create("recovered-change")
+        recovered_manager.ensure("recovered-change")
 
-    recovered = recovered_manager.create("recovered-change", recovery_reviewed_head=reviewed)
+    recovered = recovered_manager.ensure("recovered-change", recovery_reviewed_head=reviewed)
 
     assert recovered.last_reviewed_commit == reviewed
     assert _git(recovered.worktree_path, "rev-parse", "HEAD") == reviewed
@@ -513,7 +625,7 @@ def test_coordinator_rejects_capacity_below_active_holders(tmp_path: Path) -> No
 def test_restart_preserves_rejected_head_and_returns_to_reviewed_commit(tmp_path: Path) -> None:
     repository, initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)
-    coordination = manager.create("restart-change")
+    coordination = manager.ensure("restart-change")
     rejected = _commit_file(coordination.worktree_path, "rejected\n", "rejected attempt")
     coordinator.acquire(
         "restart-change",
@@ -531,7 +643,7 @@ def test_restart_preserves_rejected_head_and_returns_to_reviewed_commit(tmp_path
 def test_restart_recovers_after_git_succeeds_before_writer_release(tmp_path: Path) -> None:
     repository, initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)
-    coordination = manager.create("recover-restart")
+    coordination = manager.ensure("recover-restart")
     rejected = _commit_file(coordination.worktree_path, "rejected\n", "rejected attempt")
     coordinator.acquire(
         "recover-restart",
@@ -557,7 +669,7 @@ def test_restart_recovers_after_git_succeeds_before_writer_release(tmp_path: Pat
 def test_restart_recovers_from_each_git_interruption(tmp_path: Path, interruption: str) -> None:
     repository, initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)
-    coordination = manager.create(f"restart-{interruption}")
+    coordination = manager.ensure(f"restart-{interruption}")
     rejected = _commit_file(coordination.worktree_path, "rejected\n", "rejected attempt")
     coordinator.acquire(
         coordination.change_id,
@@ -603,7 +715,7 @@ def _restart_stage(
 def test_restart_recovers_missing_worktree_at_each_git_interruption(tmp_path: Path, interruption: str) -> None:
     repository, initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)
-    coordination = manager.create(f"restart-missing-{interruption}")
+    coordination = manager.ensure(f"restart-missing-{interruption}")
     rejected = _commit_file(coordination.worktree_path, "rejected\n", "rejected attempt")
     writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build")
     coordinator.acquire(coordination.change_id, writer)

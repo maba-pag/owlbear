@@ -401,6 +401,7 @@ def _portfolio(  # noqa: PLR0913
     (repository / "product.txt").write_text("baseline\n", encoding="utf-8")
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "baseline")
+    _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
     state_root = tmp_path / "state"
     package_root = tmp_path / "packages"
     coordinator = PortfolioCoordinator(state_root, capacity=writer_capacity)
@@ -414,7 +415,7 @@ def _portfolio(  # noqa: PLR0913
         contract = _contract(change_id, intent, design)
         package = store.create(change_id, intent, design)
         store.publish_contract(change_id, package.package_id, _canonical(contract), lambda *_content: None)
-        coordination = manager.create(change_id)
+        coordination = manager.ensure(change_id)
         runtimes[change_id] = _runtime(state_root, contract, manager, stage, coordination.last_reviewed_commit)
     identities = (f"identity-{index:03}" for index in itertools.count(1))
 
@@ -1613,7 +1614,7 @@ def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_pa
         coordinator,
         "main",
     )
-    coordination = manager.create("change-a")
+    coordination = manager.ensure("change-a")
     contract = _contract("change-a", b"intent", b"design")
     task = _task()
     result = _task_result(
@@ -2267,6 +2268,7 @@ def test_acquisition_does_not_create_integration_repair_claim(tmp_path: Path) ->
     (repository / "product.txt").write_text("target side\n", encoding="utf-8")
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "concurrent target")
+    _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
     target_head = _git(repository, "rev-parse", "main")
     application._workspace_manager.refresh_integration_target("change-a")  # noqa: SLF001
     _publish_merge_conflict_attention(runtimes, state_root, "change-a", reviewed, target_head)
@@ -2288,6 +2290,7 @@ def _prepare_legacy_integration_repair(tmp_path: Path):
     (repository / "product.txt").write_text("target side\n", encoding="utf-8")
     _git(repository, "add", "product.txt")
     _git(repository, "commit", "-m", "concurrent target")
+    _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
     target_head = _git(repository, "rev-parse", "main")
     application._workspace_manager.refresh_integration_target("change-a")  # noqa: SLF001
     _publish_merge_conflict_attention(runtimes, state_root, "change-a", reviewed, target_head)

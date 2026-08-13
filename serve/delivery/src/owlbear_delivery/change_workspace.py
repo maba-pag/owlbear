@@ -183,6 +183,18 @@ class RetainedChangeWorktree(_WorkspaceModel):
     publication_expiry: datetime | None = None
 
 
+class ChangeWorktreeAttentionError(RuntimeError):
+    """A retained Change worktree requires explicit reconciliation."""
+
+    code = "ERR_TARGET_WORKTREE_ATTENTION"
+
+    def __init__(self, change_id: str, attention: tuple[ChangeWorktreeAttentionCode, ...]) -> None:
+        self.change_id = change_id
+        self.attention = attention
+        detail = ", ".join(code.value for code in attention)
+        super().__init__(f"Change worktree requires attention: {detail}")
+
+
 class CapacityLedger(_WorkspaceModel):
     """Global writer capacity without serializing independent changes."""
 
@@ -524,24 +536,34 @@ class ChangeWorkspaceManager:
         remote: str = "origin",
     ) -> None:
         self._repository = repository.resolve()
+        if worktree_root.is_symlink() or (worktree_root.exists() and not worktree_root.is_dir()):
+            _workspace_failure("Change worktree root is not a safe directory")
         self._worktree_root = worktree_root.resolve()
         self._coordinator = coordinator
         self._integration_target = integration_target
         self._remote = remote
-        self._git("check-ref-format", f"refs/heads/{integration_target}")
+        self._git("check-ref-format", self._target_ref())
 
     @property
     def repository(self) -> Path:
         """Return the engine-owned repository used for managed Change reads."""
         return self._repository
 
-    def create(
+    def _target_ref(self) -> str:
+        if self._integration_target.startswith("refs/remotes/"):
+            return self._integration_target
+        return f"refs/remotes/{self._remote}/{self._integration_target}"
+
+    def ensure(
         self,
         change_id: str,
         *,
         recovery_reviewed_head: str | None = None,
     ) -> ChangeCoordination:
-        """Create or replay one warm branch and worktree from the configured target."""
+        """Ensure one healthy warm branch and worktree without repairing degraded state."""
+        if not _is_change_id(change_id):
+            msg = "change identity is not a safe worktree identity"
+            raise ValueError(msg)
         try:
             existing = self._coordinator.show(change_id)
         except CoordinationConflictError:
@@ -551,7 +573,9 @@ class ChangeWorkspaceManager:
                 _workspace_failure("registered workspace uses another integration target")
             if recovery_reviewed_head is not None and recovery_reviewed_head != existing.last_reviewed_commit:
                 _coordination_conflict("recovery reviewed head differs from registered workspace authority")
+            self._validate_existing_worktree(existing)
             self._require_worktree(
+                change_id,
                 existing.worktree_path,
                 existing.branch,
                 self._resolve(existing.branch),
@@ -560,11 +584,12 @@ class ChangeWorkspaceManager:
         branch = f"owlbear/change/{change_id}"
         self._git("check-ref-format", f"refs/heads/{branch}")
         worktree = self._worktree_root / change_id
-        target_head = self._resolve(self._integration_target)
+        target_head = self._resolve(self._target_ref())
         branch_head = self._resolve(branch, missing_ok=True)
         if branch_head is None:
             if recovery_reviewed_head is not None:
                 _coordination_conflict("recovery reviewed head requires an existing Change branch")
+            self._validate_unregistered_worktree(change_id, recovery_reviewed_head, branch_head)
             self._git("branch", branch, target_head)
             branch_head = target_head
             last_reviewed_commit = target_head
@@ -572,9 +597,11 @@ class ChangeWorkspaceManager:
             if recovery_reviewed_head is None:
                 _coordination_conflict("existing Change branch requires an exact recovery reviewed head")
             self._require_ancestor(recovery_reviewed_head, branch_head)
+            self._validate_unregistered_worktree(change_id, recovery_reviewed_head, branch_head)
             last_reviewed_commit = recovery_reviewed_head
-        self._register_worktree(worktree, branch, self._git)
-        self._require_worktree(worktree, branch, branch_head)
+        if not self._worktree_present(worktree):
+            self._register_worktree(worktree, branch, self._git)
+        self._require_worktree(change_id, worktree, branch, branch_head)
         coordination = ChangeCoordination(
             change_id=change_id,
             branch=branch,
@@ -587,6 +614,9 @@ class ChangeWorkspaceManager:
 
     def validate_recovery(self, change_id: str, recovery_reviewed_head: str | None) -> None:
         """Require exact reviewed authority when coordination is missing for a surviving branch."""
+        if not _is_change_id(change_id):
+            msg = "change identity is not a safe worktree identity"
+            raise ValueError(msg)
         try:
             existing = self._coordinator.show(change_id)
         except CoordinationConflictError:
@@ -594,16 +624,19 @@ class ChangeWorkspaceManager:
         if existing is not None:
             if recovery_reviewed_head is not None and recovery_reviewed_head != existing.last_reviewed_commit:
                 _coordination_conflict("recovery reviewed head differs from registered workspace authority")
+            self._validate_existing_worktree(existing)
             return
         branch = f"owlbear/change/{change_id}"
         branch_head = self._resolve(branch, missing_ok=True)
         if branch_head is None:
             if recovery_reviewed_head is not None:
                 _coordination_conflict("recovery reviewed head requires an existing Change branch")
+            self._validate_unregistered_worktree(change_id, recovery_reviewed_head, branch_head)
             return
         if recovery_reviewed_head is None:
             _coordination_conflict("existing Change branch requires an exact recovery reviewed head")
         self._require_ancestor(recovery_reviewed_head, branch_head)
+        self._validate_unregistered_worktree(change_id, recovery_reviewed_head, branch_head)
 
     def record_reviewed(self, change_id: str, commit: str) -> ChangeCoordination:
         """Advance the recorded reviewed boundary to an exact branch ancestor."""
@@ -668,7 +701,7 @@ class ChangeWorkspaceManager:
     def refresh_integration_target(self, change_id: str) -> ChangeCoordination:
         """Persist the current target head at an operational Git boundary."""
         coordination = self._coordinator.show(change_id)
-        target_head = self._resolve(coordination.integration_target)
+        target_head = self._resolve(self._target_ref())
         if target_head == coordination.target_head:
             return coordination
         return self._coordinator.update(coordination.model_copy(update={"target_head": target_head}))
@@ -681,7 +714,7 @@ class ChangeWorkspaceManager:
             change_head=self._resolve(coordination.branch),
             reviewed_change_head=coordination.last_reviewed_commit,
             integration_target=coordination.integration_target,
-            target_head=self._resolve(coordination.integration_target),
+            target_head=self._resolve(self._target_ref()),
         )
 
     def reviewed_source_head(self, change_id: str) -> str:
@@ -690,7 +723,7 @@ class ChangeWorkspaceManager:
         branch_head = self._resolve(coordination.branch)
         if branch_head != coordination.last_reviewed_commit:
             _workspace_failure("change branch differs from its reviewed source boundary")
-        self._require_worktree(coordination.worktree_path, coordination.branch, branch_head)
+        self._require_worktree(change_id, coordination.worktree_path, coordination.branch, branch_head)
         if self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
             _workspace_failure("change source worktree is not clean")
         return branch_head
@@ -772,7 +805,7 @@ class ChangeWorkspaceManager:
         if branch_head != commit:
             _workspace_failure("candidate commit is not the current change branch head")
         self._require_ancestor(coordination.last_reviewed_commit, commit)
-        self._require_worktree(coordination.worktree_path, coordination.branch, commit)
+        self._require_worktree(change_id, coordination.worktree_path, coordination.branch, commit)
         if self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
             _workspace_failure("candidate commit requires a clean change worktree")
         return coordination
@@ -815,8 +848,14 @@ class ChangeWorkspaceManager:
             attempt_id,
             rejected_head,
         )
-        self._register_worktree(worktree, coordination.branch, self._git)
-        self._require_worktree(worktree, coordination.branch, coordination.last_reviewed_commit)
+        if not self._worktree_present(worktree):
+            self._register_worktree(worktree, coordination.branch, self._git)
+        self._require_worktree(
+            change_id,
+            worktree,
+            coordination.branch,
+            coordination.last_reviewed_commit,
+        )
         return self._coordinator.release(change_id, coordination.writer.claim_id)
 
     def _validate_released_restart(
@@ -829,6 +868,7 @@ class ChangeWorkspaceManager:
         if preserved != rejected_head or branch_head != coordination.last_reviewed_commit:
             _coordination_conflict("released restart state does not match the rejected head")
         self._require_worktree(
+            coordination.change_id,
             coordination.worktree_path,
             coordination.branch,
             coordination.last_reviewed_commit,
@@ -855,7 +895,12 @@ class ChangeWorkspaceManager:
         if branch_head != rejected_head:
             return
         if coordination.worktree_path.exists():
-            self._require_worktree(coordination.worktree_path, coordination.branch, rejected_head)
+            self._require_worktree(
+                coordination.change_id,
+                coordination.worktree_path,
+                coordination.branch,
+                rejected_head,
+            )
             if self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
                 _workspace_failure("restart requires a clean committed change worktree")
             self._git("reset", "--hard", coordination.last_reviewed_commit, cwd=coordination.worktree_path)
@@ -867,12 +912,65 @@ class ChangeWorkspaceManager:
             rejected_head,
         )
 
-    def _require_worktree(self, worktree: Path, branch: str, expected_head: str) -> None:
-        if self._resolve("HEAD", cwd=worktree) != expected_head:
+    def _require_worktree(self, change_id: str, worktree: Path, branch: str, expected_head: str) -> None:
+        expected_path = self._canonical_worktree_path(change_id, worktree)
+        registered = self._registered_worktrees().get(change_id)
+        attention = self._registered_attention(registered, branch)
+        if not self._worktree_present(expected_path):
+            attention.add(ChangeWorktreeAttentionCode.WORKTREE_MISSING)
+        self._raise_worktree_attention(change_id, attention)
+        if registered is None or registered.head != expected_head:
+            _workspace_failure("registered Change worktree head differs from its branch")
+        if self._resolve("HEAD", cwd=expected_path) != expected_head:
             _workspace_failure("change worktree head differs from its branch")
-        current = self._git("-C", str(worktree), "branch", "--show-current")
+        current = self._git("-C", str(expected_path), "branch", "--show-current")
         if current != branch:
             _workspace_failure("change worktree is attached to another branch")
+
+    def _validate_existing_worktree(self, coordination: ChangeCoordination) -> None:
+        retained = self._retained_worktree(
+            coordination.change_id,
+            coordination,
+            self._registered_worktrees().get(coordination.change_id),
+            self._change_branch_heads().get(coordination.change_id),
+        )
+        self._raise_worktree_attention(coordination.change_id, set(retained.attention))
+
+    def _validate_unregistered_worktree(
+        self,
+        change_id: str,
+        recovery_reviewed_head: str | None,
+        branch_head: str | None,
+    ) -> None:
+        registered = self._registered_worktrees().get(change_id)
+        worktree_present = self._worktree_present(self._worktree_root / change_id)
+        retained = self._retained_worktree(change_id, None, registered, branch_head)
+        attention = set(retained.attention)
+        attention.discard(ChangeWorktreeAttentionCode.COORDINATION_MISSING)
+        if branch_head is None and registered is None and not worktree_present:
+            return
+        self._raise_worktree_attention(change_id, attention)
+        if branch_head is None or recovery_reviewed_head is None:
+            _coordination_conflict("existing Change worktree requires exact recovery authority")
+        self._require_worktree(change_id, self._worktree_root / change_id, f"owlbear/change/{change_id}", branch_head)
+
+    def _canonical_worktree_path(self, change_id: str, worktree: Path) -> Path:
+        expected_path = self._worktree_root / change_id
+        if worktree.is_symlink() or worktree.resolve() != expected_path.resolve():
+            raise ChangeWorktreeAttentionError(
+                change_id,
+                (ChangeWorktreeAttentionCode.COORDINATION_PATH_MISMATCH,),
+            )
+        return expected_path
+
+    @staticmethod
+    def _raise_worktree_attention(
+        change_id: str,
+        attention: set[ChangeWorktreeAttentionCode],
+    ) -> None:
+        if attention:
+            ordered = tuple(code for code in ChangeWorktreeAttentionCode if code in attention)
+            raise ChangeWorktreeAttentionError(change_id, ordered)
 
     def _registered_worktrees(self) -> dict[str, _RegisteredGitWorktree]:
         completed = self._run_git("worktree", "list", "--porcelain", "-z")

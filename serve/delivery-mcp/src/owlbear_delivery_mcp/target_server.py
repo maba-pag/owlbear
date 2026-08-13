@@ -15,7 +15,7 @@ from mcp.types import ToolAnnotations
 from pydantic import BaseModel, ValidationError
 
 from owlbear_delivery.acceptance import CompletionReceiptConflictError
-from owlbear_delivery.change_workspace import CoordinationConflictError
+from owlbear_delivery.change_workspace import ChangeWorktreeAttentionError, CoordinationConflictError
 from owlbear_delivery.completed_history import CompletedHistoryError, CompletedHistoryStaleError
 from owlbear_delivery.delivery_runtime import (
     DeliveryPlanCandidate,
@@ -485,6 +485,7 @@ class TargetMCPAdapter:
 
 _NAMED_DELIVERY_ERRORS = (
     CompletionReceiptConflictError,
+    ChangeWorktreeAttentionError,
     CoordinationConflictError,
     DeliveryRuntimeConflictError,
     DeliveryRuntimeReferenceError,

@@ -951,7 +951,7 @@ class PortfolioApplication:
         with self._coordinator.acquisition_lock():
             self._workspace_manager.validate_recovery(request.change_id, request.recovery_reviewed_head)
             result = self._authority_registry.admit(request)
-            coordination = self._workspace_manager.create(
+            coordination = self._workspace_manager.ensure(
                 request.change_id,
                 recovery_reviewed_head=request.recovery_reviewed_head,
             )

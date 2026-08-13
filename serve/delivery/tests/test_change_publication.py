@@ -67,7 +67,7 @@ def _change_workspace(tmp_path: Path, repository: Path) -> tuple[PortfolioCoordi
 
 
 def _reviewed_change(manager: ChangeWorkspaceManager, change_id: str) -> tuple[Path, str]:
-    coordination = manager.create(change_id)
+    coordination = manager.ensure(change_id)
     (coordination.worktree_path / "product.txt").write_text("reviewed\n", encoding="utf-8")
     _git(coordination.worktree_path, "add", "product.txt")
     _git(coordination.worktree_path, "commit", "-m", "reviewed change")
