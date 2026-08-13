@@ -54,6 +54,14 @@ _MUTATING_GIT_COMMANDS = frozenset(
         ("update-ref",),
     }
 )
+_REGISTER_WORKTREE_CALLERS = frozenset(
+    {
+        ("ChangeWorkspaceManager", "ensure"),
+        ("ChangeWorkspaceManager", "restart"),
+        ("ChangeWorkspaceManager", "restore_worktree"),
+    }
+)
+_COMPLETION_CALLERS = frozenset({("PortfolioApplication", "observe_acceptance")})
 
 
 def _source_files() -> tuple[Path, ...]:
@@ -113,6 +121,75 @@ class _WorktreeAddVisitor(ast.NodeVisitor):
     def scan(self) -> None:
         self._source = self.path.read_text(encoding="utf-8")
         self.visit(ast.parse(self._source, filename=str(self.path)))
+
+
+class _ManagedWorktreeRegistrationVisitor(ast.NodeVisitor):
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.classes: list[str] = []
+        self.functions: list[str] = []
+        self.matches: list[tuple[int, tuple[str, ...], tuple[str, ...]]] = []
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self.classes.append(node.name)
+        self.generic_visit(node)
+        self.classes.pop()
+
+    def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.functions.append(node.name)
+        self.generic_visit(node)
+        self.functions.pop()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._visit_function(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._visit_function(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        if (
+            isinstance(node.func, ast.Attribute)
+            and node.func.attr == "_register_worktree"
+            and self.classes
+            and self.functions
+        ):
+            self.matches.append((node.lineno, tuple(self.classes), tuple(self.functions)))
+        self.generic_visit(node)
+
+    def scan(self) -> None:
+        self.visit(ast.parse(self.path.read_text(encoding="utf-8"), filename=str(self.path)))
+
+
+class _CompletionCallVisitor(ast.NodeVisitor):
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.classes: list[str] = []
+        self.functions: list[str] = []
+        self.matches: list[tuple[int, tuple[str, ...], tuple[str, ...]]] = []
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self.classes.append(node.name)
+        self.generic_visit(node)
+        self.classes.pop()
+
+    def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.functions.append(node.name)
+        self.generic_visit(node)
+        self.functions.pop()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._visit_function(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._visit_function(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        if isinstance(node.func, ast.Attribute) and node.func.attr == "complete_change":
+            self.matches.append((node.lineno, tuple(self.classes), tuple(self.functions)))
+        self.generic_visit(node)
+
+    def scan(self) -> None:
+        self.visit(ast.parse(self.path.read_text(encoding="utf-8"), filename=str(self.path)))
 
 
 def _worktree_add_matches() -> list[tuple[Path, int, tuple[str, ...], tuple[str, ...], str]]:
@@ -177,6 +254,35 @@ def test_delivery_source_has_one_managed_worktree_add_implementation() -> None:
     assert classes == ("ChangeWorkspaceManager",)
     assert functions == ("_register_worktree",)
     assert "--detach" not in source
+
+
+def test_worktree_registration_has_only_named_lifecycle_callers() -> None:
+    matches: list[tuple[Path, int, tuple[str, ...], tuple[str, ...]]] = []
+    for path in _source_files():
+        visitor = _ManagedWorktreeRegistrationVisitor(path)
+        visitor.scan()
+        matches.extend((path, lineno, classes, functions) for lineno, classes, functions in visitor.matches)
+
+    actual = {(classes[-1], functions[-1]) for _path, _line, classes, functions in matches}
+    assert actual == _REGISTER_WORKTREE_CALLERS, "Unexpected worktree registration callers: " + repr(matches)
+
+
+def test_completion_has_one_provider_acceptance_callsite() -> None:
+    matches: list[tuple[Path, int, tuple[str, ...], tuple[str, ...]]] = []
+    for path in _source_files():
+        visitor = _CompletionCallVisitor(path)
+        visitor.scan()
+        matches.extend((path, lineno, classes, functions) for lineno, classes, functions in visitor.matches)
+
+    actual = {(classes[-1], functions[-1]) for _path, _line, classes, functions in matches}
+    assert actual == _COMPLETION_CALLERS, "Unexpected completion callsites: " + repr(matches)
+
+    runtime = _REPO_ROOT / "serve/delivery/src/owlbear_delivery/delivery_runtime.py"
+    source = runtime.read_text(encoding="utf-8")
+    completion_start = source.index("    def complete_change(")
+    completion_end = source.index("\n    def ", completion_start + 1)
+    completion_body = source[completion_start:completion_end]
+    assert "merged_pull_request_latch" in completion_body
 
 
 def test_delivery_source_has_no_retired_local_integration_producers() -> None:
