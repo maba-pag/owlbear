@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from owlbear_delivery.delivery_runtime import (
     DeliveryBlock,
+    DeliveryChangeDisposition,
     DeliveryChangeDispositionKind,
     DeliveryFrontier,
     DeliveryOperatorMove,
@@ -84,6 +85,7 @@ class WorkItemActionKind(StrEnum):
     RECONCILE_CHECKPOINT = "reconcile-checkpoint"
     MARK_READY = "mark-ready"
     OBSERVE_ACCEPTANCE = "observe-acceptance"
+    RESOLVE_ATTENTION = "resolve-attention"
     START_ORCHESTRATION = "start-orchestration"
 
 
@@ -192,6 +194,7 @@ class WorkItemAction(_ProjectionModel):
     kind: WorkItemActionKind = WorkItemActionKind.NONE
     label: str | None = None
     command: str | None = None
+    attention_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 class WorkItemProgress(_ProjectionModel):
@@ -289,6 +292,7 @@ class WorkItemPublicationView(_ProjectionModel):
     pull_request_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     accepted_merge_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     merged_at: str | None = None
+    attention: DeliveryChangeDisposition | None = None
 
 
 class WorkItemDetailView(_ProjectionModel):
@@ -399,7 +403,9 @@ class WorkItemProjector:
             self._outcome_card(outcome, self._bindings[outcome.outcome_id])
             for outcome in self._snapshot.contract.outcomes
         )
-        if all(binding.stage == DeliveryStage.COMPLETED for binding in self._snapshot.frontier.bindings):
+        if all(binding.stage == DeliveryStage.COMPLETED for binding in self._snapshot.frontier.bindings) or (
+            self._snapshot.frontier.change_disposition is not None
+        ):
             return (*cards, self._publication_card())
         return cards
 
@@ -504,6 +510,32 @@ class WorkItemProjector:
         )
 
     def _publication_card(self) -> WorkItemCardView:
+        disposition = self._snapshot.frontier.change_disposition
+        if disposition is not None:
+            label = (
+                "Resolve publication attention"
+                if disposition.kind == DeliveryChangeDispositionKind.PUBLICATION_ATTENTION
+                else "Resolve acceptance attention"
+            )
+            return WorkItemCardView(
+                item_key="publication",
+                work_item_id=self._snapshot.contract.change_id,
+                change_id=self._snapshot.contract.change_id,
+                scope=WorkItemScope.CHANGE_PUBLICATION,
+                title="Change publication",
+                stage=None,
+                needs=WorkItemNeed.YOU,
+                needs_headline="Change attention requires resolution",
+                next_actor=WorkItemNextActor.YOU,
+                next_step=label,
+                activity=WorkItemActivity(state=WorkItemActivityState.IDLE),
+                progress=WorkItemProgress(kind=WorkItemProgressKind.PUBLICATION, label=label),
+                action=WorkItemAction(
+                    kind=WorkItemActionKind.RESOLVE_ATTENTION,
+                    label=label,
+                    attention_id=disposition.disposition_id,
+                ),
+            )
         phase = self._publication_phase()
         if phase == WorkItemPublicationPhase.FINALIZATION_INVALIDATED:
             needs, headline, next_actor = WorkItemNeed.NONE, "Finalization invalidated", WorkItemNextActor.AGENT
@@ -623,6 +655,7 @@ class WorkItemProjector:
             pull_request_head=ready.head_sha if ready is not None else merged.head_sha if merged is not None else None,
             accepted_merge_commit=merged.accepted_merge_commit if merged is not None else None,
             merged_at=merged.merged_at.isoformat() if merged is not None else None,
+            attention=frontier.change_disposition,
         )
 
     def _compatibility_projection(self, card: WorkItemCardView) -> WorkItemProjection:

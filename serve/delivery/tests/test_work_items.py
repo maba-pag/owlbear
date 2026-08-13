@@ -7,6 +7,9 @@ from datetime import UTC, datetime
 from owlbear_delivery.delivery_runtime import (
     DeliveryActiveClaim,
     DeliveryBlock,
+    DeliveryChangeDisposition,
+    DeliveryChangeDispositionKind,
+    DeliveryChangeStage,
     DeliveryFrontier,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
@@ -511,6 +514,34 @@ def test_head_drift_projects_exact_finalization_invalidation() -> None:
     assert detail.publication is not None
     assert detail.publication.invalidated_expected_head == finalization.exact_head
     assert detail.publication.invalidated_observed_head == "4" * 40
+
+
+def test_change_attention_projects_user_resolution_before_outcomes_complete() -> None:
+    attention = DeliveryChangeDisposition.create(
+        kind=DeliveryChangeDispositionKind.PUBLICATION_ATTENTION,
+        change_id="portfolio-change",
+        entered_from=DeliveryChangeStage.BUILDING,
+        recorded_at=datetime(2026, 8, 11, 16, tzinfo=UTC),
+        diagnostics=("provider unavailable",),
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (_binding("OUT-001", DeliveryStage.PLANNING), _binding("OUT-002", DeliveryStage.PLANNING)),
+            frontier_updates={"change_disposition": attention},
+        )
+    )
+
+    card = projector.group_view().items[-1]
+    detail = projector.show_view("publication")
+
+    assert (card.needs, card.next_actor, card.action.kind, card.action.attention_id) == (
+        WorkItemNeed.YOU,
+        WorkItemNextActor.YOU,
+        WorkItemActionKind.RESOLVE_ATTENTION,
+        attention.disposition_id,
+    )
+    assert detail.publication is not None
+    assert detail.publication.attention == attention
 
 
 def test_finalization_projects_checkpoint_then_pull_request_draft() -> None:

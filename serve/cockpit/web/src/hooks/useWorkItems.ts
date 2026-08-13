@@ -9,6 +9,7 @@ import {
   previewWorkItemBackward,
   reconcileWorkItemPublication,
   recoverWorkItemClaim,
+  resolveWorkItemAttention,
   searchCompletedChanges,
   showDesignWork,
   showCompletedChange,
@@ -318,6 +319,11 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
       'acceptance-observe',
       () => observeWorkItemAcceptance(identity.changeId),
       'GitHub acceptance observed.',
+    ),
+    resolveAttention: (expectedDispositionId: string) => mutate(
+      'attention-resolve',
+      () => resolveWorkItemAttention(identity.changeId, expectedDispositionId),
+      'Change attention resolved.',
     ),
     retry: polling.refetch,
   }

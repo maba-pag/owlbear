@@ -62,7 +62,7 @@ _REGISTER_WORKTREE_CALLERS = frozenset(
     }
 )
 _COMPLETION_CALLERS = frozenset({("PortfolioApplication", "observe_acceptance")})
-_DISPOSITION_CAPTURE_EXEMPTIONS = frozenset({"capture_change_disposition"})
+_DISPOSITION_CAPTURE_EXEMPTIONS = frozenset({"capture_change_disposition", "resolve_change_disposition"})
 
 
 def _source_files() -> tuple[Path, ...]:
@@ -377,6 +377,31 @@ def test_runtime_frontier_writers_use_the_central_mutability_policy() -> None:
     assert normal_writers == _NORMAL_CHANGE_MUTATIONS
     assert all(_has_named_call(visitor.methods[name], "_require_change_mutable") for name in normal_writers)
     assert _has_named_call(visitor.methods["capture_change_disposition"], "is_change_terminal")
+    resolver = visitor.methods["resolve_change_disposition"]
+    assert any(isinstance(node, ast.Name) and node.id == "expected_disposition_id" for node in ast.walk(resolver))
+    assert _has_named_call(resolver, "_require_no_active_change_claim")
+    assert any(
+        isinstance(node, ast.Dict)
+        and any(
+            isinstance(key, ast.Constant)
+            and key.value == "change_disposition"
+            and isinstance(value, ast.Constant)
+            and value.value is None
+            for key, value in zip(node.keys, node.values, strict=False)
+        )
+        for node in ast.walk(resolver)
+    )
+    assert any(
+        isinstance(node, ast.Dict)
+        and any(
+            isinstance(key, ast.Constant)
+            and key.value == "change_disposition_resolution"
+            and isinstance(value, ast.Name)
+            and value.id == "resolution"
+            for key, value in zip(node.keys, node.values, strict=False)
+        )
+        for node in ast.walk(resolver)
+    )
 
 
 def test_delivery_source_has_no_retired_local_integration_producers() -> None:

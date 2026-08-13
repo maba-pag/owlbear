@@ -39,8 +39,10 @@ from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
+    DeliveryAcceptanceWaitingError,
     DeliveryActiveClaim,
     DeliveryBlock,
+    DeliveryChangeDispositionResolution,
     DeliveryChangeStage,
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointTriggerKind,
@@ -69,6 +71,7 @@ from owlbear_delivery.delivery_runtime import (
     PublishDeliveryResult,
     derive_change_stage,
     integration_attention_disposition,
+    is_acceptance_waiting_observation,
     is_change_terminal,
 )
 from owlbear_delivery.draft_pull_request import (
@@ -716,6 +719,16 @@ class PortfolioApplication:
             ),
         )
 
+    def resolve_change_disposition(
+        self,
+        change_id: str,
+        expected_disposition_id: str,
+    ) -> DeliveryChangeDispositionResolution:
+        """Resolve one exact Change attention record without recreating provider authority."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            return runtime.resolve_change_disposition(expected_disposition_id, _timestamp(self._clock()))
+
     def observe_acceptance(self, change_id: str) -> CompletionReceipt:
         """Complete one Change from a fresh exact merged-PR observation."""
         if self._draft_pull_request_publisher is None:
@@ -726,6 +739,9 @@ class PortfolioApplication:
             existing = runtime.completion_receipt()
             if existing is not None:
                 return existing
+            if runtime.change_disposition() is not None:
+                message = "Delivery Change requires attention resolution before acceptance observation"
+                raise PortfolioApplicationError(message)
             finalization = runtime.finalization()
             ready = runtime.ready_receipt()
             publication = runtime.checkpoint_publication_state()
@@ -749,7 +765,18 @@ class PortfolioApplication:
                 or snapshot.node_id != ready.node_id
                 or snapshot.base_branch != self._draft_pull_request_publisher.target_branch
                 or snapshot.head_sha != finalization.exact_head
-                or snapshot.state != "closed"
+            ):
+                runtime.capture_acceptance_attention(
+                    observation,
+                    ("provider pull request does not satisfy acceptance authority",),
+                )
+                message = "provider pull request does not satisfy acceptance authority"
+                raise PortfolioApplicationError(message)
+            if is_acceptance_waiting_observation(observation):
+                message = "provider pull request is still open and unmerged"
+                raise DeliveryAcceptanceWaitingError(message)
+            if (
+                snapshot.state != "closed"
                 or not snapshot.merged
                 or snapshot.merge_commit_sha is None
                 or snapshot.merged_at is None

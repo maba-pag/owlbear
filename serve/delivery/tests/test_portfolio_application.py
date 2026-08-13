@@ -35,6 +35,7 @@ from owlbear_delivery import (
     DeliveryAdmissionRequest,
     DeliveryAuthorityRegistry,
     DeliveryClaimRecoveryStatus,
+    DeliveryAcceptanceWaitingError,
     DeliveryChangeStage,
     DeliveryContract,
     DeliveryCheckpointPublicationState,
@@ -703,7 +704,7 @@ def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Pat
     assert provider.set_pull_request_draft_state.call_count == 3
 
 
-def test_observe_acceptance_completes_once_and_replays_without_provider_io(tmp_path: Path) -> None:
+def test_observe_acceptance_completes_once_and_replays_without_provider_io(tmp_path: Path) -> None:  # noqa: PLR0915
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
@@ -782,6 +783,22 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(tmp_p
             exact_head=exact_head,
         ),
     )
+    with pytest.raises(DeliveryAcceptanceWaitingError, match="still open and unmerged"):
+        application.observe_acceptance("change-a")
+    assert runtime.change_disposition() is None
+    pull_request = pull_request.model_copy(update={"state": "closed"})
+    with pytest.raises(PortfolioApplicationError, match="does not satisfy acceptance authority"):
+        application.observe_acceptance("change-a")
+    disposition = runtime.change_disposition()
+    assert disposition is not None
+    assert disposition.kind.value == "acceptance-attention"
+    assert runtime.ready_receipt() is None
+    assert application.resolve_change_disposition("change-a", disposition.disposition_id).disposition_id == (
+        disposition.disposition_id
+    )
+    pull_request = pull_request.model_copy(update={"state": "open", "draft": True})
+    assert application.reconcile_finalization_head("change-a") == finalization
+    application.mark_current_change_ready("change-a")
     pull_request = pull_request.model_copy(
         update={
             "state": "closed",
@@ -1601,7 +1618,7 @@ dependencies: []
     assert recovered.replayed
     assert coordinator.show("change-a").last_reviewed_commit == reviewed_head
     assert application.show_change_checkpoint_publication("change-a").pending_checkpoint is not None
-    assert json.loads(frontier_path.read_bytes())["schema_version"] == 10
+    assert json.loads(frontier_path.read_bytes())["schema_version"] == 11
 
 
 def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
@@ -1652,7 +1669,7 @@ def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_pa
 
     assert state.pending_checkpoint is not None
     assert state.pending_checkpoint.head == coordination.last_reviewed_commit
-    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 10
+    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 11
 
 
 def test_delivery_loader_injects_publication_provider_and_derives_check_head(tmp_path: Path) -> None:

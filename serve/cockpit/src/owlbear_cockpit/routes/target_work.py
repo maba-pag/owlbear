@@ -20,6 +20,7 @@ from owlbear_cockpit.target_models import (
     ConfirmLostClaimBody,
     DesignWorkDetailResponse,
     NeedsCounts,
+    ResolveChangeAttentionBody,
     WorkItemDetailResponse,
     WorkItemPortfolioResponse,
     WorkItemPortfolioTotals,
@@ -155,6 +156,15 @@ class TargetCockpitService:
     def observe_acceptance(self, change_id: str) -> object:
         """Observe provider acceptance without merge authority."""
         return self._invoke(lambda: self._application.observe_acceptance(change_id))
+
+    def resolve_attention(self, change_id: str, body: ResolveChangeAttentionBody) -> object:
+        """Resolve one exact Change attention record without restoring provider authority."""
+        return self._invoke(
+            lambda: self._application.resolve_change_disposition(
+                change_id,
+                body.expected_disposition_id,
+            )
+        )
 
     def list_completed(self, cursor: str | None, limit: int) -> object:
         """List one bounded page of completed change history."""
@@ -313,6 +323,14 @@ def _register_controls(router: APIRouter) -> None:
     @router.post("/changes/{change_id}/acceptance/observe")
     def observe_acceptance(change_id: str, service: _TargetService) -> object:
         return service.observe_acceptance(change_id)
+
+    @router.post("/changes/{change_id}/attention/resolve")
+    def resolve_attention(
+        change_id: str,
+        body: ResolveChangeAttentionBody,
+        service: _TargetService,
+    ) -> object:
+        return service.resolve_attention(change_id, body)
 
 
 def _portfolio_totals(groups: tuple[ChangeGroupView, ...]) -> WorkItemPortfolioTotals:

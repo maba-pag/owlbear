@@ -72,6 +72,7 @@ DELIVERY_TOOLS = {
     "reconcile_change_checkpoint",
     "observe_change_publication_checks",
     "observe_acceptance",
+    "resolve_change_disposition",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
@@ -397,6 +398,9 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
     acceptance_schema = tools["observe_acceptance"].input_schema
     acceptance_request = acceptance_schema["$defs"]["ChangeParams"]
     assert set(acceptance_request["properties"]) == {"change_id"}
+    resolution_schema = tools["resolve_change_disposition"].input_schema
+    resolution_request = resolution_schema["$defs"]["ResolveChangeDispositionParams"]
+    assert set(resolution_request["properties"]) == {"change_id", "expected_disposition_id"}
     assert transition_definitions["DeliveryTransition"]["discriminator"]["propertyName"] == "action"
     assert "output" in tools["publish_delivery_plan"].output_schema["required"]
     assert "output" in tools["publish_delivery_result"].output_schema["required"]

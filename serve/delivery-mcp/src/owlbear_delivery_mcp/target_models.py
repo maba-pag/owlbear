@@ -76,6 +76,12 @@ class ChangeParams(_TargetProtocolModel):
     change_id: ChangeId
 
 
+class ResolveChangeDispositionParams(ChangeParams):
+    """Validate one exact Change attention identity for explicit resolution."""
+
+    expected_disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class CreateDesignSessionParams(ChangeParams):
     """Validate authored Design source bytes."""
 
@@ -273,6 +279,10 @@ type ReviseDesignSessionRequest = Annotated[
     ReviseDesignSessionParams,
     BeforeValidator(partial(_parse_json_model, ReviseDesignSessionParams)),
 ]
+type ResolveChangeDispositionRequest = Annotated[
+    ResolveChangeDispositionParams,
+    BeforeValidator(partial(_parse_json_model, ResolveChangeDispositionParams)),
+]
 type SearchCompletedRequest = Annotated[
     SearchCompletedParams,
     BeforeValidator(partial(_parse_json_model, SearchCompletedParams)),
@@ -315,6 +325,8 @@ __all__ = [
     "PublishDeliveryResultRequest",
     "RepairClaimContextParams",
     "RepairClaimContextRequest",
+    "ResolveChangeDispositionParams",
+    "ResolveChangeDispositionRequest",
     "RetainedChangeWorktreeResponse",
     "ReviseDesignSessionParams",
     "ReviseDesignSessionRequest",

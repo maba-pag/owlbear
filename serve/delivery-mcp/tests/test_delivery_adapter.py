@@ -19,6 +19,7 @@ from owlbear_delivery.completed_history import (
     CompletedHistoryMissingError,
 )
 from owlbear_delivery.delivery_runtime import (
+    DeliveryAcceptanceWaitingError,
     DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryPlanCandidate,
@@ -234,6 +235,7 @@ def _requests() -> dict[str, dict[str, object]]:
         "reconcile_change_checkpoint": change,
         "observe_change_publication_checks": change,
         "observe_acceptance": change,
+        "resolve_change_disposition": {**change, "expected_disposition_id": DIGEST},
         "transition_delivery": {
             **change,
             "request": {
@@ -278,6 +280,8 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
         assert isinstance(application.calls[0][1][1], MarkChangePullRequestReady)
     if operation_name in {"reconcile_finalization_head", "observe_acceptance"}:
         assert application.calls[0][1] == (CHANGE,)
+    if operation_name == "resolve_change_disposition":
+        assert application.calls[0][1] == (CHANGE, DIGEST)
     tuple_results = {"list_work_items", "list_retained_change_worktrees"}
     publication_results = {
         "publish_delivery_plan": {"candidate_id": "plan", "claim_id": "claim"},
@@ -412,6 +416,12 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             CompletionReceiptConflictError("completion receipt is inconsistent"),
             "ERR_COMPLETION_RECEIPT_CONFLICT",
             False,
+        ),
+        (
+            "resolve_change_disposition",
+            DeliveryAcceptanceWaitingError("pull request is still open and unmerged"),
+            "ERR_DELIVERY_ACCEPTANCE_WAITING",
+            True,
         ),
     )
     for operation_name, failure, code, retry_safe in cases:

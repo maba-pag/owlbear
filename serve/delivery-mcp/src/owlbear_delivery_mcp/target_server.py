@@ -57,6 +57,8 @@ from owlbear_delivery_mcp.target_models import (
     PublishDeliveryResultRequest,
     RepairClaimContextParams,
     RepairClaimContextRequest,
+    ResolveChangeDispositionParams,
+    ResolveChangeDispositionRequest,
     RetainedChangeWorktreeResponse,
     ReviseDesignSessionParams,
     ReviseDesignSessionRequest,
@@ -98,6 +100,7 @@ DELIVERY_OPERATION_NAMES = (
     "reconcile_change_checkpoint",
     "observe_change_publication_checks",
     "observe_acceptance",
+    "resolve_change_disposition",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
@@ -331,6 +334,18 @@ class TargetMCPAdapter:
             self._call,
             params,
             lambda: self._application.observe_acceptance(params.change_id),
+        )
+
+    async def resolve_change_disposition(self, request: ResolveChangeDispositionRequest) -> dict[str, object]:
+        """Resolve one exact Change attention record without restoring provider authority."""
+        params = self._validate(ResolveChangeDispositionParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.resolve_change_disposition(
+                params.change_id,
+                params.expected_disposition_id,
+            ),
         )
 
     async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]:

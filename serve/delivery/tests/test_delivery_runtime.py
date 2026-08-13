@@ -23,6 +23,7 @@ from owlbear_delivery import (
     CompletionPullRequestIdentity,
     CompletionReceipt,
     DeliveryActiveClaim,
+    DeliveryAcceptanceWaitingError,
     DeliveryChangeStage,
     DeliveryChangeDisposition,
     DeliveryChangeDispositionKind,
@@ -452,9 +453,10 @@ def _ready_receipt(finalization_id: str, exact_head: str) -> PullRequestReadyRec
     return PullRequestReadyReceipt(receipt_id=receipt_id, **values)
 
 
-def _pull_request_observation(
+def _pull_request_observation(  # noqa: PLR0913
     *,
     merged: bool = True,
+    state: str | None = None,
     merge_commit_sha: str = "5" * 40,
     observed_at: datetime = datetime(2026, 8, 11, 16, tzinfo=UTC),
     merged_at: datetime = datetime(2026, 8, 11, 15, tzinfo=UTC),
@@ -470,7 +472,7 @@ def _pull_request_observation(
         title="Delivery runtime",
         body="Generated summary",
         draft=False,
-        state="closed" if merged else "open",
+        state=state or ("closed" if merged else "open"),
         merged=merged,
         merge_commit_sha=merge_commit_sha,
         merged_at=merged_at if merged else None,
@@ -585,8 +587,23 @@ def test_schema_nine_frontier_migrates_without_change_attention(tmp_path: Path) 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 10
+    assert canonical["schema_version"] == 11
     assert migrated.change_disposition() is None
+
+
+def test_schema_ten_frontier_migrates_resolution_slot(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    path = tmp_path / "changes/delivery-runtime/frontier.json"
+    payload = json.loads(runtime.frontier_bytes())
+    payload["schema_version"] = 10
+    payload.pop("change_disposition_resolution")
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    migrated = DeliveryRuntime(tmp_path, _contract())
+    canonical = json.loads(migrated.frontier_bytes())
+
+    assert canonical["schema_version"] == 11
+    assert canonical["change_disposition_resolution"] is None
 
 
 def test_change_attention_is_first_write_wins_and_blocks_claims(tmp_path: Path) -> None:
@@ -608,8 +625,70 @@ def test_change_attention_is_first_write_wins_and_blocks_claims(tmp_path: Path) 
                 diagnostics=("different evidence",),
             )
         )
+    assert (
+        runtime.capture_change_disposition(
+            DeliveryChangeDisposition.create(
+                kind=disposition.kind,
+                change_id=disposition.change_id,
+                entered_from=disposition.entered_from,
+                recorded_at=recorded_at.replace(hour=17),
+                diagnostics=disposition.diagnostics,
+            )
+        )
+        == disposition
+    )
     with pytest.raises(DeliveryRuntimeConflictError, match="requires attention"):
         _activate(runtime, "OUT-001", "claim-001")
+
+
+def test_change_attention_resolution_is_exact_idempotent_and_preserves_ready_invalidation(tmp_path: Path) -> None:
+    runtime = _awaiting_merge_runtime(tmp_path)
+    disposition = runtime.capture_publication_attention(
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+        ("provider unavailable",),
+        clear_ready=True,
+    )
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="identity is stale"):
+        runtime.resolve_change_disposition("0" * 64, datetime(2026, 8, 11, 17, tzinfo=UTC))
+
+    resolution = runtime.resolve_change_disposition(
+        disposition.disposition_id,
+        datetime(2026, 8, 11, 17, tzinfo=UTC),
+    )
+
+    assert runtime.change_disposition() is None
+    assert runtime.change_disposition_resolution() == resolution
+    assert runtime.ready_receipt() is None
+    assert (
+        runtime.resolve_change_disposition(disposition.disposition_id, datetime(2026, 8, 11, 18, tzinfo=UTC))
+        == resolution
+    )
+
+
+def test_change_attention_resolution_rejects_active_claims(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    disposition = runtime.capture_publication_attention(
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+        ("provider unavailable",),
+    )
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    claim = DeliveryActiveClaim(
+        attempt_id="attempt-resolution",
+        claim_id="claim-resolution",
+        owner_id="owner-resolution",
+        process_id="process-resolution",
+        started_at="2026-08-11T16:00:00Z",
+        worker_role=DeliveryWorkerRole.PLANNER,
+    )
+    claimed_binding = frontier.bindings[0].model_copy(update={"active_claim": claim})
+    invalid_frontier = frontier.model_copy(update={"bindings": (claimed_binding, *frontier.bindings[1:])})
+
+    with (
+        patch.object(runtime, "_read", return_value=(invalid_frontier, runtime.frontier_bytes())),
+        pytest.raises(DeliveryRuntimeConflictError, match="cannot overlap an active mutation claim"),
+    ):
+        runtime.resolve_change_disposition(disposition.disposition_id, datetime(2026, 8, 11, 17, tzinfo=UTC))
 
 
 def test_pull_request_draft_regression_persists_publication_attention(tmp_path: Path) -> None:
@@ -638,7 +717,26 @@ def test_pull_request_draft_regression_persists_publication_attention(tmp_path: 
     assert ready.finalization_id == finalization.finalization_id
 
 
-def test_acceptance_mismatch_persists_acceptance_attention(tmp_path: Path) -> None:
+def test_open_unmerged_pull_request_is_retry_safe_waiting(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    exact_head = "3" * 40
+    finalization = runtime.finalize_change(
+        _finalization_request(exact_head),
+        datetime(2026, 8, 11, 14, tzinfo=UTC),
+    )
+    runtime.mark_awaiting_merge(_ready_receipt(finalization.finalization_id, exact_head))
+
+    with pytest.raises(DeliveryAcceptanceWaitingError, match="still open and unmerged"):
+        runtime.latch_merged_pull_request(_pull_request_observation(merged=False))
+
+    assert runtime.change_disposition() is None
+    assert runtime.ready_receipt() is not None
+
+
+def test_closed_unmerged_pull_request_persists_acceptance_attention(tmp_path: Path) -> None:
     runtime = _runtime(
         tmp_path,
         stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
@@ -651,12 +749,13 @@ def test_acceptance_mismatch_persists_acceptance_attention(tmp_path: Path) -> No
     runtime.mark_awaiting_merge(_ready_receipt(finalization.finalization_id, exact_head))
 
     with pytest.raises(DeliveryRuntimeConflictError, match="does not report a merged"):
-        runtime.latch_merged_pull_request(_pull_request_observation(merged=False))
+        runtime.latch_merged_pull_request(_pull_request_observation(merged=False, state="closed"))
 
     disposition = runtime.change_disposition()
     assert disposition is not None
     assert disposition.kind == DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION
-    assert runtime.ready_receipt() is not None
+    assert runtime.ready_receipt() is None
+    assert runtime.finalization() == finalization
 
 
 def test_merged_pull_request_latch_is_monotonic_and_rejects_regression(tmp_path: Path) -> None:
@@ -793,7 +892,7 @@ def test_runtime_migrates_reducible_assembly_metadata_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 10
+    assert canonical["schema_version"] == 11
     assert all("assembly_required" not in binding for binding in canonical["bindings"])
     assert json.loads(path.read_bytes()) == canonical
 
@@ -810,7 +909,7 @@ def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 10
+    assert canonical["schema_version"] == 11
     assert canonical["published_head"] is None
     assert canonical["pending_checkpoint"] is None
     assert json.loads(path.read_bytes()) == canonical
@@ -864,7 +963,7 @@ def test_runtime_migrates_prior_schema_without_rewriting_finalization_checkpoint
     )
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 10
+    assert canonical["schema_version"] == 11
     assert canonical["pending_checkpoint"] == expected_checkpoint
     assert canonical["pending_checkpoint"]["head"] == exact_head
     assert canonical["pending_checkpoint"]["triggers"][-1] == {

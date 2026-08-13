@@ -92,6 +92,12 @@ class ConfirmLostClaimBody(_TargetHTTPModel):
     claim_id: str = Field(min_length=1)
 
 
+class ResolveChangeAttentionBody(_TargetHTTPModel):
+    """Exact Change attention identity selected by the operator."""
+
+    expected_disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class BackwardMoveBody(_TargetHTTPModel):
     """Operator-selected earlier stage and reason."""
 
@@ -127,6 +133,7 @@ __all__ = [
     "ConfirmLostClaimBody",
     "DesignWorkDetailResponse",
     "NeedsCounts",
+    "ResolveChangeAttentionBody",
     "WorkItemDetailResponse",
     "WorkItemPortfolioResponse",
     "WorkItemPortfolioTotals",

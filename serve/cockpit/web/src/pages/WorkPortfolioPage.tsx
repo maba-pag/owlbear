@@ -187,6 +187,7 @@ function SelectedWorkItemDetail({
       onReconcilePublication={selectedDetail.reconcilePublication}
       onMarkPublicationReady={selectedDetail.markPublicationReady}
       onObserveAcceptance={selectedDetail.observeAcceptance}
+      onResolveAttention={selectedDetail.resolveAttention}
     />
   )
   if (selectedDetail.detail.isLoading) return <p role="status">Loading Work Item details...</p>

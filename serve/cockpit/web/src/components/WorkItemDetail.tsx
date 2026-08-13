@@ -45,6 +45,7 @@ interface WorkItemDetailProps {
   onReconcilePublication: () => Promise<void>
   onMarkPublicationReady: () => Promise<void>
   onObserveAcceptance: () => Promise<void>
+  onResolveAttention: (expectedDispositionId: string) => Promise<void>
 }
 
 const WORKER_ROLE_LABELS: Record<DeliveryWorkerRole, string> = {
@@ -385,16 +386,30 @@ function PublicationSection(props: WorkItemDetailProps) {
       ? props.onMarkPublicationReady
       : action.kind === 'observe-acceptance'
         ? props.onObserveAcceptance
+        : action.kind === 'resolve-attention' && action.attention_id
+          ? () => props.onResolveAttention(action.attention_id as string)
         : null
   const pending = action.kind === 'reconcile-checkpoint'
     ? props.pendingAction === 'publication-reconcile'
     : action.kind === 'mark-ready'
       ? props.pendingAction === 'publication-ready'
-      : props.pendingAction === 'acceptance-observe'
+      : action.kind === 'observe-acceptance'
+        ? props.pendingAction === 'acceptance-observe'
+        : props.pendingAction === 'attention-resolve'
   return (
     <section className="min-w-0 border-l border-contrast-low bg-surface p-static-md" aria-labelledby="work-publication-heading">
       <PHeading id="work-publication-heading" tag="h3" size="md">{PUBLICATION_PHASE_LABELS[publication.phase]}</PHeading>
       <p className="mt-static-xs text-sm leading-relaxed">{props.detail.item.card.next_step}</p>
+      {publication.attention ? (
+        <div className="mt-static-md border-l-4 border-warning bg-surface p-static-sm" role="alert">
+          <PHeading tag="h4" size="sm">Change attention</PHeading>
+          <p className="mt-static-xs text-sm">{publication.attention.kind === 'publication-attention' ? 'Publication evidence needs reconciliation.' : 'Acceptance evidence needs reconciliation.'}</p>
+          <ul className="mt-static-xs list-disc pl-static-md text-sm">
+            {publication.attention.diagnostics.map((diagnostic) => <li key={diagnostic}>{diagnostic}</li>)}
+          </ul>
+          <p className="mt-static-xs break-all font-mono text-xs">Disposition: {publication.attention.disposition_id}</p>
+        </div>
+      ) : null}
       <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs text-sm">
         <IdentityRow label="Repository" value={publication.repository} />
         <IdentityRow label="Pull request" value={publication.pull_request_number} />

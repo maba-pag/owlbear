@@ -259,6 +259,7 @@ function installFetch() {
       url.endsWith('/publication/reconcile')
       || url.endsWith('/publication/ready')
       || url.endsWith('/acceptance/observe')
+      || url.endsWith('/attention/resolve')
     )) {
       if (portfolioAfterPublication) currentPortfolio = portfolioAfterPublication
       return response({})
@@ -796,6 +797,68 @@ it('shows GitHub merge as user-owned work with observation as the only Cockpit c
     method: 'POST',
     body: null,
   }))
+})
+
+it('shows Change attention diagnostics and resolves the selected disposition', async () => {
+  const attentionId = 'a'.repeat(64)
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'you',
+    needs_headline: 'Change attention requires resolution',
+    next_actor: 'you',
+    next_step: 'Resolve acceptance attention',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Resolve acceptance attention', done: null, total: null },
+    action: { kind: 'resolve-attention', label: 'Resolve acceptance attention', command: null, attention_id: attentionId },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    promise: 'Resolve the provider evidence before continuing.',
+    acceptance: [],
+    commitments: [],
+    tasks: [],
+    publication: {
+      phase: 'awaiting-merge',
+      finalization_id: 'f'.repeat(64),
+      finalized_head: '1'.repeat(40),
+      published_head: '1'.repeat(40),
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: 'owlbear/example',
+      pull_request_number: 42,
+      pull_request_head: '1'.repeat(40),
+      accepted_merge_commit: null,
+      merged_at: null,
+      attention: {
+        disposition_id: attentionId,
+        kind: 'acceptance-attention',
+        change_id: 'change-alpha',
+        entered_from: 'awaiting-merge',
+        recorded_at: '2026-08-11T16:00:00Z',
+        diagnostics: ['Pull request was closed without a merge commit.'],
+      },
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'acceptance', outcome_completed: 0, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(inspector).toHaveTextContent('Change attention')
+  expect(inspector).toHaveTextContent('Pull request was closed without a merge commit.')
+  expect(inspector).toHaveTextContent(`Disposition: ${attentionId}`)
+  fireEvent.click(within(inspector).getAllByText('Resolve acceptance attention').at(-1)!)
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/attention/resolve',
+    method: 'POST',
+    body: { expected_disposition_id: attentionId },
+  }))
+  expect(await screen.findByText('Change attention resolved.')).toBeInTheDocument()
 })
 
 it('uses the Done status tag without leaking the internal Stage field', async () => {

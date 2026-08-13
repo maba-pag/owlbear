@@ -12,6 +12,7 @@ export type WorkItemActionKind =
   | 'reconcile-checkpoint'
   | 'mark-ready'
   | 'observe-acceptance'
+  | 'resolve-attention'
   | 'start-orchestration'
 export type WorkItemProgressKind = 'tasks' | 'design-return' | 'plan' | 'publication'
 export type WorkItemChangeLifecycle = 'in-delivery' | 'finalization' | 'publication' | 'awaiting-merge' | 'acceptance'
@@ -35,6 +36,7 @@ export interface WorkItemAction {
   kind: WorkItemActionKind
   label: string | null
   command: string | null
+  attention_id?: string | null
 }
 
 export interface WorkItemProgress {
@@ -198,6 +200,14 @@ export interface WorkItemPublicationView {
   pull_request_head: string | null
   accepted_merge_commit: string | null
   merged_at: string | null
+  attention?: {
+    disposition_id: string
+    kind: 'publication-attention' | 'acceptance-attention'
+    change_id: string
+    entered_from: string
+    recorded_at: string
+    diagnostics: string[]
+  } | null
 }
 
 export interface WorkItemDetailView {
@@ -481,5 +491,13 @@ export function observeWorkItemAcceptance(changeId: string): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/acceptance/observe`,
     'ERR_WORK_ITEM_ACCEPTANCE_OBSERVE',
+  )
+}
+
+export function resolveWorkItemAttention(changeId: string, expectedDispositionId: string): Promise<unknown> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/attention/resolve`,
+    'ERR_WORK_ITEM_ATTENTION_RESOLVE',
+    { expected_disposition_id: expectedDispositionId },
   )
 }

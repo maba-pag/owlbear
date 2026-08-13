@@ -231,6 +231,10 @@ class _DeliveryApplicationFake:
         self.calls.append(("acceptance-observe", args))
         return {"change_id": args[0], "completion_id": "f" * 64}
 
+    def resolve_change_disposition(self, *args: object) -> dict[str, object]:
+        self.calls.append(("attention-resolve", args))
+        return {"change_id": args[0], "disposition_id": args[1]}
+
     def list_completed_changes(self, *args: object) -> dict[str, object]:
         self.calls.append(("completed-list", args))
         return {"records": [], "next_cursor": None}
@@ -443,16 +447,21 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
         client.post("/api/changes/change-a/publication/reconcile"),
         client.post("/api/changes/change-a/publication/ready"),
         client.post("/api/changes/change-a/acceptance/observe"),
+        client.post(
+            "/api/changes/change-a/attention/resolve",
+            json={"expected_disposition_id": "a" * 64},
+        ),
         client.get("/api/work-items/completed", params={"limit": 25}),
         client.get("/api/work-items/completed/search", params={"query": "delivery", "limit": 5}),
         client.get("/api/work-items/completed/change-a", params={"completion_id": "a" * 64}),
     )
 
-    assert [response.status_code for response in responses] == [200, 200, 200, 200, 200, 200]
+    assert [response.status_code for response in responses] == [200, 200, 200, 200, 200, 200, 200]
     assert application.calls == [
         ("publication-reconcile", ("change-a",)),
         ("publication-ready", ("change-a",)),
         ("acceptance-observe", ("change-a",)),
+        ("attention-resolve", ("change-a", "a" * 64)),
         ("completed-list", (None, 25)),
         ("completed-search", ("delivery", None, 5)),
         ("completed-show", ("change-a", "a" * 64)),
