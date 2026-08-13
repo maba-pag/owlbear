@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from owlbear_delivery.delivery_runtime import (
     DeliveryBlock,
+    DeliveryChangeDispositionKind,
     DeliveryFrontier,
     DeliveryOperatorMove,
     DeliveryRecoveryAttention,
@@ -339,7 +340,10 @@ class WorkItemProjector:
         completed = sum(binding.stage == DeliveryStage.COMPLETED for binding in self._snapshot.frontier.bindings)
         lifecycle = (
             self._change_lifecycle()
-            if completed == len(self._snapshot.frontier.bindings)
+            if (
+                completed == len(self._snapshot.frontier.bindings)
+                or self._snapshot.frontier.change_disposition is not None
+            )
             else WorkItemChangeLifecycle.IN_DELIVERY
         )
         return ChangeGroupView(
@@ -567,6 +571,11 @@ class WorkItemProjector:
         )
 
     def _change_lifecycle(self) -> WorkItemChangeLifecycle:
+        disposition = self._snapshot.frontier.change_disposition
+        if disposition is not None:
+            if disposition.kind == DeliveryChangeDispositionKind.PUBLICATION_ATTENTION:
+                return WorkItemChangeLifecycle.PUBLICATION
+            return WorkItemChangeLifecycle.ACCEPTANCE
         phase = self._publication_phase()
         if phase in {
             WorkItemPublicationPhase.FINALIZATION_INVALIDATED,

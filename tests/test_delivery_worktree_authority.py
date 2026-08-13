@@ -62,6 +62,7 @@ _REGISTER_WORKTREE_CALLERS = frozenset(
     }
 )
 _COMPLETION_CALLERS = frozenset({("PortfolioApplication", "observe_acceptance")})
+_DISPOSITION_CAPTURE_EXEMPTIONS = frozenset({"capture_change_disposition"})
 
 
 def _source_files() -> tuple[Path, ...]:
@@ -191,6 +192,48 @@ class _CompletionCallVisitor(ast.NodeVisitor):
         self.visit(ast.parse(self.path.read_text(encoding="utf-8"), filename=str(self.path)))
 
 
+class _RuntimeMutationVisitor(ast.NodeVisitor):
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.in_runtime = False
+        self.methods: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {}
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        if node.name == "DeliveryRuntime":
+            self.in_runtime = True
+            self.generic_visit(node)
+            self.in_runtime = False
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        if self.in_runtime:
+            self.methods[node.name] = node
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        if self.in_runtime:
+            self.methods[node.name] = node
+
+    def scan(self) -> None:
+        self.visit(ast.parse(self.path.read_text(encoding="utf-8"), filename=str(self.path)))
+
+
+def _has_attribute_call(node: ast.AST, attribute: str) -> bool:
+    return any(
+        isinstance(item, ast.Call)
+        and isinstance(item.func, ast.Attribute)
+        and isinstance(item.func.value, ast.Name)
+        and item.func.value.id == "self"
+        and item.func.attr == attribute
+        for item in ast.walk(node)
+    )
+
+
+def _has_named_call(node: ast.AST, name: str) -> bool:
+    return any(
+        isinstance(item, ast.Call) and isinstance(item.func, ast.Name) and item.func.id == name
+        for item in ast.walk(node)
+    )
+
+
 def _worktree_add_matches() -> list[tuple[Path, int, tuple[str, ...], tuple[str, ...], str]]:
     matches: list[tuple[Path, int, tuple[str, ...], tuple[str, ...], str]] = []
     for path in _source_files():
@@ -316,6 +359,24 @@ def test_completion_has_one_application_callsite_and_merged_latch_guard() -> Non
         isinstance(node, ast.If) and any(_is_none_guard(test, "latch") for test in ast.walk(node.test))
         for node in ast.walk(completion)
     )
+
+
+def test_runtime_frontier_writers_use_the_central_mutability_policy() -> None:
+    runtime_path = _REPO_ROOT / "serve/delivery/src/owlbear_delivery/delivery_runtime.py"
+    visitor = _RuntimeMutationVisitor(runtime_path)
+    visitor.scan()
+    writers = {
+        name
+        for name, node in visitor.methods.items()
+        if _has_attribute_call(node, "_replace") or name == "complete_change"
+    }
+    normal_writers = writers - _DISPOSITION_CAPTURE_EXEMPTIONS
+
+    from owlbear_delivery.delivery_runtime import _NORMAL_CHANGE_MUTATIONS
+
+    assert normal_writers == _NORMAL_CHANGE_MUTATIONS
+    assert all(_has_named_call(visitor.methods[name], "_require_change_mutable") for name in normal_writers)
+    assert _has_named_call(visitor.methods["capture_change_disposition"], "is_change_terminal")
 
 
 def test_delivery_source_has_no_retired_local_integration_producers() -> None:

@@ -24,6 +24,8 @@ from owlbear_delivery import (
     CompletionReceipt,
     DeliveryActiveClaim,
     DeliveryChangeStage,
+    DeliveryChangeDisposition,
+    DeliveryChangeDispositionKind,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
     DeliveryContract,
@@ -572,6 +574,91 @@ def test_finalization_binds_exact_head_and_invalidates_on_head_drift(tmp_path: P
     assert runtime.checkpoint_publication_state().pending_checkpoint is None
 
 
+def test_schema_nine_frontier_migrates_without_change_attention(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    path = tmp_path / "changes/delivery-runtime/frontier.json"
+    payload = json.loads(runtime.frontier_bytes())
+    payload["schema_version"] = 9
+    payload.pop("change_disposition")
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    migrated = DeliveryRuntime(tmp_path, _contract())
+    canonical = json.loads(migrated.frontier_bytes())
+
+    assert canonical["schema_version"] == 10
+    assert migrated.change_disposition() is None
+
+
+def test_change_attention_is_first_write_wins_and_blocks_claims(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    recorded_at = datetime(2026, 8, 11, 16, tzinfo=UTC)
+
+    disposition = runtime.capture_publication_attention(recorded_at, ("provider unavailable",))
+
+    assert disposition.kind == DeliveryChangeDispositionKind.PUBLICATION_ATTENTION
+    assert runtime.change_disposition() == disposition
+    assert runtime.capture_change_disposition(disposition) == disposition
+    with pytest.raises(DeliveryRuntimeConflictError, match="different attention"):
+        runtime.capture_change_disposition(
+            DeliveryChangeDisposition.create(
+                kind=DeliveryChangeDispositionKind.PUBLICATION_ATTENTION,
+                change_id="delivery-runtime",
+                entered_from=DeliveryChangeStage.BUILDING,
+                recorded_at=recorded_at,
+                diagnostics=("different evidence",),
+            )
+        )
+    with pytest.raises(DeliveryRuntimeConflictError, match="requires attention"):
+        _activate(runtime, "OUT-001", "claim-001")
+
+
+def test_pull_request_draft_regression_persists_publication_attention(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    exact_head = "3" * 40
+    finalization = runtime.finalize_change(
+        _finalization_request(exact_head),
+        datetime(2026, 8, 11, 14, tzinfo=UTC),
+    )
+    ready = runtime.mark_awaiting_merge(_ready_receipt(finalization.finalization_id, exact_head))
+
+    runtime.reconcile_pull_request_draft_state(
+        provider_draft=True,
+        observed_at=datetime(2026, 8, 11, 15, tzinfo=UTC),
+        observation_id="d" * 64,
+    )
+
+    disposition = runtime.change_disposition()
+    assert disposition is not None
+    assert disposition.kind == DeliveryChangeDispositionKind.PUBLICATION_ATTENTION
+    assert disposition.entered_from == DeliveryChangeStage.AWAITING_MERGE
+    assert runtime.ready_receipt() is None
+    assert ready.finalization_id == finalization.finalization_id
+
+
+def test_acceptance_mismatch_persists_acceptance_attention(tmp_path: Path) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    exact_head = "3" * 40
+    finalization = runtime.finalize_change(
+        _finalization_request(exact_head),
+        datetime(2026, 8, 11, 14, tzinfo=UTC),
+    )
+    runtime.mark_awaiting_merge(_ready_receipt(finalization.finalization_id, exact_head))
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="does not report a merged"):
+        runtime.latch_merged_pull_request(_pull_request_observation(merged=False))
+
+    disposition = runtime.change_disposition()
+    assert disposition is not None
+    assert disposition.kind == DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION
+    assert runtime.ready_receipt() is not None
+
+
 def test_merged_pull_request_latch_is_monotonic_and_rejects_regression(tmp_path: Path) -> None:
     runtime = _runtime(
         tmp_path,
@@ -706,7 +793,7 @@ def test_runtime_migrates_reducible_assembly_metadata_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 9
+    assert canonical["schema_version"] == 10
     assert all("assembly_required" not in binding for binding in canonical["bindings"])
     assert json.loads(path.read_bytes()) == canonical
 
@@ -723,7 +810,7 @@ def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 9
+    assert canonical["schema_version"] == 10
     assert canonical["published_head"] is None
     assert canonical["pending_checkpoint"] is None
     assert json.loads(path.read_bytes()) == canonical
@@ -777,7 +864,7 @@ def test_runtime_migrates_prior_schema_without_rewriting_finalization_checkpoint
     )
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 9
+    assert canonical["schema_version"] == 10
     assert canonical["pending_checkpoint"] == expected_checkpoint
     assert canonical["pending_checkpoint"]["head"] == exact_head
     assert canonical["pending_checkpoint"]["triggers"][-1] == {

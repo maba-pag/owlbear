@@ -67,7 +67,9 @@ from owlbear_delivery.delivery_runtime import (
     OutcomeAuthorityBinding,
     PublishDeliveryPlan,
     PublishDeliveryResult,
+    derive_change_stage,
     integration_attention_disposition,
+    is_change_terminal,
 )
 from owlbear_delivery.draft_pull_request import (
     CreateOrReconcileDraftPullRequest,
@@ -752,6 +754,10 @@ class PortfolioApplication:
                 or snapshot.merge_commit_sha is None
                 or snapshot.merged_at is None
             ):
+                runtime.capture_acceptance_attention(
+                    observation,
+                    ("provider pull request does not satisfy acceptance authority",),
+                )
                 message = "provider pull request does not satisfy acceptance authority"
                 raise PortfolioApplicationError(message)
             latch = runtime.latch_merged_pull_request(observation)
@@ -823,7 +829,11 @@ class PortfolioApplication:
                 )
             result = runtime.reconcile_finalization_head(observed_head, _timestamp(self._clock()))
             if not isinstance(result, DeliveryFinalizationInvalidationReceipt) and observation is not None:
-                runtime.reconcile_pull_request_draft_state(provider_draft=observation.snapshot.draft)
+                runtime.reconcile_pull_request_draft_state(
+                    provider_draft=observation.snapshot.draft,
+                    observed_at=observation.observed_at,
+                    observation_id=observation.observation_id,
+                )
             return result
 
     def reconcile_change_checkpoint(self, change_id: str) -> DeliveryCheckpointReconciliationResult:
@@ -1032,7 +1042,7 @@ class PortfolioApplication:
         """List bounded work-item projections in stable portfolio order."""
         projections = []
         for snapshot in self._portfolio_snapshots():
-            if self._snapshot_change_stage(snapshot) == DeliveryChangeStage.COMPLETED:
+            if is_change_terminal(snapshot.frontier):
                 continue
             projections.extend(WorkItemProjector(snapshot).list_items())
         return tuple(
@@ -1051,7 +1061,7 @@ class PortfolioApplication:
         return tuple(
             WorkItemProjector(snapshot).group_view()
             for snapshot in self._portfolio_snapshots()
-            if self._snapshot_change_stage(snapshot) != DeliveryChangeStage.COMPLETED
+            if not is_change_terminal(snapshot.frontier)
         )
 
     def portfolio_read_view(self) -> PortfolioReadView:
@@ -1060,7 +1070,7 @@ class PortfolioApplication:
         groups = tuple(
             WorkItemProjector(snapshot).group_view()
             for snapshot in snapshots
-            if self._snapshot_change_stage(snapshot) != DeliveryChangeStage.COMPLETED
+            if not is_change_terminal(snapshot.frontier)
         )
         return PortfolioReadView(
             groups=groups,
@@ -1113,9 +1123,7 @@ class PortfolioApplication:
             for item in group.items
             if item.needs == WorkItemNeed.DEPENDENCY
         )
-        unfinished_runtime_count = sum(
-            self._snapshot_change_stage(snapshot) != DeliveryChangeStage.COMPLETED for snapshot in snapshots
-        )
+        unfinished_runtime_count = sum(not is_change_terminal(snapshot.frontier) for snapshot in snapshots)
         unfinished_change_count = unfinished_runtime_count
         design_change_ids = tuple(dict.fromkeys((*draft_design_ids, *design_required_ids)))
         guidance = derive_portfolio_guidance(
@@ -1176,8 +1184,10 @@ class PortfolioApplication:
         self,
         snapshot: DeliveryPortfolioSnapshot,
     ) -> tuple[int, int, int, str, PortfolioWorkReference] | None:
-        if self._snapshot_change_stage(snapshot) != DeliveryChangeStage.BUILDING or self._snapshot_has_active_claims(
-            snapshot
+        if (
+            self._snapshot_change_stage(snapshot) != DeliveryChangeStage.BUILDING
+            or snapshot.frontier.change_disposition is not None
+            or self._snapshot_has_active_claims(snapshot)
         ):
             return None
         completed = {
@@ -1394,16 +1404,7 @@ class PortfolioApplication:
 
     @staticmethod
     def _snapshot_change_stage(snapshot: DeliveryPortfolioSnapshot) -> DeliveryChangeStage:
-        if snapshot.frontier.change_completion is not None or snapshot.frontier.integration_result_id is not None:
-            return DeliveryChangeStage.COMPLETED
-        if snapshot.frontier.ready is not None:
-            return DeliveryChangeStage.AWAITING_MERGE
-        if snapshot.frontier.finalization is not None:
-            return DeliveryChangeStage.FINALIZED
-        stages = {binding.stage for binding in snapshot.frontier.bindings}
-        if DeliveryStage.DESIGN in stages:
-            return DeliveryChangeStage.DESIGN
-        return DeliveryChangeStage.BUILDING
+        return derive_change_stage(snapshot.frontier)
 
     @staticmethod
     def _snapshot_has_active_claims(snapshot: DeliveryPortfolioSnapshot) -> bool:

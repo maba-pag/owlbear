@@ -62,6 +62,8 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryActiveClaim,
     DeliveryBlock,
     DeliveryChangeCompletion,
+    DeliveryChangeDisposition,
+    DeliveryChangeDispositionKind,
     DeliveryChangeStage,
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointTrigger,
@@ -107,7 +109,9 @@ from owlbear_delivery.delivery_runtime import (
     PublishDeliveryResult,
     RetryDelivery,
     ReturnDelivery,
+    derive_change_stage,
     integration_attention_disposition,
+    is_change_terminal,
 )
 from owlbear_delivery.design_package import (
     CompletionPackageManifest,
@@ -337,6 +341,8 @@ __all__ = [
     "DeliveryBlock",
     "DeliveryBuildContext",
     "DeliveryChangeCompletion",
+    "DeliveryChangeDisposition",
+    "DeliveryChangeDispositionKind",
     "DeliveryChangeStage",
     "DeliveryCheckpointPublicationState",
     "DeliveryCheckpointReconciliationResult",
@@ -520,8 +526,10 @@ __all__ = [
     "WriterIdentity",
     "compile_delivery_contract",
     "create_legacy_snapshot",
+    "derive_change_stage",
     "integration_attention_disposition",
     "inventory_legacy_source",
+    "is_change_terminal",
     "load_delivery_application",
     "verify_legacy_snapshot",
 ]
