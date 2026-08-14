@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from owlbear_delivery.delivery_runtime import DeliveryStage
 from owlbear_delivery.portfolio_operating import PortfolioOperatingView
+from owlbear_delivery.publication_provider import (
+    PublicationCheckBlockingState,
+    PublicationCheckKind,
+    classify_publication_check,
+)
 from owlbear_delivery.work_items import ChangeGroupView, WorkItemDetailView
 
 if TYPE_CHECKING:
     from owlbear_delivery.change_workspace import ChangeTargetSyncAbortReceipt, ChangeTargetSyncReceipt
+    from owlbear_delivery.draft_pull_request import PublicationCheckObservationReceipt
     from owlbear_delivery.portfolio_application import (
         DeliveryAcceptanceReconciliationOutcome,
         DeliveryChangePublicationSupersessionReceipt,
@@ -61,6 +68,74 @@ class WorkItemDetailResponse(_TargetHTTPModel):
     """Semantic and operator detail from one exact snapshot."""
 
     item: WorkItemDetailView
+
+
+class PublicationCheckView(_TargetHTTPModel):
+    """One bounded provider check with Delivery-owned readiness meaning."""
+
+    check_id: str = Field(min_length=1)
+    kind: PublicationCheckKind
+    name: str = Field(min_length=1)
+    status: str = Field(min_length=1)
+    conclusion: str | None = None
+    required: bool
+    blocking_state: PublicationCheckBlockingState
+
+
+class PublicationChecksObservationResponse(_TargetHTTPModel):
+    """Bounded exact-head publication checks observed through Delivery."""
+
+    schema_version: Literal[1] = 1
+    observation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: str = Field(min_length=1)
+    repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    pull_request_number: int = Field(gt=0)
+    exact_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    observed_at: datetime
+    rollup_state: str | None = Field(default=None, min_length=1)
+    checks: tuple[PublicationCheckView, ...]
+    required_failure_count: int = Field(ge=0)
+    truncated_count: int = Field(ge=0)
+
+    @classmethod
+    def from_receipt(cls, receipt: PublicationCheckObservationReceipt) -> PublicationChecksObservationResponse:
+        """Order and bound provider checks without moving readiness authority to HTTP."""
+        classified = tuple((check, classify_publication_check(check)) for check in receipt.snapshot.checks)
+        state_order = {
+            PublicationCheckBlockingState.BLOCKING: 0,
+            PublicationCheckBlockingState.REQUIRED_PENDING: 1,
+            PublicationCheckBlockingState.NOT_BLOCKING: 2,
+        }
+        ordered = tuple(
+            sorted(
+                classified,
+                key=lambda item: (state_order[item[1]], item[0].name.casefold(), item[0].check_id),
+            )
+        )
+        limit = 200
+        return cls(
+            observation_id=receipt.observation_id,
+            change_id=receipt.change_id,
+            repository=receipt.repository,
+            pull_request_number=receipt.number,
+            exact_commit=receipt.exact_commit,
+            observed_at=receipt.observed_at,
+            rollup_state=receipt.snapshot.rollup_state,
+            checks=tuple(
+                PublicationCheckView(
+                    check_id=check.check_id,
+                    kind=check.kind,
+                    name=check.name,
+                    status=check.status,
+                    conclusion=check.conclusion,
+                    required=check.required,
+                    blocking_state=state,
+                )
+                for check, state in ordered[:limit]
+            ),
+            required_failure_count=sum(state is PublicationCheckBlockingState.BLOCKING for _check, state in classified),
+            truncated_count=max(len(ordered) - limit, 0),
+        )
 
 
 class AcceptanceReconciliationRequest(_TargetHTTPModel):
@@ -323,6 +398,8 @@ __all__ = [
     "ConfirmLostClaimBody",
     "DesignWorkDetailResponse",
     "NeedsCounts",
+    "PublicationCheckView",
+    "PublicationChecksObservationResponse",
     "RecoverChangeWorktreeBody",
     "ResolveChangeAttentionBody",
     "TargetSyncAbortResponse",

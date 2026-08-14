@@ -15,6 +15,8 @@ import {
   type DeliveryRequest,
   type DeliveryRequestResolution,
   type WorkItemDetailResponse,
+  type PublicationCheckBlockingState,
+  type PublicationChecksObservationResponse,
   type WorkItemPublicationPhase,
   type WorkItemStage,
   type DeliveryWorkerRole,
@@ -44,6 +46,11 @@ interface WorkItemDetailProps {
   onMoveBackward: (target: WorkItemStage, reason: string, snapshotVersion: string) => Promise<void>
   onReconcilePublication: () => Promise<Error | null>
   onMarkPublicationReady: () => Promise<Error | null>
+  publicationChecks: PublicationChecksObservationResponse | null
+  publicationChecksError: Error | null
+  publicationChecksStale: boolean
+  isObservingPublicationChecks: boolean
+  onObservePublicationChecks: () => Promise<Error | null>
   onObserveAcceptance: () => Promise<Error | null>
   onResolveAttention: (expectedDispositionId: string) => Promise<Error | null>
   onSupersedePublication: () => Promise<Error | null>
@@ -580,6 +587,92 @@ function TargetSyncConflictSection(props: WorkItemDetailProps) {
   )
 }
 
+const PUBLICATION_CHECK_STATE_LABELS: Record<PublicationCheckBlockingState, string> = {
+  blocking: 'Blocking',
+  'required-pending': 'Required pending',
+  'not-blocking': 'Not blocking',
+}
+
+function PublicationCheckItem({ check }: { check: PublicationChecksObservationResponse['checks'][number] }) {
+  return (
+    <li className="border-l-2 border-contrast-low pl-static-sm" data-testid="publication-check">
+      <div className="flex flex-wrap items-start justify-between gap-static-xs">
+        <strong className="text-sm">{check.name}</strong>
+        <PTag compact>{PUBLICATION_CHECK_STATE_LABELS[check.blocking_state]}</PTag>
+      </div>
+      <p className="mt-static-xs text-xs text-contrast-medium">
+        {check.required ? 'Required' : 'Optional'} · {check.status}
+        {check.conclusion ? ` · ${check.conclusion}` : ''}
+      </p>
+    </li>
+  )
+}
+
+function PublicationChecksSection(props: WorkItemDetailProps) {
+  const publication = props.detail.item.publication
+  const observable = publication
+    && (publication.phase === 'pull-request-draft' || publication.phase === 'awaiting-merge')
+    && publication.published_head !== null
+    && publication.publication_generations.length > 0
+  if (!observable) return null
+  const observation = props.publicationChecks
+  const errorCode = props.publicationChecksError instanceof WorkItemApiError
+    ? props.publicationChecksError.code
+    : 'ERR_DELIVERY_PUBLICATION_CHECKS'
+  const status = props.isObservingPublicationChecks
+    ? 'Observing publication checks...'
+    : props.publicationChecksStale
+      ? 'Previous check results were cleared because the published head changed. Observe again for the current head.'
+      : observation
+        ? `Checks observed for ${observation.exact_commit}.`
+        : 'No publication-check observation recorded for this head.'
+  return (
+    <section className="border-l border-contrast-low bg-surface p-static-md" aria-labelledby="publication-checks-heading">
+      <div className="flex flex-wrap items-start justify-between gap-static-sm">
+        <PHeading id="publication-checks-heading" tag="h4" size="sm">Publication checks</PHeading>
+        <PButton
+          type="button"
+          compact
+          variant="secondary"
+          data-testid="publication-checks-observe"
+          disabled={props.isObservingPublicationChecks}
+          onClick={() => void props.onObservePublicationChecks()}
+        >
+          {props.isObservingPublicationChecks ? 'Checking...' : 'Check publication'}
+        </PButton>
+      </div>
+      <p className="mt-static-sm text-sm" aria-live="polite" role="status" data-testid="publication-checks-status">{status}</p>
+      {props.publicationChecksError ? (
+        <p className="mt-static-sm flex items-center gap-static-xs border-l-4 border-danger bg-surface p-static-sm text-sm" role="alert">
+          <PIcon name="error" size="sm" aria-hidden="true" />
+          <strong>{errorCode}</strong>: {props.publicationChecksError.message}
+        </p>
+      ) : null}
+      {observation ? (
+        <>
+          <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs text-sm">
+            <dt className="text-contrast-medium">Observed commit</dt>
+            <dd className="min-w-0 break-all font-mono text-xs">{observation.exact_commit}</dd>
+            <dt className="text-contrast-medium">Evidence recorded</dt>
+            <dd className="min-w-0 break-all font-mono text-xs"><time dateTime={observation.observed_at}>{observation.observed_at}</time></dd>
+            <dt className="text-contrast-medium">Required blocking checks</dt>
+            <dd>{observation.required_failure_count}</dd>
+            {observation.rollup_state ? <><dt className="text-contrast-medium">Provider rollup</dt><dd>{observation.rollup_state}</dd></> : null}
+          </dl>
+          {observation.truncated_count > 0 ? (
+            <p className="mt-static-sm border-l-4 border-warning bg-surface p-static-sm text-sm" role="status">
+              {observation.truncated_count} additional check{observation.truncated_count === 1 ? '' : 's'} not shown.
+            </p>
+          ) : null}
+          <ul className="mt-static-md grid gap-static-sm" aria-label="Publication check results">
+            {observation.checks.map((check) => <PublicationCheckItem key={check.check_id} check={check} />)}
+          </ul>
+        </>
+      ) : null}
+    </section>
+  )
+}
+
 function PublicationSection(props: WorkItemDetailProps) {
   const publication = props.detail.item.publication
   if (!publication) return null
@@ -639,6 +732,7 @@ function PublicationSection(props: WorkItemDetailProps) {
         <IdentityRow label="Target head" value={publication.target_sync?.target_head ?? null} />
         <IdentityRow label="Merged Change head" value={publication.target_sync?.merged_head ?? null} />
       </dl>
+      <PublicationChecksSection {...props} />
       {publication.target_sync ? (
         <p className="mt-static-sm text-xs text-contrast-medium">
           Last target sync: {publication.target_sync.integration_target}

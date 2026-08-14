@@ -9,6 +9,7 @@ import type {
   WorkItemCardView,
   WorkItemDetailResponse,
   WorkItemPortfolioResponse,
+  PublicationChecksObservationResponse,
 } from '../api/workItems'
 import { PortfolioHeaderSummary } from '../components/PortfolioOperatingSummary'
 import WorkPortfolioPage from '../pages/WorkPortfolioPage'
@@ -108,6 +109,10 @@ function portfolio(groups: ChangeGroupView[] = [group()]): WorkItemPortfolioResp
 }
 
 function detail(overrides: Partial<WorkItemDetailResponse['item']> = {}): WorkItemDetailResponse {
+  const publication = overrides.publication && {
+    publication_generations: [],
+    ...overrides.publication,
+  }
   return {
     item: {
       snapshot_version: 'a'.repeat(64),
@@ -137,10 +142,57 @@ function detail(overrides: Partial<WorkItemDetailResponse['item']> = {}): WorkIt
       return_context: null,
       operator_moves: [],
       recovery_attention: null,
-      publication: null,
       ...overrides,
+      publication: publication || null,
     },
   }
+}
+
+type PublicationView = NonNullable<WorkItemDetailResponse['item']['publication']>
+
+function publicationForChecks(
+  phase: 'pull-request-draft' | 'awaiting-merge' | 'ready-for-finalization',
+  publishedHead = '1'.repeat(40),
+): PublicationView {
+  return {
+    phase,
+    finalization_id: 'f'.repeat(64),
+    finalized_head: publishedHead,
+    published_head: publishedHead,
+    pending_checkpoint_head: null,
+    pending_checkpoint_triggers: [],
+    invalidated_expected_head: null,
+    invalidated_observed_head: null,
+    repository: null,
+    pull_request_number: null,
+    pull_request_head: null,
+    accepted_merge_commit: null,
+    merged_at: null,
+    publication_generations: [{
+      repository: 'owlbear/example',
+      number: 42,
+      node_id: 'PR_example_42',
+      head_sha: publishedHead,
+    }],
+  }
+}
+
+function publicationCardForChecks(overrides: Partial<WorkItemCardView> = {}): WorkItemCardView {
+  return card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'none',
+    needs_headline: null,
+    next_actor: 'agent',
+    next_step: 'Review publication checks',
+    activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Pull request is draft', done: null, total: null },
+    action: { kind: 'none', label: null, command: null },
+    ...overrides,
+  })
 }
 
 const completed: CompletedChangeRecord = {
@@ -184,6 +236,8 @@ let portfolioAfterPublication: WorkItemPortfolioResponse | null
 let portfolioFailure: boolean
 let detailFailure: boolean
 let acceptanceObservationFailure: boolean
+let publicationChecksFailure: boolean
+let publicationChecksResponse: PublicationChecksObservationResponse
 let supersedeFailuresRemaining: number
 let completedRecords: CompletedChangeRecord[]
 let requests: Array<{ url: string; method: string; body: unknown }>
@@ -226,6 +280,20 @@ function installFetch() {
     if (method === 'GET' && url.startsWith('/api/work-items/completed/')) {
       const selected = completedRecords.find((record) => url.includes(record.completion_id))
       return selected ? response(selected) : response({ detail: 'Not found' }, 404)
+    }
+
+    if (method === 'POST' && url.endsWith('/publication/checks/observe')) {
+      if (publicationChecksFailure) {
+        return response({
+          detail: {
+            code: 'ERR_DELIVERY_PROVIDER_UNAVAILABLE',
+            detail: 'GitHub is unavailable',
+            authority: 'delivery',
+            retry_safe: true,
+          },
+        }, 502)
+      }
+      return response(publicationChecksResponse)
     }
 
     if (method === 'POST' && url.includes('/requests/')) {
@@ -375,6 +443,48 @@ beforeEach(() => {
   portfolioFailure = false
   detailFailure = false
   acceptanceObservationFailure = false
+  publicationChecksFailure = false
+  publicationChecksResponse = {
+    schema_version: 1,
+    observation_id: 'a'.repeat(64),
+    change_id: 'change-alpha',
+    repository: 'owlbear/example',
+    pull_request_number: 42,
+    exact_commit: '1'.repeat(40),
+    observed_at: '2026-08-11T16:00:00Z',
+    rollup_state: 'failure',
+    checks: [
+      {
+        check_id: 'required-failure',
+        kind: 'check_run',
+        name: 'Unit tests',
+        status: 'completed',
+        conclusion: 'failure',
+        required: true,
+        blocking_state: 'blocking',
+      },
+      {
+        check_id: 'required-pending',
+        kind: 'check_run',
+        name: 'Integration tests',
+        status: 'queued',
+        conclusion: null,
+        required: true,
+        blocking_state: 'required-pending',
+      },
+      {
+        check_id: 'optional-failure',
+        kind: 'check_run',
+        name: 'Optional lint',
+        status: 'completed',
+        conclusion: 'failure',
+        required: false,
+        blocking_state: 'not-blocking',
+      },
+    ],
+    required_failure_count: 1,
+    truncated_count: 0,
+  }
   supersedeFailuresRemaining = 0
   completedRecords = [completed]
   requests = []
@@ -1579,6 +1689,96 @@ it('presents a draft pull request as publication work', async () => {
   const readyLink = within(table).getByText('Mark ready').closest('p-link-pure') as HTMLElement & { href: string }
   expect(readyLink.href).toBe('/delivery/change-alpha/publication')
   expect(screen.getByLabelText('Delivery portfolio status')).not.toHaveTextContent('need you')
+})
+
+it('observes checks from a draft even when repository and pull request fields are null', async () => {
+  const publicationCard = publicationCardForChecks()
+  currentDetail = detail({
+    card: publicationCard,
+    publication: publicationForChecks('pull-request-draft'),
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'publication', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  const portfolioReadsBefore = requests.filter(({ url, method }) => url === '/api/work-items' && method === 'GET').length
+  expect(within(inspector).getByTestId('publication-checks-observe')).toBeInTheDocument()
+  fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
+
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/publication/checks/observe',
+    method: 'POST',
+    body: null,
+  }))
+  expect(await within(inspector).findByText('Unit tests')).toBeInTheDocument()
+  expect(within(inspector).getByText('Blocking', { exact: true })).toBeInTheDocument()
+  expect(within(inspector).getByText('Required pending', { exact: true })).toBeInTheDocument()
+  expect(within(inspector).getByText('Not blocking', { exact: true })).toBeInTheDocument()
+  expect(within(inspector).getByText('Observed commit').nextElementSibling).toHaveTextContent('1'.repeat(40))
+  expect(within(inspector).getByText('Evidence recorded').nextElementSibling).toHaveTextContent('2026-08-11T16:00:00Z')
+  expect(Array.from(within(inspector).getAllByTestId('publication-check')).map((item) => item.textContent)).toEqual([
+    expect.stringContaining('Unit tests'),
+    expect.stringContaining('Integration tests'),
+    expect.stringContaining('Optional lint'),
+  ])
+  const portfolioReadsAfter = requests.filter(({ url, method }) => url === '/api/work-items' && method === 'GET').length
+  expect(portfolioReadsAfter).toBe(portfolioReadsBefore)
+})
+
+it('does not offer publication-check observation outside draft and awaiting-merge phases', async () => {
+  const publicationCard = publicationCardForChecks({
+    progress: { kind: 'publication', label: 'Ready for finalization', done: null, total: null },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    publication: publicationForChecks('ready-for-finalization'),
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'finalization', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(within(inspector).queryByTestId('publication-checks-observe')).not.toBeInTheDocument()
+})
+
+it('clears publication-check results when the polled published head changes', async () => {
+  const publicationCard = publicationCardForChecks()
+  currentDetail = detail({
+    card: publicationCard,
+    publication: publicationForChecks('awaiting-merge'),
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
+  await within(inspector).findByText('Unit tests')
+
+  currentDetail = detail({
+    card: publicationCard,
+    publication: publicationForChecks('awaiting-merge', '2'.repeat(40)),
+  })
+  await waitFor(
+    () => expect(within(inspector).getByTestId('publication-checks-status')).toHaveTextContent('Previous check results were cleared'),
+    { timeout: 6_000 },
+  )
+  expect(within(inspector).queryByText('Unit tests')).not.toBeInTheDocument()
+})
+
+it('shows typed provider failure for publication-check observation', async () => {
+  publicationChecksFailure = true
+  const publicationCard = publicationCardForChecks()
+  currentDetail = detail({
+    card: publicationCard,
+    publication: publicationForChecks('awaiting-merge'),
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
+  const error = await within(inspector).findByRole('alert')
+  expect(error).toHaveTextContent('ERR_DELIVERY_PROVIDER_UNAVAILABLE')
+  expect(error).toHaveTextContent('GitHub is unavailable')
 })
 
 it('keeps cached routed detail visible when a background refresh fails', async () => {

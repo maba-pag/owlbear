@@ -119,6 +119,7 @@ from owlbear_delivery.publication_provider import (
     PublicationCheckSnapshot,
     PublicationProviderError,
     PublicationPullRequest,
+    failed_required_publication_checks,
 )
 from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery.target_contract import (
@@ -172,23 +173,13 @@ def _timestamp(value: str) -> datetime:
 
 _MAX_PULL_REQUEST_TITLE_LENGTH = 256
 _MAX_ACCEPTANCE_RECONCILIATION_CHANGES = 8
-_SUCCESSFUL_PUBLICATION_CONCLUSIONS = frozenset({"success", "neutral", "skipped"})
 _MAX_REQUIRED_CHECK_DIAGNOSTICS = 8
 _MAX_CHECK_DIAGNOSTIC_VALUE_LENGTH = 160
 
 
 def _failed_required_publication_checks(snapshot: PublicationCheckSnapshot) -> tuple[PublicationCheck, ...]:
     """Return provider-marked required checks with terminal non-success evidence."""
-    return tuple(
-        check
-        for check in snapshot.checks
-        if check.required
-        and (
-            check.status.casefold() == "completed"
-            if check.conclusion is None
-            else check.conclusion.casefold() not in _SUCCESSFUL_PUBLICATION_CONCLUSIONS
-        )
-    )
+    return failed_required_publication_checks(snapshot)
 
 
 def _check_diagnostic_value(value: str | None) -> str:

@@ -216,6 +216,33 @@ export interface WorkItemPublicationGeneration {
   head_sha: string
 }
 
+export type PublicationCheckKind = 'check_run' | 'status_context'
+export type PublicationCheckBlockingState = 'blocking' | 'required-pending' | 'not-blocking'
+
+export interface PublicationCheckView {
+  check_id: string
+  kind: PublicationCheckKind
+  name: string
+  status: string
+  conclusion: string | null
+  required: boolean
+  blocking_state: PublicationCheckBlockingState
+}
+
+export interface PublicationChecksObservationResponse {
+  schema_version: 1
+  observation_id: string
+  change_id: string
+  repository: string
+  pull_request_number: number
+  exact_commit: string
+  observed_at: string
+  rollup_state: string | null
+  checks: PublicationCheckView[]
+  required_failure_count: number
+  truncated_count: number
+}
+
 export interface WorkItemPublicationView {
   phase: WorkItemPublicationPhase
   finalization_id: string | null
@@ -590,6 +617,13 @@ export function markWorkItemPublicationReady(changeId: string): Promise<unknown>
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/publication/ready`,
     'ERR_WORK_ITEM_PUBLICATION_READY',
+  )
+}
+
+export function observeWorkItemPublicationChecks(changeId: string): Promise<PublicationChecksObservationResponse> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/publication/checks/observe`,
+    'ERR_WORK_ITEM_PUBLICATION_CHECKS_OBSERVE',
   )
 }
 

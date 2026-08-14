@@ -159,6 +159,14 @@ class PublicationCheck(_ProviderModel):
     details_url: str | None = None
 
 
+class PublicationCheckBlockingState(StrEnum):
+    """Delivery-owned readiness meaning for one observed publication check."""
+
+    BLOCKING = "blocking"
+    REQUIRED_PENDING = "required-pending"
+    NOT_BLOCKING = "not-blocking"
+
+
 class PublicationCheckSnapshot(_ProviderModel):
     """Complete bounded provider check observation for one exact PR head."""
 
@@ -178,6 +186,37 @@ class PublicationCheckSnapshot(_ProviderModel):
             message = "publication checks must match the snapshot head"
             raise ValueError(message)
         return self
+
+
+_SUCCESSFUL_PUBLICATION_CONCLUSIONS = frozenset({"success", "neutral", "skipped"})
+
+
+def classify_publication_check(check: PublicationCheck) -> PublicationCheckBlockingState:
+    """Classify one check using the same readiness semantics as Delivery."""
+    if not check.required:
+        return PublicationCheckBlockingState.NOT_BLOCKING
+    if check.conclusion is None:
+        return (
+            PublicationCheckBlockingState.BLOCKING
+            if check.status.casefold() == "completed"
+            else PublicationCheckBlockingState.REQUIRED_PENDING
+        )
+    return (
+        PublicationCheckBlockingState.NOT_BLOCKING
+        if check.conclusion.casefold() in _SUCCESSFUL_PUBLICATION_CONCLUSIONS
+        else PublicationCheckBlockingState.BLOCKING
+    )
+
+
+def failed_required_publication_checks(
+    snapshot: PublicationCheckSnapshot,
+) -> tuple[PublicationCheck, ...]:
+    """Return required checks with terminal non-success evidence."""
+    return tuple(
+        check
+        for check in snapshot.checks
+        if classify_publication_check(check) is PublicationCheckBlockingState.BLOCKING
+    )
 
 
 @runtime_checkable

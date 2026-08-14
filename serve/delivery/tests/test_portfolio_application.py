@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Event
+from typing import Literal
 from unittest.mock import Mock, patch, sentinel
 
 import pytest
@@ -99,6 +100,7 @@ from owlbear_delivery import (
     PortfolioCoordinator,
     PublicationLease,
     PublicationCheck,
+    PublicationCheckBlockingState,
     PublicationCheckKind,
     PublicationCheckSnapshot,
     PublishDeliveryPlan,
@@ -107,6 +109,7 @@ from owlbear_delivery import (
     DeliveryRetainedWorktreeCleanupBlockReason,
     RetryDelivery,
     RequiredPublicationChecksFailedError,
+    classify_publication_check,
     load_delivery_application,
 )
 from owlbear_delivery.publication_provider import (
@@ -1250,6 +1253,35 @@ def test_mark_change_ready_does_not_gate_on_pending_or_nonblocking_checks(
     assert runtime.change_disposition() is None
     assert runtime.change_stage() == DeliveryChangeStage.AWAITING_MERGE
     assert provider.set_pull_request_draft_state.call_count == 1
+
+
+@pytest.mark.parametrize(
+    ("status", "conclusion", "required", "expected"),
+    [
+        ("completed", "failure", True, PublicationCheckBlockingState.BLOCKING),
+        ("queued", None, True, PublicationCheckBlockingState.REQUIRED_PENDING),
+        ("completed", None, True, PublicationCheckBlockingState.BLOCKING),
+        ("completed", "neutral", True, PublicationCheckBlockingState.NOT_BLOCKING),
+        ("completed", "failure", False, PublicationCheckBlockingState.NOT_BLOCKING),
+    ],
+)
+def test_classify_publication_check_preserves_ready_semantics(
+    status: str,
+    conclusion: str | None,
+    required: Literal[True, False],
+    expected: PublicationCheckBlockingState,
+) -> None:
+    check = PublicationCheck(
+        check_id="check-classification",
+        kind=PublicationCheckKind.CHECK_RUN,
+        name="classification",
+        head_sha="a" * 40,
+        status=status,
+        conclusion=conclusion,
+        required=required,
+    )
+
+    assert classify_publication_check(check) is expected
 
 
 def test_required_check_attention_requires_reconciled_publication_identity(tmp_path: Path) -> None:

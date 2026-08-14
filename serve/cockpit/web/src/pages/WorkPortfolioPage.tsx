@@ -192,6 +192,11 @@ function SelectedWorkItemDetail({
       onMoveBackward={selectedDetail.moveBackward}
       onReconcilePublication={selectedDetail.reconcilePublication}
       onMarkPublicationReady={selectedDetail.markPublicationReady}
+      publicationChecks={selectedDetail.publicationChecks}
+      publicationChecksError={selectedDetail.publicationChecksError}
+      publicationChecksStale={selectedDetail.publicationChecksStale}
+      isObservingPublicationChecks={selectedDetail.isObservingPublicationChecks}
+      onObservePublicationChecks={selectedDetail.observePublicationChecks}
       onObserveAcceptance={selectedDetail.observeAcceptance}
       onResolveAttention={selectedDetail.resolveAttention}
       onSupersedePublication={selectedDetail.supersedePublication}

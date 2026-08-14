@@ -11,6 +11,7 @@ import {
   markWorkItemPublicationReady,
   moveWorkItemBackward,
   observeWorkItemAcceptance,
+  observeWorkItemPublicationChecks,
   previewWorkItemBackward,
   reconcileWorkItemPublication,
   recoverWorkItemClaim,
@@ -32,6 +33,7 @@ import {
   type WorkItemDetailResponse,
   type WorkItemPortfolioResponse,
   type WorkItemCardView,
+  type PublicationChecksObservationResponse,
   type WorkItemStage,
   WorkItemApiError,
 } from '../api/workItems'
@@ -331,19 +333,109 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [actionError, setActionError] = useState<Error | null>(null)
   const [actionResult, setActionResult] = useState<string | null>(null)
+  const [publicationChecks, setPublicationChecks] = useState<PublicationChecksObservationResponse | null>(null)
+  const [publicationChecksError, setPublicationChecksError] = useState<Error | null>(null)
+  const [publicationChecksStale, setPublicationChecksStale] = useState(false)
+  const [isObservingPublicationChecks, setIsObservingPublicationChecks] = useState(false)
   const targetSyncOperation = useRef<{ changeId: string; operationId: string } | null>(null)
   const supersedePublicationOperation = useRef<{ changeId: string; operationId: string } | null>(null)
+  const identityKey = `${identity.changeId}:${identity.itemKey}`
+  const publicationIdentityRef = useRef(identityKey)
+  const publicationDetailRef = useRef<WorkItemDetailResponse | null>(null)
+  const publicationHeadRef = useRef<string | null>(null)
+  const publicationChecksRef = useRef<PublicationChecksObservationResponse | null>(null)
+  const publicationObservationGenerationRef = useRef(0)
+  const publicationObservationRequestRef = useRef(0)
+  const observingPublicationChecksRef = useRef(false)
+  publicationIdentityRef.current = identityKey
+
+  useEffect(() => {
+    publicationDetailRef.current = null
+    publicationHeadRef.current = null
+    publicationChecksRef.current = null
+    publicationObservationGenerationRef.current += 1
+    publicationObservationRequestRef.current += 1
+    observingPublicationChecksRef.current = false
+    setPublicationChecks(null)
+    setPublicationChecksError(null)
+    setPublicationChecksStale(false)
+    setIsObservingPublicationChecks(false)
+  }, [identityKey])
+
   const polling = usePollingFetch<WorkItemDetailResponse>(
     workItemDetailUrl(identity.changeId, identity.itemKey),
     {
       intervalMs: 3_000,
       onSuccess: (next) => {
+        if (next.item.card.change_id !== identity.changeId || next.item.card.item_key !== identity.itemKey) return
+        const nextPublishedHead = next.item.publication?.published_head ?? null
+        const previousPublishedHead = publicationHeadRef.current
+        if (previousPublishedHead !== nextPublishedHead) {
+          const hadObservation = publicationChecksRef.current !== null
+          publicationObservationGenerationRef.current += 1
+          publicationObservationRequestRef.current += 1
+          observingPublicationChecksRef.current = false
+          publicationChecksRef.current = null
+          setPublicationChecks(null)
+          setPublicationChecksError(null)
+          setPublicationChecksStale(hadObservation)
+          setIsObservingPublicationChecks(false)
+        }
+        publicationHeadRef.current = nextPublishedHead
+        publicationDetailRef.current = next
         setData(next)
         setDetailError(null)
       },
       onError: setDetailError,
     },
   )
+
+  const observePublicationChecks = async (): Promise<Error | null> => {
+    const requestedIdentity = identityKey
+    const requestedHead = publicationDetailRef.current?.item.publication?.published_head ?? null
+    if (!requestedHead) {
+      const error = new Error('Publication checks require a published head.')
+      setPublicationChecksError(error)
+      return error
+    }
+    if (observingPublicationChecksRef.current) return null
+    const generation = publicationObservationGenerationRef.current
+    const requestId = ++publicationObservationRequestRef.current
+    observingPublicationChecksRef.current = true
+    setIsObservingPublicationChecks(true)
+    setPublicationChecksError(null)
+    const isCurrent = () => requestId === publicationObservationRequestRef.current
+      && generation === publicationObservationGenerationRef.current
+      && publicationIdentityRef.current === requestedIdentity
+      && publicationHeadRef.current === requestedHead
+    try {
+      const observed = await observeWorkItemPublicationChecks(identity.changeId)
+      if (!isCurrent() || observed.exact_commit !== requestedHead) {
+        if (isCurrent()) {
+          publicationChecksRef.current = null
+          setPublicationChecks(null)
+          setPublicationChecksStale(true)
+          setPublicationChecksError(new Error('Observed checks belong to a different published head. Refresh the Work Item and try again.'))
+        }
+        return null
+      }
+      publicationChecksRef.current = observed
+      setPublicationChecks(observed)
+      setPublicationChecksStale(false)
+      setPublicationChecksError(null)
+      return null
+    } catch (caught: unknown) {
+      if (!isCurrent()) return null
+      const error = caught instanceof Error ? caught : new Error('Publication checks could not be observed')
+      setPublicationChecksError(error)
+      return error
+    } finally {
+      if (requestId === publicationObservationRequestRef.current) {
+        observingPublicationChecksRef.current = false
+        setIsObservingPublicationChecks(false)
+      }
+    }
+  }
 
   const mutate = async (
     action: string,
@@ -436,6 +528,11 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
       () => markWorkItemPublicationReady(identity.changeId),
       'Pull request marked ready.',
     ),
+    publicationChecks,
+    publicationChecksError,
+    publicationChecksStale,
+    isObservingPublicationChecks,
+    observePublicationChecks,
     observeAcceptance: () => mutate(
       'acceptance-observe',
       () => observeWorkItemAcceptance(identity.changeId),

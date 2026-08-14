@@ -28,6 +28,7 @@ from owlbear_cockpit.target_models import (
     ConfirmLostClaimBody,
     DesignWorkDetailResponse,
     NeedsCounts,
+    PublicationChecksObservationResponse,
     PublicationSupersessionResponse,
     RecoverChangeWorktreeBody,
     ResolveChangeAttentionBody,
@@ -60,6 +61,7 @@ from owlbear_delivery.delivery_runtime import (
 )
 from owlbear_delivery.design_package import DesignPackageConflictError
 from owlbear_delivery.portfolio_application import PortfolioApplication, PortfolioApplicationError
+from owlbear_delivery.publication_provider import PublicationProviderError
 from owlbear_delivery.work_items import (
     ChangeGroupView,
     WorkItemActivityState,
@@ -180,6 +182,11 @@ class TargetCockpitService:
     def observe_acceptance(self, change_id: str) -> object:
         """Observe provider acceptance without merge authority."""
         return self._invoke(lambda: self._application.observe_acceptance(change_id))
+
+    def observe_publication_checks(self, change_id: str) -> PublicationChecksObservationResponse:
+        """Observe provider checks at the current exact published Change head."""
+        receipt = self._invoke(lambda: self._application.observe_change_publication_checks(change_id))
+        return PublicationChecksObservationResponse.from_receipt(receipt)
 
     def reconcile_acceptance(
         self,
@@ -318,6 +325,13 @@ class TargetCockpitService:
             )
         except (DeliveryRuntimeReferenceError, PortfolioApplicationError) as exc:
             _http_error(409, exc.code, str(exc), retry_safe=False)
+        except PublicationProviderError as exc:
+            _http_error(
+                502,
+                f"ERR_DELIVERY_PROVIDER_{exc.code.value.upper()}",
+                str(exc),
+                retry_safe=exc.retry_safe,
+            )
         except DesignPackageConflictError as exc:
             _http_error(409, exc.code, str(exc), retry_safe=False)
 
@@ -470,6 +484,16 @@ def _register_publication_controls(router: APIRouter) -> None:
     @router.post("/changes/{change_id}/acceptance/observe")
     def observe_acceptance(change_id: str, service: _TargetService) -> object:
         return service.observe_acceptance(change_id)
+
+    @router.post(
+        "/changes/{change_id}/publication/checks/observe",
+        response_model=PublicationChecksObservationResponse,
+    )
+    def observe_publication_checks(
+        change_id: str,
+        service: _TargetService,
+    ) -> PublicationChecksObservationResponse:
+        return service.observe_publication_checks(change_id)
 
     @router.post("/changes/{change_id}/attention/resolve")
     def resolve_attention(

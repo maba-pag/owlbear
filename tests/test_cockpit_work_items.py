@@ -14,9 +14,13 @@ from fastapi.testclient import TestClient
 
 from owlbear_cockpit.routes.target_work import assemble_target_app
 from owlbear_cockpit.target_context import load_target_context
+from owlbear_cockpit.target_models import PublicationChecksObservationResponse
 from owlbear_delivery import (
     DeliveryAcceptanceReconciliationOutcome,
     DeliveryAcceptanceReconciliationStatus,
+    PublicationCheckKind,
+    PublicationProviderError,
+    PublicationProviderFailureCode,
 )
 from owlbear_delivery.acceptance import CompletionPullRequestIdentity
 from owlbear_delivery.change_workspace import (
@@ -248,7 +252,54 @@ class _DeliveryApplicationFake:
 
     def mark_current_change_ready(self, *args: object) -> dict[str, object]:
         self.calls.append(("publication-ready", args))
+        failure = self.failures.get("publication-ready")
+        if failure is not None:
+            raise failure
         return {"change_id": args[0], "draft": False}
+
+    def observe_change_publication_checks(self, *args: object) -> SimpleNamespace:
+        self.calls.append(("publication-checks-observe", args))
+        failure = self.failures.get("publication-checks-observe")
+        if failure is not None:
+            raise failure
+        head = "1" * 40
+        return SimpleNamespace(
+            observation_id="a" * 64,
+            change_id=str(args[0]),
+            repository="owlbear/example",
+            number=42,
+            exact_commit=head,
+            observed_at=datetime(2026, 8, 11, 16, 0, tzinfo=UTC),
+            snapshot=SimpleNamespace(
+                rollup_state="failure",
+                checks=(
+                    SimpleNamespace(
+                        check_id="optional-failure",
+                        kind=PublicationCheckKind.CHECK_RUN,
+                        name="Optional lint",
+                        status="completed",
+                        conclusion="failure",
+                        required=False,
+                    ),
+                    SimpleNamespace(
+                        check_id="required-pending",
+                        kind=PublicationCheckKind.CHECK_RUN,
+                        name="Integration tests",
+                        status="queued",
+                        conclusion=None,
+                        required=True,
+                    ),
+                    SimpleNamespace(
+                        check_id="required-failure",
+                        kind=PublicationCheckKind.CHECK_RUN,
+                        name="Unit tests",
+                        status="completed",
+                        conclusion="failure",
+                        required=True,
+                    ),
+                ),
+            ),
+        )
 
     def observe_acceptance(self, *args: object) -> dict[str, object]:
         self.calls.append(("acceptance-observe", args))
@@ -704,6 +755,141 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
         ("completed-search", ("delivery", None, 5)),
         ("completed-show", ("change-a", "a" * 64)),
     ]
+
+
+def test_publication_check_observation_is_bounded_and_classified() -> None:
+    client, application = _client()
+
+    response = client.post("/api/changes/change-a/publication/checks/observe")
+    method_rejected = client.get("/api/changes/change-a/publication/checks/observe")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "schema_version": 1,
+        "observation_id": "a" * 64,
+        "change_id": "change-a",
+        "repository": "owlbear/example",
+        "pull_request_number": 42,
+        "exact_commit": "1" * 40,
+        "observed_at": "2026-08-11T16:00:00Z",
+        "rollup_state": "failure",
+        "checks": [
+            {
+                "check_id": "required-failure",
+                "kind": "check_run",
+                "name": "Unit tests",
+                "status": "completed",
+                "conclusion": "failure",
+                "required": True,
+                "blocking_state": "blocking",
+            },
+            {
+                "check_id": "required-pending",
+                "kind": "check_run",
+                "name": "Integration tests",
+                "status": "queued",
+                "conclusion": None,
+                "required": True,
+                "blocking_state": "required-pending",
+            },
+            {
+                "check_id": "optional-failure",
+                "kind": "check_run",
+                "name": "Optional lint",
+                "status": "completed",
+                "conclusion": "failure",
+                "required": False,
+                "blocking_state": "not-blocking",
+            },
+        ],
+        "required_failure_count": 1,
+        "truncated_count": 0,
+    }
+    assert method_rejected.status_code == 405
+    assert application.calls == [("publication-checks-observe", ("change-a",))]
+
+
+def test_publication_provider_failure_is_typed_and_retry_safe() -> None:
+    failure = PublicationProviderError(
+        PublicationProviderFailureCode.UNAVAILABLE,
+        "observe_checks",
+        "GitHub is unavailable",
+        retry_safe=True,
+    )
+    client, application = _client({"publication-checks-observe": failure})
+
+    response = client.post("/api/changes/change-a/publication/checks/observe")
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "code": "ERR_DELIVERY_PROVIDER_UNAVAILABLE",
+        "detail": "GitHub is unavailable",
+        "authority": "delivery",
+        "retry_safe": True,
+    }
+    assert application.calls == [("publication-checks-observe", ("change-a",))]
+
+
+def test_publication_provider_failure_mapping_is_shared_by_ready_route() -> None:
+    failure = PublicationProviderError(
+        PublicationProviderFailureCode.AUTHENTICATION_REQUIRED,
+        "set_pull_request_draft_state",
+        "GitHub credentials are required",
+        retry_safe=False,
+    )
+    client, application = _client({"publication-ready": failure})
+
+    response = client.post("/api/changes/change-a/publication/ready")
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "code": "ERR_DELIVERY_PROVIDER_AUTHENTICATION_REQUIRED",
+        "detail": "GitHub credentials are required",
+        "authority": "delivery",
+        "retry_safe": False,
+    }
+    assert application.calls == [("publication-ready", ("change-a",))]
+
+
+def test_publication_check_response_retains_blockers_before_bounded_truncation() -> None:
+    head = "1" * 40
+    checks = (
+        SimpleNamespace(
+            check_id="blocking-check",
+            kind=PublicationCheckKind.CHECK_RUN,
+            name="Blocking check",
+            status="completed",
+            conclusion="failure",
+            required=True,
+        ),
+        *(
+            SimpleNamespace(
+                check_id=f"optional-{index}",
+                kind=PublicationCheckKind.CHECK_RUN,
+                name=f"Optional check {index}",
+                status="completed",
+                conclusion="success",
+                required=False,
+            )
+            for index in range(200)
+        ),
+    )
+    receipt = SimpleNamespace(
+        observation_id="a" * 64,
+        change_id="change-a",
+        repository="owlbear/example",
+        number=42,
+        exact_commit=head,
+        observed_at=datetime(2026, 8, 11, 16, 0, tzinfo=UTC),
+        snapshot=SimpleNamespace(rollup_state="success", checks=checks),
+    )
+
+    response = PublicationChecksObservationResponse.from_receipt(receipt)
+
+    assert len(response.checks) == 200
+    assert response.checks[0].check_id == "blocking-check"
+    assert response.required_failure_count == 1
+    assert response.truncated_count == 1
 
 
 def test_completed_history_routes_serialize_both_record_kinds() -> None:
