@@ -310,6 +310,16 @@ class WorkItemTargetSyncView(_ProjectionModel):
     merge_commit: bool
 
 
+class WorkItemTargetSyncConflictView(_ProjectionModel):
+    """Exact preserved target-sync conflict identity for operator exits."""
+
+    conflict_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    change_head_before: str = Field(pattern=r"^[0-9a-f]{40}$")
+    conflict_paths: tuple[str, ...] = ()
+
+
 class WorkItemPublicationView(_ProjectionModel):
     """Exact durable finalization, publication, and acceptance identities."""
 
@@ -328,6 +338,7 @@ class WorkItemPublicationView(_ProjectionModel):
     merged_at: str | None = None
     attention: DeliveryChangeDisposition | None = None
     target_sync: WorkItemTargetSyncView | None = None
+    target_sync_conflict: WorkItemTargetSyncConflictView | None = None
     worktree_cleanup: WorkItemWorktreeCleanupView | None = None
     worktree_recovery: WorkItemWorktreeRecoveryView | None = None
 

@@ -15,7 +15,13 @@ from mcp.types import ToolAnnotations
 from pydantic import BaseModel, ValidationError
 
 from owlbear_delivery.acceptance import CompletionReceiptConflictError
-from owlbear_delivery.change_workspace import ChangeWorktreeAttentionError, CoordinationConflictError
+from owlbear_delivery.change_workspace import (
+    ChangeTargetSyncAbortReceipt,
+    ChangeTargetSyncConflictError,
+    ChangeTargetSyncReceipt,
+    ChangeWorktreeAttentionError,
+    CoordinationConflictError,
+)
 from owlbear_delivery.completed_history import CompletedHistoryError, CompletedHistoryStaleError
 from owlbear_delivery.delivery_runtime import (
     DeliveryPlanCandidate,
@@ -45,6 +51,8 @@ from owlbear_delivery_mcp.target_models import (
     AdmitDeliveryChangeRequest,
     ChangeParams,
     ChangeRequest,
+    ChangeTargetSyncAbortResponse,
+    ChangeTargetSyncResponse,
     ChangeWorktreeCleanupResponse,
     ChangeWorktreeRecoveryResponse,
     ClaimContextParams,
@@ -88,6 +96,10 @@ from owlbear_delivery_mcp.target_models import (
     SupersedePublicationParams,
     SupersedePublicationRequest,
     TargetDiagnostic,
+    TargetSyncConflictParams,
+    TargetSyncConflictRequest,
+    TargetSyncParams,
+    TargetSyncRequest,
     TransitionDeliveryParams,
     TransitionDeliveryRequest,
     WorkItemParams,
@@ -120,6 +132,9 @@ DELIVERY_OPERATION_NAMES = (
     "mark_change_ready",
     "reconcile_finalization_head",
     "reconcile_change_checkpoint",
+    "sync_change_with_target",
+    "abort_target_sync_conflict",
+    "resolve_target_sync_conflict",
     "supersede_publication",
     "observe_change_publication_checks",
     "observe_acceptance",
@@ -367,6 +382,62 @@ class TargetMCPAdapter:
             DeliveryChangePublicationSupersessionReceipt,
         )
         return DeliveryPublicationSupersessionResponse.from_receipt(receipt)
+
+    async def sync_change_with_target(
+        self,
+        request: TargetSyncRequest,
+    ) -> ChangeTargetSyncResponse:
+        """Fetch and merge one exact target head through the managed Change worktree."""
+        params = self._validate(TargetSyncParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.sync_change_with_target(
+                params.change_id,
+                params.expected_target,
+                params.operation_id,
+            ),
+            ChangeTargetSyncReceipt,
+        )
+        return ChangeTargetSyncResponse.from_receipt(receipt)
+
+    async def abort_target_sync_conflict(
+        self,
+        request: TargetSyncConflictRequest,
+    ) -> ChangeTargetSyncAbortResponse:
+        """Abort one exact preserved target-sync conflict."""
+        params = self._validate(TargetSyncConflictParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.abort_target_sync_conflict(
+                params.change_id,
+                params.expected_disposition_id,
+                params.target_head,
+                params.operation_id,
+            ),
+            ChangeTargetSyncAbortReceipt,
+        )
+        return ChangeTargetSyncAbortResponse.from_receipt(receipt)
+
+    async def resolve_target_sync_conflict(
+        self,
+        request: TargetSyncConflictRequest,
+    ) -> ChangeTargetSyncResponse:
+        """Resolve one exact preserved target-sync conflict with a reviewed merge."""
+        params = self._validate(TargetSyncConflictParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.resolve_target_sync_conflict(
+                params.change_id,
+                params.expected_disposition_id,
+                params.target_head,
+                params.operation_id,
+            ),
+            ChangeTargetSyncReceipt,
+        )
+        return ChangeTargetSyncResponse.from_receipt(receipt)
 
     async def observe_change_publication_checks(
         self,
@@ -629,6 +700,7 @@ class TargetMCPAdapter:
 
 _NAMED_DELIVERY_ERRORS = (
     CompletionReceiptConflictError,
+    ChangeTargetSyncConflictError,
     ChangeWorktreeAttentionError,
     CoordinationConflictError,
     DeliveryRuntimeConflictError,

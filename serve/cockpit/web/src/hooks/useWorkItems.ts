@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   answerWorkItemRequest,
+  abortWorkItemTargetSync,
   abandonWorkItemChange,
   cleanupAbandonedWorkItemChange,
   cleanupCompletedWorkItemChange,
@@ -14,9 +15,11 @@ import {
   reconcileWorkItemPublication,
   recoverWorkItemClaim,
   recoverWorkItemChange,
+  resolveWorkItemTargetSync,
   resolveWorkItemAttention,
   resumeWorkItemChange,
   searchCompletedChanges,
+  syncWorkItemTarget,
   showDesignWork,
   showCompletedChange,
   workItemDetailUrl,
@@ -28,6 +31,7 @@ import {
   type WorkItemPortfolioResponse,
   type WorkItemCardView,
   type WorkItemStage,
+  WorkItemApiError,
 } from '../api/workItems'
 import { usePollingFetch } from './usePollingFetch'
 
@@ -225,6 +229,7 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [actionError, setActionError] = useState<Error | null>(null)
   const [actionResult, setActionResult] = useState<string | null>(null)
+  const targetSyncOperation = useRef<{ changeId: string; operationId: string } | null>(null)
   const polling = usePollingFetch<WorkItemDetailResponse>(
     workItemDetailUrl(identity.changeId, identity.itemKey),
     {
@@ -237,7 +242,11 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     },
   )
 
-  const mutate = async (action: string, operation: () => Promise<unknown>, result: string) => {
+  const mutate = async (
+    action: string,
+    operation: () => Promise<unknown>,
+    result: string,
+  ): Promise<Error | null> => {
     setPendingAction(action)
     setActionError(null)
     setActionResult(null)
@@ -246,8 +255,11 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
       setActionResult(result)
       polling.refetch()
       onChanged()
+      return null
     } catch (caught: unknown) {
-      setActionError(caught instanceof Error ? caught : new Error('Delivery control failed'))
+      const error = caught instanceof Error ? caught : new Error('Delivery control failed')
+      setActionError(error)
+      return error
     } finally {
       setPendingAction(null)
     }
@@ -330,6 +342,40 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
       'attention-resolve',
       () => resolveWorkItemAttention(identity.changeId, expectedDispositionId),
       'Change attention resolved.',
+    ),
+    syncTarget: () => mutate(
+      'target-sync',
+      () => {
+        const existing = targetSyncOperation.current
+        const operationId = existing?.changeId === identity.changeId
+          ? existing.operationId
+          : `cockpit-target-sync-${crypto.randomUUID()}`
+        targetSyncOperation.current = { changeId: identity.changeId, operationId }
+        return syncWorkItemTarget(identity.changeId, operationId)
+      },
+      'Target synchronized with the integration target.',
+    ).then((error) => {
+      const operationId = targetSyncOperation.current?.operationId
+      if (
+        operationId
+        && (error === null || (error instanceof WorkItemApiError && !error.retrySafe))
+      ) {
+        targetSyncOperation.current = null
+      }
+      return error
+    }),
+    abortTargetSync: (expectedDispositionId: string, targetHead: string, operationId: string) => mutate(
+      'target-sync-abort',
+      () => abortWorkItemTargetSync(identity.changeId, expectedDispositionId, targetHead, operationId),
+      'Target sync conflict aborted.',
+    ).then((error) => {
+      if (error === null) targetSyncOperation.current = null
+      return error
+    }),
+    resolveTargetSync: (expectedDispositionId: string, targetHead: string, operationId: string) => mutate(
+      'target-sync-resolve',
+      () => resolveWorkItemTargetSync(identity.changeId, expectedDispositionId, targetHead, operationId),
+      'Resolved target sync is ready for review.',
     ),
     deferChange: (reason: string) => mutate(
       'change-defer',

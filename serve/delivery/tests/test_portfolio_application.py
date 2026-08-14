@@ -22,6 +22,8 @@ from owlbear_delivery import (
     ChangeBranchPublisher,
     ChangeBranchSupersessionReceipt,
     ChangeTargetSyncConflictError,
+    ChangeTargetSyncAbortReceipt,
+    ChangeTargetSyncConflictState,
     ChangeTargetSyncReceipt,
     ChangeWorktreeAttentionCode,
     ChangeWorktreeAttentionError,
@@ -636,10 +638,12 @@ def test_application_captures_target_sync_conflict_as_publication_attention(tmp_
                 ("product.txt",),
             ),
         ),
-        pytest.raises(PortfolioApplicationError, match="requires conflict resolution"),
+        pytest.raises(ChangeTargetSyncConflictError) as raised,
     ):
         application.sync_change_with_target("change-a", "2" * 40, "sync-change-a")
 
+    assert raised.value.code == "ERR_TARGET_SYNC_CONFLICT"
+    assert raised.value.conflict_paths == ("product.txt",)
     attention = runtimes["change-a"].change_disposition()
     assert attention is not None
     assert attention.kind.value == "publication-attention"
@@ -651,6 +655,81 @@ def test_application_captures_target_sync_conflict_as_publication_attention(tmp_
     assert runtimes["change-a"].finalization() is None
     assert runtimes["change-a"].finalization_invalidation().finalization_id == finalization.finalization_id
     assert runtimes["change-a"].finalization_invalidation().reason == "target-sync-conflict"
+
+
+def test_application_aborts_target_sync_conflict_and_resolves_exact_attention(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    exact_head = coordinator.show("change-a").last_reviewed_commit
+    disposition = runtimes["change-a"].capture_target_sync_conflict(
+        "sync-abort",
+        "2" * 40,
+        datetime.now(UTC),
+        ("target synchronization merge conflict",),
+    )
+    receipt = ChangeTargetSyncAbortReceipt.create(
+        operation_id="sync-abort",
+        change_id="change-a",
+        target_head="2" * 40,
+        restored_head=exact_head,
+    )
+
+    with patch.object(application._workspace_manager, "abort_target_sync_conflict", return_value=receipt):  # noqa: SLF001
+        assert (
+            application.abort_target_sync_conflict(
+                "change-a",
+                disposition.disposition_id,
+                "2" * 40,
+                "sync-abort",
+            )
+            == receipt
+        )
+
+    assert runtimes["change-a"].change_disposition() is None
+    assert runtimes["change-a"].change_disposition_resolution().disposition_id == disposition.disposition_id
+
+
+def test_application_records_semantic_target_resolution_with_exact_runtime_receipt(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    exact_head = coordinator.show("change-a").last_reviewed_commit
+    finalization = application.finalize_change("change-a", _finalization_request("change-a", exact_head))
+    disposition = runtimes["change-a"].capture_target_sync_conflict(
+        "sync-resolve",
+        "2" * 40,
+        datetime.now(UTC),
+        ("target synchronization merge conflict",),
+    )
+    receipt = ChangeTargetSyncReceipt.create(
+        operation_id="sync-resolve",
+        change_id="change-a",
+        integration_target="main",
+        expected_target="2" * 40,
+        target_head="2" * 40,
+        change_head_before=exact_head,
+        merged_head="3" * 40,
+        merge_commit=True,
+    )
+
+    with patch.object(application._workspace_manager, "resolve_target_sync_conflict", return_value=receipt):  # noqa: SLF001
+        assert (
+            application.resolve_target_sync_conflict(
+                "change-a",
+                disposition.disposition_id,
+                "2" * 40,
+                "sync-resolve",
+            )
+            == receipt
+        )
+
+    assert runtimes["change-a"].change_disposition() is None
+    assert runtimes["change-a"].target_sync_receipt() == receipt
+    assert runtimes["change-a"].finalization() is None
+    assert runtimes["change-a"].finalization_invalidation().finalization_id == finalization.finalization_id
 
 
 def test_finalization_context_uses_managed_change_head(tmp_path: Path) -> None:
@@ -2704,6 +2783,40 @@ def test_abandoned_publication_detail_projects_cleanup_eligibility(tmp_path: Pat
     assert detail.publication.worktree_cleanup.eligible is True
     assert detail.publication.worktree_cleanup.blocked_reason is None
     assert detail.publication.worktree_cleanup.completion_id is None
+
+
+def test_publication_detail_projects_preserved_target_sync_conflict(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    reviewed_head = coordinator.show("change-a").last_reviewed_commit
+    conflict = ChangeTargetSyncConflictState.create(
+        operation_id="sync-view",
+        change_id="change-a",
+        target_head="2" * 40,
+        change_head_before=reviewed_head,
+        conflict_paths=("src/app.py", "tests/test_app.py"),
+    )
+    runtimes["change-a"].capture_target_sync_conflict(
+        "sync-view",
+        "2" * 40,
+        datetime.now(UTC),
+        ("target synchronization merge conflict", "conflict-path:src/app.py"),
+    )
+    coordinator.update(coordinator.show("change-a").model_copy(update={"target_sync_conflict": conflict}))
+
+    detail = application.show_work_item_view("change-a", "publication")
+
+    assert detail.publication is not None
+    assert detail.publication.target_sync_conflict is not None
+    assert detail.publication.target_sync_conflict.model_dump() == {
+        "conflict_id": conflict.conflict_id,
+        "operation_id": conflict.operation_id,
+        "target_head": conflict.target_head,
+        "change_head_before": conflict.change_head_before,
+        "conflict_paths": conflict.conflict_paths,
+    }
 
 
 def test_dirty_abandoned_publication_detail_blocks_cleanup(tmp_path: Path) -> None:

@@ -9,7 +9,11 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 from owlbear_delivery.change_publication import ChangeBranchSupersessionReceipt
-from owlbear_delivery.change_workspace import ChangeWorktreeAttentionCode
+from owlbear_delivery.change_workspace import (
+    ChangeTargetSyncAbortReceipt,
+    ChangeTargetSyncReceipt,
+    ChangeWorktreeAttentionCode,
+)
 from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
     DeliveryChangePublicationHistory,
@@ -187,6 +191,21 @@ class SupersedePublicationParams(ChangeParams):
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
+class TargetSyncParams(ChangeParams):
+    """Validate one exact target synchronization operation."""
+
+    expected_target: str = Field(pattern=r"^[0-9a-f]{40}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class TargetSyncConflictParams(ChangeParams):
+    """Validate one exact preserved target-sync conflict exit."""
+
+    expected_disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
 class DeliveryPlanPublication(_TargetProtocolModel):
     """Planning publication response with its transition-ready output reference."""
 
@@ -319,6 +338,42 @@ class DeliveryPublicationSupersessionResponse(_TargetProtocolModel):
         )
 
 
+class ChangeTargetSyncResponse(_TargetProtocolModel):
+    """MCP response for one exact target synchronization receipt."""
+
+    schema_version: int = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: ChangeId
+    integration_target: str = Field(min_length=1)
+    expected_target: str = Field(pattern=r"^[0-9a-f]{40}$")
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    change_head_before: str = Field(pattern=r"^[0-9a-f]{40}$")
+    merged_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    merge_commit: bool
+
+    @classmethod
+    def from_receipt(cls, receipt: ChangeTargetSyncReceipt) -> ChangeTargetSyncResponse:
+        """Project one domain sync receipt into the transport contract."""
+        return cls(**receipt.model_dump())
+
+
+class ChangeTargetSyncAbortResponse(_TargetProtocolModel):
+    """MCP response for one exact target-sync abort receipt."""
+
+    schema_version: int = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: ChangeId
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    restored_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def from_receipt(cls, receipt: ChangeTargetSyncAbortReceipt) -> ChangeTargetSyncAbortResponse:
+        """Project one domain abort receipt into the transport contract."""
+        return cls(**receipt.model_dump())
+
+
 class TransitionDeliveryParams(ChangeParams):
     """Validate one worker-owned mechanical transition."""
 
@@ -401,6 +456,14 @@ type SupersedePublicationRequest = Annotated[
     SupersedePublicationParams,
     BeforeValidator(partial(_parse_json_model, SupersedePublicationParams)),
 ]
+type TargetSyncRequest = Annotated[
+    TargetSyncParams,
+    BeforeValidator(partial(_parse_json_model, TargetSyncParams)),
+]
+type TargetSyncConflictRequest = Annotated[
+    TargetSyncConflictParams,
+    BeforeValidator(partial(_parse_json_model, TargetSyncConflictParams)),
+]
 type PublishDeliveryPlanRequest = Annotated[
     PublishDeliveryPlanParams,
     BeforeValidator(partial(_parse_json_model, PublishDeliveryPlanParams)),
@@ -443,6 +506,8 @@ __all__ = [
     "AdmitDeliveryChangeRequest",
     "ChangeParams",
     "ChangeRequest",
+    "ChangeTargetSyncAbortResponse",
+    "ChangeTargetSyncResponse",
     "ChangeWorktreeCleanupResponse",
     "ChangeWorktreeRecoveryResponse",
     "ClaimContextParams",
@@ -488,6 +553,10 @@ __all__ = [
     "SupersedePublicationParams",
     "SupersedePublicationRequest",
     "TargetDiagnostic",
+    "TargetSyncConflictParams",
+    "TargetSyncConflictRequest",
+    "TargetSyncParams",
+    "TargetSyncRequest",
     "TransitionDeliveryParams",
     "TransitionDeliveryRequest",
     "WorkItemParams",

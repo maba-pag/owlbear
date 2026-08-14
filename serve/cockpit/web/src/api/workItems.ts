@@ -211,8 +211,29 @@ export interface WorkItemPublicationView {
     recorded_at: string
     diagnostics: string[]
   } | null
+  target_sync?: WorkItemTargetSyncView | null
+  target_sync_conflict?: WorkItemTargetSyncConflictView | null
   worktree_cleanup?: WorkItemWorktreeCleanupView | null
   worktree_recovery?: WorkItemWorktreeRecoveryView | null
+}
+
+export interface WorkItemTargetSyncView {
+  receipt_id: string
+  operation_id: string
+  integration_target: string
+  expected_target: string
+  target_head: string
+  change_head_before: string
+  merged_head: string
+  merge_commit: boolean
+}
+
+export interface WorkItemTargetSyncConflictView {
+  conflict_id: string
+  operation_id: string
+  target_head: string
+  change_head_before: string
+  conflict_paths: string[]
 }
 
 export interface WorkItemWorktreeCleanupView {
@@ -241,6 +262,20 @@ export interface ChangeWorktreeRecoveryResponse {
   worktree_path: string
   branch_head: string
   recovery_reviewed_head: string
+}
+
+export interface TargetSyncResponse extends WorkItemTargetSyncView {
+  schema_version: 1
+  change_id: string
+}
+
+export interface TargetSyncAbortResponse {
+  schema_version: 1
+  receipt_id: string
+  operation_id: string
+  change_id: string
+  target_head: string
+  restored_head: string
 }
 
 export interface WorkItemDetailView {
@@ -532,6 +567,40 @@ export function resolveWorkItemAttention(changeId: string, expectedDispositionId
     `/api/changes/${encodeURIComponent(changeId)}/attention/resolve`,
     'ERR_WORK_ITEM_ATTENTION_RESOLVE',
     { expected_disposition_id: expectedDispositionId },
+  )
+}
+
+export function syncWorkItemTarget(changeId: string, operationId: string): Promise<TargetSyncResponse> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/target/sync`,
+    'ERR_WORK_ITEM_TARGET_SYNC',
+    { operation_id: operationId },
+  )
+}
+
+export function abortWorkItemTargetSync(
+  changeId: string,
+  expectedDispositionId: string,
+  targetHead: string,
+  operationId: string,
+): Promise<TargetSyncAbortResponse> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/target/conflict/abort`,
+    'ERR_WORK_ITEM_TARGET_SYNC_ABORT',
+    { expected_disposition_id: expectedDispositionId, target_head: targetHead, operation_id: operationId },
+  )
+}
+
+export function resolveWorkItemTargetSync(
+  changeId: string,
+  expectedDispositionId: string,
+  targetHead: string,
+  operationId: string,
+): Promise<TargetSyncResponse> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/target/conflict/resolve`,
+    'ERR_WORK_ITEM_TARGET_SYNC_RESOLVE',
+    { expected_disposition_id: expectedDispositionId, target_head: targetHead, operation_id: operationId },
   )
 }
 

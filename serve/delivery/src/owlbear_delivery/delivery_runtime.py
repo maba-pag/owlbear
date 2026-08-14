@@ -1620,6 +1620,8 @@ class DeliveryRuntime:
             _attention_conflict("Delivery Change attention is absent or already resolved")
         if current.disposition_id != expected_disposition_id:
             _attention_conflict("Delivery Change attention identity is stale")
+        if _target_sync_operation_id(current) is not None:
+            _attention_conflict("target synchronization requires an explicit conflict exit")
         _require_no_active_change_claim(frontier, "Change attention resolution")
         resolution = DeliveryChangeDispositionResolution.create(
             change_id=self._contract.change_id,
@@ -1841,6 +1843,15 @@ class DeliveryRuntime:
     def target_sync_receipt(self) -> ChangeTargetSyncReceipt | None:
         """Return the latest exact target synchronization receipt, if any."""
         return self._read()[0].target_sync_receipt
+
+    def validate_target_sync_conflict(
+        self,
+        expected_disposition_id: str,
+        operation_id: str,
+    ) -> DeliveryChangeDisposition:
+        """Require one exact target-sync operation attention record."""
+        frontier, _content = self._read()
+        return _require_target_sync_attention(frontier, expected_disposition_id, operation_id)
 
     def completion_receipt(self) -> CompletionReceipt | None:
         """Return the exact terminal receipt while rejecting partial completion state."""
@@ -2200,10 +2211,79 @@ class DeliveryRuntime:
             if existing != receipt:
                 _conflict("target synchronization operation has different receipt evidence")
             return existing
+        updated = self._target_sync_update(frontier, receipt, synced_at)
+        self._replace(previous, updated)
+        return receipt
+
+    def record_resolved_target_sync(
+        self,
+        receipt: ChangeTargetSyncReceipt,
+        expected_disposition_id: str,
+        operation_id: str,
+        synced_at: datetime,
+    ) -> ChangeTargetSyncReceipt:
+        """Record one resolved merge while atomically clearing its exact attention."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_target_sync", allow_attention=True)
+        _require_no_active_change_claim(frontier, "target synchronization resolution")
+        _require_target_sync_attention(frontier, expected_disposition_id, operation_id)
+        if receipt.change_id != self._contract.change_id:
+            _conflict("target synchronization receipt does not match the admitted Change")
+        existing = frontier.target_sync_receipt
+        if existing is not None and existing.operation_id == receipt.operation_id:
+            if existing != receipt:
+                _conflict("target synchronization operation has different receipt evidence")
+            return existing
+        updated = self._target_sync_update(frontier, receipt, synced_at)
+        resolution = DeliveryChangeDispositionResolution.create(
+            change_id=self._contract.change_id,
+            disposition_id=expected_disposition_id,
+            resolved_at=synced_at,
+        )
+        updated = updated.model_copy(
+            update={
+                "change_disposition": None,
+                "change_disposition_publication": None,
+                "change_disposition_resolution": resolution,
+            }
+        )
+        self._replace(previous, updated)
+        return receipt
+
+    def record_target_sync_abort(
+        self,
+        expected_disposition_id: str,
+        operation_id: str,
+        resolved_at: datetime,
+    ) -> DeliveryChangeDispositionResolution:
+        """Clear one exact target-sync attention after its workspace abort receipt exists."""
+        frontier, previous = self._read()
+        _require_target_sync_attention(frontier, expected_disposition_id, operation_id)
+        _require_no_active_change_claim(frontier, "target synchronization abort")
+        resolution = DeliveryChangeDispositionResolution.create(
+            change_id=self._contract.change_id,
+            disposition_id=expected_disposition_id,
+            resolved_at=resolved_at,
+        )
+        updated = frontier.model_copy(
+            update={
+                "change_disposition": None,
+                "change_disposition_publication": None,
+                "change_disposition_resolution": resolution,
+            }
+        )
+        self._replace(previous, updated)
+        return resolution
+
+    def _target_sync_update(
+        self,
+        frontier: DeliveryFrontier,
+        receipt: ChangeTargetSyncReceipt,
+        synced_at: datetime,
+    ) -> DeliveryFrontier:
         if synced_at.tzinfo is None:
             message = "target synchronization timestamp must include a timezone"
             raise ValueError(message)
-
         finalization = frontier.finalization
         invalidation = frontier.finalization_invalidation
         ready = frontier.ready
@@ -2231,7 +2311,7 @@ class DeliveryRuntime:
         explicit = DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT)
         if explicit not in triggers:
             triggers = (*triggers, explicit)
-        updated = frontier.model_copy(
+        return frontier.model_copy(
             update={
                 "target_sync_receipt": receipt,
                 "finalization": finalization,
@@ -2243,8 +2323,6 @@ class DeliveryRuntime:
                 ),
             }
         )
-        self._replace(previous, updated)
-        return receipt
 
     def capture_target_sync_conflict(
         self,
@@ -2259,6 +2337,7 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         existing = frontier.change_disposition
         if existing is not None:
+            _require_target_sync_attention(frontier, existing.disposition_id, operation_id)
             return existing
         _require_change_mutable(frontier, "capture_target_sync_conflict")
         _require_no_active_change_claim(frontier, "target synchronization attention capture")
@@ -2955,7 +3034,12 @@ def _find_binding(frontier: DeliveryFrontier, outcome_id: str) -> OutcomeAuthori
         _reference(f"Delivery outcome is absent: {outcome_id}", exc)
 
 
-def _require_change_mutable(frontier: DeliveryFrontier, operation: str) -> None:
+def _require_change_mutable(
+    frontier: DeliveryFrontier,
+    operation: str,
+    *,
+    allow_attention: bool = False,
+) -> None:
     if operation not in _NORMAL_CHANGE_MUTATIONS:
         message = f"unregistered Delivery Change mutation: {operation}"
         raise ValueError(message)
@@ -2967,12 +3051,17 @@ def _require_change_mutable(frontier: DeliveryFrontier, operation: str) -> None:
         _conflict("abandoned Delivery Change is terminal")
     if frontier.change_deferral is not None and operation not in {"resume_change", "abandon_change"}:
         _conflict("deferred Delivery Change requires resumption before mutation")
-    if frontier.change_disposition is not None and operation not in {
-        "defer_change",
-        "resume_change",
-        "abandon_change",
-        "record_publication_successor",
-    }:
+    if (
+        frontier.change_disposition is not None
+        and not allow_attention
+        and operation
+        not in {
+            "defer_change",
+            "resume_change",
+            "abandon_change",
+            "record_publication_successor",
+        }
+    ):
         _conflict("Delivery Change requires attention resolution before mutation")
 
 
@@ -3281,6 +3370,31 @@ def _pull_request_identity(ready: PullRequestReadyReceipt | None) -> DeliveryCha
 
 def _attention_conflict(message: str) -> None:
     raise DeliveryChangeDispositionConflictError(message)
+
+
+def _target_sync_operation_id(disposition: DeliveryChangeDisposition) -> str | None:
+    prefix = "target-sync-operation:"
+    for diagnostic in disposition.diagnostics:
+        if diagnostic.startswith(prefix):
+            return diagnostic.removeprefix(prefix)
+    return None
+
+
+def _require_target_sync_attention(
+    frontier: DeliveryFrontier,
+    expected_disposition_id: str,
+    operation_id: str,
+) -> DeliveryChangeDisposition:
+    current = frontier.change_disposition
+    if current is None:
+        _attention_conflict("target synchronization attention is absent or already resolved")
+    if current.disposition_id != expected_disposition_id:
+        _attention_conflict("target synchronization attention identity is stale")
+    if current.kind != DeliveryChangeDispositionKind.PUBLICATION_ATTENTION:
+        _attention_conflict("target synchronization attention has the wrong disposition kind")
+    if _target_sync_operation_id(current) != operation_id:
+        _attention_conflict("target synchronization operation identity is stale")
+    return current
 
 
 def _conflict(message: str) -> None:

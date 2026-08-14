@@ -13,7 +13,13 @@ from fastapi.testclient import TestClient
 
 from owlbear_cockpit.routes.target_work import assemble_target_app
 from owlbear_cockpit.target_context import load_target_context
-from owlbear_delivery.change_workspace import ChangeWorktreeAttentionCode, ChangeWorktreeAttentionError
+from owlbear_delivery.change_workspace import (
+    ChangeTargetSyncAbortReceipt,
+    ChangeTargetSyncConflictError,
+    ChangeTargetSyncReceipt,
+    ChangeWorktreeAttentionCode,
+    ChangeWorktreeAttentionError,
+)
 from owlbear_delivery_github import GitHubCliPublicationProvider
 from owlbear_delivery.delivery_application_loader import DeliveryApplicationLoadError
 from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
@@ -246,6 +252,44 @@ class _DeliveryApplicationFake:
         if failure is not None:
             raise failure
         return {"change_id": args[0], "disposition_id": args[1]}
+
+    def sync_change_with_current_target(self, *args: object) -> ChangeTargetSyncReceipt:
+        self.calls.append(("target-sync", args))
+        failure = self.failures.get("target_sync")
+        if failure is not None:
+            raise failure
+        return ChangeTargetSyncReceipt.create(
+            operation_id=str(args[1]),
+            change_id=str(args[0]),
+            integration_target="main",
+            expected_target="e" * 40,
+            target_head="e" * 40,
+            change_head_before="d" * 40,
+            merged_head="f" * 40,
+            merge_commit=True,
+        )
+
+    def abort_target_sync_conflict(self, *args: object) -> ChangeTargetSyncAbortReceipt:
+        self.calls.append(("target-sync-abort", args))
+        return ChangeTargetSyncAbortReceipt.create(
+            operation_id=str(args[3]),
+            change_id=str(args[0]),
+            target_head=str(args[2]),
+            restored_head="d" * 40,
+        )
+
+    def resolve_target_sync_conflict(self, *args: object) -> ChangeTargetSyncReceipt:
+        self.calls.append(("target-sync-resolve", args))
+        return ChangeTargetSyncReceipt.create(
+            operation_id=str(args[3]),
+            change_id=str(args[0]),
+            integration_target="main",
+            expected_target=str(args[2]),
+            target_head=str(args[2]),
+            change_head_before="d" * 40,
+            merged_head="f" * 40,
+            merge_commit=True,
+        )
 
     def defer_change(self, *args: object) -> dict[str, object]:
         self.calls.append(("defer", args))
@@ -509,6 +553,10 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
 
     responses = (
         client.post("/api/changes/change-a/publication/reconcile"),
+        client.post(
+            "/api/changes/change-a/target/sync",
+            json={"operation_id": "cockpit-target-sync-test"},
+        ),
         client.post("/api/changes/change-a/publication/ready"),
         client.post("/api/changes/change-a/acceptance/observe"),
         client.post(
@@ -534,17 +582,32 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
         client.get("/api/work-items/completed/change-a", params={"completion_id": "a" * 64}),
     )
 
-    assert [response.status_code for response in responses] == [200] * 12
-    assert responses[7].json() == {
+    assert [response.status_code for response in responses] == [200] * 13
+    target_sync_call = application.calls[1]
+    target_sync_operation_id = target_sync_call[1][1]
+    assert isinstance(target_sync_operation_id, str)
+    assert target_sync_operation_id == "cockpit-target-sync-test"
+    assert responses[1].json() == ChangeTargetSyncReceipt.create(
+        operation_id=target_sync_operation_id,
+        change_id="change-a",
+        integration_target="main",
+        expected_target="e" * 40,
+        target_head="e" * 40,
+        change_head_before="d" * 40,
+        merged_head="f" * 40,
+        merge_commit=True,
+    ).model_dump(mode="json")
+    assert responses[8].json() == {
         "cleanup_id": "c" * 64,
         "change_id": "change-a",
         "branch": "owlbear/change/change-a",
         "worktree_path": ".owlbear/delivery/worktrees/change-a",
         "branch_head": "d" * 40,
     }
-    assert responses[8].json() == responses[7].json()
+    assert responses[9].json() == responses[8].json()
     assert application.calls == [
         ("publication-reconcile", ("change-a",)),
+        target_sync_call,
         ("publication-ready", ("change-a",)),
         ("acceptance-observe", ("change-a",)),
         ("attention-resolve", ("change-a", "a" * 64)),
@@ -574,6 +637,60 @@ def test_open_acceptance_waiting_route_is_retry_safe() -> None:
         "retry_safe": True,
     }
     assert application.calls == [("acceptance-observe", ("change-a",))]
+
+
+def test_target_sync_conflict_route_preserves_typed_delivery_error() -> None:
+    client, application = _client(
+        {
+            "target_sync": ChangeTargetSyncConflictError(
+                "change-a",
+                "cockpit-target-sync-test",
+                "e" * 40,
+                ("product.txt",),
+            )
+        }
+    )
+
+    response = client.post(
+        "/api/changes/change-a/target/sync",
+        json={"operation_id": "cockpit-target-sync-test"},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "ERR_TARGET_SYNC_CONFLICT",
+        "detail": "target synchronization requires conflict resolution: product.txt",
+        "authority": "delivery",
+        "retry_safe": False,
+    }
+    assert application.calls == [("target-sync", ("change-a", "cockpit-target-sync-test"))]
+
+
+def test_target_sync_conflict_exit_routes_delegate_exactly_once() -> None:
+    client, application = _client()
+    body = {
+        "expected_disposition_id": "a" * 64,
+        "target_head": "e" * 40,
+        "operation_id": "cockpit-target-sync-test",
+    }
+
+    abort = client.post("/api/changes/change-a/target/conflict/abort", json=body)
+    resolve = client.post("/api/changes/change-a/target/conflict/resolve", json=body)
+
+    assert abort.status_code == 200
+    assert resolve.status_code == 200
+    assert abort.json()["restored_head"] == "d" * 40
+    assert resolve.json()["target_head"] == "e" * 40
+    assert application.calls == [
+        (
+            "target-sync-abort",
+            ("change-a", "a" * 64, "e" * 40, "cockpit-target-sync-test"),
+        ),
+        (
+            "target-sync-resolve",
+            ("change-a", "a" * 64, "e" * 40, "cockpit-target-sync-test"),
+        ),
+    ]
 
 
 def test_stale_attention_resolution_route_is_not_retry_safe() -> None:

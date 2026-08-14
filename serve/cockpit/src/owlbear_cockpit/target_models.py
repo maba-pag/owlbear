@@ -11,6 +11,7 @@ from owlbear_delivery.portfolio_operating import PortfolioOperatingView
 from owlbear_delivery.work_items import ChangeGroupView, WorkItemDetailView
 
 if TYPE_CHECKING:
+    from owlbear_delivery.change_workspace import ChangeTargetSyncAbortReceipt, ChangeTargetSyncReceipt
     from owlbear_delivery.portfolio_application import DeliveryChangeWorktreeCleanup, DeliveryChangeWorktreeRecovery
 
 
@@ -127,6 +128,56 @@ class RecoverChangeWorktreeBody(_TargetHTTPModel):
     recovery_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
 
 
+class TargetSyncBody(_TargetHTTPModel):
+    """Stable operation identity used to reconcile a target-sync retry."""
+
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class TargetSyncConflictBody(_TargetHTTPModel):
+    """Exact operation and attention identity for one preserved target conflict exit."""
+
+    expected_disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class TargetSyncResponse(_TargetHTTPModel):
+    """Typed receipt returned after one exact target synchronization."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: str = Field(min_length=1)
+    integration_target: str = Field(min_length=1)
+    expected_target: str = Field(pattern=r"^[0-9a-f]{40}$")
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    change_head_before: str = Field(pattern=r"^[0-9a-f]{40}$")
+    merged_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    merge_commit: bool
+
+    @classmethod
+    def from_receipt(cls, receipt: ChangeTargetSyncReceipt) -> TargetSyncResponse:
+        """Convert one application sync receipt into the HTTP transport shape."""
+        return cls(**receipt.model_dump())
+
+
+class TargetSyncAbortResponse(_TargetHTTPModel):
+    """Typed receipt returned after one exact target-sync abort."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: str = Field(min_length=1)
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    restored_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def from_receipt(cls, receipt: ChangeTargetSyncAbortReceipt) -> TargetSyncAbortResponse:
+        """Convert one application abort receipt into the HTTP transport shape."""
+        return cls(**receipt.model_dump())
+
+
 class ChangeWorktreeCleanupResponse(_TargetHTTPModel):
     """Typed receipt returned after one exact terminal worktree cleanup."""
 
@@ -211,6 +262,9 @@ __all__ = [
     "NeedsCounts",
     "RecoverChangeWorktreeBody",
     "ResolveChangeAttentionBody",
+    "TargetSyncAbortResponse",
+    "TargetSyncConflictBody",
+    "TargetSyncResponse",
     "WorkItemDetailResponse",
     "WorkItemPortfolioResponse",
     "WorkItemPortfolioTotals",

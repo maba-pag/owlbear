@@ -21,7 +21,7 @@ Parse the supplied value as exactly one lowercase-hyphenated `change_id` followe
 extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
-`OwlBear Delivery list_work_items list_retained_change_worktrees show_work_item show_integration_attention resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_completed_change_worktree recover_change_worktree reconcile_change_checkpoint mark_change_ready recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
+`OwlBear Delivery list_work_items list_retained_change_worktrees show_work_item show_integration_attention resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_completed_change_worktree recover_change_worktree reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
 For a Change attention, call `list_work_items` and require the Change publication card's
 `action.attention_id` to equal the supplied disposition identity; use `show_work_item` for the
 publication detail when needed. For an Integration attention, call
@@ -127,6 +127,11 @@ Use only an existing operation whose contract owns the selected result:
   revision required;
 - reviewed merge conflict: report `authority-gap` unless the current context supplies an exact
   legacy repair claim for recovery; do not create a new claim, candidate, review, or admission;
+- target-sync merge conflict: when the Change attention diagnostics identify a preserved target
+  synchronization conflict, retain the managed worktree, `MERGE_HEAD`, and conflict paths and
+  report `authority-gap` unless the current context supplies an exact Delivery-owned operation for
+  conflict resolution, validation, and review. Do not resolve the generic Change disposition,
+  retry synchronization, abort the merge, reset the worktree, or use raw Git as a substitute;
 - target, publication, or finalization prerequisite: hand off to the owning Delivery workflow and
   report the exact missing authority rather than inventing a local Integration route;
 - claim recovery: use the exact claim-bound recovery operation only when current context supplies

@@ -27,11 +27,19 @@ from owlbear_cockpit.target_models import (
     NeedsCounts,
     RecoverChangeWorktreeBody,
     ResolveChangeAttentionBody,
+    TargetSyncAbortResponse,
+    TargetSyncBody,
+    TargetSyncConflictBody,
+    TargetSyncResponse,
     WorkItemDetailResponse,
     WorkItemPortfolioResponse,
     WorkItemPortfolioTotals,
 )
-from owlbear_delivery.change_workspace import ChangeWorktreeAttentionError, CoordinationConflictError
+from owlbear_delivery.change_workspace import (
+    ChangeTargetSyncConflictError,
+    ChangeWorktreeAttentionError,
+    CoordinationConflictError,
+)
 from owlbear_delivery.completed_history import CompletedHistoryError, CompletedHistoryMissingError
 from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
@@ -172,6 +180,35 @@ class TargetCockpitService:
             )
         )
 
+    def sync_target(self, change_id: str, body: TargetSyncBody) -> TargetSyncResponse:
+        """Synchronize one Change with the current remote-tracking target."""
+        receipt = self._invoke(lambda: self._application.sync_change_with_current_target(change_id, body.operation_id))
+        return TargetSyncResponse.from_receipt(receipt)
+
+    def abort_target_sync(self, change_id: str, body: TargetSyncConflictBody) -> TargetSyncAbortResponse:
+        """Abort one exact preserved target-sync conflict."""
+        receipt = self._invoke(
+            lambda: self._application.abort_target_sync_conflict(
+                change_id,
+                body.expected_disposition_id,
+                body.target_head,
+                body.operation_id,
+            )
+        )
+        return TargetSyncAbortResponse.from_receipt(receipt)
+
+    def resolve_target_sync(self, change_id: str, body: TargetSyncConflictBody) -> TargetSyncResponse:
+        """Resolve one exact preserved target-sync conflict with a reviewed merge."""
+        receipt = self._invoke(
+            lambda: self._application.resolve_target_sync_conflict(
+                change_id,
+                body.expected_disposition_id,
+                body.target_head,
+                body.operation_id,
+            )
+        )
+        return TargetSyncResponse.from_receipt(receipt)
+
     def defer_change(self, change_id: str, body: ChangeDispositionReasonBody) -> object:
         """Retain one Change while pausing its claimable frontier."""
         return self._invoke(lambda: self._application.defer_change(change_id, body.reason))
@@ -238,7 +275,12 @@ class TargetCockpitService:
                 exc.diagnostic.detail,
                 retry_safe=False,
             )
-        except (ChangeWorktreeAttentionError, DeliveryRuntimeConflictError, CoordinationConflictError) as exc:
+        except (
+            ChangeTargetSyncConflictError,
+            ChangeWorktreeAttentionError,
+            DeliveryRuntimeConflictError,
+            CoordinationConflictError,
+        ) as exc:
             _http_error(
                 409,
                 getattr(exc, "code", "ERR_DELIVERY_CONFLICT"),
@@ -323,6 +365,7 @@ def _register_controls(router: APIRouter) -> None:
     _register_request_controls(router)
     _register_outcome_controls(router)
     _register_publication_controls(router)
+    _register_target_controls(router)
     _register_worktree_controls(router)
 
 
@@ -408,6 +451,41 @@ def _register_publication_controls(router: APIRouter) -> None:
     @router.post("/changes/{change_id}/resume")
     def resume_change(change_id: str, service: _TargetService) -> object:
         return service.resume_change(change_id)
+
+
+def _register_target_controls(router: APIRouter) -> None:
+    @router.post(
+        "/changes/{change_id}/target/sync",
+        response_model=TargetSyncResponse,
+    )
+    def sync_change_with_target(
+        change_id: str,
+        body: TargetSyncBody,
+        service: _TargetService,
+    ) -> TargetSyncResponse:
+        return service.sync_target(change_id, body)
+
+    @router.post(
+        "/changes/{change_id}/target/conflict/abort",
+        response_model=TargetSyncAbortResponse,
+    )
+    def abort_target_sync_conflict(
+        change_id: str,
+        body: TargetSyncConflictBody,
+        service: _TargetService,
+    ) -> TargetSyncAbortResponse:
+        return service.abort_target_sync(change_id, body)
+
+    @router.post(
+        "/changes/{change_id}/target/conflict/resolve",
+        response_model=TargetSyncResponse,
+    )
+    def resolve_target_sync_conflict(
+        change_id: str,
+        body: TargetSyncConflictBody,
+        service: _TargetService,
+    ) -> TargetSyncResponse:
+        return service.resolve_target_sync(change_id, body)
 
     @router.post("/changes/{change_id}/abandon")
     def abandon_change(

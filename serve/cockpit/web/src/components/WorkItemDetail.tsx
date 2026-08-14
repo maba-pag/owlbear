@@ -37,21 +37,24 @@ interface WorkItemDetailProps {
   pendingAction: string | null
   actionError: Error | null
   actionResult: string | null
-  onAnswerRequest: (requestId: string, resolution: DeliveryRequestResolution) => Promise<void>
-  onClearBlock: (blockId: string, note: string, locators: string[]) => Promise<void>
-  onRecoverClaim: (attemptId: string, claimId: string) => Promise<void>
+  onAnswerRequest: (requestId: string, resolution: DeliveryRequestResolution) => Promise<Error | null>
+  onClearBlock: (blockId: string, note: string, locators: string[]) => Promise<Error | null>
+  onRecoverClaim: (attemptId: string, claimId: string) => Promise<Error | null>
   onPreviewBackward: (target: WorkItemStage) => Promise<BackwardMovePreview | null>
   onMoveBackward: (target: WorkItemStage, reason: string, snapshotVersion: string) => Promise<void>
-  onReconcilePublication: () => Promise<void>
-  onMarkPublicationReady: () => Promise<void>
-  onObserveAcceptance: () => Promise<void>
-  onResolveAttention: (expectedDispositionId: string) => Promise<void>
-  onDeferChange: (reason: string) => Promise<void>
-  onResumeChange: () => Promise<void>
-  onAbandonChange: (reason: string) => Promise<void>
-  onCleanupAbandonedChange: () => Promise<void>
-  onCleanupCompletedChange: (completionId: string) => Promise<void>
-  onRecoverChangeWorktree: (recoveryReviewedHead: string) => Promise<void>
+  onReconcilePublication: () => Promise<Error | null>
+  onMarkPublicationReady: () => Promise<Error | null>
+  onObserveAcceptance: () => Promise<Error | null>
+  onResolveAttention: (expectedDispositionId: string) => Promise<Error | null>
+  onSyncTarget: () => Promise<Error | null>
+  onAbortTargetSync: (expectedDispositionId: string, targetHead: string, operationId: string) => Promise<Error | null>
+  onResolveTargetSync: (expectedDispositionId: string, targetHead: string, operationId: string) => Promise<Error | null>
+  onDeferChange: (reason: string) => Promise<Error | null>
+  onResumeChange: () => Promise<Error | null>
+  onAbandonChange: (reason: string) => Promise<Error | null>
+  onCleanupAbandonedChange: () => Promise<Error | null>
+  onCleanupCompletedChange: (completionId: string) => Promise<Error | null>
+  onRecoverChangeWorktree: (recoveryReviewedHead: string) => Promise<Error | null>
 }
 
 const WORKER_ROLE_LABELS: Record<DeliveryWorkerRole, string> = {
@@ -529,17 +532,67 @@ function WorktreeCleanupSection(props: WorkItemDetailProps) {
   )
 }
 
+function TargetSyncConflictSection(props: WorkItemDetailProps) {
+  const publication = props.detail.item.publication
+  const conflict = publication?.target_sync_conflict
+  const attention = publication?.attention
+  if (!publication || !conflict) return null
+  const canExit = attention?.kind === 'publication-attention'
+  return (
+    <section className="border-l-4 border-danger bg-surface p-static-md" aria-labelledby="target-sync-conflict-heading">
+      <PHeading id="target-sync-conflict-heading" tag="h4" size="sm">Target sync conflict</PHeading>
+      <p className="mt-static-xs text-sm">The merge is preserved in the Change worktree. Choose an explicit exit after reviewing the conflict.</p>
+      <dl className="mt-static-md grid grid-cols-[auto_minmax(0,1fr)] gap-x-static-md gap-y-static-xs break-all text-xs">
+        <IdentityRow label="Operation" value={conflict.operation_id} />
+        <IdentityRow label="Target head" value={conflict.target_head} />
+        <IdentityRow label="Reviewed head" value={conflict.change_head_before} />
+      </dl>
+      {conflict.conflict_paths.length > 0 ? (
+        <ul className="mt-static-md list-disc break-all pl-static-md text-sm">
+          {conflict.conflict_paths.map((path) => <li key={path}>{path}</li>)}
+        </ul>
+      ) : <p className="mt-static-md text-sm text-contrast-medium">Git did not report individual conflict paths.</p>}
+      {canExit && attention ? (
+        <div className="mt-static-md flex flex-wrap gap-static-sm">
+          <PButton
+            type="button"
+            compact
+            variant="secondary"
+            data-testid="target-sync-conflict-abort"
+            disabled={props.pendingAction !== null}
+            onClick={() => void props.onAbortTargetSync(attention.disposition_id, conflict.target_head, conflict.operation_id)}
+          >
+            {props.pendingAction === 'target-sync-abort' ? 'Aborting...' : 'Abort target sync'}
+          </PButton>
+          <PButton
+            type="button"
+            compact
+            data-testid="target-sync-conflict-resolve"
+            disabled={props.pendingAction !== null}
+            onClick={() => void props.onResolveTargetSync(attention.disposition_id, conflict.target_head, conflict.operation_id)}
+          >
+            {props.pendingAction === 'target-sync-resolve' ? 'Validating...' : 'Validate resolved merge'}
+          </PButton>
+        </div>
+      ) : <p className="mt-static-md text-sm text-contrast-medium">Waiting for the matching Change attention record.</p>}
+    </section>
+  )
+}
+
 function PublicationSection(props: WorkItemDetailProps) {
   const publication = props.detail.item.publication
   if (!publication) return null
   const action = props.detail.item.card.action
+  const targetSyncAttention = Boolean(
+    publication.target_sync_conflict && publication.attention?.kind === 'publication-attention',
+  )
   const control = action.kind === 'reconcile-checkpoint'
     ? props.onReconcilePublication
     : action.kind === 'mark-ready'
       ? props.onMarkPublicationReady
       : action.kind === 'observe-acceptance'
         ? props.onObserveAcceptance
-        : action.kind === 'resolve-attention' && action.attention_id
+        : action.kind === 'resolve-attention' && action.attention_id && !targetSyncAttention
           ? () => props.onResolveAttention(action.attention_id as string)
         : action.kind === 'resume-change'
           ? props.onResumeChange
@@ -557,6 +610,7 @@ function PublicationSection(props: WorkItemDetailProps) {
     <section className="min-w-0 border-l border-contrast-low bg-surface p-static-md" aria-labelledby="work-publication-heading">
       <PHeading id="work-publication-heading" tag="h3" size="md">{PUBLICATION_PHASE_LABELS[publication.phase]}</PHeading>
       <p className="mt-static-xs text-sm leading-relaxed">{props.detail.item.card.next_step}</p>
+      <TargetSyncConflictSection {...props} />
       {publication.attention ? (
         <div className="mt-static-md border-l-4 border-warning bg-surface p-static-sm" role="alert">
           <PHeading tag="h4" size="sm">Change attention</PHeading>
@@ -577,10 +631,23 @@ function PublicationSection(props: WorkItemDetailProps) {
         <IdentityRow label="Expected head" value={publication.invalidated_expected_head} />
         <IdentityRow label="Observed head" value={publication.invalidated_observed_head} />
         <IdentityRow label="Merged at" value={publication.merged_at} />
+        <IdentityRow label="Target head" value={publication.target_sync?.target_head ?? null} />
+        <IdentityRow label="Merged Change head" value={publication.target_sync?.merged_head ?? null} />
       </dl>
+      {publication.target_sync ? (
+        <p className="mt-static-sm text-xs text-contrast-medium">
+          Last target sync: {publication.target_sync.integration_target}
+          {publication.target_sync.merge_commit ? ' (merge commit)' : ' (fast-forward)'}
+        </p>
+      ) : null}
       {publication.pending_checkpoint_triggers.length > 0 ? <p className="mt-static-sm text-xs text-contrast-medium">Checkpoint triggers: {publication.pending_checkpoint_triggers.join(', ')}</p> : null}
       {action.command ? <CopyCommand command={action.command} className="mt-static-md" /> : null}
       {!action.command && control && action.label ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null} onClick={() => void control()}>{pending ? 'Working...' : action.label}</PButton> : null}
+      {!publication.attention && !['deferred', 'abandoned', 'acceptance-observed'].includes(publication.phase) ? (
+        <PButton className="mt-static-md" type="button" compact variant="secondary" disabled={props.pendingAction !== null} onClick={() => void props.onSyncTarget()}>
+          {props.pendingAction === 'target-sync' ? 'Syncing target...' : 'Sync with target'}
+        </PButton>
+      ) : null}
       <WorktreeRecoverySection {...props} />
       <WorktreeCleanupSection {...props} />
     </section>

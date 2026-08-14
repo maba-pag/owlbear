@@ -256,7 +256,10 @@ function installFetch() {
       return response({ invalidated_outcome_ids: ['OUT-002'], move: {} })
     }
     if (method === 'POST' && (
-      url.endsWith('/publication/reconcile')
+      url.endsWith('/target/sync')
+      || url.endsWith('/target/conflict/abort')
+      || url.endsWith('/target/conflict/resolve')
+      || url.endsWith('/publication/reconcile')
       || url.endsWith('/publication/ready')
       || url.endsWith('/acceptance/observe')
       || url.endsWith('/attention/resolve')
@@ -268,6 +271,44 @@ function installFetch() {
       || url.endsWith('/worktree/recover')
     )) {
       if (portfolioAfterPublication) currentPortfolio = portfolioAfterPublication
+      if (url.endsWith('/target/sync')) {
+        return response({
+          schema_version: 1,
+          receipt_id: 'a'.repeat(64),
+          operation_id: 'cockpit-target-sync-test',
+          change_id: 'change-alpha',
+          integration_target: 'main',
+          expected_target: '1'.repeat(40),
+          target_head: '1'.repeat(40),
+          change_head_before: '2'.repeat(40),
+          merged_head: '3'.repeat(40),
+          merge_commit: true,
+        })
+      }
+      if (url.endsWith('/target/conflict/abort')) {
+        return response({
+          schema_version: 1,
+          receipt_id: 'b'.repeat(64),
+          operation_id: 'cockpit-target-sync-conflict',
+          change_id: 'change-alpha',
+          target_head: '4'.repeat(40),
+          restored_head: '5'.repeat(40),
+        })
+      }
+      if (url.endsWith('/target/conflict/resolve')) {
+        return response({
+          schema_version: 1,
+          receipt_id: 'c'.repeat(64),
+          operation_id: 'cockpit-target-sync-conflict',
+          change_id: 'change-alpha',
+          integration_target: 'main',
+          expected_target: '4'.repeat(40),
+          target_head: '4'.repeat(40),
+          change_head_before: '5'.repeat(40),
+          merged_head: '6'.repeat(40),
+          merge_commit: true,
+        })
+      }
       return response({})
     }
     return response({ detail: 'Not found' }, 404)
@@ -658,6 +699,154 @@ it('reconciles a pending publication checkpoint from the Change publication view
     body: null,
   }))
   expect(await screen.findByText('Publication checkpoint reconciled.')).toBeInTheDocument()
+})
+
+it('syncs the Change with the target and shows the latest sync receipt', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'none',
+    needs_headline: null,
+    next_actor: 'agent',
+    next_step: 'Finalize the reviewed Change',
+    activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Ready for finalization', done: null, total: null },
+    action: { kind: 'finalize', label: 'Finalize Change', command: '/finalize-change change-alpha' },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    promise: 'Publish the reviewed Change.',
+    acceptance: [],
+    commitments: [],
+    tasks: [],
+    publication: {
+      phase: 'ready-for-finalization',
+      finalization_id: null,
+      finalized_head: null,
+      published_head: null,
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: null,
+      pull_request_number: null,
+      pull_request_head: null,
+      accepted_merge_commit: null,
+      merged_at: null,
+      target_sync: {
+        receipt_id: 'a'.repeat(64),
+        operation_id: 'sync-portfolio-change',
+        integration_target: 'main',
+        expected_target: '1'.repeat(40),
+        target_head: '1'.repeat(40),
+        change_head_before: '2'.repeat(40),
+        merged_head: '3'.repeat(40),
+        merge_commit: true,
+      },
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'finalization', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(inspector).toHaveTextContent(`Target head${'1'.repeat(40)}`)
+  expect(inspector).toHaveTextContent(`Merged Change head${'3'.repeat(40)}`)
+  expect(inspector).toHaveTextContent('Last target sync: main (merge commit)')
+  fireEvent.click(within(inspector).getByText('Sync with target'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/target/sync',
+    method: 'POST',
+    body: { operation_id: expect.stringMatching(/^cockpit-target-sync-/) },
+  }))
+  expect(await screen.findByText('Target synchronized with the integration target.')).toBeInTheDocument()
+})
+
+it('offers explicit exits for a preserved target-sync conflict', async () => {
+  const dispositionId = 'd'.repeat(64)
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'you',
+    needs_headline: 'Target sync conflict',
+    next_actor: 'you',
+    next_step: 'Choose an explicit target-sync conflict exit',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Finalization invalidated', done: null, total: null },
+    action: { kind: 'resolve-attention', label: 'Resolve attention', command: null, attention_id: dispositionId },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    promise: 'Publish the reviewed Change.',
+    acceptance: [],
+    commitments: [],
+    tasks: [],
+    publication: {
+      phase: 'finalization-invalidated',
+      finalization_id: null,
+      finalized_head: null,
+      published_head: null,
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: '5'.repeat(40),
+      invalidated_observed_head: '4'.repeat(40),
+      repository: null,
+      pull_request_number: null,
+      pull_request_head: null,
+      accepted_merge_commit: null,
+      merged_at: null,
+      attention: {
+        disposition_id: dispositionId,
+        kind: 'publication-attention',
+        change_id: 'change-alpha',
+        entered_from: 'finalization',
+        recorded_at: '2026-08-12T12:00:00Z',
+        diagnostics: ['target-sync-operation:cockpit-target-sync-conflict'],
+      },
+      target_sync_conflict: {
+        conflict_id: 'e'.repeat(64),
+        operation_id: 'cockpit-target-sync-conflict',
+        target_head: '4'.repeat(40),
+        change_head_before: '5'.repeat(40),
+        conflict_paths: ['src/app.py', 'tests/test_app.py'],
+      },
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'publication', items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(inspector).toHaveTextContent('Target sync conflict')
+  expect(inspector).toHaveTextContent('src/app.py')
+  expect(within(inspector).queryByText('Resolve attention')).toBeNull()
+
+  fireEvent.click(screen.getByTestId('target-sync-conflict-abort'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/target/conflict/abort',
+    method: 'POST',
+    body: {
+      expected_disposition_id: dispositionId,
+      target_head: '4'.repeat(40),
+      operation_id: 'cockpit-target-sync-conflict',
+    },
+  }))
+  expect(await screen.findByText('Target sync conflict aborted.')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByTestId('target-sync-conflict-resolve'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/target/conflict/resolve',
+    method: 'POST',
+    body: {
+      expected_disposition_id: dispositionId,
+      target_head: '4'.repeat(40),
+      operation_id: 'cockpit-target-sync-conflict',
+    },
+  }))
 })
 
 it('offers the finalization command from the Change publication row and detail view', async () => {

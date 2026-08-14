@@ -13,6 +13,7 @@ from owlbear_delivery import (
     ChangeBranchPublisher,
     ChangeBranchSupersessionReceipt,
     ChangeTargetSyncConflictError,
+    TargetSyncConflictRequest,
     ChangeWriter,
     ChangeWorkspaceManager,
     CoordinationConflictError,
@@ -175,6 +176,219 @@ def test_sync_conflict_preserves_merge_state_and_user_checkout(tmp_path: Path) -
     assert coordinator.show("sync-conflict").target_head == initial
     assert coordinator.show("sync-conflict").last_reviewed_commit == reviewed
     assert coordinator.show("sync-conflict").target_sync_receipt is None
+
+
+def test_abort_target_sync_conflict_replays_and_restores_reviewed_boundary(tmp_path: Path) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, reviewed = _reviewed_change(manager, "sync-abort")
+    target_head = _advance_remote_target(tmp_path, remote, product="target\n")
+    request = SyncChangeWithTarget(
+        change_id="sync-abort",
+        expected_target=target_head,
+        operation_id="sync-abort-1",
+    )
+    user_checkout_before = (repository / "product.txt").read_bytes()
+
+    with pytest.raises(ChangeTargetSyncConflictError):
+        manager.sync_with_target(request)
+
+    exit_request = TargetSyncConflictRequest(
+        change_id="sync-abort",
+        target_head=target_head,
+        operation_id="sync-abort-1",
+    )
+    receipt = manager.abort_target_sync_conflict(exit_request)
+    replayed = manager.abort_target_sync_conflict(exit_request)
+
+    assert replayed == receipt
+    assert receipt.restored_head == reviewed
+    assert _head(worktree) == reviewed
+    assert _git(worktree, "status", "--porcelain").stdout == ""
+    assert _git(worktree, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode == 128
+    assert _head(repository, "refs/heads/main") == initial
+    assert (repository / "product.txt").read_bytes() == user_checkout_before
+    assert coordinator.show("sync-abort").target_sync_conflict is None
+    assert coordinator.show("sync-abort").target_sync_abort_receipt == receipt
+
+
+def test_abort_target_sync_conflict_replays_after_abort_before_receipt_persistence(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, reviewed = _reviewed_change(manager, "sync-abort-crash")
+    target_head = _advance_remote_target(tmp_path, remote, product="target\n")
+    request = SyncChangeWithTarget(
+        change_id="sync-abort-crash",
+        expected_target=target_head,
+        operation_id="sync-abort-crash-1",
+    )
+
+    with pytest.raises(ChangeTargetSyncConflictError):
+        manager.sync_with_target(request)
+    exit_request = TargetSyncConflictRequest(
+        change_id="sync-abort-crash",
+        target_head=target_head,
+        operation_id="sync-abort-crash-1",
+    )
+    original_update = coordinator.update
+    with (
+        patch.object(coordinator, "update", side_effect=RuntimeError("simulated crash")),
+        pytest.raises(RuntimeError, match="simulated crash"),
+    ):
+        manager.abort_target_sync_conflict(exit_request)
+
+    assert _head(worktree) == reviewed
+    assert _git(worktree, "status", "--porcelain").stdout == ""
+    assert coordinator.show("sync-abort-crash").target_sync_conflict is not None
+    with patch.object(coordinator, "update", original_update):
+        receipt = manager.abort_target_sync_conflict(exit_request)
+
+    assert receipt.restored_head == reviewed
+    assert coordinator.show("sync-abort-crash").target_sync_conflict is None
+
+
+def test_resolve_target_sync_conflict_replays_after_commit_before_receipt_persistence(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, reviewed = _reviewed_change(manager, "sync-resolve-crash")
+    target_head = _advance_remote_target(tmp_path, remote, product="target\n")
+    request = SyncChangeWithTarget(
+        change_id="sync-resolve-crash",
+        expected_target=target_head,
+        operation_id="sync-resolve-crash-1",
+    )
+
+    with pytest.raises(ChangeTargetSyncConflictError):
+        manager.sync_with_target(request)
+    (worktree / "product.txt").write_text("resolved\n", encoding="utf-8")
+    _git(worktree, "add", "product.txt")
+    exit_request = TargetSyncConflictRequest(
+        change_id="sync-resolve-crash",
+        target_head=target_head,
+        operation_id="sync-resolve-crash-1",
+    )
+    original_update = coordinator.update
+    with (
+        patch.object(coordinator, "update", side_effect=RuntimeError("simulated crash")),
+        pytest.raises(RuntimeError, match="simulated crash"),
+    ):
+        manager.resolve_target_sync_conflict(exit_request)
+
+    assert _head(worktree) != reviewed
+    assert _git(worktree, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode == 128
+    assert coordinator.show("sync-resolve-crash").target_sync_conflict is not None
+    with patch.object(coordinator, "update", original_update):
+        receipt = manager.resolve_target_sync_conflict(exit_request)
+
+    assert receipt.change_head_before == reviewed
+    assert receipt.target_head == target_head
+    assert coordinator.show("sync-resolve-crash").target_sync_receipt == receipt
+
+
+def test_resolve_target_sync_conflict_rejects_unresolved_paths_without_mutation(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, _reviewed = _reviewed_change(manager, "sync-unresolved")
+    target_head = _advance_remote_target(tmp_path, remote, product="target\n")
+    request = SyncChangeWithTarget(
+        change_id="sync-unresolved",
+        expected_target=target_head,
+        operation_id="sync-unresolved-1",
+    )
+
+    with pytest.raises(ChangeTargetSyncConflictError):
+        manager.sync_with_target(request)
+
+    with pytest.raises(RuntimeError, match="still has unresolved paths"):
+        manager.resolve_target_sync_conflict(
+            TargetSyncConflictRequest(
+                change_id="sync-unresolved",
+                target_head=target_head,
+                operation_id="sync-unresolved-1",
+            )
+        )
+
+    assert _git(worktree, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode == 0
+    assert coordinator.show("sync-unresolved").target_sync_conflict is not None
+    assert coordinator.show("sync-unresolved").target_sync_receipt is None
+
+
+def test_target_sync_conflict_exit_rejects_mismatched_operation_without_mutation(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, _reviewed = _reviewed_change(manager, "sync-mismatch")
+    target_head = _advance_remote_target(tmp_path, remote, product="target\n")
+
+    with pytest.raises(ChangeTargetSyncConflictError):
+        manager.sync_with_target(
+            SyncChangeWithTarget(
+                change_id="sync-mismatch",
+                expected_target=target_head,
+                operation_id="sync-mismatch-1",
+            )
+        )
+
+    with pytest.raises(CoordinationConflictError, match="conflict identity"):
+        manager.abort_target_sync_conflict(
+            TargetSyncConflictRequest(
+                change_id="sync-mismatch",
+                target_head=target_head,
+                operation_id="different-operation",
+            )
+        )
+
+    assert _git(worktree, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode == 0
+    assert coordinator.show("sync-mismatch").target_sync_abort_receipt is None
+
+    with pytest.raises(CoordinationConflictError, match="conflict identity"):
+        manager.resolve_target_sync_conflict(
+            TargetSyncConflictRequest(
+                change_id="sync-mismatch",
+                target_head="0" * 40,
+                operation_id="sync-mismatch-1",
+            )
+        )
+
+    assert _git(worktree, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode == 0
+    assert coordinator.show("sync-mismatch").target_sync_receipt is None
+
+
+def test_resolve_target_sync_conflict_records_exact_merge_and_replays(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, reviewed = _reviewed_change(manager, "sync-resolve")
+    target_head = _advance_remote_target(tmp_path, remote, product="target\n")
+    request = SyncChangeWithTarget(
+        change_id="sync-resolve",
+        expected_target=target_head,
+        operation_id="sync-resolve-1",
+    )
+    user_checkout_before = (repository / "product.txt").read_bytes()
+
+    with pytest.raises(ChangeTargetSyncConflictError):
+        manager.sync_with_target(request)
+    (worktree / "product.txt").write_text("resolved\n", encoding="utf-8")
+    _git(worktree, "add", "product.txt")
+
+    exit_request = TargetSyncConflictRequest(
+        change_id="sync-resolve",
+        target_head=target_head,
+        operation_id="sync-resolve-1",
+    )
+    receipt = manager.resolve_target_sync_conflict(exit_request)
+    replayed = manager.resolve_target_sync_conflict(exit_request)
+    parents = _git(worktree, "rev-list", "--parents", "-n", "1", receipt.merged_head).stdout.split()
+
+    assert replayed == receipt
+    assert receipt.change_head_before == reviewed
+    assert receipt.target_head == target_head
+    assert receipt.merge_commit
+    assert parents[1:] == [reviewed, target_head]
+    assert coordinator.show("sync-resolve").target_sync_conflict is None
+    assert coordinator.show("sync-resolve").target_sync_receipt == receipt
+    assert manager.reviewed_source_head("sync-resolve") == receipt.merged_head
+    assert _head(repository, "refs/heads/main") != receipt.merged_head
+    assert (repository / "product.txt").read_bytes() == user_checkout_before
 
 
 def _writer(change_id: str) -> ChangeWriter:

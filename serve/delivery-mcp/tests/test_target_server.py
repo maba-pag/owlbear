@@ -70,6 +70,9 @@ DELIVERY_TOOLS = {
     "mark_change_ready",
     "reconcile_finalization_head",
     "reconcile_change_checkpoint",
+    "sync_change_with_target",
+    "abort_target_sync_conflict",
+    "resolve_target_sync_conflict",
     "supersede_publication",
     "observe_change_publication_checks",
     "observe_acceptance",
@@ -427,6 +430,20 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
         "provider_supersession",
         "publication_history",
     } <= set(tools["supersede_publication"].output_schema["required"])
+    sync_schema = tools["sync_change_with_target"].input_schema
+    sync_request = sync_schema["$defs"]["TargetSyncParams"]
+    assert set(sync_request["properties"]) == {"change_id", "expected_target", "operation_id"}
+    assert {
+        "receipt_id",
+        "operation_id",
+        "change_id",
+        "integration_target",
+        "expected_target",
+        "target_head",
+        "change_head_before",
+        "merged_head",
+        "merge_commit",
+    } <= set(tools["sync_change_with_target"].output_schema["required"])
     assert transition_definitions["DeliveryTransition"]["discriminator"]["propertyName"] == "action"
     assert "output" in tools["publish_delivery_plan"].output_schema["required"]
     assert "output" in tools["publish_delivery_result"].output_schema["required"]
@@ -439,6 +456,41 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
     }
     assert transitioned.structured_content == {"operation": "transition_delivery"}
     assert application.calls == ["publish_delivery_result", "transition_delivery"]
+
+
+@pytest.mark.asyncio
+async def test_target_sync_conflict_tools_have_exact_contract() -> None:
+    application = _PublicationApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+
+    async with Client(server) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    conflict_request = tools["abort_target_sync_conflict"].input_schema["$defs"]["TargetSyncConflictParams"]
+    assert set(conflict_request["properties"]) == {
+        "change_id",
+        "expected_disposition_id",
+        "target_head",
+        "operation_id",
+    }
+    assert {
+        "receipt_id",
+        "operation_id",
+        "change_id",
+        "target_head",
+        "restored_head",
+    } <= set(tools["abort_target_sync_conflict"].output_schema["required"])
+    assert {
+        "receipt_id",
+        "operation_id",
+        "change_id",
+        "integration_target",
+        "expected_target",
+        "target_head",
+        "change_head_before",
+        "merged_head",
+        "merge_commit",
+    } <= set(tools["resolve_target_sync_conflict"].output_schema["required"])
 
 
 @pytest.mark.asyncio

@@ -15,7 +15,7 @@ from itertools import pairwise
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Never, Self
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.identities import ChangeId
@@ -36,6 +36,7 @@ _PUBLICATION_LEASE_MAX_SECONDS = 600
 _PUBLICATION_OPERATION_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 _CHANGE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _MERGE_COMMIT_MIN_PARENTS = 2
+_PORCELAIN_WORKTREE_STATUS_INDEX = 1
 
 
 @dataclass(frozen=True)
@@ -124,6 +125,14 @@ class SyncChangeWithTarget(_WorkspaceModel):
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
+class TargetSyncConflictRequest(_WorkspaceModel):
+    """Exact target and operation identity for one preserved merge conflict."""
+
+    change_id: ChangeId
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
 class ChangeTargetSyncReceipt(_WorkspaceModel):
     """Durable evidence for one exact target merge in a managed Change worktree."""
 
@@ -176,6 +185,88 @@ class ChangeTargetSyncReceipt(_WorkspaceModel):
         return self
 
 
+class ChangeTargetSyncConflictState(_WorkspaceModel):
+    """Durable identity of one preserved target merge conflict."""
+
+    schema_version: Literal[1] = 1
+    conflict_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: ChangeId
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    change_head_before: str = Field(pattern=r"^[0-9a-f]{40}$")
+    conflict_paths: tuple[str, ...] = ()
+
+    @field_validator("conflict_paths", mode="before")
+    @classmethod
+    def _normalize_conflict_paths(cls, value: object) -> object:
+        return tuple(value) if isinstance(value, list) else value
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        target_head: str,
+        change_head_before: str,
+        conflict_paths: tuple[str, ...],
+    ) -> Self:
+        """Create deterministic evidence for one preserved merge state."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "target_head": target_head,
+            "change_head_before": change_head_before,
+            "conflict_paths": conflict_paths,
+        }
+        candidate = cls.model_construct(conflict_id="0" * 64, **values)
+        return cls(conflict_id=_target_sync_conflict_digest(candidate), **values)
+
+    @model_validator(mode="after")
+    def _validate_state(self) -> Self:
+        if self.conflict_id != _target_sync_conflict_digest(self):
+            message = "target synchronization conflict identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class ChangeTargetSyncAbortReceipt(_WorkspaceModel):
+    """Content-addressed evidence that one target merge was explicitly aborted."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: ChangeId
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    restored_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        target_head: str,
+        restored_head: str,
+    ) -> Self:
+        """Create deterministic evidence for one restored reviewed boundary."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "target_head": target_head,
+            "restored_head": restored_head,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, **values)
+        return cls(receipt_id=_target_sync_abort_digest(candidate), **values)
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> Self:
+        if self.receipt_id != _target_sync_abort_digest(self):
+            message = "target synchronization abort identity is invalid"
+            raise ValueError(message)
+        return self
+
+
 class PublicationLease(_WorkspaceModel):
     """Expiring custody for one exact Change publication attempt."""
 
@@ -221,6 +312,8 @@ class ChangeCoordination(_WorkspaceModel):
     writer: ChangeWriter | None = None
     publication_lease: PublicationLease | None = None
     target_sync_receipt: ChangeTargetSyncReceipt | None = None
+    target_sync_conflict: ChangeTargetSyncConflictState | None = None
+    target_sync_abort_receipt: ChangeTargetSyncAbortReceipt | None = None
     worktree_cleanup_intent: ChangeWorktreeCleanupIntent | None = None
     worktree_cleanup: ChangeWorktreeCleanup | None = None
 
@@ -245,6 +338,18 @@ class ChangeCoordination(_WorkspaceModel):
     def _validate_target_sync_receipt(self) -> Self:
         if self.target_sync_receipt is not None and self.target_sync_receipt.change_id != self.change_id:
             message = "target synchronization receipt does not match its Change"
+            raise ValueError(message)
+        if self.target_sync_abort_receipt is not None and self.target_sync_abort_receipt.change_id != self.change_id:
+            message = "target synchronization abort receipt does not match its Change"
+            raise ValueError(message)
+        if self.target_sync_conflict is not None and self.target_sync_conflict.change_id != self.change_id:
+            message = "target synchronization conflict does not match its Change"
+            raise ValueError(message)
+        if self.target_sync_receipt is not None and self.target_sync_conflict is not None:
+            message = "target synchronization receipt and conflict cannot coexist"
+            raise ValueError(message)
+        if self.target_sync_abort_receipt is not None and self.target_sync_conflict is not None:
+            message = "target synchronization abort receipt and conflict cannot coexist"
             raise ValueError(message)
         return self
 
@@ -759,6 +864,7 @@ class ChangeWorkspaceManager:
                 _coordination_conflict("existing Change branch requires an exact recovery reviewed head")
             self._require_ancestor(recovery_reviewed_head, branch_head)
             self._validate_unregistered_worktree(change_id, recovery_reviewed_head, branch_head)
+
             last_reviewed_commit = recovery_reviewed_head
         if not self._worktree_present(worktree):
             self._register_worktree(worktree, branch, self._git)
@@ -1079,28 +1185,86 @@ class ChangeWorkspaceManager:
             return coordination
         return self._coordinator.update(coordination.model_copy(update={"target_head": target_head}))
 
+    def _replay_target_sync_receipt(
+        self,
+        request: SyncChangeWithTarget,
+        coordination: ChangeCoordination,
+    ) -> ChangeTargetSyncReceipt | None:
+        receipt = coordination.target_sync_receipt
+        if receipt is None or receipt.operation_id != request.operation_id:
+            return None
+        if (
+            receipt.expected_target != request.expected_target
+            or coordination.last_reviewed_commit != receipt.merged_head
+        ):
+            _coordination_conflict("target synchronization operation inputs differ from its receipt")
+        self._require_worktree(
+            request.change_id,
+            coordination.worktree_path,
+            coordination.branch,
+            receipt.merged_head,
+        )
+        return receipt
+
+    def _persist_target_sync_conflict(
+        self,
+        request: SyncChangeWithTarget,
+        coordination: ChangeCoordination,
+        lock: PublicationLock,
+        target_head: str,
+        change_head_before: str,
+    ) -> Never:
+        conflict = ChangeTargetSyncConflictState.create(
+            operation_id=request.operation_id,
+            change_id=request.change_id,
+            target_head=target_head,
+            change_head_before=change_head_before,
+            conflict_paths=self._unmerged_paths(coordination.worktree_path),
+        )
+        self._coordinator.update(
+            coordination.model_copy(update={"target_sync_conflict": conflict}),
+            lock=lock,
+        )
+        raise ChangeTargetSyncConflictError(
+            request.change_id,
+            request.operation_id,
+            target_head,
+            conflict.conflict_paths,
+        )
+
+    def _require_target_sync_start(
+        self,
+        request: SyncChangeWithTarget,
+        coordination: ChangeCoordination,
+    ) -> None:
+        conflict = coordination.target_sync_conflict
+        if conflict is not None:
+            if conflict.operation_id != request.operation_id or conflict.target_head != request.expected_target:
+                _coordination_conflict("target synchronization conflict identity differs from the request")
+            raise ChangeTargetSyncConflictError(
+                request.change_id,
+                conflict.operation_id,
+                conflict.target_head,
+                conflict.conflict_paths,
+            )
+        if (
+            coordination.target_sync_abort_receipt is not None
+            and coordination.target_sync_abort_receipt.operation_id == request.operation_id
+        ):
+            _coordination_conflict("target synchronization operation was explicitly aborted")
+        if coordination.writer is not None:
+            _coordination_conflict("target synchronization cannot overlap an active writer")
+        if coordination.publication_lease is not None:
+            _coordination_conflict("target synchronization cannot overlap a publication lease")
+
     def sync_with_target(self, request: SyncChangeWithTarget) -> ChangeTargetSyncReceipt:
         """Fetch one exact target head and merge it only in the managed Change worktree."""
         with self._coordinator.publication_lock(request.change_id) as lock:
             coordination = self._coordinator.show(request.change_id)
-            previous_receipt = coordination.target_sync_receipt
-            if previous_receipt is not None and previous_receipt.operation_id == request.operation_id:
-                if (
-                    previous_receipt.expected_target != request.expected_target
-                    or coordination.last_reviewed_commit != previous_receipt.merged_head
-                ):
-                    _coordination_conflict("target synchronization operation inputs differ from its receipt")
-                self._require_worktree(
-                    request.change_id,
-                    coordination.worktree_path,
-                    coordination.branch,
-                    previous_receipt.merged_head,
-                )
+            previous_receipt = self._replay_target_sync_receipt(request, coordination)
+            if previous_receipt is not None:
                 return previous_receipt
-            if coordination.writer is not None:
-                _coordination_conflict("target synchronization cannot overlap an active writer")
-            if coordination.publication_lease is not None:
-                _coordination_conflict("target synchronization cannot overlap a publication lease")
+            self._require_target_sync_start(request, coordination)
             branch_head = self._resolve(coordination.branch)
             self._require_worktree(
                 request.change_id,
@@ -1108,6 +1272,11 @@ class ChangeWorkspaceManager:
                 coordination.branch,
                 branch_head,
             )
+            merge_head = self._resolve("MERGE_HEAD", cwd=coordination.worktree_path, missing_ok=True)
+            if merge_head is not None:
+                if merge_head != request.expected_target:
+                    _coordination_conflict("preserved target synchronization conflict target differs from the request")
+                self._persist_target_sync_conflict(request, coordination, lock, merge_head, branch_head)
             if self._git(
                 "--no-optional-locks",
                 "status",
@@ -1137,12 +1306,7 @@ class ChangeWorkspaceManager:
             if merge.returncode != 0:
                 merge_head = self._resolve("MERGE_HEAD", cwd=coordination.worktree_path, missing_ok=True)
                 if merge_head is not None:
-                    raise ChangeTargetSyncConflictError(
-                        request.change_id,
-                        request.operation_id,
-                        merge_head,
-                        self._unmerged_paths(coordination.worktree_path),
-                    )
+                    self._persist_target_sync_conflict(request, coordination, lock, merge_head, branch_head)
                 _workspace_failure("target synchronization merge failed")
             merged_head = self._resolve(coordination.branch)
             receipt = ChangeTargetSyncReceipt.create(
@@ -1159,7 +1323,210 @@ class ChangeWorkspaceManager:
                 coordination.model_copy(
                     update={
                         "target_head": target_head,
+                        "target_sync_conflict": None,
                         "target_sync_receipt": receipt,
+                        "target_sync_abort_receipt": None,
+                        "last_reviewed_commit": merged_head,
+                    }
+                ),
+                lock=lock,
+            )
+            return receipt
+
+    def _replay_target_sync_abort(
+        self,
+        request: TargetSyncConflictRequest,
+        coordination: ChangeCoordination,
+    ) -> ChangeTargetSyncAbortReceipt | None:
+        receipt = coordination.target_sync_abort_receipt
+        if receipt is None or receipt.operation_id != request.operation_id:
+            return None
+        if receipt.target_head != request.target_head:
+            _coordination_conflict("target synchronization abort inputs differ from its receipt")
+        self._require_worktree(
+            request.change_id,
+            coordination.worktree_path,
+            coordination.branch,
+            receipt.restored_head,
+        )
+        self._require_clean_worktree(coordination.worktree_path)
+        if self._resolve("MERGE_HEAD", cwd=coordination.worktree_path, missing_ok=True) is not None:
+            _workspace_failure("target synchronization abort receipt has unresolved merge state")
+        return receipt
+
+    def _require_target_sync_exit_custody(self, coordination: ChangeCoordination, operation: str) -> None:
+        if coordination.writer is not None:
+            _coordination_conflict(f"target synchronization {operation} cannot overlap an active writer")
+        if coordination.publication_lease is not None:
+            _coordination_conflict(f"target synchronization {operation} cannot overlap a publication lease")
+
+    def _require_target_sync_conflict(
+        self,
+        coordination: ChangeCoordination,
+        request: TargetSyncConflictRequest,
+    ) -> ChangeTargetSyncConflictState:
+        conflict = coordination.target_sync_conflict
+        if conflict is None:
+            _coordination_conflict("target synchronization has no preserved conflict for this exit")
+        if conflict.operation_id != request.operation_id or conflict.target_head != request.target_head:
+            _coordination_conflict("target synchronization conflict identity differs from the request")
+        return conflict
+
+    def _abort_preserved_target_merge(self, worktree: Path, target_head: str) -> None:
+        merge_head = self._resolve("MERGE_HEAD", cwd=worktree, missing_ok=True)
+        if merge_head is None:
+            return
+        if merge_head != target_head:
+            _coordination_conflict("target synchronization conflict target differs from the request")
+        result = self._run_git("merge", "--abort", cwd=worktree, check=False)
+        if result.returncode != 0:
+            _workspace_failure("target synchronization conflict could not be aborted")
+
+    def abort_target_sync_conflict(
+        self,
+        request: TargetSyncConflictRequest,
+    ) -> ChangeTargetSyncAbortReceipt:
+        """Abort one exact preserved target merge and restore the reviewed boundary."""
+        with self._coordinator.publication_lock(request.change_id) as lock:
+            coordination = self._coordinator.show(request.change_id)
+            replayed = self._replay_target_sync_abort(request, coordination)
+            if replayed is not None:
+                return replayed
+            if coordination.target_sync_receipt is not None:
+                _coordination_conflict("target synchronization already has completed receipt evidence")
+            self._require_target_sync_exit_custody(coordination, "abort")
+            conflict = self._require_target_sync_conflict(coordination, request)
+            restored_head = conflict.change_head_before
+            if restored_head != coordination.last_reviewed_commit:
+                _workspace_failure("target synchronization conflict is outside the reviewed boundary")
+            if self._resolve(coordination.branch) != restored_head:
+                _workspace_failure("target synchronization conflict branch moved outside the reviewed boundary")
+            self._require_worktree(
+                request.change_id,
+                coordination.worktree_path,
+                coordination.branch,
+                restored_head,
+            )
+            self._abort_preserved_target_merge(coordination.worktree_path, request.target_head)
+            self._require_worktree(
+                request.change_id,
+                coordination.worktree_path,
+                coordination.branch,
+                restored_head,
+            )
+            self._require_clean_worktree(coordination.worktree_path)
+            if self._resolve("MERGE_HEAD", cwd=coordination.worktree_path, missing_ok=True) is not None:
+                _workspace_failure("target synchronization conflict remains active after abort")
+            receipt = ChangeTargetSyncAbortReceipt.create(
+                operation_id=request.operation_id,
+                change_id=request.change_id,
+                target_head=request.target_head,
+                restored_head=restored_head,
+            )
+            self._coordinator.update(
+                coordination.model_copy(
+                    update={
+                        "target_sync_conflict": None,
+                        "target_sync_abort_receipt": receipt,
+                    }
+                ),
+                lock=lock,
+            )
+            return receipt
+
+    def _replay_target_sync_resolution(
+        self,
+        request: TargetSyncConflictRequest,
+        coordination: ChangeCoordination,
+    ) -> ChangeTargetSyncReceipt | None:
+        receipt = coordination.target_sync_receipt
+        if receipt is None or receipt.operation_id != request.operation_id:
+            return None
+        if receipt.target_head != request.target_head:
+            _coordination_conflict("target synchronization resolution inputs differ from its receipt")
+        self._require_worktree(
+            request.change_id,
+            coordination.worktree_path,
+            coordination.branch,
+            receipt.merged_head,
+        )
+        self._require_clean_worktree(coordination.worktree_path)
+        return receipt
+
+    def _commit_target_sync_resolution(
+        self,
+        request: TargetSyncConflictRequest,
+        coordination: ChangeCoordination,
+        conflict: ChangeTargetSyncConflictState,
+    ) -> str:
+        worktree = coordination.worktree_path
+        merge_head = self._resolve("MERGE_HEAD", cwd=worktree, missing_ok=True)
+        if merge_head is not None:
+            if merge_head != request.target_head:
+                _coordination_conflict("target synchronization conflict target differs from the request")
+            self._require_worktree(
+                request.change_id,
+                worktree,
+                coordination.branch,
+                conflict.change_head_before,
+            )
+            if self._unmerged_paths(worktree):
+                _workspace_failure("target synchronization conflict still has unresolved paths")
+            self._require_no_unstaged_changes(worktree)
+            result = self._run_git("commit", "--no-edit", cwd=worktree, check=False)
+            if result.returncode != 0:
+                _workspace_failure("target synchronization conflict could not be committed")
+        elif self._resolve(coordination.branch) == conflict.change_head_before:
+            _workspace_failure("target synchronization conflict has not been resolved")
+        return self._resolve(coordination.branch)
+
+    def resolve_target_sync_conflict(
+        self,
+        request: TargetSyncConflictRequest,
+    ) -> ChangeTargetSyncReceipt:
+        """Commit or validate one exact semantic conflict resolution."""
+        with self._coordinator.publication_lock(request.change_id) as lock:
+            coordination = self._coordinator.show(request.change_id)
+            replayed = self._replay_target_sync_resolution(request, coordination)
+            if replayed is not None:
+                return replayed
+            if coordination.target_sync_abort_receipt is not None:
+                _coordination_conflict("target synchronization conflict was already aborted")
+            self._require_target_sync_exit_custody(coordination, "resolution")
+            conflict = self._require_target_sync_conflict(coordination, request)
+            change_head_before = conflict.change_head_before
+            if change_head_before != coordination.last_reviewed_commit:
+                _workspace_failure("target synchronization conflict is outside the reviewed boundary")
+            merged_head = self._commit_target_sync_resolution(request, coordination, conflict)
+            self._require_worktree(
+                request.change_id,
+                coordination.worktree_path,
+                coordination.branch,
+                merged_head,
+            )
+            self._require_clean_worktree(coordination.worktree_path)
+            if self._resolve("MERGE_HEAD", cwd=coordination.worktree_path, missing_ok=True) is not None:
+                _workspace_failure("target synchronization conflict remains active after resolution")
+            parents = self._git("rev-list", "--parents", "-n", "1", merged_head, cwd=coordination.worktree_path).split()
+            if parents[1:] != [change_head_before, request.target_head]:
+                _workspace_failure("target synchronization resolution is not an exact merge of the requested heads")
+            receipt = ChangeTargetSyncReceipt.create(
+                operation_id=request.operation_id,
+                change_id=request.change_id,
+                integration_target=coordination.integration_target,
+                expected_target=request.target_head,
+                target_head=request.target_head,
+                change_head_before=change_head_before,
+                merged_head=merged_head,
+                merge_commit=True,
+            )
+            self._coordinator.update(
+                coordination.model_copy(
+                    update={
+                        "target_head": request.target_head,
+                        "target_sync_conflict": None,
+                        "target_sync_receipt": receipt,
+                        "target_sync_abort_receipt": None,
                         "last_reviewed_commit": merged_head,
                     }
                 ),
@@ -1219,6 +1586,19 @@ class ChangeWorkspaceManager:
         if result.returncode != 0:
             return ()
         return tuple(os.fsdecode(path) for path in result.stdout.split(b"\0") if path)
+
+    def _require_clean_worktree(self, worktree: Path) -> None:
+        if self._git("-C", str(worktree), "status", "--porcelain=v1").strip():
+            _workspace_failure("target synchronization worktree is not clean")
+
+    def _require_no_unstaged_changes(self, worktree: Path) -> None:
+        status = self._git("-C", str(worktree), "status", "--porcelain=v1")
+        if any(
+            line.startswith("??")
+            or (len(line) > _PORCELAIN_WORKTREE_STATUS_INDEX and line[_PORCELAIN_WORKTREE_STATUS_INDEX] != " ")
+            for line in status.splitlines()
+        ):
+            _workspace_failure("target synchronization resolution has unstaged or untracked changes")
 
     def _is_merge_commit(self, commit: str, worktree: Path) -> bool:
         parents = self._git("rev-list", "--parents", "-n", "1", commit, cwd=worktree).split()
@@ -1808,6 +2188,18 @@ def _model_content(model: BaseModel) -> bytes:
 
 
 def _target_sync_digest(receipt: ChangeTargetSyncReceipt) -> str:
+    payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _target_sync_conflict_digest(conflict: ChangeTargetSyncConflictState) -> str:
+    payload = conflict.model_dump(mode="json", exclude={"conflict_id"})
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _target_sync_abort_digest(receipt: ChangeTargetSyncAbortReceipt) -> str:
     payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()

@@ -28,6 +28,7 @@ from owlbear_delivery.change_publication import (
 )
 from owlbear_delivery.change_workspace import (
     ChangeCoordination,
+    ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
     ChangeTargetSyncReceipt,
     ChangeWorkspaceManager,
@@ -38,6 +39,7 @@ from owlbear_delivery.change_workspace import (
     PortfolioCoordinator,
     RetainedChangeWorktree,
     SyncChangeWithTarget,
+    TargetSyncConflictRequest,
     WorkspaceRecoverySnapshot,
 )
 from owlbear_delivery.delivery_runtime import (
@@ -125,6 +127,7 @@ from owlbear_delivery.work_items import (
     WorkItemProjector,
     WorkItemPublicationPhase,
     WorkItemScope,
+    WorkItemTargetSyncConflictView,
     WorkItemWorktreeCleanupView,
     WorkItemWorktreeRecoveryView,
 )
@@ -765,7 +768,7 @@ class PortfolioApplication:
                     ),
                     publication_identity=history.current if history is not None else None,
                 )
-                self._fail("target synchronization requires conflict resolution", exc)
+                raise
             except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
                 self._fail("target synchronization could not be completed", exc)
             runtime.record_target_sync(receipt, _timestamp(self._clock()))
@@ -782,6 +785,96 @@ class PortfolioApplication:
         except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
             self._fail("target synchronization target head is unavailable", exc)
         return self.sync_change_with_target(change_id, expected_target, operation_id)
+
+    def abort_target_sync_conflict(
+        self,
+        change_id: str,
+        expected_disposition_id: str,
+        target_head: str,
+        operation_id: str,
+    ) -> ChangeTargetSyncAbortReceipt:
+        """Abort one exact preserved target merge and clear its attention."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            disposition = runtime.change_disposition()
+            attention_active = disposition is not None
+            if attention_active:
+                runtime.validate_target_sync_conflict(expected_disposition_id, operation_id)
+            else:
+                resolution = runtime.change_disposition_resolution()
+                if resolution is None or resolution.disposition_id != expected_disposition_id:
+                    runtime.validate_target_sync_conflict(expected_disposition_id, operation_id)
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                self._fail("target synchronization conflict exit cannot overlap an active Delivery claim")
+            request = TargetSyncConflictRequest(
+                change_id=change_id,
+                target_head=target_head,
+                operation_id=operation_id,
+            )
+            try:
+                receipt = self._workspace_manager.abort_target_sync_conflict(request)
+            except (OSError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("target synchronization conflict could not be aborted", exc)
+            if attention_active:
+                runtime.record_target_sync_abort(
+                    expected_disposition_id,
+                    operation_id,
+                    _timestamp(self._clock()),
+                )
+            return receipt
+
+    def resolve_target_sync_conflict(
+        self,
+        change_id: str,
+        expected_disposition_id: str,
+        target_head: str,
+        operation_id: str,
+    ) -> ChangeTargetSyncReceipt:
+        """Record one exact semantic target merge and clear its attention."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            existing = runtime.target_sync_receipt()
+            if existing is not None:
+                if existing.operation_id != operation_id or existing.target_head != target_head:
+                    self._fail("target synchronization resolution identity differs from runtime evidence")
+                if runtime.change_disposition() is not None:
+                    runtime.validate_target_sync_conflict(expected_disposition_id, operation_id)
+                else:
+                    resolution = runtime.change_disposition_resolution()
+                    if resolution is None or resolution.disposition_id != expected_disposition_id:
+                        self._fail("target synchronization resolution attention identity differs from runtime evidence")
+                try:
+                    receipt = self._workspace_manager.resolve_target_sync_conflict(
+                        TargetSyncConflictRequest(
+                            change_id=change_id,
+                            target_head=target_head,
+                            operation_id=operation_id,
+                        )
+                    )
+                except (OSError, subprocess.SubprocessError, ValueError) as exc:
+                    self._fail("target synchronization conflict could not be resolved", exc)
+                if receipt != existing:
+                    self._fail("target synchronization resolution differs from runtime evidence")
+                return receipt
+            runtime.validate_target_sync_conflict(expected_disposition_id, operation_id)
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                self._fail("target synchronization conflict exit cannot overlap an active Delivery claim")
+            try:
+                receipt = self._workspace_manager.resolve_target_sync_conflict(
+                    TargetSyncConflictRequest(
+                        change_id=change_id,
+                        target_head=target_head,
+                        operation_id=operation_id,
+                    )
+                )
+            except (OSError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("target synchronization conflict could not be resolved", exc)
+            return runtime.record_resolved_target_sync(
+                receipt,
+                expected_disposition_id,
+                operation_id,
+                _timestamp(self._clock()),
+            )
 
     def supersede_publication(
         self,
@@ -1805,12 +1898,29 @@ class PortfolioApplication:
         if view.publication is None:
             return view
         cleanup = self._worktree_cleanup_view(runtime)
+        conflict = self._workspace_manager.show(change_id).target_sync_conflict
         retained = next(
             (item for item in self._workspace_manager.list_retained() if item.change_id == change_id),
             None,
         )
         recovery = self._worktree_recovery_view(retained) if retained is not None else None
-        publication = view.publication.model_copy(update={"worktree_cleanup": cleanup, "worktree_recovery": recovery})
+        publication = view.publication.model_copy(
+            update={
+                "worktree_cleanup": cleanup,
+                "worktree_recovery": recovery,
+                "target_sync_conflict": (
+                    WorkItemTargetSyncConflictView(
+                        conflict_id=conflict.conflict_id,
+                        operation_id=conflict.operation_id,
+                        target_head=conflict.target_head,
+                        change_head_before=conflict.change_head_before,
+                        conflict_paths=conflict.conflict_paths,
+                    )
+                    if conflict is not None
+                    else None
+                ),
+            }
+        )
         return view.model_copy(update={"publication": publication})
 
     def show_operator_context(self, change_id: str, outcome_id: str) -> DeliveryOperatorContext:

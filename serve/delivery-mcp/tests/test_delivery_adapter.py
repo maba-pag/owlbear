@@ -18,7 +18,12 @@ from owlbear_delivery import (
     DeliveryRetainedChangeWorktree,
 )
 from owlbear_delivery.acceptance import CompletionReceiptConflictError
-from owlbear_delivery.change_workspace import CoordinationConflictError
+from owlbear_delivery.change_workspace import (
+    ChangeTargetSyncAbortReceipt,
+    ChangeTargetSyncConflictError,
+    ChangeTargetSyncReceipt,
+    CoordinationConflictError,
+)
 from owlbear_delivery.change_publication import ChangeBranchSupersessionReceipt
 from owlbear_delivery.completed_history import (
     CompletedHistoryDiagnostic,
@@ -160,6 +165,28 @@ def _supersession_receipt() -> DeliveryChangePublicationSupersessionReceipt:
     )
 
 
+def _target_sync_receipt() -> ChangeTargetSyncReceipt:
+    return ChangeTargetSyncReceipt.create(
+        operation_id="sync-change-a",
+        change_id=CHANGE,
+        integration_target="main",
+        expected_target="c" * 40,
+        target_head="c" * 40,
+        change_head_before=COMMIT,
+        merged_head="d" * 40,
+        merge_commit=True,
+    )
+
+
+def _target_sync_abort_receipt() -> ChangeTargetSyncAbortReceipt:
+    return ChangeTargetSyncAbortReceipt.create(
+        operation_id="sync-change-a",
+        change_id=CHANGE,
+        target_head="c" * 40,
+        restored_head=COMMIT,
+    )
+
+
 class _Result(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
@@ -230,8 +257,18 @@ class _RecordingApplication:
                     digest=DIGEST,
                     result=result,
                 )
-            elif name == "supersede_publication":
-                result = _supersession_receipt()
+            elif name in {
+                "supersede_publication",
+                "sync_change_with_target",
+                "resolve_target_sync_conflict",
+                "abort_target_sync_conflict",
+            }:
+                result = {
+                    "supersede_publication": _supersession_receipt,
+                    "sync_change_with_target": _target_sync_receipt,
+                    "resolve_target_sync_conflict": _target_sync_receipt,
+                    "abort_target_sync_conflict": _target_sync_abort_receipt,
+                }[name]()
             else:
                 result = _Result(operation=name)
             return result
@@ -367,6 +404,23 @@ def _requests() -> dict[str, dict[str, object]]:
         },
         "reconcile_finalization_head": change,
         "reconcile_change_checkpoint": change,
+        "sync_change_with_target": {
+            **change,
+            "expected_target": "c" * 40,
+            "operation_id": "sync-change-a",
+        },
+        "abort_target_sync_conflict": {
+            **change,
+            "expected_disposition_id": DIGEST,
+            "target_head": "c" * 40,
+            "operation_id": "sync-change-a",
+        },
+        "resolve_target_sync_conflict": {
+            **change,
+            "expected_disposition_id": DIGEST,
+            "target_head": "c" * 40,
+            "operation_id": "sync-change-a",
+        },
         "supersede_publication": {
             **change,
             "expected_publication_id": DIGEST,
@@ -413,6 +467,21 @@ def _requests() -> dict[str, dict[str, object]]:
     }
 
 
+def _assert_publication_result(operation_name: str, result: Any) -> None:
+    assert result.change_id == CHANGE
+    expected_operation_id = {
+        "supersede_publication": "supersede-change-a",
+        "sync_change_with_target": "sync-change-a",
+        "resolve_target_sync_conflict": "sync-change-a",
+        "abort_target_sync_conflict": "sync-change-a",
+    }[operation_name]
+    assert result.operation_id == expected_operation_id
+    if operation_name == "supersede_publication":
+        assert result.provider_supersession.successor_number == 8
+    else:
+        assert result.target_head == "c" * 40
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation_name", DELIVERY_OPERATION_NAMES)
 async def test_each_delivery_operation_validates_delegates_once_and_serializes(operation_name: str) -> None:
@@ -426,6 +495,9 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
         "reconcile_finalization_head": (CHANGE,),
         "observe_acceptance": (CHANGE,),
         "supersede_publication": (CHANGE, DIGEST, "supersede-change-a"),
+        "sync_change_with_target": (CHANGE, "c" * 40, "sync-change-a"),
+        "abort_target_sync_conflict": (CHANGE, DIGEST, "c" * 40, "sync-change-a"),
+        "resolve_target_sync_conflict": (CHANGE, DIGEST, "c" * 40, "sync-change-a"),
         "cleanup_abandoned_change_worktree": (CHANGE,),
         "cleanup_completed_change_worktree": (CHANGE, DIGEST),
         "resolve_change_disposition": (CHANGE, DIGEST),
@@ -458,10 +530,13 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
         assert len(result) == 1
         assert result[0]["change_id"] == CHANGE
         assert result[0]["worktree_path"] == str(WORKTREE_PATH)
-    elif operation_name == "supersede_publication":
-        assert result.change_id == CHANGE
-        assert result.operation_id == "supersede-change-a"
-        assert result.provider_supersession.successor_number == 8
+    elif operation_name in {
+        "supersede_publication",
+        "sync_change_with_target",
+        "abort_target_sync_conflict",
+        "resolve_target_sync_conflict",
+    }:
+        _assert_publication_result(operation_name, result)
     elif operation_name in receipt_results:
         for field, expected in receipt_results[operation_name].items():
             assert getattr(result, field) == expected
@@ -624,6 +699,17 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             CoordinationConflictError("cleanup coordination changed"),
             "ERR_TARGET_COORDINATION_CONFLICT",
             True,
+        ),
+        (
+            "sync_change_with_target",
+            ChangeTargetSyncConflictError(
+                CHANGE,
+                "sync-change-a",
+                "c" * 40,
+                ("product.txt",),
+            ),
+            "ERR_TARGET_SYNC_CONFLICT",
+            False,
         ),
     )
     for operation_name, failure, code, retry_safe in cases:
