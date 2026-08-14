@@ -20,7 +20,7 @@ from owlbear_delivery.acceptance import (
     CompletionReceiptStore,
 )
 from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator
-from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
+from owlbear_delivery.delivery_application_loader import DeliveryHostConfig, DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
     DeliveryBlock,
     DeliveryFrontier,
@@ -383,6 +383,13 @@ def _write_config(workspace: Path) -> None:
     path.write_text(config.model_dump_json(by_alias=True), encoding="utf-8")
 
 
+def _write_host_config(workspace: Path) -> None:
+    config = DeliveryHostConfig(schema_version=1, writer_capacity=2, execution_capacity=2)
+    path = workspace / ".owlbear/delivery/runtime/host.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(config.model_dump_json(), encoding="utf-8")
+
+
 def seed_delivery(workspace: Path) -> None:
     """Seed canonical current and completed Delivery data below the real application."""
     repository = workspace
@@ -397,6 +404,7 @@ def seed_delivery(workspace: Path) -> None:
     )
     _write_current_delivery(runtime_root, head)
     _write_publication_delivery(runtime_root, head)
+    _write_host_config(workspace)
     coordinator = PortfolioCoordinator(runtime_root, capacity=2)
     workspace_manager = ChangeWorkspaceManager(repository, worktrees, coordinator, "main")
     workspace_manager.ensure("work-e2e")

@@ -479,6 +479,15 @@ class CoordinationConflictError(RuntimeError):
     code = "ERR_TARGET_COORDINATION_CONFLICT"
 
 
+class CapacityConfigurationConflictError(CoordinationConflictError):
+    """Configured writer capacity is below the active holder count."""
+
+    def __init__(self, active_holders: int, configured_capacity: int) -> None:
+        self.active_holders = active_holders
+        self.configured_capacity = configured_capacity
+        super().__init__(f"active writers exceed configured writer capacity: {active_holders} > {configured_capacity}")
+
+
 class PortfolioCoordinator:
     """Atomically coordinate independent per-change writers and global capacity."""
 
@@ -761,7 +770,7 @@ class PortfolioCoordinator:
             existing = CapacityLedger.model_validate_json(existing_bytes)
             if existing.capacity != self._capacity:
                 if len(existing.change_ids) > self._capacity:
-                    _coordination_conflict("active writers exceed configured writer capacity")
+                    raise CapacityConfigurationConflictError(len(existing.change_ids), self._capacity)
                 updated = existing.model_copy(update={"capacity": self._capacity})
                 self._commit(
                     "reconfigure-capacity",

@@ -35,6 +35,7 @@ from owlbear_delivery import (
     CompletionReceipt,
     CoordinationConflictError,
     DeliveryApplicationLoadError,
+    DeliveryHostConfig,
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryAdmissionConflictError,
@@ -2825,8 +2826,90 @@ def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path
     )
     assert application.list_work_items() == ()
     assert (runtime_root / "capacity.json").is_file()
+    assert CapacityLedger.model_validate_json((runtime_root / "capacity.json").read_bytes()).capacity == 1
+    assert application._execution_capacity == 1  # noqa: SLF001
     assert not (repository / ".owlbear/target").exists()
     assert not (repository / ".owlbear/worktrees").exists()
+
+
+def test_delivery_loader_uses_host_capacity_for_writer_and_execution_limits(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    host_config_path = repository / ".owlbear/delivery/runtime/host.json"
+    host_config_path.parent.mkdir(parents=True)
+    host_config_path.write_text(
+        DeliveryHostConfig(schema_version=1, writer_capacity=2, execution_capacity=3).model_dump_json(),
+        encoding="utf-8",
+    )
+
+    application = load_delivery_application(_startup_config(), workspace_root=repository)
+
+    ledger = CapacityLedger.model_validate_json((repository / ".owlbear/delivery/runtime/capacity.json").read_bytes())
+    assert ledger.capacity == 2
+    assert application._execution_capacity == 3  # noqa: SLF001
+
+
+@pytest.mark.parametrize(
+    ("content", "field"),
+    [
+        ("not-json\n", "host_config"),
+        ('{"schema_version": 1, "writer_capacity": 0}\n', "writer_capacity"),
+        ('{"schema_version": 1, "execution_capacity": "3"}\n', "execution_capacity"),
+        ('{"schema_version": 1, "unknown": 3}\n', "unknown"),
+    ],
+)
+def test_delivery_loader_rejects_invalid_host_capacity_before_ledger_mutation(
+    tmp_path: Path,
+    content: str,
+    field: str,
+) -> None:
+    repository = _repository(tmp_path)
+    host_config_path = repository / ".owlbear/delivery/runtime/host.json"
+    host_config_path.parent.mkdir(parents=True)
+    host_config_path.write_text(content, encoding="utf-8")
+
+    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
+        load_delivery_application(_startup_config(), workspace_root=repository)
+
+    assert exc_info.value.field == field
+    assert "host.json" in exc_info.value.detail
+    assert not (repository / ".owlbear/delivery/runtime/capacity.json").exists()
+
+
+def test_delivery_loader_reports_active_writer_conflict_as_host_capacity_error(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    runtime_root.mkdir(parents=True)
+    ledger_path = runtime_root / "capacity.json"
+    ledger_path.write_text(
+        CapacityLedger(capacity=2, change_ids=("change-a", "change-b")).model_dump_json(),
+        encoding="utf-8",
+    )
+    before = ledger_path.read_bytes()
+    host_config_path = runtime_root / "host.json"
+    host_config_path.write_text(
+        DeliveryHostConfig(schema_version=1, writer_capacity=1, execution_capacity=1).model_dump_json(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
+        load_delivery_application(_startup_config(), workspace_root=repository)
+
+    assert exc_info.value.field == "writer_capacity"
+    assert "active writers" in exc_info.value.detail
+    assert "host.json" in exc_info.value.detail
+    assert ledger_path.read_bytes() == before
+
+
+def test_delivery_loader_does_not_translate_unrelated_coordination_conflict(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    with (
+        patch(
+            "owlbear_delivery.delivery_application_loader.PortfolioCoordinator",
+            side_effect=CoordinationConflictError("unrelated coordination failure"),
+        ),
+        pytest.raises(CoordinationConflictError, match="unrelated coordination failure"),
+    ):
+        load_delivery_application(_startup_config(), workspace_root=repository)
 
 
 def test_delivery_loader_isolates_contract_without_workspace_coordination(tmp_path: Path) -> None:

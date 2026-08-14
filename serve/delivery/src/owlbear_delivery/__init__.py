@@ -19,6 +19,7 @@ from owlbear_delivery.change_publication import (
     SupersedeChangeBranch,
 )
 from owlbear_delivery.change_workspace import (
+    CapacityConfigurationConflictError,
     CapacityLedger,
     ChangeCoordination,
     ChangeTargetSyncAbortReceipt,
@@ -57,6 +58,7 @@ from owlbear_delivery.completed_history import (
 )
 from owlbear_delivery.delivery_application_loader import (
     DeliveryApplicationLoadError,
+    DeliveryHostConfig,
     DeliveryStartupConfig,
     load_delivery_application,
 )
@@ -321,6 +323,7 @@ __all__ = [
     "ArbitrateTargetAttemptRequest",
     "AuthorityStatus",
     "BlockDelivery",
+    "CapacityConfigurationConflictError",
     "CapacityLedger",
     "ChangeBranchPublicationReceipt",
     "ChangeBranchPublisher",
@@ -407,6 +410,7 @@ __all__ = [
     "DeliveryFinalizationInvalidationReceipt",
     "DeliveryFinalizationReceipt",
     "DeliveryFrontier",
+    "DeliveryHostConfig",
     "DeliveryIntegrationAttention",
     "DeliveryIntegrationAttentionCode",
     "DeliveryIntegrationAttentionDisposition",

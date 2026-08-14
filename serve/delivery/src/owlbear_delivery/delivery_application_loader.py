@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from owlbear_delivery.change_publication import ChangeBranchPublisher
 from owlbear_delivery.change_workspace import (
+    CapacityConfigurationConflictError,
     ChangeWorkspaceManager,
     CoordinationConflictError,
     PortfolioCoordinator,
@@ -51,6 +52,14 @@ class DeliveryStartupConfig(_LoaderModel):
     remote: str = Field(min_length=1)
     target_branch: str = Field(min_length=1)
     github_repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+
+
+class DeliveryHostConfig(_LoaderModel):
+    """Host-local limits for concurrent Delivery work."""
+
+    schema_version: Literal[1]
+    writer_capacity: int = Field(default=1, gt=0)
+    execution_capacity: int = Field(default=1, gt=0)
 
 
 @dataclass(frozen=True)
@@ -231,6 +240,30 @@ def _load_contracts(runtime_root: Path) -> dict[str, DeliveryContract]:
     }
 
 
+def _load_host_config(paths: _DeliveryPaths) -> DeliveryHostConfig:
+    path = paths.runtime_root / "host.json"
+    try:
+        if not path.exists():
+            if path.is_symlink():
+                error = _load_error("host_config", "host-local Delivery capacity configuration is unsafe")
+                raise error
+            return DeliveryHostConfig(schema_version=1)
+        if path.is_symlink() or not path.is_file():
+            error = _load_error("host_config", "host-local Delivery capacity configuration must be a regular file")
+            raise error
+        return DeliveryHostConfig.model_validate_json(path.read_bytes())
+    except DeliveryApplicationLoadError:
+        raise
+    except ValidationError as exc:
+        location = exc.errors(include_url=False, include_context=False)[0].get("loc")
+        field = location[0] if isinstance(location, tuple | list) and location else "host_config"
+        error = _load_error(str(field), f"host-local Delivery capacity configuration is invalid: {path}")
+        raise error from exc
+    except (OSError, ValueError) as exc:
+        error = _load_error("host_config", f"host-local Delivery capacity configuration cannot be read: {path}")
+        raise error from exc
+
+
 def _role_policies() -> tuple[DeliveryRolePolicy, ...]:
     return (
         DeliveryRolePolicy(
@@ -266,12 +299,20 @@ def _require_runtime_bindings(contract: DeliveryContract, frontier: DeliveryFron
 
 def _compose_application(
     config: DeliveryStartupConfig,
+    host_config: DeliveryHostConfig,
     paths: _DeliveryPaths,
     contracts: dict[str, DeliveryContract],
     publication_provider: PublicationProvider | None,
 ) -> PortfolioApplication:
     package_store = DesignPackageStore(paths.package_root, paths.repository_root)
-    coordinator = PortfolioCoordinator(paths.runtime_root, capacity=1)
+    try:
+        coordinator = PortfolioCoordinator(paths.runtime_root, capacity=host_config.writer_capacity)
+    except CapacityConfigurationConflictError as exc:
+        error = _load_error(
+            "writer_capacity",
+            f"host-local Delivery capacity configuration in host.json cannot be lower than active writers: {exc}",
+        )
+        raise error from exc
     workspace_manager = ChangeWorkspaceManager(
         paths.repository_root,
         paths.worktree_root,
@@ -316,7 +357,7 @@ def _compose_application(
     )
     application_config = PortfolioApplicationConfig(
         package_root=paths.package_root,
-        execution_capacity=1,
+        execution_capacity=host_config.execution_capacity,
         role_policies=_role_policies(),
     )
     return PortfolioApplication(runtimes, dependencies, application_config)
@@ -351,6 +392,7 @@ def load_delivery_application(
     """Validate external identities before constructing the Delivery state owners."""
     paths = _derive_paths(workspace_root)
     _validate_git_config(config, paths)
+    host_config = _load_host_config(paths)
     contracts = _load_contracts(paths.runtime_root)
     _validate_runtime_state(paths.runtime_root, contracts)
-    return _compose_application(config, paths, contracts, publication_provider)
+    return _compose_application(config, host_config, paths, contracts, publication_provider)

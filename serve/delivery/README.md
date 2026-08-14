@@ -34,9 +34,11 @@ historical schema for validation. New Changes use sequential Planning and Build 
 
 ## Configuration
 
-The package reads no environment variables. Callers pass package, runtime state, repository, worktree,
-configured target branch, role policies, and capacity configuration explicitly. MCP and Cockpit load
-tracked project policy and compose owners over canonical Delivery roots; setup seeds that policy.
+The package reads no environment variables. The canonical loader reads optional ignored host-local
+capacity configuration from `.owlbear/delivery/runtime/host.json` (`writer_capacity` and
+`execution_capacity`, both defaulting to `1`); it writes the derived writer ledger to
+`capacity.json`. MCP and Cockpit load tracked project policy and compose owners over canonical
+Delivery roots; setup seeds that policy but does not create host-local capacity configuration.
 
 ## Dependencies
 

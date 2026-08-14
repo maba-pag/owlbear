@@ -148,7 +148,8 @@ Git administration rather than Delivery-authored product state.
 | `.owlbear/delivery/runtime/transactions/**` | Append-only transaction journals and recovery state | Host-local and ignored |
 | `.owlbear/delivery/runtime/publications/**` | Checkpoint, remote-head, PR, check-observation, and acceptance-observation receipts | Host-local and ignored |
 | `.owlbear/delivery/runtime/completions/**` | Receipt-backed completion history plus non-authoritative display metadata captured atomically from admitted Change authority | Host-local and ignored |
-| `.owlbear/delivery/runtime/capacity.json` | Host-local cross-Change execution capacity | Host-local and ignored |
+| `.owlbear/delivery/runtime/host.json` | Host-local configured writer and execution capacities | Host-local and ignored |
+| `.owlbear/delivery/runtime/capacity.json` | Host-local derived writer ledger and active holders | Host-local and ignored |
 | `.owlbear/delivery/worktrees/<change-id>/` | The one linked Change worktree | Host-local and ignored |
 | `.owlbear/legacy/briefs/**` | Retired ideation-blackboard artifacts | Tracked, read-only legacy evidence; no new writes |
 | `.owlbear/legacy/completed/**` | Legacy in-target completion packages | Tracked, read-only legacy evidence; no new writes |
@@ -198,12 +199,13 @@ and a child branch beneath that branch at the same time; `+` is valid in a Git r
 ChangeId grammar, so it cannot collide with another canonical Change branch. No operation accepts a
 caller-supplied branch namespace or name.
 
-The configuration schema uses the fields `schema_version`, `remote`, `target_branch`, and
+The tracked configuration schema uses the fields `schema_version`, `remote`, `target_branch`, and
 `github_repository`. `remote` is a configured Git remote name, `target_branch` is an unqualified branch
 name, and `github_repository` is the exact `owner/name` identity reconciled against that remote before
 publication. Schema migration renames the current `integration_target` field to `target_branch`.
-The cross-Change execution limit remains host-local at
-`.owlbear/delivery/runtime/capacity.json`; tracked project policy does not prescribe laptop capacity.
+Host-local writer and execution limits are optionally configured in the ignored
+`.owlbear/delivery/runtime/host.json`; the coordinator derives its active writer ledger in
+`.owlbear/delivery/runtime/capacity.json`. Tracked project policy does not prescribe laptop capacity.
 
 ### 4.3 GitHub Authority
 
@@ -900,7 +902,7 @@ through local target observation.
 
 1. Make the existing Change worktree Change-scoped and idempotent across claims.
 2. Replace the portfolio-global capacity of one with one fenced mutation claim per Change while
-  retaining an explicit configurable cross-Change capacity limit.
+  retaining explicit configurable host-local cross-Change writer and execution limits.
 3. Route Tasks directly onto the Change branch.
 4. Remove Assembly stages, roles, scopes, jobs, agents, tools, projections, and tests.
 5. Remove extra proof/verification worktree creation.
