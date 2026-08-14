@@ -402,6 +402,68 @@ def test_rejects_predecessor_branch_from_another_change_before_provider_write(tm
     assert provider.create_calls == 1
 
 
+def test_replays_original_publish_operation_after_supersession(tmp_path: Path) -> None:
+    provider = _Provider()
+    publisher = _publisher(tmp_path, provider)
+    predecessor = publisher.publish(_request())
+    publisher.supersede(_supersede_request(predecessor))
+
+    replayed = publisher.publish(_request())
+
+    assert replayed == predecessor
+    assert provider.create_calls == 2
+
+
+def test_rejects_stale_predecessor_receipt_identity_before_successor_creation(tmp_path: Path) -> None:
+    provider = _Provider()
+    publisher = _publisher(tmp_path, provider)
+    predecessor = publisher.publish(_request())
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        publisher.supersede(_supersede_request(predecessor, expected_predecessor_receipt_id="f" * 64))
+
+    assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
+    assert provider.create_calls == 1
+
+
+def test_repairs_current_receipt_after_interrupted_history_append(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = _Provider()
+    publisher = _publisher(tmp_path, provider)
+    predecessor = publisher.publish(_request())
+    original_write = publisher._write_current_receipt  # noqa: SLF001
+
+    def fail_once(
+        _successor: DraftPullRequestPublicationReceipt,
+        _supersession: object,
+        _request: object,
+    ) -> None:
+        monkeypatch.setattr(publisher, "_write_current_receipt", original_write)
+        message = "simulated receipt projection interruption"
+        raise RuntimeError(message)
+
+    monkeypatch.setattr(publisher, "_write_current_receipt", fail_once)
+    with pytest.raises(RuntimeError, match="projection interruption"):
+        publisher.supersede(_supersede_request(predecessor))
+
+    history = publisher.read_publication_history(ReadChangePublicationHistory(change_id="change-a"))
+    assert history is not None
+    successor = history.publications[-1]
+    second = publisher.supersede(
+        _supersede_request(
+            successor,
+            operation_id="supersession-operation-2",
+            successor_branch="owlbear/change/change-a+s2",
+            superseding_head="3" * 40,
+        )
+    )
+
+    assert second.successor_branch == "owlbear/change/change-a+s2"
+    assert publisher.read_publication_history(ReadChangePublicationHistory(change_id="change-a"))
+
+
 def test_mark_ready_reconciles_lost_response_and_replays_durable_receipt(tmp_path: Path) -> None:
     provider = _Provider(lose_draft_state_response=True)
     publisher = _publisher(tmp_path, provider)

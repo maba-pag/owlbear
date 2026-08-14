@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Literal, Never
+from typing import TYPE_CHECKING, Literal, Never, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -413,6 +413,15 @@ class _DraftPullRequestSupersessionOperation(_DraftPullRequestModel):
     def head_sha(self) -> str:
         """Project the shared provider-operation head field."""
         return self.superseding_head
+
+
+class _PublicationOperationLike(Protocol):
+    repository: str
+    head_branch: str
+    head_sha: str
+    base_branch: str
+    title: str
+    body: str
 
 
 class _GeneratedSummaryOperation(_DraftPullRequestModel):
@@ -850,6 +859,19 @@ class DraftPullRequestPublisher:
         operation = self._bind_operation(self._operation(request), request)
         existing = self._read_receipt(request)
         if existing is not None:
+            history = self._read_history(request)
+            if history is not None:
+                matching = next(
+                    (
+                        publication
+                        for publication in history.publications
+                        if publication.operation_id == operation.operation_id
+                    ),
+                    None,
+                )
+                if matching is None:
+                    self._conflict(request, "Change publication has already been superseded")
+                existing = matching
             self._validate_receipt(existing, operation, request)
             current = self._provider.read_pull_request(existing.repository, existing.number)
             self._validate_publication_identity(current, existing, request)
@@ -1161,10 +1183,13 @@ class DraftPullRequestPublisher:
             existing = DraftPullRequestPublicationReceipt.model_validate_json(content)
         except ValidationError as exc:
             self._invalid_response(request, "stored draft pull-request receipt is invalid", cause=exc)
-        if existing.receipt_id not in {
-            supersession.predecessor_receipt_id,
-            supersession.successor_receipt_id,
-        }:
+        history = self._read_history(request)
+        allowed_receipt_ids = (
+            {publication.receipt_id for publication in history.publications}
+            if history is not None
+            else {supersession.predecessor_receipt_id, supersession.successor_receipt_id}
+        )
+        if existing.receipt_id not in allowed_receipt_ids:
             self._conflict(request, "stored draft pull-request receipt is outside the supersession history")
         if existing != successor:
             with locked_roots((self._state_root,)):
@@ -1182,7 +1207,7 @@ class DraftPullRequestPublisher:
             body=_draft_body(request.change_id, request.generated_summary),
         )
 
-    def _find(self, operation: _DraftPullRequestOperation) -> PublicationPullRequest | None:
+    def _find(self, operation: _PublicationOperationLike) -> PublicationPullRequest | None:
         return self._provider.find_pull_request(
             FindPublicationPullRequest(
                 repository=operation.repository,
@@ -1193,7 +1218,7 @@ class DraftPullRequestPublisher:
 
     def _create_or_reconcile(
         self,
-        operation: _DraftPullRequestOperation,
+        operation: _PublicationOperationLike,
     ) -> PublicationPullRequest:
         try:
             return self._provider.create_draft_pull_request(
@@ -1220,8 +1245,8 @@ class DraftPullRequestPublisher:
     def _validate_pull_request(
         self,
         pull_request: PublicationPullRequest,
-        operation: _DraftPullRequestOperation,
-        request: CreateOrReconcileDraftPullRequest,
+        operation: _PublicationOperationLike,
+        request: _PublicationRequest,
     ) -> None:
         if (
             pull_request.repository != operation.repository
