@@ -25,6 +25,7 @@ from owlbear_delivery.delivery_runtime import (
 )
 from owlbear_delivery.design_package import DesignPackageConflictError
 from owlbear_delivery.portfolio_application import (
+    DeliveryChangePublicationSupersessionReceipt,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
     PortfolioApplication,
@@ -83,6 +84,8 @@ from owlbear_delivery_mcp.target_models import (
     SearchCompletedRequest,
     ShowCompletedParams,
     ShowCompletedRequest,
+    SupersedePublicationParams,
+    SupersedePublicationRequest,
     TargetDiagnostic,
     TransitionDeliveryParams,
     TransitionDeliveryRequest,
@@ -116,6 +119,7 @@ DELIVERY_OPERATION_NAMES = (
     "mark_change_ready",
     "reconcile_finalization_head",
     "reconcile_change_checkpoint",
+    "supersede_publication",
     "observe_change_publication_checks",
     "observe_acceptance",
     "resolve_change_disposition",
@@ -343,6 +347,23 @@ class TargetMCPAdapter:
             self._call,
             params,
             lambda: self._application.reconcile_change_checkpoint(params.change_id),
+        )
+
+    async def supersede_publication(
+        self,
+        request: SupersedePublicationRequest,
+    ) -> DeliveryChangePublicationSupersessionReceipt:
+        """Publish one successor branch and pull request for exact publication attention."""
+        params = self._validate(SupersedePublicationParams, request)
+        return await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.supersede_publication(
+                params.change_id,
+                params.expected_publication_id,
+                params.operation_id,
+            ),
+            DeliveryChangePublicationSupersessionReceipt,
         )
 
     async def observe_change_publication_checks(

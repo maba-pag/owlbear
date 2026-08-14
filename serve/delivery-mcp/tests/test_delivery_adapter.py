@@ -18,6 +18,7 @@ from owlbear_delivery import (
 )
 from owlbear_delivery.acceptance import CompletionReceiptConflictError
 from owlbear_delivery.change_workspace import CoordinationConflictError
+from owlbear_delivery.change_publication import ChangeBranchSupersessionReceipt
 from owlbear_delivery.completed_history import (
     CompletedHistoryDiagnostic,
     CompletedHistoryDiagnosticCode,
@@ -32,13 +33,15 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryResultCandidate,
     DeliveryReview,
     DeliveryReviewReceipt,
+    DeliveryChangePublicationHistory,
     DeliveryRuntimeReferenceError,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     FinalizeDeliveryChange,
 )
 from owlbear_delivery.design_package import DesignPackageConflictError
-from owlbear_delivery.draft_pull_request import MarkChangePullRequestReady
+from owlbear_delivery.draft_pull_request import DraftPullRequestSupersessionReceipt, MarkChangePullRequestReady
+from owlbear_delivery.portfolio_application import DeliveryChangePublicationSupersessionReceipt
 from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
 from owlbear_delivery_mcp.target_server import (
     DELIVERY_OPERATION_ANNOTATIONS,
@@ -121,6 +124,17 @@ class _RecordingApplication:
                     claim_id="claim",
                     digest=DIGEST,
                     result=result,
+                )
+            elif name == "supersede_publication":
+                result = DeliveryChangePublicationSupersessionReceipt.model_construct(
+                    receipt_id=DIGEST,
+                    operation_id="supersede-change-a",
+                    change_id=CHANGE,
+                    predecessor_publication_id=DIGEST,
+                    successor_publication_id=DIGEST,
+                    git_supersession=ChangeBranchSupersessionReceipt.model_construct(),
+                    provider_supersession=DraftPullRequestSupersessionReceipt.model_construct(),
+                    publication_history=DeliveryChangePublicationHistory.model_construct(),
                 )
             else:
                 result = _Result(operation=name)
@@ -257,6 +271,11 @@ def _requests() -> dict[str, dict[str, object]]:
         },
         "reconcile_finalization_head": change,
         "reconcile_change_checkpoint": change,
+        "supersede_publication": {
+            **change,
+            "expected_publication_id": DIGEST,
+            "operation_id": "supersede-change-a",
+        },
         "observe_change_publication_checks": change,
         "observe_acceptance": change,
         "resolve_change_disposition": {**change, "expected_disposition_id": DIGEST},
@@ -342,6 +361,9 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
         assert len(result) == 1
         assert result[0]["change_id"] == CHANGE
         assert result[0]["worktree_path"] == str(WORKTREE_PATH)
+    elif operation_name == "supersede_publication":
+        assert result.receipt_id == DIGEST
+        assert result.operation_id == "supersede-change-a"
     elif operation_name in receipt_results:
         for field, expected in receipt_results[operation_name].items():
             assert getattr(result, field) == expected

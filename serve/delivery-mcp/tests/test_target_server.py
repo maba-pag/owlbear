@@ -70,6 +70,7 @@ DELIVERY_TOOLS = {
     "mark_change_ready",
     "reconcile_finalization_head",
     "reconcile_change_checkpoint",
+    "supersede_publication",
     "observe_change_publication_checks",
     "observe_acceptance",
     "resolve_change_disposition",

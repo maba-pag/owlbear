@@ -177,6 +177,13 @@ class MarkChangeReadyParams(_TargetProtocolModel):
     request: MarkChangePullRequestReady
 
 
+class SupersedePublicationParams(ChangeParams):
+    """Validate one exact publication-attention supersession operation."""
+
+    expected_publication_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
 class DeliveryPlanPublication(_TargetProtocolModel):
     """Planning publication response with its transition-ready output reference."""
 
@@ -357,6 +364,10 @@ type MarkChangeReadyRequest = Annotated[
     MarkChangeReadyParams,
     BeforeValidator(partial(_parse_json_model, MarkChangeReadyParams)),
 ]
+type SupersedePublicationRequest = Annotated[
+    SupersedePublicationParams,
+    BeforeValidator(partial(_parse_json_model, SupersedePublicationParams)),
+]
 type PublishDeliveryPlanRequest = Annotated[
     PublishDeliveryPlanParams,
     BeforeValidator(partial(_parse_json_model, PublishDeliveryPlanParams)),
@@ -440,6 +451,8 @@ __all__ = [
     "SearchCompletedRequest",
     "ShowCompletedParams",
     "ShowCompletedRequest",
+    "SupersedePublicationParams",
+    "SupersedePublicationRequest",
     "TargetDiagnostic",
     "TransitionDeliveryParams",
     "TransitionDeliveryRequest",
