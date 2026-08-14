@@ -466,6 +466,36 @@ def test_runtime_frontier_writers_use_the_central_mutability_policy() -> None:
     )
 
 
+def test_target_sync_runtime_writers_bind_operation_names_before_replacement() -> None:
+    runtime_path = _REPO_ROOT / "serve/delivery/src/owlbear_delivery/delivery_runtime.py"
+    visitor = _RuntimeMutationVisitor(runtime_path)
+    visitor.scan()
+
+    for method_name in ("record_resolved_target_sync", "record_target_sync_abort"):
+        method = visitor.methods[method_name]
+        mutability_guards = [
+            node
+            for node in ast.walk(method)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_require_change_mutable"
+        ]
+        replacements = [
+            node
+            for node in ast.walk(method)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "self"
+            and node.func.attr == "_replace"
+        ]
+
+        assert any(len(node.args) >= 2 and _literal_string(node.args[1]) == method_name for node in mutability_guards)
+        assert mutability_guards
+        assert replacements
+        assert max(node.lineno for node in mutability_guards) < min(node.lineno for node in replacements)
+
+
 def test_delivery_source_has_no_retired_local_integration_producers() -> None:
     matches = _retired_producer_definitions()
 

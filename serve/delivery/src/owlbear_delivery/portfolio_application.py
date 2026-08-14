@@ -832,6 +832,12 @@ class PortfolioApplication:
             attention_active = disposition is not None
             if attention_active:
                 runtime.validate_target_sync_conflict(expected_disposition_id, operation_id)
+                if runtime.change_stage() in {
+                    DeliveryChangeStage.DEFERRED,
+                    DeliveryChangeStage.ABANDONED,
+                    DeliveryChangeStage.COMPLETED,
+                }:
+                    self._fail("target synchronization conflict exit requires a mutable Change")
             else:
                 resolution = runtime.change_disposition_resolution()
                 if resolution is None or resolution.disposition_id != expected_disposition_id:
@@ -889,6 +895,12 @@ class PortfolioApplication:
                     self._fail("target synchronization resolution differs from runtime evidence")
                 return receipt
             runtime.validate_target_sync_conflict(expected_disposition_id, operation_id)
+            if runtime.change_stage() in {
+                DeliveryChangeStage.DEFERRED,
+                DeliveryChangeStage.ABANDONED,
+                DeliveryChangeStage.COMPLETED,
+            }:
+                self._fail("target synchronization conflict exit requires a mutable Change")
             if runtime.active_claims() or runtime.integration_repair_claim() is not None:
                 self._fail("target synchronization conflict exit cannot overlap an active Delivery claim")
             try:

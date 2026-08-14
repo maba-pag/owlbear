@@ -435,13 +435,14 @@ def _repository(tmp_path: Path) -> Path:
     return repository
 
 
-def _advance_remote_target(tmp_path: Path, remote: Path) -> str:
+def _advance_remote_target(tmp_path: Path, remote: Path, *, product: str | None = None) -> str:
     target_repository = tmp_path / "target-repository"
     _git(tmp_path, "clone", str(remote), str(target_repository))
     _git(target_repository, "config", "user.name", "Target User")
     _git(target_repository, "config", "user.email", "target@example.invalid")
-    (target_repository / "target.txt").write_text("target\n", encoding="utf-8")
-    _git(target_repository, "add", "target.txt")
+    target_file = target_repository / ("product.txt" if product is not None else "target.txt")
+    target_file.write_text(product if product is not None else "target\n", encoding="utf-8")
+    _git(target_repository, "add", target_file.name)
     _git(target_repository, "commit", "-m", "advance target")
     _git(target_repository, "push", "origin", "HEAD:refs/heads/main")
     return _git(target_repository, "rev-parse", "HEAD")
@@ -733,6 +734,105 @@ def test_application_records_semantic_target_resolution_with_exact_runtime_recei
     assert runtimes["change-a"].target_sync_receipt() == receipt
     assert runtimes["change-a"].finalization() is None
     assert runtimes["change-a"].finalization_invalidation().finalization_id == finalization.finalization_id
+
+
+@pytest.mark.parametrize("operation", ["abort_target_sync_conflict", "resolve_target_sync_conflict"])
+def test_target_sync_conflict_exit_rejects_deferred_change_before_workspace_mutation(
+    tmp_path: Path,
+    operation: str,
+) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    runtime = runtimes["change-a"]
+    disposition = runtime.capture_target_sync_conflict(
+        "sync-deferred",
+        "2" * 40,
+        datetime.now(UTC),
+        ("target synchronization merge conflict",),
+    )
+    application.defer_change("change-a", "Wait before resolving the preserved merge")
+
+    with (
+        patch.object(application._workspace_manager, operation) as workspace_exit,  # noqa: SLF001
+        pytest.raises(PortfolioApplicationError, match="requires a mutable Change"),
+    ):
+        getattr(application, operation)(
+            "change-a",
+            disposition.disposition_id,
+            "2" * 40,
+            "sync-deferred",
+        )
+
+    assert not workspace_exit.called
+    assert runtime.change_stage() is DeliveryChangeStage.DEFERRED
+
+
+@pytest.mark.parametrize("operation", ["abort_target_sync_conflict", "resolve_target_sync_conflict"])
+def test_target_sync_conflict_exit_rejects_abandoned_change_before_workspace_mutation(
+    tmp_path: Path,
+    operation: str,
+) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    runtime = runtimes["change-a"]
+    disposition = runtime.capture_target_sync_conflict(
+        "sync-abandoned",
+        "2" * 40,
+        datetime.now(UTC),
+        ("target synchronization merge conflict",),
+    )
+    application.abandon_change("change-a", "Stop the unresolved Change")
+
+    with (
+        patch.object(application._workspace_manager, operation) as workspace_exit,  # noqa: SLF001
+        pytest.raises(DeliveryRuntimeConflictError, match="target synchronization"),
+    ):
+        getattr(application, operation)(
+            "change-a",
+            disposition.disposition_id,
+            "2" * 40,
+            "sync-abandoned",
+        )
+
+    assert not workspace_exit.called
+    assert runtime.change_stage() is DeliveryChangeStage.ABANDONED
+
+
+def test_abandoning_preserved_target_sync_conflict_surfaces_cleanup_attention(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    repository = application._workspace_manager.repository  # noqa: SLF001
+    remote = tmp_path / "remote.git"
+    subprocess.run(("git", "init", "--bare", str(remote)), check=True, capture_output=True)
+    _git(repository, "remote", "add", "origin", str(remote))
+    _git(repository, "push", "origin", "refs/heads/main:refs/heads/main")
+    target_head = _advance_remote_target(tmp_path, remote, product="target\n")
+    coordination = coordinator.show("change-a")
+    (coordination.worktree_path / "product.txt").write_text("change\n", encoding="utf-8")
+    _git(coordination.worktree_path, "add", "product.txt")
+    _git(coordination.worktree_path, "commit", "-m", "change branch edit")
+    application._workspace_manager.record_reviewed(  # noqa: SLF001
+        "change-a",
+        _git(coordination.worktree_path, "rev-parse", "HEAD"),
+    )
+
+    with pytest.raises(ChangeTargetSyncConflictError):
+        application.sync_change_with_target("change-a", target_head, "sync-abandoned-cleanup")
+
+    application.abandon_change("change-a", "Stop the unresolved Change")
+
+    with pytest.raises(ChangeWorktreeAttentionError) as raised:
+        application.cleanup_abandoned_change_worktree("change-a")
+
+    assert ChangeWorktreeAttentionCode.WORKTREE_DIRTY in raised.value.attention
+    assert runtimes["change-a"].change_stage() is DeliveryChangeStage.ABANDONED
+    assert coordination.worktree_path.exists()
 
 
 def test_finalization_context_uses_managed_change_head(tmp_path: Path) -> None:

@@ -1345,6 +1345,8 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "record_publication_identity",
         "record_publication_successor",
         "record_target_sync",
+        "record_resolved_target_sync",
+        "record_target_sync_abort",
         "capture_target_sync_conflict",
         "mark_awaiting_merge",
         "reconcile_pull_request_draft_state",
@@ -2239,7 +2241,7 @@ class DeliveryRuntime:
     ) -> ChangeTargetSyncReceipt:
         """Record one resolved merge while atomically clearing its exact attention."""
         frontier, previous = self._read()
-        _require_change_mutable(frontier, "record_target_sync", allow_attention=True)
+        _require_change_mutable(frontier, "record_resolved_target_sync", allow_attention=True)
         _require_no_active_change_claim(frontier, "target synchronization resolution")
         _require_target_sync_attention(frontier, expected_disposition_id, operation_id)
         if receipt.change_id != self._contract.change_id:
@@ -2273,6 +2275,7 @@ class DeliveryRuntime:
     ) -> DeliveryChangeDispositionResolution:
         """Clear one exact target-sync attention after its workspace abort receipt exists."""
         frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_target_sync_abort", allow_attention=True)
         _require_target_sync_attention(frontier, expected_disposition_id, operation_id)
         _require_no_active_change_claim(frontier, "target synchronization abort")
         resolution = DeliveryChangeDispositionResolution.create(
