@@ -107,6 +107,66 @@ class DeliveryChangePublicationIdentity(_DeliveryModel):
     head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
 
 
+class DeliveryChangePublicationHistory(_DeliveryModel):
+    """Ordered provider pull-request identities retained across supersession."""
+
+    schema_version: Literal[1] = 1
+    change_id: str = Field(min_length=1)
+    publications: tuple[DeliveryChangePublicationIdentity, ...] = Field(min_length=1)
+
+    @property
+    def current(self) -> DeliveryChangePublicationIdentity:
+        """Return the current successor publication identity."""
+        return self.publications[-1]
+
+    @classmethod
+    def create(
+        cls,
+        publication: DeliveryChangePublicationIdentity,
+    ) -> DeliveryChangePublicationHistory:
+        """Create history from the first exact publication identity."""
+        return cls(change_id=publication.change_id, publications=(publication,))
+
+    def append(
+        self,
+        predecessor: DeliveryChangePublicationIdentity,
+        successor: DeliveryChangePublicationIdentity,
+    ) -> DeliveryChangePublicationHistory:
+        """Append one exact successor after the current publication."""
+        if self.current != predecessor:
+            message = "publication successor does not match the current predecessor"
+            raise ValueError(message)
+        return self.model_copy(update={"publications": (*self.publications, successor)})
+
+    def refresh_current(
+        self,
+        publication: DeliveryChangePublicationIdentity,
+    ) -> DeliveryChangePublicationHistory:
+        """Refresh the exact head of the current provider PR without adding a generation."""
+        current = self.current
+        if (current.repository, current.number, current.node_id) != (
+            publication.repository,
+            publication.number,
+            publication.node_id,
+        ):
+            message = "publication head refresh does not match the current publication"
+            raise ValueError(message)
+        return self.model_copy(update={"publications": (*self.publications[:-1], publication)})
+
+    @model_validator(mode="after")
+    def _validate_history(self) -> DeliveryChangePublicationHistory:
+        identities = tuple(
+            (publication.repository, publication.number, publication.node_id) for publication in self.publications
+        )
+        if len(identities) != len(set(identities)):
+            message = "Delivery publication history identities must be unique"
+            raise ValueError(message)
+        if any(publication.change_id != self.change_id for publication in self.publications):
+            message = "Delivery publication history must bind one Change"
+            raise ValueError(message)
+        return self
+
+
 class DeliveryChangeDeferral(_DeliveryModel):
     """Durable user disposition that pauses one nonterminal Change."""
 
@@ -925,7 +985,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 class DeliveryFrontier(_DeliveryModel):
     """Canonical outcome and Change checkpoint state persisted beside authority."""
 
-    schema_version: Literal[13] = 13
+    schema_version: Literal[14] = 14
     bindings: tuple[OutcomeAuthorityBinding, ...]
     published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint: DeliveryPendingCheckpoint | None = None
@@ -934,6 +994,7 @@ class DeliveryFrontier(_DeliveryModel):
     finalization_invalidation: DeliveryFinalizationInvalidationReceipt | None = None
     ready: PullRequestReadyReceipt | None = None
     change_disposition_publication: DeliveryChangePublicationIdentity | None = None
+    change_publication_history: DeliveryChangePublicationHistory | None = None
     merged_pull_request_latch: DeliveryMergedPullRequestLatch | None = None
     change_completion: DeliveryChangeCompletion | None = None
     change_deferral: DeliveryChangeDeferral | None = None
@@ -1258,8 +1319,8 @@ _STAGE_ORDER = {
     DeliveryStage.IMPLEMENTATION: 2,
     DeliveryStage.COMPLETED: 3,
 }
-_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
-_FRONTIER_SCHEMA_VERSION = 13
+_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13})
+_FRONTIER_SCHEMA_VERSION = 14
 _FINALIZATION_SCHEMA_VERSION = 2
 _LEGACY_FINALIZATION_MESSAGE = "legacy finalization authority requires explicit re-finalization"
 _CHECKPOINT_BACKFILL_SCHEMA_VERSIONS = frozenset({1, 2})
@@ -1271,6 +1332,8 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
     {
         "record_checkpoint_branch_publication",
         "acknowledge_checkpoint_publication",
+        "record_publication_identity",
+        "record_publication_successor",
         "mark_awaiting_merge",
         "reconcile_pull_request_draft_state",
         "latch_merged_pull_request",
@@ -1455,6 +1518,36 @@ class DeliveryRuntime:
         )
         return abandonment
 
+    def _capture_existing_change_disposition(
+        self,
+        frontier: DeliveryFrontier,
+        previous: bytes,
+        existing: DeliveryChangeDisposition,
+        disposition: DeliveryChangeDisposition,
+        publication_identity: DeliveryChangePublicationIdentity | None,
+    ) -> DeliveryChangeDisposition:
+        if not (
+            existing.kind == disposition.kind
+            and existing.change_id == disposition.change_id
+            and existing.entered_from == disposition.entered_from
+            and existing.diagnostics == disposition.diagnostics
+        ):
+            _conflict("Delivery Change already has different attention authority")
+        if publication_identity is None:
+            return existing
+        if publication_identity.change_id != self._contract.change_id:
+            _conflict("Change publication identity does not match the admitted Change")
+        current = frontier.change_disposition_publication
+        if current is None:
+            self._replace(
+                previous,
+                frontier.model_copy(update={"change_disposition_publication": publication_identity}),
+            )
+            return existing
+        if current != publication_identity:
+            _conflict("Delivery Change attention has different publication identity")
+        return existing
+
     def capture_change_disposition(
         self,
         disposition: DeliveryChangeDisposition,
@@ -1466,23 +1559,13 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         existing = frontier.change_disposition
         if existing is not None:
-            if (
-                existing.kind == disposition.kind
-                and existing.change_id == disposition.change_id
-                and existing.entered_from == disposition.entered_from
-                and existing.diagnostics == disposition.diagnostics
-            ):
-                if publication_identity is not None and frontier.change_disposition_publication is None:
-                    self._replace(
-                        previous,
-                        frontier.model_copy(update={"change_disposition_publication": publication_identity}),
-                    )
-                elif (
-                    publication_identity is not None and frontier.change_disposition_publication != publication_identity
-                ):
-                    _conflict("Delivery Change attention has different publication identity")
-                return existing
-            _conflict("Delivery Change already has different attention authority")
+            return self._capture_existing_change_disposition(
+                frontier,
+                previous,
+                existing,
+                disposition,
+                publication_identity,
+            )
         if is_change_terminal(frontier):
             _conflict("completed Delivery Change cannot retain attention")
         _require_no_active_change_claim(frontier, "Change attention capture")
@@ -1493,6 +1576,8 @@ class DeliveryRuntime:
         retained_publication = publication_identity
         if retained_publication is None and clear_ready:
             retained_publication = _pull_request_identity(frontier.ready)
+        if retained_publication is not None and retained_publication.change_id != self._contract.change_id:
+            _conflict("Change publication identity does not match the admitted Change")
         updated = frontier.model_copy(
             update={
                 "change_disposition": disposition,
@@ -1541,6 +1626,7 @@ class DeliveryRuntime:
         diagnostics: tuple[str, ...],
         *,
         clear_ready: bool = False,
+        publication_identity: DeliveryChangePublicationIdentity | None = None,
     ) -> DeliveryChangeDisposition:
         """Capture provider publication evidence that requires operator reconciliation."""
         return self.capture_change_disposition(
@@ -1552,6 +1638,7 @@ class DeliveryRuntime:
                 diagnostics=diagnostics,
             ),
             clear_ready=clear_ready,
+            publication_identity=publication_identity,
         )
 
     def capture_acceptance_attention(
@@ -1577,6 +1664,62 @@ class DeliveryRuntime:
                 head_sha=observation.snapshot.head_sha,
             ),
         )
+
+    def record_publication_successor(
+        self,
+        predecessor: DeliveryChangePublicationIdentity,
+        successor: DeliveryChangePublicationIdentity,
+    ) -> DeliveryChangePublicationHistory:
+        """Append one exact successor publication while retaining publication attention."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_publication_successor")
+        _require_no_active_change_claim(frontier, "publication supersession")
+        disposition = frontier.change_disposition
+        if disposition is None or disposition.kind != DeliveryChangeDispositionKind.PUBLICATION_ATTENTION:
+            _conflict("publication supersession requires current publication attention")
+        if (
+            predecessor.change_id != self._contract.change_id
+            or successor.change_id != self._contract.change_id
+            or frontier.change_disposition_publication != predecessor
+        ):
+            _conflict("publication supersession predecessor does not match current attention")
+        if predecessor == successor:
+            _conflict("publication supersession requires a distinct successor identity")
+        history = frontier.change_publication_history or DeliveryChangePublicationHistory.create(predecessor)
+        try:
+            updated_history = history.append(predecessor, successor)
+        except ValueError as exc:
+            _conflict(str(exc))
+        updated = frontier.model_copy(
+            update={
+                "change_disposition_publication": successor,
+                "change_publication_history": updated_history,
+            }
+        )
+        self._replace(previous, updated)
+        return updated_history
+
+    def record_publication_identity(
+        self,
+        publication: DeliveryChangePublicationIdentity,
+    ) -> DeliveryChangePublicationHistory:
+        """Record the first publication or refresh the exact head of the current PR."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_publication_identity")
+        if publication.change_id != self._contract.change_id:
+            _conflict("Change publication identity does not match the admitted Change")
+        history = frontier.change_publication_history
+        if history is None:
+            updated_history = DeliveryChangePublicationHistory.create(publication)
+        elif history.current == publication:
+            return history
+        else:
+            try:
+                updated_history = history.refresh_current(publication)
+            except ValueError as exc:
+                _conflict(str(exc))
+        self._replace(previous, frontier.model_copy(update={"change_publication_history": updated_history}))
+        return updated_history
 
     def show_binding(self, outcome_id: str) -> OutcomeAuthorityBinding:
         """Return one current outcome binding."""
@@ -1675,6 +1818,10 @@ class DeliveryRuntime:
         """Return durable authority that the exact finalized pull request is ready."""
         return self._read()[0].ready
 
+    def publication_history(self) -> DeliveryChangePublicationHistory | None:
+        """Return ordered provider publication identities for this Change."""
+        return self._read()[0].change_publication_history
+
     def completion_receipt(self) -> CompletionReceipt | None:
         """Return the exact terminal receipt while rejecting partial completion state."""
         frontier, _content = self._read()
@@ -1718,11 +1865,30 @@ class DeliveryRuntime:
             or receipt.head_sha != finalization.exact_head
         ):
             _conflict("pull-request ready receipt does not match current finalization authority")
+        publication = _pull_request_identity(receipt)
+        history = frontier.change_publication_history
+        if history is None:
+            updated_history = DeliveryChangePublicationHistory.create(publication)
+        elif (
+            history.current.repository,
+            history.current.number,
+            history.current.node_id,
+        ) == (
+            publication.repository,
+            publication.number,
+            publication.node_id,
+        ):
+            updated_history = history.refresh_current(publication)
+        else:
+            _conflict("pull-request ready receipt does not match the current publication")
         if frontier.ready is not None:
             if frontier.ready == receipt:
                 return receipt
             _conflict("Delivery Change is already awaiting merge with different authority")
-        self._replace(previous, frontier.model_copy(update={"ready": receipt}))
+        self._replace(
+            previous,
+            frontier.model_copy(update={"ready": receipt, "change_publication_history": updated_history}),
+        )
         return receipt
 
     def reconcile_pull_request_draft_state(
@@ -2622,6 +2788,9 @@ class DeliveryRuntime:
         resolution = frontier.change_disposition_resolution
         if resolution is not None and resolution.change_id != self._contract.change_id:
             _reference("Delivery Change attention resolution does not match its admitted Change")
+        history = frontier.change_publication_history
+        if history is not None and history.change_id != self._contract.change_id:
+            _reference("Delivery publication history does not match its admitted Change")
         for receipt in (frontier.change_deferral, frontier.change_abandonment):
             if receipt is not None and receipt.change_id != self._contract.change_id:
                 _reference("Delivery Change lifecycle receipt does not match its admitted Change")
@@ -2650,6 +2819,7 @@ def _require_change_mutable(frontier: DeliveryFrontier, operation: str) -> None:
         "defer_change",
         "resume_change",
         "abandon_change",
+        "record_publication_successor",
     }:
         _conflict("Delivery Change requires attention resolution before mutation")
 
@@ -2987,6 +3157,7 @@ __all__ = [
     "DeliveryChangeDispositionConflictError",
     "DeliveryChangeDispositionKind",
     "DeliveryChangeDispositionResolution",
+    "DeliveryChangePublicationHistory",
     "DeliveryChangePublicationIdentity",
     "DeliveryChangeStage",
     "DeliveryCheckpointPublicationState",

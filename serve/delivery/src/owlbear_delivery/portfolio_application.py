@@ -46,6 +46,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangeAbandonment,
     DeliveryChangeDeferral,
     DeliveryChangeDispositionResolution,
+    DeliveryChangePublicationIdentity,
     DeliveryChangeStage,
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointTriggerKind,
@@ -1058,6 +1059,15 @@ class PortfolioApplication:
                     generated_summary=summary,
                 )
             )
+            runtime.record_publication_identity(
+                DeliveryChangePublicationIdentity(
+                    change_id=draft_receipt.change_id,
+                    repository=draft_receipt.repository,
+                    number=draft_receipt.number,
+                    node_id=draft_receipt.node_id,
+                    head_sha=draft_receipt.head_sha,
+                )
+            )
         summary_receipt = self._draft_pull_request_publisher.update_generated_summary(
             UpdateGeneratedPullRequestSummary(
                 change_id=change_id,
@@ -1066,6 +1076,11 @@ class PortfolioApplication:
                 generated_summary=summary,
             )
         )
+        history = runtime.publication_history()
+        if history is not None:
+            runtime.record_publication_identity(
+                history.current.model_copy(update={"head_sha": summary_receipt.head_sha})
+            )
         state = runtime.acknowledge_checkpoint_publication(pending, head)
         return DeliveryCheckpointReconciliationResult(
             change_id=change_id,

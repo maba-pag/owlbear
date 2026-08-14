@@ -29,6 +29,8 @@ from owlbear_delivery import (
     DeliveryChangeStage,
     DeliveryChangeDisposition,
     DeliveryChangeDispositionKind,
+    DeliveryChangePublicationHistory,
+    DeliveryChangePublicationIdentity,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
     DeliveryContract,
@@ -501,6 +503,21 @@ def _pull_request_observation(  # noqa: PLR0913
     return PublicationPullRequestObservationReceipt(observation_id=observation_id, **values)
 
 
+def _publication_identity(
+    head_sha: str = "3" * 40,
+    *,
+    number: int = 7,
+    node_id: str = "PR_node_7",
+) -> DeliveryChangePublicationIdentity:
+    return DeliveryChangePublicationIdentity(
+        change_id="delivery-runtime",
+        repository="example/project",
+        number=number,
+        node_id=node_id,
+        head_sha=head_sha,
+    )
+
+
 def _completion_receipt(runtime: DeliveryRuntime) -> CompletionReceipt:
     finalization = runtime.finalization()
     latch = runtime.merged_pull_request_latch()
@@ -589,7 +606,7 @@ def test_schema_nine_frontier_migrates_without_change_attention(tmp_path: Path) 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 13
+    assert canonical["schema_version"] == 14
     assert migrated.change_disposition() is None
 
 
@@ -604,7 +621,7 @@ def test_schema_ten_frontier_migrates_resolution_slot(tmp_path: Path) -> None:
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 13
+    assert canonical["schema_version"] == 14
     assert canonical["change_disposition_resolution"] is None
 
 
@@ -619,7 +636,7 @@ def test_schema_eleven_frontier_migrates_publication_identity_slot(tmp_path: Pat
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 13
+    assert canonical["schema_version"] == 14
     assert canonical["change_disposition_publication"] is None
 
 
@@ -681,6 +698,58 @@ def test_change_attention_resolution_is_exact_idempotent_and_preserves_ready_inv
         runtime.resolve_change_disposition(disposition.disposition_id, datetime(2026, 8, 11, 18, tzinfo=UTC))
         == resolution
     )
+
+
+def test_publication_history_refreshes_one_pr_and_appends_successors(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    predecessor = _publication_identity()
+    refreshed = _publication_identity("4" * 40)
+    successor = _publication_identity("5" * 40, number=8, node_id="PR_node_8")
+
+    first = runtime.record_publication_identity(predecessor)
+    current = runtime.record_publication_identity(refreshed)
+    runtime.capture_publication_attention(
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+        ("published history requires correction",),
+        publication_identity=refreshed,
+    )
+    history = runtime.record_publication_successor(refreshed, successor)
+
+    assert first.publications == (predecessor,)
+    assert current.publications == (refreshed,)
+    assert history.publications == (refreshed, successor)
+    assert runtime.publication_history() == history
+    assert DeliveryFrontier.model_validate_json(runtime.frontier_bytes()).change_disposition_publication == successor
+
+
+def test_publication_history_rejects_stale_or_duplicate_successors(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    predecessor = _publication_identity()
+    successor = _publication_identity("5" * 40, number=8, node_id="PR_node_8")
+    runtime.record_publication_identity(predecessor)
+    runtime.capture_publication_attention(
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+        ("published history requires correction",),
+        publication_identity=predecessor,
+    )
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="does not match current attention"):
+        runtime.record_publication_successor(_publication_identity("4" * 40), successor)
+
+    runtime.record_publication_successor(predecessor, successor)
+    with pytest.raises(DeliveryRuntimeConflictError, match="does not match current attention"):
+        runtime.record_publication_successor(
+            predecessor, _publication_identity("6" * 40, number=9, node_id="PR_node_9")
+        )
+
+
+def test_publication_history_rejects_duplicate_provider_pr_generations() -> None:
+    predecessor = _publication_identity()
+    with pytest.raises(ValidationError, match="identities must be unique"):
+        DeliveryChangePublicationHistory(
+            change_id="delivery-runtime",
+            publications=(predecessor, predecessor.model_copy(update={"head_sha": "4" * 40})),
+        )
 
 
 def test_change_attention_recapture_clears_prior_resolution(tmp_path: Path) -> None:
@@ -900,7 +969,7 @@ def test_schema_twelve_frontier_migrates_lifecycle_disposition_slots(tmp_path: P
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 13
+    assert canonical["schema_version"] == 14
     assert migrated.change_deferral() is None
     assert migrated.change_abandonment() is None
 
@@ -1113,7 +1182,7 @@ def test_runtime_migrates_reducible_assembly_metadata_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 13
+    assert canonical["schema_version"] == 14
     assert all("assembly_required" not in binding for binding in canonical["bindings"])
     assert json.loads(path.read_bytes()) == canonical
 
@@ -1130,7 +1199,7 @@ def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 13
+    assert canonical["schema_version"] == 14
     assert canonical["published_head"] is None
     assert canonical["pending_checkpoint"] is None
     assert json.loads(path.read_bytes()) == canonical
@@ -1184,7 +1253,7 @@ def test_runtime_migrates_prior_schema_without_rewriting_finalization_checkpoint
     )
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 13
+    assert canonical["schema_version"] == 14
     assert canonical["pending_checkpoint"] == expected_checkpoint
     assert canonical["pending_checkpoint"]["head"] == exact_head
     assert canonical["pending_checkpoint"]["triggers"][-1] == {
