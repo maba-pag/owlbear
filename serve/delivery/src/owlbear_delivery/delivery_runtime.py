@@ -127,6 +127,14 @@ class DeliveryChangePublicationHistory(_DeliveryModel):
         """Create history from the first exact publication identity."""
         return cls(change_id=publication.change_id, publications=(publication,))
 
+    def _replace_publications(
+        self,
+        publications: tuple[DeliveryChangePublicationIdentity, ...],
+    ) -> DeliveryChangePublicationHistory:
+        payload = self.model_dump(mode="python")
+        payload["publications"] = publications
+        return DeliveryChangePublicationHistory.model_validate(payload)
+
     def append(
         self,
         predecessor: DeliveryChangePublicationIdentity,
@@ -136,7 +144,7 @@ class DeliveryChangePublicationHistory(_DeliveryModel):
         if self.current != predecessor:
             message = "publication successor does not match the current predecessor"
             raise ValueError(message)
-        return self.model_copy(update={"publications": (*self.publications, successor)})
+        return self._replace_publications((*self.publications, successor))
 
     def refresh_current(
         self,
@@ -151,7 +159,7 @@ class DeliveryChangePublicationHistory(_DeliveryModel):
         ):
             message = "publication head refresh does not match the current publication"
             raise ValueError(message)
-        return self.model_copy(update={"publications": (*self.publications[:-1], publication)})
+        return self._replace_publications((*self.publications[:-1], publication))
 
     @model_validator(mode="after")
     def _validate_history(self) -> DeliveryChangePublicationHistory:
@@ -1883,6 +1891,11 @@ class DeliveryRuntime:
             _conflict("pull-request ready receipt does not match the current publication")
         if frontier.ready is not None:
             if frontier.ready == receipt:
+                if frontier.change_publication_history != updated_history:
+                    self._replace(
+                        previous,
+                        frontier.model_copy(update={"change_publication_history": updated_history}),
+                    )
                 return receipt
             _conflict("Delivery Change is already awaiting merge with different authority")
         self._replace(

@@ -1079,7 +1079,13 @@ class PortfolioApplication:
         history = runtime.publication_history()
         if history is not None:
             runtime.record_publication_identity(
-                history.current.model_copy(update={"head_sha": summary_receipt.head_sha})
+                history.current.model_copy(
+                    update={
+                        "repository": summary_receipt.repository,
+                        "number": summary_receipt.number,
+                        "head_sha": summary_receipt.head_sha,
+                    }
+                )
             )
         state = runtime.acknowledge_checkpoint_publication(pending, head)
         return DeliveryCheckpointReconciliationResult(

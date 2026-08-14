@@ -752,6 +752,37 @@ def test_publication_history_rejects_duplicate_provider_pr_generations() -> None
         )
 
 
+def test_publication_history_rejects_same_pr_as_a_new_successor(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    predecessor = _publication_identity()
+    runtime.record_publication_identity(predecessor)
+    runtime.capture_publication_attention(
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+        ("published history requires correction",),
+        publication_identity=predecessor,
+    )
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="identities must be unique"):
+        runtime.record_publication_successor(predecessor, predecessor.model_copy(update={"head_sha": "4" * 40}))
+
+    history = runtime.publication_history()
+    assert history is not None
+    assert history.publications == (predecessor,)
+
+
+def test_ready_replay_backfills_history_for_migrated_frontier(tmp_path: Path) -> None:
+    runtime = _awaiting_merge_runtime(tmp_path)
+    ready = runtime.ready_receipt()
+    assert ready is not None
+    _persist_frontier(tmp_path, runtime, change_publication_history=None)
+
+    assert runtime.publication_history() is None
+    assert runtime.mark_awaiting_merge(ready) == ready
+    history = runtime.publication_history()
+    assert history is not None
+    assert history.current.head_sha == ready.head_sha
+
+
 def test_change_attention_recapture_clears_prior_resolution(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path)
     recorded_at = datetime(2026, 8, 11, 16, tzinfo=UTC)
