@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import subprocess
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -37,6 +38,11 @@ from owlbear_tools.delivery_integration_retirement import (
     DeliveryIntegrationRetirementError,
     apply_delivery_integration_retirement,
     plan_delivery_integration_retirement,
+)
+from owlbear_tools.delivery_migration import (
+    DeliveryStateMigrationError,
+    apply_delivery_state_migration,
+    plan_delivery_state_migration,
 )
 
 
@@ -330,6 +336,73 @@ def _fixture(tmp_path: Path, *, with_worktree: bool = False) -> tuple[Path, dict
     )
 
 
+def _prepare_migration_input(
+    repository: Path,
+    commits: dict[str, str],
+    delivery_root: Path,
+    archive: Path,
+) -> bytes:
+    shutil.rmtree(archive.parent)
+    change_source = delivery_root / "runtime/changes/change-a"
+    frontier = json.loads((change_source / "frontier.json").read_bytes())
+    authority_digest = hashlib.sha256((change_source / "contract.json").read_bytes()).hexdigest()
+    frontier["bindings"][0]["results"] = [_modern_result("change-a", commits["baseline"], authority_digest, _task())]
+    frontier["bindings"][0]["output"] = {
+        "claim_id": "legacy-claim",
+        "digest": "f" * 64,
+        "kind": "implementation",
+        "output_id": "output-implementation",
+        "stage": "implementation",
+    }
+    frontier.update(
+        {
+            "change_abandonment": None,
+            "change_completion": None,
+            "change_deferral": None,
+            "change_disposition": None,
+            "change_disposition_publication": None,
+            "change_disposition_resolution": None,
+            "change_publication_history": None,
+            "finalization": None,
+            "finalization_invalidation": None,
+            "merged_pull_request_latch": None,
+            "pending_checkpoint": None,
+            "published_head": commits["baseline"],
+            "ready": None,
+            "schema_version": 15,
+            "target_sync_receipt": None,
+        }
+    )
+    frontier_bytes = _canonical(frontier)
+    (change_source / "frontier.json").write_bytes(frontier_bytes)
+
+    legacy_target = repository / ".owlbear/target"
+    legacy_runtime = legacy_target / "target-runtime"
+    (legacy_target / "delivery/changes").mkdir(parents=True)
+    (legacy_runtime / "coordination").mkdir(parents=True)
+    change_source.rename(legacy_target / "delivery/changes/change-a")
+    (delivery_root / "runtime/claims/changes/change-a.json").rename(legacy_runtime / "coordination/change-a.json")
+    (delivery_root / "runtime/capacity.json").rename(legacy_runtime / "capacity.json")
+
+    completion = CompletionPackageManifest.model_validate_json(
+        (repository / ".owlbear/legacy/completed/change-a/completion.json").read_bytes()
+    )
+    verification = legacy_runtime / "integration-verification"
+    (verification / "requests").mkdir(parents=True)
+    (verification / "receipts").mkdir()
+    request = {
+        "request_id": "request-a",
+        "change_id": "change-a",
+        "completion_id": completion.completion_id,
+        "package_id": completion.package_id,
+    }
+    receipt = {"request_id": "request-a", "change_id": "change-a"}
+    (verification / "requests/request-a.json").write_bytes(_canonical(request))
+    (verification / "receipts/request-a.json").write_bytes(_canonical(receipt))
+    shutil.rmtree(delivery_root / "runtime")
+    return frontier_bytes
+
+
 def _publication_artifacts(delivery_root: Path) -> tuple[Path, ...]:
     receipt = delivery_root / "runtime/publications/pull-requests/receipts/change-a.json"
     branch_operation = delivery_root / "runtime/publications/change-branches/operations/branch-operation.json"
@@ -380,6 +453,58 @@ def _publication_artifacts(delivery_root: Path) -> tuple[Path, ...]:
         supersession_receipt,
         publication_history,
     )
+
+
+def test_migration_output_with_verification_archive_is_retirable(tmp_path: Path) -> None:
+    repository, commits, delivery_root, archive, _branch = _fixture(tmp_path)
+    frontier_bytes = _prepare_migration_input(repository, commits, delivery_root, archive)
+
+    migration_plan = plan_delivery_state_migration(repository)
+    apply_delivery_state_migration(migration_plan)
+
+    runtime_frontier = delivery_root / "runtime/changes/change-a/frontier.json"
+    verification_root = delivery_root / "runtime/claims/integration-verification"
+    archived_verification_root = archive / "target-runtime/integration-verification"
+    assert runtime_frontier.read_bytes() == frontier_bytes
+    for kind in ("requests", "receipts"):
+        current = verification_root / kind / "request-a.json"
+        archived = archived_verification_root / kind / "request-a.json"
+        assert current.read_bytes() == archived.read_bytes()
+
+    retirement_plan = plan_delivery_integration_retirement(repository)
+
+    assert tuple(change.change_id for change in retirement_plan.changes) == ("change-a",)
+    assert retirement_plan.changes[0].verification_paths == (
+        verification_root / "requests/request-a.json",
+        verification_root / "receipts/request-a.json",
+    )
+
+
+def test_migration_rejects_interrupted_retirement_before_path_migration(tmp_path: Path) -> None:
+    repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
+    (delivery_root / "integration-retirement.json").write_text("{}\n", encoding="utf-8")
+
+    with pytest.raises(DeliveryStateMigrationError, match="interrupted Integration retirement"):
+        plan_delivery_state_migration(repository)
+
+
+@pytest.mark.parametrize("ordering_state", ["legacy-path", "migration-journal", "missing-archive"])
+def test_retirement_requires_completed_path_migration(tmp_path: Path, ordering_state: str) -> None:
+    repository, _commits, delivery_root, archive, _branch = _fixture(tmp_path)
+    if ordering_state == "legacy-path":
+        legacy_target = repository / ".owlbear/target"
+        legacy_target.mkdir(parents=True)
+        (legacy_target / "marker").write_text("unmigrated\n", encoding="utf-8")
+        expected = "legacy Delivery paths must be migrated"
+    elif ordering_state == "migration-journal":
+        (delivery_root / "migration.json").write_text("{}\n", encoding="utf-8")
+        expected = "interrupted Delivery path migration"
+    else:
+        archive.rmdir()
+        expected = "completed path-migration archive"
+
+    with pytest.raises(DeliveryIntegrationRetirementError, match=expected):
+        plan_delivery_integration_retirement(repository)
 
 
 def test_retirement_plans_legacy_frontier_and_preserves_catalog_snapshot(tmp_path: Path) -> None:
