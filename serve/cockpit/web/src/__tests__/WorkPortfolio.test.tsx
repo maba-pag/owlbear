@@ -265,6 +265,7 @@ function installFetch() {
       || url.endsWith('/abandon')
       || url.endsWith('/worktree/cleanup/abandoned')
       || url.endsWith('/worktree/cleanup/completed')
+      || url.endsWith('/worktree/recover')
     )) {
       if (portfolioAfterPublication) currentPortfolio = portfolioAfterPublication
       return response({})
@@ -1122,6 +1123,56 @@ it('cleans an eligible completed Change worktree with its exact completion ident
     body: { completion_id: completionId },
   }))
   expect(await screen.findByText('Completed Change worktree cleaned up.')).toBeInTheDocument()
+})
+
+it('confirms and recovers a missing Change worktree from its exact reviewed head', async () => {
+  const reviewedHead = '9'.repeat(40)
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'none',
+    needs_headline: null,
+    next_actor: 'none',
+    next_step: 'Change abandoned',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Change abandoned', done: null, total: null },
+    action: { kind: 'none', label: null, command: null },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    publication: {
+      phase: 'abandoned',
+      finalization_id: null,
+      finalized_head: null,
+      published_head: null,
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: null,
+      pull_request_number: null,
+      pull_request_head: null,
+      accepted_merge_commit: null,
+      merged_at: null,
+      worktree_recovery: { eligible: true, blocked_reason: null, recovery_reviewed_head: reviewedHead },
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'abandoned', items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(within(inspector).getByText(`Reviewed head: ${reviewedHead}`)).toBeInTheDocument()
+  fireEvent.click(within(inspector).getByText('Recover missing worktree'))
+  fireEvent.click(await screen.findByText('Confirm worktree recovery'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/worktree/recover',
+    method: 'POST',
+    body: { confirmed_recovery: true, recovery_reviewed_head: reviewedHead },
+  }))
+  expect(await screen.findByText('Missing Change worktree recovered.')).toBeInTheDocument()
 })
 
 it('uses the Done status tag without leaking the internal Stage field', async () => {

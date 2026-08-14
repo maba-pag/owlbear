@@ -280,6 +280,25 @@ class _DeliveryApplicationFake:
         self.calls.append(("cleanup-completed", args))
         return self._cleanup_receipt()
 
+    @staticmethod
+    def _recovery_receipt() -> SimpleNamespace:
+        return SimpleNamespace(
+            change_id="change-a",
+            branch="owlbear/change/change-a",
+            worktree_path=Path(".owlbear/delivery/worktrees/change-a"),
+            branch_head="d" * 40,
+            recovery_reviewed_head="c" * 40,
+        )
+
+    def recover_change_worktree(
+        self, change_id: str, reviewed_head: str, *, confirmed_recovery: bool
+    ) -> SimpleNamespace:
+        self.calls.append(("recover-worktree", (change_id, reviewed_head, confirmed_recovery)))
+        failure = self.failures.get("recover_worktree")
+        if failure is not None:
+            raise failure
+        return self._recovery_receipt()
+
     def list_completed_changes(self, *args: object) -> dict[str, object]:
         self.calls.append(("completed-list", args))
         return {"records": [], "next_cursor": None}
@@ -630,6 +649,65 @@ def test_worktree_attention_cleanup_route_returns_typed_delivery_error() -> None
         "retry_safe": False,
     }
     assert application.calls == [("cleanup-abandoned", ("change-a",))]
+
+
+def test_worktree_recovery_route_forwards_exact_confirmation_and_head() -> None:
+    client, application = _client()
+
+    response = client.post(
+        "/api/changes/change-a/worktree/recover",
+        json={"confirmed_recovery": True, "recovery_reviewed_head": "c" * 40},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "change_id": "change-a",
+        "branch": "owlbear/change/change-a",
+        "worktree_path": ".owlbear/delivery/worktrees/change-a",
+        "branch_head": "d" * 40,
+        "recovery_reviewed_head": "c" * 40,
+    }
+    assert application.calls == [("recover-worktree", ("change-a", "c" * 40, True))]
+
+
+def test_malformed_worktree_recovery_body_fails_before_application_mutation() -> None:
+    client, application = _client()
+
+    response = client.post(
+        "/api/changes/change-a/worktree/recover",
+        json={"confirmed_recovery": False, "recovery_reviewed_head": "c" * 40},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "code": "ERR_DELIVERY_HTTP_VALIDATION",
+        "detail": "Delivery request input is malformed",
+        "authority": "delivery",
+        "retry_safe": False,
+    }
+    assert application.calls == []
+
+
+def test_worktree_attention_recovery_route_returns_typed_delivery_error() -> None:
+    attention = ChangeWorktreeAttentionError(
+        "change-a",
+        (ChangeWorktreeAttentionCode.OWNERSHIP_AMBIGUOUS,),
+    )
+    client, application = _client({"recover_worktree": attention})
+
+    response = client.post(
+        "/api/changes/change-a/worktree/recover",
+        json={"confirmed_recovery": True, "recovery_reviewed_head": "c" * 40},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "ERR_TARGET_WORKTREE_ATTENTION",
+        "detail": "Change worktree requires attention: ownership-ambiguous",
+        "authority": "delivery",
+        "retry_safe": False,
+    }
+    assert application.calls == [("recover-worktree", ("change-a", "c" * 40, True))]
 
 
 def test_target_routes_are_mounted_on_live_app() -> None:

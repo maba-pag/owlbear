@@ -11,7 +11,11 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict
 
-from owlbear_delivery import DeliveryChangeWorktreeCleanup, DeliveryRetainedChangeWorktree
+from owlbear_delivery import (
+    DeliveryChangeWorktreeCleanup,
+    DeliveryChangeWorktreeRecovery,
+    DeliveryRetainedChangeWorktree,
+)
 from owlbear_delivery.acceptance import CompletionReceiptConflictError
 from owlbear_delivery.change_workspace import CoordinationConflictError
 from owlbear_delivery.completed_history import (
@@ -66,9 +70,9 @@ class _RecordingApplication:
             if failure is not None:
                 raise failure
             if name == "list_work_items":
-                return (_Result(operation=name),)
-            if name == "list_retained_change_worktrees":
-                return (
+                result: object = (_Result(operation=name),)
+            elif name == "list_retained_change_worktrees":
+                result = (
                     DeliveryRetainedChangeWorktree(
                         change_id=CHANGE,
                         worktree_path=WORKTREE_PATH,
@@ -84,33 +88,43 @@ class _RecordingApplication:
                         cleanup_eligible=True,
                     ),
                 )
-            if name in {"cleanup_abandoned_change_worktree", "cleanup_completed_change_worktree"}:
-                return DeliveryChangeWorktreeCleanup(
+            elif name in {"cleanup_abandoned_change_worktree", "cleanup_completed_change_worktree"}:
+                result = DeliveryChangeWorktreeCleanup(
                     cleanup_id=DIGEST,
                     change_id=CHANGE,
                     branch="owlbear/change/change-a",
                     worktree_path=WORKTREE_PATH,
                     branch_head=COMMIT,
                 )
-            if name == "publish_delivery_plan":
+            elif name == "recover_change_worktree":
+                result = DeliveryChangeWorktreeRecovery(
+                    change_id=CHANGE,
+                    branch="owlbear/change/change-a",
+                    worktree_path=WORKTREE_PATH,
+                    branch_head=COMMIT,
+                    recovery_reviewed_head=COMMIT,
+                )
+            elif name == "publish_delivery_plan":
                 request = args[1]
                 assert hasattr(request, "tasks")
                 tasks = request.tasks
                 assert isinstance(tasks, tuple)
                 assert all(isinstance(task, DeliveryTaskDefinition) for task in tasks)
-                return DeliveryPlanCandidate(candidate_id="plan", claim_id="claim", digest=DIGEST, tasks=tasks)
-            if name == "publish_delivery_result":
+                result = DeliveryPlanCandidate(candidate_id="plan", claim_id="claim", digest=DIGEST, tasks=tasks)
+            elif name == "publish_delivery_result":
                 request = args[1]
                 assert hasattr(request, "result")
                 result = request.result
                 assert isinstance(result, DeliveryTaskResult)
-                return DeliveryResultCandidate(
+                result = DeliveryResultCandidate(
                     candidate_id="result",
                     claim_id="claim",
                     digest=DIGEST,
                     result=result,
                 )
-            return _Result(operation=name)
+            else:
+                result = _Result(operation=name)
+            return result
 
         return operation
 
@@ -251,6 +265,11 @@ def _requests() -> dict[str, dict[str, object]]:
         "abandon_change": {**change, "reason": "Stop this Change"},
         "cleanup_abandoned_change_worktree": change,
         "cleanup_completed_change_worktree": {**change, "completion_id": DIGEST},
+        "recover_change_worktree": {
+            **change,
+            "confirmed_recovery": True,
+            "recovery_reviewed_head": COMMIT,
+        },
         "transition_delivery": {
             **change,
             "request": {
@@ -288,31 +307,44 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
     result = await getattr(adapter, operation_name)(_requests()[operation_name])
 
     assert [call[0] for call in application.calls] == [operation_name]
+    call_args = {
+        "reconcile_finalization_head": (CHANGE,),
+        "observe_acceptance": (CHANGE,),
+        "cleanup_abandoned_change_worktree": (CHANGE,),
+        "cleanup_completed_change_worktree": (CHANGE, DIGEST),
+        "resolve_change_disposition": (CHANGE, DIGEST),
+    }
+    if operation_name in call_args:
+        assert application.calls[0][1] == call_args[operation_name]
+    if operation_name == "recover_change_worktree":
+        assert application.calls[0][1] == (CHANGE, COMMIT)
+        assert application.calls[0][2] == {"confirmed_recovery": True}
     if operation_name == "finalize_change":
         assert isinstance(application.calls[0][1][1], FinalizeDeliveryChange)
     if operation_name == "mark_change_ready":
         assert application.calls[0][1][0] == CHANGE
         assert isinstance(application.calls[0][1][1], MarkChangePullRequestReady)
-    if operation_name in {"reconcile_finalization_head", "observe_acceptance"}:
-        assert application.calls[0][1] == (CHANGE,)
-    if operation_name == "cleanup_abandoned_change_worktree":
-        assert application.calls[0][1] == (CHANGE,)
-    if operation_name == "cleanup_completed_change_worktree":
-        assert application.calls[0][1] == (CHANGE, DIGEST)
-    if operation_name == "resolve_change_disposition":
-        assert application.calls[0][1] == (CHANGE, DIGEST)
     tuple_results = {"list_work_items", "list_retained_change_worktrees"}
     publication_results = {
         "publish_delivery_plan": {"candidate_id": "plan", "claim_id": "claim"},
         "publish_delivery_result": {"candidate_id": "result", "claim_id": "claim"},
     }
+    receipt_results = {
+        "cleanup_abandoned_change_worktree": {"cleanup_id": DIGEST, "worktree_path": str(WORKTREE_PATH)},
+        "cleanup_completed_change_worktree": {"cleanup_id": DIGEST, "worktree_path": str(WORKTREE_PATH)},
+        "recover_change_worktree": {
+            "change_id": CHANGE,
+            "worktree_path": str(WORKTREE_PATH),
+            "recovery_reviewed_head": COMMIT,
+        },
+    }
     if operation_name == "list_retained_change_worktrees":
         assert len(result) == 1
         assert result[0]["change_id"] == CHANGE
         assert result[0]["worktree_path"] == str(WORKTREE_PATH)
-    elif operation_name in {"cleanup_abandoned_change_worktree", "cleanup_completed_change_worktree"}:
-        assert result.cleanup_id == DIGEST
-        assert result.worktree_path == str(WORKTREE_PATH)
+    elif operation_name in receipt_results:
+        for field, expected in receipt_results[operation_name].items():
+            assert getattr(result, field) == expected
     elif operation_name in publication_results:
         assert result.candidate_id == publication_results[operation_name]["candidate_id"]
         assert result.claim_id == publication_results[operation_name]["claim_id"]
@@ -395,6 +427,20 @@ async def test_revise_design_session_rejects_non_digest_identity_before_delegati
 
     with pytest.raises(ToolError) as exc_info:
         await adapter.revise_design_session(request)
+
+    diagnostic = json.loads(str(exc_info.value))
+    assert diagnostic["code"] == "ERR_TARGET_PARAM_VALIDATION"
+    assert application.calls == []
+
+
+@pytest.mark.asyncio
+async def test_recovery_requires_literal_confirmation_before_delegation() -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+    request = {**_requests()["recover_change_worktree"], "confirmed_recovery": False}
+
+    with pytest.raises(ToolError) as exc_info:
+        await adapter.recover_change_worktree(request)
 
     diagnostic = json.loads(str(exc_info.value))
     assert diagnostic["code"] == "ERR_TARGET_PARAM_VALIDATION"

@@ -114,6 +114,7 @@ from owlbear_delivery.work_items import (
     WorkItemPublicationPhase,
     WorkItemScope,
     WorkItemWorktreeCleanupView,
+    WorkItemWorktreeRecoveryView,
 )
 
 if TYPE_CHECKING:
@@ -360,6 +361,7 @@ class DeliveryRetainedChangeWorktree(_ApplicationModel):
     worktree_path: Path
     branch: str = Field(min_length=1)
     branch_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    recovery_reviewed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     coordination_registered: bool
     git_registered: bool
     worktree_present: bool
@@ -383,6 +385,16 @@ class DeliveryChangeWorktreeCleanup(_ApplicationModel):
     branch: str = Field(min_length=1)
     worktree_path: Path
     branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class DeliveryChangeWorktreeRecovery(_ApplicationModel):
+    """Application receipt for one exact managed Change worktree recovery."""
+
+    change_id: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    worktree_path: Path
+    branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    recovery_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
 
 
 class DeliveryOperatorClaim(_ApplicationModel):
@@ -610,6 +622,35 @@ class PortfolioApplication:
     def list_retained_change_worktrees(self) -> tuple[DeliveryRetainedChangeWorktree, ...]:
         """List retained Change worktrees and exact cleanup eligibility facts."""
         return tuple(self._retained_change_worktree_view(item) for item in self._workspace_manager.list_retained())
+
+    def recover_change_worktree(
+        self,
+        change_id: str,
+        recovery_reviewed_head: str,
+        *,
+        confirmed_recovery: Literal[True],
+    ) -> DeliveryChangeWorktreeRecovery:
+        """Recreate one missing Change worktree from explicit reviewed authority."""
+        if confirmed_recovery is not True:
+            self._fail("Change worktree recovery requires explicit confirmation")
+        self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            try:
+                coordination = self._workspace_manager.recover(change_id, recovery_reviewed_head)
+                branch_head = self._workspace_manager.observed_change_head(change_id)
+            except ChangeWorktreeAttentionError:
+                raise
+            except CoordinationConflictError:
+                raise
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("Change worktree recovery could not complete", exc)
+        return DeliveryChangeWorktreeRecovery(
+            change_id=coordination.change_id,
+            branch=coordination.branch,
+            worktree_path=coordination.worktree_path,
+            branch_head=branch_head,
+            recovery_reviewed_head=recovery_reviewed_head,
+        )
 
     def cleanup_change_worktree(
         self,
@@ -1361,7 +1402,12 @@ class PortfolioApplication:
         if view.publication is None:
             return view
         cleanup = self._worktree_cleanup_view(runtime)
-        publication = view.publication.model_copy(update={"worktree_cleanup": cleanup})
+        retained = next(
+            (item for item in self._workspace_manager.list_retained() if item.change_id == change_id),
+            None,
+        )
+        recovery = self._worktree_recovery_view(retained) if retained is not None else None
+        publication = view.publication.model_copy(update={"worktree_cleanup": cleanup, "worktree_recovery": recovery})
         return view.model_copy(update={"publication": publication})
 
     def show_operator_context(self, change_id: str, outcome_id: str) -> DeliveryOperatorContext:
@@ -1458,6 +1504,33 @@ class PortfolioApplication:
             completion_id=completion.completion_id if completion is not None else None,
         )
 
+    def _worktree_recovery_view(
+        self,
+        retained: RetainedChangeWorktree,
+    ) -> WorkItemWorktreeRecoveryView | None:
+        if ChangeWorktreeAttentionCode.WORKTREE_MISSING not in retained.attention:
+            return None
+        allowed_attention = {
+            ChangeWorktreeAttentionCode.COORDINATION_MISSING,
+            ChangeWorktreeAttentionCode.GIT_REGISTRATION_MISSING,
+            ChangeWorktreeAttentionCode.PRUNABLE,
+            ChangeWorktreeAttentionCode.WORKTREE_MISSING,
+        }
+        blocked_reason: str | None = None
+        if retained.writer is not None:
+            blocked_reason = DeliveryRetainedWorktreeCleanupBlockReason.ACTIVE_WRITER.value
+        elif retained.publication_expiry is not None and retained.publication_expiry > _timestamp(self._clock()):
+            blocked_reason = DeliveryRetainedWorktreeCleanupBlockReason.ACTIVE_PUBLICATION_LEASE.value
+        elif any(code not in allowed_attention for code in retained.attention):
+            blocked_reason = DeliveryRetainedWorktreeCleanupBlockReason.WORKTREE_ATTENTION.value
+        elif retained.last_reviewed_commit is None:
+            blocked_reason = "reviewed-head-unavailable"
+        return WorkItemWorktreeRecoveryView(
+            eligible=blocked_reason is None,
+            blocked_reason=blocked_reason,
+            recovery_reviewed_head=retained.last_reviewed_commit,
+        )
+
     def _portfolio_snapshots(self) -> tuple[DeliveryPortfolioSnapshot, ...]:
         return tuple(self._delivery_snapshot(runtime) for _change_id, runtime in sorted(self._runtimes.items()))
 
@@ -1497,6 +1570,7 @@ class PortfolioApplication:
             worktree_path=retained.worktree_path,
             branch=retained.branch,
             branch_head=retained.branch_head,
+            recovery_reviewed_head=retained.last_reviewed_commit,
             coordination_registered=retained.coordination_registered,
             git_registered=retained.git_registered,
             worktree_present=retained.worktree_present,

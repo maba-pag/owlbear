@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from functools import partial
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
@@ -26,6 +26,7 @@ from owlbear_delivery.draft_pull_request import MarkChangePullRequestReady
 from owlbear_delivery.identities import ChangeId
 from owlbear_delivery.portfolio_application import (
     DeliveryChangeWorktreeCleanup,
+    DeliveryChangeWorktreeRecovery,
     DeliveryRetainedChangeWorktree,
     DeliveryRetainedWorktreeCleanupBlockReason,
 )
@@ -103,6 +104,13 @@ class CleanupCompletedChangeParams(ChangeParams):
     """Validate cleanup of one completed Change worktree receipt."""
 
     completion_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class RecoverChangeWorktreeParams(ChangeParams):
+    """Validate explicit recovery of one Change worktree from reviewed authority."""
+
+    confirmed_recovery: Literal[True]
+    recovery_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
 
 
 class CreateDesignSessionParams(ChangeParams):
@@ -191,6 +199,7 @@ class RetainedChangeWorktreeResponse(_TargetProtocolModel):
     worktree_path: str = Field(min_length=1)
     branch: str = Field(min_length=1)
     branch_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    recovery_reviewed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     coordination_registered: bool
     git_registered: bool
     worktree_present: bool
@@ -231,6 +240,27 @@ class ChangeWorktreeCleanupResponse(_TargetProtocolModel):
             branch=receipt.branch,
             worktree_path=str(receipt.worktree_path),
             branch_head=receipt.branch_head,
+        )
+
+
+class ChangeWorktreeRecoveryResponse(_TargetProtocolModel):
+    """Strict MCP receipt for one exact Change worktree recovery."""
+
+    change_id: ChangeId
+    branch: str = Field(min_length=1)
+    worktree_path: str = Field(min_length=1)
+    branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    recovery_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def from_receipt(cls, receipt: DeliveryChangeWorktreeRecovery) -> ChangeWorktreeRecoveryResponse:
+        """Convert one application recovery receipt into transport form."""
+        return cls(
+            change_id=receipt.change_id,
+            branch=receipt.branch,
+            worktree_path=str(receipt.worktree_path),
+            branch_head=receipt.branch_head,
+            recovery_reviewed_head=receipt.recovery_reviewed_head,
         )
 
 
@@ -302,6 +332,10 @@ type CleanupCompletedChangeRequest = Annotated[
     CleanupCompletedChangeParams,
     BeforeValidator(partial(_parse_json_model, CleanupCompletedChangeParams)),
 ]
+type RecoverChangeWorktreeRequest = Annotated[
+    RecoverChangeWorktreeParams,
+    BeforeValidator(partial(_parse_json_model, RecoverChangeWorktreeParams)),
+]
 type ClaimContextRequest = Annotated[
     ClaimContextParams,
     BeforeValidator(partial(_parse_json_model, ClaimContextParams)),
@@ -366,6 +400,7 @@ __all__ = [
     "ChangeParams",
     "ChangeRequest",
     "ChangeWorktreeCleanupResponse",
+    "ChangeWorktreeRecoveryResponse",
     "ClaimContextParams",
     "ClaimContextRequest",
     "CleanupAbandonedChangeParams",
@@ -392,6 +427,8 @@ __all__ = [
     "PublishDeliveryPlanRequest",
     "PublishDeliveryResultParams",
     "PublishDeliveryResultRequest",
+    "RecoverChangeWorktreeParams",
+    "RecoverChangeWorktreeRequest",
     "RepairClaimContextParams",
     "RepairClaimContextRequest",
     "ResolveChangeDispositionParams",

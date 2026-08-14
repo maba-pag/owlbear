@@ -26,6 +26,7 @@ from owlbear_delivery.delivery_runtime import (
 from owlbear_delivery.design_package import DesignPackageConflictError
 from owlbear_delivery.portfolio_application import (
     DeliveryChangeWorktreeCleanup,
+    DeliveryChangeWorktreeRecovery,
     PortfolioApplication,
     PortfolioApplicationError,
 )
@@ -44,6 +45,7 @@ from owlbear_delivery_mcp.target_models import (
     ChangeParams,
     ChangeRequest,
     ChangeWorktreeCleanupResponse,
+    ChangeWorktreeRecoveryResponse,
     ClaimContextParams,
     ClaimContextRequest,
     CleanupAbandonedChangeParams,
@@ -68,6 +70,8 @@ from owlbear_delivery_mcp.target_models import (
     PublishDeliveryPlanRequest,
     PublishDeliveryResultParams,
     PublishDeliveryResultRequest,
+    RecoverChangeWorktreeParams,
+    RecoverChangeWorktreeRequest,
     RepairClaimContextParams,
     RepairClaimContextRequest,
     ResolveChangeDispositionParams,
@@ -120,6 +124,7 @@ DELIVERY_OPERATION_NAMES = (
     "abandon_change",
     "cleanup_abandoned_change_worktree",
     "cleanup_completed_change_worktree",
+    "recover_change_worktree",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
@@ -430,6 +435,24 @@ class TargetMCPAdapter:
             DeliveryChangeWorktreeCleanup,
         )
         return ChangeWorktreeCleanupResponse.from_receipt(receipt)
+
+    async def recover_change_worktree(
+        self,
+        request: RecoverChangeWorktreeRequest,
+    ) -> ChangeWorktreeRecoveryResponse:
+        """Recreate one exact Change worktree after explicit reviewed-head confirmation."""
+        params = self._validate(RecoverChangeWorktreeParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.recover_change_worktree(
+                params.change_id,
+                params.recovery_reviewed_head,
+                confirmed_recovery=params.confirmed_recovery,
+            ),
+            DeliveryChangeWorktreeRecovery,
+        )
+        return ChangeWorktreeRecoveryResponse.from_receipt(receipt)
 
     async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]:
         """Apply one worker-owned Delivery transition."""

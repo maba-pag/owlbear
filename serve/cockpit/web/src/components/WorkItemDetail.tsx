@@ -51,6 +51,7 @@ interface WorkItemDetailProps {
   onAbandonChange: (reason: string) => Promise<void>
   onCleanupAbandonedChange: () => Promise<void>
   onCleanupCompletedChange: (completionId: string) => Promise<void>
+  onRecoverChangeWorktree: (recoveryReviewedHead: string) => Promise<void>
 }
 
 const WORKER_ROLE_LABELS: Record<DeliveryWorkerRole, string> = {
@@ -436,6 +437,48 @@ function IdentityRow({ label, value }: { label: string; value: string | number |
   return <><dt className="text-contrast-medium">{label}</dt><dd className="min-w-0 break-all font-mono text-xs">{value}</dd></>
 }
 
+function WorktreeRecoverySection(props: WorkItemDetailProps) {
+  const recovery = props.detail.item.publication?.worktree_recovery
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  if (!recovery) return null
+  if (!recovery.eligible || !recovery.recovery_reviewed_head) {
+    return recovery.blocked_reason ? (
+      <p className="mt-static-md border-l-4 border-warning bg-surface p-static-sm text-sm" role="status">
+        Worktree recovery unavailable: {recovery.blocked_reason.replace(/-/g, ' ')}.
+      </p>
+    ) : null
+  }
+  const pendingAction = 'change-worktree-recover'
+  const run = async () => {
+    await props.onRecoverChangeWorktree(recovery.recovery_reviewed_head as string)
+    setConfirmOpen(false)
+  }
+  return (
+    <section className="mt-static-md border-l-4 border-warning bg-surface p-static-md" aria-labelledby="worktree-recovery-heading">
+      <PHeading id="worktree-recovery-heading" tag="h4" size="sm">Missing worktree</PHeading>
+      <p className="mt-static-xs text-sm">Delivery can recreate the missing worktree from the exact reviewed Change head.</p>
+      <code className="mt-static-sm block break-all text-xs text-contrast-medium">Reviewed head: {recovery.recovery_reviewed_head}</code>
+      <PButton className="mt-static-md" type="button" compact variant="secondary" disabled={props.pendingAction !== null} onClick={() => setConfirmOpen(true)}>
+        {props.pendingAction === pendingAction ? 'Recovering...' : 'Recover missing worktree'}
+      </PButton>
+      {confirmOpen ? (
+        <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm worktree recovery' }}>
+          <div className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary">
+            <PHeading tag="h2" size="lg">Recover missing worktree</PHeading>
+            <p className="text-sm">The managed worktree will be recreated at its canonical path. The Change branch and reviewed head will remain unchanged.</p>
+            <div className="flex flex-wrap justify-end gap-static-xs">
+              <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton>
+              <PButton type="button" disabled={props.pendingAction !== null} onClick={() => void run()}>
+                {props.pendingAction === pendingAction ? 'Recovering...' : 'Confirm worktree recovery'}
+              </PButton>
+            </div>
+          </div>
+        </PModal>
+      ) : null}
+    </section>
+  )
+}
+
 function WorktreeCleanupSection(props: WorkItemDetailProps) {
   const publication = props.detail.item.publication
   const cleanup = publication?.worktree_cleanup
@@ -538,6 +581,7 @@ function PublicationSection(props: WorkItemDetailProps) {
       {publication.pending_checkpoint_triggers.length > 0 ? <p className="mt-static-sm text-xs text-contrast-medium">Checkpoint triggers: {publication.pending_checkpoint_triggers.join(', ')}</p> : null}
       {action.command ? <CopyCommand command={action.command} className="mt-static-md" /> : null}
       {!action.command && control && action.label ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null} onClick={() => void control()}>{pending ? 'Working...' : action.label}</PButton> : null}
+      <WorktreeRecoverySection {...props} />
       <WorktreeCleanupSection {...props} />
     </section>
   )

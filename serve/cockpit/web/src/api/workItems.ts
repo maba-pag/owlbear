@@ -212,6 +212,7 @@ export interface WorkItemPublicationView {
     diagnostics: string[]
   } | null
   worktree_cleanup?: WorkItemWorktreeCleanupView | null
+  worktree_recovery?: WorkItemWorktreeRecoveryView | null
 }
 
 export interface WorkItemWorktreeCleanupView {
@@ -220,12 +221,26 @@ export interface WorkItemWorktreeCleanupView {
   completion_id: string | null
 }
 
+export interface WorkItemWorktreeRecoveryView {
+  eligible: boolean
+  blocked_reason: string | null
+  recovery_reviewed_head: string | null
+}
+
 export interface ChangeWorktreeCleanupResponse {
   cleanup_id: string
   change_id: string
   branch: string
   worktree_path: string
   branch_head: string
+}
+
+export interface ChangeWorktreeRecoveryResponse {
+  change_id: string
+  branch: string
+  worktree_path: string
+  branch_head: string
+  recovery_reviewed_head: string
 }
 
 export interface WorkItemDetailView {
@@ -558,5 +573,16 @@ export function cleanupCompletedWorkItemChange(
     `/api/changes/${encodeURIComponent(changeId)}/worktree/cleanup/completed`,
     'ERR_WORK_ITEM_COMPLETED_WORKTREE_CLEANUP',
     { completion_id: completionId },
+  )
+}
+
+export function recoverWorkItemChange(
+  changeId: string,
+  recoveryReviewedHead: string,
+): Promise<ChangeWorktreeRecoveryResponse> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/worktree/recover`,
+    'ERR_WORK_ITEM_WORKTREE_RECOVERY',
+    { confirmed_recovery: true, recovery_reviewed_head: recoveryReviewedHead },
   )
 }

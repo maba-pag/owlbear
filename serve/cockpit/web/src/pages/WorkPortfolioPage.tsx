@@ -193,6 +193,7 @@ function SelectedWorkItemDetail({
       onAbandonChange={selectedDetail.abandonChange}
       onCleanupAbandonedChange={selectedDetail.cleanupAbandonedChange}
       onCleanupCompletedChange={selectedDetail.cleanupCompletedChange}
+      onRecoverChangeWorktree={selectedDetail.recoverChangeWorktree}
     />
   )
   if (selectedDetail.detail.isLoading) return <p role="status">Loading Work Item details...</p>

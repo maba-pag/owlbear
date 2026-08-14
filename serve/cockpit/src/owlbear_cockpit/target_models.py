@@ -11,7 +11,7 @@ from owlbear_delivery.portfolio_operating import PortfolioOperatingView
 from owlbear_delivery.work_items import ChangeGroupView, WorkItemDetailView
 
 if TYPE_CHECKING:
-    from owlbear_delivery.portfolio_application import DeliveryChangeWorktreeCleanup
+    from owlbear_delivery.portfolio_application import DeliveryChangeWorktreeCleanup, DeliveryChangeWorktreeRecovery
 
 
 class _TargetHTTPModel(BaseModel):
@@ -120,6 +120,13 @@ class CleanupCompletedChangeBody(_TargetHTTPModel):
     completion_id: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class RecoverChangeWorktreeBody(_TargetHTTPModel):
+    """Explicit confirmation and exact reviewed head for worktree recovery."""
+
+    confirmed_recovery: Literal[True]
+    recovery_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
 class ChangeWorktreeCleanupResponse(_TargetHTTPModel):
     """Typed receipt returned after one exact terminal worktree cleanup."""
 
@@ -138,6 +145,27 @@ class ChangeWorktreeCleanupResponse(_TargetHTTPModel):
             branch=receipt.branch,
             worktree_path=str(receipt.worktree_path),
             branch_head=receipt.branch_head,
+        )
+
+
+class ChangeWorktreeRecoveryResponse(_TargetHTTPModel):
+    """Typed receipt returned after one exact Change worktree recovery."""
+
+    change_id: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    worktree_path: str = Field(min_length=1)
+    branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    recovery_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def from_receipt(cls, receipt: DeliveryChangeWorktreeRecovery) -> ChangeWorktreeRecoveryResponse:
+        """Convert one application receipt into the HTTP transport shape."""
+        return cls(
+            change_id=receipt.change_id,
+            branch=receipt.branch,
+            worktree_path=str(receipt.worktree_path),
+            branch_head=receipt.branch_head,
+            recovery_reviewed_head=receipt.recovery_reviewed_head,
         )
 
 
@@ -175,11 +203,13 @@ __all__ = [
     "BackwardMovePreviewBody",
     "ChangeDispositionReasonBody",
     "ChangeWorktreeCleanupResponse",
+    "ChangeWorktreeRecoveryResponse",
     "CleanupCompletedChangeBody",
     "ClearBlockBody",
     "ConfirmLostClaimBody",
     "DesignWorkDetailResponse",
     "NeedsCounts",
+    "RecoverChangeWorktreeBody",
     "ResolveChangeAttentionBody",
     "WorkItemDetailResponse",
     "WorkItemPortfolioResponse",

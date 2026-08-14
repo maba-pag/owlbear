@@ -13,6 +13,7 @@ import {
   previewWorkItemBackward,
   reconcileWorkItemPublication,
   recoverWorkItemClaim,
+  recoverWorkItemChange,
   resolveWorkItemAttention,
   resumeWorkItemChange,
   searchCompletedChanges,
@@ -354,6 +355,11 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
       'change-cleanup-completed',
       () => cleanupCompletedWorkItemChange(identity.changeId, completionId),
       'Completed Change worktree cleaned up.',
+    ),
+    recoverChangeWorktree: (recoveryReviewedHead: string) => mutate(
+      'change-worktree-recover',
+      () => recoverWorkItemChange(identity.changeId, recoveryReviewedHead),
+      'Missing Change worktree recovered.',
     ),
     retry: polling.refetch,
   }

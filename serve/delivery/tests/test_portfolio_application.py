@@ -8,7 +8,7 @@ import shutil
 import subprocess
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Event
 from unittest.mock import Mock, patch, sentinel
@@ -39,6 +39,7 @@ from owlbear_delivery import (
     DeliveryAcceptanceWaitingError,
     DeliveryChangeStage,
     DeliveryChangeWorktreeCleanup,
+    DeliveryChangeWorktreeRecovery,
     DeliveryContract,
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointTrigger,
@@ -874,6 +875,130 @@ def test_abandoned_change_worktree_cleanup_preserves_branch_and_replays_receipt(
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.ABANDONED
     assert application.cleanup_abandoned_change_worktree("change-a") == receipt
     assert application.list_retained_change_worktrees() == ()
+
+
+def test_change_worktree_recovery_recreates_missing_worktree_and_replays_receipt(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    coordination = application._workspace_manager.show("change-a")  # noqa: SLF001 - inspect recovery authority.
+    shutil.rmtree(coordination.worktree_path)
+
+    receipt = application.recover_change_worktree(
+        "change-a",
+        coordination.last_reviewed_commit,
+        confirmed_recovery=True,
+    )
+
+    assert isinstance(receipt, DeliveryChangeWorktreeRecovery)
+    assert receipt.change_id == "change-a"
+    assert receipt.branch_head == coordination.last_reviewed_commit
+    assert receipt.recovery_reviewed_head == coordination.last_reviewed_commit
+    assert receipt.worktree_path.is_dir()
+    assert (
+        application.recover_change_worktree(
+            "change-a",
+            coordination.last_reviewed_commit,
+            confirmed_recovery=True,
+        )
+        == receipt
+    )
+
+
+def test_change_worktree_recovery_rejects_active_writer(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    coordination = coordinator.show("change-a")
+    writer = ChangeWriter(
+        attempt_id="attempt-change-a",
+        claim_id="claim-change-a",
+        actor_id="builder",
+        process_id="process-change-a",
+        claimed_at="2026-08-04T00:00:00Z",
+        job_id=1,
+        kind="build",
+    )
+    coordinator.acquire("change-a", writer)
+    shutil.rmtree(coordination.worktree_path)
+
+    with pytest.raises(CoordinationConflictError, match="recovery cannot overlap an active writer"):
+        application.recover_change_worktree(
+            "change-a",
+            coordination.last_reviewed_commit,
+            confirmed_recovery=True,
+        )
+
+
+def test_change_worktree_recovery_requires_exact_reviewed_head(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    coordination = application._workspace_manager.show("change-a")  # noqa: SLF001 - inspect recovery authority.
+    shutil.rmtree(coordination.worktree_path)
+
+    with pytest.raises(CoordinationConflictError, match="recovery reviewed head differs"):
+        application.recover_change_worktree(
+            "change-a",
+            "a" * 40,
+            confirmed_recovery=True,
+        )
+
+    assert not coordination.worktree_path.exists()
+
+
+def test_change_worktree_recovery_rebuilds_missing_coordination_without_target_mutation(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    coordination = application._workspace_manager.show("change-a")  # noqa: SLF001 - inspect recovery authority.
+    target_head = _git(application._workspace_manager.repository, "rev-parse", "HEAD")  # noqa: SLF001
+    (state_root / "claims/changes/change-a.json").unlink()
+    shutil.rmtree(coordination.worktree_path)
+
+    receipt = application.recover_change_worktree(
+        "change-a",
+        coordination.last_reviewed_commit,
+        confirmed_recovery=True,
+    )
+
+    assert receipt.recovery_reviewed_head == coordination.last_reviewed_commit
+    assert application._workspace_manager.show("change-a").last_reviewed_commit == coordination.last_reviewed_commit  # noqa: SLF001
+    assert _git(application._workspace_manager.repository, "rev-parse", "HEAD") == target_head  # noqa: SLF001
+
+
+def test_change_worktree_recovery_rejects_active_publication_lease(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    coordination = coordinator.show("change-a")
+    now = datetime.now(UTC)
+    with coordinator.publication_lock("change-a") as lock:
+        coordinator.reserve_publication(
+            "change-a",
+            PublicationLease(
+                operation_id="recovery-publication",
+                owner_id="recovery-owner",
+                expires_at=(now + timedelta(minutes=5)).isoformat(),
+            ),
+            lock,
+            now=now.isoformat(),
+        )
+    shutil.rmtree(coordination.worktree_path)
+
+    with pytest.raises(CoordinationConflictError, match="active publication lease"):
+        application.recover_change_worktree(
+            "change-a",
+            coordination.last_reviewed_commit,
+            confirmed_recovery=True,
+        )
+
+    assert not coordination.worktree_path.exists()
 
 
 def test_change_worktree_cleanup_requires_terminal_authority(tmp_path: Path) -> None:

@@ -223,6 +223,7 @@ class RetainedChangeWorktree(_WorkspaceModel):
     worktree_path: Path
     branch: str = Field(min_length=1)
     branch_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    last_reviewed_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     coordination_registered: bool
     git_registered: bool
     worktree_present: bool
@@ -1495,6 +1496,7 @@ class ChangeWorkspaceManager:
             worktree_path=expected_path,
             branch=expected_branch,
             branch_head=branch_head,
+            last_reviewed_commit=coordination.last_reviewed_commit if coordination is not None else None,
             coordination_registered=coordination is not None,
             git_registered=registered is not None,
             worktree_present=worktree_present,

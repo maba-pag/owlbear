@@ -19,11 +19,13 @@ from owlbear_cockpit.target_models import (
     BackwardMovePreviewBody,
     ChangeDispositionReasonBody,
     ChangeWorktreeCleanupResponse,
+    ChangeWorktreeRecoveryResponse,
     CleanupCompletedChangeBody,
     ClearBlockBody,
     ConfirmLostClaimBody,
     DesignWorkDetailResponse,
     NeedsCounts,
+    RecoverChangeWorktreeBody,
     ResolveChangeAttentionBody,
     WorkItemDetailResponse,
     WorkItemPortfolioResponse,
@@ -198,6 +200,21 @@ class TargetCockpitService:
         )
         return ChangeWorktreeCleanupResponse.from_receipt(receipt)
 
+    def recover_change_worktree(
+        self,
+        change_id: str,
+        body: RecoverChangeWorktreeBody,
+    ) -> ChangeWorktreeRecoveryResponse:
+        """Recover one exact Change worktree after explicit reviewed-head confirmation."""
+        receipt = self._invoke(
+            lambda: self._application.recover_change_worktree(
+                change_id,
+                body.recovery_reviewed_head,
+                confirmed_recovery=body.confirmed_recovery,
+            )
+        )
+        return ChangeWorktreeRecoveryResponse.from_receipt(receipt)
+
     def list_completed(self, cursor: str | None, limit: int) -> object:
         """List one bounded page of completed change history."""
         return self._invoke(lambda: self._application.list_completed_changes(cursor, limit))
@@ -306,6 +323,7 @@ def _register_controls(router: APIRouter) -> None:
     _register_request_controls(router)
     _register_outcome_controls(router)
     _register_publication_controls(router)
+    _register_worktree_controls(router)
 
 
 def _register_request_controls(router: APIRouter) -> None:
@@ -419,6 +437,19 @@ def _register_publication_controls(router: APIRouter) -> None:
         service: _TargetService,
     ) -> ChangeWorktreeCleanupResponse:
         return service.cleanup_completed_change_worktree(change_id, body)
+
+
+def _register_worktree_controls(router: APIRouter) -> None:
+    @router.post(
+        "/changes/{change_id}/worktree/recover",
+        response_model=ChangeWorktreeRecoveryResponse,
+    )
+    def recover_change_worktree(
+        change_id: str,
+        body: RecoverChangeWorktreeBody,
+        service: _TargetService,
+    ) -> ChangeWorktreeRecoveryResponse:
+        return service.recover_change_worktree(change_id, body)
 
 
 def _portfolio_totals(groups: tuple[ChangeGroupView, ...]) -> WorkItemPortfolioTotals:

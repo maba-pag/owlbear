@@ -289,6 +289,14 @@ class WorkItemWorktreeCleanupView(_ProjectionModel):
     completion_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
+class WorkItemWorktreeRecoveryView(_ProjectionModel):
+    """Bounded recovery authority for one missing Change worktree."""
+
+    eligible: bool
+    blocked_reason: str | None = None
+    recovery_reviewed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+
+
 class WorkItemPublicationView(_ProjectionModel):
     """Exact durable finalization, publication, and acceptance identities."""
 
@@ -307,6 +315,7 @@ class WorkItemPublicationView(_ProjectionModel):
     merged_at: str | None = None
     attention: DeliveryChangeDisposition | None = None
     worktree_cleanup: WorkItemWorktreeCleanupView | None = None
+    worktree_recovery: WorkItemWorktreeRecoveryView | None = None
 
 
 class WorkItemDetailView(_ProjectionModel):
