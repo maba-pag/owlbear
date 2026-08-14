@@ -135,8 +135,10 @@ from owlbear_delivery.design_package import (
 )
 from owlbear_delivery.draft_pull_request import (
     CreateOrReconcileDraftPullRequest,
+    DraftPullRequestPublicationHistory,
     DraftPullRequestPublicationReceipt,
     DraftPullRequestPublisher,
+    DraftPullRequestSupersessionReceipt,
     GeneratedPullRequestSummaryReceipt,
     MarkChangePullRequestReady,
     ObserveChangePublicationChecks,
@@ -146,7 +148,9 @@ from owlbear_delivery.draft_pull_request import (
     PullRequestDraftReceipt,
     PullRequestReadyReceipt,
     ReadChangePublicationCheckObservations,
+    ReadChangePublicationHistory,
     ReturnChangePullRequestToDraft,
+    SupersedeDraftPullRequest,
     UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.portfolio_application import (
@@ -434,8 +438,10 @@ __all__ = [
     "DesignPackageResult",
     "DesignPackageStore",
     "DesignReentryBriefing",
+    "DraftPullRequestPublicationHistory",
     "DraftPullRequestPublicationReceipt",
     "DraftPullRequestPublisher",
+    "DraftPullRequestSupersessionReceipt",
     "FinalizeDeliveryChange",
     "FindPublicationPullRequest",
     "FinishTargetJobRequest",
@@ -493,6 +499,7 @@ __all__ = [
     "PullRequestDraftReceipt",
     "PullRequestReadyReceipt",
     "ReadChangePublicationCheckObservations",
+    "ReadChangePublicationHistory",
     "ReceiptCompletedChangeRecord",
     "RecoverInterruptedTaskRequest",
     "RespondToReviewRequest",
@@ -508,6 +515,7 @@ __all__ = [
     "StartTargetJobRequest",
     "StartedTargetJob",
     "SupersedeChangeBranch",
+    "SupersedeDraftPullRequest",
     "TargetAdmissionAssessment",
     "TargetAdmissionCandidate",
     "TargetAdmissionConflictError",

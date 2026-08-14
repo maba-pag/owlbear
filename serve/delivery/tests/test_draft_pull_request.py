@@ -10,6 +10,7 @@ import pytest
 
 from owlbear_delivery.draft_pull_request import (
     CreateOrReconcileDraftPullRequest,
+    DraftPullRequestPublicationReceipt,
     DraftPullRequestPublisher,
     MarkChangePullRequestReady,
     ObserveChangePublicationChecks,
@@ -18,7 +19,9 @@ from owlbear_delivery.draft_pull_request import (
     PublicationPullRequestObservationReceipt,
     PullRequestDraftReceipt,
     PullRequestReadyReceipt,
+    ReadChangePublicationHistory,
     ReturnChangePullRequestToDraft,
+    SupersedeDraftPullRequest,
     UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.publication_provider import (
@@ -86,8 +89,8 @@ class _Provider:
             raise TimeoutError(msg)
         pull_request = PublicationPullRequest(
             repository=request.repository,
-            number=7,
-            node_id="PR_node_7",
+            number=7 + len(self.pull_requests),
+            node_id=f"PR_node_{7 + len(self.pull_requests)}",
             head_branch=request.head_branch,
             head_sha=request.head_sha,
             base_branch=request.base_branch,
@@ -224,6 +227,26 @@ def _checks_request(**updates: object) -> ObserveChangePublicationChecks:
     return ObserveChangePublicationChecks.model_validate(values)
 
 
+def _supersede_request(
+    predecessor: DraftPullRequestPublicationReceipt,
+    **updates: object,
+) -> SupersedeDraftPullRequest:
+    predecessor_receipt = predecessor
+    values = {
+        "change_id": "change-a",
+        "operation_id": "supersession-operation",
+        "expected_predecessor_receipt_id": predecessor_receipt.receipt_id,
+        "predecessor_branch": predecessor_receipt.head_branch,
+        "predecessor_head": predecessor_receipt.head_sha,
+        "successor_branch": "owlbear/change/change-a+s1",
+        "superseding_head": "2" * 40,
+        "title": "Change A corrected",
+        "generated_summary": "Corrected reviewed checkpoint.",
+    }
+    values.update(updates)
+    return SupersedeDraftPullRequest.model_validate(values)
+
+
 def _ready_request(**updates: object) -> MarkChangePullRequestReady:
     values = {
         "change_id": "change-a",
@@ -293,6 +316,90 @@ def test_reconciles_lost_create_response_without_creating_second_pr(tmp_path: Pa
     assert receipt.number == 7
     assert provider.create_calls == 1
     assert len(provider.pull_requests) == 1
+
+
+def test_supersedes_publication_and_replays_ordered_successor_history(tmp_path: Path) -> None:
+    provider = _Provider()
+    publisher = _publisher(tmp_path, provider)
+    predecessor = publisher.publish(_request())
+    request = _supersede_request(predecessor)
+
+    first = publisher.supersede(request)
+    replayed = publisher.supersede(request)
+    history = publisher.read_publication_history(ReadChangePublicationHistory(change_id="change-a"))
+
+    assert replayed == first
+    assert first.predecessor_receipt_id == predecessor.receipt_id
+    assert first.successor_publication.head_branch == "owlbear/change/change-a+s1"
+    assert first.successor_publication.head_sha == "2" * 40
+    assert history is not None
+    assert history.publications == (predecessor, first.successor_publication)
+    assert history.current_receipt_id == first.successor_receipt_id
+    assert provider.create_calls == 2
+    assert len(provider.pull_requests) == 2
+    assert provider.pull_requests[0].head_branch == predecessor.head_branch
+
+    summary = publisher.update_generated_summary(
+        _summary_request(
+            operation_id="successor-summary-operation",
+            published_head="2" * 40,
+            generated_summary="Successor summary.",
+        )
+    )
+
+    assert summary.head_sha == "2" * 40
+    assert "Successor summary." in provider.pull_requests[1].body
+    assert "Second reviewed checkpoint." not in provider.pull_requests[1].body
+
+
+def test_chained_supersession_preserves_every_predecessor(tmp_path: Path) -> None:
+    provider = _Provider()
+    publisher = _publisher(tmp_path, provider)
+    first_publication = publisher.publish(_request())
+    first = publisher.supersede(_supersede_request(first_publication))
+
+    second = publisher.supersede(
+        _supersede_request(
+            first.successor_publication,
+            operation_id="supersession-operation-2",
+            successor_branch="owlbear/change/change-a+s2",
+            superseding_head="3" * 40,
+        )
+    )
+    history = publisher.read_publication_history(ReadChangePublicationHistory(change_id="change-a"))
+
+    assert history is not None
+    assert history.publications == (
+        first_publication,
+        first.successor_publication,
+        second.successor_publication,
+    )
+    assert second.predecessor_receipt_id == first.successor_receipt_id
+    assert second.successor_branch == "owlbear/change/change-a+s2"
+    assert len(provider.pull_requests) == 3
+
+
+def test_reconciles_lost_successor_create_response(tmp_path: Path) -> None:
+    provider = _Provider(lose_create_response=True)
+    publisher = _publisher(tmp_path, provider)
+    predecessor = publisher.publish(_request())
+
+    receipt = publisher.supersede(_supersede_request(predecessor))
+
+    assert receipt.successor_number == 8
+    assert provider.create_calls == 2
+    assert len(provider.pull_requests) == 2
+
+
+def test_rejects_predecessor_branch_from_another_change_before_provider_write(tmp_path: Path) -> None:
+    provider = _Provider()
+    publisher = _publisher(tmp_path, provider)
+    predecessor = publisher.publish(_request())
+
+    with pytest.raises(ValueError, match="predecessor branch does not belong"):
+        _supersede_request(predecessor, predecessor_branch="owlbear/change/other-change")
+
+    assert provider.create_calls == 1
 
 
 def test_mark_ready_reconciles_lost_response_and_replays_durable_receipt(tmp_path: Path) -> None:

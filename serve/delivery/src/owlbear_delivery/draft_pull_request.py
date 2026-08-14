@@ -28,6 +28,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 _CHANGE_ID_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
+_CHANGE_BRANCH_PATTERN = r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*(?:\+s[1-9][0-9]*)?$"
+_SUCCESSOR_BRANCH_PATTERN = r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*\+s[1-9][0-9]*$"
 _OPERATION_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
 _SHA_PATTERN = r"^[0-9a-f]{40}$"
 _GENERATED_START = "<!-- owlbear-generated:start -->"
@@ -54,6 +56,34 @@ class CreateOrReconcileDraftPullRequest(_DraftPullRequestModel):
         return self
 
 
+class SupersedeDraftPullRequest(_DraftPullRequestModel):
+    """Bind one successor draft PR to the current predecessor publication."""
+
+    change_id: str = Field(pattern=_CHANGE_ID_PATTERN)
+    operation_id: str = Field(pattern=_OPERATION_ID_PATTERN)
+    expected_predecessor_receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    predecessor_branch: str = Field(pattern=_CHANGE_BRANCH_PATTERN)
+    predecessor_head: str = Field(pattern=_SHA_PATTERN)
+    successor_branch: str = Field(pattern=_SUCCESSOR_BRANCH_PATTERN)
+    superseding_head: str = Field(pattern=_SHA_PATTERN)
+    title: str = Field(min_length=1, max_length=256)
+    generated_summary: str = Field(min_length=1, max_length=50_000)
+
+    @model_validator(mode="after")
+    def _validate_request(self) -> SupersedeDraftPullRequest:
+        _require_safe_generated_summary(self.generated_summary)
+        if not _is_change_publication_branch(self.predecessor_branch, self.change_id):
+            msg = "predecessor branch does not belong to the requested Change"
+            raise ValueError(msg)
+        if not _is_change_publication_branch(self.successor_branch, self.change_id):
+            msg = "successor branch does not belong to the requested Change"
+            raise ValueError(msg)
+        if self.predecessor_branch == self.successor_branch:
+            msg = "supersession requires a distinct successor branch"
+            raise ValueError(msg)
+        return self
+
+
 class UpdateGeneratedPullRequestSummary(_DraftPullRequestModel):
     """Replace only OwlBear's generated block at one published Change head."""
 
@@ -77,6 +107,12 @@ class ObserveChangePublicationChecks(_DraftPullRequestModel):
 
 class ObserveChangePublicationPullRequest(_DraftPullRequestModel):
     """Observe the current provider state of one bound publication pull request."""
+
+    change_id: str = Field(pattern=_CHANGE_ID_PATTERN)
+
+
+class ReadChangePublicationHistory(_DraftPullRequestModel):
+    """Read ordered provider publication identities for one Change."""
 
     change_id: str = Field(pattern=_CHANGE_ID_PATTERN)
 
@@ -125,6 +161,92 @@ class DraftPullRequestPublicationReceipt(_DraftPullRequestModel):
         payload = self.model_dump(mode="json", exclude={"receipt_id"})
         if self.receipt_id != _digest(payload):
             msg = "draft pull-request receipt identity is invalid"
+            raise ValueError(msg)
+        return self
+
+
+class DraftPullRequestPublicationHistory(_DraftPullRequestModel):
+    """Ordered immutable publication identities for one Change."""
+
+    schema_version: Literal[1] = 1
+    history_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: str = Field(pattern=_CHANGE_ID_PATTERN)
+    publications: tuple[DraftPullRequestPublicationReceipt, ...] = Field(min_length=1)
+    predecessor_receipt_ids: tuple[str | None, ...] = Field(min_length=1)
+    current_receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _validate_history(self) -> DraftPullRequestPublicationHistory:
+        if len(self.publications) != len(self.predecessor_receipt_ids):
+            msg = "publication history entries and predecessor identities must align"
+            raise ValueError(msg)
+        receipt_ids = tuple(publication.receipt_id for publication in self.publications)
+        if len(receipt_ids) != len(set(receipt_ids)):
+            msg = "publication history receipt identities must be unique"
+            raise ValueError(msg)
+        if any(publication.change_id != self.change_id for publication in self.publications):
+            msg = "publication history entries must bind the same Change"
+            raise ValueError(msg)
+        if self.predecessor_receipt_ids[0] is not None:
+            msg = "the first publication history entry cannot have a predecessor"
+            raise ValueError(msg)
+        for index in range(1, len(receipt_ids)):
+            if self.predecessor_receipt_ids[index] != receipt_ids[index - 1]:
+                msg = "publication history entries must form one ordered predecessor chain"
+                raise ValueError(msg)
+        if self.current_receipt_id != receipt_ids[-1]:
+            msg = "publication history current identity must be its last entry"
+            raise ValueError(msg)
+        payload = self.model_dump(mode="json", exclude={"history_id"})
+        if self.history_id != _digest(payload):
+            msg = "publication history identity is invalid"
+            raise ValueError(msg)
+        return self
+
+
+class DraftPullRequestSupersessionReceipt(_DraftPullRequestModel):
+    """Immutable evidence linking one predecessor PR publication to its successor."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=_OPERATION_ID_PATTERN)
+    change_id: str = Field(pattern=_CHANGE_ID_PATTERN)
+    predecessor_receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    predecessor_branch: str = Field(pattern=_CHANGE_BRANCH_PATTERN)
+    predecessor_head: str = Field(pattern=_SHA_PATTERN)
+    successor_receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    successor_branch: str = Field(pattern=_SUCCESSOR_BRANCH_PATTERN)
+    superseding_head: str = Field(pattern=_SHA_PATTERN)
+    repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    successor_number: int = Field(gt=0)
+    successor_node_id: str = Field(min_length=1)
+    base_branch: str = Field(min_length=1)
+    provider_evidence_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    predecessor_publication: DraftPullRequestPublicationReceipt
+    successor_publication: DraftPullRequestPublicationReceipt
+
+    @model_validator(mode="after")
+    def _validate_receipt_id(self) -> DraftPullRequestSupersessionReceipt:
+        if (
+            self.predecessor_publication.receipt_id != self.predecessor_receipt_id
+            or self.predecessor_publication.change_id != self.change_id
+            or self.predecessor_publication.head_branch != self.predecessor_branch
+            or self.predecessor_publication.head_sha != self.predecessor_head
+            or self.successor_publication.receipt_id != self.successor_receipt_id
+            or self.successor_publication.change_id != self.change_id
+            or self.successor_publication.repository != self.repository
+            or self.successor_publication.number != self.successor_number
+            or self.successor_publication.node_id != self.successor_node_id
+            or self.successor_publication.head_branch != self.successor_branch
+            or self.successor_publication.head_sha != self.superseding_head
+            or self.successor_publication.base_branch != self.base_branch
+            or self.successor_publication.provider_evidence_digest != self.provider_evidence_digest
+        ):
+            msg = "draft pull-request supersession receipt does not match its successor publication"
+            raise ValueError(msg)
+        payload = self.model_dump(mode="json", exclude={"receipt_id"})
+        if self.receipt_id != _digest(payload):
+            msg = "draft pull-request supersession receipt identity is invalid"
             raise ValueError(msg)
         return self
 
@@ -268,6 +390,31 @@ class _DraftPullRequestOperation(_DraftPullRequestModel):
     body: str = Field(min_length=1, max_length=_MAX_PULL_REQUEST_BODY_LENGTH)
 
 
+class _DraftPullRequestSupersessionOperation(_DraftPullRequestModel):
+    schema_version: Literal[1] = 1
+    operation_id: str = Field(pattern=_OPERATION_ID_PATTERN)
+    change_id: str = Field(pattern=_CHANGE_ID_PATTERN)
+    repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    expected_predecessor_receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    predecessor_branch: str = Field(pattern=_CHANGE_BRANCH_PATTERN)
+    predecessor_head: str = Field(pattern=_SHA_PATTERN)
+    successor_branch: str = Field(pattern=_SUCCESSOR_BRANCH_PATTERN)
+    superseding_head: str = Field(pattern=_SHA_PATTERN)
+    base_branch: str = Field(min_length=1)
+    title: str = Field(min_length=1, max_length=256)
+    body: str = Field(min_length=1, max_length=_MAX_PULL_REQUEST_BODY_LENGTH)
+
+    @property
+    def head_branch(self) -> str:
+        """Project the shared provider-operation branch field."""
+        return self.successor_branch
+
+    @property
+    def head_sha(self) -> str:
+        """Project the shared provider-operation head field."""
+        return self.superseding_head
+
+
 class _GeneratedSummaryOperation(_DraftPullRequestModel):
     schema_version: Literal[1] = 1
     operation_id: str = Field(pattern=_OPERATION_ID_PATTERN)
@@ -300,8 +447,10 @@ type _PublicationRequest = (
     | MarkChangePullRequestReady
     | ObserveChangePublicationChecks
     | ObserveChangePublicationPullRequest
+    | ReadChangePublicationHistory
     | ReadChangePublicationCheckObservations
     | ReturnChangePullRequestToDraft
+    | SupersedeDraftPullRequest
     | UpdateGeneratedPullRequestSummary
 )
 
@@ -342,6 +491,27 @@ class DraftPullRequestPublisher:
         lock_root = self._state_root / "locks" / request.change_id
         with locked_roots((lock_root,)):
             return self._publish_locked(request)
+
+    def supersede(self, request: SupersedeDraftPullRequest) -> DraftPullRequestSupersessionReceipt:
+        """Create or recover one successor draft PR for an exact predecessor publication."""
+        lock_root = self._state_root / "locks" / request.change_id
+        with locked_roots((lock_root,)):
+            return self._supersede_locked(request)
+
+    def read_publication_history(
+        self,
+        request: ReadChangePublicationHistory,
+    ) -> DraftPullRequestPublicationHistory | None:
+        """Read ordered publication identities without observing provider state."""
+        lock_root = self._state_root / "locks" / request.change_id
+        with locked_roots((lock_root,)):
+            history = self._read_history(request)
+            if history is not None:
+                return history
+            receipt = self._read_receipt(request)
+            if receipt is None:
+                return None
+            return _publication_history((receipt,), (None,), request.change_id)
 
     def update_generated_summary(
         self,
@@ -696,10 +866,311 @@ class DraftPullRequestPublisher:
         self._validate_pull_request(pull_request, operation, request)
         return self._bind_receipt(self._receipt(operation, pull_request), request)
 
+    def _supersede_locked(
+        self,
+        request: SupersedeDraftPullRequest,
+    ) -> DraftPullRequestSupersessionReceipt:
+        operation = self._read_supersession_operation(request)
+        predecessor: DraftPullRequestPublicationReceipt | None = None
+        if operation is None:
+            predecessor = self._read_receipt(request)
+            if predecessor is None:
+                self._conflict(request, "Change has no predecessor pull-request publication receipt")
+            self._validate_supersession_predecessor(predecessor, request)
+            self._validate_predecessor_pull_request(predecessor, request)
+            operation = self._bind_supersession_operation(self._supersession_operation(request), request)
+        else:
+            self._validate_supersession_operation(operation, request)
+
+        existing = self._read_supersession_receipt(request)
+        if existing is not None:
+            self._validate_supersession_receipt(existing, operation, request)
+            self._persist_superseded_publication(existing, request)
+            return existing
+
+        repository = self._provider.read_repository(operation.repository)
+        if repository.repository != operation.repository:
+            self._invalid_response(request, "provider returned a different repository identity")
+        pull_request = self._find(operation)
+        if pull_request is None:
+            pull_request = self._create_or_reconcile(operation)
+        self._validate_pull_request(pull_request, operation, request)
+        successor = self._supersession_publication(operation, pull_request)
+        receipt = self._supersession_receipt(
+            operation,
+            predecessor or self._predecessor_publication(operation, request),
+            successor,
+            pull_request,
+        )
+        bound = self._bind_supersession_receipt(receipt, request)
+        self._persist_superseded_publication(bound, request)
+        return bound
+
+    def _supersession_operation(
+        self,
+        request: SupersedeDraftPullRequest,
+    ) -> _DraftPullRequestSupersessionOperation:
+        return _DraftPullRequestSupersessionOperation(
+            operation_id=request.operation_id,
+            change_id=request.change_id,
+            repository=self._repository,
+            expected_predecessor_receipt_id=request.expected_predecessor_receipt_id,
+            predecessor_branch=request.predecessor_branch,
+            predecessor_head=request.predecessor_head,
+            successor_branch=request.successor_branch,
+            superseding_head=request.superseding_head,
+            base_branch=self._target_branch,
+            title=request.title,
+            body=_draft_body(request.change_id, request.generated_summary),
+        )
+
+    def _bind_supersession_operation(
+        self,
+        operation: _DraftPullRequestSupersessionOperation,
+        request: SupersedeDraftPullRequest,
+    ) -> _DraftPullRequestSupersessionOperation:
+        path = self._supersession_operation_path(request)
+        existing = self._publish_or_read(path, operation, _DraftPullRequestSupersessionOperation, request)
+        if existing != operation:
+            self._conflict(request, "draft pull-request supersession operation differs from stored operation")
+        return existing
+
+    def _read_supersession_operation(
+        self,
+        request: SupersedeDraftPullRequest,
+    ) -> _DraftPullRequestSupersessionOperation | None:
+        return self._read_state(
+            self._supersession_operation_path(request),
+            _DraftPullRequestSupersessionOperation,
+            request,
+        )
+
+    def _validate_supersession_operation(
+        self,
+        operation: _DraftPullRequestSupersessionOperation,
+        request: SupersedeDraftPullRequest,
+    ) -> None:
+        expected = self._supersession_operation(request)
+        if operation != expected:
+            self._conflict(request, "draft pull-request supersession request differs from stored operation")
+
+    def _validate_supersession_predecessor(
+        self,
+        predecessor: DraftPullRequestPublicationReceipt,
+        request: SupersedeDraftPullRequest,
+    ) -> None:
+        if (
+            predecessor.receipt_id != request.expected_predecessor_receipt_id
+            or predecessor.change_id != request.change_id
+            or predecessor.head_branch != request.predecessor_branch
+            or predecessor.head_sha != request.predecessor_head
+            or predecessor.base_branch != self._target_branch
+        ):
+            self._conflict(request, "supersession predecessor does not match the requested publication identity")
+
+    def _validate_predecessor_pull_request(
+        self,
+        predecessor: DraftPullRequestPublicationReceipt,
+        request: SupersedeDraftPullRequest,
+    ) -> None:
+        pull_request = self._provider.read_pull_request(predecessor.repository, predecessor.number)
+        if (
+            pull_request.repository != predecessor.repository
+            or pull_request.number != predecessor.number
+            or pull_request.node_id != predecessor.node_id
+            or pull_request.head_branch != predecessor.head_branch
+            or pull_request.head_sha != predecessor.head_sha
+            or pull_request.base_branch != predecessor.base_branch
+        ):
+            self._conflict(request, "provider predecessor pull request moved outside its publication identity")
+
+    def _predecessor_publication(
+        self,
+        operation: _DraftPullRequestSupersessionOperation,
+        request: SupersedeDraftPullRequest,
+    ) -> DraftPullRequestPublicationReceipt:
+        history = self._read_history(request)
+        if history is not None:
+            for publication in history.publications:
+                if publication.receipt_id == operation.expected_predecessor_receipt_id:
+                    return publication
+        receipt = self._read_receipt(request)
+        if receipt is not None and receipt.receipt_id == operation.expected_predecessor_receipt_id:
+            return receipt
+        return self._conflict(request, "supersession predecessor publication is unavailable")
+
+    def _supersession_publication(
+        self,
+        operation: _DraftPullRequestSupersessionOperation,
+        pull_request: PublicationPullRequest,
+    ) -> DraftPullRequestPublicationReceipt:
+        payload = {
+            "schema_version": 1,
+            "operation_id": operation.operation_id,
+            "change_id": operation.change_id,
+            "repository": pull_request.repository,
+            "number": pull_request.number,
+            "node_id": pull_request.node_id,
+            "head_branch": pull_request.head_branch,
+            "head_sha": pull_request.head_sha,
+            "base_branch": pull_request.base_branch,
+            "provider_evidence_digest": _digest(pull_request.model_dump(mode="json")),
+        }
+        return DraftPullRequestPublicationReceipt(receipt_id=_digest(payload), **payload)
+
+    def _supersession_receipt(
+        self,
+        operation: _DraftPullRequestSupersessionOperation,
+        predecessor: DraftPullRequestPublicationReceipt,
+        successor: DraftPullRequestPublicationReceipt,
+        pull_request: PublicationPullRequest,
+    ) -> DraftPullRequestSupersessionReceipt:
+        payload = {
+            "schema_version": 1,
+            "operation_id": operation.operation_id,
+            "change_id": operation.change_id,
+            "predecessor_receipt_id": predecessor.receipt_id,
+            "predecessor_branch": predecessor.head_branch,
+            "predecessor_head": predecessor.head_sha,
+            "successor_receipt_id": successor.receipt_id,
+            "successor_branch": successor.head_branch,
+            "superseding_head": successor.head_sha,
+            "repository": pull_request.repository,
+            "successor_number": pull_request.number,
+            "successor_node_id": pull_request.node_id,
+            "base_branch": pull_request.base_branch,
+            "provider_evidence_digest": successor.provider_evidence_digest,
+            "predecessor_publication": predecessor,
+            "successor_publication": successor,
+        }
+        candidate = DraftPullRequestSupersessionReceipt.model_construct(receipt_id="0" * 64, **payload)
+        receipt_id = _digest(candidate.model_dump(mode="json", exclude={"receipt_id"}))
+        return DraftPullRequestSupersessionReceipt(receipt_id=receipt_id, **payload)
+
+    def _read_supersession_receipt(
+        self,
+        request: SupersedeDraftPullRequest,
+    ) -> DraftPullRequestSupersessionReceipt | None:
+        return self._read_state(
+            self._supersession_receipt_path(request),
+            DraftPullRequestSupersessionReceipt,
+            request,
+        )
+
+    def _bind_supersession_receipt(
+        self,
+        receipt: DraftPullRequestSupersessionReceipt,
+        request: SupersedeDraftPullRequest,
+    ) -> DraftPullRequestSupersessionReceipt:
+        path = self._supersession_receipt_path(request)
+        existing = self._publish_or_read(path, receipt, DraftPullRequestSupersessionReceipt, request)
+        if existing != receipt:
+            self._conflict(request, "Change is already bound to a different supersession receipt")
+        return existing
+
+    def _validate_supersession_receipt(
+        self,
+        receipt: DraftPullRequestSupersessionReceipt,
+        operation: _DraftPullRequestSupersessionOperation,
+        request: SupersedeDraftPullRequest,
+    ) -> None:
+        if (
+            receipt.operation_id != operation.operation_id
+            or receipt.change_id != operation.change_id
+            or receipt.predecessor_receipt_id != operation.expected_predecessor_receipt_id
+            or receipt.predecessor_branch != operation.predecessor_branch
+            or receipt.predecessor_head != operation.predecessor_head
+            or receipt.successor_branch != operation.successor_branch
+            or receipt.superseding_head != operation.superseding_head
+            or receipt.base_branch != operation.base_branch
+            or receipt.successor_publication.operation_id != operation.operation_id
+        ):
+            self._conflict(request, "stored supersession receipt differs from the operation")
+
+    def _persist_superseded_publication(
+        self,
+        receipt: DraftPullRequestSupersessionReceipt,
+        request: SupersedeDraftPullRequest,
+    ) -> None:
+        history = self._read_history(request)
+        if history is None:
+            candidate = _publication_history(
+                (receipt.predecessor_publication, receipt.successor_publication),
+                (None, receipt.predecessor_receipt_id),
+                request.change_id,
+            )
+        elif history.current_receipt_id == receipt.successor_receipt_id:
+            candidate = history
+        else:
+            if history.current_receipt_id != receipt.predecessor_receipt_id:
+                self._conflict(request, "publication history has a different current predecessor")
+            candidate = _publication_history(
+                (*history.publications, receipt.successor_publication),
+                (*history.predecessor_receipt_ids, receipt.predecessor_receipt_id),
+                request.change_id,
+            )
+        self._write_history(candidate, request)
+        self._write_current_receipt(receipt.successor_publication, receipt, request)
+
+    def _write_history(
+        self,
+        history: DraftPullRequestPublicationHistory,
+        request: _PublicationRequest,
+    ) -> None:
+        path = self._history_path(request.change_id)
+        with locked_roots((self._state_root,)):
+            self._require_directory(path.parent)
+            self._reject_symlink(path, request)
+            try:
+                content = path.read_bytes()
+            except FileNotFoundError:
+                atomic_write(path, history.model_dump_json(indent=2) + "\n")
+                return
+        try:
+            existing = DraftPullRequestPublicationHistory.model_validate_json(content)
+        except ValidationError as exc:
+            self._invalid_response(request, "stored publication history is invalid", cause=exc)
+        if existing == history:
+            return
+        if (
+            history.change_id != existing.change_id
+            or history.publications[:-1] != existing.publications
+            or history.predecessor_receipt_ids[:-1] != existing.predecessor_receipt_ids
+            or history.publications[-1].receipt_id != history.current_receipt_id
+        ):
+            self._conflict(request, "stored publication history differs from the supersession result")
+        with locked_roots((self._state_root,)):
+            atomic_write(path, history.model_dump_json(indent=2) + "\n")
+
+    def _write_current_receipt(
+        self,
+        successor: DraftPullRequestPublicationReceipt,
+        supersession: DraftPullRequestSupersessionReceipt,
+        request: SupersedeDraftPullRequest,
+    ) -> None:
+        path = self._path("receipts", request.change_id)
+        with locked_roots((self._state_root,)):
+            self._require_directory(path.parent)
+            self._reject_symlink(path, request)
+            try:
+                content = path.read_bytes()
+            except FileNotFoundError:
+                atomic_write(path, successor.model_dump_json(indent=2) + "\n")
+                return
+        try:
+            existing = DraftPullRequestPublicationReceipt.model_validate_json(content)
+        except ValidationError as exc:
+            self._invalid_response(request, "stored draft pull-request receipt is invalid", cause=exc)
+        if existing.receipt_id not in {
+            supersession.predecessor_receipt_id,
+            supersession.successor_receipt_id,
+        }:
+            self._conflict(request, "stored draft pull-request receipt is outside the supersession history")
+        if existing != successor:
+            with locked_roots((self._state_root,)):
+                atomic_write(path, successor.model_dump_json(indent=2) + "\n")
+
     def _operation(self, request: CreateOrReconcileDraftPullRequest) -> _DraftPullRequestOperation:
-        marker = _change_marker(request.change_id)
-        summary = request.generated_summary.rstrip()
-        body = f"{marker}\n\n{_GENERATED_START}\n{summary}\n{_GENERATED_END}\n"
         return _DraftPullRequestOperation(
             operation_id=request.operation_id,
             change_id=request.change_id,
@@ -708,7 +1179,7 @@ class DraftPullRequestPublisher:
             head_sha=request.published_head,
             base_branch=self._target_branch,
             title=request.title,
-            body=body,
+            body=_draft_body(request.change_id, request.generated_summary),
         )
 
     def _find(self, operation: _DraftPullRequestOperation) -> PublicationPullRequest | None:
@@ -800,6 +1271,22 @@ class DraftPullRequestPublisher:
         self,
         request: _PublicationRequest,
     ) -> DraftPullRequestPublicationReceipt | None:
+        history = self._read_history(request)
+        if history is not None:
+            path = self._path("receipts", request.change_id)
+            with locked_roots((self._state_root,)):
+                self._reject_symlink(path, request)
+                try:
+                    content = path.read_bytes()
+                except FileNotFoundError:
+                    return history.publications[-1]
+            try:
+                current = DraftPullRequestPublicationReceipt.model_validate_json(content)
+            except ValidationError as exc:
+                self._invalid_response(request, "stored draft pull-request receipt is invalid", cause=exc)
+            if current.receipt_id not in {publication.receipt_id for publication in history.publications}:
+                self._conflict(request, "stored draft pull-request receipt is outside the publication history")
+            return history.publications[-1]
         path = self._path("receipts", request.change_id)
         with locked_roots((self._state_root,)):
             self._reject_symlink(path, request)
@@ -811,6 +1298,16 @@ class DraftPullRequestPublisher:
             return DraftPullRequestPublicationReceipt.model_validate_json(content)
         except ValidationError as exc:
             self._invalid_response(request, "stored draft pull-request receipt is invalid", cause=exc)
+
+    def _read_history(
+        self,
+        request: _PublicationRequest,
+    ) -> DraftPullRequestPublicationHistory | None:
+        return self._read_state(
+            self._history_path(request.change_id),
+            DraftPullRequestPublicationHistory,
+            request,
+        )
 
     def _bind_receipt(
         self,
@@ -1004,6 +1501,15 @@ class DraftPullRequestPublisher:
     def _operation_path(self, request: CreateOrReconcileDraftPullRequest) -> Path:
         return self._state_root / "operations" / f"{request.change_id}--{request.operation_id}.json"
 
+    def _supersession_operation_path(self, request: SupersedeDraftPullRequest) -> Path:
+        return self._state_root / "supersession-operations" / f"{request.change_id}--{request.operation_id}.json"
+
+    def _supersession_receipt_path(self, request: SupersedeDraftPullRequest) -> Path:
+        return self._state_root / "supersession-receipts" / f"{request.change_id}--{request.operation_id}.json"
+
+    def _history_path(self, change_id: str) -> Path:
+        return self._state_root / "publication-history" / f"{change_id}.json"
+
     def _path(self, kind: str, change_id: str) -> Path:
         return self._state_root / kind / f"{change_id}.json"
 
@@ -1081,6 +1587,39 @@ def _change_marker(change_id: str) -> str:
     return f"<!-- owlbear-change:{change_id} -->"
 
 
+def _is_change_publication_branch(branch: str, change_id: str) -> bool:
+    canonical = f"owlbear/change/{change_id}"
+    if branch == canonical:
+        return True
+    suffix = branch.removeprefix(f"{canonical}+s")
+    return suffix.isdecimal() and not suffix.startswith("0")
+
+
+def _draft_body(change_id: str, generated_summary: str) -> str:
+    marker = _change_marker(change_id)
+    summary = generated_summary.rstrip()
+    return f"{marker}\n\n{_GENERATED_START}\n{summary}\n{_GENERATED_END}\n"
+
+
+def _publication_history(
+    publications: tuple[DraftPullRequestPublicationReceipt, ...],
+    predecessor_receipt_ids: tuple[str | None, ...],
+    change_id: str,
+) -> DraftPullRequestPublicationHistory:
+    payload = {
+        "schema_version": 1,
+        "change_id": change_id,
+        "publications": publications,
+        "predecessor_receipt_ids": predecessor_receipt_ids,
+        "current_receipt_id": publications[-1].receipt_id,
+    }
+    candidate = DraftPullRequestPublicationHistory.model_construct(history_id="0" * 64, **payload)
+    return DraftPullRequestPublicationHistory(
+        history_id=_digest(candidate.model_dump(mode="json", exclude={"history_id"})),
+        **payload,
+    )
+
+
 def _require_safe_generated_summary(generated_summary: str) -> None:
     reserved_tokens = (_GENERATED_START, _GENERATED_END, "<!-- owlbear-change:")
     if any(token in generated_summary for token in reserved_tokens):
@@ -1102,6 +1641,8 @@ def _request_operation(request: _PublicationRequest) -> str:
         return "observe_change_publication_checks"
     if isinstance(request, ObserveChangePublicationPullRequest):
         return "observe_change_publication_pull_request"
+    if isinstance(request, ReadChangePublicationHistory):
+        return "read_change_publication_history"
     return request.operation_id
 
 
