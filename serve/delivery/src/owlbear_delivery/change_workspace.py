@@ -674,6 +674,52 @@ class ChangeWorkspaceManager:
         )
         return self._coordinator.register(coordination)
 
+    def recover(self, change_id: str, recovery_reviewed_head: str) -> ChangeCoordination:
+        """Recreate one absent managed Change worktree from exact reviewed authority."""
+        if not _is_change_id(change_id):
+            msg = "change identity is not a safe worktree identity"
+            raise ValueError(msg)
+        if re.fullmatch(r"[0-9a-f]{40}", recovery_reviewed_head) is None:
+            msg = "recovery reviewed head is not a valid commit identity"
+            raise ValueError(msg)
+        try:
+            existing = self._coordinator.show(change_id)
+        except CoordinationConflictError:
+            existing = None
+        expected_branch = f"owlbear/change/{change_id}"
+        expected_path = self._worktree_root / change_id
+        branch = expected_branch
+        if existing is not None:
+            self._validate_existing_coordination(existing, recovery_reviewed_head)
+            self._require_recovery_authority(existing)
+            expected_path = self._canonical_worktree_path(change_id, existing.worktree_path)
+            branch = existing.branch
+            if branch != expected_branch:
+                self._raise_worktree_attention(change_id, {ChangeWorktreeAttentionCode.BRANCH_MISMATCH})
+        branch_head = self._resolve(branch, missing_ok=True)
+        if branch_head is None:
+            self._raise_worktree_attention(change_id, {ChangeWorktreeAttentionCode.BRANCH_MISSING})
+        self._require_ancestor(recovery_reviewed_head, branch_head)
+        registrations = self._registered_worktrees_all()
+        self._raise_worktree_attention(
+            change_id,
+            self._recovery_attention(expected_path, expected_branch, registrations, branch_head),
+        )
+        if not expected_path.exists():
+            registered = registrations.get(expected_path)
+            if registered is not None:
+                self.remove_worktree(self._repository, expected_path)
+                registrations = self._registered_worktrees_all()
+                if expected_path in registrations or any(
+                    record.branch == expected_branch for record in registrations.values()
+                ):
+                    self._raise_worktree_attention(
+                        change_id,
+                        {ChangeWorktreeAttentionCode.OWNERSHIP_AMBIGUOUS},
+                    )
+            self.restore_worktree(self._repository, expected_path, expected_branch)
+        return self.ensure(change_id, recovery_reviewed_head=recovery_reviewed_head)
+
     def _validate_existing_coordination(
         self,
         coordination: ChangeCoordination,
@@ -845,6 +891,13 @@ class ChangeWorkspaceManager:
         if coordination.publication_expiry is not None and coordination.publication_expiry > datetime.now(UTC):
             _coordination_conflict("Change worktree cleanup cannot overlap an active publication lease")
 
+    @staticmethod
+    def _require_recovery_authority(coordination: ChangeCoordination) -> None:
+        if coordination.writer is not None:
+            _coordination_conflict("Change worktree recovery cannot overlap an active writer")
+        if coordination.publication_expiry is not None and coordination.publication_expiry > datetime.now(UTC):
+            _coordination_conflict("Change worktree recovery cannot overlap an active publication lease")
+
     def _cleanup_intent_attention(
         self,
         change_id: str,
@@ -859,6 +912,33 @@ class ChangeWorkspaceManager:
             attention.add(ChangeWorktreeAttentionCode.BRANCH_MISMATCH)
         if intent.worktree_path.resolve() != expected_path.resolve():
             attention.add(ChangeWorktreeAttentionCode.COORDINATION_PATH_MISMATCH)
+        return attention
+
+    @staticmethod
+    def _recovery_attention(
+        expected_path: Path,
+        expected_branch: str,
+        registrations: dict[Path, _RegisteredGitWorktree],
+        branch_head: str,
+    ) -> set[ChangeWorktreeAttentionCode]:
+        attention: set[ChangeWorktreeAttentionCode] = set()
+        if expected_path.is_symlink() or (expected_path.exists() and not expected_path.is_dir()):
+            attention.add(ChangeWorktreeAttentionCode.UNEXPECTED_FILESYSTEM_STATE)
+        path_record = registrations.get(expected_path)
+        branch_records = [record for record in registrations.values() if record.branch == expected_branch]
+        if len(branch_records) > 1 or (path_record is not None and branch_records != [path_record]):
+            attention.add(ChangeWorktreeAttentionCode.OWNERSHIP_AMBIGUOUS)
+        if expected_path.exists() and path_record is None:
+            attention.add(ChangeWorktreeAttentionCode.GIT_REGISTRATION_MISSING)
+        if path_record is not None:
+            registered_attention = ChangeWorkspaceManager._cleanup_registered_record_attention(
+                path_record,
+                expected_branch,
+                branch_head,
+            )
+            if not expected_path.exists():
+                registered_attention.discard(ChangeWorktreeAttentionCode.PRUNABLE)
+            attention.update(registered_attention)
         return attention
 
     @staticmethod

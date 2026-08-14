@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -559,6 +560,49 @@ def test_ensure_refuses_missing_worktree_state_without_writes(tmp_path: Path, mi
     assert _workspace_bytes(repository, tmp_path / "state") == before
     if missing_state == "registration":
         assert (coordination.worktree_path / "preserved.txt").read_text(encoding="utf-8") == "preserve\n"
+
+
+def test_recover_recreates_missing_worktree_from_exact_reviewed_head(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("recoverable-change")
+    shutil.rmtree(coordination.worktree_path)
+
+    recovered = manager.recover(coordination.change_id, coordination.last_reviewed_commit)
+
+    assert recovered == coordination
+    assert recovered.worktree_path.is_dir()
+    assert _git(recovered.worktree_path, "rev-parse", "HEAD") == coordination.last_reviewed_commit
+    assert _git(repository, "worktree", "list", "--porcelain").count(str(recovered.worktree_path)) == 1
+    assert coordinator.show(coordination.change_id) == coordination
+
+
+def test_recover_rejects_unregistered_worktree_without_discarding_content(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("preserved-recovery")
+    _git(repository, "worktree", "remove", "--force", str(coordination.worktree_path))
+    coordination.worktree_path.mkdir(parents=True)
+    preserved = coordination.worktree_path / "preserved.txt"
+    preserved.write_text("preserve\n", encoding="utf-8")
+
+    with pytest.raises(ChangeWorktreeAttentionError) as raised:
+        manager.recover(coordination.change_id, coordination.last_reviewed_commit)
+
+    assert ChangeWorktreeAttentionCode.GIT_REGISTRATION_MISSING in raised.value.attention
+    assert preserved.read_text(encoding="utf-8") == "preserve\n"
+
+
+def test_recover_requires_the_registered_reviewed_head(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("exact-recovery")
+    shutil.rmtree(coordination.worktree_path)
+
+    with pytest.raises(CoordinationConflictError, match="recovery reviewed head differs"):
+        manager.recover(coordination.change_id, "a" * 40)
+
+    assert not coordination.worktree_path.exists()
 
 
 def test_ensure_preserves_dirty_change_worktree(tmp_path: Path) -> None:
