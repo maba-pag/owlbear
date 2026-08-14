@@ -1543,11 +1543,15 @@ def test_reconcile_awaiting_acceptance_ignores_ineligible_changes(tmp_path: Path
     assert application.reconcile_awaiting_acceptance() == ()
 
 
-def test_observe_acceptance_completes_once_and_replays_without_provider_io(tmp_path: Path) -> None:  # noqa: PLR0915
+def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # noqa: PLR0915
+    tmp_path: Path,
+    user_checkout_snapshot,
+) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
     )
+    repository = tmp_path / "repository"
     runtime = runtimes["change-a"]
     exact_head = coordinator.show("change-a").last_reviewed_commit
     finalization = application.finalize_change(
@@ -1622,6 +1626,7 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(tmp_p
             exact_head=exact_head,
         ),
     )
+    user_checkout_before = user_checkout_snapshot(repository)
     with pytest.raises(DeliveryAcceptanceWaitingError, match="still open and unmerged"):
         application.observe_acceptance("change-a")
     assert runtime.change_disposition() is None
@@ -1704,6 +1709,7 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(tmp_p
     assert len(retained) == 1
     assert retained[0].cleanup_eligible is True
     assert retained[0].cleanup_blocked_reason is None
+    user_checkout_before.assert_unchanged(repository)
 
 
 def test_change_lifecycle_dispositions_delegate_through_application_lock(tmp_path: Path) -> None:

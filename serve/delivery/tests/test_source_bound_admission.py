@@ -201,6 +201,42 @@ def test_admission_recovers_receipt_last_publication_and_replays_exact_sources(
     assert not (target_root / "delivery/changes/source-bound-change").exists()
 
 
+def test_admission_preserves_staged_user_checkout_outside_declared_package_path(
+    repository: Path,
+    user_checkout_snapshot,
+) -> None:
+    active_root = repository / ".owlbear/delivery/packages"
+    target_root = repository / ".owlbear/delivery/runtime"
+    package_store = DesignPackageStore(active_root, repository)
+    intent_bytes, design_bytes = _sources()
+    package_store.create("source-bound-change", intent_bytes, design_bytes)
+    _git(repository, "add", ".owlbear/delivery/packages")
+    _git(repository, "commit", "-m", "author source-bound package")
+    (repository / "product.txt").write_text("staged user work\n", encoding="utf-8")
+    _git(repository, "add", "product.txt")
+    (repository / "untracked-user.txt").write_text("untracked user work\n", encoding="utf-8")
+    before = user_checkout_snapshot(
+        repository,
+        ("refs/owlbear/packages/source-bound-change",),
+        (
+            ".owlbear/delivery/packages/source-bound-change",
+            ".owlbear/delivery/runtime",
+        ),
+    )
+
+    registry = DeliveryAuthorityRegistry(target_root, package_store, integration_target="product")
+    result = registry.admit(_request())
+    replayed = registry.admit(_request())
+
+    assert replayed.replayed is True
+    assert result.receipt.checkpoint_commit == _git(
+        repository,
+        "rev-parse",
+        "refs/owlbear/packages/source-bound-change",
+    )
+    before.assert_unchanged(repository)
+
+
 def test_rejected_package_validation_cannot_publish_during_later_recovery(
     repository: Path,
     tmp_path: Path,

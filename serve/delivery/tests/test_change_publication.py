@@ -1,3 +1,10 @@
+"""Publication proofs for user checkout state and declared Delivery surfaces.
+
+The state matrix covers staged, detached, mid-merge, and mid-rebase checkouts
+through publication and cleanup. It does not claim exhaustive coverage of every
+Git operation marker or every Delivery operation that can touch repository state.
+"""
+
 from __future__ import annotations
 
 import subprocess
@@ -94,6 +101,74 @@ def _advance_remote_target(tmp_path: Path, remote: Path, *, product: str | None 
     _git(target_repository, "commit", "-m", "advance target")
     _git(target_repository, "push", "origin", "HEAD:refs/heads/main")
     return _head(target_repository)
+
+
+def _prepare_user_checkout_state(repository: Path, user_state: str) -> None:
+    if user_state == "staged":
+        (repository / "product.txt").write_text("staged user work\n", encoding="utf-8")
+        _git(repository, "add", "product.txt")
+        (repository / "untracked-user.txt").write_text("untracked user work\n", encoding="utf-8")
+        return
+    if user_state == "detached":
+        _git(repository, "checkout", "--detach", "HEAD")
+        return
+    _git(repository, "config", "rebase.autoStash", "false")
+    branch = f"user-{user_state.removeprefix('mid-')}"
+    _git(repository, "checkout", "-b", branch)
+    (repository / "product.txt").write_text(f"{user_state} side\n", encoding="utf-8")
+    _git(repository, "add", "product.txt")
+    _git(repository, "commit", "-m", f"{user_state} side")
+    _git(repository, "checkout", "main")
+    (repository / "product.txt").write_text(f"{user_state} target\n", encoding="utf-8")
+    _git(repository, "add", "product.txt")
+    _git(repository, "commit", "-m", f"{user_state} target")
+    _git(repository, "checkout", branch)
+    if user_state == "mid-merge":
+        _git(repository, "merge", "main", check=False)
+    else:
+        _git(repository, "rebase", "--merge", "main", check=False)
+
+
+@pytest.mark.parametrize("user_state", ["staged", "detached", "mid-merge", "mid-rebase"])
+def test_publication_and_cleanup_preserve_user_checkout_states(
+    tmp_path: Path,
+    user_state: str,
+    user_checkout_snapshot,
+) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    _prepare_user_checkout_state(repository, user_state)
+    change_id = f"preserve-{user_state}"
+    allowed_refs = (
+        f"refs/heads/owlbear/change/{change_id}",
+        f"refs/remotes/origin/owlbear/change/{change_id}",
+        "refs/remotes/origin/main",
+    )
+    before = user_checkout_snapshot(repository, allowed_refs)
+
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, reviewed = _reviewed_change(manager, change_id)
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+
+    receipt = publisher.publish(
+        PublishChangeBranch(change_id=change_id, expected_remote_head=None, operation_id=f"{change_id}-publish")
+    )
+    replayed = publisher.publish(
+        PublishChangeBranch(change_id=change_id, expected_remote_head=None, operation_id=f"{change_id}-publish")
+    )
+    cleanup = manager.cleanup(change_id)
+
+    assert receipt.published_head == reviewed
+    assert replayed == receipt
+    assert cleanup.branch_head == reviewed
+    assert _head(remote, f"refs/heads/owlbear/change/{change_id}") == reviewed
+    assert _head(repository, "refs/remotes/origin/main") == initial
+    before.assert_unchanged(repository)
 
 
 def test_syncs_exact_fetched_target_in_managed_worktree_and_replays_without_ref_pollution(
