@@ -605,6 +605,22 @@ def test_recover_requires_the_registered_reviewed_head(tmp_path: Path) -> None:
     assert not coordination.worktree_path.exists()
 
 
+def test_recover_rejects_branch_registered_at_a_foreign_path(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("foreign-recovery")
+    _git(repository, "worktree", "remove", "--force", str(coordination.worktree_path))
+    foreign_path = tmp_path / "foreign-worktree"
+    _git(repository, "worktree", "add", str(foreign_path), coordination.branch)
+
+    with pytest.raises(ChangeWorktreeAttentionError) as raised:
+        manager.recover(coordination.change_id, coordination.last_reviewed_commit)
+
+    assert ChangeWorktreeAttentionCode.OWNERSHIP_AMBIGUOUS in raised.value.attention
+    assert foreign_path.is_dir()
+    assert not coordination.worktree_path.exists()
+
+
 def test_ensure_preserves_dirty_change_worktree(tmp_path: Path) -> None:
     repository, _initial = _repository(tmp_path)
     _coordinator, manager = _manager(tmp_path, repository)

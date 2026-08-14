@@ -926,7 +926,7 @@ class ChangeWorkspaceManager:
             attention.add(ChangeWorktreeAttentionCode.UNEXPECTED_FILESYSTEM_STATE)
         path_record = registrations.get(expected_path)
         branch_records = [record for record in registrations.values() if record.branch == expected_branch]
-        if len(branch_records) > 1 or (path_record is not None and branch_records != [path_record]):
+        if len(branch_records) > 1 or (branch_records and branch_records[0] is not path_record):
             attention.add(ChangeWorktreeAttentionCode.OWNERSHIP_AMBIGUOUS)
         if expected_path.exists() and path_record is None:
             attention.add(ChangeWorktreeAttentionCode.GIT_REGISTRATION_MISSING)
