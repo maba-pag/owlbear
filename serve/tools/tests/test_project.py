@@ -112,6 +112,40 @@ def test_target_branch_accepts_acceptance_completed_delivery_work(
     assert "dev -> release" in capsys.readouterr().out
 
 
+def test_target_branch_accepts_legacy_integration_completed_delivery_work(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: object,
+) -> None:
+    config = tmp_path / ".owlbear/delivery/config.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        '{"schema_version":2,"remote":"origin","target_branch":"dev","github_repository":"example/project"}\n',
+        encoding="utf-8",
+    )
+    frontier = tmp_path / ".owlbear/delivery/runtime/changes/example/frontier.json"
+    frontier.parent.mkdir(parents=True)
+    frontier.write_text(
+        json.dumps(
+            {
+                "bindings": [],
+                "integration_result_id": "a" * 64,
+                "integration_completion": {"completion_id": "a" * 64},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["target-branch", "release"])
+
+    with patch("owlbear_tools.project._run", side_effect=_git_result):
+        target_branch()
+
+    assert json.loads(config.read_text(encoding="utf-8"))["target_branch"] == "release"
+    assert "dev -> release" in capsys.readouterr().out
+
+
 def test_target_branch_rejects_idle_change_coordination_without_frontier(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

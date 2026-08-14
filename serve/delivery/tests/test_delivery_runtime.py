@@ -26,6 +26,7 @@ from owlbear_delivery import (
     DeliveryActiveClaim,
     DeliveryAcceptanceWaitingError,
     DeliveryChangeAbandonment,
+    DeliveryChangeCompletion,
     DeliveryChangeDeferral,
     DeliveryChangeStage,
     DeliveryChangeDisposition,
@@ -993,6 +994,20 @@ def test_change_deferral_rejects_active_claims(tmp_path: Path) -> None:
 
     with pytest.raises(DeliveryRuntimeConflictError, match="cannot overlap an active mutation claim"):
         runtime.defer_change("pause", datetime(2026, 8, 11, 17, tzinfo=UTC))
+
+
+def test_frontier_rejects_deferred_change_with_completion_authority(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    runtime.defer_change("pause for user review", datetime(2026, 8, 11, 17, tzinfo=UTC))
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    payload = frontier.model_dump(mode="python")
+    payload["change_completion"] = DeliveryChangeCompletion(
+        completion_id="a" * 64,
+        completed_at=datetime(2026, 8, 11, 18, tzinfo=UTC),
+    )
+
+    with pytest.raises(ValueError, match="deferred Change cannot retain terminal completion authority"):
+        DeliveryFrontier.model_validate(payload)
 
 
 def test_change_abandonment_is_terminal_and_idempotent(tmp_path: Path) -> None:

@@ -80,6 +80,14 @@ def _remote_target_exists(root: Path, remote: str, branch: str) -> bool:
     return syntax == 0 and exists == 0
 
 
+def _has_terminal_completion(frontier: dict[str, object]) -> bool:
+    if frontier.get("change_completion") is not None:
+        return True
+    completion = frontier.get("integration_completion")
+    result_id = frontier.get("integration_result_id")
+    return isinstance(completion, dict) and isinstance(result_id, str) and completion.get("completion_id") == result_id
+
+
 def _remote_github_repository(root: Path, remote: str) -> str | None:
     completed = subprocess.run(  # noqa: S603
         ["git", "remote", "get-url", remote],  # noqa: S607
@@ -151,7 +159,7 @@ def _delivery_blockers(root: Path) -> list[str]:
         ]
         if any(claim is not None for claim in active_claims) or frontier.get("integration_repair_claim") is not None:
             blockers.append(f"active Delivery claim: {path.parent.name}")
-        elif frontier.get("change_completion") is None:
+        elif not _has_terminal_completion(frontier):
             blockers.append(f"unfinished Delivery change: {path.parent.name}")
     for path in sorted(root.glob(_COORDINATION_GLOB)):
         try:

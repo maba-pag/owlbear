@@ -325,6 +325,18 @@ def test_retirement_ignores_completionless_legacy_frontier(tmp_path: Path) -> No
     assert plan.changes == ()
 
 
+def test_retirement_accepts_schema_fifteen_legacy_completion(tmp_path: Path) -> None:
+    repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
+    frontier_path = delivery_root / "runtime/changes/change-a/frontier.json"
+    frontier = json.loads(frontier_path.read_bytes())
+    frontier["schema_version"] = 15
+    frontier_path.write_bytes(_canonical(frontier))
+
+    plan = plan_delivery_integration_retirement(repository)
+
+    assert tuple(change.change_id for change in plan.changes) == ("change-a",)
+
+
 def test_retirement_removes_per_change_publication_state(tmp_path: Path) -> None:
     repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
     artifacts = _publication_artifacts(delivery_root)

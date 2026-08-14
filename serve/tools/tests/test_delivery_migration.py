@@ -18,6 +18,7 @@ from owlbear_delivery import (
     DeliveryCommitmentClass,
     DeliveryContract,
     DeliveryFrontier,
+    DeliveryIntegrationCompletion,
     DeliveryOutcome,
     DeliveryPlanScope,
     DeliverySourceBinding,
@@ -136,6 +137,78 @@ def _legacy_repository(tmp_path: Path) -> tuple[Path, Path, bytes]:
     config.parent.mkdir(parents=True)
     config.write_text('{"schema_version":1,"integration_target":"main"}\n', encoding="utf-8")
     return repository, legacy_worktree, frontier_bytes
+
+
+def _legacy_completion() -> DeliveryIntegrationCompletion:
+    return DeliveryIntegrationCompletion(
+        completion_id="a" * 64,
+        candidate_id="b" * 64,
+        package_id="c" * 64,
+        target_commit="1" * 40,
+        completion_path=".owlbear/completed/delivery-runtime.json",
+    )
+
+
+def _write_legacy_completion(repository: Path, completion: DeliveryIntegrationCompletion) -> bytes:
+    path = repository / ".owlbear/target/delivery/changes/change-a/frontier.json"
+    payload = json.loads(path.read_bytes())
+    payload["schema_version"] = 15
+    payload["integration_result_id"] = completion.completion_id
+    payload["integration_completion"] = completion.model_dump(mode="json")
+    content = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    path.write_bytes(content)
+    return content
+
+
+def test_migration_accepts_legacy_integration_completion_as_terminal(tmp_path: Path) -> None:
+    repository, _legacy_worktree, _frontier_bytes = _legacy_repository(tmp_path)
+    completion = _legacy_completion()
+    legacy_bytes = _write_legacy_completion(repository, completion)
+
+    plan = plan_delivery_state_migration(repository)
+
+    assert plan.changes[0].legacy_completion == completion
+    apply_delivery_state_migration(plan)
+
+    assert (repository / ".owlbear/delivery/runtime/changes/change-a/frontier.json").read_bytes() == legacy_bytes
+
+
+def test_migration_rejects_legacy_completion_identity_mismatch(tmp_path: Path) -> None:
+    repository, legacy_worktree, _frontier_bytes = _legacy_repository(tmp_path)
+    completion = _legacy_completion()
+    _write_legacy_completion(repository, completion)
+    path = repository / ".owlbear/target/delivery/changes/change-a/frontier.json"
+    payload = json.loads(path.read_bytes())
+    payload["integration_result_id"] = "d" * 64
+    path.write_bytes((json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode())
+
+    with pytest.raises(DeliveryStateMigrationError, match="completion identity differs"):
+        plan_delivery_state_migration(repository)
+
+    assert legacy_worktree.is_dir()
+
+
+def test_migration_rejects_staged_legacy_completion_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repository, legacy_worktree, _frontier_bytes = _legacy_repository(tmp_path)
+    completion = _legacy_completion()
+    _write_legacy_completion(repository, completion)
+    plan = plan_delivery_state_migration(repository)
+    original_stage = delivery_migration._stage_runtime
+
+    def corrupt_stage(migration_plan: delivery_migration.DeliveryStateMigrationPlan, staging: Path) -> None:
+        original_stage(migration_plan, staging)
+        path = staging / "changes/change-a/frontier.json"
+        payload = json.loads(path.read_bytes())
+        payload["integration_completion"]["completion_path"] = "corrupted/completion.json"
+        path.write_bytes((json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode())
+
+    monkeypatch.setattr(delivery_migration, "_stage_runtime", corrupt_stage)
+
+    with pytest.raises(DeliveryStateMigrationError, match="staged Delivery frontier changed"):
+        apply_delivery_state_migration(plan)
+
+    assert legacy_worktree.is_dir()
+    assert not (repository / ".owlbear/delivery/runtime").exists()
 
 
 def test_migration_moves_owned_worktree_and_preserves_runtime_and_archive(tmp_path: Path) -> None:

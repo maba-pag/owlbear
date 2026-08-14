@@ -51,6 +51,7 @@ class _MigrationChange:
     change_id: str
     coordination: ChangeCoordination
     frontier: DeliveryFrontier
+    legacy_completion: DeliveryIntegrationCompletion | None
     source_worktree: Path
     target_worktree: Path
     registered: bool
@@ -148,7 +149,7 @@ def _require_symlink_free_tree(root: Path) -> None:
                 _fail(f"retired Delivery state contains a symlink: {parent / name}")
 
 
-def _load_migration_frontier(path: Path) -> tuple[DeliveryFrontier, bool]:
+def _load_migration_frontier(path: Path) -> tuple[DeliveryFrontier, DeliveryIntegrationCompletion | None]:
     try:
         payload = json.loads(path.read_bytes())
     except (OSError, json.JSONDecodeError) as exc:
@@ -158,14 +159,14 @@ def _load_migration_frontier(path: Path) -> tuple[DeliveryFrontier, bool]:
         _fail(f"retired Delivery frontier is malformed: {path}")
     result_id = payload.get("integration_result_id")
     completion_payload = payload.get("integration_completion")
-    has_legacy_completion = result_id is not None or completion_payload is not None
-    if has_legacy_completion:
+    legacy_completion = None
+    if result_id is not None or completion_payload is not None:
         try:
-            completion = DeliveryIntegrationCompletion.model_validate(completion_payload)
+            legacy_completion = DeliveryIntegrationCompletion.model_validate(completion_payload)
         except (TypeError, ValidationError) as exc:
             _fail(f"retired Delivery Integration completion is invalid: {path}")
             raise AssertionError from exc
-        if result_id != completion.completion_id:
+        if result_id != legacy_completion.completion_id:
             _fail(f"retired Delivery Integration completion identity differs: {path}")
         payload = dict(payload)
         payload.pop("integration_result_id", None)
@@ -177,30 +178,30 @@ def _load_migration_frontier(path: Path) -> tuple[DeliveryFrontier, bool]:
     except (TypeError, ValueError, ValidationError) as exc:
         _fail(f"retired Delivery frontier is invalid: {path}")
         raise AssertionError from exc
-    return frontier, has_legacy_completion
+    return frontier, legacy_completion
 
 
 def _runtime_authority(
     legacy_target: Path,
-) -> tuple[dict[str, DeliveryContract], dict[str, DeliveryFrontier], set[str]]:
+) -> tuple[dict[str, DeliveryContract], dict[str, DeliveryFrontier], dict[str, DeliveryIntegrationCompletion]]:
     changes_root = legacy_target / "delivery/changes"
     if not changes_root.is_dir() or changes_root.is_symlink():
         _fail("retired Delivery changes are missing or unsafe")
     contracts: dict[str, DeliveryContract] = {}
     frontiers: dict[str, DeliveryFrontier] = {}
-    legacy_completion_ids: set[str] = set()
+    legacy_completions: dict[str, DeliveryIntegrationCompletion] = {}
     for change_root in sorted(changes_root.iterdir()):
         if not change_root.is_dir() or change_root.is_symlink():
             _fail(f"retired Delivery change path is unsafe: {change_root}")
         contract = _load_model(change_root / "contract.json", DeliveryContract)
-        frontier, has_legacy_completion = _load_migration_frontier(change_root / "frontier.json")
+        frontier, legacy_completion = _load_migration_frontier(change_root / "frontier.json")
         if contract.change_id != change_root.name:
             _fail(f"retired Delivery change identity mismatch: {change_root}")
         contracts[contract.change_id] = contract
         frontiers[contract.change_id] = frontier
-        if has_legacy_completion:
-            legacy_completion_ids.add(contract.change_id)
-    return contracts, frontiers, legacy_completion_ids
+        if legacy_completion is not None:
+            legacy_completions[contract.change_id] = legacy_completion
+    return contracts, frontiers, legacy_completions
 
 
 def _require_quiescent(frontiers: dict[str, DeliveryFrontier], capacity: CapacityLedger) -> None:
@@ -253,7 +254,7 @@ def _migration_changes(
     frontiers: dict[str, DeliveryFrontier],
     coordinations: dict[str, ChangeCoordination],
     registered: tuple[_RegisteredWorktree, ...],
-    legacy_completion_ids: set[str],
+    legacy_completions: dict[str, DeliveryIntegrationCompletion],
 ) -> tuple[tuple[_MigrationChange, ...], tuple[_RegisteredWorktree, ...]]:
     if set(frontiers) != set(coordinations):
         _fail("retired runtime and coordination Change identities differ")
@@ -276,12 +277,22 @@ def _migration_changes(
                 change_id,
                 coordination,
                 registration,
-                terminal=frontier.change_completion is not None or change_id in legacy_completion_ids,
+                terminal=frontier.change_completion is not None or change_id in legacy_completions,
             )
             owned_paths.add(registration.path)
-        elif frontier.change_completion is None and change_id not in legacy_completion_ids:
+        elif frontier.change_completion is None and change_id not in legacy_completions:
             _fail(f"nonterminal Change has no registered worktree: {change_id}")
-        changes.append(_MigrationChange(change_id, coordination, frontier, source, target, registration is not None))
+        changes.append(
+            _MigrationChange(
+                change_id,
+                coordination,
+                frontier,
+                legacy_completions.get(change_id),
+                source,
+                target,
+                registration is not None,
+            )
+        )
     preserved = tuple(
         item for item in registered if item.path.is_relative_to(legacy_root) and item.path not in owned_paths
     )
@@ -330,7 +341,7 @@ def plan_delivery_state_migration(root: Path) -> DeliveryStateMigrationPlan:
     _require_empty_destination(runtime_target)
     _require_empty_destination(worktree_target)
     _require_empty_destination(preserved_worktree_target)
-    _contracts, frontiers, legacy_completion_ids = _runtime_authority(legacy_target)
+    _contracts, frontiers, legacy_completions = _runtime_authority(legacy_target)
     capacity, coordinations = _coordination_authority(legacy_target / "target-runtime")
     _require_quiescent(frontiers, capacity)
     changes, preserved_worktrees = _migration_changes(
@@ -338,7 +349,7 @@ def plan_delivery_state_migration(root: Path) -> DeliveryStateMigrationPlan:
         frontiers,
         coordinations,
         registered,
-        legacy_completion_ids,
+        legacy_completions,
     )
     return DeliveryStateMigrationPlan(
         repository_root,
@@ -374,14 +385,14 @@ def _validate_staging(plan: DeliveryStateMigrationPlan, staging: Path) -> None:
     for change in plan.changes:
         change_root = staging / "changes" / change.change_id
         contract = _load_model(change_root / "contract.json", DeliveryContract)
-        frontier, _has_legacy_completion = _load_migration_frontier(change_root / "frontier.json")
+        frontier, legacy_completion = _load_migration_frontier(change_root / "frontier.json")
         coordination = _load_model(
             staging / "claims/changes" / f"{change.change_id}.json",
             ChangeCoordination,
         )
         if contract.change_id != change.change_id or coordination.worktree_path != change.target_worktree:
             _fail(f"staged Delivery identity mismatch: {change.change_id}")
-        if frontier != change.frontier:
+        if frontier != change.frontier or legacy_completion != change.legacy_completion:
             _fail(f"staged Delivery frontier changed: {change.change_id}")
 
 
