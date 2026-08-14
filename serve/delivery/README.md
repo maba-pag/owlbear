@@ -1,10 +1,10 @@
 # owlbear-delivery
 
-`owlbear-delivery` is the transport-free control plane for target delivery. It projects semantic work
-items from admitted Specification authority, owns deterministic Planning and Build transitions,
-coordinates bounded execution and writer capacity, integrates reviewed changes, and publishes
-recoverable completed history. It also retains legacy Target cutover and evidence contracts for
-historical consumers; canonical Delivery startup does not use them.
+`owlbear-delivery` is the transport-free control plane for Change delivery. It projects semantic work
+items from admitted Design authority, owns deterministic Planning and Build transitions, coordinates
+bounded execution and writer capacity, publishes reviewed Change checkpoints, observes user-owned
+pull-request acceptance, and projects recoverable completed history. It retains legacy Target cutover
+and evidence contracts for historical consumers; canonical Change delivery does not use them.
 
 Parent project: [README.md](../../README.md)
 
@@ -21,22 +21,22 @@ The main public areas are:
 |------|-----------|
 | Authored Specification | `DesignPackageStore` create, verified read, compare-and-swap revision, and checkpoint |
 | Compilation and admission | Deterministic contract derivation, validation, package binding, and atomic runtime admission |
-| Operational Delivery | `DeliveryRuntime` and `PortfolioApplication` outcome stages, launch acquisition, typed role contexts, publication, worker transitions, requests, and exact-claim recovery |
+| Operational Delivery | `DeliveryRuntime` and `PortfolioApplication` outcome stages, frontier acquisition, typed role contexts, publication, worker transitions, requests, and exact-claim recovery |
 | Work projection | Portfolio work items with dependency readiness, typed attention, requests, blocks, and task progress |
 | Coordination | Per-change writers, separate execution/writer capacity, warm worktrees, and reviewed source boundaries |
-| Integration and history | Atomic target publication, typed Integration attention, exact legacy claim recovery, and bounded completed lookup |
-| Legacy Target evidence | `TargetRuntime`, `list_frontier`, target snapshots, mutation authorization, receipts, and legacy verification remain public for historical consumers |
+| Publication and acceptance | Change-branch checkpoints, draft pull-request reconciliation, finalization, acceptance observation, and publication supersession |
+| Completed history | Receipt-backed completed Change projections with bounded list, search, and exact lookup |
+| Legacy compatibility | Typed Integration attention/recovery and `TargetRuntime` evidence remain public for historical consumers |
 
-Assembly remains a live stage, projection, and required role-policy configuration type. Current
-compiled bindings leave `assembly_required` false, and the agent MCP registry exposes no Assembly
-context or result-publication operation. Operational agents therefore do not run that stage; an
-unexpected launch is recovered by exact claim identity.
+Assembly is not a live Delivery stage or public Change authority. Historical runtime captures may
+still contain reducible Assembly metadata, and legacy completed-history records retain their
+historical schema for validation. New Changes use sequential Planning and Build outcomes directly.
 
 ## Configuration
 
-The package reads no environment variables. Callers pass package, runtime-state, repository,
-worktree, Integration target, role policies, and capacity configuration explicitly. MCP and Cockpit
-load tracked project policy and compose owners over canonical Delivery roots; setup seeds that policy.
+The package reads no environment variables. Callers pass package, runtime state, repository, worktree,
+configured target branch, role policies, and capacity configuration explicitly. MCP and Cockpit load
+tracked project policy and compose owners over canonical Delivery roots; setup seeds that policy.
 
 ## Dependencies
 

@@ -73,15 +73,16 @@ Cockpit projects current Delivery state and user-owned controls without becoming
 | Surface | Authority |
 |---------|-----------|
 | Outcome portfolio | Admitted outcomes, dependencies, Planning/Build stages, and task progress from `PortfolioApplication` |
-| Actionable attention | Typed requests, requestless blocks, long-idle claims, revision attention, and Integration attention |
-| User controls | Answer request, clear block, recover a confirmed-dead exact claim, move backward, and retry Integration |
+| Actionable attention | Typed requests, requestless blocks, long-idle claims, revision attention, publication and target-sync attention, and acceptance attention |
+| User controls | Answer requests, clear blocks, recover confirmed-dead claims or worktrees, move backward, reconcile target-sync conflicts, supersede a publication, and observe acceptance |
 | Completed history | Bounded list, semantic search, and exact completed-change lookup |
 | Startup authority | Tracked `.owlbear/delivery/config.json` and validated canonical Delivery roots |
 
 Cockpit calls the same transport-free application owners used by the MCP adapter but exposes the
 answer-bearing and administrative controls reserved for users. It does not schedule work, choose
-worker transitions, interpret reviewer evidence, repair source, or update the Integration target on
-its own.
+worker transitions, interpret reviewer evidence, repair source, merge pull requests, or update the
+configured target branch on its own. Persisted legacy Integration attention remains visible only
+through compatibility surfaces.
 
 ## Configuration
 
@@ -108,5 +109,5 @@ package's bundled `dist/` directory.
 | `fastapi` | HTTP framework |
 | `uvicorn` | ASGI server |
 | `pydantic` | Request/response model validation |
-| `owlbear-delivery` | Design authority, Delivery runtime, admission, Integration, and completed history |
+| `owlbear-delivery` | Design authority, Delivery runtime, admission, publication, acceptance observation, and completed history |
 | `owlbear-memory` | Memory engine (workspace package) |

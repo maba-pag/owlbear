@@ -1,7 +1,7 @@
 # owlbear-delivery-mcp — Target Delivery MCP Server
 
-MCP server for authored Design, Delivery planning and execution, legacy Integration visibility,
-provider-observed acceptance, and completed change history. It is registered in VS Code as
+MCP server for authored Design, sequential Delivery planning and execution, provider-observed
+publication and acceptance, and completed Change history. It is registered in VS Code as
 `owlbear-delivery` and composes the Delivery portfolio from
 explicit startup configuration.
 
@@ -19,16 +19,20 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 ### Tools
 
-The server exposes 37 tools:
+The server exposes these operation groups:
 
 | Area | Tools |
 |------|-------|
 | Design | `create_design_session`, `read_design_session`, `revise_design_session`, `publish_design_checkpoint`, `derive_delivery_contract`, `validate_delivery_contract`, `admit_delivery_change` |
 | Portfolio | `list_work_items`, `list_retained_change_worktrees`, `show_work_item`, `acquire_frontier_work`, `show_plan_context`, `show_build_context`, `show_finalization_context` |
-| Delivery | `publish_delivery_plan`, `publish_delivery_result`, `finalize_change`, `mark_change_ready`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `observe_acceptance`, `resolve_change_disposition`, `defer_change`, `resume_change`, `abandon_change`, `cleanup_abandoned_change_worktree`, `cleanup_completed_change_worktree`, `recover_change_worktree`, `transition_delivery`, `recover_claim`, `recover_integration_repair_claim` |
+| Delivery | `publish_delivery_plan`, `publish_delivery_result`, `finalize_change`, `mark_change_ready`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `sync_change_with_target`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `observe_acceptance`, `resolve_change_disposition`, `defer_change`, `resume_change`, `abandon_change`, `cleanup_abandoned_change_worktree`, `cleanup_completed_change_worktree`, `recover_change_worktree`, `transition_delivery`, `recover_claim` |
 | Publication | `observe_change_publication_checks`, `supersede_publication` |
-| Integration | `show_integration_attention` |
+| Legacy compatibility | `show_integration_attention`, `recover_integration_repair_claim` |
 | Completed changes | `list_completed_changes`, `search_completed_changes`, `show_completed_change` |
+
+The server exposes no Assembly stage or new Integration repair admission, candidate, or authority
+attention operation. The compatibility tools only make persisted legacy state visible or recoverable;
+current work uses sequential Change outcomes and user-owned pull-request acceptance.
 
 ## Configuration
 
@@ -66,5 +70,5 @@ as its current directory. Startup fails closed when nonempty retired `.owlbear/t
 | Package | Purpose |
 |---------|---------|
 | `mcp[cli]` | MCPServer framework and CLI |
-| `owlbear-delivery` | Design authority, execution, Integration evidence, and completed history |
+| `owlbear-delivery` | Design authority, sequential execution, publication, acceptance observation, legacy compatibility, and completed history |
 | `owlbear-delivery-github` | Fixed GitHub API adapter for draft pull-request publication |
