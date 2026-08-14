@@ -58,7 +58,7 @@ class SupersedeChangeBranch(_PublicationModel):
     """Exact preconditions for one replayable published-history successor."""
 
     change_id: ChangeId
-    expected_published_branch: str = Field(pattern=r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*(?:-s[1-9][0-9]*)?$")
+    expected_published_branch: str = Field(pattern=r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*(?:\+s[1-9][0-9]*)?$")
     expected_published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     superseding_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -86,9 +86,9 @@ class ChangeBranchSupersessionReceipt(_PublicationModel):
     operation_id: str = Field(min_length=1)
     change_id: ChangeId
     remote: str = Field(min_length=1)
-    predecessor_branch: str = Field(pattern=r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*(?:-s[1-9][0-9]*)?$")
+    predecessor_branch: str = Field(pattern=r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*(?:\+s[1-9][0-9]*)?$")
     predecessor_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    successor_branch: str = Field(pattern=r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*-s[1-9][0-9]*$")
+    successor_branch: str = Field(pattern=r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*\+s[1-9][0-9]*$")
     superseding_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     target_branch: str = Field(min_length=1)
 
@@ -98,7 +98,7 @@ class _PublicationOperation(_PublicationModel):
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     change_id: ChangeId
     remote: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
-    branch: str = Field(pattern=r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*$")
+    branch: str = Field(pattern=r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*(?:\+s[1-9][0-9]*)?$")
     target_branch: str = Field(min_length=1)
     expected_remote_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
@@ -109,9 +109,9 @@ class _SupersessionOperation(_PublicationModel):
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     change_id: ChangeId
     remote: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
-    predecessor_branch: str = Field(pattern=r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*(?:-s[1-9][0-9]*)?$")
+    predecessor_branch: str = Field(pattern=r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*(?:\+s[1-9][0-9]*)?$")
     predecessor_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    successor_branch: str = Field(pattern=r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*-s[1-9][0-9]*$")
+    successor_branch: str = Field(pattern=r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*\+s[1-9][0-9]*$")
     superseding_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     target_branch: str = Field(min_length=1)
 
@@ -288,7 +288,6 @@ class ChangeBranchPublisher:
         request: PublishChangeBranch,
         attempt: _PublicationAttempt,
     ) -> None:
-        self._create_successor_ref(operation, request)
         successor_head = self._remote_head(operation.successor_branch, request)
         if successor_head is not None:
             self._fetch_change_head(operation.successor_branch, successor_head, request)
@@ -425,7 +424,7 @@ class ChangeBranchPublisher:
         branch_request: PublishChangeBranch,
     ) -> _SupersessionOperation:
         if (
-            coordination.branch != request.expected_published_branch
+            coordination.branch != f"owlbear/change/{request.change_id}"
             or coordination.writer is not None
             or coordination.publication_lease is None
             or coordination.publication_lease.operation_id != request.operation_id
@@ -436,6 +435,8 @@ class ChangeBranchPublisher:
         if self._operation_root == worktree or self._operation_root.is_relative_to(worktree):
             self._conflict(branch_request, "publication operation storage cannot be inside the Change worktree")
         branch_head = self._resolve_commit(f"refs/heads/{coordination.branch}", branch_request)
+        if request.expected_published_head == request.superseding_head:
+            self._conflict(branch_request, "supersession must advance beyond the published predecessor")
         if branch_head != request.superseding_head or coordination.last_reviewed_commit != request.superseding_head:
             self._conflict(branch_request, "supersession head differs from the reviewed boundary")
         self._require_clean_worktree(coordination.worktree_path, branch_request)
@@ -459,7 +460,7 @@ class ChangeBranchPublisher:
         owner_id: str | None = None,
     ) -> None:
         coordination = self._coordination(request)
-        if coordination.branch != operation.predecessor_branch or coordination.writer is not None:
+        if coordination.branch != f"owlbear/change/{operation.change_id}" or coordination.writer is not None:
             self._conflict(request, "supersession no longer owns the reviewed Change workspace")
         if owner_id is not None and (
             coordination.publication_lease is None
@@ -471,36 +472,6 @@ class ChangeBranchPublisher:
         if branch_head != operation.superseding_head or coordination.last_reviewed_commit != operation.superseding_head:
             self._conflict(request, "supersession no longer names the reviewed Change head")
         self._require_clean_worktree(coordination.worktree_path, request)
-
-    def _create_successor_ref(
-        self,
-        operation: _SupersessionOperation,
-        request: PublishChangeBranch,
-    ) -> None:
-        reference = f"refs/heads/{operation.successor_branch}"
-        current = self._resolve_optional_commit(reference, request)
-        if current == operation.superseding_head:
-            return
-        if current is not None:
-            self._conflict(request, "successor Change branch already names another head")
-        result = self._run_git("update-ref", reference, operation.superseding_head, "0" * 40)
-        if result.returncode != 0:
-            current = self._resolve_optional_commit(reference, request)
-            if current != operation.superseding_head:
-                self._conflict(request, "successor Change branch was created concurrently", retry_safe=True)
-
-    def _resolve_optional_commit(self, revision: str, request: PublishChangeBranch) -> str | None:
-        result = self._run_git("rev-parse", "--verify", "--end-of-options", f"{revision}^{{commit}}")
-        if result.returncode != 0:
-            return None
-        commit = result.stdout.decode(errors="replace").strip()
-        if _COMMIT_PATTERN.fullmatch(commit) is None:
-            self._failure(
-                PublicationProviderFailureCode.INVALID_RESPONSE,
-                request,
-                "Git returned an invalid commit identity",
-            )
-        return commit
 
     def _push_superseding_head(
         self,
@@ -524,34 +495,36 @@ class ChangeBranchPublisher:
         references = self._run_git(
             "for-each-ref",
             "--format=%(refname)",
-            f"refs/heads/{base}-s*",
-            f"refs/remotes/{self._remote}/{base}-s*",
+            "refs/heads/owlbear/change",
+            f"refs/remotes/{self._remote}/owlbear/change",
         )
         if references.returncode != 0:
             self._unavailable(request, "local successor Change branches could not be observed")
-        indexes = self._successor_indexes(references.stdout.decode(errors="replace"), base, request)
-        remote_references = self._run_git("ls-remote", "--heads", self._remote, f"refs/heads/{base}-s*")
+        indexes = self._successor_indexes(references.stdout.decode(errors="replace"), base)
+        remote_references = self._run_git("ls-remote", "--heads", self._remote)
         if remote_references.returncode != 0:
             self._unavailable(request, "remote successor Change branches could not be observed")
-        indexes.update(self._successor_indexes(remote_references.stdout.decode(errors="replace"), base, request))
+        indexes.update(self._successor_indexes(remote_references.stdout.decode(errors="replace"), base))
         next_index = max(indexes, default=0) + 1
-        return f"{base}-s{next_index}"
+        return f"{base}+s{next_index}"
 
     @staticmethod
-    def _successor_indexes(output: str, base: str, request: PublishChangeBranch) -> set[int]:
+    def _successor_indexes(output: str, base: str) -> set[int]:
         indexes: set[int] = set()
-        pattern = re.compile(rf"(?:^|/)({re.escape(base)}-s)([1-9][0-9]*)$")
+        pattern = re.compile(rf"^{re.escape(base)}\+s([1-9][0-9]*)$")
         for line in output.splitlines():
             fields = line.split("\t")
-            reference = fields[-1].removeprefix("refs/heads/").removeprefix("refs/remotes/")
+            reference = fields[-1]
+            if reference.startswith("refs/heads/"):
+                reference = reference.removeprefix("refs/heads/")
+            elif reference.startswith("refs/remotes/"):
+                reference = reference.removeprefix("refs/remotes/").partition("/")[2]
+            else:
+                continue
             match = pattern.search(reference)
             if match is None:
-                ChangeBranchPublisher._failure(
-                    PublicationProviderFailureCode.INVALID_RESPONSE,
-                    request,
-                    "successor Change branch observation returned an invalid ref",
-                )
-            indexes.add(int(match.group(2)))
+                continue
+            indexes.add(int(match.group(1)))
         return indexes
 
     def _validate_prepared_operation(
@@ -811,7 +784,7 @@ class ChangeBranchPublisher:
 
     def _release_publication(
         self,
-        operation: _PublicationOperation,
+        operation: _PublicationOperation | _SupersessionOperation,
         owner_id: str,
         lock: PublicationLock,
     ) -> None:
