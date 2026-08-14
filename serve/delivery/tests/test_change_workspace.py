@@ -10,7 +10,9 @@ from unittest.mock import patch
 import pytest
 
 from owlbear_delivery.change_workspace import (
+    CapacityConfigurationConflictError,
     CapacityLedger,
+    CapacityLedgerConflictError,
     ChangeWorkspaceManager,
     ChangeCoordination,
     ChangeWorktreeAttentionError,
@@ -789,6 +791,39 @@ def test_coordinator_reconfigures_capacity_when_active_holders_fit(tmp_path: Pat
         capacity=1,
         change_ids=("change-a",),
     )
+
+
+@pytest.mark.parametrize("transaction_id", ["initialize-capacity", "reconfigure-capacity"])
+def test_coordinator_translates_capacity_ledger_conflict(
+    tmp_path: Path,
+    transaction_id: str,
+) -> None:
+    state_root = tmp_path / "state"
+    ledger_path = state_root / "capacity.json"
+    if transaction_id == "reconfigure-capacity":
+        state_root.mkdir(parents=True)
+        ledger_path.write_text(CapacityLedger(capacity=2).model_dump_json(), encoding="utf-8")
+
+    original_commit = PortfolioCoordinator._commit
+
+    def race(
+        coordinator: PortfolioCoordinator,
+        candidate_transaction_id: str,
+        participants: tuple[object, ...],
+    ) -> None:
+        if candidate_transaction_id == transaction_id:
+            ledger_path.write_text(CapacityLedger(capacity=3).model_dump_json(), encoding="utf-8")
+        original_commit(coordinator, candidate_transaction_id, participants)  # type: ignore[arg-type]
+
+    with (
+        patch.object(PortfolioCoordinator, "_commit", new=race),
+        pytest.raises(CapacityLedgerConflictError) as exc_info,
+    ):
+        PortfolioCoordinator(state_root, capacity=1)
+
+    assert isinstance(exc_info.value, CoordinationConflictError)
+    assert not isinstance(exc_info.value, CapacityConfigurationConflictError)
+    assert str(exc_info.value) == "host capacity ledger changed concurrently"
 
 
 def test_coordinator_rejects_capacity_below_active_holders(tmp_path: Path) -> None:

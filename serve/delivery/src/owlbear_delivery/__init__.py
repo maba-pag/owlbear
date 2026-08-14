@@ -21,6 +21,7 @@ from owlbear_delivery.change_publication import (
 from owlbear_delivery.change_workspace import (
     CapacityConfigurationConflictError,
     CapacityLedger,
+    CapacityLedgerConflictError,
     ChangeCoordination,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
@@ -325,6 +326,7 @@ __all__ = [
     "BlockDelivery",
     "CapacityConfigurationConflictError",
     "CapacityLedger",
+    "CapacityLedgerConflictError",
     "ChangeBranchPublicationReceipt",
     "ChangeBranchPublisher",
     "ChangeBranchSupersessionReceipt",

@@ -488,6 +488,13 @@ class CapacityConfigurationConflictError(CoordinationConflictError):
         super().__init__(f"active writers exceed configured writer capacity: {active_holders} > {configured_capacity}")
 
 
+class CapacityLedgerConflictError(CoordinationConflictError):
+    """The host capacity ledger changed during startup reconfiguration."""
+
+    def __init__(self) -> None:
+        super().__init__("host capacity ledger changed concurrently")
+
+
 class PortfolioCoordinator:
     """Atomically coordinate independent per-change writers and global capacity."""
 
@@ -772,21 +779,27 @@ class PortfolioCoordinator:
                 if len(existing.change_ids) > self._capacity:
                     raise CapacityConfigurationConflictError(len(existing.change_ids), self._capacity)
                 updated = existing.model_copy(update={"capacity": self._capacity})
-                self._commit(
-                    "reconfigure-capacity",
-                    (_replacement(self._state_root, self._ledger_path, existing_bytes, updated),),
-                )
+                try:
+                    self._commit(
+                        "reconfigure-capacity",
+                        (_replacement(self._state_root, self._ledger_path, existing_bytes, updated),),
+                    )
+                except TransactionConflictError as exc:
+                    raise CapacityLedgerConflictError from exc
             return
-        self._commit(
-            "initialize-capacity",
-            (
-                TransactionParticipant(
-                    self._state_root,
-                    self._ledger_path.relative_to(self._state_root),
-                    _model_content(initial),
+        try:
+            self._commit(
+                "initialize-capacity",
+                (
+                    TransactionParticipant(
+                        self._state_root,
+                        self._ledger_path.relative_to(self._state_root),
+                        _model_content(initial),
+                    ),
                 ),
-            ),
-        )
+            )
+        except TransactionConflictError as exc:
+            raise CapacityLedgerConflictError from exc
 
     def _coordination_path(self, change_id: str) -> Path:
         if not change_id or any(character not in "abcdefghijklmnopqrstuvwxyz0123456789-" for character in change_id):

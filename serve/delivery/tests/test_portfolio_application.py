@@ -18,6 +18,7 @@ import pytest
 from owlbear_delivery import (
     AdministrativeDeliveryMove,
     CapacityLedger,
+    CapacityLedgerConflictError,
     ChangeBranchPublicationReceipt,
     ChangeBranchPublisher,
     ChangeBranchSupersessionReceipt,
@@ -2898,6 +2899,44 @@ def test_delivery_loader_reports_active_writer_conflict_as_host_capacity_error(t
     assert "active writers" in exc_info.value.detail
     assert "host.json" in exc_info.value.detail
     assert ledger_path.read_bytes() == before
+
+
+def test_delivery_loader_reports_capacity_ledger_race_as_runtime_error(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    runtime_root.mkdir(parents=True)
+    (runtime_root / "capacity.json").write_text(
+        CapacityLedger(capacity=2).model_dump_json(),
+        encoding="utf-8",
+    )
+    (runtime_root / "host.json").write_text(
+        DeliveryHostConfig(schema_version=1, writer_capacity=1, execution_capacity=1).model_dump_json(),
+        encoding="utf-8",
+    )
+    original_commit = PortfolioCoordinator._commit
+
+    def race(
+        coordinator: PortfolioCoordinator,
+        transaction_id: str,
+        participants: tuple[object, ...],
+    ) -> None:
+        if transaction_id == "reconfigure-capacity":
+            (runtime_root / "capacity.json").write_text(
+                CapacityLedger(capacity=3).model_dump_json(),
+                encoding="utf-8",
+            )
+        original_commit(coordinator, transaction_id, participants)  # type: ignore[arg-type]
+
+    with (
+        patch.object(PortfolioCoordinator, "_commit", new=race),
+        pytest.raises(DeliveryApplicationLoadError) as exc_info,
+    ):
+        load_delivery_application(_startup_config(), workspace_root=repository)
+
+    assert exc_info.value.field == "runtime_root"
+    assert "capacity ledger changed concurrently" in exc_info.value.detail
+    assert "active writers" not in exc_info.value.detail
+    assert isinstance(exc_info.value.__cause__, CapacityLedgerConflictError)
 
 
 def test_delivery_loader_does_not_translate_unrelated_coordination_conflict(tmp_path: Path) -> None:

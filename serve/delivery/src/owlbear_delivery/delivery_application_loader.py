@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from owlbear_delivery.change_publication import ChangeBranchPublisher
 from owlbear_delivery.change_workspace import (
     CapacityConfigurationConflictError,
+    CapacityLedgerConflictError,
     ChangeWorkspaceManager,
     CoordinationConflictError,
     PortfolioCoordinator,
@@ -311,6 +312,12 @@ def _compose_application(
         error = _load_error(
             "writer_capacity",
             f"host-local Delivery capacity configuration in host.json cannot be lower than active writers: {exc}",
+        )
+        raise error from exc
+    except CapacityLedgerConflictError as exc:
+        error = _load_error(
+            "runtime_root",
+            f"Delivery capacity ledger changed concurrently; retry startup: {exc}",
         )
         raise error from exc
     workspace_manager = ChangeWorkspaceManager(
