@@ -108,9 +108,9 @@ jobs:
           FIX_MODE: ${{ needs.classify.outputs.fix_mode }}
         run: |
           if [ "$FIX_MODE" = unsafe ]; then
-            uv run lint --all --unsafe-fixes
+            uv run lint --unsafe-fix
           else
-            uv run lint --all
+            uv run lint
           fi
 
       - name: Apply MegaLinter fixes and checks
@@ -121,7 +121,7 @@ jobs:
           FIX_MODE: ${{ needs.classify.outputs.fix_mode }}
         run: |
           if [ "$FIX_MODE" = unsafe ]; then
-            uv run megalint --unsafe-fixes
+            uv run megalint --unsafe-fix
           else
             uv run megalint
           fi
@@ -135,7 +135,7 @@ jobs:
         id: native_check
         if: needs.classify.outputs.fix_mode != 'none'
         continue-on-error: true
-        run: uv run lint --all --no-fix
+        run: uv run lint --no-fix
 
       - name: Capture autofix candidate
         id: candidate
@@ -441,7 +441,7 @@ jobs:
 
       - name: Exercise updated pre-commit hooks
         if: needs.classify.outputs.precommit == 'true'
-        run: uv run lint --all --no-fix
+        run: uv run lint --no-fix
 
       - name: Exercise updated MegaLinter image
         if: needs.classify.outputs.megalinter == 'true'

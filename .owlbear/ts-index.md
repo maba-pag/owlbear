@@ -240,11 +240,11 @@
 - `export type WorkItemNeed = 'you' | 'dependency' | 'none'`
 - `export type WorkItemNextActor = 'you' | 'agent' | 'dependency' | 'none'`
 - `export type WorkItemActivityState = 'idle' | 'ready' | 'working'`
-- `export type WorkItemActionKind = | 'none' | 'answer-request' | 'clear-block' | 'recover-claim' | 'finalize' | 'reconcile-checkpoint' | 'mark-ready' | 'observe-acceptance' | 'start-orchestration'`
+- `export type WorkItemActionKind = | 'none' | 'answer-request' | 'clear-block' | 'recover-claim' | 'finalize' | 'reconcile-checkpoint' | 'mark-ready' | 'observe-acceptance' | 'resolve-attention' | 'resume-change' | 'start-orchestration'`
 - `export type WorkItemProgressKind = 'tasks' | 'design-return' | 'plan' | 'publication'`
-- `export type WorkItemChangeLifecycle = 'in-delivery' | 'finalization' | 'publication' | 'awaiting-merge' | 'acceptance'`
+- `export type WorkItemChangeLifecycle = 'in-delivery' | 'finalization' | 'publication' | 'awaiting-merge' | 'acceptance' | 'deferred' | 'abandoned'`
 - `export type DeliveryWorkerRole = 'planner' | 'builder'`
-- `export type WorkItemPublicationPhase = | 'finalization-invalidated' | 'ready-for-finalization' | 'checkpoint-pending' | 'pull-request-draft' | 'awaiting-merge' | 'acceptance-observed'`
+- `export type WorkItemPublicationPhase = | 'finalization-invalidated' | 'ready-for-finalization' | 'checkpoint-pending' | 'pull-request-draft' | 'awaiting-merge' | 'acceptance-observed' | 'deferred' | 'abandoned'`
 - `export interface WorkItemActivity`
 - `export interface WorkItemAction`
 - `export interface WorkItemProgress`
@@ -259,6 +259,9 @@
 - `export interface PortfolioGuidance`
 - `export interface PortfolioOperatingView`
 - `export interface WorkItemPortfolioResponse`
+- `export type AcceptanceReconciliationStatus = | 'completed' | 'waiting' | 'head-moved' | 'attention' | 'provider-unavailable' | 'skipped'`
+- `export interface AcceptanceReconciliationOutcome`
+- `export interface AcceptanceReconciliationResponse`
 - `export interface DesignWorkDetailResponse`
 - `export interface DeliveryRequestResolution`
 - `export interface DeliveryRequest`
@@ -266,7 +269,17 @@
 - `export interface WorkItemCommitment`
 - `export interface WorkItemDependency`
 - `export interface WorkItemTaskEvidence`
+- `export interface WorkItemPublicationGeneration`
 - `export interface WorkItemPublicationView`
+- `export interface WorkItemTargetSyncView`
+- `export interface WorkItemTargetSyncConflictView`
+- `export interface WorkItemWorktreeCleanupView`
+- `export interface WorkItemWorktreeRecoveryView`
+- `export interface ChangeWorktreeCleanupResponse`
+- `export interface ChangeWorktreeRecoveryResponse`
+- `export interface TargetSyncResponse extends WorkItemTargetSyncView`
+- `export interface TargetSyncAbortResponse`
+- `export interface PublicationSupersessionResponse`
 - `export interface WorkItemDetailView`
 - `export interface WorkItemDetailResponse`
 - `export interface BackwardMoveResult`
@@ -285,7 +298,7 @@
   - `readonly retrySafe: boolean`
   - `constructor(status: number, code: string, detail: string, authority: string | null, retrySafe: boolean)`
 - `async function workItemRequest<T>(url: string, options: WorkItemRequestOptions): Promise<T>`
-- `function controlRequest<T>(url: string, fallbackCode: string, body?: object): Promise<T>`
+- `function controlRequest<T>(url: string, fallbackCode: string, body?: object, signal?: AbortSignal): Promise<T>`
 - `export function listWorkItems(): Promise<WorkItemPortfolioResponse>`
 - `export function listCompletedChanges(cursor?: string): Promise<CompletedChangePage>`
 - `export function searchCompletedChanges(query: string, cursor?: string): Promise<CompletedChangePage>`
@@ -301,6 +314,18 @@
 - `export function reconcileWorkItemPublication(changeId: string): Promise<unknown>`
 - `export function markWorkItemPublicationReady(changeId: string): Promise<unknown>`
 - `export function observeWorkItemAcceptance(changeId: string): Promise<unknown>`
+- `export function reconcileWorkItemAcceptance( changeIds: string[], signal?: AbortSignal, ): Promise<AcceptanceReconciliationResponse>`
+- `export function resolveWorkItemAttention(changeId: string, expectedDispositionId: string): Promise<unknown>`
+- `export function supersedeWorkItemPublication( changeId: string, operationId: string, ): Promise<PublicationSupersessionResponse>`
+- `export function syncWorkItemTarget(changeId: string, operationId: string): Promise<TargetSyncResponse>`
+- `export function abortWorkItemTargetSync( changeId: string, expectedDispositionId: string, targetHead: string, operationId: string, ): Promise<TargetSyncAbortResponse>`
+- `export function resolveWorkItemTargetSync( changeId: string, expectedDispositionId: string, targetHead: string, operationId: string, ): Promise<TargetSyncResponse>`
+- `export function deferWorkItemChange(changeId: string, reason: string): Promise<unknown>`
+- `export function resumeWorkItemChange(changeId: string): Promise<unknown>`
+- `export function abandonWorkItemChange(changeId: string, reason: string): Promise<unknown>`
+- `export function cleanupAbandonedWorkItemChange(changeId: string): Promise<ChangeWorktreeCleanupResponse>`
+- `export function cleanupCompletedWorkItemChange( changeId: string, completionId: string, ): Promise<ChangeWorktreeCleanupResponse>`
+- `export function recoverWorkItemChange( changeId: string, recoveryReviewedHead: string, ): Promise<ChangeWorktreeRecoveryResponse>`
 
 ## serve/cockpit/web/src/components/CompletedHistoryWorkspace.tsx
 
@@ -407,7 +432,7 @@
 
 ### Interfaces
 
-- `function countLabel(count: number, singular: string, plural =`${singular}s`)`
+- `function countLabel(count: number, singular: string, plural = `${singular}s`)`
 - `function Command({ children }: { children: string })`
 - `function Guidance({ guidance }: { guidance: PortfolioGuidance })`
 - `interface PortfolioHeaderSummaryProps`
@@ -459,6 +484,7 @@
 - `function DetailHeader({ detail }: Pick<WorkItemDetailProps, 'detail'>)`
 - `function RequestControl({ request, pending, onAnswer }: { request: DeliveryRequest pending: boolean onAnswer: WorkItemDetailProps['onAnswerRequest'] })`
 - `function RequestsSection({ detail, pendingAction, onAnswerRequest }: WorkItemDetailProps)`
+- `function ChangeDispositionSection(props: WorkItemDetailProps)`
 - `function BlockSection({ detail, pendingAction, onClearBlock }: WorkItemDetailProps)`
 - `function elapsedAge(startedAt: string): string`
 - `function ClaimSection({ detail, pendingAction, onRecoverClaim }: WorkItemDetailProps)`
@@ -470,6 +496,9 @@
 - `function SemanticDetail({ detail }: Pick<WorkItemDetailProps, 'detail'>)`
 - `const PUBLICATION_PHASE_LABELS: Record<WorkItemPublicationPhase, string>`
 - `function IdentityRow({ label, value }: { label: string; value: string | number | null })`
+- `function WorktreeRecoverySection(props: WorkItemDetailProps)`
+- `function WorktreeCleanupSection(props: WorkItemDetailProps)`
+- `function TargetSyncConflictSection(props: WorkItemDetailProps)`
 - `function PublicationSection(props: WorkItemDetailProps)`
 - `function ActionFeedback({ error, result }: { error: Error | null; result: string | null })`
 - `export default function WorkItemDetail(props: WorkItemDetailProps)`
@@ -651,7 +680,7 @@
 ### Imports
 
 - `import { useEffect, useRef, useState } from 'react'`
-- `import { answerWorkItemRequest, clearWorkItemBlock, listCompletedChanges, markWorkItemPublicationReady, moveWorkItemBackward, observeWorkItemAcceptance, previewWorkItemBackward, reconcileWorkItemPublication, recoverWorkItemClaim, searchCompletedChanges, showDesignWork, showCompletedChange, workItemDetailUrl, type CompletedChangePage, type CompletedChangeRecord, type DeliveryRequestResolution, type DesignWorkDetailResponse, type WorkItemDetailResponse, type WorkItemPortfolioResponse, type WorkItemCardView, type WorkItemStage, } from '../api/workItems'`
+- `import { answerWorkItemRequest, abortWorkItemTargetSync, abandonWorkItemChange, cleanupAbandonedWorkItemChange, cleanupCompletedWorkItemChange, clearWorkItemBlock, deferWorkItemChange, listCompletedChanges, markWorkItemPublicationReady, moveWorkItemBackward, observeWorkItemAcceptance, previewWorkItemBackward, reconcileWorkItemPublication, recoverWorkItemClaim, recoverWorkItemChange, reconcileWorkItemAcceptance, resolveWorkItemTargetSync, resolveWorkItemAttention, resumeWorkItemChange, searchCompletedChanges, supersedeWorkItemPublication, syncWorkItemTarget, showDesignWork, showCompletedChange, workItemDetailUrl, type CompletedChangePage, type CompletedChangeRecord, type DeliveryRequestResolution, type DesignWorkDetailResponse, type WorkItemDetailResponse, type WorkItemPortfolioResponse, type WorkItemCardView, type WorkItemStage, WorkItemApiError, } from '../api/workItems'`
 - `import { usePollingFetch } from './usePollingFetch'`
 
 ### Interfaces
@@ -660,7 +689,11 @@
 - `interface AsyncResource<T>`
 - `const EMPTY_PORTFOLIO: WorkItemPortfolioResponse`
 - `const EMPTY_HISTORY: CompletedChangePage`
+- `const ACCEPTANCE_RECONCILIATION_INTERVAL_MS`
+- `const ACCEPTANCE_RECONCILIATION_MAX_BACKOFF_MS`
+- `function acceptanceChangeIds(portfolio: WorkItemPortfolioResponse): string[]`
 - `export function useWorkPortfolio()`
+- `export function useAcceptanceReconciliation( portfolio: WorkItemPortfolioResponse, onChanged: () => void, ): void`
 - `export function useDesignWorkDetail(changeId: string)`
 - `export function useCompletedHistory(query: string)`
 - `export function useCompletedChange(identity: { changeId: string; completionId: string } | null)`
@@ -774,7 +807,7 @@
 - `import { WorkspaceViewCount } from '../components/WorkspaceViewHeader'`
 - `import WorkItemDetail from '../components/WorkItemDetail'`
 - `import WorkPortfolioTable from '../components/WorkPortfolioTable'`
-- `import { useDesignWorkDetail, useWorkItemDetail, useWorkPortfolio, type WorkItemIdentity } from '../hooks/useWorkItems'`
+- `import { useAcceptanceReconciliation, useDesignWorkDetail, useWorkItemDetail, useWorkPortfolio, type WorkItemIdentity, } from '../hooks/useWorkItems'`
 
 ### Interfaces
 

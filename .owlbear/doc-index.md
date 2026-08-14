@@ -70,7 +70,7 @@
 - ### `Reconciliation of the initial assessment`
 - ### `Priority 0 — prevent acquisition from revoking live work`
 - ### `Priority 0 — preserve Design stage in work-item projection`
-- ### `Priority 1 — delete the confirmed dead Integration API`
+- ### `Priority 1 — retire the confirmed dead Integration API`
 - ### `Priority 1 decision — complete or remove Assembly`
 - ### `Priority 1 — prove and remove empty authority reintroduction`
 - ### `Priority 2 — make startup authorization a pure steady-state gate`
@@ -884,7 +884,6 @@
 
 ### Outbound links
 - [README.md](../../README.md)
-- [setup-guide.md](../../setup/setup-guide.md)
 
 ## serve/knowledge/README.md
 - # `owlbear-knowledge — Knowledge Engine`
@@ -1112,6 +1111,8 @@
 
 ## share/agents/designer.agent.md
 
+## share/agents/finalizer.agent.md
+
 ## share/agents/knowledge-enricher.agent.md
 - ### `Channel A`
 - ### `Channel B`
@@ -1172,6 +1173,8 @@
 - ## `Step 4 - Explore the Selected Design`
 
 ## share/prompts/design.prompt.md
+
+## share/prompts/finalize-change.prompt.md
 
 ## share/prompts/frontend-audit.prompt.md
 - # `Frontend Audit`
@@ -1541,6 +1544,17 @@
 - ## `OwlBear-Managed Artifact Placement`
 - ## `Attribution`
 
+## share/skills/w-change-finalization/SKILL.md
+- # `Change Finalization`
+- ## `Step 0 - Resolve Current Authority`
+- ## `Step 1 - Establish Exact Managed Custody`
+- ## `Step 2 - Capture Exact-Head Observations`
+- ## `Step 3 - Obtain Independent Exact-Commit Review`
+- ## `Step 4 - Construct Exact Evidence`
+- ## `Step 5 - Re-check And Finalize`
+- ## `Output Template`
+- ## `Known Pitfalls`
+
 ## share/skills/w-delivery-attention-resolution/SKILL.md
 - # `Delivery Attention Resolution`
 - ## `Step 0 - Bind The Exact Current Attention`
@@ -1589,15 +1603,6 @@
 - ## `Examples`
 - ## `Known Pitfalls`
 
-## share/skills/w-integration-repair/SKILL.md
-- # `Integration Repair`
-- ## `Step 0 - Bind Current Attention And Coordination`
-- ## `Step 1 - Make One Additive Conflict Repair`
-- ## `Step 2 - Obtain Independent Exact-Commit Review`
-- ## `Step 3 - Admit Only The Reviewed Repair`
-- ## `Output`
-- ## `Known Pitfalls`
-
 ## share/skills/w-knowledge-enrichment/SKILL.md
 - # `Knowledge Enrichment`
 - ## `Overview`
@@ -1632,7 +1637,7 @@
 - ## `Step 1 - Acquire One Current Batch`
 - ## `Step 2 - Dispatch Or Recover Each Launch`
 - ## `Step 3 - Forward One Worker Transition`
-- ## `Step 4 - Integrate Only Acquisition-Provided IDs`
+- ## `Step 4 - Preserve Typed Integration Attention`
 - ## `Step 5 - Refresh`
 - ## `Output`
 - ## `Known Pitfalls`

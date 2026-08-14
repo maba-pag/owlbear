@@ -51,7 +51,7 @@ Run the maintained development checks with `uv`:
 
 ```shell
 uv run test --all
-uv run lint --all --no-fix
+uv run lint --no-fix
 ```
 
 Use `uv run help`, `uv run help tests`, or the shorthand `uv run help t` for focused command

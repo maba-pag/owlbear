@@ -107,21 +107,24 @@ Apply these only when the target is the OwlBear repository or matching configura
 | `uv run test` or `uv run test --all` | Complete Python and Cockpit frontend unit-test suites |
 | `uv run test [PATH ...]` | Tests owning the explicit paths; routes to pytest and/or Vitest |
 | `uv run test-e2e [SPEC ...]` | Cockpit maintained fast Playwright gate |
-| `uv run lint [FILE ...]` | Default hooks on explicit files, or staged files when omitted; safe fixes enabled |
-| `uv run lint --all` | Default hooks on all files with safe fixes |
-| `uv run typecheck` | Cockpit frontend TypeScript check |
-| `uv run megalint` | MegaLinter only, with safe fixes enabled |
-| `uv run lint-full` | Default hooks, CSS, HTML, TypeScript, and MegaLinter, with safe fixes enabled |
+| `uv run lint` | Normal local lint aggregate on the workspace; `--staged` selects staged files |
+| `uv run lint-cockpit` | Cockpit frontend lint aggregate |
+| `uv run megalint` | Standalone MegaLinter on the workspace |
+| `uv run lint-full` | `lint` plus MegaLinter |
+| `uv run format-full` | Python, whitespace, and final-newline formatters |
+| `uv run typecheck-cockpit` | Cockpit frontend TypeScript check |
+| `uv run quality-full` | Format, lint-full, typecheck-cockpit, then advisory TODO scan |
 
-Use these workspace entry points instead of invoking individual linters manually. `lint` and
-`lint --all` may auto-fix files through Ruff, markdownlint, and general file hooks; inspect the diff
-afterward. Agents should pass their changed paths explicitly to `lint`; no-argument `lint`, `lint --all`,
-`megalint`, and `lint-full` are broad user workflows rather than focused agent validation commands.
+Use these workspace entry points instead of invoking individual linters manually. `lint` may auto-fix
+files through Ruff, markdownlint, and general file hooks; inspect the diff afterward. Agents should
+scope validation to their own work with `lint --staged`; workspace-wide `lint`, `megalint`, and
+`lint-full` are broad user workflows rather than focused agent validation commands.
 
-`lint`, `megalint`, and `lint-full` accept one optional fix-policy flag. `--no-fix`
-replaces mutating hooks with check-only equivalents. `--unsafe-fixes` enables Ruff unsafe fixes and
-Stylelint lax fixes in addition to the default deterministic fixes. The two flags are mutually
-exclusive; review the resulting diff whenever unsafe fixes are enabled.
+`lint`, `lint-cockpit`, `megalint`, `lint-full`, and `quality-full` accept one optional fix-policy
+flag. `--no-fix` replaces mutating hooks with check-only equivalents. `--unsafe-fix` enables Ruff
+unsafe fixes and Stylelint lax fixes in addition to the default deterministic fixes. The two flags
+are mutually exclusive; review the resulting diff whenever unsafe fixes are enabled. Full
+aggregates are listed by `uv run help quality`.
 
 | Marker | Local meaning |
 |--------|---------------|

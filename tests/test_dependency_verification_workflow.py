@@ -99,7 +99,8 @@ def test_workflow_runs_native_and_megalinter_fixes_before_writeback() -> None:
     writeback = WRITEBACK_PATH.read_text()
     cockpit = _job(_workflow(VERIFY_PATH), "proof-cockpit")
 
-    assert "uv run lint --all" in verification
+    assert "uv run lint --no-fix" in verification
+    assert "uv run lint --all" not in verification
     assert "uv run megalint" in verification
     assert "uv run playwright install chromium" not in verification
     assert 'uv run pytest tests serve -m "not api and not e2e and not browser and not cockpit"' in verification

@@ -1,48 +1,4 @@
-"""Lint and static-analysis shortcuts.
-
-Commands
---------
-uv run lint [--no-fix | --unsafe-fixes] [FILE ...]
-                   OwlBear hooks in the dev checkout; otherwise discover
-                   consumer-owned Ruff config and package lint scripts.
-uv run lint --all [--no-fix | --unsafe-fixes]
-                   All files, default hooks.
-uv run megalint [--no-fix | --unsafe-fixes]
-                   MegaLinter only.
-uv run typecheck   TypeScript check only.
-uv run lint-full [--no-fix | --unsafe-fixes]
-                   All local and full-project lint checks.
-uv run eslint-fix [--no-fix]
-                   ESLint on Cockpit frontend (fixes by default).
-uv run todo        Scan for ``> **TODO:**`` markers (warning only).
-
-Default hooks (lint)
-~~~~~~~~~~~~~~~~~~~~
-Hook                       Auto-fix  Tool
-─────────────────────────  ────────  ────
-trailing-whitespace        yes       pre-commit-hooks
-end-of-file-fixer          yes       pre-commit-hooks
-check-yaml                 no        pre-commit-hooks
-check-merge-conflict       no        pre-commit-hooks
-check-added-large-files    no        pre-commit-hooks
-ruff (lint)                yes       ruff
-ruff-format                yes       ruff
-yamllint                   no        yamllint
-shellcheck                 no        shellcheck
-actionlint                 no        actionlint
-markdownlint-cli2          yes       markdownlint-cli2 --fix
-editorconfig-checker       no        editorconfig-checker
-eslint (Cockpit frontend)  yes       eslint --fix
-validate-skills            no        custom (.owlbear/scripts)
-validate-agents            no        custom (.owlbear/scripts)
-
-Manual-stage hooks (megalint)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Hook                       Auto-fix  Tool
-─────────────────────────  ────────  ────
-megalinter                 yes       Selected safe fix-capable linters
-typecheck-frontend         no        TypeScript check (tsc --noEmit, whole-project)
-"""
+"""Workspace lint, formatting, and quality commands."""
 
 from __future__ import annotations
 
@@ -56,32 +12,15 @@ import tomllib
 from enum import StrEnum
 from pathlib import Path
 
+import yaml
+
 from owlbear_tools.commands import command_footer
 from owlbear_tools.megalinter import load_megalinter_image
 
-COCKPIT_WEB = "serve/cockpit/web"
+COCKPIT_WEB = Path("serve/cockpit/web")
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 _NO_FIX_ENV = "OWLBEAR_LINT_NO_FIX"
 _UNSAFE_FIX_ENV = "OWLBEAR_LINT_UNSAFE_FIXES"
-_FIX_HOOK_ALIASES = (
-    "trailing-whitespace-fix",
-    "end-of-file-fix",
-    "ruff-fix",
-    "ruff-format-fix",
-    "markdownlint-fix",
-    "eslint-frontend-fix",
-    "stylelint-frontend-fix",
-)
-_CHECK_HOOKS = (
-    "text-hygiene-check",
-    "ruff-check",
-    "ruff-format-check",
-    "markdownlint-check",
-    "eslint-frontend-check",
-    "stylelint-frontend-check",
-)
-_UNSAFE_REPLACED_HOOKS = ("ruff-fix", "stylelint-frontend-fix")
-_UNSAFE_HOOKS = ("ruff-unsafe-fix", "stylelint-frontend-lax")
 _PYTHON_SUFFIXES = frozenset({".py", ".pyi"})
 
 
@@ -93,238 +32,191 @@ class FixMode(StrEnum):
     UNSAFE = "unsafe"
 
 
+_PRECOMMIT_FIX_HOOKS: dict[str, tuple[str, str, str | None]] = {
+    "lint-python": ("ruff-fix", "ruff-check", "ruff-unsafe-fix"),
+    "lint-markdown": ("markdownlint-fix", "markdownlint-check", None),
+    "lint-cockpit-code": ("eslint-frontend-fix", "eslint-frontend-check", None),
+    "lint-cockpit-style": ("stylelint-frontend-fix", "stylelint-frontend-check", "stylelint-frontend-lax"),
+    "format-python": ("ruff-format-fix", "ruff-format-check", None),
+    "format-whitespace": ("trailing-whitespace-fix", "", None),
+    "format-eof": ("end-of-file-fix", "", None),
+}
+_PRECOMMIT_CHECK_HOOKS = {
+    "lint-yaml": "yamllint",
+    "lint-shell": "shellcheck",
+    "lint-actions": "actionlint",
+    "lint-editorconfig": "editorconfig-checker",
+}
+_AGGREGATES: dict[str, tuple[str, ...]] = {
+    "lint": (
+        "lint-python",
+        "lint-markdown",
+        "lint-yaml",
+        "lint-shell",
+        "lint-actions",
+        "lint-editorconfig",
+        "lint-cockpit",
+    ),
+    "lint-cockpit": ("lint-cockpit-code", "lint-cockpit-style", "lint-cockpit-html"),
+    "lint-full": ("lint", "megalint"),
+    "format-full": ("format-python", "format-whitespace", "format-eof"),
+    "quality-full": ("format-full", "lint-full", "typecheck-cockpit", "todo"),
+}
+_SKIP_DIRS = frozenset(
+    {
+        ".git",
+        "node_modules",
+        ".venv",
+        "dist",
+        "__pycache__",
+        "build",
+        ".egg-info",
+        "megalinter-reports",
+        "test-results",
+        "scratch",
+    }
+)
+_TODO_RE = re.compile(r"^> \*\*TODO:\*\*", re.MULTILINE)
+
+
 def _call(command: list[str], *, env: dict[str, str] | None = None, cwd: Path | None = None) -> int:
-    if env is None:
-        return subprocess.call(command, cwd=cwd) if cwd is not None else subprocess.call(command)  # noqa: S603
-    if cwd is None:
-        return subprocess.call(command, env=env)  # noqa: S603
-    return subprocess.call(command, env=env, cwd=cwd)  # noqa: S603
+    kwargs: dict[str, object] = {}
+    if env is not None:
+        kwargs["env"] = env
+    if cwd is not None:
+        kwargs["cwd"] = cwd
+    return subprocess.call(command, **kwargs)  # noqa: S603
 
 
-def _run(args: list[str], *, hint: str = "", env: dict[str, str] | None = None) -> None:
-    rc = _call(["pre-commit", *args], env=env)
-    if hint:
-        sys.stderr.write(hint + "\n")
-    raise SystemExit(rc)
-
-
-def _skip_hooks_environment(hooks: tuple[str, ...]) -> dict[str, str]:
-    env = os.environ.copy()
-    configured = [item for item in env.get("SKIP", "").split(",") if item]
-    env["SKIP"] = ",".join(dict.fromkeys([*configured, *hooks]))
-    return env
-
-
-def _call_named_hooks(hooks: tuple[str, ...], selection: list[str]) -> int:
-    failures = 0
-    for hook in hooks:
-        command = ["pre-commit", "run", hook, "--hook-stage", "manual", *selection]
-        failures += int(bool(_call(command)))
-    return int(bool(failures))
-
-
-def _call_lint_hooks(args: list[str], *, fix_mode: FixMode) -> int:
-    if fix_mode is FixMode.SAFE:
-        return _call(["pre-commit", *args])
-    selection = args[1:]
-    if fix_mode is FixMode.NONE:
-        env = _skip_hooks_environment(_FIX_HOOK_ALIASES)
-        failures = int(bool(_call(["pre-commit", *args], env=env)))
-        return int(bool(failures + _call_named_hooks(_CHECK_HOOKS, selection)))
-    env = _skip_hooks_environment(_UNSAFE_REPLACED_HOOKS)
-    failures = int(bool(_call(["pre-commit", *args], env=env)))
-    return int(bool(failures + _call_named_hooks(_UNSAFE_HOOKS, selection)))
-
-
-def _add_fix_mode(parser: argparse.ArgumentParser) -> None:
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--no-fix", action="store_const", const=FixMode.NONE, dest="fix_mode")
-    group.add_argument("--unsafe-fixes", action="store_const", const=FixMode.UNSAFE, dest="fix_mode")
-    parser.set_defaults(fix_mode=FixMode.SAFE)
-
-
-def _parse_fix_mode(prog: str) -> FixMode:
-    parser = argparse.ArgumentParser(prog=prog)
-    _add_fix_mode(parser)
-    return parser.parse_args().fix_mode
-
-
-def _mode_environment(fix_mode: FixMode) -> dict[str, str] | None:
-    if fix_mode is FixMode.NONE:
-        return {**os.environ, _NO_FIX_ENV: "1"}
-    if fix_mode is FixMode.UNSAFE:
-        return {**os.environ, _UNSAFE_FIX_ENV: "1"}
-    return None
-
-
-def _is_owlbear_dev_checkout(root: Path) -> bool:
-    return root.resolve() == _REPOSITORY_ROOT and (root / ".pre-commit-config.yaml").is_file()
-
-
-def _consumer_paths(files: list[str], *, all_files: bool) -> list[str]:
-    if all_files:
-        return ["."]
-    if files:
-        return files
+def _git_paths(*, staged: bool) -> list[str]:
+    command = (
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"] if staged else ["git", "ls-files", "-z"]
+    )
     try:
-        output = subprocess.check_output(
-            ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"],  # noqa: S607
-        )
+        output = subprocess.check_output(command)  # noqa: S603
     except (OSError, subprocess.CalledProcessError) as exc:
-        msg = "lint needs explicit files or --all outside a Git working tree"
-        raise RuntimeError(msg) from exc
+        scope = "staged files" if staged else "workspace files"
+        message = f"unable to discover {scope} from Git"
+        raise RuntimeError(message) from exc
     return [value.decode("utf-8") for value in output.split(b"\0") if value]
 
 
-def _has_ruff_config(root: Path) -> bool:
-    if any((root / name).is_file() for name in ("ruff.toml", ".ruff.toml")):
-        return True
-    pyproject = root / "pyproject.toml"
-    if not pyproject.is_file():
-        return False
-    config = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-    tool = config.get("tool")
-    return isinstance(tool, dict) and isinstance(tool.get("ruff"), dict)
+def _add_fix_mode(parser: argparse.ArgumentParser, *, allow_unsafe: bool) -> None:
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--no-fix", "-n", action="store_const", const=FixMode.NONE, dest="fix_mode")
+    if allow_unsafe:
+        group.add_argument("--unsafe-fix", "-u", action="store_const", const=FixMode.UNSAFE, dest="fix_mode")
+    parser.set_defaults(fix_mode=FixMode.SAFE)
 
 
-def _ruff_commands(targets: list[str], fix_mode: FixMode) -> tuple[list[str], list[str]]:
+def _parse_options(
+    prog: str,
+    *,
+    staged: bool,
+    fixes: bool,
+    allow_unsafe: bool = False,
+) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog=prog)
+    if staged:
+        parser.add_argument("--staged", "-s", action="store_true")
+    if fixes:
+        _add_fix_mode(parser, allow_unsafe=allow_unsafe)
+    else:
+        parser.set_defaults(fix_mode=FixMode.NONE)
+    return parser.parse_args()
+
+
+def _precommit_hook(hook: str, *, staged: bool, manual: bool = False) -> int:
+    if staged:
+        paths = _git_paths(staged=True)
+        if not paths:
+            return 0
+    command = ["pre-commit", "run", hook]
+    if manual:
+        command.extend(["--hook-stage", "manual"])
+    if staged:
+        command.extend(["--files", *paths])
+    else:
+        command.append("--all-files")
+    return _call(command)
+
+
+def _run_precommit_fix_hook(name: str, *, staged: bool, fix_mode: FixMode) -> int:
+    safe_hook, check_hook, unsafe_hook = _PRECOMMIT_FIX_HOOKS[name]
     if fix_mode is FixMode.NONE:
-        return ["ruff", "check", *targets], ["ruff", "format", "--check", *targets]
-    check = ["ruff", "check", "--fix"]
-    if fix_mode is FixMode.UNSAFE:
-        check.append("--unsafe-fixes")
-    return [*check, *targets], ["ruff", "format", *targets]
+        if not check_hook:
+            return _check_text_files(name, staged=staged)
+        return _precommit_hook(check_hook, staged=staged, manual=True)
+    if fix_mode is FixMode.UNSAFE and unsafe_hook is not None:
+        return _precommit_hook(unsafe_hook, staged=staged, manual=True)
+    return _precommit_hook(safe_hook, staged=staged)
 
 
-def _package_lint_command(root: Path, fix_mode: FixMode) -> list[str] | None:
-    manifest = root / "package.json"
-    if not manifest.is_file():
-        return None
-    package = json.loads(manifest.read_text(encoding="utf-8"))
-    scripts = package.get("scripts")
-    if not isinstance(scripts, dict) or not isinstance(scripts.get("lint"), str):
-        return None
-    script = "lint:fix" if fix_mode is not FixMode.NONE and isinstance(scripts.get("lint:fix"), str) else "lint"
-    package_manager = package.get("packageManager", "")
-    if not isinstance(package_manager, str):
-        package_manager = ""
-    runner = next(
-        (
-            name
-            for name, marker in (
-                ("pnpm", "pnpm-lock.yaml"),
-                ("yarn", "yarn.lock"),
-                ("bun", "bun.lock"),
-            )
-            if package_manager.startswith(f"{name}@") or (root / marker).is_file()
-        ),
-        "npm",
-    )
-    return [runner, "run", script]
+def _precommit_excludes(hook: str) -> tuple[re.Pattern[str], ...]:
+    """Return the exclude patterns pre-commit applies to one hook."""
+    config = yaml.safe_load((Path.cwd() / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
+    top_level = config.get("exclude")
+    scoped = [
+        entry["exclude"]
+        for repo in config.get("repos", [])
+        for entry in repo.get("hooks", [])
+        if hook in {entry.get("id"), entry.get("alias")} and isinstance(entry.get("exclude"), str)
+    ]
+    patterns = ([top_level] if isinstance(top_level, str) else []) + scoped
+    return tuple(re.compile(pattern) for pattern in patterns)
 
 
-def _consumer_lint(root: Path, files: list[str], *, all_files: bool, fix_mode: FixMode) -> int:
-    paths = _consumer_paths(files, all_files=all_files)
-    has_ruff = _has_ruff_config(root)
-    package_command = _package_lint_command(root, fix_mode)
-    commands: list[list[str]] = []
-    if has_ruff:
-        ruff_targets = [path for path in paths if Path(path).is_dir() or Path(path).suffix in _PYTHON_SUFFIXES]
-        if ruff_targets:
-            commands.extend(_ruff_commands(ruff_targets, fix_mode))
-    if package_command is not None and paths:
-        commands.append(package_command)
-    if not has_ruff and package_command is None:
-        sys.stderr.write(
-            "No consumer lint configuration found. Add [tool.ruff], ruff.toml, .ruff.toml, "
-            "or a package.json lint script.\n"
-        )
-        return 2
-    failures = sum(bool(_call(command, cwd=root)) for command in commands)
+def _check_text_files(name: str, *, staged: bool) -> int:
+    excludes = _precommit_excludes(_PRECOMMIT_FIX_HOOKS[name][0])
+    paths = [path for path in _git_paths(staged=staged) if not any(pattern.search(path) for pattern in excludes)]
+    failures = 0
+    for raw_path in paths:
+        path = Path(raw_path)
+        try:
+            data = path.read_bytes()
+        except OSError as exc:
+            print(f"{path}: unable to read: {exc}")  # noqa: T201
+            failures += 1
+            continue
+        if not data or b"\0" in data:
+            continue
+        if name == "format-whitespace" and any(
+            line.rstrip(b"\r\n").endswith((b" ", b"\t")) for line in data.splitlines(keepends=True)
+        ):
+            print(f"{path}: trailing whitespace")  # noqa: T201
+            failures += 1
+        if name == "format-eof":
+            line_ending = data[len(data.rstrip(b"\r\n")) :]
+            if line_ending not in (b"\n", b"\r\n"):
+                print(f"{path}: expected exactly one final newline")  # noqa: T201
+                failures += 1
     return int(bool(failures))
 
 
-def lint() -> None:
-    """Run OwlBear hooks or discover consumer-owned lint tools."""
-    parser = argparse.ArgumentParser(prog="lint")
-    parser.add_argument("-a", "--all", action="store_true", dest="all_files")
-    _add_fix_mode(parser)
-    parser.add_argument("files", nargs="*")
-    args = parser.parse_args()
-    if args.all_files and args.files:
-        parser.error("--all cannot be combined with file names")
-    root = Path.cwd()
-    if not _is_owlbear_dev_checkout(root):
-        try:
-            rc = _consumer_lint(root, args.files, all_files=args.all_files, fix_mode=args.fix_mode)
-        except (json.JSONDecodeError, RuntimeError, tomllib.TOMLDecodeError) as exc:
-            sys.stderr.write(f"Error: {exc}\n")
-            rc = 2
-        sys.stderr.write(command_footer() + "\n")
-        raise SystemExit(rc)
-    pre_commit_args = ["run", "--all-files"] if args.all_files else ["run", "--files", *args.files]
-    if not args.all_files and not args.files:
-        pre_commit_args = ["run"]
-    rc = _call_lint_hooks(pre_commit_args, fix_mode=args.fix_mode)
-    sys.stderr.write(command_footer() + "\n")
-    raise SystemExit(rc)
+def _run_cockpit_html(*, staged: bool) -> int:
+    if staged and "serve/cockpit/web/index.html" not in _git_paths(staged=True):
+        return 0
+    return _call(["npm", "run", "lint:html"], cwd=COCKPIT_WEB)
 
 
-def megalint() -> None:
-    """Run MegaLinter without the other manual-stage hooks."""
-    fix_mode = _parse_fix_mode("megalint")
-    _run(
-        ["run", "megalinter", "--all-files", "--hook-stage", "manual"],
-        hint=command_footer(),
-        env=_mode_environment(fix_mode),
-    )
+def _docker_command() -> list[str]:
+    return [
+        "docker",
+        "run",
+        "--rm",
+        "--platform",
+        "linux/amd64",
+        "-v",
+        f"{Path.cwd()}:/tmp/lint",
+    ]
 
 
-def typecheck() -> None:
-    """Run the Cockpit TypeScript project check."""
-    _run(["run", "typecheck-frontend", "--all-files", "--hook-stage", "manual"], hint=command_footer())
-
-
-def lint_full() -> None:
-    """Run all local and full-project lint checks."""
-    fix_mode = _parse_fix_mode("lint-full")
-    failures = _call_lint_hooks(["run", "--all-files"], fix_mode=fix_mode)
-    commands: tuple[tuple[list[str], dict[str, str] | None], ...] = (
-        (["npm", "run", "lint:html"], None),
-        (["pre-commit", "run", "typecheck-frontend", "--all-files", "--hook-stage", "manual"], None),
-        (
-            ["pre-commit", "run", "megalinter", "--all-files", "--hook-stage", "manual"],
-            _mode_environment(fix_mode),
-        ),
-    )
-    failures += sum(bool(_call(command, env=env)) for command, env in commands)
-    sys.stderr.write(command_footer() + "\n")
-    raise SystemExit(1 if failures else 0)
-
-
-def eslint_fix() -> None:
-    """Run ESLint on Cockpit frontend sources, fixing by default."""
-    fix_mode = _parse_fix_mode("eslint-fix")
-    web_dir = Path(COCKPIT_WEB)
-    if not web_dir.is_dir():
-        sys.stderr.write(f"Error: {COCKPIT_WEB} not found\n")
-        raise SystemExit(1)
-    command = ["npx", "eslint", "src/"]
-    if fix_mode is not FixMode.NONE:
-        command.append("--fix")
-    rc = _call(command, cwd=web_dir)
-    sys.stderr.write(command_footer() + "\n")
-    raise SystemExit(rc)
-
-
-def megalint_hook() -> None:
-    """Run the pinned MegaLinter container for the manual pre-commit hook."""
+def _run_megalint(fix_mode: FixMode) -> int:
     image = load_megalinter_image()
-    unsafe_fixes = bool(os.environ.get(_UNSAFE_FIX_ENV))
     command = _docker_command()
-    if os.environ.get(_NO_FIX_ENV):
+    if fix_mode is FixMode.NONE:
         command.extend(["-e", "APPLY_FIXES=none"])
-    if unsafe_fixes:
+    if fix_mode is FixMode.UNSAFE:
         command.extend(
             [
                 "-e",
@@ -346,92 +238,271 @@ def megalint_hook() -> None:
             image.reference,
         ]
     )
-    raise SystemExit(_call(command))
+    return _call(command)
 
 
-def _docker_command() -> list[str]:
-    return [
-        "docker",
-        "run",
-        "--rm",
-        "--platform",
-        "linux/amd64",
-        "-v",
-        f"{Path.cwd()}:/tmp/lint",
-    ]
+def _run_typecheck_cockpit() -> int:
+    return _call(
+        [
+            "npx",
+            "--prefix",
+            str(COCKPIT_WEB),
+            "tsc",
+            "--noEmit",
+            "--project",
+            str(COCKPIT_WEB / "tsconfig.json"),
+        ]
+    )
 
 
-def text_hygiene_check() -> None:
-    """Check trailing whitespace and final newlines without modifying files."""
+def _run_leaf(name: str, *, staged: bool, fix_mode: FixMode) -> int:
+    if name in _PRECOMMIT_FIX_HOOKS:
+        result = _run_precommit_fix_hook(name, staged=staged, fix_mode=fix_mode)
+    elif name in _PRECOMMIT_CHECK_HOOKS:
+        result = _precommit_hook(_PRECOMMIT_CHECK_HOOKS[name], staged=staged)
+    elif name == "lint-cockpit-html":
+        result = _run_cockpit_html(staged=staged)
+    elif name == "megalint":
+        result = _run_megalint(fix_mode)
+    elif name == "typecheck-cockpit":
+        result = _run_typecheck_cockpit()
+    elif name == "todo":
+        result = _run_todo()
+    else:
+        message = f"unknown quality command: {name}"
+        raise ValueError(message)
+    return result
+
+
+def _run_named(name: str, *, staged: bool, fix_mode: FixMode) -> int:
+    children = _AGGREGATES.get(name)
+    if children is None:
+        return _run_leaf(name, staged=staged, fix_mode=fix_mode)
     failures = 0
-    for raw_path in sys.argv[1:]:
-        path = Path(raw_path)
-        try:
-            data = path.read_bytes()
-        except OSError as exc:
-            print(f"{path}: unable to read: {exc}")  # noqa: T201
-            failures += 1
-            continue
-        if not data or b"\0" in data:
-            continue
-        trailing = any(line.rstrip(b"\r\n").endswith((b" ", b"\t")) for line in data.splitlines(keepends=True))
-        line_ending = data[len(data.rstrip(b"\r\n")) :]
-        if trailing:
-            print(f"{path}: trailing whitespace")  # noqa: T201
-            failures += 1
-        if line_ending not in (b"\n", b"\r\n"):
-            print(f"{path}: expected exactly one final newline")  # noqa: T201
-            failures += 1
-    raise SystemExit(1 if failures else 0)
+    for child in children:
+        failures += int(bool(_run_named(child, staged=staged, fix_mode=fix_mode)))
+    return int(bool(failures))
 
 
-# ── TODO marker scan ──────────────────────────────────────────
-
-_TODO_RE = re.compile(r"^> \*\*TODO:\*\*", re.MULTILINE)
-_SKIP_DIRS = frozenset(
-    {
-        ".git",
-        "node_modules",
-        ".venv",
-        "dist",
-        "__pycache__",
-        "build",
-        ".egg-info",
-        "megalinter-reports",
-        "test-results",
-        "scratch",
-    }
-)
+def _finish(rc: int) -> None:
+    sys.stderr.write(command_footer() + "\n")
+    raise SystemExit(rc)
 
 
-def todo_check() -> None:
-    """Scan for ``> **TODO:**`` markers (warning only, exit 0)."""
+def _require_development(prog: str) -> None:
+    if not _is_owlbear_dev_checkout(Path.cwd()):
+        message = f"{prog} is available only from the OwlBear development checkout"
+        raise SystemExit(message)
+
+
+def _is_owlbear_dev_checkout(root: Path) -> bool:
+    return root.resolve() == _REPOSITORY_ROOT and (root / ".pre-commit-config.yaml").is_file()
+
+
+def _has_ruff_config(root: Path) -> bool:
+    if any((root / name).is_file() for name in ("ruff.toml", ".ruff.toml")):
+        return True
+    pyproject = root / "pyproject.toml"
+    if not pyproject.is_file():
+        return False
+    config = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    tool = config.get("tool")
+    return isinstance(tool, dict) and isinstance(tool.get("ruff"), dict)
+
+
+def _consumer_lint(root: Path, *, staged: bool, fix_mode: FixMode) -> int:
+    paths = _git_paths(staged=staged) if staged else ["."]
+    has_ruff = _has_ruff_config(root)
+    package = root / "package.json"
+    package_command: list[str] | None = None
+    if package.is_file():
+        config = json.loads(package.read_text(encoding="utf-8"))
+        scripts = config.get("scripts")
+        if isinstance(scripts, dict) and isinstance(scripts.get("lint"), str):
+            script = "lint:fix" if fix_mode is not FixMode.NONE and isinstance(scripts.get("lint:fix"), str) else "lint"
+            package_command = ["npm", "run", script]
+    commands: list[list[str]] = []
+    if has_ruff:
+        targets = [path for path in paths if Path(path).is_dir() or Path(path).suffix in _PYTHON_SUFFIXES]
+        if targets:
+            if fix_mode is FixMode.NONE:
+                commands.append(["ruff", "check", *targets])
+            else:
+                command = ["ruff", "check", "--fix"]
+                if fix_mode is FixMode.UNSAFE:
+                    command.append("--unsafe-fixes")
+                commands.append([*command, *targets])
+    if package_command is not None:
+        commands.append(package_command)
+    if not commands:
+        sys.stderr.write(
+            "No consumer lint configuration found. Add [tool.ruff], ruff.toml, .ruff.toml, "
+            "or a package.json lint script.\n"
+        )
+        return 2
+    failures = sum(bool(_call(command, cwd=root)) for command in commands)
+    return int(bool(failures))
+
+
+def lint() -> None:
+    """Run the normal local lint suite or discover consumer-owned lint tools."""
+    parser = argparse.ArgumentParser(prog="lint")
+    parser.add_argument("--staged", "-s", action="store_true")
+    _add_fix_mode(parser, allow_unsafe=True)
+    args = parser.parse_args()
+    try:
+        if _is_owlbear_dev_checkout(Path.cwd()):
+            rc = _run_named("lint", staged=args.staged, fix_mode=args.fix_mode)
+        else:
+            rc = _consumer_lint(Path.cwd(), staged=args.staged, fix_mode=args.fix_mode)
+    except (OSError, RuntimeError, json.JSONDecodeError, tomllib.TOMLDecodeError) as exc:
+        sys.stderr.write(f"Error: {exc}\n")
+        rc = 2
+    _finish(rc)
+
+
+def _run_public_leaf(name: str, *, fixes: bool, allow_unsafe: bool, staged: bool) -> None:
+    _require_development(name)
+    args = _parse_options(name, staged=staged, fixes=fixes, allow_unsafe=allow_unsafe)
+    rc = _run_named(name, staged=getattr(args, "staged", False), fix_mode=args.fix_mode)
+    _finish(rc)
+
+
+def lint_cockpit() -> None:
+    """Run the Cockpit frontend lint suite."""
+    _run_public_leaf("lint-cockpit", fixes=True, allow_unsafe=True, staged=True)
+
+
+def lint_python() -> None:
+    """Run Ruff's Python lint checks."""
+    _run_public_leaf("lint-python", fixes=True, allow_unsafe=True, staged=True)
+
+
+def lint_markdown() -> None:
+    """Run Markdown lint checks."""
+    _run_public_leaf("lint-markdown", fixes=True, allow_unsafe=False, staged=True)
+
+
+def lint_yaml() -> None:
+    """Run strict YAML lint checks."""
+    _run_public_leaf("lint-yaml", fixes=False, allow_unsafe=False, staged=True)
+
+
+def lint_shell() -> None:
+    """Run ShellCheck on shell sources."""
+    _run_public_leaf("lint-shell", fixes=False, allow_unsafe=False, staged=True)
+
+
+def lint_actions() -> None:
+    """Run Actionlint on GitHub workflows."""
+    _run_public_leaf("lint-actions", fixes=False, allow_unsafe=False, staged=True)
+
+
+def lint_editorconfig() -> None:
+    """Check repository files against EditorConfig policy."""
+    _run_public_leaf("lint-editorconfig", fixes=False, allow_unsafe=False, staged=True)
+
+
+def lint_cockpit_code() -> None:
+    """Run Cockpit ESLint checks."""
+    _run_public_leaf("lint-cockpit-code", fixes=True, allow_unsafe=False, staged=True)
+
+
+def lint_cockpit_style() -> None:
+    """Run Cockpit Stylelint checks."""
+    _run_public_leaf("lint-cockpit-style", fixes=True, allow_unsafe=True, staged=True)
+
+
+def lint_cockpit_html() -> None:
+    """Run Cockpit HTMLHint checks."""
+    _run_public_leaf("lint-cockpit-html", fixes=False, allow_unsafe=False, staged=True)
+
+
+def megalint() -> None:
+    """Run MegaLinter across the workspace."""
+    _require_development("megalint")
+    args = _parse_options("megalint", staged=False, fixes=True, allow_unsafe=True)
+    _finish(_run_megalint(args.fix_mode))
+
+
+def lint_full() -> None:
+    """Run every configured lint engine, including MegaLinter."""
+    _require_development("lint-full")
+    args = _parse_options("lint-full", staged=False, fixes=True, allow_unsafe=True)
+    _finish(_run_named("lint-full", staged=False, fix_mode=args.fix_mode))
+
+
+def format_python() -> None:
+    """Format Python with Ruff."""
+    _run_public_leaf("format-python", fixes=True, allow_unsafe=False, staged=True)
+
+
+def format_whitespace() -> None:
+    """Remove trailing whitespace."""
+    _run_public_leaf("format-whitespace", fixes=True, allow_unsafe=False, staged=True)
+
+
+def format_eof() -> None:
+    """Normalize final newlines."""
+    _run_public_leaf("format-eof", fixes=True, allow_unsafe=False, staged=True)
+
+
+def format_full() -> None:
+    """Run all dedicated formatters and text normalizers."""
+    _require_development("format-full")
+    args = _parse_options("format-full", staged=True, fixes=True, allow_unsafe=False)
+    _finish(_run_named("format-full", staged=args.staged, fix_mode=args.fix_mode))
+
+
+def typecheck_cockpit() -> None:
+    """Type-check the Cockpit frontend."""
+    _require_development("typecheck-cockpit")
+    parser = argparse.ArgumentParser(prog="typecheck-cockpit")
+    parser.parse_args()
+    _finish(_run_typecheck_cockpit())
+
+
+def quality_full() -> None:
+    """Run format, lint, typecheck, and advisory checks."""
+    _require_development("quality-full")
+    args = _parse_options("quality-full", staged=False, fixes=True, allow_unsafe=True)
+    _finish(_run_named("quality-full", staged=False, fix_mode=args.fix_mode))
+
+
+def _run_todo() -> int:
     hits: list[str] = []
     _walk_todo(".", hits)
     if hits:
-        print(  # noqa: T201
-            f"\033[1;33m\u26a0 {len(hits)} TODO marker(s):\033[0m"
-        )
-        for h in hits:
-            print(f"  {h}")  # noqa: T201
+        print(f"\033[1;33m\u26a0 {len(hits)} TODO marker(s):\033[0m")  # noqa: T201
+        for hit in hits:
+            print(f"  {hit}")  # noqa: T201
     else:
         print("\033[32m\u2713 No TODO markers found\033[0m")  # noqa: T201
+    return 0
+
+
+def todo_check() -> None:
+    """Scan for TODO markers as an advisory check."""
+    parser = argparse.ArgumentParser(prog="todo")
+    parser.parse_args()
+    rc = _run_todo()
     if not os.environ.get("PRE_COMMIT"):
         sys.stderr.write(command_footer() + "\n")
+    raise SystemExit(rc)
 
 
 def _walk_todo(root: str, hits: list[str]) -> None:
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
-        for f in filenames:
-            _scan_todo(str(Path(dirpath) / f), hits)
+        dirnames[:] = [directory for directory in dirnames if directory not in _SKIP_DIRS]
+        for filename in filenames:
+            _scan_todo(str(Path(dirpath) / filename), hits)
 
 
 def _scan_todo(path: str, hits: list[str]) -> None:
     try:
-        with Path(path).open(encoding="utf-8", errors="replace") as fh:
-            for i, line in enumerate(fh, 1):
+        with Path(path).open(encoding="utf-8", errors="replace") as handle:
+            for line_number, line in enumerate(handle, 1):
                 if _TODO_RE.search(line):
-                    hits.append(f"{path}:{i}: {line.rstrip()}")
+                    hits.append(f"{path}:{line_number}: {line.rstrip()}")
     except OSError:
         pass

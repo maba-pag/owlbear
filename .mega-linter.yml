@@ -20,7 +20,7 @@ ENABLE_LINTERS:
   - YAML_YAMLLINT
 
 # Apply deterministic fixes by default. Syntax-only validators and security
-# scanners remain check-only. The CLI's --unsafe-fixes mode adds Ruff unsafe
+# scanners remain check-only. The CLI's --unsafe-fix mode adds Ruff unsafe
 # fixes and Stylelint lax parsing.
 APPLY_FIXES:
   - CSS_STYLELINT
@@ -40,7 +40,7 @@ SARIF_REPORTER: true
 FILTER_REGEX_EXCLUDE: "(\
   \\.egg-info/|\
   \\.owlbear/\
-    (completed|delivery/packages|delivery/runtime|doc-index\\.md$|kanban/archive|legacy|memory|research|sources|target)|\
+      (completed|delivery/packages|delivery/runtime|(doc|py|ts)-index\\.md$|kanban/archive|legacy|memory|research|sources|target)|\
   store/audit/|store/knowledge/.*\\.db$\
 )"
 

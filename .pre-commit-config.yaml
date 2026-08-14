@@ -2,26 +2,25 @@
 # Pre-commit config — aligned with CI (MegaLinter v9.6.0)
 #
 # Commands:
-#   uv run lint [--no-fix | --unsafe-fixes] [FILE ...]
-#                     Explicit files, or staged files when omitted (= git commit)
-#   uv run lint --all [--no-fix | --unsafe-fixes]
-#                     All files, default hooks
-#   uv run typecheck  Frontend TypeScript only
-#   uv run megalint [--no-fix | --unsafe-fixes]
+#   uv run lint [--staged] [--no-fix | --unsafe-fix]
+#                     Workspace files by default; staged files with --staged
+#   uv run lint-cockpit [--staged] [--no-fix | --unsafe-fix]
+#                     Cockpit frontend lint aggregate
+#   uv run megalint [--no-fix | --unsafe-fix]
 #                     MegaLinter only
-#   uv run lint-full [--no-fix | --unsafe-fixes]
+#   uv run lint-full [--no-fix | --unsafe-fix]
 #                     All local and full-project lint checks
-#   uv run eslint-fix [--no-fix]
-#                     ESLint on Cockpit frontend (fixes by default)
+#   uv run quality-full [--no-fix | --unsafe-fix]
+#                     Full format, lint, typecheck, and advisory checks
 #
-# Auto-fix on commit: ruff (safe lint fixes + format), ESLint,
-# trailing-whitespace, end-of-file-fixer, and markdownlint.
+# Auto-fix on commit: Ruff, frontend lint hooks, trailing-whitespace,
+# end-of-file-fixer, and markdownlint.
 
 # Exclude paths matching MegaLinter FILTER_REGEX_EXCLUDE + ADDITIONAL_EXCLUDED_DIRECTORIES.
 # Keep aligned with .mega-linter.yml.
 exclude: |
   (?x)^(
-    \.owlbear/doc-index\.md$
+    \.owlbear/(doc-index|py-index|ts-index)\.md$
     |\.owlbear/delivery/packages/
     |\.owlbear/kanban/(archive|decisions|tasks)/
     |\.owlbear/(legacy|memory|research|sources|target)/
@@ -151,13 +150,6 @@ repos:
         files: ^serve/cockpit/web/src/.*\.css$
         pass_filenames: false
         stages: [manual]
-      - id: text-hygiene-check
-        name: Trailing whitespace and final newline (no fix)
-        language: system
-        entry: uv run --frozen text-hygiene-check
-        types: [text]
-        exclude: ^serve/cockpit/web/public/porsche-design-system/
-        stages: [manual]
       # Frontend — extra (no CI equivalent, catches type errors early)
       # Manual stage: tsc --noEmit is a whole-project check — can't scope to
       # staged files. Run explicitly: uv run pre-commit run typecheck-frontend --all-files --hook-stage manual
@@ -197,7 +189,7 @@ repos:
       - id: megalinter
         name: MegaLinter
         language: system
-        entry: uv run --frozen megalint-hook
+        entry: uv run --frozen megalint
         pass_filenames: false
         always_run: true
         stages: [manual]

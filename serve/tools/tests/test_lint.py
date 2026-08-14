@@ -1,21 +1,30 @@
-"""Behavioral tests for lint command wrappers."""
+"""Behavioral tests for lint, formatting, and quality command wrappers."""
 
 from __future__ import annotations
 
-import json
-import os
 import sys
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from owlbear_tools.lint import lint, lint_full, megalint, megalint_hook, typecheck
+from owlbear_tools.lint import (
+    FixMode,
+    _run_named,
+    format_eof,
+    format_whitespace,
+    lint,
+    lint_full,
+    lint_python,
+    megalint,
+    quality_full,
+)
 from owlbear_tools.megalinter import MegaLinterImage
 
 _TEST_IMAGE = MegaLinterImage(reference="registry.example/megalinter-main:v-current")
 
 
-def test_lint_uses_staged_files_when_no_paths_are_given() -> None:
+def test_lint_runs_the_normal_local_suite() -> None:
     with (
         patch.object(sys, "argv", ["lint"]),
         patch("owlbear_tools.lint.subprocess.call", return_value=0) as call,
@@ -23,229 +32,142 @@ def test_lint_uses_staged_files_when_no_paths_are_given() -> None:
     ):
         lint()
 
-    call.assert_called_once_with(["pre-commit", "run"])
-
-
-def test_lint_passes_explicit_paths_to_pre_commit() -> None:
-    paths = ["share/skills/h-mcp-memory/SKILL.md", "share/skills/r-pipeline-protocol/SKILL.md"]
-    with (
-        patch.object(sys, "argv", ["lint", *paths]),
-        patch("owlbear_tools.lint.subprocess.call", return_value=0) as call,
-        pytest.raises(SystemExit, match="0"),
-    ):
-        lint()
-
-    call.assert_called_once_with(["pre-commit", "run", "--files", *paths])
-
-
-@pytest.mark.parametrize("option", ["--all", "-a"])
-def test_lint_runs_all_files_for_all_option(option: str) -> None:
-    with (
-        patch.object(sys, "argv", ["lint", option]),
-        patch("owlbear_tools.lint.subprocess.call", return_value=0) as call,
-        pytest.raises(SystemExit, match="0"),
-    ):
-        lint()
-
-    call.assert_called_once_with(["pre-commit", "run", "--all-files"])
-
-
-def test_lint_rejects_all_with_explicit_paths() -> None:
-    with patch.object(sys, "argv", ["lint", "--all", "README.md"]), pytest.raises(SystemExit, match="2"):
-        lint()
-
-
-def test_consumer_lint_uses_declared_ruff_config_without_fixes(tmp_path: object, monkeypatch: object) -> None:
-    root = tmp_path
-    (root / "pyproject.toml").write_text("[tool.ruff]\nline-length = 100\n", encoding="utf-8")
-    source = root / "src/example.py"
-    source.parent.mkdir()
-    source.write_text("value = 1\n", encoding="utf-8")
-    monkeypatch.chdir(root)
-
-    with (
-        patch.object(sys, "argv", ["lint", "--no-fix", "src/example.py"]),
-        patch("owlbear_tools.lint.subprocess.call", return_value=0) as call,
-        pytest.raises(SystemExit, match="0"),
-    ):
-        lint()
-
-    assert [item.args[0] for item in call.call_args_list] == [
-        ["ruff", "check", "src/example.py"],
-        ["ruff", "format", "--check", "src/example.py"],
-    ]
-    assert all(item.kwargs["cwd"] == root for item in call.call_args_list)
-
-
-def test_consumer_lint_uses_project_owned_fix_script(tmp_path: object, monkeypatch: object) -> None:
-    root = tmp_path
-    package = {"scripts": {"lint": "eslint .", "lint:fix": "eslint . --fix"}}
-    (root / "package.json").write_text(json.dumps(package), encoding="utf-8")
-    (root / "package-lock.json").write_text("{}\n", encoding="utf-8")
-    monkeypatch.chdir(root)
-
-    with (
-        patch.object(sys, "argv", ["lint", "--all"]),
-        patch("owlbear_tools.lint.subprocess.call", return_value=0) as call,
-        pytest.raises(SystemExit, match="0"),
-    ):
-        lint()
-
-    call.assert_called_once_with(["npm", "run", "lint:fix"], cwd=root)
-
-
-def test_consumer_lint_requires_project_owned_configuration(
-    tmp_path: object, monkeypatch: object, capsys: object
-) -> None:
-    monkeypatch.chdir(tmp_path)
-
-    with patch.object(sys, "argv", ["lint", "--all"]), pytest.raises(SystemExit, match="2"):
-        lint()
-
-    assert "No consumer lint configuration found" in capsys.readouterr().err
-
-
-def test_lint_no_fix_replaces_mutating_hooks_with_check_hooks() -> None:
-    with (
-        patch.object(sys, "argv", ["lint", "--no-fix", "README.md"]),
-        patch("owlbear_tools.lint.subprocess.call", return_value=0) as call,
-        pytest.raises(SystemExit, match="0"),
-    ):
-        lint()
-
-    commands = [args[0][0] for args in call.call_args_list]
+    commands = [item.args[0] for item in call.call_args_list]
     assert commands == [
-        ["pre-commit", "run", "--files", "README.md"],
-        ["pre-commit", "run", "text-hygiene-check", "--hook-stage", "manual", "--files", "README.md"],
-        ["pre-commit", "run", "ruff-check", "--hook-stage", "manual", "--files", "README.md"],
-        ["pre-commit", "run", "ruff-format-check", "--hook-stage", "manual", "--files", "README.md"],
-        ["pre-commit", "run", "markdownlint-check", "--hook-stage", "manual", "--files", "README.md"],
-        ["pre-commit", "run", "eslint-frontend-check", "--hook-stage", "manual", "--files", "README.md"],
-        ["pre-commit", "run", "stylelint-frontend-check", "--hook-stage", "manual", "--files", "README.md"],
+        ["pre-commit", "run", "ruff-fix", "--all-files"],
+        ["pre-commit", "run", "markdownlint-fix", "--all-files"],
+        ["pre-commit", "run", "yamllint", "--all-files"],
+        ["pre-commit", "run", "shellcheck", "--all-files"],
+        ["pre-commit", "run", "actionlint", "--all-files"],
+        ["pre-commit", "run", "editorconfig-checker", "--all-files"],
+        ["pre-commit", "run", "eslint-frontend-fix", "--all-files"],
+        ["pre-commit", "run", "stylelint-frontend-fix", "--all-files"],
+        ["npm", "run", "lint:html"],
     ]
-    assert "trailing-whitespace-fix" in call.call_args_list[0].kwargs["env"]["SKIP"]
+    assert call.call_args_list[-1].kwargs["cwd"] == Path("serve/cockpit/web")
 
 
-def test_lint_unsafe_fixes_replaces_safe_hooks_with_stronger_hooks() -> None:
+def test_lint_staged_passes_staged_files_to_every_local_leaf() -> None:
+    staged = b"README.md\0serve/cockpit/web/src/App.tsx\0"
     with (
-        patch.object(sys, "argv", ["lint", "--unsafe-fixes", "serve/cockpit/web/src/styles.css"]),
+        patch.object(sys, "argv", ["lint", "--staged"]),
+        patch("owlbear_tools.lint.subprocess.check_output", return_value=staged),
         patch("owlbear_tools.lint.subprocess.call", return_value=0) as call,
         pytest.raises(SystemExit, match="0"),
     ):
         lint()
 
-    commands = [args[0][0] for args in call.call_args_list]
-    assert commands == [
-        ["pre-commit", "run", "--files", "serve/cockpit/web/src/styles.css"],
-        [
-            "pre-commit",
-            "run",
-            "ruff-unsafe-fix",
-            "--hook-stage",
-            "manual",
-            "--files",
-            "serve/cockpit/web/src/styles.css",
-        ],
-        [
-            "pre-commit",
-            "run",
-            "stylelint-frontend-lax",
-            "--hook-stage",
-            "manual",
-            "--files",
-            "serve/cockpit/web/src/styles.css",
-        ],
-    ]
-    skip = call.call_args_list[0].kwargs["env"]["SKIP"]
-    assert "ruff-fix" in skip
-    assert "stylelint-frontend-fix" in skip
+    assert all("--files" in item.args[0] for item in call.call_args_list)
+    assert all("README.md" in item.args[0] for item in call.call_args_list)
 
 
-@pytest.mark.parametrize("command", [lint, megalint, lint_full])
-def test_fix_modes_are_mutually_exclusive(command: object) -> None:
-    with (
-        patch.object(sys, "argv", ["lint", "--no-fix", "--unsafe-fixes"]),
-        pytest.raises(SystemExit, match="2"),
-    ):
-        command()
-
-
-@pytest.mark.parametrize(
-    ("command", "hook"),
-    [(megalint, "megalinter"), (typecheck, "typecheck-frontend")],
-)
-def test_manual_commands_run_only_their_named_hook(command: object, hook: str) -> None:
-    with (
-        patch.object(sys, "argv", [hook]),
-        patch("owlbear_tools.lint.subprocess.call", return_value=0) as call,
-        pytest.raises(SystemExit, match="0"),
-    ):
-        command()
-
-    call.assert_called_once_with(["pre-commit", "run", hook, "--all-files", "--hook-stage", "manual"])
-
-
-def test_megalint_no_fix_disables_fixes_for_the_hook() -> None:
-    with (
-        patch.object(sys, "argv", ["megalint", "--no-fix"]),
-        patch("owlbear_tools.lint.subprocess.call", return_value=0) as call,
-        pytest.raises(SystemExit, match="0"),
-    ):
-        megalint()
-
-    assert call.call_args.args[0] == [
-        "pre-commit",
-        "run",
-        "megalinter",
-        "--all-files",
-        "--hook-stage",
-        "manual",
-    ]
-    assert call.call_args.kwargs["env"]["OWLBEAR_LINT_NO_FIX"] == "1"
-
-
-def test_megalint_unsafe_fixes_enables_stronger_container_mode() -> None:
-    with (
-        patch.object(sys, "argv", ["megalint", "--unsafe-fixes"]),
-        patch("owlbear_tools.lint.subprocess.call", return_value=0) as call,
-        pytest.raises(SystemExit, match="0"),
-    ):
-        megalint()
-
-    assert call.call_args.kwargs["env"]["OWLBEAR_LINT_UNSAFE_FIXES"] == "1"
-
-
-def test_lint_full_supports_all_fix_modes() -> None:
-    for option, expected_env in (
-        ([], {}),
-        (["--no-fix"], {"OWLBEAR_LINT_NO_FIX": "1"}),
-        (["--unsafe-fixes"], {"OWLBEAR_LINT_UNSAFE_FIXES": "1"}),
+def test_lint_python_exposes_safe_no_fix_and_unsafe_modes() -> None:
+    for option, hook, manual in (
+        ([], "ruff-fix", False),
+        (["--no-fix"], "ruff-check", True),
+        (["--unsafe-fix"], "ruff-unsafe-fix", True),
     ):
         with (
-            patch.object(sys, "argv", ["lint-full", *option]),
+            patch.object(sys, "argv", ["lint-python", *option]),
             patch("owlbear_tools.lint.subprocess.call", return_value=0) as call,
             pytest.raises(SystemExit, match="0"),
         ):
-            lint_full()
+            lint_python()
 
-        megalint_call = next(
-            item for item in call.call_args_list if item.args[0][0:3] == ["pre-commit", "run", "megalinter"]
-        )
-        env = megalint_call.kwargs.get("env", {})
-        for key, value in expected_env.items():
-            assert env[key] == value
+        command = call.call_args.args[0]
+        assert command[:3] == ["pre-commit", "run", hook]
+        if manual:
+            assert "--hook-stage" in command
+            assert "manual" in command
+        else:
+            assert "--all-files" in command
 
 
-def test_megalint_hook_runs_stronger_linter_modes() -> None:
+def test_megalint_runs_as_a_direct_workspace_engine() -> None:
     with (
-        patch.dict(os.environ, {"OWLBEAR_LINT_UNSAFE_FIXES": "1"}),
+        patch.object(sys, "argv", ["megalint", "--unsafe-fix"]),
         patch("owlbear_tools.lint.load_megalinter_image", return_value=_TEST_IMAGE),
         patch("owlbear_tools.lint.subprocess.call", return_value=0) as call,
         pytest.raises(SystemExit, match="0"),
     ):
-        megalint_hook()
+        megalint()
 
     command = call.call_args.args[0]
+    assert command[:6] == ["docker", "run", "--rm", "--platform", "linux/amd64", "-v"]
+    assert "registry.example/megalinter-main:v-current" in command
     assert "PYTHON_RUFF_ARGUMENTS=--unsafe-fixes" in command
-    assert "CSS_STYLELINT_COMMAND_REMOVE_ARGUMENTS=--fix" in command
-    assert "CSS_STYLELINT_ARGUMENTS=--fix=lax" in command
+
+
+def test_lint_full_runs_local_lint_then_megalint() -> None:
+    with (
+        patch.object(sys, "argv", ["lint-full", "--no-fix"]),
+        patch("owlbear_tools.lint.subprocess.call", return_value=0) as call,
+        patch("owlbear_tools.lint.load_megalinter_image", return_value=_TEST_IMAGE),
+        pytest.raises(SystemExit, match="0"),
+    ):
+        lint_full()
+
+    commands = [item.args[0] for item in call.call_args_list]
+    assert commands[0][:3] == ["pre-commit", "run", "ruff-check"]
+    assert commands[-1][-1] == _TEST_IMAGE.reference
+    assert "APPLY_FIXES=none" in commands[-1]
+
+
+def test_quality_full_executes_todo_last() -> None:
+    executed: list[str] = []
+
+    def record(name: str, **_: object) -> int:
+        executed.append(name)
+        return 0
+
+    with patch("owlbear_tools.lint._run_leaf", side_effect=record):
+        assert _run_named("quality-full", staged=False, fix_mode=FixMode.SAFE) == 0
+
+    assert executed[-1] == "todo"
+    assert executed == [
+        "format-python",
+        "format-whitespace",
+        "format-eof",
+        "lint-python",
+        "lint-markdown",
+        "lint-yaml",
+        "lint-shell",
+        "lint-actions",
+        "lint-editorconfig",
+        "lint-cockpit-code",
+        "lint-cockpit-style",
+        "lint-cockpit-html",
+        "megalint",
+        "typecheck-cockpit",
+        "todo",
+    ]
+
+
+def test_format_whitespace_no_fix_reports_trailing_whitespace(tmp_path: Path) -> None:
+    path = tmp_path / "example.txt"
+    path.write_bytes(b"value  \n")
+
+    with (
+        patch.object(sys, "argv", ["format-whitespace", "--no-fix"]),
+        patch("owlbear_tools.lint.subprocess.check_output", return_value=f"{path}\0".encode()),
+        pytest.raises(SystemExit, match="1"),
+    ):
+        format_whitespace()
+
+
+def test_no_fix_text_check_skips_precommit_excluded_paths() -> None:
+    with (
+        patch.object(sys, "argv", ["format-eof", "--no-fix"]),
+        patch("owlbear_tools.lint.subprocess.check_output", return_value=b".owlbear/legacy/absent.md\0"),
+        pytest.raises(SystemExit, match="0"),
+    ):
+        format_eof()
+
+
+@pytest.mark.parametrize("command", [lint, megalint, lint_full, quality_full])
+def test_unsafe_and_no_fix_are_mutually_exclusive(command: object) -> None:
+    with (
+        patch.object(sys, "argv", ["command", "--no-fix", "--unsafe-fix"]),
+        pytest.raises(SystemExit, match="2"),
+    ):
+        command()
