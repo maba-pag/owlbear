@@ -92,6 +92,17 @@ class _DeliveryModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
+class DeliveryChangePublicationIdentity(_DeliveryModel):
+    """Provider pull-request identity retained while Change attention clears ready authority."""
+
+    schema_version: Literal[1] = 1
+    change_id: str = Field(min_length=1)
+    repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    number: int = Field(gt=0)
+    node_id: str = Field(min_length=1)
+    head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
 class DeliveryOutputReference(_DeliveryModel):
     """Claim-bound identity and digest of one separately published phase output."""
 
@@ -817,7 +828,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 class DeliveryFrontier(_DeliveryModel):
     """Canonical outcome and Change checkpoint state persisted beside authority."""
 
-    schema_version: Literal[11] = 11
+    schema_version: Literal[12] = 12
     bindings: tuple[OutcomeAuthorityBinding, ...]
     published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint: DeliveryPendingCheckpoint | None = None
@@ -825,6 +836,7 @@ class DeliveryFrontier(_DeliveryModel):
     finalization: DeliveryFinalizationReceipt | None = None
     finalization_invalidation: DeliveryFinalizationInvalidationReceipt | None = None
     ready: PullRequestReadyReceipt | None = None
+    change_disposition_publication: DeliveryChangePublicationIdentity | None = None
     merged_pull_request_latch: DeliveryMergedPullRequestLatch | None = None
     change_completion: DeliveryChangeCompletion | None = None
     change_disposition: DeliveryChangeDisposition | None = None
@@ -881,6 +893,9 @@ class DeliveryFrontier(_DeliveryModel):
 
     def _validate_change_disposition(self) -> None:
         if self.change_disposition is None:
+            if self.change_disposition_publication is not None:
+                message = "Change publication identity requires current Change attention"
+                raise ValueError(message)
             return
         if self.change_completion is not None or self.integration_completion is not None:
             message = "Change disposition cannot coexist with terminal completion authority"
@@ -894,6 +909,10 @@ class DeliveryFrontier(_DeliveryModel):
         resolution = self.change_disposition_resolution
         if resolution is not None and resolution.change_id != self.change_disposition.change_id:
             message = "Change attention and its resolution must bind the same Change"
+            raise ValueError(message)
+        publication = self.change_disposition_publication
+        if publication is not None and publication.change_id != self.change_disposition.change_id:
+            message = "Change attention and its publication identity must bind the same Change"
             raise ValueError(message)
         if resolution is not None and resolution.disposition_id == self.change_disposition.disposition_id:
             message = "Change attention cannot retain its own resolution receipt"
@@ -1087,6 +1106,12 @@ class DeliveryRuntimeConflictError(RuntimeError):
     code = "ERR_DELIVERY_RUNTIME_CONFLICT"
 
 
+class DeliveryChangeDispositionConflictError(DeliveryRuntimeConflictError):
+    """An exact Change attention identity is stale or no longer active."""
+
+    retry_safe = False
+
+
 class DeliveryAcceptanceWaitingError(DeliveryRuntimeConflictError):
     """The bound pull request is still open and has not reached acceptance."""
 
@@ -1105,8 +1130,8 @@ _STAGE_ORDER = {
     DeliveryStage.IMPLEMENTATION: 2,
     DeliveryStage.COMPLETED: 3,
 }
-_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9, 10})
-_FRONTIER_SCHEMA_VERSION = 11
+_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9, 10, 11})
+_FRONTIER_SCHEMA_VERSION = 12
 _FINALIZATION_SCHEMA_VERSION = 2
 _LEGACY_FINALIZATION_MESSAGE = "legacy finalization authority requires explicit re-finalization"
 _CHECKPOINT_BACKFILL_SCHEMA_VERSIONS = frozenset({1, 2})
@@ -1211,6 +1236,7 @@ class DeliveryRuntime:
         disposition: DeliveryChangeDisposition,
         *,
         clear_ready: bool = False,
+        publication_identity: DeliveryChangePublicationIdentity | None = None,
     ) -> DeliveryChangeDisposition:
         """Persist one first-write-wins Change attention record."""
         frontier, previous = self._read()
@@ -1222,6 +1248,15 @@ class DeliveryRuntime:
                 and existing.entered_from == disposition.entered_from
                 and existing.diagnostics == disposition.diagnostics
             ):
+                if publication_identity is not None and frontier.change_disposition_publication is None:
+                    self._replace(
+                        previous,
+                        frontier.model_copy(update={"change_disposition_publication": publication_identity}),
+                    )
+                elif (
+                    publication_identity is not None and frontier.change_disposition_publication != publication_identity
+                ):
+                    _conflict("Delivery Change attention has different publication identity")
                 return existing
             _conflict("Delivery Change already has different attention authority")
         if is_change_terminal(frontier):
@@ -1231,9 +1266,14 @@ class DeliveryRuntime:
             _conflict("Change disposition does not match the admitted Change")
         if disposition.entered_from != derive_change_stage(frontier):
             _conflict("Change disposition does not match the current lifecycle stage")
+        retained_publication = publication_identity
+        if retained_publication is None and clear_ready:
+            retained_publication = _pull_request_identity(frontier.ready)
         updated = frontier.model_copy(
             update={
                 "change_disposition": disposition,
+                "change_disposition_publication": retained_publication,
+                "change_disposition_resolution": None,
                 "ready": None if clear_ready else frontier.ready,
             }
         )
@@ -1252,9 +1292,9 @@ class DeliveryRuntime:
         if current is None:
             if existing is not None and existing.disposition_id == expected_disposition_id:
                 return existing
-            _conflict("Delivery Change attention is absent or already resolved")
+            _attention_conflict("Delivery Change attention is absent or already resolved")
         if current.disposition_id != expected_disposition_id:
-            _conflict("Delivery Change attention identity is stale")
+            _attention_conflict("Delivery Change attention identity is stale")
         _require_no_active_change_claim(frontier, "Change attention resolution")
         resolution = DeliveryChangeDispositionResolution.create(
             change_id=self._contract.change_id,
@@ -1264,6 +1304,7 @@ class DeliveryRuntime:
         updated = frontier.model_copy(
             update={
                 "change_disposition": None,
+                "change_disposition_publication": None,
                 "change_disposition_resolution": resolution,
             }
         )
@@ -1304,6 +1345,13 @@ class DeliveryRuntime:
                 diagnostics=(*diagnostics, f"acceptance-observation:{observation.observation_id}"),
             ),
             clear_ready=True,
+            publication_identity=DeliveryChangePublicationIdentity(
+                change_id=self._contract.change_id,
+                repository=observation.snapshot.repository,
+                number=observation.snapshot.number,
+                node_id=observation.snapshot.node_id,
+                head_sha=observation.snapshot.head_sha,
+            ),
         )
 
     def show_binding(self, outcome_id: str) -> OutcomeAuthorityBinding:
@@ -1461,7 +1509,7 @@ class DeliveryRuntime:
         observation_id: str | None = None,
     ) -> PullRequestReadyReceipt | None:
         """Retain ready authority only while the provider reports the PR ready."""
-        frontier, previous = self._read()
+        frontier, _previous = self._read()
         _require_change_mutable(frontier, "reconcile_pull_request_draft_state")
         if frontier.ready is None or not provider_draft:
             return frontier.ready
@@ -1475,8 +1523,7 @@ class DeliveryRuntime:
             recorded_at=observed_at or datetime.now(UTC),
             diagnostics=diagnostics,
         )
-        updated = frontier.model_copy(update={"ready": None, "change_disposition": disposition})
-        self._replace(previous, updated)
+        self.capture_change_disposition(disposition, clear_ready=True)
         return None
 
     def latch_merged_pull_request(
@@ -2659,6 +2706,22 @@ def _receipt_digest(receipt: BaseModel, identity_field: str) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
+def _pull_request_identity(ready: PullRequestReadyReceipt | None) -> DeliveryChangePublicationIdentity | None:
+    if ready is None:
+        return None
+    return DeliveryChangePublicationIdentity(
+        change_id=ready.change_id,
+        repository=ready.repository,
+        number=ready.number,
+        node_id=ready.node_id,
+        head_sha=ready.head_sha,
+    )
+
+
+def _attention_conflict(message: str) -> None:
+    raise DeliveryChangeDispositionConflictError(message)
+
+
 def _conflict(message: str) -> None:
     raise DeliveryRuntimeConflictError(message)
 
@@ -2680,8 +2743,10 @@ __all__ = [
     "DeliveryBlock",
     "DeliveryChangeCompletion",
     "DeliveryChangeDisposition",
+    "DeliveryChangeDispositionConflictError",
     "DeliveryChangeDispositionKind",
     "DeliveryChangeDispositionResolution",
+    "DeliveryChangePublicationIdentity",
     "DeliveryChangeStage",
     "DeliveryCheckpointPublicationState",
     "DeliveryCheckpointTrigger",

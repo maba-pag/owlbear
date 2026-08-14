@@ -587,7 +587,7 @@ def test_schema_nine_frontier_migrates_without_change_attention(tmp_path: Path) 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 11
+    assert canonical["schema_version"] == 12
     assert migrated.change_disposition() is None
 
 
@@ -602,8 +602,23 @@ def test_schema_ten_frontier_migrates_resolution_slot(tmp_path: Path) -> None:
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 11
+    assert canonical["schema_version"] == 12
     assert canonical["change_disposition_resolution"] is None
+
+
+def test_schema_eleven_frontier_migrates_publication_identity_slot(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    path = tmp_path / "changes/delivery-runtime/frontier.json"
+    payload = json.loads(runtime.frontier_bytes())
+    payload["schema_version"] = 11
+    payload.pop("change_disposition_publication")
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    migrated = DeliveryRuntime(tmp_path, _contract())
+    canonical = json.loads(migrated.frontier_bytes())
+
+    assert canonical["schema_version"] == 12
+    assert canonical["change_disposition_publication"] is None
 
 
 def test_change_attention_is_first_write_wins_and_blocks_claims(tmp_path: Path) -> None:
@@ -664,6 +679,41 @@ def test_change_attention_resolution_is_exact_idempotent_and_preserves_ready_inv
         runtime.resolve_change_disposition(disposition.disposition_id, datetime(2026, 8, 11, 18, tzinfo=UTC))
         == resolution
     )
+
+
+def test_change_attention_recapture_clears_prior_resolution(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    recorded_at = datetime(2026, 8, 11, 16, tzinfo=UTC)
+    disposition = runtime.capture_publication_attention(recorded_at, ("provider unavailable",))
+
+    runtime.resolve_change_disposition(disposition.disposition_id, datetime(2026, 8, 11, 17, tzinfo=UTC))
+
+    assert runtime.capture_publication_attention(recorded_at, ("provider unavailable",)) == disposition
+    assert runtime.change_disposition_resolution() is None
+
+
+def test_change_attention_capture_rejects_active_claims(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    claim = DeliveryActiveClaim(
+        attempt_id="attempt-capture",
+        claim_id="claim-capture",
+        owner_id="owner-capture",
+        process_id="process-capture",
+        started_at="2026-08-11T16:00:00Z",
+        worker_role=DeliveryWorkerRole.PLANNER,
+    )
+    claimed_binding = frontier.bindings[0].model_copy(update={"active_claim": claim})
+    invalid_frontier = frontier.model_copy(update={"bindings": (claimed_binding, *frontier.bindings[1:])})
+
+    with (
+        patch.object(runtime, "_read", return_value=(invalid_frontier, runtime.frontier_bytes())),
+        pytest.raises(DeliveryRuntimeConflictError, match="cannot overlap an active mutation claim"),
+    ):
+        runtime.capture_publication_attention(
+            datetime(2026, 8, 11, 16, tzinfo=UTC),
+            ("provider unavailable",),
+        )
 
 
 def test_change_attention_resolution_rejects_active_claims(tmp_path: Path) -> None:
@@ -755,6 +805,13 @@ def test_closed_unmerged_pull_request_persists_acceptance_attention(tmp_path: Pa
     assert disposition is not None
     assert disposition.kind == DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION
     assert runtime.ready_receipt() is None
+    publication = DeliveryFrontier.model_validate_json(runtime.frontier_bytes()).change_disposition_publication
+    assert publication is not None
+    assert (publication.repository, publication.number, publication.head_sha) == (
+        "example/project",
+        7,
+        exact_head,
+    )
     assert runtime.finalization() == finalization
 
 
@@ -892,7 +949,7 @@ def test_runtime_migrates_reducible_assembly_metadata_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 11
+    assert canonical["schema_version"] == 12
     assert all("assembly_required" not in binding for binding in canonical["bindings"])
     assert json.loads(path.read_bytes()) == canonical
 
@@ -909,7 +966,7 @@ def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 11
+    assert canonical["schema_version"] == 12
     assert canonical["published_head"] is None
     assert canonical["pending_checkpoint"] is None
     assert json.loads(path.read_bytes()) == canonical
@@ -963,7 +1020,7 @@ def test_runtime_migrates_prior_schema_without_rewriting_finalization_checkpoint
     )
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 11
+    assert canonical["schema_version"] == 12
     assert canonical["pending_checkpoint"] == expected_checkpoint
     assert canonical["pending_checkpoint"]["head"] == exact_head
     assert canonical["pending_checkpoint"]["triggers"][-1] == {

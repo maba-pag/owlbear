@@ -20,6 +20,7 @@ from owlbear_delivery.completed_history import (
 )
 from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceWaitingError,
+    DeliveryChangeDispositionConflictError,
     DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryPlanCandidate,
@@ -418,10 +419,16 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             False,
         ),
         (
-            "resolve_change_disposition",
+            "observe_acceptance",
             DeliveryAcceptanceWaitingError("pull request is still open and unmerged"),
             "ERR_DELIVERY_ACCEPTANCE_WAITING",
             True,
+        ),
+        (
+            "resolve_change_disposition",
+            DeliveryChangeDispositionConflictError("attention identity is stale"),
+            "ERR_DELIVERY_RUNTIME_CONFLICT",
+            False,
         ),
     )
     for operation_name, failure, code, retry_safe in cases:

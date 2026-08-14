@@ -447,7 +447,7 @@ class TargetMCPAdapter:
                 exc.code,
                 str(exc) or exc.code,
                 self._authority(params),
-                retry_safe=isinstance(exc, _RETRY_SAFE_ERRORS),
+                retry_safe=getattr(exc, "retry_safe", isinstance(exc, _RETRY_SAFE_ERRORS)),
             )
 
     @staticmethod

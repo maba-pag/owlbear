@@ -16,6 +16,10 @@ from owlbear_cockpit.target_context import load_target_context
 from owlbear_delivery_github import GitHubCliPublicationProvider
 from owlbear_delivery.delivery_application_loader import DeliveryApplicationLoadError
 from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
+from owlbear_delivery.delivery_runtime import (
+    DeliveryAcceptanceWaitingError,
+    DeliveryChangeDispositionConflictError,
+)
 from owlbear_delivery.portfolio_operating import (
     PortfolioGuidance,
     PortfolioGuidanceKind,
@@ -62,8 +66,9 @@ def _card(change_id: str, outcome_id: str, needs: WorkItemNeed) -> WorkItemCardV
 
 
 class _DeliveryApplicationFake:
-    def __init__(self) -> None:
+    def __init__(self, failures: dict[str, Exception] | None = None) -> None:
         self.calls: list[tuple[str, tuple[object, ...]]] = []
+        self.failures = failures or {}
 
     def list_work_item_groups(self) -> tuple[ChangeGroupView, ...]:
         self.calls.append(("list", ()))
@@ -229,10 +234,16 @@ class _DeliveryApplicationFake:
 
     def observe_acceptance(self, *args: object) -> dict[str, object]:
         self.calls.append(("acceptance-observe", args))
+        failure = self.failures.get("observe_acceptance")
+        if failure is not None:
+            raise failure
         return {"change_id": args[0], "completion_id": "f" * 64}
 
     def resolve_change_disposition(self, *args: object) -> dict[str, object]:
         self.calls.append(("attention-resolve", args))
+        failure = self.failures.get("resolve_change_disposition")
+        if failure is not None:
+            raise failure
         return {"change_id": args[0], "disposition_id": args[1]}
 
     def list_completed_changes(self, *args: object) -> dict[str, object]:
@@ -248,8 +259,8 @@ class _DeliveryApplicationFake:
         return {"change_id": args[0], "completion_id": args[1]}
 
 
-def _client() -> tuple[TestClient, _DeliveryApplicationFake]:
-    application = _DeliveryApplicationFake()
+def _client(failures: dict[str, Exception] | None = None) -> tuple[TestClient, _DeliveryApplicationFake]:
+    application = _DeliveryApplicationFake(failures)
     return TestClient(assemble_target_app(application)), application  # type: ignore[arg-type]
 
 
@@ -466,6 +477,43 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
         ("completed-search", ("delivery", None, 5)),
         ("completed-show", ("change-a", "a" * 64)),
     ]
+
+
+def test_open_acceptance_waiting_route_is_retry_safe() -> None:
+    client, application = _client(
+        {"observe_acceptance": DeliveryAcceptanceWaitingError("pull request is still open and unmerged")}
+    )
+
+    response = client.post("/api/changes/change-a/acceptance/observe")
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "ERR_DELIVERY_ACCEPTANCE_WAITING",
+        "detail": "pull request is still open and unmerged",
+        "authority": "delivery",
+        "retry_safe": True,
+    }
+    assert application.calls == [("acceptance-observe", ("change-a",))]
+
+
+def test_stale_attention_resolution_route_is_not_retry_safe() -> None:
+    client, application = _client(
+        {"resolve_change_disposition": DeliveryChangeDispositionConflictError("attention identity is stale")}
+    )
+
+    response = client.post(
+        "/api/changes/change-a/attention/resolve",
+        json={"expected_disposition_id": "a" * 64},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "ERR_DELIVERY_RUNTIME_CONFLICT",
+        "detail": "attention identity is stale",
+        "authority": "delivery",
+        "retry_safe": False,
+    }
+    assert application.calls == [("attention-resolve", ("change-a", "a" * 64))]
 
 
 def test_malformed_body_fails_before_application_mutation() -> None:

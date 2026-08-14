@@ -368,7 +368,9 @@ def test_runtime_frontier_writers_use_the_central_mutability_policy() -> None:
     writers = {
         name
         for name, node in visitor.methods.items()
-        if _has_attribute_call(node, "_replace") or name == "complete_change"
+        if _has_attribute_call(node, "_replace")
+        or _has_named_call(node, "_require_change_mutable")
+        or name == "complete_change"
     }
     normal_writers = writers - _DISPOSITION_CAPTURE_EXEMPTIONS
 

@@ -190,7 +190,12 @@ class TargetCockpitService:
                 retry_safe=False,
             )
         except (DeliveryRuntimeConflictError, CoordinationConflictError) as exc:
-            _http_error(409, getattr(exc, "code", "ERR_DELIVERY_CONFLICT"), str(exc), retry_safe=True)
+            _http_error(
+                409,
+                getattr(exc, "code", "ERR_DELIVERY_CONFLICT"),
+                str(exc),
+                retry_safe=getattr(exc, "retry_safe", True),
+            )
         except (DeliveryRuntimeReferenceError, PortfolioApplicationError) as exc:
             _http_error(409, exc.code, str(exc), retry_safe=False)
         except DesignPackageConflictError as exc:

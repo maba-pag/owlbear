@@ -1,28 +1,35 @@
 ---
 name: w-delivery-attention-resolution
-description: "Workflow: Diagnose and resolve one exact Delivery Integration attention through an interactive user decision"
+description: "Workflow: Diagnose and resolve one exact Delivery Change or Integration attention through an interactive user decision"
 user-invocable: false
 ---
 
 # Delivery Attention Resolution
 
-Resolve one exact retained Integration attention outside the portfolio worker chain. This is an
-interactive operator session: inspect current evidence, explain materially different remedies, ask
-the user to choose, and perform only a selected operation that current Delivery authority permits.
-Local Integration execution and completion-proposal operations are retired; completion is recorded
-only from a fresh provider observation bound to finalized Delivery authority.
+Resolve one exact retained Delivery Change or Integration attention outside the portfolio worker
+chain. This is an interactive operator session: inspect current evidence, explain materially
+different remedies, ask the user to choose, and perform only a selected operation that current
+Delivery authority permits. Local Integration execution and completion-proposal operations are
+retired; completion is recorded only from a fresh provider observation bound to finalized Delivery
+authority.
 
 ## Step 0 - Bind The Exact Current Attention
 
-Parse the supplied value as exactly one lowercase-hyphenated `change_id` followed by one 64-character
-lowercase hexadecimal `attention_id`. Reject missing, extra, or malformed identities.
+Parse the supplied value as exactly one lowercase-hyphenated `change_id` followed by one
+64-character lowercase hexadecimal identity. A Change publication or acceptance attention uses its
+`disposition_id`; a retained Integration repair attention uses its `attention_id`. Reject missing,
+extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
-`OwlBear Delivery show_integration_attention observe_change_publication_checks observe_acceptance list_work_items show_completed_change`. Call
-`show_integration_attention(change_id)` and require a current attention whose change and attention
-identities equal the supplied values. If no attention exists, its identity differs, or Delivery
-reports that the retained condition is superseded, report the current state and stop without
-mutation. Never substitute a newer attention silently.
+`OwlBear Delivery list_work_items show_work_item show_integration_attention resolve_change_disposition observe_change_publication_checks observe_acceptance show_completed_change`.
+For a Change attention, call `list_work_items` and require the Change publication card's
+`action.attention_id` to equal the supplied disposition identity; use `show_work_item` for the
+publication detail when needed. For an Integration attention, call
+`show_integration_attention(change_id)` and require its change and attention identities to equal
+the supplied values. An ordinary open and unmerged provider pull request is retry-safe waiting,
+not an attention; report that state and stop without resolution. If no attention exists, its
+identity differs, or Delivery reports that the retained condition is superseded, report the
+current state and stop without mutation. Never substitute a newer attention silently.
 
 Treat the returned code, heads, target, diagnostics, and retry condition as retained evidence, not
 as permission to edit a worktree or target.
@@ -30,8 +37,9 @@ as permission to edit a worktree or target.
 ## Step 1 - Diagnose Current State Read-Only
 
 Read the owning Delivery coordination and relevant repository state without mutation. Verify the
-current source branch, reviewed boundary, Integration target, worktree existence, worktree branch
-and head, and staged, unstaged, and untracked paths when they bear on the reported condition.
+current source branch, reviewed boundary, Change finalization and publication identities, provider
+pull-request state, Integration target, worktree existence, worktree branch and head, and staged,
+unstaged, and untracked paths when they bear on the reported condition.
 Inspect only enough diff, package, completed-history, or verification evidence to distinguish the
 current cause and viable remedy classes.
 
@@ -43,6 +51,8 @@ Classify the result as one of:
 
 - `resolved-or-stale` - current state no longer supports the retained condition;
 - `single-authorized-route` - one non-destructive existing Delivery operation can advance it;
+- `provider-waiting` - the provider pull request is open and unmerged, so no attention resolution
+  is required;
 - `decision-required` - two or more materially different valid remedies remain;
 - `authority-gap` - the selected remedy needs a Delivery-owned operation that does not exist;
 - `unknown` - current evidence cannot responsibly identify the cause or remedy.
@@ -52,7 +62,7 @@ Classify the result as one of:
 When a material choice remains, present exactly one decision before calling `askQuestions`:
 
 ```markdown
-### Decision: <one precise Integration resolution choice>
+### Decision: <one precise Delivery resolution choice>
 
 **Current condition:** <current evidence and whether retained evidence still matches>
 **Why this blocks Integration:** <bounded causal explanation>
@@ -75,6 +85,15 @@ route. Abort if the attention, heads, target, worktree state, or relevant eviden
 
 Use only an existing operation whose contract owns the selected result:
 
+- Change attention: use the exact disposition identity and call
+  `resolve_change_disposition(change_id, expected_disposition_id)`. This clears the current Change
+  attention and retained provider identity; it does not restore ready authority. For a closed,
+  unmerged provider pull request, first reopen that exact pull request in GitHub, then resolve the
+  attention, reconcile the current finalization/publication checkpoint with
+  `reconcile_change_checkpoint(change_id)`, and call `mark_change_ready(change_id)` only after the
+  reconciled publication is valid. Observe acceptance only after the reopened pull request is
+  merged. An open, unmerged pull request needs no attention resolution; call
+  `observe_acceptance(change_id)` only as a retry-safe waiting observation.
 - provider acceptance required: after re-reading the exact finalization, ready receipt, reconciled
   checkpoint, and publication evidence, call `observe_acceptance(change_id)` once. This operation
   reads the current provider pull request and creates the receipt-backed completion record only when
@@ -89,6 +108,10 @@ Use only an existing operation whose contract owns the selected result:
   report the exact missing authority rather than inventing a local Integration route;
 - claim recovery: use the exact claim-bound recovery operation only when current context supplies
   its attempt and claim identities.
+- retained Integration repair attention: preserve the existing
+  `show_integration_attention(change_id)` and `recover_integration_repair_claim(change_id,
+  attempt_id, claim_id)` route. Do not use Change disposition resolution for an Integration repair
+  claim.
 
 If preservation, adoption, discard, worktree recreation, package restoration, completed-history
 repair, target correction, or verification-profile correction lacks a public Delivery operation,
@@ -101,7 +124,8 @@ Explicit user preference selects among admitted routes; it does not manufacture 
 
 ## Step 4 - Verify And Close
 
-After any operation, re-read the work item and exact Integration attention. Report:
+After any operation, re-read the Change publication Work Item or exact Integration attention, as
+applicable. Report:
 
 - prior attention identity and condition;
 - selected route and operation actually performed;
@@ -118,5 +142,9 @@ owned route.
 - **Trusting copied prompt evidence:** always re-read current Delivery and repository state.
 - **Treating user approval as Git authority:** use a Delivery-owned mutation or report an authority gap.
 - **Retrying an operator condition:** generic retry text does not make an operator-required attention retryable.
+- **Treating acceptance waiting as attention:** an open, unmerged pull request remains retry-safe
+  waiting and must not freeze the Change or create a disposition.
+- **Assuming resolution restores publication authority:** exact Change disposition resolution
+  clears attention only; reconciliation and ready-marking are separate authority steps.
 - **Choosing for the user:** preservation, adoption, and discard have materially different outcomes.
 - **Resolving the wrong attention:** bind and revalidate the exact attention ID before every mutation.

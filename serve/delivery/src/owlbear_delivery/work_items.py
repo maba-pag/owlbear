@@ -640,7 +640,9 @@ class WorkItemProjector:
         pending = frontier.pending_checkpoint
         invalidation = frontier.finalization_invalidation
         ready = frontier.ready
+        attention_publication = frontier.change_disposition_publication
         merged = frontier.merged_pull_request_latch
+        publication_identity = ready or merged or attention_publication
         return WorkItemPublicationView(
             phase=self._publication_phase(),
             finalization_id=finalization.finalization_id if finalization is not None else None,
@@ -650,9 +652,9 @@ class WorkItemProjector:
             pending_checkpoint_triggers=tuple(trigger.kind.value for trigger in pending.triggers) if pending else (),
             invalidated_expected_head=invalidation.expected_head if invalidation is not None else None,
             invalidated_observed_head=invalidation.observed_head if invalidation is not None else None,
-            repository=ready.repository if ready is not None else merged.repository if merged is not None else None,
-            pull_request_number=ready.number if ready is not None else merged.number if merged is not None else None,
-            pull_request_head=ready.head_sha if ready is not None else merged.head_sha if merged is not None else None,
+            repository=publication_identity.repository if publication_identity is not None else None,
+            pull_request_number=publication_identity.number if publication_identity is not None else None,
+            pull_request_head=publication_identity.head_sha if publication_identity is not None else None,
             accepted_merge_commit=merged.accepted_merge_commit if merged is not None else None,
             merged_at=merged.merged_at.isoformat() if merged is not None else None,
             attention=frontier.change_disposition,

@@ -9,6 +9,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryBlock,
     DeliveryChangeDisposition,
     DeliveryChangeDispositionKind,
+    DeliveryChangePublicationIdentity,
     DeliveryChangeStage,
     DeliveryFrontier,
     DeliveryCheckpointTrigger,
@@ -524,10 +525,20 @@ def test_change_attention_projects_user_resolution_before_outcomes_complete() ->
         recorded_at=datetime(2026, 8, 11, 16, tzinfo=UTC),
         diagnostics=("provider unavailable",),
     )
+    publication = DeliveryChangePublicationIdentity(
+        change_id="portfolio-change",
+        repository="example/project",
+        number=42,
+        node_id="PR_portfolio_42",
+        head_sha="3" * 40,
+    )
     projector = WorkItemProjector(
         _snapshot(
             (_binding("OUT-001", DeliveryStage.PLANNING), _binding("OUT-002", DeliveryStage.PLANNING)),
-            frontier_updates={"change_disposition": attention},
+            frontier_updates={
+                "change_disposition": attention,
+                "change_disposition_publication": publication,
+            },
         )
     )
 
@@ -542,6 +553,15 @@ def test_change_attention_projects_user_resolution_before_outcomes_complete() ->
     )
     assert detail.publication is not None
     assert detail.publication.attention == attention
+    assert (
+        detail.publication.repository,
+        detail.publication.pull_request_number,
+        detail.publication.pull_request_head,
+    ) == (
+        publication.repository,
+        publication.number,
+        publication.head_sha,
+    )
 
 
 def test_finalization_projects_checkpoint_then_pull_request_draft() -> None:

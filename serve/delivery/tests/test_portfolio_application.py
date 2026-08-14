@@ -793,6 +793,8 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(tmp_p
     assert disposition is not None
     assert disposition.kind.value == "acceptance-attention"
     assert runtime.ready_receipt() is None
+    with pytest.raises(PortfolioApplicationError, match="requires attention resolution"):
+        application.observe_acceptance("change-a")
     assert application.resolve_change_disposition("change-a", disposition.disposition_id).disposition_id == (
         disposition.disposition_id
     )
@@ -1618,7 +1620,7 @@ dependencies: []
     assert recovered.replayed
     assert coordinator.show("change-a").last_reviewed_commit == reviewed_head
     assert application.show_change_checkpoint_publication("change-a").pending_checkpoint is not None
-    assert json.loads(frontier_path.read_bytes())["schema_version"] == 11
+    assert json.loads(frontier_path.read_bytes())["schema_version"] == 12
 
 
 def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
@@ -1669,7 +1671,7 @@ def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_pa
 
     assert state.pending_checkpoint is not None
     assert state.pending_checkpoint.head == coordination.last_reviewed_commit
-    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 11
+    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 12
 
 
 def test_delivery_loader_injects_publication_provider_and_derives_check_head(tmp_path: Path) -> None:
