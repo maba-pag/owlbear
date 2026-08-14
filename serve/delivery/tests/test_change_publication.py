@@ -12,6 +12,7 @@ import pytest
 from owlbear_delivery import (
     ChangeBranchPublisher,
     ChangeBranchSupersessionReceipt,
+    ChangeTargetSyncConflictError,
     ChangeWriter,
     ChangeWorkspaceManager,
     CoordinationConflictError,
@@ -21,6 +22,7 @@ from owlbear_delivery import (
     PublicationProviderFailureCode,
     PublishChangeBranch,
     SupersedeChangeBranch,
+    SyncChangeWithTarget,
     WriterIdentity,
 )
 from owlbear_delivery.git_executable import resolve_git_executable
@@ -76,6 +78,103 @@ def _reviewed_change(manager: ChangeWorkspaceManager, change_id: str) -> tuple[P
     reviewed = _head(coordination.worktree_path)
     manager.record_reviewed(change_id, reviewed)
     return coordination.worktree_path, reviewed
+
+
+def _advance_remote_target(tmp_path: Path, remote: Path, *, product: str | None = None) -> str:
+    target_repository = tmp_path / "target-repository"
+    _git(tmp_path, "clone", str(remote), str(target_repository))
+    _git(target_repository, "config", "user.name", "Target User")
+    _git(target_repository, "config", "user.email", "target@example.com")
+    if product is not None:
+        (target_repository / "product.txt").write_text(product, encoding="utf-8")
+    else:
+        (target_repository / "target.txt").write_text("target\n", encoding="utf-8")
+    _git(target_repository, "add", ".")
+    _git(target_repository, "commit", "-m", "advance target")
+    _git(target_repository, "push", "origin", "HEAD:refs/heads/main")
+    return _head(target_repository)
+
+
+def test_syncs_exact_fetched_target_in_managed_worktree_and_replays_without_ref_pollution(
+    tmp_path: Path,
+) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    _coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, _reviewed = _reviewed_change(manager, "sync-change")
+    target_head = _advance_remote_target(tmp_path, remote)
+    request = SyncChangeWithTarget(
+        change_id="sync-change",
+        expected_target=target_head,
+        operation_id="sync-change-1",
+    )
+    user_checkout_before = (repository / "product.txt").read_bytes()
+
+    receipt = manager.sync_with_target(request)
+
+    assert receipt.change_id == "sync-change"
+    assert receipt.expected_target == target_head
+    assert receipt.target_head == target_head
+    assert receipt.change_head_before != receipt.merged_head
+    assert receipt.merge_commit
+    assert _head(worktree) == receipt.merged_head
+    assert _head(repository, "refs/remotes/origin/main") == target_head
+    assert _head(repository, "refs/heads/main") == initial
+    assert (repository / "product.txt").read_bytes() == user_checkout_before
+    assert _coordinator.show("sync-change").last_reviewed_commit == receipt.merged_head
+    assert manager.reviewed_source_head("sync-change") == receipt.merged_head
+    manager.validate_finalization_head("sync-change", receipt.merged_head, ())
+
+    with patch.object(manager, "_run_git", wraps=manager._run_git) as run_git:
+        assert manager.sync_with_target(request) == receipt
+
+    assert not any(call.args and call.args[0] in {"fetch", "merge"} for call in run_git.call_args_list)
+
+
+def test_fast_forward_target_sync_advances_the_reviewed_boundary(tmp_path: Path) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    coordination = manager.ensure("sync-fast-forward")
+    target_head = _advance_remote_target(tmp_path, remote)
+    request = SyncChangeWithTarget(
+        change_id="sync-fast-forward",
+        expected_target=target_head,
+        operation_id="sync-fast-forward-1",
+    )
+
+    receipt = manager.sync_with_target(request)
+
+    assert receipt.change_head_before == initial
+    assert receipt.target_head == target_head
+    assert receipt.merged_head == target_head
+    assert not receipt.merge_commit
+    assert coordinator.show("sync-fast-forward").last_reviewed_commit == target_head
+    assert manager.reviewed_source_head("sync-fast-forward") == target_head
+    assert _head(coordination.worktree_path) == target_head
+
+
+def test_sync_conflict_preserves_merge_state_and_user_checkout(tmp_path: Path) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    worktree, reviewed = _reviewed_change(manager, "sync-conflict")
+    target_head = _advance_remote_target(tmp_path, remote, product="target\n")
+    request = SyncChangeWithTarget(
+        change_id="sync-conflict",
+        expected_target=target_head,
+        operation_id="sync-conflict-1",
+    )
+
+    with pytest.raises(ChangeTargetSyncConflictError) as raised:
+        manager.sync_with_target(request)
+
+    assert raised.value.conflict_paths == ("product.txt",)
+    merge_head = Path(_git(worktree, "rev-parse", "--git-path", "MERGE_HEAD").stdout.strip())
+    assert merge_head.exists()
+    assert b"<<<<<<<" in (worktree / "product.txt").read_bytes()
+    assert _head(repository, "refs/heads/main") == initial
+    assert (repository / "product.txt").read_text(encoding="utf-8") == "base\n"
+    assert coordinator.show("sync-conflict").target_head == initial
+    assert coordinator.show("sync-conflict").last_reviewed_commit == reviewed
+    assert coordinator.show("sync-conflict").target_sync_receipt is None
 
 
 def _writer(change_id: str) -> ChangeWriter:

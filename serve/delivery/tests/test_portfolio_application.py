@@ -21,6 +21,8 @@ from owlbear_delivery import (
     ChangeBranchPublicationReceipt,
     ChangeBranchPublisher,
     ChangeBranchSupersessionReceipt,
+    ChangeTargetSyncConflictError,
+    ChangeTargetSyncReceipt,
     ChangeWorktreeAttentionCode,
     ChangeWorktreeAttentionError,
     AdvanceDelivery,
@@ -428,6 +430,18 @@ def _repository(tmp_path: Path) -> Path:
     return repository
 
 
+def _advance_remote_target(tmp_path: Path, remote: Path) -> str:
+    target_repository = tmp_path / "target-repository"
+    _git(tmp_path, "clone", str(remote), str(target_repository))
+    _git(target_repository, "config", "user.name", "Target User")
+    _git(target_repository, "config", "user.email", "target@example.invalid")
+    (target_repository / "target.txt").write_text("target\n", encoding="utf-8")
+    _git(target_repository, "add", "target.txt")
+    _git(target_repository, "commit", "-m", "advance target")
+    _git(target_repository, "push", "origin", "HEAD:refs/heads/main")
+    return _git(target_repository, "rev-parse", "HEAD")
+
+
 def _portfolio(  # noqa: PLR0913
     tmp_path: Path,
     stages: dict[str, DeliveryStage],
@@ -550,6 +564,93 @@ def test_finalization_uses_managed_head_and_invalidates_observed_drift(tmp_path:
     assert invalidation.observed_head == observed_head
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.BUILDING
     assert application.list_integration_attention() == ()
+
+
+def test_application_binds_target_sync_receipt_and_invalidates_finalization(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    exact_head = coordinator.show("change-a").last_reviewed_commit
+    finalization = application.finalize_change("change-a", _finalization_request("change-a", exact_head))
+    receipt = ChangeTargetSyncReceipt.create(
+        operation_id="sync-change-a",
+        change_id="change-a",
+        integration_target="main",
+        expected_target="2" * 40,
+        target_head="2" * 40,
+        change_head_before=exact_head,
+        merged_head="3" * 40,
+        merge_commit=True,
+    )
+
+    with patch.object(application._workspace_manager, "sync_with_target", return_value=receipt) as sync:
+        assert application.sync_change_with_target("change-a", "2" * 40, "sync-change-a") == receipt
+
+    request = sync.call_args.args[0]
+    assert request.change_id == "change-a"
+    assert request.expected_target == "2" * 40
+    assert request.operation_id == "sync-change-a"
+    assert runtimes["change-a"].target_sync_receipt() == receipt
+    assert runtimes["change-a"].finalization() is None
+    assert runtimes["change-a"].finalization_invalidation().finalization_id == finalization.finalization_id
+
+
+def test_application_acquires_after_real_target_sync_at_the_merged_head(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    repository = application._workspace_manager.repository  # noqa: SLF001
+    remote = tmp_path / "remote.git"
+    subprocess.run(("git", "init", "--bare", str(remote)), check=True, capture_output=True)
+    _git(repository, "remote", "add", "origin", str(remote))
+    _git(repository, "push", "origin", "refs/heads/main:refs/heads/main")
+    target_head = _advance_remote_target(tmp_path, remote)
+
+    receipt = application.sync_change_with_target("change-a", target_head, "sync-change-a")
+    acquired = application.acquire_frontier_work()
+
+    assert acquired.failures == ()
+    assert len(acquired.launch_packages) == 1
+    assert acquired.launch_packages[0].source_head == receipt.merged_head
+    assert application._workspace_manager.reviewed_source_head("change-a") == receipt.merged_head  # noqa: SLF001
+
+
+def test_application_captures_target_sync_conflict_as_publication_attention(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    exact_head = coordinator.show("change-a").last_reviewed_commit
+    finalization = application.finalize_change("change-a", _finalization_request("change-a", exact_head))
+
+    with (
+        patch.object(
+            application._workspace_manager,
+            "sync_with_target",
+            side_effect=ChangeTargetSyncConflictError(
+                "change-a",
+                "sync-change-a",
+                "2" * 40,
+                ("product.txt",),
+            ),
+        ),
+        pytest.raises(PortfolioApplicationError, match="requires conflict resolution"),
+    ):
+        application.sync_change_with_target("change-a", "2" * 40, "sync-change-a")
+
+    attention = runtimes["change-a"].change_disposition()
+    assert attention is not None
+    assert attention.kind.value == "publication-attention"
+    assert attention.diagnostics == (
+        "target-sync-operation:sync-change-a",
+        "target synchronization merge conflict",
+        "conflict-path:product.txt",
+    )
+    assert runtimes["change-a"].finalization() is None
+    assert runtimes["change-a"].finalization_invalidation().finalization_id == finalization.finalization_id
+    assert runtimes["change-a"].finalization_invalidation().reason == "target-sync-conflict"
 
 
 def test_finalization_context_uses_managed_change_head(tmp_path: Path) -> None:
@@ -2134,7 +2235,7 @@ dependencies: []
     assert recovered.replayed
     assert coordinator.show("change-a").last_reviewed_commit == reviewed_head
     assert application.show_change_checkpoint_publication("change-a").pending_checkpoint is not None
-    assert json.loads(frontier_path.read_bytes())["schema_version"] == 14
+    assert json.loads(frontier_path.read_bytes())["schema_version"] == 15
 
 
 def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
@@ -2185,7 +2286,7 @@ def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_pa
 
     assert state.pending_checkpoint is not None
     assert state.pending_checkpoint.head == coordination.last_reviewed_commit
-    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 14
+    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 15
 
 
 def test_delivery_loader_injects_publication_provider_and_derives_check_head(tmp_path: Path) -> None:

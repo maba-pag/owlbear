@@ -39,6 +39,7 @@ from owlbear_delivery.delivery_runtime import (
     OutcomeAuthorityBinding,
 )
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
+from owlbear_delivery.change_workspace import ChangeTargetSyncReceipt
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCommitmentClass,
@@ -463,6 +464,40 @@ def test_completed_outcomes_project_ready_for_finalization() -> None:
     assert card.action.command == "/finalize-change portfolio-change"
     assert detail.publication is not None
     assert detail.publication.phase == WorkItemPublicationPhase.READY_FOR_FINALIZATION
+
+
+def test_target_sync_receipt_projects_without_receipt_only_fields() -> None:
+    receipt = ChangeTargetSyncReceipt.create(
+        operation_id="sync-portfolio-change",
+        change_id="portfolio-change",
+        integration_target="main",
+        expected_target="1" * 40,
+        target_head="1" * 40,
+        change_head_before="2" * 40,
+        merged_head="3" * 40,
+        merge_commit=True,
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
+            frontier_updates={"target_sync_receipt": receipt},
+        )
+    )
+
+    target_sync = projector.show_view("publication").publication
+
+    assert target_sync is not None
+    assert target_sync.target_sync is not None
+    assert target_sync.target_sync.model_dump() == {
+        "receipt_id": receipt.receipt_id,
+        "operation_id": receipt.operation_id,
+        "integration_target": receipt.integration_target,
+        "expected_target": receipt.expected_target,
+        "target_head": receipt.target_head,
+        "change_head_before": receipt.change_head_before,
+        "merged_head": receipt.merged_head,
+        "merge_commit": receipt.merge_commit,
+    }
 
 
 def test_attention_only_completed_outcomes_still_project_finalize_action() -> None:

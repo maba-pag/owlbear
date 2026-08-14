@@ -28,6 +28,8 @@ from owlbear_delivery.change_publication import (
 )
 from owlbear_delivery.change_workspace import (
     ChangeCoordination,
+    ChangeTargetSyncConflictError,
+    ChangeTargetSyncReceipt,
     ChangeWorkspaceManager,
     ChangeWorktreeAttentionCode,
     ChangeWorktreeAttentionError,
@@ -35,6 +37,7 @@ from owlbear_delivery.change_workspace import (
     CoordinationConflictError,
     PortfolioCoordinator,
     RetainedChangeWorktree,
+    SyncChangeWithTarget,
     WorkspaceRecoverySnapshot,
 )
 from owlbear_delivery.delivery_runtime import (
@@ -729,6 +732,56 @@ class PortfolioApplication:
         return self._draft_pull_request_publisher.observe_checks(
             ObserveChangePublicationChecks(change_id=change_id, published_head=published_head)
         )
+
+    def sync_change_with_target(
+        self,
+        change_id: str,
+        expected_target: str,
+        operation_id: str,
+    ) -> ChangeTargetSyncReceipt:
+        """Fetch and merge one exact target head through the managed Change worktree."""
+        runtime = self._runtime(change_id)
+        request = SyncChangeWithTarget(
+            change_id=change_id,
+            expected_target=expected_target,
+            operation_id=operation_id,
+        )
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            if runtime.change_disposition() is not None:
+                self._fail("target synchronization requires Change attention resolution first")
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                self._fail("target synchronization cannot overlap an active Delivery claim")
+            try:
+                receipt = self._workspace_manager.sync_with_target(request)
+            except ChangeTargetSyncConflictError as exc:
+                history = runtime.publication_history()
+                runtime.capture_target_sync_conflict(
+                    exc.operation_id,
+                    exc.target_head,
+                    _timestamp(self._clock()),
+                    (
+                        "target synchronization merge conflict",
+                        *tuple(f"conflict-path:{path}" for path in exc.conflict_paths),
+                    ),
+                    publication_identity=history.current if history is not None else None,
+                )
+                self._fail("target synchronization requires conflict resolution", exc)
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("target synchronization could not be completed", exc)
+            runtime.record_target_sync(receipt, _timestamp(self._clock()))
+            return receipt
+
+    def sync_change_with_current_target(
+        self,
+        change_id: str,
+        operation_id: str,
+    ) -> ChangeTargetSyncReceipt:
+        """Bind the current remote-tracking target and perform one exact sync operation."""
+        try:
+            expected_target = self._workspace_manager.integration_context(change_id).target_head
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            self._fail("target synchronization target head is unavailable", exc)
+        return self.sync_change_with_target(change_id, expected_target, operation_id)
 
     def supersede_publication(
         self,

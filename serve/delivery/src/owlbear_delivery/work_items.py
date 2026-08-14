@@ -297,6 +297,19 @@ class WorkItemWorktreeRecoveryView(_ProjectionModel):
     recovery_reviewed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
 
 
+class WorkItemTargetSyncView(_ProjectionModel):
+    """Latest exact target synchronization evidence for the publication view."""
+
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    integration_target: str = Field(min_length=1)
+    expected_target: str = Field(pattern=r"^[0-9a-f]{40}$")
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    change_head_before: str = Field(pattern=r"^[0-9a-f]{40}$")
+    merged_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    merge_commit: bool
+
+
 class WorkItemPublicationView(_ProjectionModel):
     """Exact durable finalization, publication, and acceptance identities."""
 
@@ -314,6 +327,7 @@ class WorkItemPublicationView(_ProjectionModel):
     accepted_merge_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     merged_at: str | None = None
     attention: DeliveryChangeDisposition | None = None
+    target_sync: WorkItemTargetSyncView | None = None
     worktree_cleanup: WorkItemWorktreeCleanupView | None = None
     worktree_recovery: WorkItemWorktreeRecoveryView | None = None
 
@@ -740,6 +754,7 @@ class WorkItemProjector:
         attention_publication = frontier.change_disposition_publication
         merged = frontier.merged_pull_request_latch
         publication_identity = ready or merged or attention_publication
+        target_sync = frontier.target_sync_receipt
         return WorkItemPublicationView(
             phase=self._publication_phase(),
             finalization_id=finalization.finalization_id if finalization is not None else None,
@@ -755,6 +770,20 @@ class WorkItemProjector:
             accepted_merge_commit=merged.accepted_merge_commit if merged is not None else None,
             merged_at=merged.merged_at.isoformat() if merged is not None else None,
             attention=frontier.change_disposition,
+            target_sync=(
+                WorkItemTargetSyncView(
+                    receipt_id=target_sync.receipt_id,
+                    operation_id=target_sync.operation_id,
+                    integration_target=target_sync.integration_target,
+                    expected_target=target_sync.expected_target,
+                    target_head=target_sync.target_head,
+                    change_head_before=target_sync.change_head_before,
+                    merged_head=target_sync.merged_head,
+                    merge_commit=target_sync.merge_commit,
+                )
+                if target_sync is not None
+                else None
+            ),
         )
 
     def _compatibility_projection(self, card: WorkItemCardView) -> WorkItemProjection:

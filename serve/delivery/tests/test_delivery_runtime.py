@@ -17,6 +17,7 @@ from owlbear_delivery import (
     AdvanceDelivery,
     BlockDelivery,
     ChangeWorkspaceManager,
+    ChangeTargetSyncReceipt,
     ChangeWriter,
     CompletionDisplayMetadata,
     CompletionEvidence,
@@ -595,6 +596,75 @@ def test_finalization_binds_exact_head_and_invalidates_on_head_drift(tmp_path: P
     assert runtime.checkpoint_publication_state().pending_checkpoint is None
 
 
+def test_target_sync_persists_receipt_invalidates_finalization_and_queues_republication(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    finalization = runtime.finalize_change(
+        _finalization_request("3" * 40),
+        datetime(2026, 8, 11, 14, tzinfo=UTC),
+    )
+    receipt = ChangeTargetSyncReceipt.create(
+        operation_id="sync-delivery-runtime",
+        change_id="delivery-runtime",
+        integration_target="main",
+        expected_target="4" * 40,
+        target_head="4" * 40,
+        change_head_before="3" * 40,
+        merged_head="5" * 40,
+        merge_commit=True,
+    )
+
+    recorded = runtime.record_target_sync(receipt, datetime(2026, 8, 11, 16, tzinfo=UTC))
+
+    assert recorded == receipt
+    assert runtime.finalization() is None
+    assert runtime.finalization_invalidation() is not None
+    assert runtime.finalization_invalidation().finalization_id == finalization.finalization_id
+    assert runtime.change_stage() == DeliveryChangeStage.BUILDING
+    publication = runtime.checkpoint_publication_state()
+    assert publication.pending_checkpoint is not None
+    assert publication.pending_checkpoint.head == "5" * 40
+    assert publication.pending_checkpoint.triggers == (
+        DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT),
+    )
+    assert DeliveryRuntime(tmp_path, _contract()).frontier_bytes() == runtime.frontier_bytes()
+    assert runtime.record_target_sync(receipt, datetime(2026, 8, 11, 17, tzinfo=UTC)) == receipt
+
+
+def test_target_sync_conflict_captures_attention_and_invalidates_finalization(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    finalization = runtime.finalize_change(
+        _finalization_request("3" * 40),
+        datetime(2026, 8, 11, 14, tzinfo=UTC),
+    )
+
+    disposition = runtime.capture_target_sync_conflict(
+        "sync-conflict",
+        "4" * 40,
+        datetime(2026, 8, 11, 16, tzinfo=UTC),
+        ("target synchronization merge conflict", "conflict-path:product.txt"),
+    )
+
+    assert disposition.kind == DeliveryChangeDispositionKind.PUBLICATION_ATTENTION
+    assert runtime.change_stage() == DeliveryChangeStage.PUBLICATION_ATTENTION
+    assert runtime.finalization() is None
+    assert runtime.ready_receipt() is None
+    invalidation = runtime.finalization_invalidation()
+    assert invalidation is not None
+    assert invalidation.finalization_id == finalization.finalization_id
+    assert invalidation.reason == "target-sync-conflict"
+    assert runtime.checkpoint_publication_state().pending_checkpoint is None
+
+
 def test_schema_nine_frontier_migrates_without_change_attention(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path)
     path = tmp_path / "changes/delivery-runtime/frontier.json"
@@ -606,7 +676,7 @@ def test_schema_nine_frontier_migrates_without_change_attention(tmp_path: Path) 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 14
+    assert canonical["schema_version"] == 15
     assert migrated.change_disposition() is None
 
 
@@ -621,7 +691,7 @@ def test_schema_ten_frontier_migrates_resolution_slot(tmp_path: Path) -> None:
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 14
+    assert canonical["schema_version"] == 15
     assert canonical["change_disposition_resolution"] is None
 
 
@@ -636,7 +706,7 @@ def test_schema_eleven_frontier_migrates_publication_identity_slot(tmp_path: Pat
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 14
+    assert canonical["schema_version"] == 15
     assert canonical["change_disposition_publication"] is None
 
 
@@ -1000,7 +1070,7 @@ def test_schema_twelve_frontier_migrates_lifecycle_disposition_slots(tmp_path: P
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 14
+    assert canonical["schema_version"] == 15
     assert migrated.change_deferral() is None
     assert migrated.change_abandonment() is None
 
@@ -1213,7 +1283,7 @@ def test_runtime_migrates_reducible_assembly_metadata_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 14
+    assert canonical["schema_version"] == 15
     assert all("assembly_required" not in binding for binding in canonical["bindings"])
     assert json.loads(path.read_bytes()) == canonical
 
@@ -1230,7 +1300,7 @@ def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 14
+    assert canonical["schema_version"] == 15
     assert canonical["published_head"] is None
     assert canonical["pending_checkpoint"] is None
     assert json.loads(path.read_bytes()) == canonical
@@ -1284,7 +1354,7 @@ def test_runtime_migrates_prior_schema_without_rewriting_finalization_checkpoint
     )
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 14
+    assert canonical["schema_version"] == 15
     assert canonical["pending_checkpoint"] == expected_checkpoint
     assert canonical["pending_checkpoint"]["head"] == exact_head
     assert canonical["pending_checkpoint"]["triggers"][-1] == {

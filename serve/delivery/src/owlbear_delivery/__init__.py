@@ -21,6 +21,8 @@ from owlbear_delivery.change_publication import (
 from owlbear_delivery.change_workspace import (
     CapacityLedger,
     ChangeCoordination,
+    ChangeTargetSyncConflictError,
+    ChangeTargetSyncReceipt,
     ChangeWorkspaceManager,
     ChangeWorktreeAttentionCode,
     ChangeWorktreeAttentionError,
@@ -31,6 +33,7 @@ from owlbear_delivery.change_workspace import (
     PortfolioCoordinator,
     PublicationLease,
     RetainedChangeWorktree,
+    SyncChangeWithTarget,
     WorkspaceRecoverySnapshot,
     WriterIdentity,
 )
@@ -317,6 +320,8 @@ __all__ = [
     "ChangeBranchPublisher",
     "ChangeBranchSupersessionReceipt",
     "ChangeCoordination",
+    "ChangeTargetSyncConflictError",
+    "ChangeTargetSyncReceipt",
     "ChangeWorkspaceManager",
     "ChangeWorktreeAttentionCode",
     "ChangeWorktreeAttentionError",
@@ -520,6 +525,7 @@ __all__ = [
     "StartedTargetJob",
     "SupersedeChangeBranch",
     "SupersedeDraftPullRequest",
+    "SyncChangeWithTarget",
     "TargetAdmissionAssessment",
     "TargetAdmissionCandidate",
     "TargetAdmissionConflictError",

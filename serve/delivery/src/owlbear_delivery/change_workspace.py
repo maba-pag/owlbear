@@ -35,6 +35,7 @@ _OCC_RETRY_LIMIT = 8
 _PUBLICATION_LEASE_MAX_SECONDS = 600
 _PUBLICATION_OPERATION_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 _CHANGE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+_MERGE_COMMIT_MIN_PARENTS = 2
 
 
 @dataclass(frozen=True)
@@ -115,6 +116,66 @@ class ChangeWorktreeCleanup(_ChangeWorktreeCleanupRecord):
     """Durable proof that one exact Change worktree was removed."""
 
 
+class SyncChangeWithTarget(_WorkspaceModel):
+    """Exact preconditions for one target synchronization attempt."""
+
+    change_id: ChangeId
+    expected_target: str = Field(pattern=r"^[0-9a-f]{40}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class ChangeTargetSyncReceipt(_WorkspaceModel):
+    """Durable evidence for one exact target merge in a managed Change worktree."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: ChangeId
+    integration_target: str = Field(min_length=1)
+    expected_target: str = Field(pattern=r"^[0-9a-f]{40}$")
+    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    change_head_before: str = Field(pattern=r"^[0-9a-f]{40}$")
+    merged_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    merge_commit: bool
+
+    @classmethod
+    def create(  # noqa: PLR0913
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        integration_target: str,
+        expected_target: str,
+        target_head: str,
+        change_head_before: str,
+        merged_head: str,
+        merge_commit: bool,
+    ) -> Self:
+        """Create a content-addressed receipt from one completed target merge."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "integration_target": integration_target,
+            "expected_target": expected_target,
+            "target_head": target_head,
+            "change_head_before": change_head_before,
+            "merged_head": merged_head,
+            "merge_commit": merge_commit,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, **values)
+        return cls(receipt_id=_target_sync_digest(candidate), **values)
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> Self:
+        if self.expected_target != self.target_head:
+            message = "target synchronization receipt names a different fetched target"
+            raise ValueError(message)
+        if self.receipt_id != _target_sync_digest(self):
+            message = "target synchronization receipt identity is invalid"
+            raise ValueError(message)
+        return self
+
+
 class PublicationLease(_WorkspaceModel):
     """Expiring custody for one exact Change publication attempt."""
 
@@ -159,6 +220,7 @@ class ChangeCoordination(_WorkspaceModel):
     last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     writer: ChangeWriter | None = None
     publication_lease: PublicationLease | None = None
+    target_sync_receipt: ChangeTargetSyncReceipt | None = None
     worktree_cleanup_intent: ChangeWorktreeCleanupIntent | None = None
     worktree_cleanup: ChangeWorktreeCleanup | None = None
 
@@ -178,6 +240,13 @@ class ChangeCoordination(_WorkspaceModel):
         if self.publication_lease is None:
             return None
         return _publication_timestamp(self.publication_lease.expires_at)
+
+    @model_validator(mode="after")
+    def _validate_target_sync_receipt(self) -> Self:
+        if self.target_sync_receipt is not None and self.target_sync_receipt.change_id != self.change_id:
+            message = "target synchronization receipt does not match its Change"
+            raise ValueError(message)
+        return self
 
 
 class WorkspaceRecoverySnapshot(_WorkspaceModel):
@@ -248,6 +317,27 @@ class ChangeWorktreeAttentionError(RuntimeError):
         self.attention = attention
         detail = ", ".join(code.value for code in attention)
         super().__init__(f"Change worktree requires attention: {detail}")
+
+
+class ChangeTargetSyncConflictError(RuntimeError):
+    """A target merge entered a preserved conflict state in the Change worktree."""
+
+    code = "ERR_TARGET_SYNC_CONFLICT"
+    retry_safe = False
+
+    def __init__(
+        self,
+        change_id: str,
+        operation_id: str,
+        target_head: str,
+        conflict_paths: tuple[str, ...],
+    ) -> None:
+        self.change_id = change_id
+        self.operation_id = operation_id
+        self.target_head = target_head
+        self.conflict_paths = conflict_paths
+        detail = ", ".join(conflict_paths) if conflict_paths else "unclassified paths"
+        super().__init__(f"target synchronization requires conflict resolution: {detail}")
 
 
 class CapacityLedger(_WorkspaceModel):
@@ -436,11 +526,19 @@ class PortfolioCoordinator:
             return released
         return _coordination_conflict("writer coordination remained concurrent")
 
-    def update(self, coordination: ChangeCoordination) -> ChangeCoordination:
+    def update(
+        self,
+        coordination: ChangeCoordination,
+        *,
+        lock: PublicationLock | None = None,
+    ) -> ChangeCoordination:
         """OCC-replace one registered per-change record without touching capacity."""
         existing = self.show(coordination.change_id)
         if existing.publication_lease is not None and existing != coordination:
             _coordination_conflict("workspace update cannot change a reserved publication boundary")
+        if lock is not None:
+            self._require_publication_lock(lock, coordination.change_id)
+            return self._update(coordination)
         with self.publication_lock(coordination.change_id):
             return self._update(coordination)
 
@@ -981,6 +1079,94 @@ class ChangeWorkspaceManager:
             return coordination
         return self._coordinator.update(coordination.model_copy(update={"target_head": target_head}))
 
+    def sync_with_target(self, request: SyncChangeWithTarget) -> ChangeTargetSyncReceipt:
+        """Fetch one exact target head and merge it only in the managed Change worktree."""
+        with self._coordinator.publication_lock(request.change_id) as lock:
+            coordination = self._coordinator.show(request.change_id)
+            previous_receipt = coordination.target_sync_receipt
+            if previous_receipt is not None and previous_receipt.operation_id == request.operation_id:
+                if (
+                    previous_receipt.expected_target != request.expected_target
+                    or coordination.last_reviewed_commit != previous_receipt.merged_head
+                ):
+                    _coordination_conflict("target synchronization operation inputs differ from its receipt")
+                self._require_worktree(
+                    request.change_id,
+                    coordination.worktree_path,
+                    coordination.branch,
+                    previous_receipt.merged_head,
+                )
+                return previous_receipt
+            if coordination.writer is not None:
+                _coordination_conflict("target synchronization cannot overlap an active writer")
+            if coordination.publication_lease is not None:
+                _coordination_conflict("target synchronization cannot overlap a publication lease")
+            branch_head = self._resolve(coordination.branch)
+            self._require_worktree(
+                request.change_id,
+                coordination.worktree_path,
+                coordination.branch,
+                branch_head,
+            )
+            if self._git(
+                "--no-optional-locks",
+                "status",
+                "--porcelain=v1",
+                "-z",
+                "--untracked-files=all",
+                cwd=coordination.worktree_path,
+            ):
+                _workspace_failure("target synchronization requires a clean Change worktree")
+            source_ref, target_ref = self._target_refs()
+            target_head = self._fetch_target(source_ref, target_ref, request.expected_target)
+            branch_head = self._resolve(coordination.branch)
+            self._require_worktree(
+                request.change_id,
+                coordination.worktree_path,
+                coordination.branch,
+                branch_head,
+            )
+            merge = self._run_git(
+                "merge",
+                "--no-edit",
+                "--",
+                target_ref,
+                cwd=coordination.worktree_path,
+                check=False,
+            )
+            if merge.returncode != 0:
+                merge_head = self._resolve("MERGE_HEAD", cwd=coordination.worktree_path, missing_ok=True)
+                if merge_head is not None:
+                    raise ChangeTargetSyncConflictError(
+                        request.change_id,
+                        request.operation_id,
+                        merge_head,
+                        self._unmerged_paths(coordination.worktree_path),
+                    )
+                _workspace_failure("target synchronization merge failed")
+            merged_head = self._resolve(coordination.branch)
+            receipt = ChangeTargetSyncReceipt.create(
+                operation_id=request.operation_id,
+                change_id=request.change_id,
+                integration_target=coordination.integration_target,
+                expected_target=request.expected_target,
+                target_head=target_head,
+                change_head_before=branch_head,
+                merged_head=merged_head,
+                merge_commit=self._is_merge_commit(merged_head, coordination.worktree_path),
+            )
+            self._coordinator.update(
+                coordination.model_copy(
+                    update={
+                        "target_head": target_head,
+                        "target_sync_receipt": receipt,
+                        "last_reviewed_commit": merged_head,
+                    }
+                ),
+                lock=lock,
+            )
+            return receipt
+
     def integration_context(self, change_id: str) -> IntegrationContext:
         """Return exact source and target heads without mutating either reference."""
         coordination = self._coordinator.show(change_id)
@@ -991,6 +1177,52 @@ class ChangeWorkspaceManager:
             integration_target=coordination.integration_target,
             target_head=self._resolve(self._target_ref()),
         )
+
+    def _target_refs(self) -> tuple[str, str]:
+        target_ref = self._target_ref()
+        remote_prefix = f"refs/remotes/{self._remote}/"
+        if not target_ref.startswith(remote_prefix):
+            _workspace_failure("configured target ref does not belong to the configured remote")
+        target_branch = target_ref.removeprefix(remote_prefix)
+        source_ref = f"refs/heads/{target_branch}"
+        self._git("check-ref-format", source_ref)
+        return source_ref, target_ref
+
+    def _fetch_target(self, source_ref: str, target_ref: str, expected_target: str) -> str:
+        result = self._run_git(
+            "fetch",
+            "--no-tags",
+            "--no-write-fetch-head",
+            "--refmap=",
+            self._remote,
+            f"{source_ref}:{target_ref}",
+            check=False,
+        )
+        if result.returncode != 0:
+            _workspace_failure("configured target could not be fetched into its remote-tracking ref")
+        target_head = self._resolve(target_ref, missing_ok=True)
+        if target_head is None:
+            _workspace_failure("fetched target remote-tracking ref is unavailable")
+        if target_head != expected_target:
+            _coordination_conflict("target changed while it was fetched")
+        return target_head
+
+    def _unmerged_paths(self, worktree: Path) -> tuple[str, ...]:
+        result = self._run_git(
+            "diff",
+            "--name-only",
+            "--diff-filter=U",
+            "-z",
+            cwd=worktree,
+            check=False,
+        )
+        if result.returncode != 0:
+            return ()
+        return tuple(os.fsdecode(path) for path in result.stdout.split(b"\0") if path)
+
+    def _is_merge_commit(self, commit: str, worktree: Path) -> bool:
+        parents = self._git("rev-list", "--parents", "-n", "1", commit, cwd=worktree).split()
+        return len(parents) > _MERGE_COMMIT_MIN_PARENTS
 
     def reviewed_source_head(self, change_id: str) -> str:
         """Return one clean warm source head anchored at its reviewed boundary."""
@@ -1573,6 +1805,12 @@ def _replacement(
 def _model_content(model: BaseModel) -> bytes:
     payload = model.model_dump(mode="json")
     return f"{json.dumps(payload, sort_keys=True, separators=(',', ':'))}\n".encode()
+
+
+def _target_sync_digest(receipt: ChangeTargetSyncReceipt) -> str:
+    payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _coordination_conflict(detail: str) -> Never:

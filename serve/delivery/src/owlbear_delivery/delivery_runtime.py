@@ -16,6 +16,7 @@ from owlbear_delivery.acceptance import (
     CompletionReceiptConflictError,
     CompletionReceiptStore,
 )
+from owlbear_delivery.change_workspace import ChangeTargetSyncReceipt
 from owlbear_delivery.draft_pull_request import (
     PublicationPullRequestObservationReceipt,
     PullRequestReadyReceipt,
@@ -506,7 +507,7 @@ class DeliveryFinalizationInvalidation(_DeliveryModel):
     finalization_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     observed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    reason: Literal["head-drift"] = "head-drift"
+    reason: Literal["head-drift", "target-sync-conflict"] = "head-drift"
     invalidated_at: datetime
 
 
@@ -993,7 +994,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 class DeliveryFrontier(_DeliveryModel):
     """Canonical outcome and Change checkpoint state persisted beside authority."""
 
-    schema_version: Literal[14] = 14
+    schema_version: Literal[15] = 15
     bindings: tuple[OutcomeAuthorityBinding, ...]
     published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint: DeliveryPendingCheckpoint | None = None
@@ -1003,6 +1004,7 @@ class DeliveryFrontier(_DeliveryModel):
     ready: PullRequestReadyReceipt | None = None
     change_disposition_publication: DeliveryChangePublicationIdentity | None = None
     change_publication_history: DeliveryChangePublicationHistory | None = None
+    target_sync_receipt: ChangeTargetSyncReceipt | None = None
     merged_pull_request_latch: DeliveryMergedPullRequestLatch | None = None
     change_completion: DeliveryChangeCompletion | None = None
     change_deferral: DeliveryChangeDeferral | None = None
@@ -1327,8 +1329,8 @@ _STAGE_ORDER = {
     DeliveryStage.IMPLEMENTATION: 2,
     DeliveryStage.COMPLETED: 3,
 }
-_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13})
-_FRONTIER_SCHEMA_VERSION = 14
+_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14})
+_FRONTIER_SCHEMA_VERSION = 15
 _FINALIZATION_SCHEMA_VERSION = 2
 _LEGACY_FINALIZATION_MESSAGE = "legacy finalization authority requires explicit re-finalization"
 _CHECKPOINT_BACKFILL_SCHEMA_VERSIONS = frozenset({1, 2})
@@ -1342,6 +1344,8 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "acknowledge_checkpoint_publication",
         "record_publication_identity",
         "record_publication_successor",
+        "record_target_sync",
+        "capture_target_sync_conflict",
         "mark_awaiting_merge",
         "reconcile_pull_request_draft_state",
         "latch_merged_pull_request",
@@ -1834,6 +1838,10 @@ class DeliveryRuntime:
         """Return ordered provider publication identities for this Change."""
         return self._read()[0].change_publication_history
 
+    def target_sync_receipt(self) -> ChangeTargetSyncReceipt | None:
+        """Return the latest exact target synchronization receipt, if any."""
+        return self._read()[0].target_sync_receipt
+
     def completion_receipt(self) -> CompletionReceipt | None:
         """Return the exact terminal receipt while rejecting partial completion state."""
         frontier, _content = self._read()
@@ -2175,6 +2183,127 @@ class DeliveryRuntime:
         )
         self._replace(previous, updated)
         return invalidation
+
+    def record_target_sync(
+        self,
+        receipt: ChangeTargetSyncReceipt,
+        synced_at: datetime,
+    ) -> ChangeTargetSyncReceipt:
+        """Persist one exact target-sync result and invalidate stale finalization authority."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_target_sync")
+        _require_no_active_change_claim(frontier, "target synchronization")
+        if receipt.change_id != self._contract.change_id:
+            _conflict("target synchronization receipt does not match the admitted Change")
+        existing = frontier.target_sync_receipt
+        if existing is not None and existing.operation_id == receipt.operation_id:
+            if existing != receipt:
+                _conflict("target synchronization operation has different receipt evidence")
+            return existing
+        if synced_at.tzinfo is None:
+            message = "target synchronization timestamp must include a timezone"
+            raise ValueError(message)
+
+        finalization = frontier.finalization
+        invalidation = frontier.finalization_invalidation
+        ready = frontier.ready
+        if finalization is not None and finalization.exact_head != receipt.merged_head:
+            invalidation = DeliveryFinalizationInvalidationReceipt.create(
+                DeliveryFinalizationInvalidation(
+                    change_id=self._contract.change_id,
+                    finalization_id=finalization.finalization_id,
+                    expected_head=finalization.exact_head,
+                    observed_head=receipt.merged_head,
+                    invalidated_at=synced_at,
+                )
+            )
+            finalization = None
+            ready = None
+
+        pending = frontier.pending_checkpoint
+        triggers = (
+            ()
+            if pending is None
+            else tuple(
+                trigger for trigger in pending.triggers if trigger.kind != DeliveryCheckpointTriggerKind.FINALIZATION
+            )
+        )
+        explicit = DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT)
+        if explicit not in triggers:
+            triggers = (*triggers, explicit)
+        updated = frontier.model_copy(
+            update={
+                "target_sync_receipt": receipt,
+                "finalization": finalization,
+                "finalization_invalidation": invalidation,
+                "ready": ready,
+                "pending_checkpoint": DeliveryPendingCheckpoint(
+                    head=receipt.merged_head,
+                    triggers=triggers,
+                ),
+            }
+        )
+        self._replace(previous, updated)
+        return receipt
+
+    def capture_target_sync_conflict(
+        self,
+        operation_id: str,
+        target_head: str,
+        recorded_at: datetime,
+        diagnostics: tuple[str, ...],
+        *,
+        publication_identity: DeliveryChangePublicationIdentity | None = None,
+    ) -> DeliveryChangeDisposition:
+        """Retain target-merge attention and invalidate authority exposed to the conflict."""
+        frontier, previous = self._read()
+        existing = frontier.change_disposition
+        if existing is not None:
+            return existing
+        _require_change_mutable(frontier, "capture_target_sync_conflict")
+        _require_no_active_change_claim(frontier, "target synchronization attention capture")
+        if recorded_at.tzinfo is None:
+            message = "target synchronization attention timestamp must include a timezone"
+            raise ValueError(message)
+        if publication_identity is None and frontier.ready is not None:
+            publication_identity = _pull_request_identity(frontier.ready)
+        if publication_identity is not None and publication_identity.change_id != self._contract.change_id:
+            _conflict("Change publication identity does not match the admitted Change")
+
+        invalidation = frontier.finalization_invalidation
+        if frontier.finalization is not None:
+            if frontier.finalization.exact_head == target_head:
+                _conflict("target synchronization conflict head must differ from finalized Change head")
+            invalidation = DeliveryFinalizationInvalidationReceipt.create(
+                DeliveryFinalizationInvalidation(
+                    change_id=self._contract.change_id,
+                    finalization_id=frontier.finalization.finalization_id,
+                    expected_head=frontier.finalization.exact_head,
+                    observed_head=target_head,
+                    reason="target-sync-conflict",
+                    invalidated_at=recorded_at,
+                )
+            )
+        disposition = DeliveryChangeDisposition.create(
+            kind=DeliveryChangeDispositionKind.PUBLICATION_ATTENTION,
+            change_id=self._contract.change_id,
+            entered_from=self.change_stage(),
+            recorded_at=recorded_at,
+            diagnostics=(f"target-sync-operation:{operation_id}", *diagnostics),
+        )
+        updated = frontier.model_copy(
+            update={
+                "change_disposition": disposition,
+                "change_disposition_publication": publication_identity,
+                "change_disposition_resolution": None,
+                "finalization": None,
+                "finalization_invalidation": invalidation,
+                "ready": None,
+                "pending_checkpoint": _invalidate_finalization_checkpoint(frontier.pending_checkpoint),
+            }
+        )
+        self._replace(previous, updated)
+        return disposition
 
     def active_claims(self) -> tuple[tuple[str, DeliveryActiveClaim], ...]:
         """Return active claim identity keyed by outcome in authority order."""
@@ -2811,6 +2940,9 @@ class DeliveryRuntime:
         history = frontier.change_publication_history
         if history is not None and history.change_id != self._contract.change_id:
             _reference("Delivery publication history does not match its admitted Change")
+        target_sync = frontier.target_sync_receipt
+        if target_sync is not None and target_sync.change_id != self._contract.change_id:
+            _reference("Delivery target synchronization receipt does not match its admitted Change")
         for receipt in (frontier.change_deferral, frontier.change_abandonment):
             if receipt is not None and receipt.change_id != self._contract.change_id:
                 _reference("Delivery Change lifecycle receipt does not match its admitted Change")
