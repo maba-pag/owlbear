@@ -416,6 +416,7 @@ class _DraftPullRequestSupersessionOperation(_DraftPullRequestModel):
 
 
 class _PublicationOperationLike(Protocol):
+    change_id: str
     repository: str
     head_branch: str
     head_sha: str

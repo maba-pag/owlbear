@@ -461,7 +461,10 @@ def test_repairs_current_receipt_after_interrupted_history_append(
     )
 
     assert second.successor_branch == "owlbear/change/change-a+s2"
-    assert publisher.read_publication_history(ReadChangePublicationHistory(change_id="change-a"))
+    current_receipt = DraftPullRequestPublicationReceipt.model_validate_json(
+        (tmp_path / "pull-requests/receipts/change-a.json").read_bytes()
+    )
+    assert current_receipt.receipt_id == second.successor_receipt_id
 
 
 def test_mark_ready_reconciles_lost_response_and_replays_durable_receipt(tmp_path: Path) -> None:
