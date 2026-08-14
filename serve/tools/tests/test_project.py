@@ -78,7 +78,7 @@ def test_target_branch_rejects_unfinished_delivery_work(
     )
     frontier = tmp_path / ".owlbear/delivery/runtime/changes/example/frontier.json"
     frontier.parent.mkdir(parents=True)
-    frontier.write_text('{"bindings": [], "integration_completion": null}\n', encoding="utf-8")
+    frontier.write_text('{"bindings": []}\n', encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(sys, "argv", ["target-branch", "release"])
 

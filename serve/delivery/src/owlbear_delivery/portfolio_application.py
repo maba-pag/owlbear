@@ -388,7 +388,6 @@ class DeliveryRetainedWorktreeCleanupBlockReason(StrEnum):
 
     ORPHAN = "orphan"
     COMPLETION_STATE_INCONSISTENT = "completion-state-inconsistent"
-    LEGACY_INTEGRATION_COMPLETION = "legacy-integration-completion"
     NONTERMINAL = "nonterminal"
     ACTIVE_WRITER = "active-writer"
     ACTIVE_PUBLICATION_LEASE = "active-publication-lease"
@@ -2069,10 +2068,7 @@ class PortfolioApplication:
         )
         unfinished_runtime_count = sum(not is_change_terminal(snapshot.frontier) for snapshot in snapshots)
         unfinished_change_count = unfinished_runtime_count
-        completed_change_count = sum(
-            snapshot.frontier.change_completion is not None or snapshot.frontier.integration_result_id is not None
-            for snapshot in snapshots
-        )
+        completed_change_count = sum(snapshot.frontier.change_completion is not None for snapshot in snapshots)
         design_change_ids = tuple(dict.fromkeys((*draft_design_ids, *design_required_ids)))
         guidance = derive_portfolio_guidance(
             PortfolioGuidanceFacts(
@@ -2413,8 +2409,6 @@ class PortfolioApplication:
             reason = DeliveryRetainedWorktreeCleanupBlockReason.ORPHAN
         elif completion_state_inconsistent:
             reason = DeliveryRetainedWorktreeCleanupBlockReason.COMPLETION_STATE_INCONSISTENT
-        elif completion is None and lifecycle == DeliveryChangeStage.COMPLETED:
-            reason = DeliveryRetainedWorktreeCleanupBlockReason.LEGACY_INTEGRATION_COMPLETION
         elif completion is None and lifecycle != DeliveryChangeStage.ABANDONED:
             reason = DeliveryRetainedWorktreeCleanupBlockReason.NONTERMINAL
         elif retained.writer is not None:

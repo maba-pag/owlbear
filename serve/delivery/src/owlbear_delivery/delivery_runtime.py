@@ -994,7 +994,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 class DeliveryFrontier(_DeliveryModel):
     """Canonical outcome and Change checkpoint state persisted beside authority."""
 
-    schema_version: Literal[15] = 15
+    schema_version: Literal[16] = 16
     bindings: tuple[OutcomeAuthorityBinding, ...]
     published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint: DeliveryPendingCheckpoint | None = None
@@ -1011,8 +1011,6 @@ class DeliveryFrontier(_DeliveryModel):
     change_abandonment: DeliveryChangeAbandonment | None = None
     change_disposition: DeliveryChangeDisposition | None = None
     change_disposition_resolution: DeliveryChangeDispositionResolution | None = None
-    integration_result_id: str | None = None
-    integration_completion: DeliveryIntegrationCompletion | None = None
     integration_attention: DeliveryIntegrationAttention | None = None
     integration_repair_claim: DeliveryActiveClaim | None = None
 
@@ -1026,18 +1024,6 @@ class DeliveryFrontier(_DeliveryModel):
             raise ValueError(message)
         if len(move_ids) != len(set(move_ids)):
             message = "Delivery operator move identities must be unique"
-            raise ValueError(message)
-        if (self.integration_result_id is None) != (self.integration_completion is None):
-            message = "Integration result identity and completion must be published together"
-            raise ValueError(message)
-        if (
-            self.integration_completion is not None
-            and self.integration_result_id != self.integration_completion.completion_id
-        ):
-            message = "Integration result identity must match its completion"
-            raise ValueError(message)
-        if self.integration_completion is not None and self.integration_attention is not None:
-            message = "completed Integration cannot retain attention"
             raise ValueError(message)
         self._validate_lifecycle_dispositions()
         self._validate_change_disposition()
@@ -1056,7 +1042,6 @@ class DeliveryFrontier(_DeliveryModel):
             any(binding.stage != DeliveryStage.COMPLETED for binding in self.bindings)
             or any(binding.active_claim is not None for binding in self.bindings)
             or self.integration_repair_claim is not None
-            or self.integration_completion is not None
         ):
             message = "Delivery finalization requires completed unclaimed outcome authority"
             raise ValueError(message)
@@ -1066,14 +1051,11 @@ class DeliveryFrontier(_DeliveryModel):
         if self.change_deferral is not None and self.change_abandonment is not None:
             message = "Change deferral and abandonment cannot coexist"
             raise ValueError(message)
-        if self.change_deferral is not None and (
-            self.change_completion is not None or self.integration_completion is not None
-        ):
+        if self.change_deferral is not None and self.change_completion is not None:
             message = "deferred Change cannot retain terminal completion authority"
             raise ValueError(message)
         if self.change_abandonment is not None and (
             self.change_completion is not None
-            or self.integration_completion is not None
             or self.change_disposition is not None
             or self.change_disposition_publication is not None
             or self.integration_attention is not None
@@ -1096,7 +1078,7 @@ class DeliveryFrontier(_DeliveryModel):
                 message = "Change publication identity requires current Change attention"
                 raise ValueError(message)
             return
-        if self.change_completion is not None or self.integration_completion is not None:
+        if self.change_completion is not None:
             message = "Change disposition cannot coexist with terminal completion authority"
             raise ValueError(message)
         if (
@@ -1123,9 +1105,6 @@ class DeliveryFrontier(_DeliveryModel):
             return self
         if self.finalization is None or self.ready is None or self.merged_pull_request_latch is None:
             message = "Delivery Change completion requires finalization, ready, and merged evidence"
-            raise ValueError(message)
-        if self.integration_result_id is not None or self.integration_completion is not None:
-            message = "Delivery Change completion cannot coexist with legacy Integration completion"
             raise ValueError(message)
         return self
 
@@ -1329,10 +1308,11 @@ _STAGE_ORDER = {
     DeliveryStage.IMPLEMENTATION: 2,
     DeliveryStage.COMPLETED: 3,
 }
-_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14})
-_FRONTIER_SCHEMA_VERSION = 15
+_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15})
+_FRONTIER_SCHEMA_VERSION = 16
 _FINALIZATION_SCHEMA_VERSION = 2
 _LEGACY_FINALIZATION_MESSAGE = "legacy finalization authority requires explicit re-finalization"
+_LEGACY_INTEGRATION_COMPLETION_MESSAGE = "legacy Integration completion requires retirement before frontier migration"
 _CHECKPOINT_BACKFILL_SCHEMA_VERSIONS = frozenset({1, 2})
 _RETURN_TARGETS = {
     DeliveryStage.PLANNING: {DeliveryStage.DESIGN},
@@ -1374,11 +1354,7 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
 
 def is_change_terminal(frontier: DeliveryFrontier) -> bool:
     """Return whether one frontier has terminal Change authority."""
-    return (
-        frontier.change_abandonment is not None
-        or frontier.change_completion is not None
-        or frontier.integration_result_id is not None
-    )
+    return frontier.change_abandonment is not None or frontier.change_completion is not None
 
 
 def derive_change_stage(frontier: DeliveryFrontier) -> DeliveryChangeStage:
@@ -1437,10 +1413,6 @@ class DeliveryRuntime:
     def frontier_bytes(self) -> bytes:
         """Return current canonical frontier bytes for OCC and failure proof."""
         return self._read()[1]
-
-    def integration_completion(self) -> DeliveryIntegrationCompletion | None:
-        """Return the committed Integration identity when publication completed."""
-        return self._read()[0].integration_completion
 
     def integration_attention(self) -> DeliveryIntegrationAttention | None:
         """Return current retryable Integration evidence, if any."""
@@ -1505,7 +1477,7 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         if frontier.change_abandonment is not None:
             return frontier.change_abandonment
-        if frontier.change_completion is not None or frontier.integration_result_id is not None:
+        if frontier.change_completion is not None:
             _conflict("completed Delivery Change cannot be abandoned")
         _require_change_mutable(frontier, "abandon_change")
         _require_no_active_change_claim(frontier, "Change abandonment")
@@ -1763,8 +1735,6 @@ class DeliveryRuntime:
             diagnostics.append("finalization cannot overlap an active Outcome claim")
         if frontier.integration_repair_claim is not None:
             diagnostics.append("finalization cannot overlap an Integration repair claim")
-        if frontier.integration_completion is not None:
-            diagnostics.append("completed legacy Integration cannot be finalized as a Change")
         if any(
             tuple(result.task_id for result in binding.results) != binding.task_ids for binding in frontier.bindings
         ):
@@ -2144,8 +2114,6 @@ class DeliveryRuntime:
             _conflict("Delivery finalization cannot overlap an active Outcome claim")
         if frontier.integration_repair_claim is not None:
             _conflict("Delivery finalization cannot overlap an Integration repair claim")
-        if frontier.integration_completion is not None:
-            _conflict("completed legacy Integration cannot be finalized as a Change")
         for binding in frontier.bindings:
             if tuple(result.task_id for result in binding.results) != binding.task_ids:
                 _conflict("Delivery finalization requires every Task result in authority order")
@@ -3061,8 +3029,6 @@ def _require_change_mutable(
     if operation not in _NORMAL_CHANGE_MUTATIONS:
         message = f"unregistered Delivery Change mutation: {operation}"
         raise ValueError(message)
-    if frontier.integration_result_id is not None:
-        _conflict("completed Integration cannot be mutated")
     if frontier.change_completion is not None:
         _conflict("completed Delivery Change is terminal")
     if frontier.change_abandonment is not None:
@@ -3129,6 +3095,7 @@ def _normalize_frontier_schema(payload: dict[str, object]) -> int:
         payload["schema_version"] = _FRONTIER_SCHEMA_VERSION
     elif schema_version != _FRONTIER_SCHEMA_VERSION:
         raise ValueError
+    _normalize_legacy_integration_completion(payload)
     return schema_version
 
 
@@ -3145,6 +3112,13 @@ def _normalize_schema_one_bindings(payload: dict[str, object]) -> None:
     payload["schema_version"] = _FRONTIER_SCHEMA_VERSION
 
 
+def _normalize_legacy_integration_completion(payload: dict[str, object]) -> None:
+    result_id = payload.pop("integration_result_id", None)
+    completion = payload.pop("integration_completion", None)
+    if result_id is not None or completion is not None:
+        raise ValueError(_LEGACY_INTEGRATION_COMPLETION_MESSAGE)
+
+
 def _reject_legacy_finalization(payload: dict[str, object]) -> None:
     finalization = payload.get("finalization")
     if isinstance(finalization, dict) and finalization.get("schema_version") != _FINALIZATION_SCHEMA_VERSION:
@@ -3157,8 +3131,6 @@ def _backfill_checkpoint_state(
     *,
     required: bool,
 ) -> DeliveryFrontier:
-    if frontier.integration_completion is not None:
-        return frontier
     result_bindings = tuple(binding for binding in frontier.bindings if binding.results)
     if not result_bindings:
         return frontier
@@ -3354,8 +3326,6 @@ def _administrative_move_closure(
 ) -> tuple[str, ...]:
     if frontier.integration_repair_claim is not None:
         _conflict("administrative movement cannot overlap an active Integration repair claim")
-    if frontier.integration_completion is not None:
-        _conflict("completed Integration cannot move backward")
     binding = _find_binding(frontier, outcome_id)
     if _STAGE_ORDER[target] >= _STAGE_ORDER[binding.stage]:
         _conflict("administrative movement must target an earlier stage")

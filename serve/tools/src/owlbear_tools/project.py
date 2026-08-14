@@ -151,7 +151,7 @@ def _delivery_blockers(root: Path) -> list[str]:
         ]
         if any(claim is not None for claim in active_claims) or frontier.get("integration_repair_claim") is not None:
             blockers.append(f"active Delivery claim: {path.parent.name}")
-        elif frontier.get("integration_completion") is None and frontier.get("change_completion") is None:
+        elif frontier.get("change_completion") is None:
             blockers.append(f"unfinished Delivery change: {path.parent.name}")
     for path in sorted(root.glob(_COORDINATION_GLOB)):
         try:

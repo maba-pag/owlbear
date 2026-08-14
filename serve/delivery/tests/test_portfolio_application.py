@@ -55,7 +55,6 @@ from owlbear_delivery import (
     DeliveryFrontier,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
-    DeliveryIntegrationCompletion,
     DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryOutcome,
@@ -1553,40 +1552,6 @@ def test_abandoned_change_worktree_cleanup_surfaces_lost_worktree_attention(tmp_
     assert ChangeWorktreeAttentionCode.WORKTREE_MISSING in raised.value.attention
 
 
-def test_retained_inventory_blocks_legacy_integration_completion(tmp_path: Path) -> None:
-    application, runtimes, _coordinator, state_root = _portfolio(
-        tmp_path,
-        {"change-a": DeliveryStage.COMPLETED},
-    )
-    runtime = runtimes["change-a"]
-    legacy = DeliveryIntegrationCompletion(
-        completion_id="a" * 64,
-        candidate_id="b" * 64,
-        package_id="c" * 64,
-        target_commit="d" * 40,
-        completion_path="legacy/completion.json",
-    )
-    path = state_root / "changes/change-a/frontier.json"
-    frontier = DeliveryFrontier.model_validate_json(path.read_bytes())
-    path.write_bytes(
-        _canonical(
-            frontier.model_copy(
-                update={
-                    "integration_result_id": legacy.completion_id,
-                    "integration_completion": legacy,
-                }
-            )
-        )
-    )
-
-    row = application.list_retained_change_worktrees()[0]
-
-    assert runtime.change_stage() == DeliveryChangeStage.COMPLETED
-    assert row.lifecycle == DeliveryChangeStage.COMPLETED
-    assert row.cleanup_eligible is False
-    assert row.cleanup_blocked_reason is DeliveryRetainedWorktreeCleanupBlockReason.LEGACY_INTEGRATION_COMPLETION
-
-
 def test_retained_inventory_turns_completion_conflict_into_typed_attention(tmp_path: Path) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
@@ -2635,7 +2600,7 @@ dependencies: []
     assert recovered.replayed
     assert coordinator.show("change-a").last_reviewed_commit == reviewed_head
     assert application.show_change_checkpoint_publication("change-a").pending_checkpoint is not None
-    assert json.loads(frontier_path.read_bytes())["schema_version"] == 15
+    assert json.loads(frontier_path.read_bytes())["schema_version"] == 16
 
 
 def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
@@ -2686,7 +2651,7 @@ def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_pa
 
     assert state.pending_checkpoint is not None
     assert state.pending_checkpoint.head == coordination.last_reviewed_commit
-    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 15
+    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 16
 
 
 def test_delivery_loader_injects_publication_provider_and_derives_check_head(tmp_path: Path) -> None:

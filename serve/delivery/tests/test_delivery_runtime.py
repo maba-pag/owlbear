@@ -676,7 +676,7 @@ def test_schema_nine_frontier_migrates_without_change_attention(tmp_path: Path) 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 15
+    assert canonical["schema_version"] == 16
     assert migrated.change_disposition() is None
 
 
@@ -691,7 +691,7 @@ def test_schema_ten_frontier_migrates_resolution_slot(tmp_path: Path) -> None:
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 15
+    assert canonical["schema_version"] == 16
     assert canonical["change_disposition_resolution"] is None
 
 
@@ -706,7 +706,7 @@ def test_schema_eleven_frontier_migrates_publication_identity_slot(tmp_path: Pat
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 15
+    assert canonical["schema_version"] == 16
     assert canonical["change_disposition_publication"] is None
 
 
@@ -1021,23 +1021,7 @@ def test_deferred_change_can_be_abandoned_with_deferred_prior_stage(tmp_path: Pa
     assert runtime.change_stage() == DeliveryChangeStage.ABANDONED
 
 
-def test_frontier_rejects_terminal_authority_mixed_with_lifecycle_disposition(tmp_path: Path) -> None:
-    runtime = _runtime(tmp_path)
-    runtime.defer_change("wait for user review", datetime(2026, 8, 11, 17, tzinfo=UTC))
-    completion = DeliveryIntegrationCompletion(
-        completion_id="a" * 64,
-        candidate_id="b" * 64,
-        package_id="c" * 64,
-        target_commit="1" * 40,
-        completion_path=".owlbear/completed/delivery-runtime.json",
-    )
-    payload = DeliveryFrontier.model_validate_json(runtime.frontier_bytes()).model_dump(mode="python")
-    payload["integration_result_id"] = completion.completion_id
-    payload["integration_completion"] = completion.model_dump(mode="python")
-
-    with pytest.raises(ValueError, match="deferred Change cannot retain terminal completion authority"):
-        DeliveryFrontier.model_validate(payload)
-
+def test_frontier_rejects_abandoned_change_with_lifecycle_attention(tmp_path: Path) -> None:
     attention_runtime = _runtime(tmp_path / "attention")
     attention_runtime.capture_publication_attention(
         datetime(2026, 8, 11, 17, tzinfo=UTC),
@@ -1070,7 +1054,7 @@ def test_schema_twelve_frontier_migrates_lifecycle_disposition_slots(tmp_path: P
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 15
+    assert canonical["schema_version"] == 16
     assert migrated.change_deferral() is None
     assert migrated.change_abandonment() is None
 
@@ -1308,14 +1292,36 @@ def test_runtime_migrates_reducible_assembly_metadata_transactionally(tmp_path: 
     payload["schema_version"] = 1
     for binding in payload["bindings"]:
         binding["assembly_required"] = False
+    payload["integration_result_id"] = None
+    payload["integration_completion"] = None
     path.write_text(json.dumps(payload), encoding="utf-8")
 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 15
+    assert canonical["schema_version"] == 16
     assert all("assembly_required" not in binding for binding in canonical["bindings"])
+    assert "integration_result_id" not in canonical
+    assert "integration_completion" not in canonical
     assert json.loads(path.read_bytes()) == canonical
+
+
+def test_frontier_migration_rejects_non_null_legacy_integration_completion(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    payload = json.loads(runtime.frontier_bytes())
+    completion = DeliveryIntegrationCompletion(
+        completion_id="a" * 64,
+        candidate_id="b" * 64,
+        package_id="c" * 64,
+        target_commit="1" * 40,
+        completion_path=".owlbear/completed/delivery-runtime.json",
+    )
+    payload["schema_version"] = 15
+    payload["integration_result_id"] = completion.completion_id
+    payload["integration_completion"] = completion.model_dump(mode="json")
+
+    with pytest.raises(ValueError, match="requires retirement"):
+        parse_delivery_frontier(json.dumps(payload).encode())
 
 
 def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: Path) -> None:
@@ -1330,7 +1336,7 @@ def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 15
+    assert canonical["schema_version"] == 16
     assert canonical["published_head"] is None
     assert canonical["pending_checkpoint"] is None
     assert json.loads(path.read_bytes()) == canonical
@@ -1384,7 +1390,7 @@ def test_runtime_migrates_prior_schema_without_rewriting_finalization_checkpoint
     )
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 15
+    assert canonical["schema_version"] == 16
     assert canonical["pending_checkpoint"] == expected_checkpoint
     assert canonical["pending_checkpoint"]["head"] == exact_head
     assert canonical["pending_checkpoint"]["triggers"][-1] == {
@@ -1431,38 +1437,6 @@ def test_schema_two_result_history_backfills_checkpoint_at_exact_reviewed_head(t
         (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-001"),
         (DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME, "OUT-002"),
     )
-
-
-def test_schema_two_completed_change_does_not_backfill_checkpoint(tmp_path: Path) -> None:
-    runtime = _runtime(
-        tmp_path,
-        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
-    )
-    completion = DeliveryIntegrationCompletion(
-        completion_id="a" * 64,
-        candidate_id="b" * 64,
-        package_id="c" * 64,
-        target_commit="1" * 40,
-        completion_path=".owlbear/completed/delivery-runtime.json",
-    )
-    _persist_frontier(
-        tmp_path,
-        runtime,
-        integration_result_id=completion.completion_id,
-        integration_completion=completion,
-    )
-    payload = json.loads(runtime.frontier_bytes())
-    payload["schema_version"] = 2
-    payload.pop("published_head")
-    payload.pop("pending_checkpoint")
-
-    migrated, _canonical_bytes = parse_delivery_frontier(
-        json.dumps(payload).encode(),
-        migration_reviewed_head="f" * 40,
-        require_checkpoint_backfill=True,
-    )
-
-    assert migrated.pending_checkpoint is None
 
 
 @pytest.mark.parametrize(
@@ -2199,40 +2173,6 @@ def test_administrative_move_rejects_active_integration_repair(tmp_path: Path) -
     before = runtime.frontier_bytes()
 
     with pytest.raises(DeliveryRuntimeConflictError, match="active Integration repair claim"):
-        runtime.administrative_move(
-            AdministrativeDeliveryMove(
-                move_id="move-001",
-                outcome_id="OUT-001",
-                target=DeliveryStage.PLANNING,
-                reason="Revise the admitted authority.",
-                expected_version=hashlib.sha256(runtime.frontier_bytes()).hexdigest(),
-            )
-        )
-
-    assert runtime.frontier_bytes() == before
-
-
-def test_administrative_move_rejects_completed_integration(tmp_path: Path) -> None:
-    runtime = _runtime(
-        tmp_path,
-        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
-    )
-    completion = DeliveryIntegrationCompletion(
-        completion_id="a" * 64,
-        candidate_id="b" * 64,
-        package_id="c" * 64,
-        target_commit="1" * 40,
-        completion_path=".owlbear/completed/delivery-runtime.json",
-    )
-    _persist_frontier(
-        tmp_path,
-        runtime,
-        integration_result_id=completion.completion_id,
-        integration_completion=completion,
-    )
-    before = runtime.frontier_bytes()
-
-    with pytest.raises(DeliveryRuntimeConflictError, match="completed Integration"):
         runtime.administrative_move(
             AdministrativeDeliveryMove(
                 move_id="move-001",

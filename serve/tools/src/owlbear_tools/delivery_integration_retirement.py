@@ -366,7 +366,7 @@ def _modern_retirement_frontier(frontier: DeliveryFrontier) -> _RetirementFronti
             )
             for binding in frontier.bindings
         ),
-        integration_completion=frontier.integration_completion,
+        integration_completion=None,
         integration_attention=frontier.integration_attention,
         integration_repair_claim=frontier.integration_repair_claim,
     )
