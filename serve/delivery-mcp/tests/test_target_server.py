@@ -410,6 +410,23 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
     resolution_schema = tools["resolve_change_disposition"].input_schema
     resolution_request = resolution_schema["$defs"]["ResolveChangeDispositionParams"]
     assert set(resolution_request["properties"]) == {"change_id", "expected_disposition_id"}
+    supersession_schema = tools["supersede_publication"].input_schema
+    supersession_request = supersession_schema["$defs"]["SupersedePublicationParams"]
+    assert set(supersession_request["properties"]) == {
+        "change_id",
+        "expected_publication_id",
+        "operation_id",
+    }
+    assert {
+        "receipt_id",
+        "operation_id",
+        "change_id",
+        "predecessor_publication_id",
+        "successor_publication_id",
+        "git_supersession",
+        "provider_supersession",
+        "publication_history",
+    } <= set(tools["supersede_publication"].output_schema["required"])
     assert transition_definitions["DeliveryTransition"]["discriminator"]["propertyName"] == "action"
     assert "output" in tools["publish_delivery_plan"].output_schema["required"]
     assert "output" in tools["publish_delivery_result"].output_schema["required"]

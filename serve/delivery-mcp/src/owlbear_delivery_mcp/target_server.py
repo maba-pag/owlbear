@@ -60,6 +60,7 @@ from owlbear_delivery_mcp.target_models import (
     DeferChangeParams,
     DeferChangeRequest,
     DeliveryPlanPublication,
+    DeliveryPublicationSupersessionResponse,
     DeliveryResultPublication,
     EmptyParams,
     EmptyRequest,
@@ -352,10 +353,10 @@ class TargetMCPAdapter:
     async def supersede_publication(
         self,
         request: SupersedePublicationRequest,
-    ) -> DeliveryChangePublicationSupersessionReceipt:
+    ) -> DeliveryPublicationSupersessionResponse:
         """Publish one successor branch and pull request for exact publication attention."""
         params = self._validate(SupersedePublicationParams, request)
-        return await asyncio.to_thread(
+        receipt = await asyncio.to_thread(
             self._call_model,
             params,
             lambda: self._application.supersede_publication(
@@ -365,6 +366,7 @@ class TargetMCPAdapter:
             ),
             DeliveryChangePublicationSupersessionReceipt,
         )
+        return DeliveryPublicationSupersessionResponse.from_receipt(receipt)
 
     async def observe_change_publication_checks(
         self,

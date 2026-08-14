@@ -8,9 +8,11 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
+from owlbear_delivery.change_publication import ChangeBranchSupersessionReceipt
 from owlbear_delivery.change_workspace import ChangeWorktreeAttentionCode
 from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
+    DeliveryChangePublicationHistory,
     DeliveryChangeStage,
     DeliveryOutputReference,
     DeliveryPlanCandidate,
@@ -22,9 +24,10 @@ from owlbear_delivery.delivery_runtime import (
     PublishDeliveryPlan,
     PublishDeliveryResult,
 )
-from owlbear_delivery.draft_pull_request import MarkChangePullRequestReady
+from owlbear_delivery.draft_pull_request import DraftPullRequestSupersessionReceipt, MarkChangePullRequestReady
 from owlbear_delivery.identities import ChangeId
 from owlbear_delivery.portfolio_application import (
+    DeliveryChangePublicationSupersessionReceipt,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
     DeliveryRetainedChangeWorktree,
@@ -286,6 +289,36 @@ class DeliveryResultPublication(_TargetProtocolModel):
         return cls(**candidate.model_dump(), output=candidate.output)
 
 
+class DeliveryPublicationSupersessionResponse(_TargetProtocolModel):
+    """MCP response for one application-bound publication successor."""
+
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: ChangeId
+    predecessor_publication_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    successor_publication_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    git_supersession: ChangeBranchSupersessionReceipt
+    provider_supersession: DraftPullRequestSupersessionReceipt
+    publication_history: DeliveryChangePublicationHistory
+
+    @classmethod
+    def from_receipt(
+        cls,
+        receipt: DeliveryChangePublicationSupersessionReceipt,
+    ) -> DeliveryPublicationSupersessionResponse:
+        """Project one application receipt into the MCP response contract."""
+        return cls(
+            receipt_id=receipt.receipt_id,
+            operation_id=receipt.operation_id,
+            change_id=receipt.change_id,
+            predecessor_publication_id=receipt.predecessor_publication_id,
+            successor_publication_id=receipt.successor_publication_id,
+            git_supersession=receipt.git_supersession,
+            provider_supersession=receipt.provider_supersession,
+            publication_history=receipt.publication_history,
+        )
+
+
 class TransitionDeliveryParams(ChangeParams):
     """Validate one worker-owned mechanical transition."""
 
@@ -425,6 +458,7 @@ __all__ = [
     "DeferChangeParams",
     "DeferChangeRequest",
     "DeliveryPlanPublication",
+    "DeliveryPublicationSupersessionResponse",
     "DeliveryResultPublication",
     "DeliveryStartupConfig",
     "DeliveryStartupDiagnostic",

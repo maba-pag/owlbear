@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,8 @@ from owlbear_delivery.completed_history import (
 )
 from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceWaitingError,
+    DeliveryChangePublicationHistory,
+    DeliveryChangePublicationIdentity,
     DeliveryChangeDispositionConflictError,
     DeliveryObservation,
     DeliveryObservationReceipt,
@@ -33,14 +36,17 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryResultCandidate,
     DeliveryReview,
     DeliveryReviewReceipt,
-    DeliveryChangePublicationHistory,
     DeliveryRuntimeReferenceError,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     FinalizeDeliveryChange,
 )
 from owlbear_delivery.design_package import DesignPackageConflictError
-from owlbear_delivery.draft_pull_request import DraftPullRequestSupersessionReceipt, MarkChangePullRequestReady
+from owlbear_delivery.draft_pull_request import (
+    DraftPullRequestPublicationReceipt,
+    DraftPullRequestSupersessionReceipt,
+    MarkChangePullRequestReady,
+)
 from owlbear_delivery.portfolio_application import DeliveryChangePublicationSupersessionReceipt
 from owlbear_delivery.publication_provider import PublicationProviderError, PublicationProviderFailureCode
 from owlbear_delivery_mcp.target_server import (
@@ -53,6 +59,105 @@ CHANGE = "change-a"
 DIGEST = "a" * 64
 COMMIT = "b" * 40
 WORKTREE_PATH = Path(__file__).resolve().parent / "fixture-worktree" / CHANGE
+
+
+def _receipt_id(payload: dict[str, object]) -> str:
+    content = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(content.encode()).hexdigest()
+
+
+def _supersession_receipt() -> DeliveryChangePublicationSupersessionReceipt:
+    predecessor_head = COMMIT
+    successor_head = "c" * 40
+    predecessor_branch = "owlbear/change/change-a"
+    successor_branch = "owlbear/change/change-a+s1"
+    predecessor_payload = {
+        "schema_version": 1,
+        "operation_id": "pull-request-operation",
+        "change_id": CHANGE,
+        "repository": "example/project",
+        "number": 7,
+        "node_id": "PR_7",
+        "head_branch": predecessor_branch,
+        "head_sha": predecessor_head,
+        "base_branch": "main",
+        "provider_evidence_digest": "2" * 64,
+    }
+    successor_payload = {
+        **predecessor_payload,
+        "operation_id": "supersede-change-a",
+        "number": 8,
+        "node_id": "PR_8",
+        "head_branch": successor_branch,
+        "head_sha": successor_head,
+        "provider_evidence_digest": "3" * 64,
+    }
+    predecessor = DraftPullRequestPublicationReceipt(
+        receipt_id=_receipt_id(predecessor_payload),
+        **predecessor_payload,
+    )
+    successor = DraftPullRequestPublicationReceipt(
+        receipt_id=_receipt_id(successor_payload),
+        **successor_payload,
+    )
+    provider_payload = {
+        "schema_version": 1,
+        "operation_id": "supersede-change-a",
+        "change_id": CHANGE,
+        "predecessor_receipt_id": predecessor.receipt_id,
+        "predecessor_branch": predecessor_branch,
+        "predecessor_head": predecessor_head,
+        "successor_receipt_id": successor.receipt_id,
+        "successor_branch": successor_branch,
+        "superseding_head": successor_head,
+        "repository": "example/project",
+        "successor_number": 8,
+        "successor_node_id": "PR_8",
+        "base_branch": "main",
+        "provider_evidence_digest": "3" * 64,
+        "predecessor_publication": predecessor.model_dump(mode="json"),
+        "successor_publication": successor.model_dump(mode="json"),
+    }
+    provider_receipt = DraftPullRequestSupersessionReceipt(
+        receipt_id=_receipt_id(provider_payload),
+        **provider_payload,
+    )
+    predecessor_identity = DeliveryChangePublicationIdentity(
+        change_id=CHANGE,
+        repository="example/project",
+        number=7,
+        node_id="PR_7",
+        head_sha=predecessor_head,
+    )
+    successor_identity = DeliveryChangePublicationIdentity(
+        change_id=CHANGE,
+        repository="example/project",
+        number=8,
+        node_id="PR_8",
+        head_sha=successor_head,
+    )
+    publication_history = DeliveryChangePublicationHistory.create(predecessor_identity).append(
+        predecessor_identity,
+        successor_identity,
+    )
+    git_receipt = ChangeBranchSupersessionReceipt(
+        receipt_id="4" * 64,
+        operation_id="supersede-change-a",
+        change_id=CHANGE,
+        remote="origin",
+        predecessor_branch=predecessor_branch,
+        predecessor_head=predecessor_head,
+        successor_branch=successor_branch,
+        superseding_head=successor_head,
+        target_branch="main",
+    )
+    return DeliveryChangePublicationSupersessionReceipt.create(
+        operation_id="supersede-change-a",
+        predecessor_publication_id=predecessor.receipt_id,
+        git_supersession=git_receipt,
+        provider_supersession=provider_receipt,
+        publication_history=publication_history,
+    )
 
 
 class _Result(BaseModel):
@@ -126,16 +231,7 @@ class _RecordingApplication:
                     result=result,
                 )
             elif name == "supersede_publication":
-                result = DeliveryChangePublicationSupersessionReceipt.model_construct(
-                    receipt_id=DIGEST,
-                    operation_id="supersede-change-a",
-                    change_id=CHANGE,
-                    predecessor_publication_id=DIGEST,
-                    successor_publication_id=DIGEST,
-                    git_supersession=ChangeBranchSupersessionReceipt.model_construct(),
-                    provider_supersession=DraftPullRequestSupersessionReceipt.model_construct(),
-                    publication_history=DeliveryChangePublicationHistory.model_construct(),
-                )
+                result = _supersession_receipt()
             else:
                 result = _Result(operation=name)
             return result
@@ -329,6 +425,7 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
     call_args = {
         "reconcile_finalization_head": (CHANGE,),
         "observe_acceptance": (CHANGE,),
+        "supersede_publication": (CHANGE, DIGEST, "supersede-change-a"),
         "cleanup_abandoned_change_worktree": (CHANGE,),
         "cleanup_completed_change_worktree": (CHANGE, DIGEST),
         "resolve_change_disposition": (CHANGE, DIGEST),
@@ -362,8 +459,9 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
         assert result[0]["change_id"] == CHANGE
         assert result[0]["worktree_path"] == str(WORKTREE_PATH)
     elif operation_name == "supersede_publication":
-        assert result.receipt_id == DIGEST
+        assert result.change_id == CHANGE
         assert result.operation_id == "supersede-change-a"
+        assert result.provider_supersession.successor_number == 8
     elif operation_name in receipt_results:
         for field, expected in receipt_results[operation_name].items():
             assert getattr(result, field) == expected
