@@ -155,12 +155,12 @@ class UserCheckoutSnapshot:
         expected_refs = {
             name: value
             for name, value in self.refs
-            if not any(name == prefix or name.startswith(f"{prefix}+s") for prefix in self.allowed_ref_prefixes)
+            if not any(name == prefix or name.startswith(f"{prefix}/") for prefix in self.allowed_ref_prefixes)
         }
         actual_refs = {
             name: value
             for name, value in current.refs
-            if not any(name == prefix or name.startswith(f"{prefix}+s") for prefix in self.allowed_ref_prefixes)
+            if not any(name == prefix or name.startswith(f"{prefix}/") for prefix in self.allowed_ref_prefixes)
         }
         assert actual_refs == expected_refs
         assert current.stash_reflog == self.stash_reflog

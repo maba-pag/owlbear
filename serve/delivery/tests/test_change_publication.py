@@ -144,6 +144,9 @@ def test_publication_and_cleanup_preserve_user_checkout_states(
         "refs/remotes/origin/main",
     )
     before = user_checkout_snapshot(repository, allowed_refs)
+    if user_state in {"mid-merge", "mid-rebase"}:
+        marker = "MERGE_HEAD" if user_state == "mid-merge" else "rebase-merge"
+        assert dict(before.operation_state)[marker]
 
     coordinator, manager = _change_workspace(tmp_path, repository)
     _worktree, reviewed = _reviewed_change(manager, change_id)
