@@ -1444,6 +1444,10 @@ class DeliveryRuntime:
         """Return current Change-level attention evidence, if any."""
         return self._read()[0].change_disposition
 
+    def change_disposition_publication(self) -> DeliveryChangePublicationIdentity | None:
+        """Return the publication identity retained by current Change attention."""
+        return self._read()[0].change_disposition_publication
+
     def change_disposition_resolution(self) -> DeliveryChangeDispositionResolution | None:
         """Return the most recent durable Change attention resolution receipt."""
         return self._read()[0].change_disposition_resolution

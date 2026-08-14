@@ -22,7 +22,9 @@ from owlbear_delivery.acceptance import (
 from owlbear_delivery.change_publication import (
     ChangeBranchPublicationReceipt,
     ChangeBranchPublisher,
+    ChangeBranchSupersessionReceipt,
     PublishChangeBranch,
+    SupersedeChangeBranch,
 )
 from owlbear_delivery.change_workspace import (
     ChangeCoordination,
@@ -45,7 +47,9 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryBlock,
     DeliveryChangeAbandonment,
     DeliveryChangeDeferral,
+    DeliveryChangeDispositionKind,
     DeliveryChangeDispositionResolution,
+    DeliveryChangePublicationHistory,
     DeliveryChangePublicationIdentity,
     DeliveryChangeStage,
     DeliveryCheckpointPublicationState,
@@ -80,8 +84,10 @@ from owlbear_delivery.delivery_runtime import (
 )
 from owlbear_delivery.draft_pull_request import (
     CreateOrReconcileDraftPullRequest,
+    DraftPullRequestPublicationHistory,
     DraftPullRequestPublicationReceipt,
     DraftPullRequestPublisher,
+    DraftPullRequestSupersessionReceipt,
     GeneratedPullRequestSummaryReceipt,
     MarkChangePullRequestReady,
     ObserveChangePublicationChecks,
@@ -89,7 +95,9 @@ from owlbear_delivery.draft_pull_request import (
     PublicationCheckObservationReceipt,
     PullRequestReadyReceipt,
     ReadChangePublicationCheckObservations,
+    ReadChangePublicationHistory,
     ReturnChangePullRequestToDraft,
+    SupersedeDraftPullRequest,
     UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.portfolio_operating import (
@@ -185,6 +193,28 @@ def _checkpoint_pull_request_title(runtime: DeliveryRuntime) -> str:
     if len(title) <= _MAX_PULL_REQUEST_TITLE_LENGTH:
         return title
     return f"{title[: _MAX_PULL_REQUEST_TITLE_LENGTH - 3]}..."
+
+
+def _supersession_summary(head: str, predecessor_id: str) -> str:
+    return "\n".join(
+        (
+            f"Superseding reviewed Delivery checkpoint `{head}`.",
+            "",
+            f"This publication supersedes provider publication `{predecessor_id}`.",
+        )
+    )
+
+
+def _publication_identity(
+    publication: DraftPullRequestPublicationReceipt,
+) -> DeliveryChangePublicationIdentity:
+    return DeliveryChangePublicationIdentity(
+        change_id=publication.change_id,
+        repository=publication.repository,
+        number=publication.number,
+        node_id=publication.node_id,
+        head_sha=publication.head_sha,
+    )
 
 
 def _operator_claim(claim: DeliveryActiveClaim | None) -> DeliveryOperatorClaim | None:
@@ -503,6 +533,80 @@ class DeliveryCheckpointReconciliationResult(_ApplicationModel):
     reconciled: bool
 
 
+class DeliveryChangePublicationSupersessionReceipt(_ApplicationModel):
+    """Bind one Git successor publication to its provider and runtime evidence."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: str = Field(min_length=1)
+    predecessor_publication_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    successor_publication_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    git_supersession: ChangeBranchSupersessionReceipt
+    provider_supersession: DraftPullRequestSupersessionReceipt
+    publication_history: DeliveryChangePublicationHistory
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        operation_id: str,
+        predecessor_publication_id: str,
+        git_supersession: ChangeBranchSupersessionReceipt,
+        provider_supersession: DraftPullRequestSupersessionReceipt,
+        publication_history: DeliveryChangePublicationHistory,
+    ) -> DeliveryChangePublicationSupersessionReceipt:
+        """Create one content-addressed application supersession receipt."""
+        change_id = provider_supersession.change_id
+        payload = {
+            "schema_version": 1,
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "predecessor_publication_id": predecessor_publication_id,
+            "successor_publication_id": provider_supersession.successor_receipt_id,
+            "git_supersession": git_supersession,
+            "provider_supersession": provider_supersession,
+            "publication_history": publication_history,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, **payload)
+        digest = hashlib.sha256(
+            json.dumps(
+                candidate.model_dump(mode="json", exclude={"receipt_id"}),
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()
+        return cls(receipt_id=digest, **payload)
+
+    @model_validator(mode="after")
+    def _validate_binding(self) -> DeliveryChangePublicationSupersessionReceipt:
+        git = self.git_supersession
+        provider = self.provider_supersession
+        if (
+            git.operation_id != self.operation_id
+            or git.change_id != self.change_id
+            or provider.operation_id != self.operation_id
+            or provider.change_id != self.change_id
+            or provider.predecessor_receipt_id != self.predecessor_publication_id
+            or provider.successor_receipt_id != self.successor_publication_id
+            or git.predecessor_branch != provider.predecessor_branch
+            or git.predecessor_head != provider.predecessor_head
+            or git.successor_branch != provider.successor_branch
+            or git.superseding_head != provider.superseding_head
+        ):
+            message = "publication supersession receipts do not share one exact successor"
+            raise ValueError(message)
+        if self.publication_history.current != _publication_identity(provider.successor_publication):
+            message = "publication supersession history does not end at the provider successor"
+            raise ValueError(message)
+        payload = self.model_dump(mode="json", exclude={"receipt_id"})
+        digest = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        if self.receipt_id != digest:
+            message = "publication supersession receipt identity is invalid"
+            raise ValueError(message)
+        return self
+
+
 class PortfolioApplicationConfig(_ApplicationModel):
     """Configured capacity, source root, and complete stage-role policy."""
 
@@ -557,6 +661,16 @@ class _PreparedSource:
     package: VerifiedDesignPackage
     coordination: ChangeCoordination
     source_head: str
+
+
+@dataclass(frozen=True)
+class _SupersessionPublishContext:
+    change_id: str
+    expected_publication_id: str
+    operation_id: str
+    predecessor: DraftPullRequestPublicationReceipt
+    superseding_head: str
+    target_branch: str
 
 
 class PortfolioApplication:
@@ -615,6 +729,216 @@ class PortfolioApplication:
         return self._draft_pull_request_publisher.observe_checks(
             ObserveChangePublicationChecks(change_id=change_id, published_head=published_head)
         )
+
+    def supersede_publication(
+        self,
+        change_id: str,
+        expected_publication_id: str,
+        operation_id: str,
+    ) -> DeliveryChangePublicationSupersessionReceipt:
+        """Publish one successor branch and PR for an exact publication attention."""
+        if self._change_branch_publisher is None or self._draft_pull_request_publisher is None:
+            self._fail("publication supersession is not configured")
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            runtime_history, predecessor, replay_head = self._read_supersession_context(
+                runtime,
+                change_id,
+                expected_publication_id,
+                operation_id,
+            )
+
+            try:
+                superseding_head = self._workspace_manager.reviewed_source_head(change_id)
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("publication supersession requires a clean reviewed Change head", exc)
+            if replay_head is not None and superseding_head != replay_head:
+                self._fail("publication supersession replay requires the stored successor head")
+
+            git_receipt, provider_receipt = self._publish_supersession(
+                runtime,
+                _SupersessionPublishContext(
+                    change_id=change_id,
+                    expected_publication_id=expected_publication_id,
+                    operation_id=operation_id,
+                    predecessor=predecessor,
+                    superseding_head=superseding_head,
+                    target_branch=self._draft_pull_request_publisher.target_branch,
+                ),
+            )
+            finalization = runtime.finalization()
+            if finalization is not None and finalization.exact_head != superseding_head:
+                runtime.reconcile_finalization_head(superseding_head, _timestamp(self._clock()))
+            updated_history = self._bind_supersession_successor(
+                runtime,
+                runtime_history,
+                predecessor,
+                provider_receipt,
+            )
+            return DeliveryChangePublicationSupersessionReceipt.create(
+                operation_id=operation_id,
+                predecessor_publication_id=expected_publication_id,
+                git_supersession=git_receipt,
+                provider_supersession=provider_receipt,
+                publication_history=updated_history,
+            )
+
+    def _read_supersession_context(
+        self,
+        runtime: DeliveryRuntime,
+        change_id: str,
+        expected_publication_id: str,
+        operation_id: str,
+    ) -> tuple[DeliveryChangePublicationHistory, DraftPullRequestPublicationReceipt, str | None]:
+        disposition = runtime.change_disposition()
+        if disposition is None or disposition.kind != DeliveryChangeDispositionKind.PUBLICATION_ATTENTION:
+            self._fail("publication supersession requires current publication attention")
+        runtime_history = runtime.publication_history()
+        if runtime_history is None:
+            self._fail("publication supersession requires current runtime publication history")
+        if runtime.change_disposition_publication() != runtime_history.current:
+            self._fail("publication attention does not retain the current runtime publication")
+        publisher = self._draft_pull_request_publisher
+        if publisher is None:
+            self._fail("publication supersession is not configured")
+        provider_history = publisher.read_publication_history(ReadChangePublicationHistory(change_id=change_id))
+        if provider_history is None:
+            self._fail("publication supersession requires current provider publication history")
+        predecessor = next(
+            (
+                publication
+                for publication in provider_history.publications
+                if publication.receipt_id == expected_publication_id
+            ),
+            None,
+        )
+        if predecessor is None:
+            self._fail("expected publication identity is not in provider publication history")
+        replay_head = self._validate_supersession_history(
+            runtime_history,
+            provider_history,
+            predecessor,
+            expected_publication_id,
+            operation_id,
+        )
+        if predecessor.base_branch != publisher.target_branch:
+            self._fail("publication predecessor targets a different integration branch")
+        return runtime_history, predecessor, replay_head
+
+    def _validate_supersession_history(
+        self,
+        runtime_history: DeliveryChangePublicationHistory,
+        provider_history: DraftPullRequestPublicationHistory,
+        predecessor: DraftPullRequestPublicationReceipt,
+        expected_publication_id: str,
+        operation_id: str,
+    ) -> str | None:
+        predecessor_identity = _publication_identity(predecessor)
+        provider_current = provider_history.publications[-1]
+        provider_current_identity = _publication_identity(provider_current)
+        if provider_current.receipt_id == expected_publication_id:
+            if runtime_history.current != predecessor_identity:
+                self._fail("runtime and provider publication predecessors differ")
+            return None
+        if (
+            provider_current.operation_id != operation_id
+            or provider_history.predecessor_receipt_ids[-1] != expected_publication_id
+            or runtime_history.current not in (predecessor_identity, provider_current_identity)
+        ):
+            self._fail("provider publication history has a different current successor")
+        return provider_current.head_sha
+
+    def _publish_supersession(
+        self,
+        runtime: DeliveryRuntime,
+        context: _SupersessionPublishContext,
+    ) -> tuple[ChangeBranchSupersessionReceipt, DraftPullRequestSupersessionReceipt]:
+        branch_publisher = self._change_branch_publisher
+        provider_publisher = self._draft_pull_request_publisher
+        if branch_publisher is None or provider_publisher is None:
+            self._fail("publication supersession is not configured")
+        git_receipt = branch_publisher.supersede(
+            SupersedeChangeBranch(
+                change_id=context.change_id,
+                expected_published_branch=context.predecessor.head_branch,
+                expected_published_head=context.predecessor.head_sha,
+                superseding_head=context.superseding_head,
+                operation_id=context.operation_id,
+            )
+        )
+        self._validate_git_supersession(
+            git_receipt,
+            context,
+        )
+        provider_receipt = provider_publisher.supersede(
+            SupersedeDraftPullRequest(
+                change_id=context.change_id,
+                operation_id=context.operation_id,
+                expected_predecessor_receipt_id=context.expected_publication_id,
+                predecessor_branch=context.predecessor.head_branch,
+                predecessor_head=context.predecessor.head_sha,
+                successor_branch=git_receipt.successor_branch,
+                superseding_head=context.superseding_head,
+                title=_checkpoint_pull_request_title(runtime),
+                generated_summary=_supersession_summary(
+                    context.superseding_head,
+                    context.expected_publication_id,
+                ),
+            )
+        )
+        self._validate_provider_supersession(
+            provider_receipt,
+            git_receipt,
+            context,
+        )
+        return git_receipt, provider_receipt
+
+    def _bind_supersession_successor(
+        self,
+        runtime: DeliveryRuntime,
+        runtime_history: DeliveryChangePublicationHistory,
+        predecessor: DraftPullRequestPublicationReceipt,
+        provider_receipt: DraftPullRequestSupersessionReceipt,
+    ) -> DeliveryChangePublicationHistory:
+        predecessor_identity = _publication_identity(predecessor)
+        successor_identity = _publication_identity(provider_receipt.successor_publication)
+        if runtime_history.current == successor_identity:
+            return runtime_history
+        if runtime_history.current != predecessor_identity:
+            self._fail("runtime publication history cannot bind the provider successor")
+        return runtime.record_publication_successor(predecessor_identity, successor_identity)
+
+    @staticmethod
+    def _validate_git_supersession(
+        receipt: ChangeBranchSupersessionReceipt,
+        context: _SupersessionPublishContext,
+    ) -> None:
+        if (
+            receipt.change_id != context.change_id
+            or receipt.predecessor_branch != context.predecessor.head_branch
+            or receipt.predecessor_head != context.predecessor.head_sha
+            or receipt.superseding_head != context.superseding_head
+        ):
+            message = "Git supersession receipt does not match provider publication authority"
+            raise PortfolioApplicationError(message)
+
+    @staticmethod
+    def _validate_provider_supersession(
+        receipt: DraftPullRequestSupersessionReceipt,
+        git_receipt: ChangeBranchSupersessionReceipt,
+        context: _SupersessionPublishContext,
+    ) -> None:
+        if (
+            receipt.change_id != context.change_id
+            or receipt.predecessor_receipt_id != context.expected_publication_id
+            or receipt.predecessor_branch != git_receipt.predecessor_branch
+            or receipt.predecessor_head != git_receipt.predecessor_head
+            or receipt.successor_branch != git_receipt.successor_branch
+            or receipt.superseding_head != git_receipt.superseding_head
+            or receipt.base_branch != context.target_branch
+        ):
+            message = "provider supersession receipt does not match Git publication authority"
+            raise PortfolioApplicationError(message)
 
     def show_change_checkpoint_publication(self, change_id: str) -> DeliveryCheckpointPublicationState:
         """Return the durable checkpoint queue for one admitted Change."""
@@ -754,6 +1078,8 @@ class PortfolioApplication:
                 "Delivery Change is already finalized with different authority",
                 ValueError("finalization request is not an exact replay"),
             )
+        if runtime.change_disposition() is not None:
+            self._fail("finalization requires current Change attention resolution")
         context = self.show_finalization_context(change_id)
         if not context.ready_for_finalization:
             self._fail(
@@ -785,6 +1111,9 @@ class PortfolioApplication:
             raise PortfolioApplicationError(message)
         runtime = self._runtime(change_id)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
+            if runtime.change_disposition() is not None:
+                message = "pull-request readiness requires current Change attention resolution"
+                raise PortfolioApplicationError(message)
             finalization = runtime.finalization()
             publication = runtime.checkpoint_publication_state()
             if (

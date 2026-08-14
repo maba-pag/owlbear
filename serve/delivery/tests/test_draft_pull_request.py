@@ -314,7 +314,7 @@ def test_reconciles_lost_create_response_without_creating_second_pr(tmp_path: Pa
     receipt = publisher.publish(_request())
 
     assert receipt.number == 7
-    assert provider.create_calls == 1
+    assert provider.create_calls == 2
     assert len(provider.pull_requests) == 1
 
 
@@ -424,6 +424,52 @@ def test_rejects_stale_predecessor_receipt_identity_before_successor_creation(tm
 
     assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
     assert provider.create_calls == 1
+
+
+def test_rejects_merged_predecessor_before_successor_creation(tmp_path: Path) -> None:
+    provider = _Provider()
+    publisher = _publisher(tmp_path, provider)
+    predecessor = publisher.publish(_request())
+    provider.pull_requests[0] = provider.pull_requests[0].model_copy(
+        update={
+            "state": "closed",
+            "merged": True,
+            "merge_commit_sha": "3" * 40,
+            "merged_at": datetime(2026, 8, 12, tzinfo=UTC),
+        }
+    )
+
+    with pytest.raises(PublicationProviderError, match="merged predecessor"):
+        publisher.supersede(_supersede_request(predecessor))
+
+    assert provider.create_calls == 1
+    assert len(provider.pull_requests) == 1
+
+
+def test_rechecks_merged_predecessor_after_persisted_operation_retry(tmp_path: Path) -> None:
+    provider = _Provider()
+    publisher = _publisher(tmp_path, provider)
+    predecessor = publisher.publish(_request())
+    request = _supersede_request(predecessor)
+    provider.fail_create_before_write_once = True
+
+    with pytest.raises(PublicationProviderError, match="provider unavailable"):
+        publisher.supersede(request)
+
+    provider.pull_requests[0] = provider.pull_requests[0].model_copy(
+        update={
+            "state": "closed",
+            "merged": True,
+            "merge_commit_sha": "3" * 40,
+            "merged_at": datetime(2026, 8, 12, tzinfo=UTC),
+        }
+    )
+
+    with pytest.raises(PublicationProviderError, match="merged predecessor"):
+        publisher.supersede(request)
+
+    assert provider.create_calls == 2
+    assert len(provider.pull_requests) == 1
 
 
 def test_repairs_current_receipt_after_interrupted_history_append(

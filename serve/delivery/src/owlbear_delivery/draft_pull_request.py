@@ -910,6 +910,10 @@ class DraftPullRequestPublisher:
             self._validate_supersession_receipt(existing, operation, request)
             self._persist_superseded_publication(existing, request)
             return existing
+        if predecessor is None:
+            predecessor = self._predecessor_publication(operation, request)
+            self._validate_supersession_predecessor(predecessor, request)
+            self._validate_predecessor_pull_request(predecessor, request)
 
         repository = self._provider.read_repository(operation.repository)
         if repository.repository != operation.repository:
@@ -1006,6 +1010,8 @@ class DraftPullRequestPublisher:
             or pull_request.base_branch != predecessor.base_branch
         ):
             self._conflict(request, "provider predecessor pull request moved outside its publication identity")
+        if pull_request.merged:
+            self._conflict(request, "merged predecessor pull request cannot be superseded")
 
     def _predecessor_publication(
         self,

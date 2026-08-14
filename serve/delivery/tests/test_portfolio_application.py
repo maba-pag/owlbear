@@ -20,6 +20,7 @@ from owlbear_delivery import (
     CapacityLedger,
     ChangeBranchPublicationReceipt,
     ChangeBranchPublisher,
+    ChangeBranchSupersessionReceipt,
     ChangeWorktreeAttentionCode,
     ChangeWorktreeAttentionError,
     AdvanceDelivery,
@@ -44,6 +45,7 @@ from owlbear_delivery import (
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
+    DeliveryChangePublicationIdentity,
     DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
     DeliveryFrontier,
@@ -74,6 +76,8 @@ from owlbear_delivery import (
     DesignPackageConflictError,
     DesignPackageStore,
     DraftPullRequestPublicationReceipt,
+    DraftPullRequestPublicationHistory,
+    DraftPullRequestSupersessionReceipt,
     CreateOrReconcileDraftPullRequest,
     DraftPullRequestPublisher,
     MarkChangePullRequestReady,
@@ -122,6 +126,15 @@ def _git_ref_exists(repository: Path, reference: str) -> bool:
     )
 
 
+def _commit_reviewed_head(application, coordination, filename: str, content: str, message: str) -> str:
+    (coordination.worktree_path / filename).write_text(content, encoding="utf-8")
+    _git(coordination.worktree_path, "add", filename)
+    _git(coordination.worktree_path, "commit", "-m", message)
+    head = _git(coordination.worktree_path, "rev-parse", "HEAD")
+    application._workspace_manager.record_reviewed("change-a", head)  # noqa: SLF001
+    return head
+
+
 def _canonical(model) -> bytes:
     return (json.dumps(model.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
 
@@ -144,20 +157,46 @@ def _branch_receipt(head: str, expected: str | None = None) -> ChangeBranchPubli
     )
 
 
-def _draft_receipt(head: str) -> DraftPullRequestPublicationReceipt:
+def _draft_receipt(
+    head: str,
+    *,
+    number: int = 7,
+    operation_id: str = "pull-request-operation",
+    head_branch: str = "owlbear/change/change-a",
+) -> DraftPullRequestPublicationReceipt:
     payload = {
         "schema_version": 1,
-        "operation_id": "pull-request-operation",
+        "operation_id": operation_id,
         "change_id": "change-a",
         "repository": "example/project",
-        "number": 7,
-        "node_id": "PR_7",
-        "head_branch": "owlbear/change/change-a",
+        "number": number,
+        "node_id": f"PR_{number}",
+        "head_branch": head_branch,
         "head_sha": head,
         "base_branch": "main",
         "provider_evidence_digest": "2" * 64,
     }
     return DraftPullRequestPublicationReceipt(receipt_id=_receipt_id(payload), **payload)
+
+
+def _draft_history(
+    publications: tuple[DraftPullRequestPublicationReceipt, ...],
+    predecessor_receipt_ids: tuple[str | None, ...],
+) -> DraftPullRequestPublicationHistory:
+    payload = {
+        "schema_version": 1,
+        "change_id": "change-a",
+        "publications": tuple(publication.model_dump(mode="json") for publication in publications),
+        "predecessor_receipt_ids": predecessor_receipt_ids,
+        "current_receipt_id": publications[-1].receipt_id,
+    }
+    return DraftPullRequestPublicationHistory(
+        history_id=_receipt_id(payload),
+        publications=publications,
+        predecessor_receipt_ids=predecessor_receipt_ids,
+        current_receipt_id=publications[-1].receipt_id,
+        change_id="change-a",
+    )
 
 
 def _summary_receipt(head: str, *, number: int = 7) -> GeneratedPullRequestSummaryReceipt:
@@ -1311,6 +1350,218 @@ def test_reconcile_first_checkpoint_publishes_branch_creates_pr_and_drains(tmp_p
     assert history is not None
     assert history.current.number == 7
     assert history.current.head_sha == head
+
+
+def test_supersede_publication_binds_git_provider_and_runtime_history(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    runtime = runtimes["change-a"]
+    coordination = coordinator.show("change-a")
+    predecessor_head = coordination.last_reviewed_commit
+    predecessor = _draft_receipt(predecessor_head)
+    predecessor_identity = DeliveryChangePublicationIdentity(
+        change_id="change-a",
+        repository=predecessor.repository,
+        number=predecessor.number,
+        node_id=predecessor.node_id,
+        head_sha=predecessor.head_sha,
+    )
+    runtime.record_publication_identity(predecessor_identity)
+    runtime.capture_publication_attention(
+        datetime(2026, 8, 12, tzinfo=UTC),
+        ("published history requires correction",),
+        publication_identity=predecessor_identity,
+    )
+
+    (coordination.worktree_path / "successor.txt").write_text("successor\n", encoding="utf-8")
+    _git(coordination.worktree_path, "add", "successor.txt")
+    _git(coordination.worktree_path, "commit", "-m", "successor publication")
+    superseding_head = _git(coordination.worktree_path, "rev-parse", "HEAD")
+    application._workspace_manager.record_reviewed("change-a", superseding_head)  # noqa: SLF001
+
+    operation_id = "supersede-change-a"
+    successor_branch = "owlbear/change/change-a+s1"
+    git_receipt = ChangeBranchSupersessionReceipt(
+        receipt_id="5" * 64,
+        operation_id=operation_id,
+        change_id="change-a",
+        remote="origin",
+        predecessor_branch=predecessor.head_branch,
+        predecessor_head=predecessor.head_sha,
+        successor_branch=successor_branch,
+        superseding_head=superseding_head,
+        target_branch="main",
+    )
+    successor = _draft_receipt(
+        superseding_head,
+        number=8,
+        operation_id=operation_id,
+        head_branch=successor_branch,
+    )
+    provider_payload = {
+        "schema_version": 1,
+        "operation_id": operation_id,
+        "change_id": "change-a",
+        "predecessor_receipt_id": predecessor.receipt_id,
+        "predecessor_branch": predecessor.head_branch,
+        "predecessor_head": predecessor.head_sha,
+        "successor_receipt_id": successor.receipt_id,
+        "successor_branch": successor.head_branch,
+        "superseding_head": successor.head_sha,
+        "repository": successor.repository,
+        "successor_number": successor.number,
+        "successor_node_id": successor.node_id,
+        "base_branch": successor.base_branch,
+        "provider_evidence_digest": successor.provider_evidence_digest,
+        "predecessor_publication": predecessor.model_dump(mode="json"),
+        "successor_publication": successor.model_dump(mode="json"),
+    }
+    provider_receipt = DraftPullRequestSupersessionReceipt(
+        receipt_id=_receipt_id(provider_payload),
+        **provider_payload,
+    )
+    initial_provider_history = _draft_history((predecessor,), (None,))
+    successor_provider_history = _draft_history((predecessor, successor), (None, predecessor.receipt_id))
+    branch_publisher = Mock()
+    branch_publisher.supersede.return_value = git_receipt
+    pull_request_publisher = Mock()
+    pull_request_publisher.target_branch = "main"
+    pull_request_publisher.read_publication_history.side_effect = (
+        initial_provider_history,
+        successor_provider_history,
+        successor_provider_history,
+    )
+    pull_request_publisher.supersede.return_value = provider_receipt
+    application._change_branch_publisher = branch_publisher  # noqa: SLF001
+    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+
+    receipt = application.supersede_publication("change-a", predecessor.receipt_id, operation_id)
+    replayed = application.supersede_publication("change-a", predecessor.receipt_id, operation_id)
+
+    assert receipt == replayed
+    assert (receipt.git_supersession, receipt.provider_supersession) == (git_receipt, provider_receipt)
+    assert receipt.publication_history.current.number == 8
+    assert len(receipt.publication_history.publications) == 2
+    assert runtimes["change-a"].publication_history() == receipt.publication_history
+    assert branch_publisher.supersede.call_count == 2
+    assert pull_request_publisher.supersede.call_count == 2
+    git_request = branch_publisher.supersede.call_args.args[0]
+    assert git_request.expected_published_branch == predecessor.head_branch
+    assert git_request.expected_published_head == predecessor.head_sha
+    assert git_request.superseding_head == superseding_head
+    provider_request = pull_request_publisher.supersede.call_args.args[0]
+    assert provider_request.expected_predecessor_receipt_id == predecessor.receipt_id
+    assert provider_request.successor_branch == successor_branch
+    assert provider_request.superseding_head == superseding_head
+
+    _commit_reviewed_head(application, coordination, "later.txt", "later\n", "later reviewed head")
+
+    with pytest.raises(PortfolioApplicationError, match="replay requires the stored successor head"):
+        application.supersede_publication("change-a", predecessor.receipt_id, operation_id)
+
+    assert (branch_publisher.supersede.call_count, pull_request_publisher.supersede.call_count) == (2, 2)
+
+
+def test_supersede_publication_requires_attention_bound_to_runtime_publication(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    runtime = runtimes["change-a"]
+    predecessor_head = coordinator.show("change-a").last_reviewed_commit
+    predecessor = _draft_receipt(predecessor_head)
+    runtime.record_publication_identity(
+        DeliveryChangePublicationIdentity(
+            change_id="change-a",
+            repository=predecessor.repository,
+            number=predecessor.number,
+            node_id=predecessor.node_id,
+            head_sha=predecessor.head_sha,
+        )
+    )
+    runtime.capture_publication_attention(
+        datetime(2026, 8, 12, tzinfo=UTC),
+        ("published history requires correction",),
+    )
+    branch_publisher = Mock()
+    pull_request_publisher = Mock()
+    pull_request_publisher.target_branch = "main"
+    application._change_branch_publisher = branch_publisher  # noqa: SLF001
+    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+
+    with pytest.raises(PortfolioApplicationError, match="attention does not retain"):
+        application.supersede_publication("change-a", predecessor.receipt_id, "supersede-change-a")
+
+    branch_publisher.supersede.assert_not_called()
+    pull_request_publisher.read_publication_history.assert_not_called()
+    assert runtime.publication_history() is not None
+    assert len(runtime.publication_history().publications) == 1
+
+
+def test_supersede_publication_preserves_finalization_when_provider_fails(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    runtime = runtimes["change-a"]
+    predecessor_head = coordinator.show("change-a").last_reviewed_commit
+    finalization = application.finalize_change("change-a", _finalization_request("change-a", predecessor_head))
+    predecessor = _draft_receipt(predecessor_head)
+    predecessor_identity = DeliveryChangePublicationIdentity(
+        change_id="change-a",
+        repository=predecessor.repository,
+        number=predecessor.number,
+        node_id=predecessor.node_id,
+        head_sha=predecessor.head_sha,
+    )
+    runtime.record_publication_identity(predecessor_identity)
+    runtime.capture_publication_attention(
+        datetime(2026, 8, 12, tzinfo=UTC),
+        ("published history requires correction",),
+        publication_identity=predecessor_identity,
+    )
+    coordination = coordinator.show("change-a")
+    superseding_head = _commit_reviewed_head(
+        application,
+        coordination,
+        "provider-failure.txt",
+        "provider failure\n",
+        "provider failure successor",
+    )
+    operation_id = "supersede-provider-failure"
+    branch_publisher = Mock()
+    branch_publisher.supersede.return_value = ChangeBranchSupersessionReceipt(
+        receipt_id="5" * 64,
+        operation_id=operation_id,
+        change_id="change-a",
+        remote="origin",
+        predecessor_branch=predecessor.head_branch,
+        predecessor_head=predecessor.head_sha,
+        successor_branch="owlbear/change/change-a+s1",
+        superseding_head=superseding_head,
+        target_branch="main",
+    )
+    pull_request_publisher = Mock()
+    pull_request_publisher.target_branch = "main"
+    pull_request_publisher.read_publication_history.return_value = _draft_history((predecessor,), (None,))
+    pull_request_publisher.supersede.side_effect = PublicationProviderError(
+        PublicationProviderFailureCode.UNAVAILABLE,
+        operation_id,
+        "provider unavailable",
+        retry_safe=True,
+    )
+    application._change_branch_publisher = branch_publisher  # noqa: SLF001
+    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+
+    with pytest.raises(PublicationProviderError, match="provider unavailable"):
+        application.supersede_publication("change-a", predecessor.receipt_id, operation_id)
+
+    assert runtime.finalization() == finalization
+    assert runtime.finalization_invalidation() is None
+    assert runtime.publication_history() is not None
+    assert runtime.publication_history().current == predecessor_identity
 
 
 def test_reconcile_checkpoint_rejects_summary_for_a_different_pull_request(tmp_path: Path) -> None:
