@@ -133,6 +133,26 @@ export interface WorkItemPortfolioResponse {
   operating: PortfolioOperatingView
 }
 
+export type AcceptanceReconciliationStatus =
+  | 'completed'
+  | 'waiting'
+  | 'head-moved'
+  | 'attention'
+  | 'provider-unavailable'
+  | 'skipped'
+
+export interface AcceptanceReconciliationOutcome {
+  change_id: string
+  status: AcceptanceReconciliationStatus
+  code: string | null
+  detail: string | null
+  completion_id: string | null
+}
+
+export interface AcceptanceReconciliationResponse {
+  outcomes: AcceptanceReconciliationOutcome[]
+}
+
 export interface DesignWorkDetailResponse {
   change_id: string
   package_id: string
@@ -440,11 +460,12 @@ async function workItemRequest<T>(url: string, options: WorkItemRequestOptions):
   )
 }
 
-function controlRequest<T>(url: string, fallbackCode: string, body?: object): Promise<T> {
+function controlRequest<T>(url: string, fallbackCode: string, body?: object, signal?: AbortSignal): Promise<T> {
   return workItemRequest(url, {
     method: 'POST',
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
+    signal,
     fallbackCode,
   })
 }
@@ -576,6 +597,18 @@ export function observeWorkItemAcceptance(changeId: string): Promise<unknown> {
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/acceptance/observe`,
     'ERR_WORK_ITEM_ACCEPTANCE_OBSERVE',
+  )
+}
+
+export function reconcileWorkItemAcceptance(
+  changeIds: string[],
+  signal?: AbortSignal,
+): Promise<AcceptanceReconciliationResponse> {
+  return controlRequest(
+    '/api/work-items/acceptance/reconcile',
+    'ERR_WORK_ITEM_ACCEPTANCE_RECONCILE',
+    { change_ids: changeIds },
+    signal,
   )
 }
 

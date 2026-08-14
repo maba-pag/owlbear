@@ -13,6 +13,10 @@ from fastapi.testclient import TestClient
 
 from owlbear_cockpit.routes.target_work import assemble_target_app
 from owlbear_cockpit.target_context import load_target_context
+from owlbear_delivery import (
+    DeliveryAcceptanceReconciliationOutcome,
+    DeliveryAcceptanceReconciliationStatus,
+)
 from owlbear_delivery.change_workspace import (
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
@@ -245,6 +249,27 @@ class _DeliveryApplicationFake:
         if failure is not None:
             raise failure
         return {"change_id": args[0], "completion_id": "f" * 64}
+
+    def reconcile_awaiting_acceptance(self, *args: object) -> tuple[DeliveryAcceptanceReconciliationOutcome, ...]:
+        self.calls.append(("acceptance-reconcile", args))
+        return (
+            DeliveryAcceptanceReconciliationOutcome(
+                change_id="change-a",
+                status=DeliveryAcceptanceReconciliationStatus.WAITING,
+                detail="The pull request is open and not merged.",
+            ),
+            DeliveryAcceptanceReconciliationOutcome(
+                change_id="change-b",
+                status=DeliveryAcceptanceReconciliationStatus.COMPLETED,
+                completion_id="f" * 64,
+            ),
+            DeliveryAcceptanceReconciliationOutcome(
+                change_id="change-c",
+                status=DeliveryAcceptanceReconciliationStatus.PROVIDER_UNAVAILABLE,
+                code="unavailable",
+                detail="Provider unavailable",
+            ),
+        )
 
     def resolve_change_disposition(self, *args: object) -> dict[str, object]:
         self.calls.append(("attention-resolve", args))
@@ -647,6 +672,61 @@ def test_open_acceptance_waiting_route_is_retry_safe() -> None:
         "retry_safe": True,
     }
     assert application.calls == [("acceptance-observe", ("change-a",))]
+
+
+def test_acceptance_reconciliation_route_returns_isolated_mixed_outcomes() -> None:
+    client, application = _client()
+
+    response = client.post(
+        "/api/work-items/acceptance/reconcile",
+        json={"change_ids": ["change-a", "change-b"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "outcomes": [
+            {
+                "change_id": "change-a",
+                "status": "waiting",
+                "code": None,
+                "detail": "The pull request is open and not merged.",
+                "completion_id": None,
+            },
+            {
+                "change_id": "change-b",
+                "status": "completed",
+                "code": None,
+                "detail": None,
+                "completion_id": "f" * 64,
+            },
+            {
+                "change_id": "change-c",
+                "status": "provider-unavailable",
+                "code": "unavailable",
+                "detail": "Provider unavailable",
+                "completion_id": None,
+            },
+        ]
+    }
+    assert application.calls == [("acceptance-reconcile", (("change-a", "change-b"),))]
+
+
+def test_acceptance_reconciliation_route_rejects_malformed_ids() -> None:
+    client, application = _client()
+
+    response = client.post(
+        "/api/work-items/acceptance/reconcile",
+        json={"change_ids": "change-a"},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "code": "ERR_DELIVERY_HTTP_VALIDATION",
+        "detail": "Delivery request input is malformed",
+        "authority": "delivery",
+        "retry_safe": False,
+    }
+    assert application.calls == []
 
 
 def test_target_sync_conflict_route_preserves_typed_delivery_error() -> None:

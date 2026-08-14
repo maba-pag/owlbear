@@ -15,6 +15,7 @@ import {
   reconcileWorkItemPublication,
   recoverWorkItemClaim,
   recoverWorkItemChange,
+  reconcileWorkItemAcceptance,
   resolveWorkItemTargetSync,
   resolveWorkItemAttention,
   resumeWorkItemChange,
@@ -70,6 +71,18 @@ const EMPTY_PORTFOLIO: WorkItemPortfolioResponse = {
 
 const EMPTY_HISTORY: CompletedChangePage = { records: [], next_cursor: null }
 
+const ACCEPTANCE_RECONCILIATION_INTERVAL_MS = 30_000
+const ACCEPTANCE_RECONCILIATION_MAX_BACKOFF_MS = 5 * 60_000
+
+function acceptanceChangeIds(portfolio: WorkItemPortfolioResponse): string[] {
+  return portfolio.groups
+    .filter((group) => group.lifecycle === 'awaiting-merge' && group.items.some(
+      (item) => item.scope === 'change-publication' && item.action.kind === 'observe-acceptance',
+    ))
+    .map((group) => group.change_id)
+    .sort()
+}
+
 export function useWorkPortfolio() {
   const [portfolio, setPortfolio] = useState<WorkItemPortfolioResponse | null>(null)
   const [error, setError] = useState<Error | null>(null)
@@ -89,6 +102,94 @@ export function useWorkPortfolio() {
     isLoading: polling.isFetching && portfolio === null,
     retry: polling.refetch,
   }
+}
+
+export function useAcceptanceReconciliation(
+  portfolio: WorkItemPortfolioResponse,
+  onChanged: () => void,
+): void {
+  const changeIds = acceptanceChangeIds(portfolio)
+  const changeIdsKey = changeIds.join('\u0000')
+  const changeIdsRef = useRef(changeIds)
+  const onChangedRef = useRef(onChanged)
+  changeIdsRef.current = changeIds
+  onChangedRef.current = onChanged
+
+  useEffect(() => {
+    if (!changeIdsKey) return
+
+    let active = true
+    let inFlight = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let controller: AbortController | null = null
+    let providerFailureCount = 0
+
+    const clearTimer = () => {
+      if (timer !== null) {
+        clearTimeout(timer)
+        timer = null
+      }
+    }
+
+    const isVisible = () => document.visibilityState === 'visible'
+
+    const scheduleNext = () => {
+      if (!active || !isVisible() || changeIdsRef.current.length === 0) return
+      const delay = Math.min(
+        ACCEPTANCE_RECONCILIATION_INTERVAL_MS * (2 ** providerFailureCount),
+        ACCEPTANCE_RECONCILIATION_MAX_BACKOFF_MS,
+      )
+      timer = setTimeout(() => {
+        timer = null
+        void poll()
+      }, delay)
+    }
+
+    const poll = async () => {
+      if (!active || !isVisible() || inFlight || changeIdsRef.current.length === 0) return
+      inFlight = true
+      controller = new AbortController()
+      const requestedIds = [...changeIdsRef.current]
+      let providerUnavailable = false
+      try {
+        const result = await reconcileWorkItemAcceptance(requestedIds, controller.signal)
+        providerUnavailable = result.outcomes.some((outcome) => outcome.status === 'provider-unavailable')
+        if (result.outcomes.some((outcome) => outcome.status !== 'waiting')) {
+          onChangedRef.current()
+        }
+      } catch (caught: unknown) {
+        if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
+          providerUnavailable = true
+        }
+      } finally {
+        inFlight = false
+        controller = null
+        if (active) {
+          providerFailureCount = providerUnavailable ? Math.min(providerFailureCount + 1, 4) : 0
+          scheduleNext()
+        }
+      }
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        clearTimer()
+        controller?.abort()
+        return
+      }
+      void poll()
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    if (isVisible()) void poll()
+
+    return () => {
+      active = false
+      clearTimer()
+      controller?.abort()
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [changeIdsKey])
 }
 
 export function useDesignWorkDetail(changeId: string) {

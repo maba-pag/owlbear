@@ -183,6 +183,7 @@ let currentDetail: WorkItemDetailResponse
 let portfolioAfterPublication: WorkItemPortfolioResponse | null
 let portfolioFailure: boolean
 let detailFailure: boolean
+let acceptanceObservationFailure: boolean
 let supersedeFailuresRemaining: number
 let completedRecords: CompletedChangeRecord[]
 let requests: Array<{ url: string; method: string; body: unknown }>
@@ -272,6 +273,16 @@ function installFetch() {
       || url.endsWith('/worktree/cleanup/completed')
       || url.endsWith('/worktree/recover')
     )) {
+      if (url.endsWith('/acceptance/observe') && acceptanceObservationFailure) {
+        return response({
+          detail: {
+            code: 'ERR_DELIVERY_ACCEPTANCE_WAITING',
+            detail: 'The pull request is still open and unmerged.',
+            authority: 'delivery',
+            retry_safe: true,
+          },
+        }, 409)
+      }
       if (portfolioAfterPublication) currentPortfolio = portfolioAfterPublication
       if (url.endsWith('/publication/supersede')) {
         if (supersedeFailuresRemaining > 0) {
@@ -363,6 +374,7 @@ beforeEach(() => {
   portfolioAfterPublication = null
   portfolioFailure = false
   detailFailure = false
+  acceptanceObservationFailure = false
   supersedeFailuresRemaining = 0
   completedRecords = [completed]
   requests = []
@@ -1142,6 +1154,12 @@ it('shows GitHub merge as user-owned work with observation as the only Cockpit c
     method: 'POST',
     body: null,
   }))
+
+  acceptanceObservationFailure = true
+  fireEvent.click(within(inspector).getByText('Check GitHub acceptance'))
+  const waiting = await within(inspector).findByRole('status')
+  expect(waiting).toHaveTextContent('ERR_DELIVERY_ACCEPTANCE_WAITING')
+  expect(within(inspector).queryByRole('alert')).not.toBeInTheDocument()
 })
 
 it('shows Change attention diagnostics and resolves the selected disposition', async () => {

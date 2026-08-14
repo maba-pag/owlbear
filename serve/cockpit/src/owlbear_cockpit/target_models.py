@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -13,6 +13,7 @@ from owlbear_delivery.work_items import ChangeGroupView, WorkItemDetailView
 if TYPE_CHECKING:
     from owlbear_delivery.change_workspace import ChangeTargetSyncAbortReceipt, ChangeTargetSyncReceipt
     from owlbear_delivery.portfolio_application import (
+        DeliveryAcceptanceReconciliationOutcome,
         DeliveryChangePublicationSupersessionReceipt,
         DeliveryChangeWorktreeCleanup,
         DeliveryChangeWorktreeRecovery,
@@ -60,6 +61,33 @@ class WorkItemDetailResponse(_TargetHTTPModel):
     """Semantic and operator detail from one exact snapshot."""
 
     item: WorkItemDetailView
+
+
+class AcceptanceReconciliationRequest(_TargetHTTPModel):
+    """Optional current Change IDs supplied by one visible Cockpit page."""
+
+    change_ids: list[Annotated[str, Field(min_length=1)]] | None = Field(default=None, max_length=100)
+
+
+class AcceptanceReconciliationOutcomeResponse(_TargetHTTPModel):
+    """One bounded provider reconciliation result."""
+
+    change_id: str = Field(min_length=1)
+    status: str = Field(min_length=1)
+    code: str | None = Field(default=None, min_length=1)
+    detail: str | None = Field(default=None, min_length=1)
+    completion_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @classmethod
+    def from_result(cls, result: DeliveryAcceptanceReconciliationOutcome) -> AcceptanceReconciliationOutcomeResponse:
+        """Convert one Delivery outcome without adding transport semantics."""
+        return cls(**result.model_dump(mode="json"))
+
+
+class AcceptanceReconciliationResponse(_TargetHTTPModel):
+    """Batch of isolated acceptance reconciliation outcomes."""
+
+    outcomes: tuple[AcceptanceReconciliationOutcomeResponse, ...]
 
 
 class DesignWorkDetailResponse(_TargetHTTPModel):
@@ -280,6 +308,9 @@ class BackwardMovePreviewBody(_TargetHTTPModel):
 
 __all__ = [
     "AbandonChangeBody",
+    "AcceptanceReconciliationOutcomeResponse",
+    "AcceptanceReconciliationRequest",
+    "AcceptanceReconciliationResponse",
     "ActivityCounts",
     "AnswerRequestBody",
     "BackwardMoveBody",

@@ -11,7 +11,13 @@ import { WorkspaceHeader } from '../components/WorkspaceHeader'
 import { WorkspaceViewCount } from '../components/WorkspaceViewHeader'
 import WorkItemDetail from '../components/WorkItemDetail'
 import WorkPortfolioTable from '../components/WorkPortfolioTable'
-import { useDesignWorkDetail, useWorkItemDetail, useWorkPortfolio, type WorkItemIdentity } from '../hooks/useWorkItems'
+import {
+  useAcceptanceReconciliation,
+  useDesignWorkDetail,
+  useWorkItemDetail,
+  useWorkPortfolio,
+  type WorkItemIdentity,
+} from '../hooks/useWorkItems'
 
 type SelectValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }
 
@@ -241,6 +247,7 @@ function EmptyDetail({ error, retry, onClose }: { error: Error | null; retry: ()
 
 export default function WorkPortfolioPage() {
   const { portfolio, hasData, error, isLoading, retry } = useWorkPortfolio()
+  useAcceptanceReconciliation(portfolio, retry)
   const location = useLocation()
   const navigate = useNavigate()
   const [changeFilter, setChangeFilter] = useState('')

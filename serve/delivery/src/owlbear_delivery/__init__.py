@@ -161,6 +161,8 @@ from owlbear_delivery.draft_pull_request import (
     UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.portfolio_application import (
+    DeliveryAcceptanceReconciliationOutcome,
+    DeliveryAcceptanceReconciliationStatus,
     DeliveryAcquisitionFailure,
     DeliveryAcquisitionResult,
     DeliveryBuildContext,
@@ -358,6 +360,8 @@ __all__ = [
     "CoordinationConflictError",
     "CreateDraftPublicationPullRequest",
     "CreateOrReconcileDraftPullRequest",
+    "DeliveryAcceptanceReconciliationOutcome",
+    "DeliveryAcceptanceReconciliationStatus",
     "DeliveryAcceptanceWaitingError",
     "DeliveryAcquisitionFailure",
     "DeliveryAcquisitionResult",

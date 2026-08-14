@@ -110,6 +110,7 @@ from owlbear_delivery.publication_provider import (
     PublicationPullRequest,
     PublicationRepository,
 )
+from owlbear_delivery.storage_io import locked_roots
 
 
 def _git(repository: Path, *arguments: str) -> str:
@@ -926,6 +927,145 @@ def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Pat
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.BUILDING
     assert pull_requests[0].draft is True
     assert provider.set_pull_request_draft_state.call_count == 3
+
+
+def _awaiting_acceptance_fixture(tmp_path: Path):
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    runtime = runtimes["change-a"]
+    exact_head = coordinator.show("change-a").last_reviewed_commit
+    application.finalize_change(
+        "change-a",
+        _finalization_request("change-a", exact_head),
+    )
+    state = {
+        "pull_request": PublicationPullRequest(
+            repository="example/project",
+            number=7,
+            node_id="PR_node_7",
+            head_branch="owlbear/change/change-a",
+            head_sha=exact_head,
+            base_branch="main",
+            title="Change A",
+            body=(
+                "<!-- owlbear-change:change-a -->\n\n"
+                "<!-- owlbear-generated:start -->\n"
+                "Finalized Change A.\n"
+                "<!-- owlbear-generated:end -->\n"
+            ),
+            draft=True,
+            state="open",
+            merged=False,
+        )
+    }
+    provider = Mock()
+    provider.read_repository.return_value = PublicationRepository(
+        repository="example/project",
+        default_branch="main",
+    )
+    provider.find_pull_request.return_value = None
+    provider.create_draft_pull_request.side_effect = lambda _request: state["pull_request"]
+    provider.read_pull_request.side_effect = lambda _repository, _number: state["pull_request"]
+    provider.observe_checks.return_value = PublicationCheckSnapshot(
+        repository="example/project",
+        number=7,
+        head_sha=exact_head,
+        checks=(),
+    )
+
+    def set_draft_state(request):
+        state["pull_request"] = state["pull_request"].model_copy(update={"draft": request.draft})
+        return state["pull_request"]
+
+    provider.set_pull_request_draft_state.side_effect = set_draft_state
+    publisher = DraftPullRequestPublisher(
+        provider,
+        repository="example/project",
+        target_branch="main",
+        state_root=tmp_path / "pull-requests",
+    )
+    publisher.publish(
+        CreateOrReconcileDraftPullRequest(
+            change_id="change-a",
+            operation_id="create-change-a",
+            published_head=exact_head,
+            title="Change A",
+            generated_summary="Finalized Change A.",
+        )
+    )
+    application._draft_pull_request_publisher = publisher  # noqa: SLF001
+    checkpoint = runtime.checkpoint_publication_state()
+    assert checkpoint.pending_checkpoint is not None
+    runtime.record_checkpoint_branch_publication(checkpoint, exact_head)
+    runtime.acknowledge_checkpoint_publication(checkpoint.pending_checkpoint, exact_head)
+    ready = application.mark_current_change_ready("change-a")
+    assert ready.head_sha == exact_head
+    return application, runtime, provider, state, exact_head, _state_root
+
+
+def test_reconcile_awaiting_acceptance_isolated_provider_matrix(tmp_path: Path) -> None:
+    application, runtime, provider, state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+
+    waiting = application.reconcile_awaiting_acceptance(("change-a",))
+    assert waiting[0].status.value == "waiting"
+    assert runtime.change_disposition() is None
+
+    state["pull_request"] = state["pull_request"].model_copy(update={"head_sha": "f" * 40})
+    moved = application.reconcile_awaiting_acceptance(("change-a",))
+    assert moved[0].status.value == "head-moved"
+    assert moved[0].code == "ERR_DELIVERY_ACCEPTANCE_HEAD_MOVED"
+    assert runtime.change_stage() == DeliveryChangeStage.AWAITING_MERGE
+    assert runtime.change_disposition() is None
+
+    provider.read_pull_request.side_effect = PublicationProviderError(
+        PublicationProviderFailureCode.UNAVAILABLE,
+        "read_pull_request",
+        "GitHub is unavailable",
+        retry_safe=True,
+    )
+    unavailable = application.reconcile_awaiting_acceptance(("change-a",))
+    assert unavailable[0].status.value == "provider-unavailable"
+    assert unavailable[0].code == "unavailable"
+    provider.read_pull_request.side_effect = lambda _repository, _number: state["pull_request"]
+
+    state["pull_request"] = state["pull_request"].model_copy(
+        update={
+            "head_sha": exact_head,
+            "state": "closed",
+            "merged": True,
+            "merge_commit_sha": "f" * 40,
+            "merged_at": datetime(2026, 8, 3, 14, tzinfo=UTC),
+            "merged_by_login": "octocat",
+        }
+    )
+    completed = application.reconcile_awaiting_acceptance(("change-a",))
+    assert completed[0].status.value == "completed"
+    assert completed[0].completion_id is not None
+    assert runtime.completion_receipt() is not None
+
+
+def test_reconcile_awaiting_acceptance_skips_a_busy_change_without_provider_io(tmp_path: Path) -> None:
+    application, _runtime, provider, _state, _exact_head, state_root = _awaiting_acceptance_fixture(tmp_path)
+    lock_root = state_root / "publications/checkpoints/locks/change-a"
+    provider_calls = provider.read_pull_request.call_count
+
+    with locked_roots((lock_root,)):
+        outcomes = application.reconcile_awaiting_acceptance(("change-a",))
+
+    assert outcomes[0].status.value == "skipped"
+    assert outcomes[0].code == "ERR_DELIVERY_RECONCILIATION_BUSY"
+    assert provider.read_pull_request.call_count == provider_calls
+
+
+def test_reconcile_awaiting_acceptance_ignores_ineligible_changes(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+
+    assert application.reconcile_awaiting_acceptance() == ()
 
 
 def test_observe_acceptance_completes_once_and_replays_without_provider_io(tmp_path: Path) -> None:  # noqa: PLR0915

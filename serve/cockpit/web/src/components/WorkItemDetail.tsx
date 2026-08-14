@@ -687,7 +687,8 @@ function PublicationSection(props: WorkItemDetailProps) {
 function ActionFeedback({ error, result }: { error: Error | null; result: string | null }) {
   if (error) {
     const code = error instanceof WorkItemApiError ? error.code : 'ERR_DELIVERY_CONTROL'
-    return <p className="flex items-center gap-static-xs border-l-4 border-danger bg-surface p-static-sm text-sm" role="alert"><PIcon name="error" size="sm" aria-hidden="true" /><strong>{code}</strong>: {error.message}</p>
+    const waiting = code === 'ERR_DELIVERY_ACCEPTANCE_WAITING'
+    return <p className={`flex items-center gap-static-xs border-l-4 ${waiting ? 'border-warning' : 'border-danger'} bg-surface p-static-sm text-sm`} role={waiting ? 'status' : 'alert'}><PIcon name={waiting ? 'warning' : 'error'} size="sm" aria-hidden="true" /><strong>{code}</strong>: {error.message}</p>
   }
   return result ? <p className="border-l-4 border-success bg-surface p-static-sm text-sm" role="status">{result}</p> : null
 }

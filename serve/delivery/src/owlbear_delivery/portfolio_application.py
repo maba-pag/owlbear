@@ -114,6 +114,7 @@ from owlbear_delivery.portfolio_operating import (
     PortfolioWorkScope,
     derive_portfolio_guidance,
 )
+from owlbear_delivery.publication_provider import PublicationProviderError, PublicationPullRequest
 from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
@@ -165,6 +166,7 @@ def _timestamp(value: str) -> datetime:
 
 
 _MAX_PULL_REQUEST_TITLE_LENGTH = 256
+_MAX_ACCEPTANCE_RECONCILIATION_CHANGES = 8
 
 
 def _operating_scope(scope: WorkItemScope) -> PortfolioWorkScope:
@@ -541,6 +543,27 @@ class DeliveryCheckpointReconciliationResult(_ApplicationModel):
     reconciled: bool
 
 
+class DeliveryAcceptanceReconciliationStatus(StrEnum):
+    """Bounded outcome of one provider acceptance reconciliation attempt."""
+
+    COMPLETED = "completed"
+    WAITING = "waiting"
+    HEAD_MOVED = "head-moved"
+    ATTENTION = "attention"
+    PROVIDER_UNAVAILABLE = "provider-unavailable"
+    SKIPPED = "skipped"
+
+
+class DeliveryAcceptanceReconciliationOutcome(_ApplicationModel):
+    """Per-Change result that keeps a polling batch isolated."""
+
+    change_id: str = Field(min_length=1)
+    status: DeliveryAcceptanceReconciliationStatus
+    code: str | None = Field(default=None, min_length=1)
+    detail: str | None = Field(default=None, min_length=1)
+    completion_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
 class DeliveryChangePublicationSupersessionReceipt(_ApplicationModel):
     """Bind one Git successor publication to its provider and runtime evidence."""
 
@@ -678,6 +701,13 @@ class _SupersessionPublishContext:
     operation_id: str
     predecessor: DraftPullRequestPublicationReceipt
     superseding_head: str
+    target_branch: str
+
+
+@dataclass(frozen=True)
+class _AcceptanceReconciliationAuthority:
+    exact_head: str
+    ready: PullRequestReadyReceipt
     target_branch: str
 
 
@@ -1335,6 +1365,242 @@ class PortfolioApplication:
         runtime = self._runtime(change_id)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             return runtime.resume_change()
+
+    def reconcile_awaiting_acceptance(
+        self,
+        change_ids: tuple[str, ...] | None = None,
+        *,
+        limit: int = _MAX_ACCEPTANCE_RECONCILIATION_CHANGES,
+    ) -> tuple[DeliveryAcceptanceReconciliationOutcome, ...]:
+        """Reconcile a bounded set of observed awaiting-merge Changes."""
+        if limit < 1:
+            message = "acceptance reconciliation limit must be positive"
+            raise ValueError(message)
+        effective_limit = min(limit, _MAX_ACCEPTANCE_RECONCILIATION_CHANGES)
+        requested = None if change_ids is None else frozenset(change_ids)
+        eligible = tuple(
+            change_id
+            for change_id, runtime in sorted(self._runtimes.items())
+            if (requested is None or change_id in requested) and self._is_acceptance_reconciliation_eligible(runtime)
+        )
+        selected = eligible[:effective_limit]
+        outcomes = [self._reconcile_awaiting_acceptance_change(change_id) for change_id in selected]
+        outcomes.extend(
+            DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.SKIPPED,
+                code="ERR_DELIVERY_RECONCILIATION_LIMIT",
+                detail="Acceptance reconciliation batch limit reached.",
+            )
+            for change_id in eligible[effective_limit:]
+        )
+        return tuple(outcomes)
+
+    @staticmethod
+    def _is_acceptance_reconciliation_eligible(runtime: DeliveryRuntime) -> bool:
+        """Select only live awaiting-merge Changes without competing custody."""
+        return runtime.change_stage() == DeliveryChangeStage.AWAITING_MERGE and not runtime.active_claims()
+
+    def _reconcile_awaiting_acceptance_change(
+        self,
+        change_id: str,
+    ) -> DeliveryAcceptanceReconciliationOutcome:
+        runtime = self._runtime(change_id)
+        try:
+            with locked_roots((self._checkpoint_lock_root(change_id),), blocking=False):
+                outcome = self._reconcile_awaiting_acceptance_locked(change_id, runtime)
+        except BlockingIOError:
+            return DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.SKIPPED,
+                code="ERR_DELIVERY_RECONCILIATION_BUSY",
+                detail="Change reconciliation is already in progress.",
+            )
+        except PublicationProviderError as exc:
+            return self._provider_unavailable_outcome(change_id, exc)
+        except (DeliveryRuntimeConflictError, OSError, ValueError) as exc:
+            return DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.SKIPPED,
+                code="ERR_DELIVERY_RECONCILIATION_STATE_CHANGED",
+                detail=str(exc) or "Change state changed during reconciliation.",
+            )
+        if outcome is not None:
+            return outcome
+        return self._reconcile_merged_acceptance(change_id, runtime)
+
+    def _reconcile_awaiting_acceptance_locked(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+    ) -> DeliveryAcceptanceReconciliationOutcome | None:
+        """Read one provider snapshot while holding only the Change checkpoint lock."""
+        if not self._is_acceptance_reconciliation_eligible(runtime):
+            return self._reconciliation_skipped_outcome(change_id, "Change is no longer awaiting merge.")
+        publisher = self._draft_pull_request_publisher
+        if publisher is None:
+            return DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.PROVIDER_UNAVAILABLE,
+                code="ERR_DELIVERY_PROVIDER_NOT_CONFIGURED",
+                detail="Draft pull-request publication is not configured.",
+            )
+        finalization = runtime.finalization()
+        ready = runtime.ready_receipt()
+        if finalization is None or ready is None:
+            return self._reconciliation_skipped_outcome(change_id, "Awaiting-merge authority is incomplete.")
+        observation = publisher.observe_pull_request(ObserveChangePublicationPullRequest(change_id=change_id))
+        if observation is None:
+            return self._reconciliation_skipped_outcome(
+                change_id,
+                "No bound pull-request publication was found.",
+                code="ERR_DELIVERY_PUBLICATION_MISSING",
+            )
+        return self._classify_acceptance_observation(
+            change_id,
+            runtime,
+            observation,
+            _AcceptanceReconciliationAuthority(
+                exact_head=finalization.exact_head,
+                ready=ready,
+                target_branch=publisher.target_branch,
+            ),
+        )
+
+    @staticmethod
+    def _reconciliation_skipped_outcome(
+        change_id: str,
+        detail: str,
+        *,
+        code: str = "ERR_DELIVERY_RECONCILIATION_STATE_CHANGED",
+    ) -> DeliveryAcceptanceReconciliationOutcome:
+        return DeliveryAcceptanceReconciliationOutcome(
+            change_id=change_id,
+            status=DeliveryAcceptanceReconciliationStatus.SKIPPED,
+            code=code,
+            detail=detail,
+        )
+
+    def _classify_acceptance_observation(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        observation: PublicationPullRequestObservationReceipt,
+        authority: _AcceptanceReconciliationAuthority,
+    ) -> DeliveryAcceptanceReconciliationOutcome | None:
+        snapshot = observation.snapshot
+        if snapshot.state == "open" and not snapshot.merged:
+            status = DeliveryAcceptanceReconciliationStatus.HEAD_MOVED
+            detail = "The open pull request head differs from the finalized Change head."
+            code: str | None = "ERR_DELIVERY_ACCEPTANCE_HEAD_MOVED"
+            if snapshot.head_sha == authority.exact_head:
+                status = DeliveryAcceptanceReconciliationStatus.WAITING
+                detail = "The pull request is open and not merged."
+                code = None
+            return DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=status,
+                code=code,
+                detail=detail,
+            )
+        if snapshot.state == "closed" and not snapshot.merged:
+            runtime.capture_acceptance_attention(
+                observation,
+                ("provider pull request is closed without a merge",),
+            )
+            return DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.ATTENTION,
+                code="ERR_DELIVERY_ACCEPTANCE_ATTENTION",
+                detail="The provider pull request is closed without a merge.",
+            )
+        if not self._acceptance_reconciliation_authority_matches(
+            snapshot,
+            authority.exact_head,
+            authority.ready,
+            authority.target_branch,
+        ):
+            runtime.capture_acceptance_attention(
+                observation,
+                ("provider acceptance evidence does not match awaiting-merge authority",),
+            )
+            return DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.ATTENTION,
+                code="ERR_DELIVERY_ACCEPTANCE_ATTENTION",
+                detail="Provider acceptance evidence does not match the finalized Change.",
+            )
+        return None
+
+    @staticmethod
+    def _acceptance_reconciliation_authority_matches(
+        snapshot: PublicationPullRequest,
+        exact_head: str,
+        ready: PullRequestReadyReceipt,
+        target_branch: str,
+    ) -> bool:
+        return (
+            snapshot.repository == ready.repository
+            and snapshot.number == ready.number
+            and snapshot.node_id == ready.node_id
+            and snapshot.base_branch == target_branch
+            and snapshot.head_sha == ready.head_sha == exact_head
+        )
+
+    def _reconcile_merged_acceptance(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+    ) -> DeliveryAcceptanceReconciliationOutcome:
+        """Use the existing exact completion path after a matching merged read."""
+        try:
+            receipt = self.observe_acceptance(change_id)
+        except DeliveryAcceptanceWaitingError as exc:
+            return DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.WAITING,
+                detail=str(exc),
+            )
+        except PublicationProviderError as exc:
+            return self._provider_unavailable_outcome(change_id, exc)
+        except PortfolioApplicationError as exc:
+            if runtime.change_disposition() is not None:
+                return DeliveryAcceptanceReconciliationOutcome(
+                    change_id=change_id,
+                    status=DeliveryAcceptanceReconciliationStatus.ATTENTION,
+                    code=exc.code,
+                    detail=str(exc),
+                )
+            return DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.SKIPPED,
+                code=exc.code,
+                detail=str(exc),
+            )
+        except (DeliveryRuntimeConflictError, OSError, ValueError) as exc:
+            return DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.SKIPPED,
+                code="ERR_DELIVERY_RECONCILIATION_STATE_CHANGED",
+                detail=str(exc) or "Change state changed during reconciliation.",
+            )
+        return DeliveryAcceptanceReconciliationOutcome(
+            change_id=change_id,
+            status=DeliveryAcceptanceReconciliationStatus.COMPLETED,
+            completion_id=receipt.completion_id,
+        )
+
+    @staticmethod
+    def _provider_unavailable_outcome(
+        change_id: str,
+        error: PublicationProviderError,
+    ) -> DeliveryAcceptanceReconciliationOutcome:
+        return DeliveryAcceptanceReconciliationOutcome(
+            change_id=change_id,
+            status=DeliveryAcceptanceReconciliationStatus.PROVIDER_UNAVAILABLE,
+            code=error.code.value,
+            detail=str(error) or error.code.value,
+        )
 
     def abandon_change(self, change_id: str, reason: str) -> DeliveryChangeAbandonment:
         """Record one terminal user abandonment without mutating the user checkout."""
@@ -2668,6 +2934,8 @@ class PortfolioApplication:
 
 
 __all__ = [
+    "DeliveryAcceptanceReconciliationOutcome",
+    "DeliveryAcceptanceReconciliationStatus",
     "DeliveryAcquisitionFailure",
     "DeliveryAcquisitionResult",
     "DeliveryBuildContext",
