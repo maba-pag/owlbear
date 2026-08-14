@@ -113,6 +113,7 @@ from owlbear_delivery.publication_provider import (
     PublicationPullRequest,
     PublicationRepository,
 )
+from owlbear_delivery.portfolio_application import _required_check_diagnostics
 from owlbear_delivery.storage_io import locked_roots
 
 
@@ -1303,6 +1304,122 @@ def test_required_check_attention_retries_with_stable_diagnostics_after_resoluti
     second = runtime.change_disposition()
     assert second is not None
     assert second.diagnostics == first.diagnostics
+
+
+def test_mark_change_ready_replays_existing_ready_without_reobserving_checks(tmp_path: Path) -> None:
+    application, runtime, provider, _state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    first = runtime.ready_receipt()
+    assert first is not None
+    observed_calls = provider.observe_checks.call_count
+    draft_state_calls = provider.set_pull_request_draft_state.call_count
+    provider.observe_checks.return_value = PublicationCheckSnapshot(
+        repository="example/project",
+        number=7,
+        head_sha=exact_head,
+        checks=(
+            PublicationCheck(
+                check_id="check-failure",
+                kind=PublicationCheckKind.CHECK_RUN,
+                name="unit tests",
+                head_sha=exact_head,
+                status="completed",
+                conclusion="failure",
+                required=True,
+            ),
+        ),
+    )
+
+    replayed = application.mark_current_change_ready("change-a")
+
+    assert replayed == first
+    assert provider.observe_checks.call_count == observed_calls
+    assert provider.set_pull_request_draft_state.call_count == draft_state_calls
+    assert runtime.change_stage() == DeliveryChangeStage.AWAITING_MERGE
+    assert runtime.change_disposition() is None
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="already awaiting merge"):
+        application.mark_change_ready(
+            "change-a",
+            MarkChangePullRequestReady(
+                change_id="change-a",
+                operation_id="different-ready-operation",
+                finalization_id=first.finalization_id,
+                exact_head=exact_head,
+            ),
+        )
+
+    assert provider.observe_checks.call_count == observed_calls
+    assert provider.set_pull_request_draft_state.call_count == draft_state_calls
+    assert runtime.ready_receipt() == first
+    assert runtime.change_disposition() is None
+
+
+def test_required_check_diagnostics_are_sorted_and_sanitized() -> None:
+    head = "a" * 40
+    checks = (
+        PublicationCheck(
+            check_id="check-zeta",
+            kind=PublicationCheckKind.CHECK_RUN,
+            name="zeta\ncheck",
+            head_sha=head,
+            status="completed",
+            conclusion="failure",
+            required=True,
+        ),
+        PublicationCheck(
+            check_id="check-alpha",
+            kind=PublicationCheckKind.STATUS_CONTEXT,
+            name="alpha",
+            head_sha=head,
+            status="error",
+            conclusion="error",
+            required=True,
+        ),
+    )
+    snapshot = PublicationCheckSnapshot(
+        repository="example/project",
+        number=7,
+        head_sha=head,
+        checks=checks,
+    )
+
+    diagnostics = _required_check_diagnostics(snapshot, "b" * 64, checks)
+
+    assert diagnostics == (
+        "required-publication-check-failure",
+        f"exact-head:{head}",
+        f"check-observation:{'b' * 64}",
+        "failing-required-checks:2",
+        "required-check:check-alpha:name=alpha:status=error:conclusion=error",
+        "required-check:check-zeta:name=zeta check:status=completed:conclusion=failure",
+    )
+
+
+def test_required_check_diagnostics_cap_reports_truncation() -> None:
+    head = "a" * 40
+    checks = tuple(
+        PublicationCheck(
+            check_id=f"check-{index:02d}",
+            kind=PublicationCheckKind.CHECK_RUN,
+            name=f"check {index:02d}",
+            head_sha=head,
+            status="completed",
+            conclusion="failure",
+            required=True,
+        )
+        for index in range(9)
+    )
+    snapshot = PublicationCheckSnapshot(
+        repository="example/project",
+        number=7,
+        head_sha=head,
+        checks=checks,
+    )
+
+    diagnostics = _required_check_diagnostics(snapshot, "b" * 64, checks)
+
+    assert len(diagnostics) == 4 + 8 + 1
+    assert diagnostics[-1] == "required-checks-truncated:1"
 
 
 def test_observe_change_publication_checks_remains_read_only_for_required_failure(tmp_path: Path) -> None:

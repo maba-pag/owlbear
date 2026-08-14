@@ -1393,6 +1393,14 @@ class PortfolioApplication:
             if publication.published_head != finalization.exact_head or publication.pending_checkpoint is not None:
                 message = "pull-request readiness requires the reconciled final checkpoint"
                 raise PortfolioApplicationError(message)
+            existing_ready = runtime.ready_receipt()
+            if (
+                existing_ready is not None
+                and existing_ready.finalization_id == finalization.finalization_id
+                and existing_ready.head_sha == finalization.exact_head
+            ):
+                receipt = self._draft_pull_request_publisher.mark_ready(request)
+                return runtime.mark_awaiting_merge(receipt)
             self._observe_required_checks_before_ready(change_id, runtime, finalization.exact_head)
             receipt = self._draft_pull_request_publisher.mark_ready(request)
             return runtime.mark_awaiting_merge(receipt)
