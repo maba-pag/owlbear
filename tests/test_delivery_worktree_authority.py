@@ -72,6 +72,7 @@ _REGISTER_WORKTREE_CALLERS = frozenset(
 _REMOVE_WORKTREE_CALLERS = frozenset(
     {
         ("ChangeWorkspaceManager", "cleanup"),
+        ("ChangeWorkspaceManager", "recover"),
         ("<module>", "_remove_worktrees"),
     }
 )
