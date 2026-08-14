@@ -82,6 +82,18 @@ class ResolveChangeDispositionParams(ChangeParams):
     expected_disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class DeferChangeParams(ChangeParams):
+    """Validate one user-requested Change deferral."""
+
+    reason: str = Field(min_length=1)
+
+
+class AbandonChangeParams(ChangeParams):
+    """Validate one user-requested terminal Change abandonment."""
+
+    reason: str = Field(min_length=1)
+
+
 class CreateDesignSessionParams(ChangeParams):
     """Validate authored Design source bytes."""
 
@@ -242,6 +254,14 @@ type AdmitDeliveryChangeRequest = Annotated[
     BeforeValidator(partial(_parse_json_model, AdmitDeliveryChangeParams)),
 ]
 type ChangeRequest = Annotated[ChangeParams, BeforeValidator(partial(_parse_json_model, ChangeParams))]
+type DeferChangeRequest = Annotated[
+    DeferChangeParams,
+    BeforeValidator(partial(_parse_json_model, DeferChangeParams)),
+]
+type AbandonChangeRequest = Annotated[
+    AbandonChangeParams,
+    BeforeValidator(partial(_parse_json_model, AbandonChangeParams)),
+]
 type ClaimContextRequest = Annotated[
     ClaimContextParams,
     BeforeValidator(partial(_parse_json_model, ClaimContextParams)),
@@ -299,6 +319,8 @@ type WorkItemRequest = Annotated[WorkItemParams, BeforeValidator(partial(_parse_
 
 
 __all__ = [
+    "AbandonChangeParams",
+    "AbandonChangeRequest",
     "AdmitDeliveryChangeParams",
     "AdmitDeliveryChangeRequest",
     "ChangeParams",
@@ -309,6 +331,8 @@ __all__ = [
     "CompletedPageRequest",
     "CreateDesignSessionParams",
     "CreateDesignSessionRequest",
+    "DeferChangeParams",
+    "DeferChangeRequest",
     "DeliveryPlanPublication",
     "DeliveryResultPublication",
     "DeliveryStartupConfig",

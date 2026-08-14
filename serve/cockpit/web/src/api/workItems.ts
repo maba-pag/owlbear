@@ -13,9 +13,10 @@ export type WorkItemActionKind =
   | 'mark-ready'
   | 'observe-acceptance'
   | 'resolve-attention'
+  | 'resume-change'
   | 'start-orchestration'
 export type WorkItemProgressKind = 'tasks' | 'design-return' | 'plan' | 'publication'
-export type WorkItemChangeLifecycle = 'in-delivery' | 'finalization' | 'publication' | 'awaiting-merge' | 'acceptance'
+export type WorkItemChangeLifecycle = 'in-delivery' | 'finalization' | 'publication' | 'awaiting-merge' | 'acceptance' | 'deferred' | 'abandoned'
 export type DeliveryWorkerRole = 'planner' | 'builder'
 export type WorkItemPublicationPhase =
   | 'finalization-invalidated'
@@ -24,6 +25,8 @@ export type WorkItemPublicationPhase =
   | 'pull-request-draft'
   | 'awaiting-merge'
   | 'acceptance-observed'
+  | 'deferred'
+  | 'abandoned'
 
 export interface WorkItemActivity {
   state: WorkItemActivityState
@@ -499,5 +502,28 @@ export function resolveWorkItemAttention(changeId: string, expectedDispositionId
     `/api/changes/${encodeURIComponent(changeId)}/attention/resolve`,
     'ERR_WORK_ITEM_ATTENTION_RESOLVE',
     { expected_disposition_id: expectedDispositionId },
+  )
+}
+
+export function deferWorkItemChange(changeId: string, reason: string): Promise<unknown> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/defer`,
+    'ERR_WORK_ITEM_CHANGE_DEFER',
+    { reason },
+  )
+}
+
+export function resumeWorkItemChange(changeId: string): Promise<unknown> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/resume`,
+    'ERR_WORK_ITEM_CHANGE_RESUME',
+  )
+}
+
+export function abandonWorkItemChange(changeId: string, reason: string): Promise<unknown> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/abandon`,
+    'ERR_WORK_ITEM_CHANGE_ABANDON',
+    { reason },
   )
 }

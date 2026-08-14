@@ -188,6 +188,9 @@ function SelectedWorkItemDetail({
       onMarkPublicationReady={selectedDetail.markPublicationReady}
       onObserveAcceptance={selectedDetail.observeAcceptance}
       onResolveAttention={selectedDetail.resolveAttention}
+      onDeferChange={selectedDetail.deferChange}
+      onResumeChange={selectedDetail.resumeChange}
+      onAbandonChange={selectedDetail.abandonChange}
     />
   )
   if (selectedDetail.detail.isLoading) return <p role="status">Loading Work Item details...</p>

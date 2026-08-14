@@ -246,6 +246,18 @@ class _DeliveryApplicationFake:
             raise failure
         return {"change_id": args[0], "disposition_id": args[1]}
 
+    def defer_change(self, *args: object) -> dict[str, object]:
+        self.calls.append(("defer", args))
+        return {"change_id": args[0], "state": "deferred", "reason": args[1]}
+
+    def resume_change(self, *args: object) -> dict[str, object]:
+        self.calls.append(("resume", args))
+        return {"change_id": args[0], "state": "building"}
+
+    def abandon_change(self, *args: object) -> dict[str, object]:
+        self.calls.append(("abandon", args))
+        return {"change_id": args[0], "state": "abandoned", "reason": args[1]}
+
     def list_completed_changes(self, *args: object) -> dict[str, object]:
         self.calls.append(("completed-list", args))
         return {"records": [], "next_cursor": None}
@@ -462,17 +474,29 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
             "/api/changes/change-a/attention/resolve",
             json={"expected_disposition_id": "a" * 64},
         ),
+        client.post(
+            "/api/changes/change-a/defer",
+            json={"reason": "Wait for user review"},
+        ),
+        client.post("/api/changes/change-a/resume"),
+        client.post(
+            "/api/changes/change-a/abandon",
+            json={"reason": "User stopped the Change"},
+        ),
         client.get("/api/work-items/completed", params={"limit": 25}),
         client.get("/api/work-items/completed/search", params={"query": "delivery", "limit": 5}),
         client.get("/api/work-items/completed/change-a", params={"completion_id": "a" * 64}),
     )
 
-    assert [response.status_code for response in responses] == [200, 200, 200, 200, 200, 200, 200]
+    assert [response.status_code for response in responses] == [200, 200, 200, 200, 200, 200, 200, 200, 200, 200]
     assert application.calls == [
         ("publication-reconcile", ("change-a",)),
         ("publication-ready", ("change-a",)),
         ("acceptance-observe", ("change-a",)),
         ("attention-resolve", ("change-a", "a" * 64)),
+        ("defer", ("change-a", "Wait for user review")),
+        ("resume", ("change-a",)),
+        ("abandon", ("change-a", "User stopped the Change")),
         ("completed-list", (None, 25)),
         ("completed-search", ("delivery", None, 5)),
         ("completed-show", ("change-a", "a" * 64)),

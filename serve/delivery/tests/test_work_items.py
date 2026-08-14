@@ -9,6 +9,8 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryBlock,
     DeliveryChangeDisposition,
     DeliveryChangeDispositionKind,
+    DeliveryChangeAbandonment,
+    DeliveryChangeDeferral,
     DeliveryChangePublicationIdentity,
     DeliveryChangeStage,
     DeliveryFrontier,
@@ -582,6 +584,52 @@ def test_finalization_projects_checkpoint_then_pull_request_draft() -> None:
     assert checkpoint.group_view().items[-1].action.kind == WorkItemActionKind.RECONCILE_CHECKPOINT
     assert draft.group_view().items[-1].progress.label == "Pull request is draft"
     assert draft.group_view().items[-1].action.kind == WorkItemActionKind.MARK_READY
+
+
+def test_deferred_change_projects_paused_outcomes_and_resume_action() -> None:
+    deferral = DeliveryChangeDeferral.create(
+        change_id="portfolio-change",
+        prior_stage=DeliveryChangeStage.BUILDING,
+        deferred_at=datetime(2026, 8, 11, 17, tzinfo=UTC),
+        reason="Wait for user review",
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (_binding("OUT-001", DeliveryStage.IMPLEMENTATION), _binding("OUT-002", DeliveryStage.PLANNING)),
+            frontier_updates={"change_deferral": deferral},
+        )
+    )
+
+    group = projector.group_view()
+
+    assert group.lifecycle == "deferred"
+    assert projector.publication_phase() == WorkItemPublicationPhase.DEFERRED
+    assert all(item.activity.state == WorkItemActivityState.IDLE for item in group.items[:2])
+    assert all(item.next_actor == WorkItemNextActor.NONE for item in group.items[:2])
+    assert group.items[-1].action.kind == WorkItemActionKind.RESUME_CHANGE
+    assert group.items[-1].action.command is None
+
+
+def test_abandoned_change_projects_terminal_publication_without_action() -> None:
+    abandonment = DeliveryChangeAbandonment.create(
+        change_id="portfolio-change",
+        prior_stage=DeliveryChangeStage.BUILDING,
+        abandoned_at=datetime(2026, 8, 11, 17, tzinfo=UTC),
+        reason="User stopped the Change",
+    )
+    projector = WorkItemProjector(
+        _snapshot(
+            (_binding("OUT-001", DeliveryStage.IMPLEMENTATION), _binding("OUT-002", DeliveryStage.PLANNING)),
+            frontier_updates={"change_abandonment": abandonment},
+        )
+    )
+
+    group = projector.group_view()
+
+    assert group.lifecycle == "abandoned"
+    assert projector.publication_phase() == WorkItemPublicationPhase.ABANDONED
+    assert group.items[-1].next_step == "Change abandoned"
+    assert group.items[-1].action.kind == WorkItemActionKind.NONE
 
 
 def test_ready_pull_request_waits_for_user_merge_without_merge_control() -> None:

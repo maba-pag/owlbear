@@ -86,6 +86,7 @@ class WorkItemActionKind(StrEnum):
     MARK_READY = "mark-ready"
     OBSERVE_ACCEPTANCE = "observe-acceptance"
     RESOLVE_ATTENTION = "resolve-attention"
+    RESUME_CHANGE = "resume-change"
     START_ORCHESTRATION = "start-orchestration"
 
 
@@ -106,6 +107,8 @@ class WorkItemChangeLifecycle(StrEnum):
     PUBLICATION = "publication"
     AWAITING_MERGE = "awaiting-merge"
     ACCEPTANCE = "acceptance"
+    DEFERRED = "deferred"
+    ABANDONED = "abandoned"
 
 
 class WorkItemPublicationPhase(StrEnum):
@@ -117,6 +120,8 @@ class WorkItemPublicationPhase(StrEnum):
     PULL_REQUEST_DRAFT = "pull-request-draft"
     AWAITING_MERGE = "awaiting-merge"
     ACCEPTANCE_OBSERVED = "acceptance-observed"
+    DEFERRED = "deferred"
+    ABANDONED = "abandoned"
 
 
 class _ProjectionModel(BaseModel):
@@ -347,6 +352,8 @@ class WorkItemProjector:
             if (
                 completed == len(self._snapshot.frontier.bindings)
                 or self._snapshot.frontier.change_disposition is not None
+                or self._snapshot.frontier.change_deferral is not None
+                or self._snapshot.frontier.change_abandonment is not None
             )
             else WorkItemChangeLifecycle.IN_DELIVERY
         )
@@ -403,15 +410,33 @@ class WorkItemProjector:
             self._outcome_card(outcome, self._bindings[outcome.outcome_id])
             for outcome in self._snapshot.contract.outcomes
         )
-        if all(binding.stage == DeliveryStage.COMPLETED for binding in self._snapshot.frontier.bindings) or (
-            self._snapshot.frontier.change_disposition is not None
+        frontier = self._snapshot.frontier
+        if (
+            all(binding.stage == DeliveryStage.COMPLETED for binding in frontier.bindings)
+            or frontier.change_disposition is not None
+            or frontier.change_deferral is not None
+            or frontier.change_abandonment is not None
         ):
             return (*cards, self._publication_card())
         return cards
 
     def _outcome_card(self, outcome: DeliveryOutcome, binding: OutcomeAuthorityBinding) -> WorkItemCardView:
-        needs, headline = self._outcome_needs(outcome, binding)
-        next_actor, next_step = self._outcome_next(binding, needs, headline)
+        paused = self._snapshot.frontier.change_deferral is not None
+        abandoned = self._snapshot.frontier.change_abandonment is not None
+        if paused or abandoned:
+            needs = WorkItemNeed.NONE
+            headline = "Change deferred" if paused else "Change abandoned"
+            next_actor = WorkItemNextActor.NONE
+            next_step = headline
+            activity = WorkItemActivity(state=WorkItemActivityState.IDLE)
+            progress = WorkItemProgress(kind=WorkItemProgressKind.TASKS, label=headline)
+            action = WorkItemAction()
+        else:
+            needs, headline = self._outcome_needs(outcome, binding)
+            next_actor, next_step = self._outcome_next(binding, needs, headline)
+            activity = self._outcome_activity(binding, needs)
+            progress = self._outcome_progress(binding)
+            action = self._outcome_action(binding)
         return WorkItemCardView(
             item_key=f"outcome:{outcome.outcome_id}",
             work_item_id=outcome.outcome_id,
@@ -423,9 +448,9 @@ class WorkItemProjector:
             needs_headline=headline,
             next_actor=next_actor,
             next_step=next_step,
-            activity=self._outcome_activity(binding, needs),
-            progress=self._outcome_progress(binding),
-            action=self._outcome_action(binding),
+            activity=activity,
+            progress=progress,
+            action=action,
         )
 
     def _outcome_needs(
@@ -510,6 +535,40 @@ class WorkItemProjector:
         )
 
     def _publication_card(self) -> WorkItemCardView:
+        if self._snapshot.frontier.change_abandonment is not None:
+            return WorkItemCardView(
+                item_key="publication",
+                work_item_id=self._snapshot.contract.change_id,
+                change_id=self._snapshot.contract.change_id,
+                scope=WorkItemScope.CHANGE_PUBLICATION,
+                title="Change publication",
+                stage=None,
+                needs=WorkItemNeed.NONE,
+                next_actor=WorkItemNextActor.NONE,
+                next_step="Change abandoned",
+                activity=WorkItemActivity(state=WorkItemActivityState.IDLE),
+                progress=WorkItemProgress(kind=WorkItemProgressKind.PUBLICATION, label="Change abandoned"),
+                action=WorkItemAction(),
+            )
+        if self._snapshot.frontier.change_deferral is not None:
+            return WorkItemCardView(
+                item_key="publication",
+                work_item_id=self._snapshot.contract.change_id,
+                change_id=self._snapshot.contract.change_id,
+                scope=WorkItemScope.CHANGE_PUBLICATION,
+                title="Change publication",
+                stage=None,
+                needs=WorkItemNeed.YOU,
+                needs_headline="Change is deferred",
+                next_actor=WorkItemNextActor.YOU,
+                next_step="Resume the deferred Change",
+                activity=WorkItemActivity(state=WorkItemActivityState.IDLE),
+                progress=WorkItemProgress(kind=WorkItemProgressKind.PUBLICATION, label="Change deferred"),
+                action=WorkItemAction(
+                    kind=WorkItemActionKind.RESUME_CHANGE,
+                    label="Resume Change",
+                ),
+            )
         disposition = self._snapshot.frontier.change_disposition
         if disposition is not None:
             label = (
@@ -603,36 +662,56 @@ class WorkItemProjector:
         )
 
     def _change_lifecycle(self) -> WorkItemChangeLifecycle:
-        disposition = self._snapshot.frontier.change_disposition
-        if disposition is not None:
-            if disposition.kind == DeliveryChangeDispositionKind.PUBLICATION_ATTENTION:
-                return WorkItemChangeLifecycle.PUBLICATION
-            return WorkItemChangeLifecycle.ACCEPTANCE
-        phase = self._publication_phase()
-        if phase in {
-            WorkItemPublicationPhase.FINALIZATION_INVALIDATED,
-            WorkItemPublicationPhase.READY_FOR_FINALIZATION,
-        }:
-            return WorkItemChangeLifecycle.FINALIZATION
-        if phase in {WorkItemPublicationPhase.CHECKPOINT_PENDING, WorkItemPublicationPhase.PULL_REQUEST_DRAFT}:
-            return WorkItemChangeLifecycle.PUBLICATION
-        if phase == WorkItemPublicationPhase.AWAITING_MERGE:
-            return WorkItemChangeLifecycle.AWAITING_MERGE
-        return WorkItemChangeLifecycle.ACCEPTANCE
+        frontier = self._snapshot.frontier
+        if frontier.change_abandonment is not None:
+            lifecycle = WorkItemChangeLifecycle.ABANDONED
+        elif frontier.change_deferral is not None:
+            lifecycle = WorkItemChangeLifecycle.DEFERRED
+        else:
+            disposition = frontier.change_disposition
+            if disposition is not None:
+                lifecycle = (
+                    WorkItemChangeLifecycle.PUBLICATION
+                    if disposition.kind == DeliveryChangeDispositionKind.PUBLICATION_ATTENTION
+                    else WorkItemChangeLifecycle.ACCEPTANCE
+                )
+            else:
+                phase = self._publication_phase()
+                if phase in {
+                    WorkItemPublicationPhase.FINALIZATION_INVALIDATED,
+                    WorkItemPublicationPhase.READY_FOR_FINALIZATION,
+                }:
+                    lifecycle = WorkItemChangeLifecycle.FINALIZATION
+                elif phase in {
+                    WorkItemPublicationPhase.CHECKPOINT_PENDING,
+                    WorkItemPublicationPhase.PULL_REQUEST_DRAFT,
+                }:
+                    lifecycle = WorkItemChangeLifecycle.PUBLICATION
+                elif phase == WorkItemPublicationPhase.AWAITING_MERGE:
+                    lifecycle = WorkItemChangeLifecycle.AWAITING_MERGE
+                else:
+                    lifecycle = WorkItemChangeLifecycle.ACCEPTANCE
+        return lifecycle
 
     def _publication_phase(self) -> WorkItemPublicationPhase:
         frontier = self._snapshot.frontier
-        if frontier.finalization_invalidation is not None:
-            return WorkItemPublicationPhase.FINALIZATION_INVALIDATED
-        if frontier.finalization is None:
-            return WorkItemPublicationPhase.READY_FOR_FINALIZATION
-        if frontier.pending_checkpoint is not None or frontier.published_head != frontier.finalization.exact_head:
-            return WorkItemPublicationPhase.CHECKPOINT_PENDING
-        if frontier.ready is None:
-            return WorkItemPublicationPhase.PULL_REQUEST_DRAFT
-        if frontier.merged_pull_request_latch is None:
-            return WorkItemPublicationPhase.AWAITING_MERGE
-        return WorkItemPublicationPhase.ACCEPTANCE_OBSERVED
+        if frontier.change_abandonment is not None:
+            phase = WorkItemPublicationPhase.ABANDONED
+        elif frontier.change_deferral is not None:
+            phase = WorkItemPublicationPhase.DEFERRED
+        elif frontier.finalization_invalidation is not None:
+            phase = WorkItemPublicationPhase.FINALIZATION_INVALIDATED
+        elif frontier.finalization is None:
+            phase = WorkItemPublicationPhase.READY_FOR_FINALIZATION
+        elif frontier.pending_checkpoint is not None or frontier.published_head != frontier.finalization.exact_head:
+            phase = WorkItemPublicationPhase.CHECKPOINT_PENDING
+        elif frontier.ready is None:
+            phase = WorkItemPublicationPhase.PULL_REQUEST_DRAFT
+        elif frontier.merged_pull_request_latch is None:
+            phase = WorkItemPublicationPhase.AWAITING_MERGE
+        else:
+            phase = WorkItemPublicationPhase.ACCEPTANCE_OBSERVED
+        return phase
 
     def _publication_view(self) -> WorkItemPublicationView:
         frontier = self._snapshot.frontier

@@ -46,6 +46,9 @@ interface WorkItemDetailProps {
   onMarkPublicationReady: () => Promise<void>
   onObserveAcceptance: () => Promise<void>
   onResolveAttention: (expectedDispositionId: string) => Promise<void>
+  onDeferChange: (reason: string) => Promise<void>
+  onResumeChange: () => Promise<void>
+  onAbandonChange: (reason: string) => Promise<void>
 }
 
 const WORKER_ROLE_LABELS: Record<DeliveryWorkerRole, string> = {
@@ -151,6 +154,41 @@ function RequestsSection({ detail, pendingAction, onAnswerRequest }: WorkItemDet
             <RequestControl request={request} pending={pendingAction !== null} onAnswer={onAnswerRequest} />
           </article>
         ))}
+      </div>
+    </section>
+  )
+}
+
+function ChangeDispositionSection(props: WorkItemDetailProps) {
+  const [reason, setReason] = useState('')
+  if (props.detail.item.card.scope !== 'change-publication') return null
+  const phase = props.detail.item.publication?.phase
+  if (phase === 'abandoned') return null
+  const canSubmit = reason.trim().length > 0 && props.pendingAction === null
+  return (
+    <section className="border-l-4 border-warning bg-surface p-static-md" aria-labelledby="change-disposition-heading">
+      <PHeading id="change-disposition-heading" tag="h3" size="md">Change controls</PHeading>
+      {phase === 'deferred' ? <p className="mt-static-xs text-sm">This Change is deferred and retains its worktree.</p> : null}
+      <div className="mt-static-md grid gap-static-sm">
+        <PInputText
+          compact
+          name="change-disposition-reason"
+          label="Reason"
+          value={reason}
+          disabled={props.pendingAction !== null}
+          onChange={(event) => setReason(fieldValue(event as FieldValueEvent))}
+          onInput={(event) => setReason(fieldValue(event as FieldValueEvent))}
+        />
+        <div className="flex flex-wrap gap-static-sm">
+          {phase !== 'deferred' ? (
+            <PButton type="button" compact disabled={!canSubmit} onClick={() => void props.onDeferChange(reason.trim())}>
+              {props.pendingAction === 'change-defer' ? 'Deferring...' : 'Defer Change'}
+            </PButton>
+          ) : null}
+          <PButton type="button" compact variant="secondary" disabled={!canSubmit} onClick={() => void props.onAbandonChange(reason.trim())}>
+            {props.pendingAction === 'change-abandon' ? 'Abandoning...' : 'Abandon Change'}
+          </PButton>
+        </div>
       </div>
     </section>
   )
@@ -369,6 +407,8 @@ const PUBLICATION_PHASE_LABELS: Record<WorkItemPublicationPhase, string> = {
   'pull-request-draft': 'Pull request draft',
   'awaiting-merge': 'Awaiting merge in GitHub',
   'acceptance-observed': 'Acceptance observed',
+  deferred: 'Change deferred',
+  abandoned: 'Change abandoned',
 }
 
 function IdentityRow({ label, value }: { label: string; value: string | number | null }) {
@@ -388,6 +428,8 @@ function PublicationSection(props: WorkItemDetailProps) {
         ? props.onObserveAcceptance
         : action.kind === 'resolve-attention' && action.attention_id
           ? () => props.onResolveAttention(action.attention_id as string)
+        : action.kind === 'resume-change'
+          ? props.onResumeChange
         : null
   const pending = action.kind === 'reconcile-checkpoint'
     ? props.pendingAction === 'publication-reconcile'
@@ -395,7 +437,9 @@ function PublicationSection(props: WorkItemDetailProps) {
       ? props.pendingAction === 'publication-ready'
       : action.kind === 'observe-acceptance'
         ? props.pendingAction === 'acceptance-observe'
-        : props.pendingAction === 'attention-resolve'
+        : action.kind === 'resolve-attention'
+          ? props.pendingAction === 'attention-resolve'
+          : props.pendingAction === 'change-resume'
   return (
     <section className="min-w-0 border-l border-contrast-low bg-surface p-static-md" aria-labelledby="work-publication-heading">
       <PHeading id="work-publication-heading" tag="h3" size="md">{PUBLICATION_PHASE_LABELS[publication.phase]}</PHeading>
@@ -449,6 +493,7 @@ export default function WorkItemDetail(props: WorkItemDetailProps) {
           </dl>
         </div>
         <ActionFeedback error={props.actionError} result={props.actionResult} />
+        <ChangeDispositionSection {...props} />
         <BlockSection {...props} />
         <RequestsSection {...props} />
         <PublicationSection {...props} />

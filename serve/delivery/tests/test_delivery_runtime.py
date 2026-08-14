@@ -24,6 +24,8 @@ from owlbear_delivery import (
     CompletionReceipt,
     DeliveryActiveClaim,
     DeliveryAcceptanceWaitingError,
+    DeliveryChangeAbandonment,
+    DeliveryChangeDeferral,
     DeliveryChangeStage,
     DeliveryChangeDisposition,
     DeliveryChangeDispositionKind,
@@ -587,7 +589,7 @@ def test_schema_nine_frontier_migrates_without_change_attention(tmp_path: Path) 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 12
+    assert canonical["schema_version"] == 13
     assert migrated.change_disposition() is None
 
 
@@ -602,7 +604,7 @@ def test_schema_ten_frontier_migrates_resolution_slot(tmp_path: Path) -> None:
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 12
+    assert canonical["schema_version"] == 13
     assert canonical["change_disposition_resolution"] is None
 
 
@@ -617,7 +619,7 @@ def test_schema_eleven_frontier_migrates_publication_identity_slot(tmp_path: Pat
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 12
+    assert canonical["schema_version"] == 13
     assert canonical["change_disposition_publication"] is None
 
 
@@ -739,6 +741,144 @@ def test_change_attention_resolution_rejects_active_claims(tmp_path: Path) -> No
         pytest.raises(DeliveryRuntimeConflictError, match="cannot overlap an active mutation claim"),
     ):
         runtime.resolve_change_disposition(disposition.disposition_id, datetime(2026, 8, 11, 17, tzinfo=UTC))
+
+
+def test_change_deferral_retains_frontier_and_suppresses_claimability(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+
+    deferral = runtime.defer_change("pause for user review", datetime(2026, 8, 11, 17, tzinfo=UTC))
+
+    assert isinstance(deferral, DeliveryChangeDeferral)
+    assert deferral.prior_stage == DeliveryChangeStage.BUILDING
+    assert runtime.change_deferral() == deferral
+    assert runtime.change_stage() == DeliveryChangeStage.DEFERRED
+    assert runtime.claimable_outcome_ids() == ()
+    with pytest.raises(DeliveryRuntimeConflictError, match="requires resumption"):
+        _activate(runtime, "OUT-001", "claim-deferred")
+
+    assert runtime.resume_change() == deferral
+    assert runtime.change_deferral() is None
+    assert runtime.change_stage() == DeliveryChangeStage.BUILDING
+    assert runtime.claimable_outcome_ids() == ("OUT-001", "OUT-003")
+
+
+def test_attention_can_be_deferred_and_resumes_to_the_same_attention_state(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    attention = runtime.capture_publication_attention(
+        datetime(2026, 8, 11, 17, tzinfo=UTC),
+        ("provider unavailable",),
+    )
+
+    deferral = runtime.defer_change("wait for provider recovery", datetime(2026, 8, 11, 18, tzinfo=UTC))
+
+    assert deferral.prior_stage == DeliveryChangeStage.PUBLICATION_ATTENTION
+    assert runtime.change_stage() == DeliveryChangeStage.DEFERRED
+    runtime.resume_change()
+    assert runtime.change_stage() == DeliveryChangeStage.PUBLICATION_ATTENTION
+    assert runtime.change_disposition() == attention
+
+
+def test_attention_can_be_abandoned_and_clears_active_attention(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    runtime.capture_publication_attention(
+        datetime(2026, 8, 11, 17, tzinfo=UTC),
+        ("provider unavailable",),
+    )
+
+    abandonment = runtime.abandon_change("user stopped the Change", datetime(2026, 8, 11, 18, tzinfo=UTC))
+
+    assert abandonment.prior_stage == DeliveryChangeStage.PUBLICATION_ATTENTION
+    assert runtime.change_disposition() is None
+    assert runtime.change_abandonment() == abandonment
+    assert runtime.change_stage() == DeliveryChangeStage.ABANDONED
+
+
+def test_change_deferral_rejects_active_claims(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    _activate(runtime, "OUT-001", "claim-deferral")
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="cannot overlap an active mutation claim"):
+        runtime.defer_change("pause", datetime(2026, 8, 11, 17, tzinfo=UTC))
+
+
+def test_change_abandonment_is_terminal_and_idempotent(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+
+    abandonment = runtime.abandon_change("user stopped the Change", datetime(2026, 8, 11, 17, tzinfo=UTC))
+
+    assert isinstance(abandonment, DeliveryChangeAbandonment)
+    assert abandonment.prior_stage == DeliveryChangeStage.BUILDING
+    assert runtime.change_abandonment() == abandonment
+    assert runtime.change_stage() == DeliveryChangeStage.ABANDONED
+    assert runtime.claimable_outcome_ids() == ()
+    assert runtime.abandon_change("different replay text", datetime(2026, 8, 11, 18, tzinfo=UTC)) == abandonment
+    with pytest.raises(DeliveryRuntimeConflictError, match="terminal"):
+        runtime.resume_change()
+
+
+def test_deferred_change_can_be_abandoned_with_deferred_prior_stage(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    runtime.defer_change("wait for user review", datetime(2026, 8, 11, 17, tzinfo=UTC))
+
+    abandonment = runtime.abandon_change("user stopped the Change", datetime(2026, 8, 11, 18, tzinfo=UTC))
+
+    assert abandonment.prior_stage == DeliveryChangeStage.DEFERRED
+    assert runtime.change_deferral() is None
+    assert runtime.change_stage() == DeliveryChangeStage.ABANDONED
+
+
+def test_frontier_rejects_terminal_authority_mixed_with_lifecycle_disposition(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    runtime.defer_change("wait for user review", datetime(2026, 8, 11, 17, tzinfo=UTC))
+    completion = DeliveryIntegrationCompletion(
+        completion_id="a" * 64,
+        candidate_id="b" * 64,
+        package_id="c" * 64,
+        target_commit="1" * 40,
+        completion_path=".owlbear/completed/delivery-runtime.json",
+    )
+    payload = DeliveryFrontier.model_validate_json(runtime.frontier_bytes()).model_dump(mode="python")
+    payload["integration_result_id"] = completion.completion_id
+    payload["integration_completion"] = completion.model_dump(mode="python")
+
+    with pytest.raises(ValueError, match="deferred Change cannot retain terminal completion authority"):
+        DeliveryFrontier.model_validate(payload)
+
+    attention_runtime = _runtime(tmp_path / "attention")
+    attention_runtime.capture_publication_attention(
+        datetime(2026, 8, 11, 17, tzinfo=UTC),
+        ("provider unavailable",),
+    )
+    abandonment = DeliveryChangeAbandonment.create(
+        change_id="delivery-runtime",
+        prior_stage=DeliveryChangeStage.PUBLICATION_ATTENTION,
+        abandoned_at=datetime(2026, 8, 11, 18, tzinfo=UTC),
+        reason="user stopped the Change",
+    )
+    attention_payload = DeliveryFrontier.model_validate_json(attention_runtime.frontier_bytes()).model_dump(
+        mode="python"
+    )
+    attention_payload["change_abandonment"] = abandonment.model_dump(mode="python")
+
+    with pytest.raises(ValueError, match="abandoned Change cannot retain active or terminal authority"):
+        DeliveryFrontier.model_validate(attention_payload)
+
+
+def test_schema_twelve_frontier_migrates_lifecycle_disposition_slots(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    path = tmp_path / "changes/delivery-runtime/frontier.json"
+    payload = json.loads(runtime.frontier_bytes())
+    payload["schema_version"] = 12
+    payload.pop("change_deferral")
+    payload.pop("change_abandonment")
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    migrated = DeliveryRuntime(tmp_path, _contract())
+    canonical = json.loads(migrated.frontier_bytes())
+
+    assert canonical["schema_version"] == 13
+    assert migrated.change_deferral() is None
+    assert migrated.change_abandonment() is None
 
 
 def test_pull_request_draft_regression_persists_publication_attention(tmp_path: Path) -> None:
@@ -949,7 +1089,7 @@ def test_runtime_migrates_reducible_assembly_metadata_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 12
+    assert canonical["schema_version"] == 13
     assert all("assembly_required" not in binding for binding in canonical["bindings"])
     assert json.loads(path.read_bytes()) == canonical
 
@@ -966,7 +1106,7 @@ def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 12
+    assert canonical["schema_version"] == 13
     assert canonical["published_head"] is None
     assert canonical["pending_checkpoint"] is None
     assert json.loads(path.read_bytes()) == canonical
@@ -1020,7 +1160,7 @@ def test_runtime_migrates_prior_schema_without_rewriting_finalization_checkpoint
     )
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 12
+    assert canonical["schema_version"] == 13
     assert canonical["pending_checkpoint"] == expected_checkpoint
     assert canonical["pending_checkpoint"]["head"] == exact_head
     assert canonical["pending_checkpoint"]["triggers"][-1] == {

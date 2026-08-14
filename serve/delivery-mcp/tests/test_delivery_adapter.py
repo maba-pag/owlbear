@@ -237,6 +237,9 @@ def _requests() -> dict[str, dict[str, object]]:
         "observe_change_publication_checks": change,
         "observe_acceptance": change,
         "resolve_change_disposition": {**change, "expected_disposition_id": DIGEST},
+        "defer_change": {**change, "reason": "Wait for user review"},
+        "resume_change": change,
+        "abandon_change": {**change, "reason": "Stop this Change"},
         "transition_delivery": {
             **change,
             "request": {

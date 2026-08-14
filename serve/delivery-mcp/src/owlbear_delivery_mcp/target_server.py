@@ -33,6 +33,8 @@ from owlbear_delivery.runtime_transaction import (
 )
 from owlbear_delivery.target_admission import TargetAdmissionError
 from owlbear_delivery_mcp.target_models import (
+    AbandonChangeParams,
+    AbandonChangeRequest,
     AdmitDeliveryChangeParams,
     AdmitDeliveryChangeRequest,
     ChangeParams,
@@ -43,6 +45,8 @@ from owlbear_delivery_mcp.target_models import (
     CompletedPageRequest,
     CreateDesignSessionParams,
     CreateDesignSessionRequest,
+    DeferChangeParams,
+    DeferChangeRequest,
     DeliveryPlanPublication,
     DeliveryResultPublication,
     EmptyParams,
@@ -101,6 +105,9 @@ DELIVERY_OPERATION_NAMES = (
     "observe_change_publication_checks",
     "observe_acceptance",
     "resolve_change_disposition",
+    "defer_change",
+    "resume_change",
+    "abandon_change",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
@@ -346,6 +353,33 @@ class TargetMCPAdapter:
                 params.change_id,
                 params.expected_disposition_id,
             ),
+        )
+
+    async def defer_change(self, request: DeferChangeRequest) -> dict[str, object]:
+        """Retain one Change while pausing its claimable frontier."""
+        params = self._validate(DeferChangeParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.defer_change(params.change_id, params.reason),
+        )
+
+    async def resume_change(self, request: ChangeRequest) -> dict[str, object]:
+        """Resume one deferred Change from its retained prior state."""
+        params = self._validate(ChangeParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.resume_change(params.change_id),
+        )
+
+    async def abandon_change(self, request: AbandonChangeRequest) -> dict[str, object]:
+        """Terminate one uncompleted Change by explicit user disposition."""
+        params = self._validate(AbandonChangeParams, request)
+        return await asyncio.to_thread(
+            self._call,
+            params,
+            lambda: self._application.abandon_change(params.change_id, params.reason),
         )
 
     async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]:

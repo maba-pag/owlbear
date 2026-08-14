@@ -16,6 +16,7 @@ from owlbear_cockpit.target_models import (
     AnswerRequestBody,
     BackwardMoveBody,
     BackwardMovePreviewBody,
+    ChangeDispositionReasonBody,
     ClearBlockBody,
     ConfirmLostClaimBody,
     DesignWorkDetailResponse,
@@ -166,6 +167,18 @@ class TargetCockpitService:
             )
         )
 
+    def defer_change(self, change_id: str, body: ChangeDispositionReasonBody) -> object:
+        """Retain one Change while pausing its claimable frontier."""
+        return self._invoke(lambda: self._application.defer_change(change_id, body.reason))
+
+    def resume_change(self, change_id: str) -> object:
+        """Resume one exact deferred Change."""
+        return self._invoke(lambda: self._application.resume_change(change_id))
+
+    def abandon_change(self, change_id: str, body: ChangeDispositionReasonBody) -> object:
+        """Terminate one uncompleted Change by explicit user disposition."""
+        return self._invoke(lambda: self._application.abandon_change(change_id, body.reason))
+
     def list_completed(self, cursor: str | None, limit: int) -> object:
         """List one bounded page of completed change history."""
         return self._invoke(lambda: self._application.list_completed_changes(cursor, limit))
@@ -271,6 +284,12 @@ def _register_queries(router: APIRouter) -> None:
 
 
 def _register_controls(router: APIRouter) -> None:
+    _register_request_controls(router)
+    _register_outcome_controls(router)
+    _register_publication_controls(router)
+
+
+def _register_request_controls(router: APIRouter) -> None:
     @router.post("/changes/{change_id}/requests/{request_id}/answer")
     def answer_request(
         change_id: str,
@@ -280,6 +299,8 @@ def _register_controls(router: APIRouter) -> None:
     ) -> object:
         return service.answer_request(change_id, request_id, body)
 
+
+def _register_outcome_controls(router: APIRouter) -> None:
     @router.post("/changes/{change_id}/outcomes/{outcome_id}/blocks/{block_id}/clear")
     def clear_block(
         change_id: str,
@@ -317,6 +338,8 @@ def _register_controls(router: APIRouter) -> None:
     ) -> object:
         return service.preview_backward_move(change_id, outcome_id, body)
 
+
+def _register_publication_controls(router: APIRouter) -> None:
     @router.post("/changes/{change_id}/publication/reconcile")
     def reconcile_checkpoint(change_id: str, service: _TargetService) -> object:
         return service.reconcile_checkpoint(change_id)
@@ -336,6 +359,26 @@ def _register_controls(router: APIRouter) -> None:
         service: _TargetService,
     ) -> object:
         return service.resolve_attention(change_id, body)
+
+    @router.post("/changes/{change_id}/defer")
+    def defer_change(
+        change_id: str,
+        body: ChangeDispositionReasonBody,
+        service: _TargetService,
+    ) -> object:
+        return service.defer_change(change_id, body)
+
+    @router.post("/changes/{change_id}/resume")
+    def resume_change(change_id: str, service: _TargetService) -> object:
+        return service.resume_change(change_id)
+
+    @router.post("/changes/{change_id}/abandon")
+    def abandon_change(
+        change_id: str,
+        body: ChangeDispositionReasonBody,
+        service: _TargetService,
+    ) -> object:
+        return service.abandon_change(change_id, body)
 
 
 def _portfolio_totals(groups: tuple[ChangeGroupView, ...]) -> WorkItemPortfolioTotals:

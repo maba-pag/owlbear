@@ -798,6 +798,7 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(tmp_p
     assert application.resolve_change_disposition("change-a", disposition.disposition_id).disposition_id == (
         disposition.disposition_id
     )
+
     pull_request = pull_request.model_copy(update={"state": "open", "draft": True})
     assert application.reconcile_finalization_head("change-a") == finalization
     application.mark_current_change_ready("change-a")
@@ -830,6 +831,25 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(tmp_p
     assert len(retained) == 1
     assert retained[0].cleanup_eligible is True
     assert retained[0].cleanup_blocked_reason is None
+
+
+def test_change_lifecycle_dispositions_delegate_through_application_lock(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    runtime = runtimes["change-a"]
+
+    deferral = application.defer_change("change-a", "Wait for user review")
+    assert runtime.change_deferral() == deferral
+    assert runtime.change_stage() == DeliveryChangeStage.DEFERRED
+
+    assert application.resume_change("change-a") == deferral
+    assert runtime.change_stage() == DeliveryChangeStage.BUILDING
+
+    abandonment = application.abandon_change("change-a", "User stopped the Change")
+    assert abandonment.prior_stage == DeliveryChangeStage.BUILDING
+    assert runtime.change_stage() == DeliveryChangeStage.ABANDONED
 
 
 def test_retained_inventory_blocks_legacy_integration_completion(tmp_path: Path) -> None:
@@ -1021,6 +1041,37 @@ def test_portfolio_claim_suppresses_second_orchestration_recommendation(tmp_path
     assert len(view.claimed) == 1
     assert len(view.queued_for_orchestration) == 1
     assert tuple(item.kind.value for item in view.guidance) == ("work-underway",)
+
+
+def test_portfolio_keeps_deferred_change_visible_without_orchestration_queue(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    application.defer_change("change-a", "wait for user review")
+
+    view = application.portfolio_read_view()
+
+    assert tuple(group.lifecycle.value for group in view.groups) == ("deferred",)
+    assert view.operating.unfinished_change_count == 1
+    assert view.operating.queued_for_orchestration == ()
+    assert tuple(item.kind.value for item in view.operating.guidance) == ("intervene",)
+
+
+def test_portfolio_keeps_abandoned_change_visible_but_terminal_and_not_completed(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    application.abandon_change("change-a", "user stopped the Change")
+
+    view = application.portfolio_read_view()
+
+    assert tuple(group.lifecycle.value for group in view.groups) == ("abandoned",)
+    assert all(item.needs.value == "none" for item in view.groups[0].items)
+    assert view.operating.unfinished_change_count == 0
+    assert view.operating.completed_change_count == 0
+    assert view.operating.queued_for_orchestration == ()
 
 
 def test_portfolio_projects_change_checkpoint_publication_state(tmp_path: Path) -> None:
@@ -1620,7 +1671,7 @@ dependencies: []
     assert recovered.replayed
     assert coordinator.show("change-a").last_reviewed_commit == reviewed_head
     assert application.show_change_checkpoint_publication("change-a").pending_checkpoint is not None
-    assert json.loads(frontier_path.read_bytes())["schema_version"] == 12
+    assert json.loads(frontier_path.read_bytes())["schema_version"] == 13
 
 
 def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
@@ -1671,7 +1722,7 @@ def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_pa
 
     assert state.pending_checkpoint is not None
     assert state.pending_checkpoint.head == coordination.last_reviewed_commit
-    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 12
+    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 13
 
 
 def test_delivery_loader_injects_publication_provider_and_derives_check_head(tmp_path: Path) -> None:

@@ -98,6 +98,12 @@ class ResolveChangeAttentionBody(_TargetHTTPModel):
     expected_disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class ChangeDispositionReasonBody(_TargetHTTPModel):
+    """User reason for deferring or abandoning one Change."""
+
+    reason: str = Field(min_length=1)
+
+
 class BackwardMoveBody(_TargetHTTPModel):
     """Operator-selected earlier stage and reason."""
 
@@ -129,6 +135,7 @@ __all__ = [
     "AnswerRequestBody",
     "BackwardMoveBody",
     "BackwardMovePreviewBody",
+    "ChangeDispositionReasonBody",
     "ClearBlockBody",
     "ConfirmLostClaimBody",
     "DesignWorkDetailResponse",

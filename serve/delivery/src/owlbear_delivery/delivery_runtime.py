@@ -39,12 +39,16 @@ class DeliveryStage(StrEnum):
 
 
 class DeliveryChangeStage(StrEnum):
-    """Change lifecycle derived from canonical outcome state."""
+    """Canonical Change lifecycle state."""
 
     DESIGN = "design"
     BUILDING = "building"
     FINALIZED = "finalized"
     AWAITING_MERGE = "awaiting-merge"
+    PUBLICATION_ATTENTION = "publication-attention"
+    ACCEPTANCE_ATTENTION = "acceptance-attention"
+    DEFERRED = "deferred"
+    ABANDONED = "abandoned"
     COMPLETED = "completed"
 
 
@@ -101,6 +105,99 @@ class DeliveryChangePublicationIdentity(_DeliveryModel):
     number: int = Field(gt=0)
     node_id: str = Field(min_length=1)
     head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class DeliveryChangeDeferral(_DeliveryModel):
+    """Durable user disposition that pauses one nonterminal Change."""
+
+    schema_version: Literal[1] = 1
+    deferral_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: str = Field(min_length=1)
+    prior_stage: DeliveryChangeStage
+    deferred_at: datetime
+    reason: str = Field(min_length=1)
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        change_id: str,
+        prior_stage: DeliveryChangeStage,
+        deferred_at: datetime,
+        reason: str,
+    ) -> DeliveryChangeDeferral:
+        """Create one deterministic deferral receipt."""
+        values = {
+            "change_id": change_id,
+            "prior_stage": prior_stage,
+            "deferred_at": deferred_at,
+            "reason": reason,
+        }
+        candidate = cls.model_construct(deferral_id="0" * 64, schema_version=1, **values)
+        return cls(deferral_id=_receipt_digest(candidate, "deferral_id"), **values)
+
+    @model_validator(mode="after")
+    def _validate_deferral(self) -> DeliveryChangeDeferral:
+        if self.prior_stage in {
+            DeliveryChangeStage.DEFERRED,
+            DeliveryChangeStage.ABANDONED,
+            DeliveryChangeStage.COMPLETED,
+        }:
+            message = "Change deferral must name a non-deferred prior state"
+            raise ValueError(message)
+        if self.deferred_at.tzinfo is None:
+            message = "Change deferral timestamp must include a timezone"
+            raise ValueError(message)
+        if self.deferral_id != _receipt_digest(self, "deferral_id"):
+            message = "Change deferral identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryChangeAbandonment(_DeliveryModel):
+    """Durable user disposition that terminates one uncompleted Change."""
+
+    schema_version: Literal[1] = 1
+    abandonment_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: str = Field(min_length=1)
+    prior_stage: DeliveryChangeStage
+    abandoned_at: datetime
+    reason: str = Field(min_length=1)
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        change_id: str,
+        prior_stage: DeliveryChangeStage,
+        abandoned_at: datetime,
+        reason: str,
+    ) -> DeliveryChangeAbandonment:
+        """Create one deterministic abandonment receipt."""
+        values = {
+            "change_id": change_id,
+            "prior_stage": prior_stage,
+            "abandoned_at": abandoned_at,
+            "reason": reason,
+        }
+        candidate = cls.model_construct(abandonment_id="0" * 64, schema_version=1, **values)
+        return cls(abandonment_id=_receipt_digest(candidate, "abandonment_id"), **values)
+
+    @model_validator(mode="after")
+    def _validate_abandonment(self) -> DeliveryChangeAbandonment:
+        if self.prior_stage in {
+            DeliveryChangeStage.ABANDONED,
+            DeliveryChangeStage.COMPLETED,
+        }:
+            message = "Change abandonment must name a non-abandoned prior state"
+            raise ValueError(message)
+        if self.abandoned_at.tzinfo is None:
+            message = "Change abandonment timestamp must include a timezone"
+            raise ValueError(message)
+        if self.abandonment_id != _receipt_digest(self, "abandonment_id"):
+            message = "Change abandonment identity is invalid"
+            raise ValueError(message)
+        return self
 
 
 class DeliveryOutputReference(_DeliveryModel):
@@ -828,7 +925,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 class DeliveryFrontier(_DeliveryModel):
     """Canonical outcome and Change checkpoint state persisted beside authority."""
 
-    schema_version: Literal[12] = 12
+    schema_version: Literal[13] = 13
     bindings: tuple[OutcomeAuthorityBinding, ...]
     published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint: DeliveryPendingCheckpoint | None = None
@@ -839,6 +936,8 @@ class DeliveryFrontier(_DeliveryModel):
     change_disposition_publication: DeliveryChangePublicationIdentity | None = None
     merged_pull_request_latch: DeliveryMergedPullRequestLatch | None = None
     change_completion: DeliveryChangeCompletion | None = None
+    change_deferral: DeliveryChangeDeferral | None = None
+    change_abandonment: DeliveryChangeAbandonment | None = None
     change_disposition: DeliveryChangeDisposition | None = None
     change_disposition_resolution: DeliveryChangeDispositionResolution | None = None
     integration_result_id: str | None = None
@@ -869,6 +968,7 @@ class DeliveryFrontier(_DeliveryModel):
         if self.integration_completion is not None and self.integration_attention is not None:
             message = "completed Integration cannot retain attention"
             raise ValueError(message)
+        self._validate_lifecycle_dispositions()
         self._validate_change_disposition()
         if self.finalization is not None and self.finalization_invalidation is not None:
             message = "Delivery finalization and invalidation cannot coexist"
@@ -890,6 +990,30 @@ class DeliveryFrontier(_DeliveryModel):
             message = "Delivery finalization requires completed unclaimed outcome authority"
             raise ValueError(message)
         return self
+
+    def _validate_lifecycle_dispositions(self) -> None:
+        if self.change_deferral is not None and self.change_abandonment is not None:
+            message = "Change deferral and abandonment cannot coexist"
+            raise ValueError(message)
+        if self.change_deferral is not None and (
+            self.change_completion is not None or self.integration_completion is not None
+        ):
+            message = "deferred Change cannot retain terminal completion authority"
+            raise ValueError(message)
+        if self.change_abandonment is not None and (
+            self.change_completion is not None
+            or self.integration_completion is not None
+            or self.change_disposition is not None
+            or self.change_disposition_publication is not None
+        ):
+            message = "abandoned Change cannot retain active or terminal authority"
+            raise ValueError(message)
+        if self.change_deferral is not None and any(binding.active_claim is not None for binding in self.bindings):
+            message = "deferred Change cannot retain an active mutation claim"
+            raise ValueError(message)
+        if self.change_abandonment is not None and any(binding.active_claim is not None for binding in self.bindings):
+            message = "abandoned Change cannot retain an active mutation claim"
+            raise ValueError(message)
 
     def _validate_change_disposition(self) -> None:
         if self.change_disposition is None:
@@ -1130,8 +1254,8 @@ _STAGE_ORDER = {
     DeliveryStage.IMPLEMENTATION: 2,
     DeliveryStage.COMPLETED: 3,
 }
-_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9, 10, 11})
-_FRONTIER_SCHEMA_VERSION = 12
+_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12})
+_FRONTIER_SCHEMA_VERSION = 13
 _FINALIZATION_SCHEMA_VERSION = 2
 _LEGACY_FINALIZATION_MESSAGE = "legacy finalization authority requires explicit re-finalization"
 _CHECKPOINT_BACKFILL_SCHEMA_VERSIONS = frozenset({1, 2})
@@ -1166,20 +1290,35 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
 
 def is_change_terminal(frontier: DeliveryFrontier) -> bool:
     """Return whether one frontier has terminal Change authority."""
-    return frontier.change_completion is not None or frontier.integration_result_id is not None
+    return (
+        frontier.change_abandonment is not None
+        or frontier.change_completion is not None
+        or frontier.integration_result_id is not None
+    )
 
 
 def derive_change_stage(frontier: DeliveryFrontier) -> DeliveryChangeStage:
-    """Derive the legacy five-value Change stage from canonical frontier authority."""
-    if is_change_terminal(frontier):
-        return DeliveryChangeStage.COMPLETED
-    if frontier.ready is not None:
-        return DeliveryChangeStage.AWAITING_MERGE
-    if frontier.finalization is not None:
-        return DeliveryChangeStage.FINALIZED
-    if DeliveryStage.DESIGN in {binding.stage for binding in frontier.bindings}:
-        return DeliveryChangeStage.DESIGN
-    return DeliveryChangeStage.BUILDING
+    """Derive the canonical Change stage from frontier authority."""
+    if frontier.change_abandonment is not None:
+        stage = DeliveryChangeStage.ABANDONED
+    elif frontier.change_deferral is not None:
+        stage = DeliveryChangeStage.DEFERRED
+    elif frontier.change_disposition is not None:
+        stage = {
+            DeliveryChangeDispositionKind.PUBLICATION_ATTENTION: DeliveryChangeStage.PUBLICATION_ATTENTION,
+            DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION: DeliveryChangeStage.ACCEPTANCE_ATTENTION,
+        }[frontier.change_disposition.kind]
+    elif is_change_terminal(frontier):
+        stage = DeliveryChangeStage.COMPLETED
+    elif frontier.ready is not None:
+        stage = DeliveryChangeStage.AWAITING_MERGE
+    elif frontier.finalization is not None:
+        stage = DeliveryChangeStage.FINALIZED
+    elif DeliveryStage.DESIGN in {binding.stage for binding in frontier.bindings}:
+        stage = DeliveryChangeStage.DESIGN
+    else:
+        stage = DeliveryChangeStage.BUILDING
+    return stage
 
 
 class DeliveryRuntime:
@@ -1230,6 +1369,76 @@ class DeliveryRuntime:
     def change_disposition_resolution(self) -> DeliveryChangeDispositionResolution | None:
         """Return the most recent durable Change attention resolution receipt."""
         return self._read()[0].change_disposition_resolution
+
+    def change_deferral(self) -> DeliveryChangeDeferral | None:
+        """Return the current user-requested Change deferral, if any."""
+        return self._read()[0].change_deferral
+
+    def change_abandonment(self) -> DeliveryChangeAbandonment | None:
+        """Return the terminal user-requested Change abandonment, if any."""
+        return self._read()[0].change_abandonment
+
+    def defer_change(self, reason: str, deferred_at: datetime) -> DeliveryChangeDeferral:
+        """Pause one nonterminal Change while retaining its exact frontier and worktree."""
+        frontier, previous = self._read()
+        if frontier.change_deferral is not None:
+            return frontier.change_deferral
+        if frontier.change_abandonment is not None or is_change_terminal(frontier):
+            _conflict("terminal Delivery Change cannot be deferred")
+        _require_no_active_change_claim(frontier, "Change deferral")
+        prior_stage = derive_change_stage(frontier)
+        if prior_stage in {DeliveryChangeStage.DEFERRED, DeliveryChangeStage.ABANDONED}:
+            _conflict("Change is not eligible for deferral")
+        deferral = DeliveryChangeDeferral.create(
+            change_id=self._contract.change_id,
+            prior_stage=prior_stage,
+            deferred_at=deferred_at,
+            reason=reason,
+        )
+        self._replace(previous, frontier.model_copy(update={"change_deferral": deferral}))
+        return deferral
+
+    def resume_change(self) -> DeliveryChangeDeferral:
+        """Resume one exact deferred Change and return its preserved prior-state receipt."""
+        frontier, previous = self._read()
+        if frontier.change_abandonment is not None or is_change_terminal(frontier):
+            _conflict("terminal Delivery Change cannot be resumed")
+        deferral = frontier.change_deferral
+        if deferral is None:
+            _conflict("Delivery Change is not deferred")
+        _require_no_active_change_claim(frontier, "Change resume")
+        self._replace(previous, frontier.model_copy(update={"change_deferral": None}))
+        return deferral
+
+    def abandon_change(self, reason: str, abandoned_at: datetime) -> DeliveryChangeAbandonment:
+        """Terminate one uncompleted Change without discarding its retained authority."""
+        frontier, previous = self._read()
+        if frontier.change_abandonment is not None:
+            return frontier.change_abandonment
+        if frontier.change_completion is not None or frontier.integration_result_id is not None:
+            _conflict("completed Delivery Change cannot be abandoned")
+        _require_no_active_change_claim(frontier, "Change abandonment")
+        prior_stage = derive_change_stage(frontier)
+        if prior_stage == DeliveryChangeStage.ABANDONED:
+            _conflict("Change is not eligible for abandonment")
+        abandonment = DeliveryChangeAbandonment.create(
+            change_id=self._contract.change_id,
+            prior_stage=prior_stage,
+            abandoned_at=abandoned_at,
+            reason=reason,
+        )
+        self._replace(
+            previous,
+            frontier.model_copy(
+                update={
+                    "change_abandonment": abandonment,
+                    "change_deferral": None,
+                    "change_disposition": None,
+                    "change_disposition_publication": None,
+                }
+            ),
+        )
+        return abandonment
 
     def capture_change_disposition(
         self,
@@ -1860,6 +2069,8 @@ class DeliveryRuntime:
     def claimable_outcome_ids(self) -> tuple[str, ...]:
         """Return stable dependency-ready, unblocked, unclaimed outcome identities."""
         frontier, _content = self._read()
+        if derive_change_stage(frontier) != DeliveryChangeStage.BUILDING:
+            return ()
         completed = {binding.outcome_id for binding in frontier.bindings if binding.stage == DeliveryStage.COMPLETED}
         dependencies = {outcome.outcome_id: set(outcome.dependency_ids) for outcome in self._contract.outcomes}
         return tuple(
@@ -1873,6 +2084,8 @@ class DeliveryRuntime:
 
     def claimable_task_ids(self, outcome_id: str) -> tuple[str, ...]:
         """Return promoted tasks whose task dependencies have compact results."""
+        if self.change_stage() != DeliveryChangeStage.BUILDING:
+            return ()
         binding = self.show_binding(outcome_id)
         if binding.stage != DeliveryStage.IMPLEMENTATION or binding.active_claim_id is not None:
             return ()
@@ -2394,6 +2607,9 @@ class DeliveryRuntime:
         resolution = frontier.change_disposition_resolution
         if resolution is not None and resolution.change_id != self._contract.change_id:
             _reference("Delivery Change attention resolution does not match its admitted Change")
+        for receipt in (frontier.change_deferral, frontier.change_abandonment):
+            if receipt is not None and receipt.change_id != self._contract.change_id:
+                _reference("Delivery Change lifecycle receipt does not match its admitted Change")
 
 
 def _find_binding(frontier: DeliveryFrontier, outcome_id: str) -> OutcomeAuthorityBinding:
@@ -2411,6 +2627,10 @@ def _require_change_mutable(frontier: DeliveryFrontier, operation: str) -> None:
         _conflict("completed Integration cannot be mutated")
     if frontier.change_completion is not None:
         _conflict("completed Delivery Change is terminal")
+    if frontier.change_abandonment is not None:
+        _conflict("abandoned Delivery Change is terminal")
+    if frontier.change_deferral is not None:
+        _conflict("deferred Delivery Change requires resumption before mutation")
     if frontier.change_disposition is not None:
         _conflict("Delivery Change requires attention resolution before mutation")
 
@@ -2741,7 +2961,9 @@ __all__ = [
     "BlockDelivery",
     "DeliveryAcceptanceWaitingError",
     "DeliveryBlock",
+    "DeliveryChangeAbandonment",
     "DeliveryChangeCompletion",
+    "DeliveryChangeDeferral",
     "DeliveryChangeDisposition",
     "DeliveryChangeDispositionConflictError",
     "DeliveryChangeDispositionKind",

@@ -42,6 +42,8 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceWaitingError,
     DeliveryActiveClaim,
     DeliveryBlock,
+    DeliveryChangeAbandonment,
+    DeliveryChangeDeferral,
     DeliveryChangeDispositionResolution,
     DeliveryChangeStage,
     DeliveryCheckpointPublicationState,
@@ -729,6 +731,24 @@ class PortfolioApplication:
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             return runtime.resolve_change_disposition(expected_disposition_id, _timestamp(self._clock()))
 
+    def defer_change(self, change_id: str, reason: str) -> DeliveryChangeDeferral:
+        """Retain one nonterminal Change and pause its claimable frontier."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            return runtime.defer_change(reason, _timestamp(self._clock()))
+
+    def resume_change(self, change_id: str) -> DeliveryChangeDeferral:
+        """Resume one exact deferred Change from its retained prior state."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            return runtime.resume_change()
+
+    def abandon_change(self, change_id: str, reason: str) -> DeliveryChangeAbandonment:
+        """Record one terminal user abandonment without mutating the user checkout."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            return runtime.abandon_change(reason, _timestamp(self._clock()))
+
     def observe_acceptance(self, change_id: str) -> CompletionReceipt:
         """Complete one Change from a fresh exact merged-PR observation."""
         if self._draft_pull_request_publisher is None:
@@ -1069,7 +1089,7 @@ class PortfolioApplication:
         """List bounded work-item projections in stable portfolio order."""
         projections = []
         for snapshot in self._portfolio_snapshots():
-            if is_change_terminal(snapshot.frontier):
+            if not self._is_work_portfolio_visible(snapshot):
                 continue
             projections.extend(WorkItemProjector(snapshot).list_items())
         return tuple(
@@ -1088,7 +1108,7 @@ class PortfolioApplication:
         return tuple(
             WorkItemProjector(snapshot).group_view()
             for snapshot in self._portfolio_snapshots()
-            if not is_change_terminal(snapshot.frontier)
+            if self._is_work_portfolio_visible(snapshot)
         )
 
     def portfolio_read_view(self) -> PortfolioReadView:
@@ -1097,7 +1117,7 @@ class PortfolioApplication:
         groups = tuple(
             WorkItemProjector(snapshot).group_view()
             for snapshot in snapshots
-            if not is_change_terminal(snapshot.frontier)
+            if self._is_work_portfolio_visible(snapshot)
         )
         return PortfolioReadView(
             groups=groups,
@@ -1110,7 +1130,7 @@ class PortfolioApplication:
         groups = tuple(
             WorkItemProjector(snapshot).group_view()
             for snapshot in snapshots
-            if self._snapshot_change_stage(snapshot) != DeliveryChangeStage.COMPLETED
+            if self._is_work_portfolio_visible(snapshot)
         )
         return self._portfolio_operating_view(snapshots, groups)
 
@@ -1152,6 +1172,10 @@ class PortfolioApplication:
         )
         unfinished_runtime_count = sum(not is_change_terminal(snapshot.frontier) for snapshot in snapshots)
         unfinished_change_count = unfinished_runtime_count
+        completed_change_count = sum(
+            snapshot.frontier.change_completion is not None or snapshot.frontier.integration_result_id is not None
+            for snapshot in snapshots
+        )
         design_change_ids = tuple(dict.fromkeys((*draft_design_ids, *design_required_ids)))
         guidance = derive_portfolio_guidance(
             PortfolioGuidanceFacts(
@@ -1165,7 +1189,7 @@ class PortfolioApplication:
         )
         return PortfolioOperatingView(
             unfinished_change_count=unfinished_change_count,
-            completed_change_count=len(self._runtimes) - unfinished_runtime_count,
+            completed_change_count=completed_change_count,
             draft_design_change_ids=draft_design_ids,
             design_required_change_ids=design_required_ids,
             claimed=claimed,
@@ -1432,6 +1456,10 @@ class PortfolioApplication:
     @staticmethod
     def _snapshot_change_stage(snapshot: DeliveryPortfolioSnapshot) -> DeliveryChangeStage:
         return derive_change_stage(snapshot.frontier)
+
+    @staticmethod
+    def _is_work_portfolio_visible(snapshot: DeliveryPortfolioSnapshot) -> bool:
+        return snapshot.frontier.change_abandonment is not None or not is_change_terminal(snapshot.frontier)
 
     @staticmethod
     def _snapshot_has_active_claims(snapshot: DeliveryPortfolioSnapshot) -> bool:

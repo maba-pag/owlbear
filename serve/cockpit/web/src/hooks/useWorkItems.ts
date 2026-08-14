@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   answerWorkItemRequest,
+  abandonWorkItemChange,
   clearWorkItemBlock,
+  deferWorkItemChange,
   listCompletedChanges,
   markWorkItemPublicationReady,
   moveWorkItemBackward,
@@ -10,6 +12,7 @@ import {
   reconcileWorkItemPublication,
   recoverWorkItemClaim,
   resolveWorkItemAttention,
+  resumeWorkItemChange,
   searchCompletedChanges,
   showDesignWork,
   showCompletedChange,
@@ -324,6 +327,21 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
       'attention-resolve',
       () => resolveWorkItemAttention(identity.changeId, expectedDispositionId),
       'Change attention resolved.',
+    ),
+    deferChange: (reason: string) => mutate(
+      'change-defer',
+      () => deferWorkItemChange(identity.changeId, reason),
+      'Change deferred.',
+    ),
+    resumeChange: () => mutate(
+      'change-resume',
+      () => resumeWorkItemChange(identity.changeId),
+      'Change resumed.',
+    ),
+    abandonChange: (reason: string) => mutate(
+      'change-abandon',
+      () => abandonWorkItemChange(identity.changeId, reason),
+      'Change abandoned.',
     ),
     retry: polling.refetch,
   }

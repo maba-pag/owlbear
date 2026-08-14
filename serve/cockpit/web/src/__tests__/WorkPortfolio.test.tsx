@@ -260,6 +260,9 @@ function installFetch() {
       || url.endsWith('/publication/ready')
       || url.endsWith('/acceptance/observe')
       || url.endsWith('/attention/resolve')
+      || url.endsWith('/defer')
+      || url.endsWith('/resume')
+      || url.endsWith('/abandon')
     )) {
       if (portfolioAfterPublication) currentPortfolio = portfolioAfterPublication
       return response({})
@@ -859,6 +862,125 @@ it('shows Change attention diagnostics and resolves the selected disposition', a
     body: { expected_disposition_id: attentionId },
   }))
   expect(await screen.findByText('Change attention resolved.')).toBeInTheDocument()
+})
+
+it('posts reasoned Change dispositions and resumes a deferred Change', async () => {
+  const activeCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'none',
+    needs_headline: null,
+    next_actor: 'agent',
+    next_step: 'Finalize the reviewed Change',
+    activity: { state: 'ready', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Ready for finalization', done: null, total: null },
+    action: { kind: 'finalize', label: 'Finalize Change', command: '/finalize-change change-alpha' },
+  })
+  currentDetail = detail({
+    card: activeCard,
+    promise: 'Publish the reviewed Change.',
+    acceptance: [],
+    commitments: [],
+    tasks: [],
+    publication: {
+      phase: 'ready-for-finalization',
+      finalization_id: null,
+      finalized_head: null,
+      published_head: null,
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: null,
+      pull_request_number: null,
+      pull_request_head: null,
+      accepted_merge_commit: null,
+      merged_at: null,
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'finalization', outcome_completed: 2, items: [activeCard] })])
+  const initialRender = renderPage('/delivery/change-alpha/publication')
+  const inspector = await screen.findByTestId('work-item-detail')
+  const reason = await waitFor(() => {
+    const element = namedPdsHost(inspector, 'p-input-text', 'change-disposition-reason')
+    expect(element).not.toBeNull()
+    return element!
+  })
+  inputValue(reason, 'Wait for user review')
+  fireEvent.change(reason, new CustomEvent('change', { detail: { value: 'Wait for user review' }, bubbles: true }))
+  const defer = within(inspector).getByText('Defer Change') as HTMLElement & { disabled: boolean }
+  await waitFor(() => expect(defer.disabled).toBe(false))
+  fireEvent.click(defer)
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/defer',
+    method: 'POST',
+    body: { reason: 'Wait for user review' },
+  }))
+
+  inputValue(reason, 'User stopped the Change')
+  fireEvent.change(reason, new CustomEvent('change', { detail: { value: 'User stopped the Change' }, bubbles: true }))
+  fireEvent.click(within(inspector).getByText('Abandon Change'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/abandon',
+    method: 'POST',
+    body: { reason: 'User stopped the Change' },
+  }))
+
+  initialRender.unmount()
+  const deferredCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'you',
+    needs_headline: 'Change is deferred',
+    next_actor: 'you',
+    next_step: 'Resume the deferred Change',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Change deferred', done: null, total: null },
+    action: { kind: 'resume-change', label: 'Resume Change', command: null },
+  })
+  currentDetail = detail({
+    card: deferredCard,
+    publication: {
+      phase: 'deferred',
+      finalization_id: null,
+      finalized_head: null,
+      published_head: null,
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: null,
+      pull_request_number: null,
+      pull_request_head: null,
+      accepted_merge_commit: null,
+      merged_at: null,
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'deferred', items: [deferredCard] })])
+  renderPage('/delivery/change-alpha/publication')
+  const deferredInspector = await screen.findByTestId('work-item-detail')
+  fireEvent.click(within(deferredInspector).getByText('Resume Change'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/resume',
+    method: 'POST',
+    body: null,
+  }))
+})
+
+it('does not show Change disposition controls on an Outcome detail', async () => {
+  currentDetail = detail()
+  currentPortfolio = portfolio()
+  renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(within(inspector).queryByText('Defer Change')).not.toBeInTheDocument()
+  expect(within(inspector).queryByText('Abandon Change')).not.toBeInTheDocument()
 })
 
 it('uses the Done status tag without leaking the internal Stage field', async () => {
