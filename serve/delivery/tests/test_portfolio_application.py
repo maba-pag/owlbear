@@ -96,11 +96,15 @@ from owlbear_delivery import (
     PortfolioApplicationHooks,
     PortfolioCoordinator,
     PublicationLease,
+    PublicationCheck,
+    PublicationCheckKind,
     PublicationCheckSnapshot,
     PublishDeliveryPlan,
     PublishDeliveryResult,
+    ReadChangePublicationCheckObservations,
     DeliveryRetainedWorktreeCleanupBlockReason,
     RetryDelivery,
+    RequiredPublicationChecksFailedError,
     load_delivery_application,
 )
 from owlbear_delivery.publication_provider import (
@@ -1054,7 +1058,13 @@ def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Pat
     assert provider.set_pull_request_draft_state.call_count == 3
 
 
-def _awaiting_acceptance_fixture(tmp_path: Path):
+def _awaiting_acceptance_fixture(
+    tmp_path: Path,
+    *,
+    checks: tuple[PublicationCheck, ...] | Callable[[str], tuple[PublicationCheck, ...]] = (),
+    mark_ready: bool = True,
+    record_publication_identity: bool = True,
+):
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
@@ -1093,11 +1103,12 @@ def _awaiting_acceptance_fixture(tmp_path: Path):
     provider.find_pull_request.return_value = None
     provider.create_draft_pull_request.side_effect = lambda _request: state["pull_request"]
     provider.read_pull_request.side_effect = lambda _repository, _number: state["pull_request"]
+    observed_checks = checks(exact_head) if callable(checks) else checks
     provider.observe_checks.return_value = PublicationCheckSnapshot(
         repository="example/project",
         number=7,
         head_sha=exact_head,
-        checks=(),
+        checks=observed_checks,
     )
 
     def set_draft_state(request):
@@ -1125,9 +1136,197 @@ def _awaiting_acceptance_fixture(tmp_path: Path):
     assert checkpoint.pending_checkpoint is not None
     runtime.record_checkpoint_branch_publication(checkpoint, exact_head)
     runtime.acknowledge_checkpoint_publication(checkpoint.pending_checkpoint, exact_head)
+    if record_publication_identity:
+        runtime.record_publication_identity(
+            DeliveryChangePublicationIdentity(
+                change_id="change-a",
+                repository="example/project",
+                number=7,
+                node_id="PR_node_7",
+                head_sha=exact_head,
+            )
+        )
+    if not mark_ready:
+        return application, runtime, provider, state, exact_head, _state_root
     ready = application.mark_current_change_ready("change-a")
     assert ready.head_sha == exact_head
     return application, runtime, provider, state, exact_head, _state_root
+
+
+@pytest.mark.parametrize(
+    ("kind", "status", "conclusion"),
+    [
+        (PublicationCheckKind.CHECK_RUN, "completed", "failure"),
+        (PublicationCheckKind.STATUS_CONTEXT, "error", "error"),
+        (PublicationCheckKind.CHECK_RUN, "completed", None),
+        (PublicationCheckKind.CHECK_RUN, "completed", "provider-added-failure"),
+    ],
+)
+def test_mark_change_ready_captures_required_check_failure(
+    tmp_path: Path,
+    kind: PublicationCheckKind,
+    status: str,
+    conclusion: str | None,
+) -> None:
+    application, runtime, provider, _state, exact_head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path,
+        checks=lambda head: (
+            PublicationCheck(
+                check_id="check-failure",
+                kind=kind,
+                name="unit tests",
+                head_sha=head,
+                status=status,
+                conclusion=conclusion,
+                required=True,
+            ),
+        ),
+        mark_ready=False,
+    )
+
+    with pytest.raises(RequiredPublicationChecksFailedError) as exc_info:
+        application.mark_current_change_ready("change-a")
+
+    disposition = runtime.change_disposition()
+    assert disposition is not None
+    assert disposition.diagnostics[:4] == (
+        "required-publication-check-failure",
+        f"exact-head:{exact_head}",
+        f"check-observation:{exc_info.value.observation_id}",
+        "failing-required-checks:1",
+    )
+    assert runtime.change_disposition_publication() == runtime.publication_history().current
+    assert runtime.ready_receipt() is None
+    assert provider.set_pull_request_draft_state.call_count == 0
+    observations = application._draft_pull_request_publisher.read_check_observations(  # noqa: SLF001
+        ReadChangePublicationCheckObservations(
+            change_id="change-a",
+            repository="example/project",
+            number=7,
+            exact_commit=exact_head,
+        )
+    )
+    assert tuple(observation.observation_id for observation in observations) == (exc_info.value.observation_id,)
+
+
+@pytest.mark.parametrize(
+    ("kind", "status", "conclusion", "required"),
+    [
+        (PublicationCheckKind.CHECK_RUN, "queued", None, True),
+        (PublicationCheckKind.CHECK_RUN, "completed", "neutral", True),
+        (PublicationCheckKind.CHECK_RUN, "completed", "skipped", True),
+        (PublicationCheckKind.CHECK_RUN, "completed", "failure", False),
+    ],
+)
+def test_mark_change_ready_does_not_gate_on_pending_or_nonblocking_checks(
+    tmp_path: Path,
+    kind: PublicationCheckKind,
+    status: str,
+    conclusion: str | None,
+    required: bool,  # noqa: FBT001
+) -> None:
+    application, runtime, provider, _state, exact_head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path,
+        checks=lambda head: (
+            PublicationCheck(
+                check_id="check-nonblocking",
+                kind=kind,
+                name="optional check",
+                head_sha=head,
+                status=status,
+                conclusion=conclusion,
+                required=required,
+            ),
+        ),
+        mark_ready=False,
+    )
+
+    ready = application.mark_current_change_ready("change-a")
+
+    assert ready.head_sha == exact_head
+    assert runtime.change_disposition() is None
+    assert runtime.change_stage() == DeliveryChangeStage.AWAITING_MERGE
+    assert provider.set_pull_request_draft_state.call_count == 1
+
+
+def test_required_check_attention_requires_reconciled_publication_identity(tmp_path: Path) -> None:
+    application, runtime, provider, _state, _exact_head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path,
+        checks=lambda head: (
+            PublicationCheck(
+                check_id="check-failure",
+                kind=PublicationCheckKind.CHECK_RUN,
+                name="unit tests",
+                head_sha=head,
+                status="completed",
+                conclusion="failure",
+                required=True,
+            ),
+        ),
+        mark_ready=False,
+        record_publication_identity=False,
+    )
+
+    with pytest.raises(PortfolioApplicationError, match="publication identity is unavailable"):
+        application.mark_current_change_ready("change-a")
+
+    assert runtime.change_disposition() is None
+    assert provider.set_pull_request_draft_state.call_count == 0
+
+
+def test_required_check_attention_retries_with_stable_diagnostics_after_resolution(tmp_path: Path) -> None:
+    application, runtime, _provider, _state, _exact_head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path,
+        checks=lambda head: (
+            PublicationCheck(
+                check_id="check-failure",
+                kind=PublicationCheckKind.CHECK_RUN,
+                name="unit\ntests",
+                head_sha=head,
+                status="completed",
+                conclusion="failure",
+                required=True,
+            ),
+        ),
+        mark_ready=False,
+    )
+
+    with pytest.raises(RequiredPublicationChecksFailedError):
+        application.mark_current_change_ready("change-a")
+    first = runtime.change_disposition()
+    assert first is not None
+
+    application.resolve_change_disposition("change-a", first.disposition_id)
+
+    with pytest.raises(RequiredPublicationChecksFailedError):
+        application.mark_current_change_ready("change-a")
+    second = runtime.change_disposition()
+    assert second is not None
+    assert second.diagnostics == first.diagnostics
+
+
+def test_observe_change_publication_checks_remains_read_only_for_required_failure(tmp_path: Path) -> None:
+    application, runtime, provider, _state, _exact_head, _state_root = _awaiting_acceptance_fixture(
+        tmp_path,
+        checks=lambda head: (
+            PublicationCheck(
+                check_id="check-failure",
+                kind=PublicationCheckKind.CHECK_RUN,
+                name="unit tests",
+                head_sha=head,
+                status="completed",
+                conclusion="failure",
+                required=True,
+            ),
+        ),
+        mark_ready=False,
+    )
+
+    observation = application.observe_change_publication_checks("change-a")
+
+    assert observation.snapshot.checks[0].conclusion == "failure"
+    assert runtime.change_disposition() is None
+    assert provider.set_pull_request_draft_state.call_count == 0
 
 
 def test_reconcile_awaiting_acceptance_isolated_provider_matrix(tmp_path: Path) -> None:

@@ -114,7 +114,12 @@ from owlbear_delivery.portfolio_operating import (
     PortfolioWorkScope,
     derive_portfolio_guidance,
 )
-from owlbear_delivery.publication_provider import PublicationProviderError, PublicationPullRequest
+from owlbear_delivery.publication_provider import (
+    PublicationCheck,
+    PublicationCheckSnapshot,
+    PublicationProviderError,
+    PublicationPullRequest,
+)
 from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
@@ -167,6 +172,58 @@ def _timestamp(value: str) -> datetime:
 
 _MAX_PULL_REQUEST_TITLE_LENGTH = 256
 _MAX_ACCEPTANCE_RECONCILIATION_CHANGES = 8
+_SUCCESSFUL_PUBLICATION_CONCLUSIONS = frozenset({"success", "neutral", "skipped"})
+_MAX_REQUIRED_CHECK_DIAGNOSTICS = 8
+_MAX_CHECK_DIAGNOSTIC_VALUE_LENGTH = 160
+
+
+def _failed_required_publication_checks(snapshot: PublicationCheckSnapshot) -> tuple[PublicationCheck, ...]:
+    """Return provider-marked required checks with terminal non-success evidence."""
+    return tuple(
+        check
+        for check in snapshot.checks
+        if check.required
+        and (
+            check.status.casefold() == "completed"
+            if check.conclusion is None
+            else check.conclusion.casefold() not in _SUCCESSFUL_PUBLICATION_CONCLUSIONS
+        )
+    )
+
+
+def _check_diagnostic_value(value: str | None) -> str:
+    """Bound provider-controlled values embedded in durable attention diagnostics."""
+    if value is None:
+        return "<missing>"
+    printable = "".join(character if character.isprintable() else " " for character in value)
+    compact = " ".join(printable.split())
+    return (compact or "<empty>")[:_MAX_CHECK_DIAGNOSTIC_VALUE_LENGTH]
+
+
+def _required_check_diagnostics(
+    snapshot: PublicationCheckSnapshot,
+    observation_id: str,
+    failures: tuple[PublicationCheck, ...],
+) -> tuple[str, ...]:
+    """Build deterministic bounded attention diagnostics for one check observation."""
+    ordered = tuple(sorted(failures, key=lambda check: (check.name.casefold(), check.check_id)))
+    diagnostics = [
+        "required-publication-check-failure",
+        f"exact-head:{snapshot.head_sha}",
+        f"check-observation:{observation_id}",
+        f"failing-required-checks:{len(ordered)}",
+    ]
+    diagnostics.extend(
+        "required-check:"
+        f"{_check_diagnostic_value(check.check_id)}:"
+        f"name={_check_diagnostic_value(check.name)}:"
+        f"status={_check_diagnostic_value(check.status)}:"
+        f"conclusion={_check_diagnostic_value(check.conclusion)}"
+        for check in ordered[:_MAX_REQUIRED_CHECK_DIAGNOSTICS]
+    )
+    if len(ordered) > _MAX_REQUIRED_CHECK_DIAGNOSTICS:
+        diagnostics.append(f"required-checks-truncated:{len(ordered) - _MAX_REQUIRED_CHECK_DIAGNOSTICS}")
+    return tuple(diagnostics)
 
 
 def _operating_scope(scope: WorkItemScope) -> PortfolioWorkScope:
@@ -521,6 +578,21 @@ class PortfolioApplicationError(RuntimeError):
     """Portfolio preparation or scoped context validation failed closed."""
 
     code = "ERR_DELIVERY_PORTFOLIO"
+
+
+class RequiredPublicationChecksFailedError(PortfolioApplicationError):
+    """A ready transition retained attention for failing provider-required checks."""
+
+    code = "ERR_DELIVERY_REQUIRED_CHECKS_FAILED"
+
+    def __init__(self, *, exact_head: str, observation_id: str, disposition_id: str) -> None:
+        self.exact_head = exact_head
+        self.observation_id = observation_id
+        self.disposition_id = disposition_id
+        super().__init__(
+            f"required publication checks failed for exact head {exact_head}; "
+            f"attention {disposition_id} retained from observation {observation_id}"
+        )
 
 
 class PortfolioReadView(_ApplicationModel):
@@ -1321,14 +1393,41 @@ class PortfolioApplication:
             if publication.published_head != finalization.exact_head or publication.pending_checkpoint is not None:
                 message = "pull-request readiness requires the reconciled final checkpoint"
                 raise PortfolioApplicationError(message)
-            self._draft_pull_request_publisher.observe_checks(
-                ObserveChangePublicationChecks(
-                    change_id=change_id,
-                    published_head=finalization.exact_head,
-                )
-            )
+            self._observe_required_checks_before_ready(change_id, runtime, finalization.exact_head)
             receipt = self._draft_pull_request_publisher.mark_ready(request)
             return runtime.mark_awaiting_merge(receipt)
+
+    def _observe_required_checks_before_ready(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        exact_head: str,
+    ) -> PublicationCheckObservationReceipt:
+        """Retain failing provider-required checks before changing pull-request state."""
+        publisher = self._draft_pull_request_publisher
+        if publisher is None:
+            message = "draft pull-request publication is not configured"
+            raise PortfolioApplicationError(message)
+        observation = publisher.observe_checks(
+            ObserveChangePublicationChecks(change_id=change_id, published_head=exact_head)
+        )
+        failures = _failed_required_publication_checks(observation.snapshot)
+        if not failures:
+            return observation
+        history = runtime.publication_history()
+        if history is None or history.current.head_sha != exact_head:
+            message = "required publication checks failed but current publication identity is unavailable"
+            raise PortfolioApplicationError(message)
+        disposition = runtime.capture_publication_attention(
+            observation.observed_at,
+            _required_check_diagnostics(observation.snapshot, observation.observation_id, failures),
+            publication_identity=history.current,
+        )
+        raise RequiredPublicationChecksFailedError(
+            exact_head=exact_head,
+            observation_id=observation.observation_id,
+            disposition_id=disposition.disposition_id,
+        )
 
     def mark_current_change_ready(self, change_id: str) -> PullRequestReadyReceipt:
         """Mark the current exact finalization ready without caller-supplied authority."""

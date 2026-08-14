@@ -85,6 +85,16 @@ route. Abort if the attention, heads, target, worktree state, or relevant eviden
 
 Use only an existing operation whose contract owns the selected result:
 
+- Required publication-check failure: when the Change publication diagnostics begin with
+  `required-publication-check-failure`, treat the condition as provider-owned check evidence, not a
+  supersession request. Re-observe the exact published head with
+  `observe_change_publication_checks(change_id)`. If a provider-marked required check still has a
+  terminal non-success conclusion, retain the exact attention and stop without resolution; Delivery
+  never selects, dispatches, reruns, or classifies workflows. When the re-observation no longer
+  reports a required failure, call `resolve_change_disposition(change_id, expected_disposition_id)`
+  and re-read finalization and checkpoint authority before retrying `mark_change_ready(change_id)`.
+  If the exact head changed, reconcile finalization first and hand the Change back to its owning
+  finalization/review workflow; do not supersede the publication solely because a check failed.
 - Change attention: use the exact disposition identity and call
   `resolve_change_disposition(change_id, expected_disposition_id)`. This clears the current Change
   attention and retained provider identity; it does not restore ready authority. For a closed,

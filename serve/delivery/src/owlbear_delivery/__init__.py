@@ -190,6 +190,7 @@ from owlbear_delivery.portfolio_application import (
     PortfolioApplicationError,
     PortfolioApplicationHooks,
     PortfolioReadView,
+    RequiredPublicationChecksFailedError,
 )
 from owlbear_delivery.portfolio_operating import (
     PortfolioGuidance,
@@ -520,6 +521,7 @@ __all__ = [
     "ReadChangePublicationHistory",
     "ReceiptCompletedChangeRecord",
     "RecoverInterruptedTaskRequest",
+    "RequiredPublicationChecksFailedError",
     "RespondToReviewRequest",
     "RetainedChangeWorktree",
     "RetryDelivery",
