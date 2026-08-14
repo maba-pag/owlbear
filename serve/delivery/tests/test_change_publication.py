@@ -309,6 +309,44 @@ def test_rejects_noop_supersession(tmp_path: Path) -> None:
     )
 
 
+def test_rejects_foreign_predecessor_branch(tmp_path: Path) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, superseding = _reviewed_change(manager, "current-change")
+    _git(repository, "push", "origin", f"{initial}:refs/heads/owlbear/change/other-change")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+
+    with pytest.raises(PublicationProviderError) as error:
+        publisher.supersede(
+            SupersedeChangeBranch(
+                change_id="current-change",
+                expected_published_branch="owlbear/change/other-change",
+                expected_published_head=initial,
+                superseding_head=superseding,
+                operation_id="supersede-foreign",
+            )
+        )
+
+    assert error.value.code == PublicationProviderFailureCode.CONFLICT
+    assert (
+        _git(
+            remote,
+            "show-ref",
+            "--verify",
+            "--quiet",
+            "refs/heads/owlbear/change/current-change+s1",
+            check=False,
+        ).returncode
+        == 1
+    )
+
+
 def test_adopts_exact_reviewed_remote_head_when_durable_head_is_missing(tmp_path: Path) -> None:
     repository, remote, _initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)

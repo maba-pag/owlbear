@@ -423,6 +423,8 @@ class ChangeBranchPublisher:
         owner_id: str,
         branch_request: PublishChangeBranch,
     ) -> _SupersessionOperation:
+        if not self._is_change_publication_branch(request.change_id, request.expected_published_branch):
+            self._conflict(branch_request, "supersession predecessor branch does not belong to the Change")
         if (
             coordination.branch != f"owlbear/change/{request.change_id}"
             or coordination.writer is not None
@@ -511,21 +513,21 @@ class ChangeBranchPublisher:
     @staticmethod
     def _successor_indexes(output: str, base: str) -> set[int]:
         indexes: set[int] = set()
-        pattern = re.compile(rf"^{re.escape(base)}\+s([1-9][0-9]*)$")
+        pattern = re.compile(rf"{re.escape(base)}\+s([1-9][0-9]*)$")
         for line in output.splitlines():
             fields = line.split("\t")
-            reference = fields[-1]
-            if reference.startswith("refs/heads/"):
-                reference = reference.removeprefix("refs/heads/")
-            elif reference.startswith("refs/remotes/"):
-                reference = reference.removeprefix("refs/remotes/").partition("/")[2]
-            else:
+            if len(fields) < 1:
                 continue
-            match = pattern.search(reference)
+            match = pattern.search(fields[-1])
             if match is None:
                 continue
             indexes.add(int(match.group(1)))
         return indexes
+
+    @staticmethod
+    def _is_change_publication_branch(change_id: str, branch: str) -> bool:
+        canonical = re.escape(f"owlbear/change/{change_id}")
+        return re.fullmatch(rf"{canonical}(?:\+s[1-9][0-9]*)?", branch) is not None
 
     def _validate_prepared_operation(
         self,
@@ -944,6 +946,7 @@ class ChangeBranchPublisher:
             or operation.predecessor_branch != request.expected_published_branch
             or operation.predecessor_head != request.expected_published_head
             or operation.superseding_head != request.superseding_head
+            or not self._is_change_publication_branch(request.change_id, request.expected_published_branch)
         ):
             branch_request = PublishChangeBranch(
                 change_id=request.change_id,
