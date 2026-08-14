@@ -21,7 +21,7 @@ Parse the supplied value as exactly one lowercase-hyphenated `change_id` followe
 extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
-`OwlBear Delivery list_work_items show_work_item show_integration_attention resolve_change_disposition observe_change_publication_checks observe_acceptance show_completed_change`.
+`OwlBear Delivery list_work_items show_work_item show_integration_attention resolve_change_disposition reconcile_change_checkpoint mark_change_ready observe_change_publication_checks observe_acceptance show_completed_change`.
 For a Change attention, call `list_work_items` and require the Change publication card's
 `action.attention_id` to equal the supplied disposition identity; use `show_work_item` for the
 publication detail when needed. For an Integration attention, call
