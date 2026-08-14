@@ -240,6 +240,7 @@ class ChangeWorktreeAttentionError(RuntimeError):
     """A retained Change worktree requires explicit reconciliation."""
 
     code = "ERR_TARGET_WORKTREE_ATTENTION"
+    retry_safe = False
 
     def __init__(self, change_id: str, attention: tuple[ChangeWorktreeAttentionCode, ...]) -> None:
         self.change_id = change_id

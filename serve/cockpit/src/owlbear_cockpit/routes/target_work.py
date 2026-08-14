@@ -29,7 +29,7 @@ from owlbear_cockpit.target_models import (
     WorkItemPortfolioResponse,
     WorkItemPortfolioTotals,
 )
-from owlbear_delivery.change_workspace import CoordinationConflictError
+from owlbear_delivery.change_workspace import ChangeWorktreeAttentionError, CoordinationConflictError
 from owlbear_delivery.completed_history import CompletedHistoryError, CompletedHistoryMissingError
 from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
@@ -221,7 +221,7 @@ class TargetCockpitService:
                 exc.diagnostic.detail,
                 retry_safe=False,
             )
-        except (DeliveryRuntimeConflictError, CoordinationConflictError) as exc:
+        except (ChangeWorktreeAttentionError, DeliveryRuntimeConflictError, CoordinationConflictError) as exc:
             _http_error(
                 409,
                 getattr(exc, "code", "ERR_DELIVERY_CONFLICT"),

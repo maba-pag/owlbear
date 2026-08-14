@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from owlbear_cockpit.routes.target_work import assemble_target_app
 from owlbear_cockpit.target_context import load_target_context
+from owlbear_delivery.change_workspace import ChangeWorktreeAttentionCode, ChangeWorktreeAttentionError
 from owlbear_delivery_github import GitHubCliPublicationProvider
 from owlbear_delivery.delivery_application_loader import DeliveryApplicationLoadError
 from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
@@ -270,6 +271,9 @@ class _DeliveryApplicationFake:
 
     def cleanup_abandoned_change_worktree(self, *args: object) -> SimpleNamespace:
         self.calls.append(("cleanup-abandoned", args))
+        failure = self.failures.get("cleanup_abandoned")
+        if failure is not None:
+            raise failure
         return self._cleanup_receipt()
 
     def cleanup_completed_change_worktree(self, *args: object) -> SimpleNamespace:
@@ -607,6 +611,25 @@ def test_completed_cleanup_requires_exact_completion_identity() -> None:
         "retry_safe": False,
     }
     assert application.calls == []
+
+
+def test_worktree_attention_cleanup_route_returns_typed_delivery_error() -> None:
+    attention = ChangeWorktreeAttentionError(
+        "change-a",
+        (ChangeWorktreeAttentionCode.WORKTREE_DIRTY,),
+    )
+    client, application = _client({"cleanup_abandoned": attention})
+
+    response = client.post("/api/changes/change-a/worktree/cleanup/abandoned")
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "code": "ERR_TARGET_WORKTREE_ATTENTION",
+        "detail": "Change worktree requires attention: worktree-dirty",
+        "authority": "delivery",
+        "retry_safe": False,
+    }
+    assert application.calls == [("cleanup-abandoned", ("change-a",))]
 
 
 def test_target_routes_are_mounted_on_live_app() -> None:
