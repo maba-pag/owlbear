@@ -49,6 +49,8 @@ interface WorkItemDetailProps {
   onDeferChange: (reason: string) => Promise<void>
   onResumeChange: () => Promise<void>
   onAbandonChange: (reason: string) => Promise<void>
+  onCleanupAbandonedChange: () => Promise<void>
+  onCleanupCompletedChange: (completionId: string) => Promise<void>
 }
 
 const WORKER_ROLE_LABELS: Record<DeliveryWorkerRole, string> = {
@@ -434,6 +436,56 @@ function IdentityRow({ label, value }: { label: string; value: string | number |
   return <><dt className="text-contrast-medium">{label}</dt><dd className="min-w-0 break-all font-mono text-xs">{value}</dd></>
 }
 
+function WorktreeCleanupSection(props: WorkItemDetailProps) {
+  const publication = props.detail.item.publication
+  const cleanup = publication?.worktree_cleanup
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  if (!publication || !cleanup) return null
+  const terminal = publication.phase === 'abandoned' || publication.phase === 'acceptance-observed'
+  if (!terminal) return null
+  if (!cleanup.eligible) {
+    return cleanup.blocked_reason ? (
+      <p className="mt-static-md border-l-4 border-warning bg-surface p-static-sm text-sm" role="status">
+        Worktree cleanup unavailable: {cleanup.blocked_reason.replace(/-/g, ' ')}.
+      </p>
+    ) : null
+  }
+  const completed = publication.phase === 'acceptance-observed'
+  const action = completed
+    ? cleanup.completion_id ? () => props.onCleanupCompletedChange(cleanup.completion_id as string) : null
+    : props.onCleanupAbandonedChange
+  if (!action) return null
+  const actionName = completed ? 'Clean completed worktree' : 'Clean abandoned worktree'
+  const pendingAction = completed ? 'change-cleanup-completed' : 'change-cleanup-abandoned'
+  const run = async () => {
+    await action()
+    setConfirmOpen(false)
+  }
+  return (
+    <section className="mt-static-md border-l-4 border-warning bg-surface p-static-md" aria-labelledby="worktree-cleanup-heading">
+      <PHeading id="worktree-cleanup-heading" tag="h4" size="sm">Retained worktree</PHeading>
+      <p className="mt-static-xs text-sm">The terminal Change worktree is clean and ready for removal. Its branch is preserved.</p>
+      <PButton className="mt-static-md" type="button" compact variant="secondary" disabled={props.pendingAction !== null} onClick={() => setConfirmOpen(true)}>
+        {props.pendingAction === pendingAction ? 'Cleaning...' : actionName}
+      </PButton>
+      {confirmOpen ? (
+        <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': `Confirm ${actionName.toLowerCase()}` }}>
+          <div className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary">
+            <PHeading tag="h2" size="lg">{actionName}</PHeading>
+            <p className="text-sm">The worktree directory will be removed. The Change branch and cleanup receipt will remain.</p>
+            <div className="flex flex-wrap justify-end gap-static-xs">
+              <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton>
+              <PButton type="button" disabled={props.pendingAction !== null} onClick={() => void run()}>
+                {props.pendingAction === pendingAction ? 'Cleaning...' : `Confirm ${actionName.toLowerCase()}`}
+              </PButton>
+            </div>
+          </div>
+        </PModal>
+      ) : null}
+    </section>
+  )
+}
+
 function PublicationSection(props: WorkItemDetailProps) {
   const publication = props.detail.item.publication
   if (!publication) return null
@@ -486,6 +538,7 @@ function PublicationSection(props: WorkItemDetailProps) {
       {publication.pending_checkpoint_triggers.length > 0 ? <p className="mt-static-sm text-xs text-contrast-medium">Checkpoint triggers: {publication.pending_checkpoint_triggers.join(', ')}</p> : null}
       {action.command ? <CopyCommand command={action.command} className="mt-static-md" /> : null}
       {!action.command && control && action.label ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null} onClick={() => void control()}>{pending ? 'Working...' : action.label}</PButton> : null}
+      <WorktreeCleanupSection {...props} />
     </section>
   )
 }

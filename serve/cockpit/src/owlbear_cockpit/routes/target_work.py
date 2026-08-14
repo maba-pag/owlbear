@@ -18,6 +18,8 @@ from owlbear_cockpit.target_models import (
     BackwardMoveBody,
     BackwardMovePreviewBody,
     ChangeDispositionReasonBody,
+    ChangeWorktreeCleanupResponse,
+    CleanupCompletedChangeBody,
     ClearBlockBody,
     ConfirmLostClaimBody,
     DesignWorkDetailResponse,
@@ -179,6 +181,22 @@ class TargetCockpitService:
     def abandon_change(self, change_id: str, body: AbandonChangeBody) -> object:
         """Terminate one uncompleted Change by explicit user disposition."""
         return self._invoke(lambda: self._application.abandon_change(change_id, body.reason))
+
+    def cleanup_abandoned_change_worktree(self, change_id: str) -> ChangeWorktreeCleanupResponse:
+        """Clean one abandoned Change worktree without reopening its terminal state."""
+        receipt = self._invoke(lambda: self._application.cleanup_abandoned_change_worktree(change_id))
+        return ChangeWorktreeCleanupResponse.from_receipt(receipt)
+
+    def cleanup_completed_change_worktree(
+        self,
+        change_id: str,
+        body: CleanupCompletedChangeBody,
+    ) -> ChangeWorktreeCleanupResponse:
+        """Clean one completed Change worktree after exact receipt validation."""
+        receipt = self._invoke(
+            lambda: self._application.cleanup_completed_change_worktree(change_id, body.completion_id)
+        )
+        return ChangeWorktreeCleanupResponse.from_receipt(receipt)
 
     def list_completed(self, cursor: str | None, limit: int) -> object:
         """List one bounded page of completed change history."""
@@ -380,6 +398,27 @@ def _register_publication_controls(router: APIRouter) -> None:
         service: _TargetService,
     ) -> object:
         return service.abandon_change(change_id, body)
+
+    @router.post(
+        "/changes/{change_id}/worktree/cleanup/abandoned",
+        response_model=ChangeWorktreeCleanupResponse,
+    )
+    def cleanup_abandoned_change_worktree(
+        change_id: str,
+        service: _TargetService,
+    ) -> ChangeWorktreeCleanupResponse:
+        return service.cleanup_abandoned_change_worktree(change_id)
+
+    @router.post(
+        "/changes/{change_id}/worktree/cleanup/completed",
+        response_model=ChangeWorktreeCleanupResponse,
+    )
+    def cleanup_completed_change_worktree(
+        change_id: str,
+        body: CleanupCompletedChangeBody,
+        service: _TargetService,
+    ) -> ChangeWorktreeCleanupResponse:
+        return service.cleanup_completed_change_worktree(change_id, body)
 
 
 def _portfolio_totals(groups: tuple[ChangeGroupView, ...]) -> WorkItemPortfolioTotals:

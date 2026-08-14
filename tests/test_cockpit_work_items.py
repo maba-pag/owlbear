@@ -258,6 +258,24 @@ class _DeliveryApplicationFake:
         self.calls.append(("abandon", args))
         return {"change_id": args[0], "state": "abandoned", "reason": args[1]}
 
+    @staticmethod
+    def _cleanup_receipt() -> SimpleNamespace:
+        return SimpleNamespace(
+            cleanup_id="c" * 64,
+            change_id="change-a",
+            branch="owlbear/change/change-a",
+            worktree_path=Path(".owlbear/delivery/worktrees/change-a"),
+            branch_head="d" * 40,
+        )
+
+    def cleanup_abandoned_change_worktree(self, *args: object) -> SimpleNamespace:
+        self.calls.append(("cleanup-abandoned", args))
+        return self._cleanup_receipt()
+
+    def cleanup_completed_change_worktree(self, *args: object) -> SimpleNamespace:
+        self.calls.append(("cleanup-completed", args))
+        return self._cleanup_receipt()
+
     def list_completed_changes(self, *args: object) -> dict[str, object]:
         self.calls.append(("completed-list", args))
         return {"records": [], "next_cursor": None}
@@ -483,12 +501,25 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
             "/api/changes/change-a/abandon",
             json={"confirmed_abandonment": True, "reason": "User stopped the Change"},
         ),
+        client.post("/api/changes/change-a/worktree/cleanup/abandoned"),
+        client.post(
+            "/api/changes/change-a/worktree/cleanup/completed",
+            json={"completion_id": "e" * 64},
+        ),
         client.get("/api/work-items/completed", params={"limit": 25}),
         client.get("/api/work-items/completed/search", params={"query": "delivery", "limit": 5}),
         client.get("/api/work-items/completed/change-a", params={"completion_id": "a" * 64}),
     )
 
-    assert [response.status_code for response in responses] == [200, 200, 200, 200, 200, 200, 200, 200, 200, 200]
+    assert [response.status_code for response in responses] == [200] * 12
+    assert responses[7].json() == {
+        "cleanup_id": "c" * 64,
+        "change_id": "change-a",
+        "branch": "owlbear/change/change-a",
+        "worktree_path": ".owlbear/delivery/worktrees/change-a",
+        "branch_head": "d" * 40,
+    }
+    assert responses[8].json() == responses[7].json()
     assert application.calls == [
         ("publication-reconcile", ("change-a",)),
         ("publication-ready", ("change-a",)),
@@ -497,6 +528,8 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
         ("defer", ("change-a", "Wait for user review")),
         ("resume", ("change-a",)),
         ("abandon", ("change-a", "User stopped the Change")),
+        ("cleanup-abandoned", ("change-a",)),
+        ("cleanup-completed", ("change-a", "e" * 64)),
         ("completed-list", (None, 25)),
         ("completed-search", ("delivery", None, 5)),
         ("completed-show", ("change-a", "a" * 64)),
@@ -546,6 +579,24 @@ def test_malformed_body_fails_before_application_mutation() -> None:
     response = client.post(
         "/api/changes/change-a/outcomes/OUT-001/move-backward",
         json={"move_id": "caller-owned", "target": "design", "reason": "Authority changed"},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "code": "ERR_DELIVERY_HTTP_VALIDATION",
+        "detail": "Delivery request input is malformed",
+        "authority": "delivery",
+        "retry_safe": False,
+    }
+    assert application.calls == []
+
+
+def test_completed_cleanup_requires_exact_completion_identity() -> None:
+    client, application = _client()
+
+    response = client.post(
+        "/api/changes/change-a/worktree/cleanup/completed",
+        json={"completion_id": "not-a-completion-id"},
     )
 
     assert response.status_code == 422

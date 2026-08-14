@@ -21,7 +21,7 @@ Parse the supplied value as exactly one lowercase-hyphenated `change_id` followe
 extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
-`OwlBear Delivery list_work_items list_retained_change_worktrees show_work_item show_integration_attention resolve_change_disposition defer_change resume_change abandon_change reconcile_change_checkpoint mark_change_ready recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
+`OwlBear Delivery list_work_items list_retained_change_worktrees show_work_item show_integration_attention resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_completed_change_worktree reconcile_change_checkpoint mark_change_ready recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
 For a Change attention, call `list_work_items` and require the Change publication card's
 `action.attention_id` to equal the supplied disposition identity; use `show_work_item` for the
 publication detail when needed. For an Integration attention, call
@@ -99,6 +99,14 @@ Use only an existing operation whose contract owns the selected result:
   `abandon_change(change_id, reason)` to terminate the uncompleted Change. Call
   `resume_change(change_id)` only for an exact currently deferred Change. Abandonment is
   irreversible and must not be inferred from an attention diagnosis.
+- Terminal worktree cleanup: after an exact abandoned Change is confirmed, re-read
+  `list_retained_change_worktrees` or the Change publication detail and call
+  `cleanup_abandoned_change_worktree(change_id)` only when Delivery reports cleanup eligibility.
+  For a completed Change, require the exact `completion_id` from the current completion receipt and
+  call `cleanup_completed_change_worktree(change_id, completion_id)`. A dirty, missing, ambiguous,
+  locked, or head-mismatched worktree remains attention; preserve its content and do not substitute
+  raw Git removal. Cleanup removes only the managed directory, preserves the Change branch, and is
+  replay-safe through its durable receipt.
 - provider acceptance required: after re-reading the exact finalization, ready receipt, reconciled
   checkpoint, and publication evidence, call `observe_acceptance(change_id)` once. This operation
   reads the current provider pull request and creates the receipt-backed completion record only when

@@ -191,6 +191,8 @@ function SelectedWorkItemDetail({
       onDeferChange={selectedDetail.deferChange}
       onResumeChange={selectedDetail.resumeChange}
       onAbandonChange={selectedDetail.abandonChange}
+      onCleanupAbandonedChange={selectedDetail.cleanupAbandonedChange}
+      onCleanupCompletedChange={selectedDetail.cleanupCompletedChange}
     />
   )
   if (selectedDetail.detail.isLoading) return <p role="status">Loading Work Item details...</p>

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import {
   answerWorkItemRequest,
   abandonWorkItemChange,
+  cleanupAbandonedWorkItemChange,
+  cleanupCompletedWorkItemChange,
   clearWorkItemBlock,
   deferWorkItemChange,
   listCompletedChanges,
@@ -342,6 +344,16 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
       'change-abandon',
       () => abandonWorkItemChange(identity.changeId, reason),
       'Change abandoned.',
+    ),
+    cleanupAbandonedChange: () => mutate(
+      'change-cleanup-abandoned',
+      () => cleanupAbandonedWorkItemChange(identity.changeId),
+      'Abandoned Change worktree cleaned up.',
+    ),
+    cleanupCompletedChange: (completionId: string) => mutate(
+      'change-cleanup-completed',
+      () => cleanupCompletedWorkItemChange(identity.changeId, completionId),
+      'Completed Change worktree cleaned up.',
     ),
     retry: polling.refetch,
   }

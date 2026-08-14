@@ -263,6 +263,8 @@ function installFetch() {
       || url.endsWith('/defer')
       || url.endsWith('/resume')
       || url.endsWith('/abandon')
+      || url.endsWith('/worktree/cleanup/abandoned')
+      || url.endsWith('/worktree/cleanup/completed')
     )) {
       if (portfolioAfterPublication) currentPortfolio = portfolioAfterPublication
       return response({})
@@ -1023,6 +1025,103 @@ it('does not show Change disposition controls for an abandoned Change', async ()
   const inspector = await screen.findByTestId('work-item-detail')
   expect(within(inspector).queryByText('Defer Change')).not.toBeInTheDocument()
   expect(within(inspector).queryByText('Abandon Change')).not.toBeInTheDocument()
+})
+
+it('confirms and cleans an eligible abandoned Change worktree', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'none',
+    needs_headline: null,
+    next_actor: 'none',
+    next_step: 'Change abandoned',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Change abandoned', done: null, total: null },
+    action: { kind: 'none', label: null, command: null },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    publication: {
+      phase: 'abandoned',
+      finalization_id: null,
+      finalized_head: null,
+      published_head: null,
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: null,
+      pull_request_number: null,
+      pull_request_head: null,
+      accepted_merge_commit: null,
+      merged_at: null,
+      worktree_cleanup: { eligible: true, blocked_reason: null, completion_id: null },
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'abandoned', items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  fireEvent.click(within(inspector).getByText('Clean abandoned worktree'))
+  fireEvent.click(await screen.findByText('Confirm clean abandoned worktree'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/worktree/cleanup/abandoned',
+    method: 'POST',
+    body: null,
+  }))
+  expect(await screen.findByText('Abandoned Change worktree cleaned up.')).toBeInTheDocument()
+})
+
+it('cleans an eligible completed Change worktree with its exact completion identity', async () => {
+  const completionId = 'e'.repeat(64)
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'none',
+    needs_headline: null,
+    next_actor: 'none',
+    next_step: 'Acceptance observed',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Acceptance observed', done: null, total: null },
+    action: { kind: 'none', label: null, command: null },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    publication: {
+      phase: 'acceptance-observed',
+      finalization_id: 'f'.repeat(64),
+      finalized_head: '1'.repeat(40),
+      published_head: '1'.repeat(40),
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: 'owlbear/example',
+      pull_request_number: 42,
+      pull_request_head: '1'.repeat(40),
+      accepted_merge_commit: '2'.repeat(40),
+      merged_at: '2026-08-11T13:00:00Z',
+      worktree_cleanup: { eligible: true, blocked_reason: null, completion_id: completionId },
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'acceptance', items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  fireEvent.click(within(inspector).getByText('Clean completed worktree'))
+  fireEvent.click(await screen.findByText('Confirm clean completed worktree'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/worktree/cleanup/completed',
+    method: 'POST',
+    body: { completion_id: completionId },
+  }))
+  expect(await screen.findByText('Completed Change worktree cleaned up.')).toBeInTheDocument()
 })
 
 it('uses the Done status tag without leaking the internal Stage field', async () => {

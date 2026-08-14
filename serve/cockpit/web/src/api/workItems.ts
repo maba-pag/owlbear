@@ -211,6 +211,21 @@ export interface WorkItemPublicationView {
     recorded_at: string
     diagnostics: string[]
   } | null
+  worktree_cleanup?: WorkItemWorktreeCleanupView | null
+}
+
+export interface WorkItemWorktreeCleanupView {
+  eligible: boolean
+  blocked_reason: string | null
+  completion_id: string | null
+}
+
+export interface ChangeWorktreeCleanupResponse {
+  cleanup_id: string
+  change_id: string
+  branch: string
+  worktree_path: string
+  branch_head: string
 }
 
 export interface WorkItemDetailView {
@@ -525,5 +540,23 @@ export function abandonWorkItemChange(changeId: string, reason: string): Promise
     `/api/changes/${encodeURIComponent(changeId)}/abandon`,
     'ERR_WORK_ITEM_CHANGE_ABANDON',
     { confirmed_abandonment: true, reason },
+  )
+}
+
+export function cleanupAbandonedWorkItemChange(changeId: string): Promise<ChangeWorktreeCleanupResponse> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/worktree/cleanup/abandoned`,
+    'ERR_WORK_ITEM_ABANDONED_WORKTREE_CLEANUP',
+  )
+}
+
+export function cleanupCompletedWorkItemChange(
+  changeId: string,
+  completionId: string,
+): Promise<ChangeWorktreeCleanupResponse> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/worktree/cleanup/completed`,
+    'ERR_WORK_ITEM_COMPLETED_WORKTREE_CLEANUP',
+    { completion_id: completionId },
   )
 }

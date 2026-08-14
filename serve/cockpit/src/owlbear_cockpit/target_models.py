@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from owlbear_delivery.delivery_runtime import DeliveryStage
 from owlbear_delivery.portfolio_operating import PortfolioOperatingView
 from owlbear_delivery.work_items import ChangeGroupView, WorkItemDetailView
+
+if TYPE_CHECKING:
+    from owlbear_delivery.portfolio_application import DeliveryChangeWorktreeCleanup
 
 
 class _TargetHTTPModel(BaseModel):
@@ -111,6 +114,33 @@ class AbandonChangeBody(_TargetHTTPModel):
     reason: str = Field(min_length=1)
 
 
+class CleanupCompletedChangeBody(_TargetHTTPModel):
+    """Exact completion receipt required for completed worktree cleanup."""
+
+    completion_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class ChangeWorktreeCleanupResponse(_TargetHTTPModel):
+    """Typed receipt returned after one exact terminal worktree cleanup."""
+
+    cleanup_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    worktree_path: str = Field(min_length=1)
+    branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def from_receipt(cls, receipt: DeliveryChangeWorktreeCleanup) -> ChangeWorktreeCleanupResponse:
+        """Convert one application receipt into the HTTP transport shape."""
+        return cls(
+            cleanup_id=receipt.cleanup_id,
+            change_id=receipt.change_id,
+            branch=receipt.branch,
+            worktree_path=str(receipt.worktree_path),
+            branch_head=receipt.branch_head,
+        )
+
+
 class BackwardMoveBody(_TargetHTTPModel):
     """Operator-selected earlier stage and reason."""
 
@@ -144,6 +174,8 @@ __all__ = [
     "BackwardMoveBody",
     "BackwardMovePreviewBody",
     "ChangeDispositionReasonBody",
+    "ChangeWorktreeCleanupResponse",
+    "CleanupCompletedChangeBody",
     "ClearBlockBody",
     "ConfirmLostClaimBody",
     "DesignWorkDetailResponse",
