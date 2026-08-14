@@ -41,6 +41,7 @@ _CHANGE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 class _RegisteredGitWorktree:
     """Parsed Git registration for one managed worktree path."""
 
+    path: Path
     head: str | None
     branch: str | None
     locked: bool
@@ -67,6 +68,44 @@ class ChangeWriter(WriterIdentity):
 
     job_id: int = Field(gt=0)
     kind: Literal["plan", "build", "repair"]
+
+
+class ChangeWorktreeCleanup(_WorkspaceModel):
+    """Durable proof that one exact Change worktree was removed."""
+
+    schema_version: Literal[1] = 1
+    cleanup_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: ChangeId
+    branch: str = Field(min_length=1)
+    worktree_path: Path
+    branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> ChangeWorktreeCleanup:
+        identity = "\0".join((self.change_id, self.branch, str(self.worktree_path), self.branch_head)).encode()
+        if self.cleanup_id != hashlib.sha256(identity).hexdigest():
+            message = "Change worktree cleanup identity is invalid"
+            raise ValueError(message)
+        return self
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        change_id: str,
+        branch: str,
+        worktree_path: Path,
+        branch_head: str,
+    ) -> ChangeWorktreeCleanup:
+        """Create a deterministic cleanup receipt for one exact workspace identity."""
+        identity = "\0".join((change_id, branch, str(worktree_path), branch_head)).encode()
+        return cls(
+            cleanup_id=hashlib.sha256(identity).hexdigest(),
+            change_id=change_id,
+            branch=branch,
+            worktree_path=worktree_path,
+            branch_head=branch_head,
+        )
 
 
 class PublicationLease(_WorkspaceModel):
@@ -113,6 +152,7 @@ class ChangeCoordination(_WorkspaceModel):
     last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     writer: ChangeWriter | None = None
     publication_lease: PublicationLease | None = None
+    worktree_cleanup: ChangeWorktreeCleanup | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -161,6 +201,10 @@ class ChangeWorktreeAttentionCode(StrEnum):
     PRUNABLE = "prunable"
     BARE = "bare"
     COORDINATION_PATH_MISMATCH = "coordination-path-mismatch"
+    LOCKED = "locked"
+    OWNERSHIP_AMBIGUOUS = "ownership-ambiguous"
+    UNEXPECTED_FILESYSTEM_STATE = "unexpected-filesystem-state"
+    WORKTREE_HEAD_MISMATCH = "worktree-head-mismatch"
 
 
 class RetainedChangeWorktree(_WorkspaceModel):
@@ -569,10 +613,7 @@ class ChangeWorkspaceManager:
         except CoordinationConflictError:
             existing = None
         if existing is not None:
-            if existing.integration_target != self._integration_target:
-                _workspace_failure("registered workspace uses another integration target")
-            if recovery_reviewed_head is not None and recovery_reviewed_head != existing.last_reviewed_commit:
-                _coordination_conflict("recovery reviewed head differs from registered workspace authority")
+            self._validate_existing_coordination(existing, recovery_reviewed_head)
             self._validate_existing_worktree(existing)
             self._require_worktree(
                 change_id,
@@ -611,6 +652,18 @@ class ChangeWorkspaceManager:
             last_reviewed_commit=last_reviewed_commit,
         )
         return self._coordinator.register(coordination)
+
+    def _validate_existing_coordination(
+        self,
+        coordination: ChangeCoordination,
+        recovery_reviewed_head: str | None,
+    ) -> None:
+        if coordination.integration_target != self._integration_target:
+            _workspace_failure("registered workspace uses another integration target")
+        if coordination.worktree_cleanup is not None:
+            _coordination_conflict("Change worktree has already been cleaned up")
+        if recovery_reviewed_head is not None and recovery_reviewed_head != coordination.last_reviewed_commit:
+            _coordination_conflict("recovery reviewed head differs from registered workspace authority")
 
     def validate_recovery(self, change_id: str, recovery_reviewed_head: str | None) -> None:
         """Require exact reviewed authority when coordination is missing for a surviving branch."""
@@ -657,9 +710,13 @@ class ChangeWorkspaceManager:
         )
 
     @classmethod
-    def remove_worktree(cls, repository: Path, worktree: Path) -> None:
-        """Remove one managed worktree without forcing Git registration cleanup."""
-        cls._run_managed_git(repository.resolve(), "worktree", "remove", str(worktree))
+    def remove_worktree(cls, repository: Path, worktree: Path, *, force: bool = False) -> None:
+        """Remove one managed worktree through Git's registration-aware operation."""
+        arguments = ["worktree", "remove"]
+        if force:
+            arguments.append("--force")
+        arguments.append(str(worktree))
+        cls._run_managed_git(repository.resolve(), *arguments)
 
     @staticmethod
     def _run_managed_git(repository: Path, *arguments: str) -> str:
@@ -687,7 +744,15 @@ class ChangeWorkspaceManager:
         registered = self._registered_worktrees()
         branch_heads = self._change_branch_heads()
         filesystem_ids = self._filesystem_change_ids()
-        change_ids = sorted(set(coordinations) | set(registered) | set(branch_heads) | filesystem_ids)
+        change_ids = set(coordinations) | set(registered) | set(branch_heads) | filesystem_ids
+        cleaned = {
+            change_id
+            for change_id, coordination in coordinations.items()
+            if coordination.worktree_cleanup is not None
+            and change_id not in registered
+            and change_id not in filesystem_ids
+        }
+        change_ids = sorted(change_ids - cleaned)
         return tuple(
             self._retained_worktree(
                 change_id,
@@ -697,6 +762,34 @@ class ChangeWorkspaceManager:
             )
             for change_id in change_ids
         )
+
+    def cleanup(self, change_id: str) -> ChangeWorktreeCleanup:
+        """Remove one exact managed Change worktree while retaining its branch and receipt."""
+        coordination = self._coordinator.show(change_id)
+        if coordination.worktree_cleanup is not None:
+            return coordination.worktree_cleanup
+        expected_path = self._worktree_root / change_id
+        attention = self._cleanup_attention(change_id, coordination, expected_path)
+        self._raise_worktree_attention(change_id, attention)
+        if coordination.writer is not None:
+            _coordination_conflict("Change worktree cleanup cannot overlap an active writer")
+        if coordination.publication_expiry is not None and coordination.publication_expiry > datetime.now(UTC):
+            _coordination_conflict("Change worktree cleanup cannot overlap an active publication lease")
+        branch_head = self._resolve(coordination.branch)
+        self.remove_worktree(self._repository, expected_path, force=True)
+        if expected_path.exists() or expected_path in self._registered_worktrees_all():
+            self._raise_worktree_attention(
+                change_id,
+                {ChangeWorktreeAttentionCode.UNEXPECTED_FILESYSTEM_STATE},
+            )
+        receipt = ChangeWorktreeCleanup.create(
+            change_id=change_id,
+            branch=coordination.branch,
+            worktree_path=expected_path,
+            branch_head=branch_head,
+        )
+        self._coordinator.update(coordination.model_copy(update={"worktree_cleanup": receipt}))
+        return receipt
 
     def refresh_integration_target(self, change_id: str) -> ChangeCoordination:
         """Persist the current target head at an operational Git boundary."""
@@ -973,15 +1066,8 @@ class ChangeWorkspaceManager:
             raise ChangeWorktreeAttentionError(change_id, ordered)
 
     def _registered_worktrees(self) -> dict[str, _RegisteredGitWorktree]:
-        completed = self._run_git("worktree", "list", "--porcelain", "-z")
-        records: dict[str, _RegisteredGitWorktree] = {}
-        for raw_record in completed.stdout.split(b"\0\0"):
-            fields = tuple(field for field in raw_record.split(b"\0") if field)
-            values = {field.partition(b" ")[0]: field.partition(b" ")[2] for field in fields}
-            raw_path = values.get(b"worktree")
-            if raw_path is None:
-                continue
-            path = Path(os.fsdecode(raw_path)).resolve()
+        records = {}
+        for path, record in self._registered_worktrees_all().items():
             try:
                 relative = path.relative_to(self._worktree_root)
             except ValueError:
@@ -991,7 +1077,23 @@ class ChangeWorkspaceManager:
             change_id = relative.name
             if change_id in records:
                 _workspace_failure(f"multiple Git worktrees are registered for Change {change_id}")
-            records[change_id] = _RegisteredGitWorktree(
+            records[change_id] = record
+        return records
+
+    def _registered_worktrees_all(self) -> dict[Path, _RegisteredGitWorktree]:
+        completed = self._run_git("worktree", "list", "--porcelain", "-z")
+        records: dict[Path, _RegisteredGitWorktree] = {}
+        for raw_record in completed.stdout.split(b"\0\0"):
+            fields = tuple(field for field in raw_record.split(b"\0") if field)
+            values = {field.partition(b" ")[0]: field.partition(b" ")[2] for field in fields}
+            raw_path = values.get(b"worktree")
+            if raw_path is None:
+                continue
+            path = Path(os.fsdecode(raw_path)).resolve()
+            if path in records:
+                _workspace_failure(f"multiple Git worktrees are registered for path {path}")
+            records[path] = _RegisteredGitWorktree(
+                path=path,
                 head=_decode_optional(values.get(b"HEAD")),
                 branch=_branch_name(values.get(b"branch")),
                 locked=b"locked" in values,
@@ -999,6 +1101,96 @@ class ChangeWorkspaceManager:
                 bare=b"bare" in values,
             )
         return records
+
+    def _cleanup_attention(
+        self,
+        change_id: str,
+        coordination: ChangeCoordination,
+        expected_path: Path,
+    ) -> set[ChangeWorktreeAttentionCode]:
+        expected_branch = f"owlbear/change/{change_id}"
+        attention = self._coordination_attention(change_id, coordination, expected_path)
+        if coordination.branch != expected_branch:
+            attention.add(ChangeWorktreeAttentionCode.BRANCH_MISMATCH)
+        branch_head = self._resolve(coordination.branch, missing_ok=True)
+        if branch_head is None:
+            attention.add(ChangeWorktreeAttentionCode.BRANCH_MISSING)
+        attention.update(self._cleanup_filesystem_attention(expected_path))
+        registrations = self._registered_worktrees_all()
+        attention.update(
+            self._cleanup_registration_attention(expected_path, expected_branch, registrations, branch_head)
+        )
+        return attention
+
+    @staticmethod
+    def _cleanup_filesystem_attention(expected_path: Path) -> set[ChangeWorktreeAttentionCode]:
+        if expected_path.is_symlink() or (expected_path.exists() and not expected_path.is_dir()):
+            return {ChangeWorktreeAttentionCode.UNEXPECTED_FILESYSTEM_STATE}
+        if not expected_path.exists():
+            return {ChangeWorktreeAttentionCode.WORKTREE_MISSING}
+        return set()
+
+    def _cleanup_registration_attention(
+        self,
+        expected_path: Path,
+        expected_branch: str,
+        registrations: dict[Path, _RegisteredGitWorktree],
+        branch_head: str | None,
+    ) -> set[ChangeWorktreeAttentionCode]:
+        attention: set[ChangeWorktreeAttentionCode] = set()
+        path_records = [record for path, record in registrations.items() if path == expected_path]
+        branch_records = [record for record in registrations.values() if record.branch == expected_branch]
+        if len(path_records) != 1:
+            attention.add(
+                ChangeWorktreeAttentionCode.GIT_REGISTRATION_MISSING
+                if not path_records
+                else ChangeWorktreeAttentionCode.OWNERSHIP_AMBIGUOUS
+            )
+        if (
+            len(branch_records) != 1
+            or (not path_records and branch_records)
+            or (path_records and branch_records[0] is not path_records[0])
+        ):
+            attention.add(ChangeWorktreeAttentionCode.OWNERSHIP_AMBIGUOUS)
+        if not path_records:
+            return attention
+        registered = path_records[0]
+        attention.update(self._cleanup_registered_record_attention(registered, expected_branch, branch_head))
+        if self._worktree_present(expected_path) and branch_head is not None:
+            attention.update(self._cleanup_head_attention(expected_path, branch_head))
+        return attention
+
+    @staticmethod
+    def _cleanup_registered_record_attention(
+        registered: _RegisteredGitWorktree,
+        expected_branch: str,
+        branch_head: str | None,
+    ) -> set[ChangeWorktreeAttentionCode]:
+        attention: set[ChangeWorktreeAttentionCode] = set()
+        if registered.branch != expected_branch:
+            attention.add(ChangeWorktreeAttentionCode.BRANCH_MISMATCH)
+        if registered.locked:
+            attention.add(ChangeWorktreeAttentionCode.LOCKED)
+        if registered.prunable:
+            attention.add(ChangeWorktreeAttentionCode.PRUNABLE)
+        if registered.bare:
+            attention.add(ChangeWorktreeAttentionCode.BARE)
+        if registered.branch is None and not registered.bare:
+            attention.add(ChangeWorktreeAttentionCode.DETACHED)
+        if branch_head is not None and registered.head != branch_head:
+            attention.add(ChangeWorktreeAttentionCode.WORKTREE_HEAD_MISMATCH)
+        return attention
+
+    def _cleanup_head_attention(
+        self,
+        expected_path: Path,
+        branch_head: str,
+    ) -> set[ChangeWorktreeAttentionCode]:
+        try:
+            actual_head = self._resolve("HEAD", cwd=expected_path)
+        except OSError, subprocess.SubprocessError, ValueError:
+            return {ChangeWorktreeAttentionCode.UNEXPECTED_FILESYSTEM_STATE}
+        return {ChangeWorktreeAttentionCode.WORKTREE_HEAD_MISMATCH} if actual_head != branch_head else set()
 
     def _change_branch_heads(self) -> dict[str, str]:
         prefix = "refs/heads/owlbear/change/"

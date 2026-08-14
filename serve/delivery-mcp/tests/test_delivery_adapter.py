@@ -11,7 +11,7 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict
 
-from owlbear_delivery import DeliveryRetainedChangeWorktree
+from owlbear_delivery import DeliveryChangeWorktreeCleanup, DeliveryRetainedChangeWorktree
 from owlbear_delivery.acceptance import CompletionReceiptConflictError
 from owlbear_delivery.completed_history import (
     CompletedHistoryDiagnostic,
@@ -82,6 +82,14 @@ class _RecordingApplication:
                         orphan=False,
                         cleanup_eligible=True,
                     ),
+                )
+            if name in {"cleanup_abandoned_change_worktree", "cleanup_completed_change_worktree"}:
+                return DeliveryChangeWorktreeCleanup(
+                    cleanup_id=DIGEST,
+                    change_id=CHANGE,
+                    branch="owlbear/change/change-a",
+                    worktree_path=WORKTREE_PATH,
+                    branch_head=COMMIT,
                 )
             if name == "publish_delivery_plan":
                 request = args[1]
@@ -240,6 +248,8 @@ def _requests() -> dict[str, dict[str, object]]:
         "defer_change": {**change, "reason": "Wait for user review"},
         "resume_change": change,
         "abandon_change": {**change, "reason": "Stop this Change"},
+        "cleanup_abandoned_change_worktree": change,
+        "cleanup_completed_change_worktree": {**change, "completion_id": DIGEST},
         "transition_delivery": {
             **change,
             "request": {
@@ -284,6 +294,10 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
         assert isinstance(application.calls[0][1][1], MarkChangePullRequestReady)
     if operation_name in {"reconcile_finalization_head", "observe_acceptance"}:
         assert application.calls[0][1] == (CHANGE,)
+    if operation_name == "cleanup_abandoned_change_worktree":
+        assert application.calls[0][1] == (CHANGE,)
+    if operation_name == "cleanup_completed_change_worktree":
+        assert application.calls[0][1] == (CHANGE, DIGEST)
     if operation_name == "resolve_change_disposition":
         assert application.calls[0][1] == (CHANGE, DIGEST)
     tuple_results = {"list_work_items", "list_retained_change_worktrees"}
@@ -295,6 +309,9 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
         assert len(result) == 1
         assert result[0]["change_id"] == CHANGE
         assert result[0]["worktree_path"] == str(WORKTREE_PATH)
+    elif operation_name in {"cleanup_abandoned_change_worktree", "cleanup_completed_change_worktree"}:
+        assert result.cleanup_id == DIGEST
+        assert result.worktree_path == str(WORKTREE_PATH)
     elif operation_name in publication_results:
         assert result.candidate_id == publication_results[operation_name]["candidate_id"]
         assert result.claim_id == publication_results[operation_name]["claim_id"]
@@ -361,7 +378,9 @@ def test_delivery_operation_names_annotations_and_prohibited_methods_are_exact()
 
     assert tuple(DELIVERY_OPERATION_ANNOTATIONS) == DELIVERY_OPERATION_NAMES
     for name, tool_annotations in DELIVERY_OPERATION_ANNOTATIONS.items():
-        assert tool_annotations.destructive_hint is False
+        assert tool_annotations.destructive_hint is (
+            name in {"cleanup_abandoned_change_worktree", "cleanup_completed_change_worktree"}
+        )
         assert tool_annotations.read_only_hint is (name in reads)
         assert tool_annotations.idempotent_hint is (name != "acquire_frontier_work")
     assert all(not hasattr(TargetMCPAdapter, name) for name in prohibited)

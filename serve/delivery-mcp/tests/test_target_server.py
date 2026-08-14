@@ -76,6 +76,8 @@ DELIVERY_TOOLS = {
     "defer_change",
     "resume_change",
     "abandon_change",
+    "cleanup_abandoned_change_worktree",
+    "cleanup_completed_change_worktree",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
@@ -285,7 +287,9 @@ async def test_live_registry_is_exact_and_annotated_from_assembled_tools() -> No
         assert tool.annotations is not None
         assert tool.annotations.read_only_hint is (name in READ_TOOLS)
         assert tool.annotations.idempotent_hint is (name != "acquire_frontier_work")
-        assert tool.annotations.destructive_hint is False
+        assert tool.annotations.destructive_hint is (
+            name in {"cleanup_abandoned_change_worktree", "cleanup_completed_change_worktree"}
+        )
         request_schema = tool.input_schema["properties"]["request"]
         assert "$ref" in request_schema
         request_definition = tool.input_schema["$defs"][request_schema["$ref"].removeprefix("#/$defs/")]

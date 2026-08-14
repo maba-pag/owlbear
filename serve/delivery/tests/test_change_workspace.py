@@ -361,6 +361,69 @@ def test_list_retained_worktrees_returns_empty_without_coordination_store(tmp_pa
     assert manager.list_retained() == ()
 
 
+def test_cleanup_removes_exact_worktree_keeps_branch_and_replays_receipt(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("cleanup-change")
+    (coordination.worktree_path / "uncommitted.txt").write_text("discarded\n", encoding="utf-8")
+
+    receipt = manager.cleanup(coordination.change_id)
+
+    assert receipt.change_id == coordination.change_id
+    assert receipt.branch_head == initial
+    assert receipt.worktree_path == coordination.worktree_path.resolve()
+    assert not coordination.worktree_path.exists()
+    assert _git_ref_exists(repository, coordination.branch)
+    assert _git(repository, "rev-parse", coordination.branch) == initial
+    assert coordinator.show(coordination.change_id).worktree_cleanup == receipt
+    assert manager.cleanup(coordination.change_id) == receipt
+    assert manager.list_retained() == ()
+
+
+def test_cleanup_refuses_missing_worktree_without_recording_cleanup(tmp_path: Path) -> None:
+    repository, _ = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("missing-cleanup")
+    _git(repository, "worktree", "remove", "--force", str(coordination.worktree_path))
+
+    with pytest.raises(ChangeWorktreeAttentionError) as raised:
+        manager.cleanup(coordination.change_id)
+
+    assert ChangeWorktreeAttentionCode.WORKTREE_MISSING in raised.value.attention
+    assert ChangeWorktreeAttentionCode.GIT_REGISTRATION_MISSING in raised.value.attention
+    assert coordinator.show(coordination.change_id).worktree_cleanup is None
+
+
+def test_cleanup_refuses_registration_for_another_branch_or_path(tmp_path: Path) -> None:
+    repository, _ = _repository(tmp_path)
+    _, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("ambiguous-cleanup")
+    _git(repository, "worktree", "remove", "--force", str(coordination.worktree_path))
+    alternate = tmp_path / "alternate-worktree"
+    _git(repository, "worktree", "add", str(alternate), coordination.branch)
+
+    with pytest.raises(ChangeWorktreeAttentionError) as raised:
+        manager.cleanup(coordination.change_id)
+
+    assert ChangeWorktreeAttentionCode.WORKTREE_MISSING in raised.value.attention
+    assert ChangeWorktreeAttentionCode.OWNERSHIP_AMBIGUOUS in raised.value.attention
+    assert alternate.exists()
+
+
+def test_cleanup_refuses_unexpected_worktree_filesystem_state(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    _, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("file-cleanup")
+    _git(repository, "worktree", "remove", "--force", str(coordination.worktree_path))
+    coordination.worktree_path.write_text("not a worktree\n", encoding="utf-8")
+
+    with pytest.raises(ChangeWorktreeAttentionError) as raised:
+        manager.cleanup(coordination.change_id)
+
+    assert ChangeWorktreeAttentionCode.UNEXPECTED_FILESYSTEM_STATE in raised.value.attention
+    assert coordination.worktree_path.read_text(encoding="utf-8") == "not a worktree\n"
+
+
 def test_list_registered_ignores_runtime_transaction_temp_files(tmp_path: Path) -> None:
     repository, _initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)

@@ -25,6 +25,7 @@ from owlbear_delivery.delivery_runtime import (
 from owlbear_delivery.draft_pull_request import MarkChangePullRequestReady
 from owlbear_delivery.identities import ChangeId
 from owlbear_delivery.portfolio_application import (
+    DeliveryChangeWorktreeCleanup,
     DeliveryRetainedChangeWorktree,
     DeliveryRetainedWorktreeCleanupBlockReason,
 )
@@ -92,6 +93,16 @@ class AbandonChangeParams(ChangeParams):
     """Validate one user-requested terminal Change abandonment."""
 
     reason: str = Field(min_length=1)
+
+
+class CleanupAbandonedChangeParams(ChangeParams):
+    """Validate cleanup of one terminal abandoned Change worktree."""
+
+
+class CleanupCompletedChangeParams(ChangeParams):
+    """Validate cleanup of one completed Change worktree receipt."""
+
+    completion_id: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class CreateDesignSessionParams(ChangeParams):
@@ -202,6 +213,27 @@ class RetainedChangeWorktreeResponse(_TargetProtocolModel):
         return cls(**values)
 
 
+class ChangeWorktreeCleanupResponse(_TargetProtocolModel):
+    """Strict MCP receipt for one exact Change worktree cleanup."""
+
+    cleanup_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: ChangeId
+    branch: str = Field(min_length=1)
+    worktree_path: str = Field(min_length=1)
+    branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def from_receipt(cls, receipt: DeliveryChangeWorktreeCleanup) -> ChangeWorktreeCleanupResponse:
+        """Convert one application cleanup receipt into transport form."""
+        return cls(
+            cleanup_id=receipt.cleanup_id,
+            change_id=receipt.change_id,
+            branch=receipt.branch,
+            worktree_path=str(receipt.worktree_path),
+            branch_head=receipt.branch_head,
+        )
+
+
 class DeliveryResultPublication(_TargetProtocolModel):
     """Build publication response with its transition-ready output reference."""
 
@@ -261,6 +293,14 @@ type DeferChangeRequest = Annotated[
 type AbandonChangeRequest = Annotated[
     AbandonChangeParams,
     BeforeValidator(partial(_parse_json_model, AbandonChangeParams)),
+]
+type CleanupAbandonedChangeRequest = Annotated[
+    CleanupAbandonedChangeParams,
+    BeforeValidator(partial(_parse_json_model, CleanupAbandonedChangeParams)),
+]
+type CleanupCompletedChangeRequest = Annotated[
+    CleanupCompletedChangeParams,
+    BeforeValidator(partial(_parse_json_model, CleanupCompletedChangeParams)),
 ]
 type ClaimContextRequest = Annotated[
     ClaimContextParams,
@@ -325,8 +365,13 @@ __all__ = [
     "AdmitDeliveryChangeRequest",
     "ChangeParams",
     "ChangeRequest",
+    "ChangeWorktreeCleanupResponse",
     "ClaimContextParams",
     "ClaimContextRequest",
+    "CleanupAbandonedChangeParams",
+    "CleanupAbandonedChangeRequest",
+    "CleanupCompletedChangeParams",
+    "CleanupCompletedChangeRequest",
     "CompletedPageParams",
     "CompletedPageRequest",
     "CreateDesignSessionParams",

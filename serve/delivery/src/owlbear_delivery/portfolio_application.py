@@ -28,6 +28,7 @@ from owlbear_delivery.change_workspace import (
     ChangeCoordination,
     ChangeWorkspaceManager,
     ChangeWorktreeAttentionCode,
+    ChangeWorktreeAttentionError,
     ChangeWriter,
     CoordinationConflictError,
     PortfolioCoordinator,
@@ -373,6 +374,16 @@ class DeliveryRetainedChangeWorktree(_ApplicationModel):
     cleanup_blocked_reason: DeliveryRetainedWorktreeCleanupBlockReason | None = None
 
 
+class DeliveryChangeWorktreeCleanup(_ApplicationModel):
+    """Application receipt for one exact managed Change worktree cleanup."""
+
+    cleanup_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    worktree_path: Path
+    branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
 class DeliveryOperatorClaim(_ApplicationModel):
     """Bounded active-claim identity required for explicit operator recovery."""
 
@@ -598,6 +609,48 @@ class PortfolioApplication:
     def list_retained_change_worktrees(self) -> tuple[DeliveryRetainedChangeWorktree, ...]:
         """List retained Change worktrees and exact cleanup eligibility facts."""
         return tuple(self._retained_change_worktree_view(item) for item in self._workspace_manager.list_retained())
+
+    def cleanup_change_worktree(self, change_id: str) -> DeliveryChangeWorktreeCleanup:
+        """Clean one terminal Change worktree after exact lifecycle validation."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            lifecycle = runtime.change_stage()
+            completion = runtime.completion_receipt()
+            if lifecycle != DeliveryChangeStage.ABANDONED and not (
+                lifecycle == DeliveryChangeStage.COMPLETED and completion is not None
+            ):
+                self._fail("Change worktree cleanup requires an abandoned or completed Change")
+            try:
+                receipt = self._workspace_manager.cleanup(change_id)
+            except ChangeWorktreeAttentionError:
+                raise
+            except (CoordinationConflictError, OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("Change worktree cleanup could not complete", exc)
+        return DeliveryChangeWorktreeCleanup(
+            cleanup_id=receipt.cleanup_id,
+            change_id=receipt.change_id,
+            branch=receipt.branch,
+            worktree_path=receipt.worktree_path,
+            branch_head=receipt.branch_head,
+        )
+
+    def cleanup_abandoned_change_worktree(self, change_id: str) -> DeliveryChangeWorktreeCleanup:
+        """Clean one abandoned Change worktree without reopening its terminal state."""
+        runtime = self._runtime(change_id)
+        if runtime.change_stage() != DeliveryChangeStage.ABANDONED:
+            self._fail("abandoned Change worktree cleanup requires an abandoned Change")
+        return self.cleanup_change_worktree(change_id)
+
+    def cleanup_completed_change_worktree(
+        self,
+        change_id: str,
+        completion_id: str,
+    ) -> DeliveryChangeWorktreeCleanup:
+        """Clean one completed Change worktree after matching its durable receipt."""
+        completion = self._runtime(change_id).completion_receipt()
+        if completion is None or completion.completion_id != completion_id:
+            self._fail("completed Change worktree cleanup requires the exact completion receipt")
+        return self.cleanup_change_worktree(change_id)
 
     def show_finalization_context(self, change_id: str) -> DeliveryFinalizationContext:
         """Return engine-resolved finalization context without changing Delivery state."""

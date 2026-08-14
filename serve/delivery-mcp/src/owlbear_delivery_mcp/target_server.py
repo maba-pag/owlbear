@@ -24,7 +24,11 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryRuntimeReferenceError,
 )
 from owlbear_delivery.design_package import DesignPackageConflictError
-from owlbear_delivery.portfolio_application import PortfolioApplication, PortfolioApplicationError
+from owlbear_delivery.portfolio_application import (
+    DeliveryChangeWorktreeCleanup,
+    PortfolioApplication,
+    PortfolioApplicationError,
+)
 from owlbear_delivery.publication_provider import PublicationProviderError
 from owlbear_delivery.runtime_transaction import (
     TransactionConflictError,
@@ -39,8 +43,13 @@ from owlbear_delivery_mcp.target_models import (
     AdmitDeliveryChangeRequest,
     ChangeParams,
     ChangeRequest,
+    ChangeWorktreeCleanupResponse,
     ClaimContextParams,
     ClaimContextRequest,
+    CleanupAbandonedChangeParams,
+    CleanupAbandonedChangeRequest,
+    CleanupCompletedChangeParams,
+    CleanupCompletedChangeRequest,
     CompletedPageParams,
     CompletedPageRequest,
     CreateDesignSessionParams,
@@ -79,6 +88,7 @@ from owlbear_delivery_mcp.target_models import (
 
 _READ = ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False)
 _WRITE = ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=False)
+_CLEANUP = ToolAnnotations(read_only_hint=False, idempotent_hint=True, destructive_hint=True)
 _ACQUIRE = ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False)
 
 DELIVERY_OPERATION_NAMES = (
@@ -108,6 +118,8 @@ DELIVERY_OPERATION_NAMES = (
     "defer_change",
     "resume_change",
     "abandon_change",
+    "cleanup_abandoned_change_worktree",
+    "cleanup_completed_change_worktree",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
@@ -135,7 +147,13 @@ _DELIVERY_READS = frozenset(
     }
 )
 DELIVERY_OPERATION_ANNOTATIONS = {
-    name: _READ if name in _DELIVERY_READS else _ACQUIRE if name == "acquire_frontier_work" else _WRITE
+    name: _READ
+    if name in _DELIVERY_READS
+    else _ACQUIRE
+    if name == "acquire_frontier_work"
+    else _CLEANUP
+    if name in {"cleanup_abandoned_change_worktree", "cleanup_completed_change_worktree"}
+    else _WRITE
     for name in DELIVERY_OPERATION_NAMES
 }
 
@@ -381,6 +399,37 @@ class TargetMCPAdapter:
             params,
             lambda: self._application.abandon_change(params.change_id, params.reason),
         )
+
+    async def cleanup_abandoned_change_worktree(
+        self,
+        request: CleanupAbandonedChangeRequest,
+    ) -> ChangeWorktreeCleanupResponse:
+        """Remove one exact abandoned Change worktree while retaining its branch."""
+        params = self._validate(CleanupAbandonedChangeParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.cleanup_abandoned_change_worktree(params.change_id),
+            DeliveryChangeWorktreeCleanup,
+        )
+        return ChangeWorktreeCleanupResponse.from_receipt(receipt)
+
+    async def cleanup_completed_change_worktree(
+        self,
+        request: CleanupCompletedChangeRequest,
+    ) -> ChangeWorktreeCleanupResponse:
+        """Remove one exact completed Change worktree after receipt validation."""
+        params = self._validate(CleanupCompletedChangeParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.cleanup_completed_change_worktree(
+                params.change_id,
+                params.completion_id,
+            ),
+            DeliveryChangeWorktreeCleanup,
+        )
+        return ChangeWorktreeCleanupResponse.from_receipt(receipt)
 
     async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]:
         """Apply one worker-owned Delivery transition."""

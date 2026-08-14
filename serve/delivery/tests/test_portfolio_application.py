@@ -21,6 +21,7 @@ from owlbear_delivery import (
     ChangeBranchPublicationReceipt,
     ChangeBranchPublisher,
     ChangeWorktreeAttentionCode,
+    ChangeWorktreeAttentionError,
     AdvanceDelivery,
     BlockDelivery,
     CompletedHistoryCatalog,
@@ -37,6 +38,7 @@ from owlbear_delivery import (
     DeliveryClaimRecoveryStatus,
     DeliveryAcceptanceWaitingError,
     DeliveryChangeStage,
+    DeliveryChangeWorktreeCleanup,
     DeliveryContract,
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointTrigger,
@@ -853,6 +855,56 @@ def test_change_lifecycle_dispositions_delegate_through_application_lock(tmp_pat
     retained = application.list_retained_change_worktrees()
     assert retained[0].cleanup_eligible is True
     assert retained[0].cleanup_blocked_reason is None
+
+
+def test_abandoned_change_worktree_cleanup_preserves_branch_and_replays_receipt(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    coordination = application._workspace_manager.show("change-a")  # noqa: SLF001 - inspect owned cleanup.
+    application.abandon_change("change-a", "User stopped the Change")
+
+    receipt = application.cleanup_abandoned_change_worktree("change-a")
+
+    assert isinstance(receipt, DeliveryChangeWorktreeCleanup)
+    assert receipt.change_id == "change-a"
+    assert not coordination.worktree_path.exists()
+    assert _git_ref_exists(application._workspace_manager.repository, coordination.branch)  # noqa: SLF001
+    assert runtimes["change-a"].change_stage() == DeliveryChangeStage.ABANDONED
+    assert application.cleanup_abandoned_change_worktree("change-a") == receipt
+    assert application.list_retained_change_worktrees() == ()
+
+
+def test_change_worktree_cleanup_requires_terminal_authority(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+
+    with pytest.raises(PortfolioApplicationError, match="requires an abandoned or completed Change"):
+        application.cleanup_change_worktree("change-a")
+
+
+def test_abandoned_change_worktree_cleanup_surfaces_lost_worktree_attention(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    coordination = application._workspace_manager.show("change-a")  # noqa: SLF001
+    application.abandon_change("change-a", "User stopped the Change")
+    _git(
+        application._workspace_manager.repository,  # noqa: SLF001
+        "worktree",
+        "remove",
+        "--force",
+        str(coordination.worktree_path),
+    )
+
+    with pytest.raises(ChangeWorktreeAttentionError) as raised:
+        application.cleanup_abandoned_change_worktree("change-a")
+
+    assert ChangeWorktreeAttentionCode.WORKTREE_MISSING in raised.value.attention
 
 
 def test_retained_inventory_blocks_legacy_integration_completion(tmp_path: Path) -> None:
