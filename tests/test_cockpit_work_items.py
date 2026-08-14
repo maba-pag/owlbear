@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -17,12 +18,18 @@ from owlbear_delivery import (
     DeliveryAcceptanceReconciliationOutcome,
     DeliveryAcceptanceReconciliationStatus,
 )
+from owlbear_delivery.acceptance import CompletionPullRequestIdentity
 from owlbear_delivery.change_workspace import (
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
     ChangeTargetSyncReceipt,
     ChangeWorktreeAttentionCode,
     ChangeWorktreeAttentionError,
+)
+from owlbear_delivery.completed_history import (
+    CompletedChangePage,
+    LegacyCompletedChangeRecord,
+    ReceiptCompletedChangeRecord,
 )
 from owlbear_delivery_github import GitHubCliPublicationProvider
 from owlbear_delivery.delivery_application_loader import DeliveryApplicationLoadError
@@ -378,17 +385,55 @@ class _DeliveryApplicationFake:
             raise failure
         return self._recovery_receipt()
 
-    def list_completed_changes(self, *args: object) -> dict[str, object]:
+    @staticmethod
+    def _completed_history() -> CompletedChangePage:
+        return CompletedChangePage(
+            records=(
+                LegacyCompletedChangeRecord(
+                    change_id="change-a",
+                    completion_id="b" * 64,
+                    title="Legacy completion",
+                    semantic_summary="A migrated completion package.",
+                    completion_path=".owlbear/legacy/completed/change-a",
+                    historical_completion_locator=".owlbear/completed/change-a",
+                    package_id="c" * 64,
+                    introducing_target_commit="d" * 40,
+                    source_target_commit="e" * 40,
+                ),
+                ReceiptCompletedChangeRecord(
+                    change_id="change-b",
+                    completion_id="1" * 64,
+                    title="Receipt completion",
+                    semantic_summary="A merged pull request completion receipt.",
+                    finalization_receipt_id="2" * 64,
+                    finalized_change_head="3" * 40,
+                    repository_identity="owlbear/example",
+                    pull_request_identity=CompletionPullRequestIdentity(number=42, node_id="PR_example_42"),
+                    accepted_target_ref="main",
+                    accepted_merge_commit="4" * 40,
+                    merged_at=datetime(2026, 8, 11, 12, tzinfo=UTC),
+                    acceptance_observation_id="5" * 64,
+                    check_observation_ids=("6" * 64,),
+                    review_receipt_ids=("7" * 64,),
+                    acceptance_evidence_digest="8" * 64,
+                    completed_at=datetime(2026, 8, 11, 13, tzinfo=UTC),
+                ),
+            ),
+            next_cursor="completed-history-next",
+        )
+
+    def list_completed_changes(self, *args: object) -> CompletedChangePage:
         self.calls.append(("completed-list", args))
-        return {"records": [], "next_cursor": None}
+        return self._completed_history()
 
-    def search_completed_changes(self, *args: object) -> dict[str, object]:
+    def search_completed_changes(self, *args: object) -> CompletedChangePage:
         self.calls.append(("completed-search", args))
-        return {"records": [], "next_cursor": None}
+        return self._completed_history()
 
-    def show_completed_change(self, *args: object) -> dict[str, object]:
+    def show_completed_change(self, *args: object) -> LegacyCompletedChangeRecord | ReceiptCompletedChangeRecord:
         self.calls.append(("completed-show", args))
-        return {"change_id": args[0], "completion_id": args[1]}
+        records = self._completed_history().records
+        return records[1] if args[1] == "1" * 64 else records[0]
 
 
 def _client(failures: dict[str, Exception] | None = None) -> tuple[TestClient, _DeliveryApplicationFake]:
@@ -618,6 +663,10 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
     )
 
     assert [response.status_code for response in responses] == [200] * 13
+    history = _DeliveryApplicationFake._completed_history()
+    assert responses[10].json() == history.model_dump(mode="json")
+    assert responses[11].json() == history.model_dump(mode="json")
+    assert responses[12].json() == history.records[0].model_dump(mode="json")
     target_sync_call = application.calls[1]
     target_sync_operation_id = target_sync_call[1][1]
     assert isinstance(target_sync_operation_id, str)
@@ -654,6 +703,28 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
         ("completed-list", (None, 25)),
         ("completed-search", ("delivery", None, 5)),
         ("completed-show", ("change-a", "a" * 64)),
+    ]
+
+
+def test_completed_history_routes_serialize_both_record_kinds() -> None:
+    client, application = _client()
+    history = _DeliveryApplicationFake._completed_history()
+
+    legacy = client.get(
+        "/api/work-items/completed/change-a",
+        params={"completion_id": history.records[0].completion_id},
+    )
+    receipt = client.get(
+        "/api/work-items/completed/change-b",
+        params={"completion_id": history.records[1].completion_id},
+    )
+
+    assert legacy.status_code == receipt.status_code == 200
+    assert legacy.json() == history.records[0].model_dump(mode="json")
+    assert receipt.json() == history.records[1].model_dump(mode="json")
+    assert application.calls == [
+        ("completed-show", ("change-a", history.records[0].completion_id)),
+        ("completed-show", ("change-b", history.records[1].completion_id)),
     ]
 
 
@@ -945,3 +1016,31 @@ def test_target_routes_are_mounted_on_live_app() -> None:
     paths = app.openapi()["paths"]
     assert "/api/work-items" in paths
     assert "/api/changes/{change_id}/work-items/{item_key}" in paths
+
+
+def test_completed_history_routes_publish_versioned_discriminated_schema() -> None:
+    client, _application = _client()
+    schema = client.app.openapi()
+    paths = schema["paths"]
+    components = schema["components"]["schemas"]
+
+    for path in ("/api/work-items/completed", "/api/work-items/completed/search"):
+        response_schema = paths[path]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+        assert response_schema == {"$ref": "#/components/schemas/CompletedChangePage"}
+    show_schema = paths["/api/work-items/completed/{change_id}"]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"]
+    assert show_schema == {"$ref": "#/components/schemas/CompletedChangeRecord"}
+
+    record_schema = components["CompletedChangeRecord"]
+    assert record_schema["oneOf"] == [
+        {"$ref": "#/components/schemas/LegacyCompletedChangeRecord"},
+        {"$ref": "#/components/schemas/ReceiptCompletedChangeRecord"},
+    ]
+    assert record_schema["discriminator"] == {
+        "propertyName": "record_kind",
+        "mapping": {
+            "legacy-package": "#/components/schemas/LegacyCompletedChangeRecord",
+            "completion-receipt": "#/components/schemas/ReceiptCompletedChangeRecord",
+        },
+    }

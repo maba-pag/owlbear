@@ -45,7 +45,12 @@ from owlbear_delivery.change_workspace import (
     ChangeWorktreeAttentionError,
     CoordinationConflictError,
 )
-from owlbear_delivery.completed_history import CompletedHistoryError, CompletedHistoryMissingError
+from owlbear_delivery.completed_history import (
+    CompletedChangePage,
+    CompletedChangeRecord,
+    CompletedHistoryError,
+    CompletedHistoryMissingError,
+)
 from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
     DeliveryRequestResolution,
@@ -276,15 +281,15 @@ class TargetCockpitService:
         )
         return ChangeWorktreeRecoveryResponse.from_receipt(receipt)
 
-    def list_completed(self, cursor: str | None, limit: int) -> object:
+    def list_completed(self, cursor: str | None, limit: int) -> CompletedChangePage:
         """List one bounded page of completed change history."""
         return self._invoke(lambda: self._application.list_completed_changes(cursor, limit))
 
-    def search_completed(self, query: str, cursor: str | None, limit: int) -> object:
+    def search_completed(self, query: str, cursor: str | None, limit: int) -> CompletedChangePage:
         """Search completed semantic history."""
         return self._invoke(lambda: self._application.search_completed_changes(query, cursor, limit))
 
-    def show_completed(self, change_id: str, completion_id: str | None) -> object:
+    def show_completed(self, change_id: str, completion_id: str | None) -> CompletedChangeRecord:
         """Return one exact completed change record."""
         return self._invoke(lambda: self._application.show_completed_change(change_id, completion_id))
 
@@ -351,29 +356,29 @@ def _register_queries(router: APIRouter) -> None:
     ) -> WorkItemPortfolioResponse:
         return service.list_items()
 
-    @router.get("/work-items/completed")
+    @router.get("/work-items/completed", response_model=CompletedChangePage)
     def list_completed_changes(
         service: _TargetService,
         cursor: str | None = None,
         limit: Annotated[int, Query(ge=1, le=100)] = 100,
-    ) -> object:
+    ) -> CompletedChangePage:
         return service.list_completed(cursor, limit)
 
-    @router.get("/work-items/completed/search")
+    @router.get("/work-items/completed/search", response_model=CompletedChangePage)
     def search_completed_changes(
         service: _TargetService,
         query: Annotated[str, Query(min_length=1)],
         cursor: str | None = None,
         limit: Annotated[int, Query(ge=1, le=100)] = 100,
-    ) -> object:
+    ) -> CompletedChangePage:
         return service.search_completed(query, cursor, limit)
 
-    @router.get("/work-items/completed/{change_id}")
+    @router.get("/work-items/completed/{change_id}", response_model=CompletedChangeRecord)
     def show_completed_change(
         change_id: str,
         service: _TargetService,
         completion_id: str | None = None,
-    ) -> object:
+    ) -> CompletedChangeRecord:
         return service.show_completed(change_id, completion_id)
 
     @router.get("/design-work/{change_id}", response_model=DesignWorkDetailResponse)
