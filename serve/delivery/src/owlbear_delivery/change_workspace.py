@@ -779,6 +779,7 @@ class ChangeWorkspaceManager:
                 coordinations.get(change_id),
                 registered.get(change_id),
                 branch_heads.get(change_id),
+                include_content_attention=True,
             )
             for change_id in change_ids
         )
@@ -1294,7 +1295,13 @@ class ChangeWorkspaceManager:
 
     def _cleanup_content_attention(self, expected_path: Path) -> set[ChangeWorktreeAttentionCode]:
         try:
-            status = self._git("status", "--porcelain=v1", "--untracked-files=all", cwd=expected_path)
+            status = self._git(
+                "--no-optional-locks",
+                "status",
+                "--porcelain=v1",
+                "--untracked-files=all",
+                cwd=expected_path,
+            )
         except OSError, subprocess.SubprocessError, ValueError:
             return {ChangeWorktreeAttentionCode.UNEXPECTED_FILESYSTEM_STATE}
         return {ChangeWorktreeAttentionCode.WORKTREE_DIRTY} if status else set()
@@ -1387,11 +1394,21 @@ class ChangeWorkspaceManager:
         coordination: ChangeCoordination | None,
         registered: _RegisteredGitWorktree | None,
         branch_head: str | None,
+        *,
+        include_content_attention: bool = False,
     ) -> RetainedChangeWorktree:
         expected_branch = f"owlbear/change/{change_id}"
         expected_path = self._worktree_root / change_id
         worktree_present = self._worktree_present(expected_path)
-        attention = self._retained_attention(change_id, coordination, registered, branch_head, expected_path)
+        attention = self._retained_attention(
+            change_id,
+            coordination,
+            registered,
+            branch_head,
+            expected_path,
+        )
+        if include_content_attention and worktree_present and registered is not None and branch_head is not None:
+            attention.update(self._cleanup_content_attention(expected_path))
         return RetainedChangeWorktree(
             change_id=change_id,
             worktree_path=expected_path,

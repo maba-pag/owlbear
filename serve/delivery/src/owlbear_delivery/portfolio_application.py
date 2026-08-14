@@ -1446,7 +1446,10 @@ class PortfolioApplication:
         if retained is None:
             return None
         projection = self._retained_change_worktree_view(retained)
-        completion = runtime.completion_receipt()
+        try:
+            completion = runtime.completion_receipt()
+        except OSError, ValueError, DeliveryRuntimeConflictError:
+            completion = None
         return WorkItemWorktreeCleanupView(
             eligible=projection.cleanup_eligible,
             blocked_reason=projection.cleanup_blocked_reason.value

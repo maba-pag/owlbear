@@ -2197,6 +2197,22 @@ def test_abandoned_publication_detail_projects_cleanup_eligibility(tmp_path: Pat
     assert detail.publication.worktree_cleanup.completion_id is None
 
 
+def test_dirty_abandoned_publication_detail_blocks_cleanup(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    application.abandon_change("change-a", "User stopped the Change")
+    (coordinator.show("change-a").worktree_path / "notes.txt").write_text("keep me\n", encoding="utf-8")
+
+    detail = application.show_work_item_view("change-a", "publication")
+
+    assert detail.publication is not None
+    assert detail.publication.worktree_cleanup is not None
+    assert detail.publication.worktree_cleanup.eligible is False
+    assert detail.publication.worktree_cleanup.blocked_reason == "worktree-attention"
+
+
 def test_change_level_legacy_context_requires_completed_building_change(tmp_path: Path) -> None:
     completed_root = tmp_path / "completed"
     completed_root.mkdir()

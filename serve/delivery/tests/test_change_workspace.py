@@ -327,6 +327,8 @@ def test_list_retained_worktrees_is_sorted_and_batches_git_reads(tmp_path: Path)
     assert [call.args[:3] for call in run_git.call_args_list] == [
         ("worktree", "list", "--porcelain"),
         ("for-each-ref", "--format=%(refname)%00%(objectname)", "refs/heads/owlbear/change"),
+        ("--no-optional-locks", "status", "--porcelain=v1"),
+        ("--no-optional-locks", "status", "--porcelain=v1"),
     ]
     assert before_worktrees == _git(repository, "worktree", "list", "--porcelain")
     assert before_coordination == tuple(
