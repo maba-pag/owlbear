@@ -160,13 +160,13 @@ def _draft_receipt(head: str) -> DraftPullRequestPublicationReceipt:
     return DraftPullRequestPublicationReceipt(receipt_id=_receipt_id(payload), **payload)
 
 
-def _summary_receipt(head: str) -> GeneratedPullRequestSummaryReceipt:
+def _summary_receipt(head: str, *, number: int = 7) -> GeneratedPullRequestSummaryReceipt:
     payload = {
         "schema_version": 1,
         "operation_id": "summary-operation",
         "change_id": "change-a",
         "repository": "example/project",
-        "number": 7,
+        "number": number,
         "head_sha": head,
         "body_digest": "3" * 64,
         "provider_evidence_digest": "4" * 64,
@@ -1311,6 +1311,34 @@ def test_reconcile_first_checkpoint_publishes_branch_creates_pr_and_drains(tmp_p
     assert history is not None
     assert history.current.number == 7
     assert history.current.head_sha == head
+
+
+def test_reconcile_checkpoint_rejects_summary_for_a_different_pull_request(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    head = coordinator.show("change-a").last_reviewed_commit
+    pending = DeliveryPendingCheckpoint(
+        head=head,
+        triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+    )
+    _set_checkpoint(runtimes["change-a"], state_root, pending)
+    branch_publisher = Mock()
+    branch_publisher.publish.return_value = _branch_receipt(head)
+    pull_request_publisher = Mock()
+    pull_request_publisher.publish.return_value = _draft_receipt(head)
+    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head, number=8)
+    application._change_branch_publisher = branch_publisher  # noqa: SLF001
+    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="does not match the current publication"):
+        application.reconcile_change_checkpoint("change-a")
+
+    history = runtimes["change-a"].publication_history()
+    assert history is not None
+    assert history.current.number == 7
+    assert runtimes["change-a"].checkpoint_publication_state().pending_checkpoint == pending
 
 
 def test_reconcile_derives_bounded_provider_text_from_authored_titles(tmp_path: Path) -> None:

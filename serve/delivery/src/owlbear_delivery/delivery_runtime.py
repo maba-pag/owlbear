@@ -1529,11 +1529,10 @@ class DeliveryRuntime:
     def _capture_existing_change_disposition(
         self,
         frontier: DeliveryFrontier,
-        previous: bytes,
         existing: DeliveryChangeDisposition,
         disposition: DeliveryChangeDisposition,
         publication_identity: DeliveryChangePublicationIdentity | None,
-    ) -> DeliveryChangeDisposition:
+    ) -> tuple[DeliveryChangeDisposition, DeliveryFrontier | None]:
         if not (
             existing.kind == disposition.kind
             and existing.change_id == disposition.change_id
@@ -1542,19 +1541,18 @@ class DeliveryRuntime:
         ):
             _conflict("Delivery Change already has different attention authority")
         if publication_identity is None:
-            return existing
+            return existing, None
         if publication_identity.change_id != self._contract.change_id:
             _conflict("Change publication identity does not match the admitted Change")
         current = frontier.change_disposition_publication
         if current is None:
-            self._replace(
-                previous,
+            return (
+                existing,
                 frontier.model_copy(update={"change_disposition_publication": publication_identity}),
             )
-            return existing
         if current != publication_identity:
             _conflict("Delivery Change attention has different publication identity")
-        return existing
+        return existing, None
 
     def capture_change_disposition(
         self,
@@ -1567,13 +1565,15 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         existing = frontier.change_disposition
         if existing is not None:
-            return self._capture_existing_change_disposition(
+            result, updated = self._capture_existing_change_disposition(
                 frontier,
-                previous,
                 existing,
                 disposition,
                 publication_identity,
             )
+            if updated is not None:
+                self._replace(previous, updated)
+            return result
         if is_change_terminal(frontier):
             _conflict("completed Delivery Change cannot retain attention")
         _require_no_active_change_claim(frontier, "Change attention capture")
@@ -1886,7 +1886,10 @@ class DeliveryRuntime:
             publication.number,
             publication.node_id,
         ):
-            updated_history = history.refresh_current(publication)
+            try:
+                updated_history = history.refresh_current(publication)
+            except ValueError as exc:
+                _conflict(str(exc))
         else:
             _conflict("pull-request ready receipt does not match the current publication")
         if frontier.ready is not None:
