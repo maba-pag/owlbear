@@ -314,7 +314,7 @@ def test_reconciles_lost_create_response_without_creating_second_pr(tmp_path: Pa
     receipt = publisher.publish(_request())
 
     assert receipt.number == 7
-    assert provider.create_calls == 2
+    assert provider.create_calls == 1
     assert len(provider.pull_requests) == 1
 
 
