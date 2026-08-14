@@ -4,13 +4,25 @@ import hashlib
 import json
 import subprocess
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from owlbear_delivery.change_workspace import CapacityLedger, ChangeCoordination
 from owlbear_delivery.completed_history import CompletedHistoryCatalog
-from owlbear_delivery.delivery_runtime import DeliveryTaskDefinition
+from owlbear_delivery.delivery_runtime import (
+    DeliveryObservation,
+    DeliveryObservationReceipt,
+    DeliveryFinalization,
+    DeliveryFinalizationReceipt,
+    DeliveryRequest,
+    DeliveryRequestKind,
+    DeliveryReview,
+    DeliveryReviewReceipt,
+    DeliveryTaskDefinition,
+    DeliveryTaskResult,
+)
 from owlbear_delivery.design_package import CompletionPackageManifest, DesignPackageManifest
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
@@ -88,6 +100,81 @@ def _task() -> DeliveryTaskDefinition:
         exclusions=("Do not remove Git history.",),
         acceptance_observations=("The catalog still returns the record.",),
         proof_boundaries=("CompletedHistoryCatalog",),
+    )
+
+
+def _modern_result(
+    change_id: str, baseline: str, authority_digest: str, task: DeliveryTaskDefinition
+) -> dict[str, object]:
+    observed_at = datetime(2026, 8, 14, 12, tzinfo=UTC)
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id=change_id,
+            task_or_finalization_id=task.task_id,
+            exact_commit=baseline,
+            observation_kind="retirement-fixture",
+            command_or_procedure="retirement fixture validation",
+            exit_status_or_artifact_locator="exit:0",
+            observer_or_runner_identity="retirement-fixture",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit=baseline,
+            author_id="retirement-fixture-author",
+            reviewer_id="retirement-fixture-reviewer",
+            evidence=("The retained completion fixture is independently reviewed.",),
+            reviewed_at=observed_at,
+        )
+    )
+    return DeliveryTaskResult(
+        authority_digest=authority_digest,
+        change_id=change_id,
+        completed_commit=baseline,
+        result_id="RESULT-TASK-001",
+        task_digest=task.digest,
+        task_id=task.task_id,
+        observations=(observation,),
+        review=review,
+    ).model_dump(mode="json")
+
+
+def _finalization_receipt(change_id: str, baseline: str) -> DeliveryFinalizationReceipt:
+    observed_at = datetime(2026, 8, 14, 13, tzinfo=UTC)
+    operation_id = "FINALIZE-001"
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id=change_id,
+            task_or_finalization_id=operation_id,
+            exact_commit=baseline,
+            observation_kind="retirement-fixture-finalization",
+            command_or_procedure="retirement fixture finalization validation",
+            exit_status_or_artifact_locator="exit:0",
+            observer_or_runner_identity="retirement-fixture",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit=baseline,
+            author_id="retirement-finalization-author",
+            reviewer_id="retirement-finalization-reviewer",
+            evidence=("The finalization fixture is independently reviewed.",),
+            reviewed_at=observed_at,
+        )
+    )
+    return DeliveryFinalizationReceipt.create(
+        DeliveryFinalization(
+            operation_id=operation_id,
+            change_id=change_id,
+            exact_head=baseline,
+            authority_digest="d" * 64,
+            result_digests=("e" * 64,),
+            observations=(observation,),
+            review=review,
+            finalized_at=observed_at,
+        )
     )
 
 
@@ -326,15 +413,70 @@ def test_retirement_ignores_completionless_legacy_frontier(tmp_path: Path) -> No
 
 
 def test_retirement_accepts_schema_fifteen_legacy_completion(tmp_path: Path) -> None:
-    repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
+    repository, commits, delivery_root, _archive, _branch = _fixture(tmp_path)
     frontier_path = delivery_root / "runtime/changes/change-a/frontier.json"
     frontier = json.loads(frontier_path.read_bytes())
-    frontier["schema_version"] = 15
+    frontier["bindings"][0]["results"] = [
+        _modern_result(
+            "change-a",
+            commits["baseline"],
+            hashlib.sha256((delivery_root / "runtime/changes/change-a/contract.json").read_bytes()).hexdigest(),
+            _task(),
+        )
+    ]
+    frontier["bindings"][0]["output"] = {
+        "claim_id": "legacy-claim",
+        "digest": "f" * 64,
+        "kind": "implementation",
+        "output_id": "output-implementation",
+        "stage": "implementation",
+    }
+    frontier.update(
+        {
+            "change_abandonment": None,
+            "change_completion": None,
+            "change_deferral": None,
+            "change_disposition": None,
+            "change_disposition_publication": None,
+            "change_disposition_resolution": None,
+            "change_publication_history": None,
+            "finalization": None,
+            "finalization_invalidation": None,
+            "merged_pull_request_latch": None,
+            "pending_checkpoint": None,
+            "published_head": commits["baseline"],
+            "ready": None,
+            "schema_version": 15,
+            "target_sync_receipt": None,
+        }
+    )
     frontier_path.write_bytes(_canonical(frontier))
 
     plan = plan_delivery_integration_retirement(repository)
 
     assert tuple(change.change_id for change in plan.changes) == ("change-a",)
+
+
+def test_retirement_rejects_legacy_completion_on_current_schema(tmp_path: Path) -> None:
+    repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
+    frontier_path = delivery_root / "runtime/changes/change-a/frontier.json"
+    frontier = json.loads(frontier_path.read_bytes())
+    frontier["schema_version"] = 16
+    frontier_path.write_bytes(_canonical(frontier))
+
+    with pytest.raises(DeliveryIntegrationRetirementError, match="frontier is invalid"):
+        plan_delivery_integration_retirement(repository)
+
+
+def test_retirement_rejects_legacy_completion_identity_mismatch(tmp_path: Path) -> None:
+    repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
+    frontier_path = delivery_root / "runtime/changes/change-a/frontier.json"
+    frontier = json.loads(frontier_path.read_bytes())
+    frontier["integration_result_id"] = "d" * 64
+    frontier_path.write_bytes(_canonical(frontier))
+
+    with pytest.raises(DeliveryIntegrationRetirementError, match="frontier is invalid"):
+        plan_delivery_integration_retirement(repository)
 
 
 def test_retirement_removes_per_change_publication_state(tmp_path: Path) -> None:
@@ -368,21 +510,27 @@ def test_retirement_rejects_managed_worktrees_without_runtime(tmp_path: Path) ->
         plan_delivery_integration_retirement(repository)
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [("requests", [{"request_id": "pending-request"}]), ("finalization", {"finalization_id": "pending"})],
-)
-def test_retirement_rejects_unresolved_legacy_authority(tmp_path: Path, field: str, value: object) -> None:
-    repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
+@pytest.mark.parametrize("field", ["requests", "finalization"])
+def test_retirement_rejects_well_formed_legacy_authority(tmp_path: Path, field: str) -> None:
+    repository, commits, delivery_root, _archive, _branch = _fixture(tmp_path)
     frontier_path = delivery_root / "runtime/changes/change-a/frontier.json"
     frontier = json.loads(frontier_path.read_bytes())
     if field == "requests":
-        frontier["bindings"][0][field] = value
+        frontier["bindings"][0][field] = [
+            DeliveryRequest(
+                request_id="pending-request",
+                kind=DeliveryRequestKind.ACTION,
+                outcome_id="OUT-001",
+                summary="A pending action remains.",
+            ).model_dump(mode="json")
+        ]
     else:
-        frontier[field] = value
+        frontier[field] = _finalization_receipt("change-a", commits["baseline"]).model_dump(mode="json")
     frontier_path.write_bytes(_canonical(frontier))
 
-    with pytest.raises(DeliveryIntegrationRetirementError, match="frontier is invalid"):
+    with pytest.raises(
+        DeliveryIntegrationRetirementError, match=f"authority blocks Integration retirement: change-a: {field}"
+    ):
         plan_delivery_integration_retirement(repository)
 
 

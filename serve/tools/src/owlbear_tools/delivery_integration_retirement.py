@@ -47,6 +47,9 @@ _PUBLICATION_LOCKS_RELATIVE = Path("claims/publication-locks")
 _ACQUISITION_LOCK_RELATIVE = Path("claims/acquisition-lock")
 _INTEGRATION_LOCK_RELATIVE = Path("claims/integration-lock")
 _LEGACY_FRONTIER_SCHEMAS = frozenset(range(1, 16))
+_COMPACT_RESULT_SCHEMAS = frozenset({1, 2, 3})
+_RETIREMENT_FRONTIER_ALLOWED_FIELDS = frozenset({"schema_version", "bindings", "published_head", "operator_moves"})
+_RETIREMENT_BINDING_ALLOWED_FIELDS = frozenset({"outcome_id", "plan_scope_id", "stage", "tasks", "results", "output"})
 _SAFE_CHANGE_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _SAFE_COMMIT = re.compile(r"^[0-9a-f]{40}$")
 _SAFE_DIGEST = re.compile(r"^[0-9a-f]{64}$")
@@ -113,20 +116,9 @@ class _VerificationRecord:
 
 
 @dataclass(frozen=True)
-class _RetirementBinding:
-    stage: DeliveryStage
-    active_claim: object | None
-    recovery_attention: object | None
-    candidate: object | None
-    result_candidate: object | None
-
-
-@dataclass(frozen=True)
 class _RetirementFrontier:
-    bindings: tuple[_RetirementBinding, ...]
+    frontier: DeliveryFrontier
     integration_completion: DeliveryIntegrationCompletion | None
-    integration_attention: object | None
-    integration_repair_claim: object | None
 
 
 def _publication_payload(path: Path) -> dict[str, object]:
@@ -354,89 +346,55 @@ def _resolve_target(repository_root: Path, target_ref: str) -> str:
     return resolved.stdout.decode().strip()
 
 
-def _modern_retirement_frontier(frontier: DeliveryFrontier) -> _RetirementFrontier:
-    return _RetirementFrontier(
-        bindings=tuple(
-            _RetirementBinding(
-                stage=binding.stage,
-                active_claim=binding.active_claim,
-                recovery_attention=binding.recovery_attention,
-                candidate=binding.candidate,
-                result_candidate=binding.result_candidate,
-            )
-            for binding in frontier.bindings
-        ),
-        integration_completion=None,
-        integration_attention=frontier.integration_attention,
-        integration_repair_claim=frontier.integration_repair_claim,
-    )
-
-
-def _legacy_retirement_binding(raw_binding: object) -> _RetirementBinding:
-    if not isinstance(raw_binding, dict):
+def _parse_retirement_frontier(content: bytes) -> _RetirementFrontier:
+    payload = json.loads(content)
+    if not isinstance(payload, dict):
         raise TypeError
-    raw_results = raw_binding.get("results", [])
-    if not isinstance(raw_results, list):
-        raise TypeError
-    if raw_binding.get("requests"):
-        raise ValueError
-    if any(not isinstance(result, dict) or "observations" in result or "review" in result for result in raw_results):
-        raise ValueError
-    try:
-        stage = DeliveryStage(raw_binding.get("stage", DeliveryStage.PLANNING))
-    except (TypeError, ValueError) as exc:
-        message = "legacy Delivery binding stage is invalid"
-        raise ValueError(message) from exc
-    return _RetirementBinding(
-        stage=stage,
-        active_claim=raw_binding.get("active_claim"),
-        recovery_attention=raw_binding.get("recovery_attention"),
-        candidate=raw_binding.get("candidate"),
-        result_candidate=raw_binding.get("result_candidate"),
-    )
-
-
-def _legacy_retirement_frontier(payload: dict[str, object]) -> _RetirementFrontier:
     schema_version = payload.get("schema_version")
-    if schema_version not in _LEGACY_FRONTIER_SCHEMAS:
-        raise ValueError
-    if payload.get("finalization") is not None:
-        raise ValueError
-    raw_bindings = payload.get("bindings")
+    result_id = payload.get("integration_result_id")
     completion_payload = payload.get("integration_completion")
-    if not isinstance(raw_bindings, list):
-        raise TypeError
-    bindings = tuple(_legacy_retirement_binding(raw_binding) for raw_binding in raw_bindings)
     completion: DeliveryIntegrationCompletion | None = None
-    if completion_payload is not None:
+    if result_id is not None or completion_payload is not None:
+        if type(schema_version) is not int or schema_version not in _LEGACY_FRONTIER_SCHEMAS:
+            raise ValueError
         try:
             completion = DeliveryIntegrationCompletion.model_validate(completion_payload)
         except (TypeError, ValueError) as exc:
             message = "legacy Delivery Integration completion is invalid"
             raise ValueError(message) from exc
-        if payload.get("integration_result_id") != completion.completion_id:
+        if result_id != completion.completion_id:
             raise ValueError
-    elif payload.get("integration_result_id") is not None:
-        raise ValueError
-    return _RetirementFrontier(
-        bindings=tuple(bindings),
-        integration_completion=completion,
-        integration_attention=payload.get("integration_attention"),
-        integration_repair_claim=payload.get("integration_repair_claim"),
-    )
+        payload = dict(payload)
+        payload.pop("integration_result_id", None)
+        payload.pop("integration_completion", None)
+    payload = _retirement_validation_payload(payload, schema_version)
+    frontier, _canonical = parse_delivery_frontier(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode())
+    return _RetirementFrontier(frontier=frontier, integration_completion=completion)
 
 
-def _parse_retirement_frontier(content: bytes) -> _RetirementFrontier:
-    try:
-        return _modern_retirement_frontier(parse_delivery_frontier(content)[0])
-    except TypeError, ValueError:
-        try:
-            payload = json.loads(content)
-        except json.JSONDecodeError as exc:
-            raise ValueError from exc
-        if not isinstance(payload, dict):
-            raise TypeError from None
-        return _legacy_retirement_frontier(payload)
+def _retirement_validation_payload(payload: dict[str, object], schema_version: object) -> dict[str, object]:
+    if schema_version not in _COMPACT_RESULT_SCHEMAS:
+        return payload
+    raw_bindings = payload.get("bindings")
+    if not isinstance(raw_bindings, list):
+        return payload
+    bindings = []
+    for raw_binding in raw_bindings:
+        if not isinstance(raw_binding, dict):
+            return payload
+        raw_results = raw_binding.get("results", [])
+        if not isinstance(raw_results, list):
+            return payload
+        if any(
+            not isinstance(result, dict) or "observations" in result or "review" in result for result in raw_results
+        ):
+            raise ValueError
+        binding = dict(raw_binding)
+        binding["results"] = []
+        bindings.append(binding)
+    validation_payload = dict(payload)
+    validation_payload["bindings"] = bindings
+    return validation_payload
 
 
 def _load_frontiers(
@@ -505,19 +463,46 @@ def _require_runtime_quiescence(runtime_root: Path) -> None:
 
 
 def _require_frontier_quiescence(change_id: str, frontier: _RetirementFrontier) -> None:
-    if any(binding.active_claim is not None for binding in frontier.bindings):
+    delivery_frontier = frontier.frontier
+    if any(binding.active_claim is not None for binding in delivery_frontier.bindings):
         _fail(f"active Delivery claim blocks Integration retirement: {change_id}")
-    if any(binding.recovery_attention is not None for binding in frontier.bindings):
+    if any(binding.recovery_attention is not None for binding in delivery_frontier.bindings):
         _fail(f"Delivery recovery attention blocks Integration retirement: {change_id}")
-    if frontier.integration_attention is not None or frontier.integration_repair_claim is not None:
+    if delivery_frontier.integration_attention is not None or delivery_frontier.integration_repair_claim is not None:
         _fail(f"Integration attention blocks retirement: {change_id}")
 
 
 def _require_terminal_frontier(change_id: str, frontier: _RetirementFrontier) -> None:
-    if any(binding.stage != DeliveryStage.COMPLETED for binding in frontier.bindings):
+    delivery_frontier = frontier.frontier
+    if any(binding.stage != DeliveryStage.COMPLETED for binding in delivery_frontier.bindings):
         _fail(f"incomplete Integration completion blocks retirement: {change_id}")
-    if any(binding.candidate is not None or binding.result_candidate is not None for binding in frontier.bindings):
+    if any(
+        binding.candidate is not None or binding.result_candidate is not None for binding in delivery_frontier.bindings
+    ):
         _fail(f"unconsumed Integration candidate blocks retirement: {change_id}")
+    _require_default_fields(
+        delivery_frontier,
+        _RETIREMENT_FRONTIER_ALLOWED_FIELDS,
+        f"Delivery frontier authority blocks Integration retirement: {change_id}",
+    )
+    for binding in delivery_frontier.bindings:
+        _require_default_fields(
+            binding,
+            _RETIREMENT_BINDING_ALLOWED_FIELDS,
+            f"Delivery binding authority blocks Integration retirement: {change_id}",
+        )
+
+
+def _require_default_fields(
+    model: BaseModel,
+    allowed_fields: frozenset[str],
+    detail: str,
+) -> None:
+    for field_name, field in type(model).model_fields.items():
+        if field_name in allowed_fields:
+            continue
+        if getattr(model, field_name) != field.get_default(call_default_factory=True):
+            _fail(f"{detail}: {field_name}")
 
 
 def _require_quiescent(
