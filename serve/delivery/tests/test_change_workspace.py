@@ -365,7 +365,6 @@ def test_cleanup_removes_exact_worktree_keeps_branch_and_replays_receipt(tmp_pat
     repository, initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)
     coordination = manager.ensure("cleanup-change")
-    (coordination.worktree_path / "uncommitted.txt").write_text("discarded\n", encoding="utf-8")
 
     receipt = manager.cleanup(coordination.change_id)
 
@@ -378,6 +377,22 @@ def test_cleanup_removes_exact_worktree_keeps_branch_and_replays_receipt(tmp_pat
     assert coordinator.show(coordination.change_id).worktree_cleanup == receipt
     assert manager.cleanup(coordination.change_id) == receipt
     assert manager.list_retained() == ()
+
+
+def test_cleanup_refuses_dirty_worktree_without_discarding_content(tmp_path: Path) -> None:
+    repository, _ = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("dirty-cleanup")
+    dirty_file = coordination.worktree_path / "uncommitted.txt"
+    dirty_file.write_text("preserve me\n", encoding="utf-8")
+
+    with pytest.raises(ChangeWorktreeAttentionError) as raised:
+        manager.cleanup(coordination.change_id)
+
+    assert ChangeWorktreeAttentionCode.WORKTREE_DIRTY in raised.value.attention
+    assert dirty_file.read_text(encoding="utf-8") == "preserve me\n"
+    assert coordination.worktree_path.exists()
+    assert coordinator.show(coordination.change_id).worktree_cleanup is None
 
 
 def test_cleanup_replays_persisted_intent_after_receipt_write_failure(

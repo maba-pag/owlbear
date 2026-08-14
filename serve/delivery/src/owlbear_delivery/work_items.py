@@ -281,6 +281,14 @@ class WorkItemTaskEvidence(_ProjectionModel):
     proof_boundaries: tuple[str, ...]
 
 
+class WorkItemWorktreeCleanupView(_ProjectionModel):
+    """Bounded cleanup eligibility without exposing workspace custody details."""
+
+    eligible: bool
+    blocked_reason: str | None = None
+    completion_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
 class WorkItemPublicationView(_ProjectionModel):
     """Exact durable finalization, publication, and acceptance identities."""
 
@@ -298,6 +306,7 @@ class WorkItemPublicationView(_ProjectionModel):
     accepted_merge_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     merged_at: str | None = None
     attention: DeliveryChangeDisposition | None = None
+    worktree_cleanup: WorkItemWorktreeCleanupView | None = None
 
 
 class WorkItemDetailView(_ProjectionModel):

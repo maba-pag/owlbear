@@ -113,6 +113,7 @@ from owlbear_delivery.work_items import (
     WorkItemProjector,
     WorkItemPublicationPhase,
     WorkItemScope,
+    WorkItemWorktreeCleanupView,
 )
 
 if TYPE_CHECKING:
@@ -610,16 +611,23 @@ class PortfolioApplication:
         """List retained Change worktrees and exact cleanup eligibility facts."""
         return tuple(self._retained_change_worktree_view(item) for item in self._workspace_manager.list_retained())
 
-    def cleanup_change_worktree(self, change_id: str) -> DeliveryChangeWorktreeCleanup:
+    def cleanup_change_worktree(
+        self,
+        change_id: str,
+        expected_completion_id: str | None = None,
+    ) -> DeliveryChangeWorktreeCleanup:
         """Clean one terminal Change worktree after exact lifecycle validation."""
         runtime = self._runtime(change_id)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             lifecycle = runtime.change_stage()
             completion = runtime.completion_receipt()
-            if lifecycle != DeliveryChangeStage.ABANDONED and not (
-                lifecycle == DeliveryChangeStage.COMPLETED and completion is not None
-            ):
+            completed = lifecycle == DeliveryChangeStage.COMPLETED and completion is not None
+            if lifecycle != DeliveryChangeStage.ABANDONED and not completed:
                 self._fail("Change worktree cleanup requires an abandoned or completed Change")
+            if expected_completion_id is not None and (
+                not completed or completion.completion_id != expected_completion_id
+            ):
+                self._fail("completed Change worktree cleanup requires the exact completion receipt")
             try:
                 receipt = self._workspace_manager.cleanup(change_id)
             except ChangeWorktreeAttentionError:
@@ -649,10 +657,7 @@ class PortfolioApplication:
         completion_id: str,
     ) -> DeliveryChangeWorktreeCleanup:
         """Clean one completed Change worktree after matching its durable receipt."""
-        completion = self._runtime(change_id).completion_receipt()
-        if completion is None or completion.completion_id != completion_id:
-            self._fail("completed Change worktree cleanup requires the exact completion receipt")
-        return self.cleanup_change_worktree(change_id)
+        return self.cleanup_change_worktree(change_id, expected_completion_id=completion_id)
 
     def show_finalization_context(self, change_id: str) -> DeliveryFinalizationContext:
         """Return engine-resolved finalization context without changing Delivery state."""
@@ -1348,10 +1353,16 @@ class PortfolioApplication:
 
     def show_work_item_view(self, change_id: str, item_key: str) -> WorkItemDetailView:
         """Show semantic and operator detail from one exact snapshot."""
+        runtime = self._runtime(change_id)
         try:
-            return self._work_item_projector(self._runtime(change_id)).show_view(item_key)
+            view = self._work_item_projector(runtime).show_view(item_key)
         except (KeyError, StopIteration) as exc:
             self._fail(f"work item is absent: {item_key}", exc)
+        if view.publication is None:
+            return view
+        cleanup = self._worktree_cleanup_view(runtime)
+        publication = view.publication.model_copy(update={"worktree_cleanup": cleanup})
+        return view.model_copy(update={"publication": publication})
 
     def show_operator_context(self, change_id: str, outcome_id: str) -> DeliveryOperatorContext:
         """Show current bounded operator state from one exact runtime binding."""
@@ -1425,6 +1436,24 @@ class PortfolioApplication:
 
     def _work_item_projector(self, runtime: DeliveryRuntime) -> WorkItemProjector:
         return WorkItemProjector(self._delivery_snapshot(runtime))
+
+    def _worktree_cleanup_view(self, runtime: DeliveryRuntime) -> WorkItemWorktreeCleanupView | None:
+        change_id = runtime.contract.change_id
+        retained = next(
+            (item for item in self._workspace_manager.list_retained() if item.change_id == change_id),
+            None,
+        )
+        if retained is None:
+            return None
+        projection = self._retained_change_worktree_view(retained)
+        completion = runtime.completion_receipt()
+        return WorkItemWorktreeCleanupView(
+            eligible=projection.cleanup_eligible,
+            blocked_reason=projection.cleanup_blocked_reason.value
+            if projection.cleanup_blocked_reason is not None
+            else None,
+            completion_id=completion.completion_id if completion is not None else None,
+        )
 
     def _portfolio_snapshots(self) -> tuple[DeliveryPortfolioSnapshot, ...]:
         return tuple(self._delivery_snapshot(runtime) for _change_id, runtime in sorted(self._runtimes.items()))

@@ -210,6 +210,7 @@ class ChangeWorktreeAttentionCode(StrEnum):
     BARE = "bare"
     COORDINATION_PATH_MISMATCH = "coordination-path-mismatch"
     LOCKED = "locked"
+    WORKTREE_DIRTY = "worktree-dirty"
     OWNERSHIP_AMBIGUOUS = "ownership-ambiguous"
     UNEXPECTED_FILESYSTEM_STATE = "unexpected-filesystem-state"
     WORKTREE_HEAD_MISMATCH = "worktree-head-mismatch"
@@ -826,7 +827,7 @@ class ChangeWorkspaceManager:
             change_id,
             self._cleanup_attention(change_id, coordination, expected_path),
         )
-        self.remove_worktree(self._repository, expected_path, force=True)
+        self.remove_worktree(self._repository, expected_path)
         registrations = self._registered_worktrees_all()
         if not self._cleanup_replay_complete(expected_path, intent.branch, registrations):
             attention = {ChangeWorktreeAttentionCode.UNEXPECTED_FILESYSTEM_STATE}
@@ -1256,6 +1257,7 @@ class ChangeWorkspaceManager:
         attention.update(self._cleanup_registered_record_attention(registered, expected_branch, branch_head))
         if self._worktree_present(expected_path) and branch_head is not None:
             attention.update(self._cleanup_head_attention(expected_path, branch_head))
+            attention.update(self._cleanup_content_attention(expected_path))
         return attention
 
     @staticmethod
@@ -1289,6 +1291,13 @@ class ChangeWorkspaceManager:
         except OSError, subprocess.SubprocessError, ValueError:
             return {ChangeWorktreeAttentionCode.UNEXPECTED_FILESYSTEM_STATE}
         return {ChangeWorktreeAttentionCode.WORKTREE_HEAD_MISMATCH} if actual_head != branch_head else set()
+
+    def _cleanup_content_attention(self, expected_path: Path) -> set[ChangeWorktreeAttentionCode]:
+        try:
+            status = self._git("status", "--porcelain=v1", "--untracked-files=all", cwd=expected_path)
+        except OSError, subprocess.SubprocessError, ValueError:
+            return {ChangeWorktreeAttentionCode.UNEXPECTED_FILESYSTEM_STATE}
+        return {ChangeWorktreeAttentionCode.WORKTREE_DIRTY} if status else set()
 
     def _change_branch_heads(self) -> dict[str, str]:
         prefix = "refs/heads/owlbear/change/"

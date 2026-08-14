@@ -43,6 +43,13 @@ _INVENTORY_FUNCTIONS = frozenset(
         "_retained_attention",
         "_retained_worktree",
         "_worktree_present",
+        "_cleanup_attention",
+        "_cleanup_filesystem_attention",
+        "_cleanup_registration_attention",
+        "_cleanup_registered_record_attention",
+        "_cleanup_head_attention",
+        "_cleanup_content_attention",
+        "_cleanup_intent_attention",
     }
 )
 _MUTATING_GIT_COMMANDS = frozenset(

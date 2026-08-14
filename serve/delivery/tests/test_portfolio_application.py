@@ -2179,6 +2179,24 @@ def test_work_item_queries_do_not_resolve_integration_target(
     assert "internal completion body sentinel" not in serialized
 
 
+def test_abandoned_publication_detail_projects_cleanup_eligibility(tmp_path: Path) -> None:
+    application, runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+
+    application.abandon_change("change-a", "User stopped the Change")
+
+    detail = application.show_work_item_view("change-a", "publication")
+
+    assert runtimes["change-a"].change_stage() == DeliveryChangeStage.ABANDONED
+    assert detail.publication is not None
+    assert detail.publication.worktree_cleanup is not None
+    assert detail.publication.worktree_cleanup.eligible is True
+    assert detail.publication.worktree_cleanup.blocked_reason is None
+    assert detail.publication.worktree_cleanup.completion_id is None
+
+
 def test_change_level_legacy_context_requires_completed_building_change(tmp_path: Path) -> None:
     completed_root = tmp_path / "completed"
     completed_root.mkdir()
