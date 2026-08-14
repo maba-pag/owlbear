@@ -782,6 +782,7 @@ class PortfolioApplication:
             operation_id=operation_id,
         )
         with locked_roots((self._checkpoint_lock_root(change_id),)):
+            self._require_target_sync_change_mutable(runtime)
             if runtime.change_disposition() is not None:
                 self._fail("target synchronization requires Change attention resolution first")
             if runtime.active_claims() or runtime.integration_repair_claim() is not None:
@@ -832,12 +833,7 @@ class PortfolioApplication:
             attention_active = disposition is not None
             if attention_active:
                 runtime.validate_target_sync_conflict(expected_disposition_id, operation_id)
-                if runtime.change_stage() in {
-                    DeliveryChangeStage.DEFERRED,
-                    DeliveryChangeStage.ABANDONED,
-                    DeliveryChangeStage.COMPLETED,
-                }:
-                    self._fail("target synchronization conflict exit requires a mutable Change")
+                self._require_target_sync_change_mutable(runtime)
             else:
                 resolution = runtime.change_disposition_resolution()
                 if resolution is None or resolution.disposition_id != expected_disposition_id:
@@ -895,12 +891,7 @@ class PortfolioApplication:
                     self._fail("target synchronization resolution differs from runtime evidence")
                 return receipt
             runtime.validate_target_sync_conflict(expected_disposition_id, operation_id)
-            if runtime.change_stage() in {
-                DeliveryChangeStage.DEFERRED,
-                DeliveryChangeStage.ABANDONED,
-                DeliveryChangeStage.COMPLETED,
-            }:
-                self._fail("target synchronization conflict exit requires a mutable Change")
+            self._require_target_sync_change_mutable(runtime)
             if runtime.active_claims() or runtime.integration_repair_claim() is not None:
                 self._fail("target synchronization conflict exit cannot overlap an active Delivery claim")
             try:
@@ -2927,6 +2918,14 @@ class PortfolioApplication:
             return self._runtimes[change_id]
         except KeyError as exc:
             self._fail(f"Delivery runtime is absent: {change_id}", exc)
+
+    def _require_target_sync_change_mutable(self, runtime: DeliveryRuntime) -> None:
+        if runtime.change_stage() in {
+            DeliveryChangeStage.DEFERRED,
+            DeliveryChangeStage.ABANDONED,
+            DeliveryChangeStage.COMPLETED,
+        }:
+            self._fail("target synchronization requires a mutable Change")
 
     def _checkpoint_lock_root(self, change_id: str) -> Path:
         return self._target_root / "publications/checkpoints/locks" / change_id

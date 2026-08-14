@@ -661,6 +661,32 @@ def test_application_captures_target_sync_conflict_as_publication_attention(tmp_
     assert runtimes["change-a"].finalization_invalidation().reason == "target-sync-conflict"
 
 
+@pytest.mark.parametrize("lifecycle", [DeliveryChangeStage.DEFERRED, DeliveryChangeStage.ABANDONED])
+def test_target_sync_rejects_terminal_or_deferred_change_before_workspace_mutation(
+    tmp_path: Path,
+    lifecycle: DeliveryChangeStage,
+) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    if lifecycle is DeliveryChangeStage.DEFERRED:
+        application.defer_change("change-a", "Wait before target synchronization")
+    else:
+        application.abandon_change("change-a", "Stop before target synchronization")
+    before = coordinator.show("change-a")
+
+    with (
+        patch.object(application._workspace_manager, "sync_with_target") as workspace_sync,  # noqa: SLF001
+        pytest.raises(PortfolioApplicationError, match="requires a mutable Change"),
+    ):
+        application.sync_change_with_target("change-a", "2" * 40, "sync-lifecycle")
+
+    assert not workspace_sync.called
+    assert coordinator.show("change-a") == before
+    assert runtimes["change-a"].change_stage() is lifecycle
+
+
 def test_application_aborts_target_sync_conflict_and_resolves_exact_attention(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
