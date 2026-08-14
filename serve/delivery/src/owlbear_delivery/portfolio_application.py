@@ -64,6 +64,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
+    DeliveryMergedPullRequestLatch,
     DeliveryPendingCheckpoint,
     DeliveryPlanCandidate,
     DeliveryRecoveryAttention,
@@ -98,6 +99,7 @@ from owlbear_delivery.draft_pull_request import (
     ObserveChangePublicationChecks,
     ObserveChangePublicationPullRequest,
     PublicationCheckObservationReceipt,
+    PublicationPullRequestObservationReceipt,
     PullRequestReadyReceipt,
     ReadChangePublicationCheckObservations,
     ReadChangePublicationHistory,
@@ -1383,22 +1385,7 @@ class PortfolioApplication:
                 )
                 message = "provider pull request does not satisfy acceptance authority"
                 raise PortfolioApplicationError(message)
-            if is_acceptance_waiting_observation(observation):
-                message = "provider pull request is still open and unmerged"
-                raise DeliveryAcceptanceWaitingError(message)
-            if (
-                snapshot.state != "closed"
-                or not snapshot.merged
-                or snapshot.merge_commit_sha is None
-                or snapshot.merged_at is None
-            ):
-                runtime.capture_acceptance_attention(
-                    observation,
-                    ("provider pull request does not satisfy acceptance authority",),
-                )
-                message = "provider pull request does not satisfy acceptance authority"
-                raise PortfolioApplicationError(message)
-            latch = runtime.latch_merged_pull_request(observation)
+            latch = self._latch_acceptance_observation(runtime, observation)
             checks = self._draft_pull_request_publisher.read_check_observations(
                 ReadChangePublicationCheckObservations(
                     change_id=change_id,
@@ -1427,6 +1414,36 @@ class PortfolioApplication:
                 )
             )
             return runtime.complete_change(receipt)
+
+    def _latch_acceptance_observation(
+        self,
+        runtime: DeliveryRuntime,
+        observation: PublicationPullRequestObservationReceipt,
+    ) -> DeliveryMergedPullRequestLatch:
+        """Route one fresh provider observation through the immutable merge latch."""
+        if runtime.merged_pull_request_latch() is not None:
+            try:
+                return runtime.latch_merged_pull_request(observation)
+            except DeliveryRuntimeConflictError as exc:
+                message = "provider acceptance evidence regressed from the established merged observation"
+                raise PortfolioApplicationError(message) from exc
+        if is_acceptance_waiting_observation(observation):
+            message = "provider pull request is still open and unmerged"
+            raise DeliveryAcceptanceWaitingError(message)
+        snapshot = observation.snapshot
+        if (
+            snapshot.state != "closed"
+            or not snapshot.merged
+            or snapshot.merge_commit_sha is None
+            or snapshot.merged_at is None
+        ):
+            runtime.capture_acceptance_attention(
+                observation,
+                ("provider pull request does not satisfy acceptance authority",),
+            )
+            message = "provider pull request does not satisfy acceptance authority"
+            raise PortfolioApplicationError(message)
+        return runtime.latch_merged_pull_request(observation)
 
     def reconcile_finalization_head(
         self,

@@ -1982,6 +1982,18 @@ class DeliveryRuntime:
                 ("provider acceptance evidence does not match awaiting-merge authority",),
             )
             _conflict("merged pull-request evidence does not match awaiting-merge authority")
+        existing = frontier.merged_pull_request_latch
+        if existing is not None and (
+            snapshot.state != "closed"
+            or not snapshot.merged
+            or snapshot.merge_commit_sha is None
+            or snapshot.merged_at is None
+        ):
+            self.capture_acceptance_attention(
+                observation,
+                ("provider acceptance evidence regressed from the immutable merged latch",),
+            )
+            _conflict("provider acceptance evidence regressed from the immutable merged latch")
         if is_acceptance_waiting_observation(observation):
             message = "provider pull request is still open and unmerged"
             raise DeliveryAcceptanceWaitingError(message)
@@ -2011,7 +2023,6 @@ class DeliveryRuntime:
             accepted_merge_commit=snapshot.merge_commit_sha,
             merged_at=snapshot.merged_at,
         )
-        existing = frontier.merged_pull_request_latch
         if existing is not None:
             if (
                 existing.repository,
@@ -2031,6 +2042,10 @@ class DeliveryRuntime:
                 candidate.merged_at,
             ):
                 return existing
+            self.capture_acceptance_attention(
+                observation,
+                ("provider acceptance evidence conflicts with the immutable merged latch",),
+            )
             _conflict("merged pull-request evidence conflicts with the immutable latch")
         self._replace(previous, frontier.model_copy(update={"merged_pull_request_latch": candidate}))
         return candidate

@@ -88,6 +88,7 @@ from owlbear_delivery import (
     GeneratedPullRequestSummaryReceipt,
     OutcomeAuthorityBinding,
     ObserveChangePublicationChecks,
+    ObserveChangePublicationPullRequest,
     ReadChangePublicationHistory,
     PortfolioApplication,
     PortfolioApplicationConfig,
@@ -1025,6 +1026,40 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(tmp_p
     pull_request = pull_request.model_copy(update={"state": "open", "draft": True})
     assert application.reconcile_finalization_head("change-a") == finalization
     application.mark_current_change_ready("change-a")
+    pull_request = pull_request.model_copy(
+        update={
+            "state": "closed",
+            "merged": True,
+            "merge_commit_sha": "f" * 40,
+            "merged_at": datetime(2026, 8, 3, 23, tzinfo=UTC),
+            "merged_by_login": "octocat",
+        }
+    )
+
+    merged_observation = publisher.observe_pull_request(ObserveChangePublicationPullRequest(change_id="change-a"))
+    assert merged_observation is not None
+    original_latch = runtime.latch_merged_pull_request(merged_observation)
+    pull_request = pull_request.model_copy(update={"state": "open", "merged": False, "merged_at": None})
+    with pytest.raises(PortfolioApplicationError, match="regressed from the established merged observation"):
+        application.observe_acceptance("change-a")
+    disposition = runtime.change_disposition()
+    assert disposition is not None
+    assert disposition.kind.value == "acceptance-attention"
+    assert runtime.merged_pull_request_latch() == original_latch
+    assert runtime.ready_receipt() is None
+
+    application.resolve_change_disposition("change-a", disposition.disposition_id)
+    pull_request = pull_request.model_copy(update={"draft": True})
+    assert application.reconcile_finalization_head("change-a") == finalization
+    application.mark_change_ready(
+        "change-a",
+        MarkChangePullRequestReady(
+            change_id="change-a",
+            operation_id="ready-after-acceptance-regression",
+            finalization_id=finalization.finalization_id,
+            exact_head=exact_head,
+        ),
+    )
     pull_request = pull_request.model_copy(
         update={
             "state": "closed",

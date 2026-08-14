@@ -1181,6 +1181,36 @@ def test_merged_pull_request_latch_is_monotonic_and_rejects_regression(tmp_path:
     assert runtime.merged_pull_request_latch() == first
 
 
+def test_merged_pull_request_regression_captures_attention_and_retains_latch(tmp_path: Path) -> None:
+    runtime = _awaiting_merge_runtime(tmp_path)
+    original = runtime.merged_pull_request_latch()
+    assert original is not None
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="regressed from the immutable merged latch"):
+        runtime.latch_merged_pull_request(_pull_request_observation(merged=False))
+
+    disposition = runtime.change_disposition()
+    assert disposition is not None
+    assert disposition.kind == DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION
+    assert runtime.merged_pull_request_latch() == original
+    assert runtime.ready_receipt() is None
+
+
+def test_merged_pull_request_evidence_conflict_captures_attention(tmp_path: Path) -> None:
+    runtime = _awaiting_merge_runtime(tmp_path)
+    original = runtime.merged_pull_request_latch()
+    assert original is not None
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="conflicts with the immutable latch"):
+        runtime.latch_merged_pull_request(_pull_request_observation(merge_commit_sha="6" * 40))
+
+    disposition = runtime.change_disposition()
+    assert disposition is not None
+    assert disposition.kind == DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION
+    assert runtime.merged_pull_request_latch() == original
+    assert runtime.ready_receipt() is None
+
+
 def test_unfinalized_completed_change_uses_building_stage(tmp_path: Path) -> None:
     runtime = _runtime(
         tmp_path,
