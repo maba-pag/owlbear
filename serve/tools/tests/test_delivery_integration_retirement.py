@@ -262,6 +262,20 @@ def _publication_artifacts(delivery_root: Path) -> tuple[Path, ...]:
     ):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(_canonical({"change_id": "change-a", "operation_id": operation_id}))
+    supersession_operation = (
+        delivery_root / "runtime/publications/pull-requests/supersession-operations/supersession-operation.json"
+    )
+    supersession_receipt = (
+        delivery_root / "runtime/publications/pull-requests/supersession-receipts/supersession-operation.json"
+    )
+    publication_history = delivery_root / "runtime/publications/pull-requests/publication-history/change-a.json"
+    for path, operation_id in (
+        (supersession_operation, "supersession-operation"),
+        (supersession_receipt, "supersession-operation"),
+        (publication_history, "publication-history"),
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(_canonical({"change_id": "change-a", "operation_id": operation_id}))
     lock_paths = (
         delivery_root / "runtime/publications/checkpoints/locks/change-a",
         delivery_root / "runtime/publications/pull-requests/locks/change-a",
@@ -269,7 +283,16 @@ def _publication_artifacts(delivery_root: Path) -> tuple[Path, ...]:
     for path in lock_paths:
         path.mkdir(parents=True, exist_ok=True)
         (path / ".storage.lock").touch()
-    return receipt, branch_operation, check_observation, pull_request_observation, *lock_paths
+    return (
+        receipt,
+        branch_operation,
+        check_observation,
+        pull_request_observation,
+        *lock_paths,
+        supersession_operation,
+        supersession_receipt,
+        publication_history,
+    )
 
 
 def test_retirement_plans_legacy_frontier_and_preserves_catalog_snapshot(tmp_path: Path) -> None:

@@ -57,6 +57,8 @@ _PUBLICATION_OPERATION_ROOTS = (
     Path("publications/pull-requests/operations"),
     Path("publications/pull-requests/summary-operations"),
     Path("publications/pull-requests/summary-receipts"),
+    Path("publications/pull-requests/supersession-operations"),
+    Path("publications/pull-requests/supersession-receipts"),
     Path("publications/pull-requests/draft-state-operations"),
     Path("publications/pull-requests/draft-state-receipts"),
 )
@@ -75,6 +77,9 @@ _PUBLICATION_FLAT_ROOTS = frozenset(
         ("pull-requests", "operations"),
         ("pull-requests", "summary-operations"),
         ("pull-requests", "summary-receipts"),
+        ("pull-requests", "supersession-operations"),
+        ("pull-requests", "supersession-receipts"),
+        ("pull-requests", "publication-history"),
         ("pull-requests", "draft-state-operations"),
         ("pull-requests", "draft-state-receipts"),
     }
@@ -173,12 +178,14 @@ def _publication_nested_paths(runtime_root: Path, change_id: str) -> tuple[Path,
 
 def _publication_paths(runtime_root: Path, change_id: str) -> tuple[Path, ...]:
     receipt = runtime_root / "publications/pull-requests/receipts" / f"{change_id}.json"
+    history = runtime_root / "publications/pull-requests/publication-history" / f"{change_id}.json"
     paths = []
-    if receipt.exists() or receipt.is_symlink():
-        _require_publication_file(receipt)
-        if _publication_payload(receipt)["change_id"] != change_id:
-            _fail(f"Delivery publication record identity differs from its path: {receipt}")
-        paths.append(receipt)
+    for path in (receipt, history):
+        if path.exists() or path.is_symlink():
+            _require_publication_file(path)
+            if _publication_payload(path)["change_id"] != change_id:
+                _fail(f"Delivery publication record identity differs from its path: {path}")
+            paths.append(path)
     paths.extend(_publication_operation_paths(runtime_root, change_id))
     paths.extend(_publication_nested_paths(runtime_root, change_id))
     return tuple(paths)
