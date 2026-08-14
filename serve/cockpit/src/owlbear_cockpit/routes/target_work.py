@@ -25,8 +25,10 @@ from owlbear_cockpit.target_models import (
     ConfirmLostClaimBody,
     DesignWorkDetailResponse,
     NeedsCounts,
+    PublicationSupersessionResponse,
     RecoverChangeWorktreeBody,
     ResolveChangeAttentionBody,
+    SupersedePublicationBody,
     TargetSyncAbortResponse,
     TargetSyncBody,
     TargetSyncConflictBody,
@@ -179,6 +181,15 @@ class TargetCockpitService:
                 body.expected_disposition_id,
             )
         )
+
+    def supersede_publication(
+        self,
+        change_id: str,
+        body: SupersedePublicationBody,
+    ) -> PublicationSupersessionResponse:
+        """Publish one successor using the current provider publication identity."""
+        receipt = self._invoke(lambda: self._application.supersede_current_publication(change_id, body.operation_id))
+        return PublicationSupersessionResponse.from_receipt(receipt)
 
     def sync_target(self, change_id: str, body: TargetSyncBody) -> TargetSyncResponse:
         """Synchronize one Change with the current remote-tracking target."""
@@ -439,6 +450,17 @@ def _register_publication_controls(router: APIRouter) -> None:
         service: _TargetService,
     ) -> object:
         return service.resolve_attention(change_id, body)
+
+    @router.post(
+        "/changes/{change_id}/publication/supersede",
+        response_model=PublicationSupersessionResponse,
+    )
+    def supersede_publication(
+        change_id: str,
+        body: SupersedePublicationBody,
+        service: _TargetService,
+    ) -> PublicationSupersessionResponse:
+        return service.supersede_publication(change_id, body)
 
     @router.post("/changes/{change_id}/defer")
     def defer_change(

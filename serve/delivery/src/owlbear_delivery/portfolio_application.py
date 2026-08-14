@@ -929,6 +929,20 @@ class PortfolioApplication:
                 publication_history=updated_history,
             )
 
+    def supersede_current_publication(
+        self,
+        change_id: str,
+        operation_id: str,
+    ) -> DeliveryChangePublicationSupersessionReceipt:
+        """Resolve the current provider publication before starting one successor operation."""
+        publisher = self._draft_pull_request_publisher
+        if publisher is None:
+            self._fail("publication supersession is not configured")
+        provider_history = publisher.read_publication_history(ReadChangePublicationHistory(change_id=change_id))
+        if provider_history is None:
+            self._fail("publication supersession requires current provider publication history")
+        return self.supersede_publication(change_id, provider_history.current_receipt_id, operation_id)
+
     def _read_supersession_context(
         self,
         runtime: DeliveryRuntime,

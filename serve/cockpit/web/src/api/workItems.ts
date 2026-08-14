@@ -189,6 +189,13 @@ export interface WorkItemTaskEvidence {
   proof_boundaries: string[]
 }
 
+export interface WorkItemPublicationGeneration {
+  repository: string
+  number: number
+  node_id: string
+  head_sha: string
+}
+
 export interface WorkItemPublicationView {
   phase: WorkItemPublicationPhase
   finalization_id: string | null
@@ -203,6 +210,7 @@ export interface WorkItemPublicationView {
   pull_request_head: string | null
   accepted_merge_commit: string | null
   merged_at: string | null
+  publication_generations: WorkItemPublicationGeneration[]
   attention?: {
     disposition_id: string
     kind: 'publication-attention' | 'acceptance-attention'
@@ -276,6 +284,15 @@ export interface TargetSyncAbortResponse {
   change_id: string
   target_head: string
   restored_head: string
+}
+
+export interface PublicationSupersessionResponse {
+  schema_version: 1
+  receipt_id: string
+  operation_id: string
+  change_id: string
+  predecessor_publication_id: string
+  successor_publication_id: string
 }
 
 export interface WorkItemDetailView {
@@ -567,6 +584,17 @@ export function resolveWorkItemAttention(changeId: string, expectedDispositionId
     `/api/changes/${encodeURIComponent(changeId)}/attention/resolve`,
     'ERR_WORK_ITEM_ATTENTION_RESOLVE',
     { expected_disposition_id: expectedDispositionId },
+  )
+}
+
+export function supersedeWorkItemPublication(
+  changeId: string,
+  operationId: string,
+): Promise<PublicationSupersessionResponse> {
+  return controlRequest(
+    `/api/changes/${encodeURIComponent(changeId)}/publication/supersede`,
+    'ERR_WORK_ITEM_PUBLICATION_SUPERSEDE',
+    { operation_id: operationId },
   )
 }
 

@@ -253,6 +253,16 @@ class _DeliveryApplicationFake:
             raise failure
         return {"change_id": args[0], "disposition_id": args[1]}
 
+    def supersede_current_publication(self, *args: object) -> SimpleNamespace:
+        self.calls.append(("publication-supersede", args))
+        return SimpleNamespace(
+            receipt_id="a" * 64,
+            operation_id=str(args[1]),
+            change_id=str(args[0]),
+            predecessor_publication_id="b" * 64,
+            successor_publication_id="c" * 64,
+        )
+
     def sync_change_with_current_target(self, *args: object) -> ChangeTargetSyncReceipt:
         self.calls.append(("target-sync", args))
         failure = self.failures.get("target_sync")
@@ -690,6 +700,28 @@ def test_target_sync_conflict_exit_routes_delegate_exactly_once() -> None:
             "target-sync-resolve",
             ("change-a", "a" * 64, "e" * 40, "cockpit-target-sync-test"),
         ),
+    ]
+
+
+def test_publication_supersession_route_delegates_current_identity_exactly_once() -> None:
+    client, application = _client()
+
+    response = client.post(
+        "/api/changes/change-a/publication/supersede",
+        json={"operation_id": "cockpit-publication-supersede"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "schema_version": 1,
+        "receipt_id": "a" * 64,
+        "operation_id": "cockpit-publication-supersede",
+        "change_id": "change-a",
+        "predecessor_publication_id": "b" * 64,
+        "successor_publication_id": "c" * 64,
+    }
+    assert application.calls == [
+        ("publication-supersede", ("change-a", "cockpit-publication-supersede")),
     ]
 
 

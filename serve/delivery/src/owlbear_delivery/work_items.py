@@ -320,6 +320,15 @@ class WorkItemTargetSyncConflictView(_ProjectionModel):
     conflict_paths: tuple[str, ...] = ()
 
 
+class WorkItemPublicationGenerationView(_ProjectionModel):
+    """One ordered provider publication identity without provider receipt state."""
+
+    repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    number: int = Field(gt=0)
+    node_id: str = Field(min_length=1)
+    head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
 class WorkItemPublicationView(_ProjectionModel):
     """Exact durable finalization, publication, and acceptance identities."""
 
@@ -336,6 +345,7 @@ class WorkItemPublicationView(_ProjectionModel):
     pull_request_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     accepted_merge_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     merged_at: str | None = None
+    publication_generations: tuple[WorkItemPublicationGenerationView, ...] = ()
     attention: DeliveryChangeDisposition | None = None
     target_sync: WorkItemTargetSyncView | None = None
     target_sync_conflict: WorkItemTargetSyncConflictView | None = None
@@ -765,6 +775,7 @@ class WorkItemProjector:
         attention_publication = frontier.change_disposition_publication
         merged = frontier.merged_pull_request_latch
         publication_identity = ready or merged or attention_publication
+        publication_history = frontier.change_publication_history
         target_sync = frontier.target_sync_receipt
         return WorkItemPublicationView(
             phase=self._publication_phase(),
@@ -780,6 +791,19 @@ class WorkItemProjector:
             pull_request_head=publication_identity.head_sha if publication_identity is not None else None,
             accepted_merge_commit=merged.accepted_merge_commit if merged is not None else None,
             merged_at=merged.merged_at.isoformat() if merged is not None else None,
+            publication_generations=(
+                tuple(
+                    WorkItemPublicationGenerationView(
+                        repository=publication.repository,
+                        number=publication.number,
+                        node_id=publication.node_id,
+                        head_sha=publication.head_sha,
+                    )
+                    for publication in publication_history.publications
+                )
+                if publication_history is not None
+                else ()
+            ),
             attention=frontier.change_disposition,
             target_sync=(
                 WorkItemTargetSyncView(

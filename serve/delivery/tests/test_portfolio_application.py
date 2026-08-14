@@ -88,6 +88,7 @@ from owlbear_delivery import (
     GeneratedPullRequestSummaryReceipt,
     OutcomeAuthorityBinding,
     ObserveChangePublicationChecks,
+    ReadChangePublicationHistory,
     PortfolioApplication,
     PortfolioApplicationConfig,
     PortfolioApplicationDependencies,
@@ -1642,6 +1643,25 @@ def test_supersede_publication_binds_git_provider_and_runtime_history(tmp_path: 
         application.supersede_publication("change-a", predecessor.receipt_id, operation_id)
 
     assert (branch_publisher.supersede.call_count, pull_request_publisher.supersede.call_count) == (2, 2)
+
+
+def test_supersede_current_publication_resolves_provider_receipt_before_delegating(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    predecessor = _draft_receipt("3" * 40)
+    provider = Mock()
+    provider.read_publication_history.return_value = _draft_history((predecessor,), (None,))
+    application._draft_pull_request_publisher = provider  # noqa: SLF001
+    expected = object()
+
+    with patch.object(application, "supersede_publication", return_value=expected) as supersede:
+        result = application.supersede_current_publication("change-a", "supersede-current")
+
+    assert result is expected
+    provider.read_publication_history.assert_called_once_with(ReadChangePublicationHistory(change_id="change-a"))
+    supersede.assert_called_once_with("change-a", predecessor.receipt_id, "supersede-current")
 
 
 def test_supersede_publication_requires_attention_bound_to_runtime_publication(tmp_path: Path) -> None:

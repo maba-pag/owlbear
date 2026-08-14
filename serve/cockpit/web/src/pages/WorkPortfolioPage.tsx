@@ -188,6 +188,7 @@ function SelectedWorkItemDetail({
       onMarkPublicationReady={selectedDetail.markPublicationReady}
       onObserveAcceptance={selectedDetail.observeAcceptance}
       onResolveAttention={selectedDetail.resolveAttention}
+      onSupersedePublication={selectedDetail.supersedePublication}
       onSyncTarget={selectedDetail.syncTarget}
       onAbortTargetSync={selectedDetail.abortTargetSync}
       onResolveTargetSync={selectedDetail.resolveTargetSync}

@@ -19,6 +19,7 @@ import {
   resolveWorkItemAttention,
   resumeWorkItemChange,
   searchCompletedChanges,
+  supersedeWorkItemPublication,
   syncWorkItemTarget,
   showDesignWork,
   showCompletedChange,
@@ -230,6 +231,7 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
   const [actionError, setActionError] = useState<Error | null>(null)
   const [actionResult, setActionResult] = useState<string | null>(null)
   const targetSyncOperation = useRef<{ changeId: string; operationId: string } | null>(null)
+  const supersedePublicationOperation = useRef<{ changeId: string; operationId: string } | null>(null)
   const polling = usePollingFetch<WorkItemDetailResponse>(
     workItemDetailUrl(identity.changeId, identity.itemKey),
     {
@@ -343,6 +345,27 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
       () => resolveWorkItemAttention(identity.changeId, expectedDispositionId),
       'Change attention resolved.',
     ),
+    supersedePublication: () => mutate(
+      'publication-supersede',
+      () => {
+        const existing = supersedePublicationOperation.current
+        const operationId = existing?.changeId === identity.changeId
+          ? existing.operationId
+          : `cockpit-publication-supersede-${crypto.randomUUID()}`
+        supersedePublicationOperation.current = { changeId: identity.changeId, operationId }
+        return supersedeWorkItemPublication(identity.changeId, operationId)
+      },
+      'Publication superseded.',
+    ).then((error) => {
+      const operationId = supersedePublicationOperation.current?.operationId
+      if (
+        operationId
+        && (error === null || (error instanceof WorkItemApiError && !error.retrySafe))
+      ) {
+        supersedePublicationOperation.current = null
+      }
+      return error
+    }),
     syncTarget: () => mutate(
       'target-sync',
       () => {

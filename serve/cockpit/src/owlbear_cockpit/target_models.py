@@ -12,7 +12,11 @@ from owlbear_delivery.work_items import ChangeGroupView, WorkItemDetailView
 
 if TYPE_CHECKING:
     from owlbear_delivery.change_workspace import ChangeTargetSyncAbortReceipt, ChangeTargetSyncReceipt
-    from owlbear_delivery.portfolio_application import DeliveryChangeWorktreeCleanup, DeliveryChangeWorktreeRecovery
+    from owlbear_delivery.portfolio_application import (
+        DeliveryChangePublicationSupersessionReceipt,
+        DeliveryChangeWorktreeCleanup,
+        DeliveryChangeWorktreeRecovery,
+    )
 
 
 class _TargetHTTPModel(BaseModel):
@@ -142,6 +146,12 @@ class TargetSyncConflictBody(_TargetHTTPModel):
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
+class SupersedePublicationBody(_TargetHTTPModel):
+    """Stable operation identity used to reconcile a publication successor retry."""
+
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
 class TargetSyncResponse(_TargetHTTPModel):
     """Typed receipt returned after one exact target synchronization."""
 
@@ -176,6 +186,28 @@ class TargetSyncAbortResponse(_TargetHTTPModel):
     def from_receipt(cls, receipt: ChangeTargetSyncAbortReceipt) -> TargetSyncAbortResponse:
         """Convert one application abort receipt into the HTTP transport shape."""
         return cls(**receipt.model_dump())
+
+
+class PublicationSupersessionResponse(_TargetHTTPModel):
+    """Compact application receipt returned after one publication successor operation."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: str = Field(min_length=1)
+    predecessor_publication_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    successor_publication_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @classmethod
+    def from_receipt(cls, receipt: DeliveryChangePublicationSupersessionReceipt) -> PublicationSupersessionResponse:
+        """Convert one application supersession receipt into the HTTP transport shape."""
+        return cls(
+            receipt_id=receipt.receipt_id,
+            operation_id=receipt.operation_id,
+            change_id=receipt.change_id,
+            predecessor_publication_id=receipt.predecessor_publication_id,
+            successor_publication_id=receipt.successor_publication_id,
+        )
 
 
 class ChangeWorktreeCleanupResponse(_TargetHTTPModel):

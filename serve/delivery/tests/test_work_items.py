@@ -11,6 +11,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryChangeDispositionKind,
     DeliveryChangeAbandonment,
     DeliveryChangeDeferral,
+    DeliveryChangePublicationHistory,
     DeliveryChangePublicationIdentity,
     DeliveryChangeStage,
     DeliveryFrontier,
@@ -599,6 +600,48 @@ def test_change_attention_projects_user_resolution_before_outcomes_complete() ->
         publication.number,
         publication.head_sha,
     )
+
+
+def test_publication_history_projects_ordered_transport_free_generations() -> None:
+    predecessor = DeliveryChangePublicationIdentity(
+        change_id="portfolio-change",
+        repository="example/project",
+        number=41,
+        node_id="PR_portfolio_41",
+        head_sha="2" * 40,
+    )
+    successor = predecessor.model_copy(
+        update={
+            "number": 42,
+            "node_id": "PR_portfolio_42",
+            "head_sha": "3" * 40,
+        }
+    )
+    history = DeliveryChangePublicationHistory.create(predecessor).append(predecessor, successor)
+    projector = WorkItemProjector(
+        _snapshot(
+            (_binding("OUT-001", DeliveryStage.COMPLETED), _binding("OUT-002", DeliveryStage.COMPLETED)),
+            frontier_updates={"change_publication_history": history},
+        )
+    )
+
+    publication = projector.show_view("publication").publication
+
+    assert publication is not None
+    assert [generation.model_dump() for generation in publication.publication_generations] == [
+        {
+            "repository": "example/project",
+            "number": 41,
+            "node_id": "PR_portfolio_41",
+            "head_sha": "2" * 40,
+        },
+        {
+            "repository": "example/project",
+            "number": 42,
+            "node_id": "PR_portfolio_42",
+            "head_sha": "3" * 40,
+        },
+    ]
 
 
 def test_finalization_projects_checkpoint_then_pull_request_draft() -> None:

@@ -46,6 +46,7 @@ interface WorkItemDetailProps {
   onMarkPublicationReady: () => Promise<Error | null>
   onObserveAcceptance: () => Promise<Error | null>
   onResolveAttention: (expectedDispositionId: string) => Promise<Error | null>
+  onSupersedePublication: () => Promise<Error | null>
   onSyncTarget: () => Promise<Error | null>
   onAbortTargetSync: (expectedDispositionId: string, targetHead: string, operationId: string) => Promise<Error | null>
   onResolveTargetSync: (expectedDispositionId: string, targetHead: string, operationId: string) => Promise<Error | null>
@@ -586,6 +587,10 @@ function PublicationSection(props: WorkItemDetailProps) {
   const targetSyncAttention = Boolean(
     publication.target_sync_conflict && publication.attention?.kind === 'publication-attention',
   )
+  const publicationGenerations = publication.publication_generations ?? []
+  const canSupersede = publication.attention?.kind === 'publication-attention'
+    && publicationGenerations.length > 0
+    && !targetSyncAttention
   const control = action.kind === 'reconcile-checkpoint'
     ? props.onReconcilePublication
     : action.kind === 'mark-ready'
@@ -640,9 +645,34 @@ function PublicationSection(props: WorkItemDetailProps) {
           {publication.target_sync.merge_commit ? ' (merge commit)' : ' (fast-forward)'}
         </p>
       ) : null}
+      {publicationGenerations.length > 0 ? (
+        <div className="mt-static-md" data-testid="publication-history">
+          <PHeading tag="h4" size="sm">Publication history</PHeading>
+          <ol className="mt-static-xs grid gap-static-xs text-xs">
+            {publicationGenerations.map((generation, index) => (
+              <li key={`${generation.node_id}-${generation.head_sha}`} className="break-all">
+                Generation {index + 1}: {generation.repository} #{generation.number} / {generation.head_sha}
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
       {publication.pending_checkpoint_triggers.length > 0 ? <p className="mt-static-sm text-xs text-contrast-medium">Checkpoint triggers: {publication.pending_checkpoint_triggers.join(', ')}</p> : null}
       {action.command ? <CopyCommand command={action.command} className="mt-static-md" /> : null}
       {!action.command && control && action.label ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null} onClick={() => void control()}>{pending ? 'Working...' : action.label}</PButton> : null}
+      {canSupersede ? (
+        <PButton
+          className="mt-static-md"
+          type="button"
+          compact
+          variant="secondary"
+          data-testid="publication-supersede"
+          disabled={props.pendingAction !== null}
+          onClick={() => void props.onSupersedePublication()}
+        >
+          {props.pendingAction === 'publication-supersede' ? 'Superseding...' : 'Supersede publication'}
+        </PButton>
+      ) : null}
       {!publication.attention && !['deferred', 'abandoned', 'acceptance-observed'].includes(publication.phase) ? (
         <PButton className="mt-static-md" type="button" compact variant="secondary" disabled={props.pendingAction !== null} onClick={() => void props.onSyncTarget()}>
           {props.pendingAction === 'target-sync' ? 'Syncing target...' : 'Sync with target'}

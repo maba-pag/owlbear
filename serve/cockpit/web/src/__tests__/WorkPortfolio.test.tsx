@@ -183,6 +183,7 @@ let currentDetail: WorkItemDetailResponse
 let portfolioAfterPublication: WorkItemPortfolioResponse | null
 let portfolioFailure: boolean
 let detailFailure: boolean
+let supersedeFailuresRemaining: number
 let completedRecords: CompletedChangeRecord[]
 let requests: Array<{ url: string; method: string; body: unknown }>
 
@@ -261,6 +262,7 @@ function installFetch() {
       || url.endsWith('/target/conflict/resolve')
       || url.endsWith('/publication/reconcile')
       || url.endsWith('/publication/ready')
+      || url.endsWith('/publication/supersede')
       || url.endsWith('/acceptance/observe')
       || url.endsWith('/attention/resolve')
       || url.endsWith('/defer')
@@ -271,6 +273,20 @@ function installFetch() {
       || url.endsWith('/worktree/recover')
     )) {
       if (portfolioAfterPublication) currentPortfolio = portfolioAfterPublication
+      if (url.endsWith('/publication/supersede')) {
+        if (supersedeFailuresRemaining > 0) {
+          supersedeFailuresRemaining -= 1
+          return response({ detail: { code: 'ERR_PROVIDER_UNAVAILABLE', detail: 'Provider unavailable', authority: 'delivery', retry_safe: true } }, 409)
+        }
+        return response({
+          schema_version: 1,
+          receipt_id: 'd'.repeat(64),
+          operation_id: (body as { operation_id: string }).operation_id,
+          change_id: 'change-alpha',
+          predecessor_publication_id: 'e'.repeat(64),
+          successor_publication_id: 'f'.repeat(64),
+        })
+      }
       if (url.endsWith('/target/sync')) {
         return response({
           schema_version: 1,
@@ -347,6 +363,7 @@ beforeEach(() => {
   portfolioAfterPublication = null
   portfolioFailure = false
   detailFailure = false
+  supersedeFailuresRemaining = 0
   completedRecords = [completed]
   requests = []
   installFetch()
@@ -764,6 +781,135 @@ it('syncs the Change with the target and shows the latest sync receipt', async (
   expect(await screen.findByText('Target synchronized with the integration target.')).toBeInTheDocument()
 })
 
+it('shows publication history and keeps ordinary attention remedies available', async () => {
+  const attentionId = 'a'.repeat(64)
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'you',
+    needs_headline: 'Change attention requires resolution',
+    next_actor: 'you',
+    next_step: 'Resolve publication attention',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Resolve publication attention', done: null, total: null },
+    action: { kind: 'resolve-attention', label: 'Resolve publication attention', command: null, attention_id: attentionId },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    promise: 'Resolve the provider evidence before continuing.',
+    acceptance: [],
+    commitments: [],
+    tasks: [],
+    publication: {
+      phase: 'awaiting-merge',
+      finalization_id: 'b'.repeat(64),
+      finalized_head: '1'.repeat(40),
+      published_head: '1'.repeat(40),
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: 'owlbear/example',
+      pull_request_number: 42,
+      pull_request_head: '1'.repeat(40),
+      accepted_merge_commit: null,
+      merged_at: null,
+      attention: {
+        disposition_id: attentionId,
+        kind: 'publication-attention',
+        change_id: 'change-alpha',
+        entered_from: 'awaiting-merge',
+        recorded_at: '2026-08-11T16:00:00Z',
+        diagnostics: ['Provider publication needs reconciliation.'],
+      },
+      publication_generations: [
+        { repository: 'owlbear/example', number: 41, node_id: 'PR_example_41', head_sha: '2'.repeat(40) },
+        { repository: 'owlbear/example', number: 42, node_id: 'PR_example_42', head_sha: '1'.repeat(40) },
+      ],
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'publication', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(inspector).toHaveTextContent('Publication history')
+  expect(inspector).toHaveTextContent(`Generation 1: owlbear/example #41 / ${'2'.repeat(40)}`)
+  expect(inspector).toHaveTextContent(`Generation 2: owlbear/example #42 / ${'1'.repeat(40)}`)
+  expect(within(inspector).getAllByText('Resolve publication attention')).not.toHaveLength(0)
+  expect(within(inspector).getByTestId('publication-supersede')).toBeInTheDocument()
+
+  fireEvent.click(within(inspector).getByTestId('publication-supersede'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/publication/supersede',
+    method: 'POST',
+    body: { operation_id: expect.stringMatching(/^cockpit-publication-supersede-/) },
+  }))
+  expect(await screen.findByText('Publication superseded.')).toBeInTheDocument()
+})
+
+it('reuses a supersession operation identity after a retry-safe failure', async () => {
+  const attentionId = 'a'.repeat(64)
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'you',
+    needs_headline: 'Change attention requires resolution',
+    next_actor: 'you',
+    next_step: 'Resolve publication attention',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Resolve publication attention', done: null, total: null },
+    action: { kind: 'resolve-attention', label: 'Resolve publication attention', command: null, attention_id: attentionId },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    publication: {
+      phase: 'awaiting-merge',
+      finalization_id: 'b'.repeat(64),
+      finalized_head: '1'.repeat(40),
+      published_head: '1'.repeat(40),
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: 'owlbear/example',
+      pull_request_number: 42,
+      pull_request_head: '1'.repeat(40),
+      accepted_merge_commit: null,
+      merged_at: null,
+      attention: {
+        disposition_id: attentionId,
+        kind: 'publication-attention',
+        change_id: 'change-alpha',
+        entered_from: 'awaiting-merge',
+        recorded_at: '2026-08-11T16:00:00Z',
+        diagnostics: ['Provider publication needs reconciliation.'],
+      },
+      publication_generations: [
+        { repository: 'owlbear/example', number: 42, node_id: 'PR_example_42', head_sha: '1'.repeat(40) },
+      ],
+    },
+  })
+  supersedeFailuresRemaining = 1
+  currentPortfolio = portfolio([group({ lifecycle: 'publication', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const supersede = await screen.findByTestId('publication-supersede')
+  fireEvent.click(supersede)
+  await waitFor(() => expect(screen.getByText('ERR_PROVIDER_UNAVAILABLE')).toBeInTheDocument())
+  fireEvent.click(supersede)
+  await waitFor(() => expect(requests.filter(({ url, method }) => method === 'POST' && url.endsWith('/publication/supersede'))).toHaveLength(2))
+
+  const supersessionRequests = requests.filter(({ url, method }) => method === 'POST' && url.endsWith('/publication/supersede'))
+  expect(supersessionRequests[0].body).toEqual({ operation_id: expect.stringMatching(/^cockpit-publication-supersede-/) })
+  expect(supersessionRequests[1].body).toEqual(supersessionRequests[0].body)
+})
+
 it('offers explicit exits for a preserved target-sync conflict', async () => {
   const dispositionId = 'd'.repeat(64)
   const publicationCard = card({
@@ -815,6 +961,9 @@ it('offers explicit exits for a preserved target-sync conflict', async () => {
         change_head_before: '5'.repeat(40),
         conflict_paths: ['src/app.py', 'tests/test_app.py'],
       },
+      publication_generations: [
+        { repository: 'owlbear/example', number: 42, node_id: 'PR_example_42', head_sha: '1'.repeat(40) },
+      ],
     },
   })
   currentPortfolio = portfolio([group({ lifecycle: 'publication', items: [publicationCard] })])
@@ -824,6 +973,7 @@ it('offers explicit exits for a preserved target-sync conflict', async () => {
   expect(inspector).toHaveTextContent('Target sync conflict')
   expect(inspector).toHaveTextContent('src/app.py')
   expect(within(inspector).queryByText('Resolve attention')).toBeNull()
+  expect(within(inspector).queryByTestId('publication-supersede')).toBeNull()
 
   fireEvent.click(screen.getByTestId('target-sync-conflict-abort'))
   await waitFor(() => expect(requests).toContainEqual({
@@ -1038,6 +1188,9 @@ it('shows Change attention diagnostics and resolves the selected disposition', a
         recorded_at: '2026-08-11T16:00:00Z',
         diagnostics: ['Pull request was closed without a merge commit.'],
       },
+      publication_generations: [
+        { repository: 'owlbear/example', number: 42, node_id: 'PR_example_42', head_sha: '1'.repeat(40) },
+      ],
     },
   })
   currentPortfolio = portfolio([group({ lifecycle: 'acceptance', outcome_completed: 0, items: [publicationCard] })])
@@ -1047,6 +1200,7 @@ it('shows Change attention diagnostics and resolves the selected disposition', a
   expect(inspector).toHaveTextContent('Change attention')
   expect(inspector).toHaveTextContent('Pull request was closed without a merge commit.')
   expect(inspector).toHaveTextContent(`Disposition: ${attentionId}`)
+  expect(within(inspector).queryByTestId('publication-supersede')).toBeNull()
   fireEvent.click(within(inspector).getAllByText('Resolve acceptance attention').at(-1)!)
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/attention/resolve',
