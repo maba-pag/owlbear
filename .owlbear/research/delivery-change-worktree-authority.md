@@ -192,8 +192,10 @@ identity. Credentials never appear in this tracked file.
 
 **R-GIT-05:** The initial local and remote Change branch name is exactly
 `owlbear/change/<change-id>` (`refs/heads/owlbear/change/<change-id>` locally). A necessary published
-history supersession uses exactly `owlbear/change/<change-id>/s<n>`, where `n` is the next monotonic
-supersession index in typed state. No operation accepts a caller-supplied branch namespace or name.
+history supersession uses exactly `owlbear/change/<change-id>-s<n>`, where `n` is the next monotonic
+supersession index in typed state. The sibling suffix is required because Git cannot store a branch
+and a child branch beneath that branch at the same time. No operation accepts a caller-supplied branch
+namespace or name.
 
 The configuration schema uses the fields `schema_version`, `remote`, `target_branch`, and
 `github_repository`. `remote` is a configured Git remote name, `target_branch` is an unqualified branch
@@ -429,7 +431,7 @@ the existing matching receipt after a lost response.
 | `defer_change(change_id)` | no active claim | Retains worktree and state | defer event |
 | `resume_change(change_id)` | deferred | Returns to named prior state | resume event |
 | `abandon_change(change_id)` | uncompleted; no active claim; user disposition | Terminal event, then exact owned-worktree cleanup | abandonment receipt / cleanup attention |
-| `supersede_publication(change_id, expected_publication_id, operation_id)` | rewrite required; user-visible disposition | Derives the next `owlbear/change/<change-id>/s<n>` branch and creates its PR without force-push | supersession receipt / publication attention |
+| `supersede_publication(change_id, expected_publication_id, operation_id)` | rewrite required; user-visible disposition | Derives the next `owlbear/change/<change-id>-s<n>` branch and creates its PR without force-push | supersession receipt / publication attention |
 
 ### 6.1 Target Synchronization Trigger
 

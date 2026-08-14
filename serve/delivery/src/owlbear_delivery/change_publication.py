@@ -54,6 +54,16 @@ class PublishChangeBranch(_PublicationModel):
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
+class SupersedeChangeBranch(_PublicationModel):
+    """Exact preconditions for one replayable published-history successor."""
+
+    change_id: ChangeId
+    expected_published_branch: str = Field(pattern=r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*(?:-s[1-9][0-9]*)?$")
+    expected_published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    superseding_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
 class ChangeBranchPublicationReceipt(_PublicationModel):
     """Provider-independent evidence for one exact remote Change branch head."""
 
@@ -68,6 +78,21 @@ class ChangeBranchPublicationReceipt(_PublicationModel):
     published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
 
 
+class ChangeBranchSupersessionReceipt(_PublicationModel):
+    """Provider-independent evidence for one exact successor Change branch head."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: ChangeId
+    remote: str = Field(min_length=1)
+    predecessor_branch: str = Field(pattern=r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*(?:-s[1-9][0-9]*)?$")
+    predecessor_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    successor_branch: str = Field(pattern=r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*-s[1-9][0-9]*$")
+    superseding_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    target_branch: str = Field(min_length=1)
+
+
 class _PublicationOperation(_PublicationModel):
     schema_version: Literal[1] = 1
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -77,6 +102,18 @@ class _PublicationOperation(_PublicationModel):
     target_branch: str = Field(min_length=1)
     expected_remote_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     published_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class _SupersessionOperation(_PublicationModel):
+    schema_version: Literal[1] = 1
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: ChangeId
+    remote: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
+    predecessor_branch: str = Field(pattern=r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*(?:-s[1-9][0-9]*)?$")
+    predecessor_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    successor_branch: str = Field(pattern=r"^owlbear/change/[a-z0-9]+(?:-[a-z0-9]+)*-s[1-9][0-9]*$")
+    superseding_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    target_branch: str = Field(min_length=1)
 
 
 @dataclass
@@ -148,6 +185,131 @@ class ChangeBranchPublisher:
                     and not attempt.write_outcome_ambiguous
                 ):
                     self._release_reserved_request(request, attempt.owner_id, lock)
+
+    def supersede(self, request: SupersedeChangeBranch) -> ChangeBranchSupersessionReceipt:
+        """Publish one successor branch without rewriting the predecessor publication."""
+        branch_request = PublishChangeBranch(
+            change_id=request.change_id,
+            expected_remote_head=None,
+            operation_id=request.operation_id,
+        )
+        attempt = _PublicationAttempt(owner_id=str(uuid.uuid4()))
+        with self._publication_lock(branch_request) as lock:
+            try:
+                return self._supersede(request, branch_request, attempt, lock)
+            except subprocess.TimeoutExpired as exc:
+                code = (
+                    PublicationProviderFailureCode.RESPONSE_UNKNOWN
+                    if attempt.write_started
+                    else PublicationProviderFailureCode.TIMEOUT
+                )
+                error = PublicationProviderError(
+                    code,
+                    request.operation_id,
+                    "Git supersession operation timed out",
+                    retry_safe=not attempt.write_started,
+                )
+                raise error from exc
+            except (OSError, ValueError) as exc:
+                error = PublicationProviderError(
+                    PublicationProviderFailureCode.UNAVAILABLE,
+                    request.operation_id,
+                    "Change supersession state is unavailable",
+                    retry_safe=False,
+                )
+                raise error from exc
+            finally:
+                if (
+                    attempt.reservation is not None
+                    and not attempt.reservation_released
+                    and not attempt.write_outcome_ambiguous
+                ):
+                    self._release_reserved_request(branch_request, attempt.owner_id, lock)
+
+    def _supersede(
+        self,
+        request: SupersedeChangeBranch,
+        branch_request: PublishChangeBranch,
+        attempt: _PublicationAttempt,
+        lock: PublicationLock,
+    ) -> ChangeBranchSupersessionReceipt:
+        operation, receipt = self._load_or_prepare_supersession(request, branch_request, attempt, lock)
+        if receipt is not None:
+            return receipt
+        self._validate_supersession_predecessor(operation, branch_request)
+        self._publish_supersession_successor(operation, branch_request, attempt)
+        attempt.reservation_released = True
+        self._release_publication(operation, attempt.owner_id, lock)
+        return self._supersession_receipt(operation)
+
+    def _load_or_prepare_supersession(
+        self,
+        request: SupersedeChangeBranch,
+        branch_request: PublishChangeBranch,
+        attempt: _PublicationAttempt,
+        lock: PublicationLock,
+    ) -> tuple[_SupersessionOperation, ChangeBranchSupersessionReceipt | None]:
+        operation = self._read_supersession_operation(request)
+        if operation is not None:
+            self._validate_supersession_replay(operation, request)
+            self._validate_supersession_workspace(operation, branch_request)
+            if self._remote_head(operation.successor_branch, branch_request) == operation.superseding_head:
+                return operation, self._supersession_receipt(operation)
+
+        reservation = self._reserve_publication(branch_request, attempt.owner_id, lock)
+        attempt.reservation = reservation
+        if operation is None:
+            operation = self._prepare_supersession(request, reservation, attempt.owner_id, branch_request)
+            operation = self._bind_supersession_operation(operation, branch_request)
+            self._validate_supersession_replay(operation, request)
+        self._validate_supersession_workspace(operation, branch_request, owner_id=attempt.owner_id)
+        return operation, None
+
+    def _validate_supersession_predecessor(
+        self,
+        operation: _SupersessionOperation,
+        request: PublishChangeBranch,
+    ) -> None:
+        predecessor_head = self._remote_head(operation.predecessor_branch, request)
+        if predecessor_head == operation.predecessor_head:
+            self._fetch_change_head(operation.predecessor_branch, predecessor_head, request)
+            return
+        if predecessor_head is not None:
+            self._conflict(
+                request,
+                "published predecessor branch changed before supersession",
+                retry_safe=True,
+            )
+        self._conflict(request, "published predecessor branch is missing")
+
+    def _publish_supersession_successor(
+        self,
+        operation: _SupersessionOperation,
+        request: PublishChangeBranch,
+        attempt: _PublicationAttempt,
+    ) -> None:
+        self._create_successor_ref(operation, request)
+        successor_head = self._remote_head(operation.successor_branch, request)
+        if successor_head is not None:
+            self._fetch_change_head(operation.successor_branch, successor_head, request)
+            if not self._is_ancestor(successor_head, operation.superseding_head, request):
+                self._conflict(
+                    request,
+                    "successor Change branch cannot fast-forward to the superseding head",
+                )
+        attempt.observed_remote_head = successor_head
+        if successor_head == operation.superseding_head:
+            return
+        attempt.write_started = True
+        attempt.write_outcome_ambiguous = True
+        self._push_superseding_head(operation, request, attempt)
+        if self._remote_head(operation.successor_branch, request) != operation.superseding_head:
+            attempt.write_outcome_ambiguous = False
+            self._failure(
+                PublicationProviderFailureCode.RESPONSE_UNKNOWN,
+                request,
+                "remote successor branch does not expose the superseding head",
+            )
 
     @contextmanager
     def _publication_lock(self, request: PublishChangeBranch) -> Iterator[PublicationLock]:
@@ -254,6 +416,143 @@ class ChangeBranchPublisher:
             expected_remote_head=request.expected_remote_head,
             published_head=branch_head,
         )
+
+    def _prepare_supersession(
+        self,
+        request: SupersedeChangeBranch,
+        coordination: ChangeCoordination,
+        owner_id: str,
+        branch_request: PublishChangeBranch,
+    ) -> _SupersessionOperation:
+        if (
+            coordination.branch != request.expected_published_branch
+            or coordination.writer is not None
+            or coordination.publication_lease is None
+            or coordination.publication_lease.operation_id != request.operation_id
+            or coordination.publication_lease.owner_id != owner_id
+        ):
+            self._conflict(branch_request, "Change supersession requires one reserved canonical workspace")
+        worktree = coordination.worktree_path.resolve()
+        if self._operation_root == worktree or self._operation_root.is_relative_to(worktree):
+            self._conflict(branch_request, "publication operation storage cannot be inside the Change worktree")
+        branch_head = self._resolve_commit(f"refs/heads/{coordination.branch}", branch_request)
+        if branch_head != request.superseding_head or coordination.last_reviewed_commit != request.superseding_head:
+            self._conflict(branch_request, "supersession head differs from the reviewed boundary")
+        self._require_clean_worktree(coordination.worktree_path, branch_request)
+        successor_branch = self._next_successor_branch(request.change_id, branch_request)
+        return _SupersessionOperation(
+            operation_id=request.operation_id,
+            change_id=request.change_id,
+            remote=self._remote,
+            predecessor_branch=request.expected_published_branch,
+            predecessor_head=request.expected_published_head,
+            successor_branch=successor_branch,
+            superseding_head=request.superseding_head,
+            target_branch=self._target_branch,
+        )
+
+    def _validate_supersession_workspace(
+        self,
+        operation: _SupersessionOperation,
+        request: PublishChangeBranch,
+        *,
+        owner_id: str | None = None,
+    ) -> None:
+        coordination = self._coordination(request)
+        if coordination.branch != operation.predecessor_branch or coordination.writer is not None:
+            self._conflict(request, "supersession no longer owns the reviewed Change workspace")
+        if owner_id is not None and (
+            coordination.publication_lease is None
+            or coordination.publication_lease.operation_id != operation.operation_id
+            or coordination.publication_lease.owner_id != owner_id
+        ):
+            self._conflict(request, "supersession does not own the Change publication reservation")
+        branch_head = self._resolve_commit(f"refs/heads/{coordination.branch}", request)
+        if branch_head != operation.superseding_head or coordination.last_reviewed_commit != operation.superseding_head:
+            self._conflict(request, "supersession no longer names the reviewed Change head")
+        self._require_clean_worktree(coordination.worktree_path, request)
+
+    def _create_successor_ref(
+        self,
+        operation: _SupersessionOperation,
+        request: PublishChangeBranch,
+    ) -> None:
+        reference = f"refs/heads/{operation.successor_branch}"
+        current = self._resolve_optional_commit(reference, request)
+        if current == operation.superseding_head:
+            return
+        if current is not None:
+            self._conflict(request, "successor Change branch already names another head")
+        result = self._run_git("update-ref", reference, operation.superseding_head, "0" * 40)
+        if result.returncode != 0:
+            current = self._resolve_optional_commit(reference, request)
+            if current != operation.superseding_head:
+                self._conflict(request, "successor Change branch was created concurrently", retry_safe=True)
+
+    def _resolve_optional_commit(self, revision: str, request: PublishChangeBranch) -> str | None:
+        result = self._run_git("rev-parse", "--verify", "--end-of-options", f"{revision}^{{commit}}")
+        if result.returncode != 0:
+            return None
+        commit = result.stdout.decode(errors="replace").strip()
+        if _COMMIT_PATTERN.fullmatch(commit) is None:
+            self._failure(
+                PublicationProviderFailureCode.INVALID_RESPONSE,
+                request,
+                "Git returned an invalid commit identity",
+            )
+        return commit
+
+    def _push_superseding_head(
+        self,
+        operation: _SupersessionOperation,
+        request: PublishChangeBranch,
+        attempt: _PublicationAttempt,
+    ) -> None:
+        push_operation = _PublicationOperation(
+            operation_id=operation.operation_id,
+            change_id=operation.change_id,
+            remote=operation.remote,
+            branch=operation.successor_branch,
+            target_branch=operation.target_branch,
+            expected_remote_head=attempt.observed_remote_head,
+            published_head=operation.superseding_head,
+        )
+        self._push_exact_head(push_operation, request, attempt)
+
+    def _next_successor_branch(self, change_id: str, request: PublishChangeBranch) -> str:
+        base = f"owlbear/change/{change_id}"
+        references = self._run_git(
+            "for-each-ref",
+            "--format=%(refname)",
+            f"refs/heads/{base}-s*",
+            f"refs/remotes/{self._remote}/{base}-s*",
+        )
+        if references.returncode != 0:
+            self._unavailable(request, "local successor Change branches could not be observed")
+        indexes = self._successor_indexes(references.stdout.decode(errors="replace"), base, request)
+        remote_references = self._run_git("ls-remote", "--heads", self._remote, f"refs/heads/{base}-s*")
+        if remote_references.returncode != 0:
+            self._unavailable(request, "remote successor Change branches could not be observed")
+        indexes.update(self._successor_indexes(remote_references.stdout.decode(errors="replace"), base, request))
+        next_index = max(indexes, default=0) + 1
+        return f"{base}-s{next_index}"
+
+    @staticmethod
+    def _successor_indexes(output: str, base: str, request: PublishChangeBranch) -> set[int]:
+        indexes: set[int] = set()
+        pattern = re.compile(rf"(?:^|/)({re.escape(base)}-s)([1-9][0-9]*)$")
+        for line in output.splitlines():
+            fields = line.split("\t")
+            reference = fields[-1].removeprefix("refs/heads/").removeprefix("refs/remotes/")
+            match = pattern.search(reference)
+            if match is None:
+                ChangeBranchPublisher._failure(
+                    PublicationProviderFailureCode.INVALID_RESPONSE,
+                    request,
+                    "successor Change branch observation returned an invalid ref",
+                )
+            indexes.add(int(match.group(2)))
+        return indexes
 
     def _validate_prepared_operation(
         self,
@@ -548,6 +847,10 @@ class ChangeBranchPublisher:
         identity = hashlib.sha256(operation_id.encode()).hexdigest()
         return self._operation_root / f"{identity}.json"
 
+    def _supersession_operation_path(self, operation_id: str) -> Path:
+        identity = hashlib.sha256(f"supersession:{operation_id}".encode()).hexdigest()
+        return self._operation_root / f"{identity}.json"
+
     def _read_operation(self, request: PublishChangeBranch) -> _PublicationOperation | None:
         if not self._operation_root.exists():
             return None
@@ -598,6 +901,101 @@ class ChangeBranchPublisher:
                     "stored publication operation is invalid",
                     cause=exc,
                 )
+
+    def _read_supersession_operation(self, request: SupersedeChangeBranch) -> _SupersessionOperation | None:
+        if not self._operation_root.exists():
+            return None
+        with locked_roots((self._operation_root,)):
+            try:
+                content = self._supersession_operation_path(request.operation_id).read_bytes()
+            except FileNotFoundError:
+                return None
+        try:
+            return _SupersessionOperation.model_validate_json(content)
+        except ValidationError as exc:
+            branch_request = PublishChangeBranch(
+                change_id=request.change_id,
+                expected_remote_head=None,
+                operation_id=request.operation_id,
+            )
+            self._failure(
+                PublicationProviderFailureCode.INVALID_RESPONSE,
+                branch_request,
+                "stored supersession operation is invalid",
+                cause=exc,
+            )
+
+    def _bind_supersession_operation(
+        self,
+        operation: _SupersessionOperation,
+        request: PublishChangeBranch,
+    ) -> _SupersessionOperation:
+        with locked_roots((self._operation_root,)):
+            path = self._supersession_operation_path(operation.operation_id)
+            try:
+                content = path.read_bytes()
+            except FileNotFoundError:
+                try:
+                    atomic_write(
+                        path,
+                        json.dumps(operation.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n",
+                    )
+                except OSError as exc:
+                    self._failure(
+                        PublicationProviderFailureCode.UNAVAILABLE,
+                        request,
+                        "supersession operation could not be persisted",
+                        cause=exc,
+                    )
+                return operation
+            try:
+                return _SupersessionOperation.model_validate_json(content)
+            except ValidationError as exc:
+                self._failure(
+                    PublicationProviderFailureCode.INVALID_RESPONSE,
+                    request,
+                    "stored supersession operation is invalid",
+                    cause=exc,
+                )
+
+    def _validate_supersession_replay(
+        self,
+        operation: _SupersessionOperation,
+        request: SupersedeChangeBranch,
+    ) -> None:
+        if (
+            operation.operation_id != request.operation_id
+            or operation.change_id != request.change_id
+            or operation.remote != self._remote
+            or operation.target_branch != self._target_branch
+            or operation.predecessor_branch != request.expected_published_branch
+            or operation.predecessor_head != request.expected_published_head
+            or operation.superseding_head != request.superseding_head
+        ):
+            branch_request = PublishChangeBranch(
+                change_id=request.change_id,
+                expected_remote_head=None,
+                operation_id=request.operation_id,
+            )
+            self._conflict(branch_request, "supersession inputs differ from the stored operation")
+
+    def _supersession_receipt(self, operation: _SupersessionOperation) -> ChangeBranchSupersessionReceipt:
+        digest_input = json.dumps(
+            operation.model_dump(mode="json"),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return ChangeBranchSupersessionReceipt(
+            receipt_id=hashlib.sha256(digest_input.encode()).hexdigest(),
+            operation_id=operation.operation_id,
+            change_id=operation.change_id,
+            remote=operation.remote,
+            predecessor_branch=operation.predecessor_branch,
+            predecessor_head=operation.predecessor_head,
+            successor_branch=operation.successor_branch,
+            superseding_head=operation.superseding_head,
+            target_branch=operation.target_branch,
+        )
 
     def _validate_replay(self, operation: _PublicationOperation, request: PublishChangeBranch) -> None:
         if (

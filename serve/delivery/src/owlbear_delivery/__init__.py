@@ -14,7 +14,9 @@ from owlbear_delivery.acceptance import (
 from owlbear_delivery.change_publication import (
     ChangeBranchPublicationReceipt,
     ChangeBranchPublisher,
+    ChangeBranchSupersessionReceipt,
     PublishChangeBranch,
+    SupersedeChangeBranch,
 )
 from owlbear_delivery.change_workspace import (
     CapacityLedger,
@@ -307,6 +309,7 @@ __all__ = [
     "CapacityLedger",
     "ChangeBranchPublicationReceipt",
     "ChangeBranchPublisher",
+    "ChangeBranchSupersessionReceipt",
     "ChangeCoordination",
     "ChangeWorkspaceManager",
     "ChangeWorktreeAttentionCode",
@@ -504,6 +507,7 @@ __all__ = [
     "SetPublicationPullRequestDraftState",
     "StartTargetJobRequest",
     "StartedTargetJob",
+    "SupersedeChangeBranch",
     "TargetAdmissionAssessment",
     "TargetAdmissionCandidate",
     "TargetAdmissionConflictError",

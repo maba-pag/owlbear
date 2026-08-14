@@ -11,6 +11,7 @@ import pytest
 
 from owlbear_delivery import (
     ChangeBranchPublisher,
+    ChangeBranchSupersessionReceipt,
     ChangeWriter,
     ChangeWorkspaceManager,
     CoordinationConflictError,
@@ -19,6 +20,7 @@ from owlbear_delivery import (
     PublicationProviderError,
     PublicationProviderFailureCode,
     PublishChangeBranch,
+    SupersedeChangeBranch,
     WriterIdentity,
 )
 from owlbear_delivery.git_executable import resolve_git_executable
@@ -122,6 +124,72 @@ def test_publishes_and_replays_exact_change_branch_without_mutating_target_or_us
     assert (repository / "user.txt").read_text(encoding="utf-8") == "uncommitted user work\n"
     assert _head(worktree) == reviewed
     assert _git(worktree, "status", "--porcelain").stdout == worktree_status
+
+
+def test_supersedes_published_change_without_rewriting_predecessor(tmp_path: Path) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, superseding = _reviewed_change(manager, "successor-change")
+    predecessor_branch = "owlbear/change/successor-change"
+    _git(repository, "push", "origin", f"{initial}:refs/heads/{predecessor_branch}")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+    request = SupersedeChangeBranch(
+        change_id="successor-change",
+        expected_published_branch=predecessor_branch,
+        expected_published_head=initial,
+        superseding_head=superseding,
+        operation_id="supersede-1",
+    )
+
+    receipt = publisher.supersede(request)
+    replayed = publisher.supersede(request)
+
+    assert isinstance(receipt, ChangeBranchSupersessionReceipt)
+    assert replayed == receipt
+    assert receipt.predecessor_branch == predecessor_branch
+    assert receipt.predecessor_head == initial
+    assert receipt.successor_branch == f"{predecessor_branch}-s1"
+    assert receipt.superseding_head == superseding
+    assert _head(remote, f"refs/heads/{predecessor_branch}") == initial
+    assert _head(remote, f"refs/heads/{predecessor_branch}-s1") == superseding
+    assert _head(repository, f"refs/heads/{predecessor_branch}") == superseding
+    assert coordinator.show("successor-change").publication_lease is None
+
+
+def test_supersession_allocates_after_existing_successor_refs(tmp_path: Path) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, superseding = _reviewed_change(manager, "successor-index")
+    predecessor_branch = "owlbear/change/successor-index"
+    _git(repository, "push", "origin", f"{initial}:refs/heads/{predecessor_branch}")
+    _git(repository, "push", "origin", f"{initial}:refs/heads/{predecessor_branch}-s1")
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+
+    receipt = publisher.supersede(
+        SupersedeChangeBranch(
+            change_id="successor-index",
+            expected_published_branch=predecessor_branch,
+            expected_published_head=initial,
+            superseding_head=superseding,
+            operation_id="supersede-index",
+        )
+    )
+
+    assert receipt.successor_branch == f"{predecessor_branch}-s2"
+    assert _head(remote, f"refs/heads/{predecessor_branch}-s1") == initial
+    assert _head(remote, f"refs/heads/{predecessor_branch}-s2") == superseding
 
 
 def test_adopts_exact_reviewed_remote_head_when_durable_head_is_missing(tmp_path: Path) -> None:
