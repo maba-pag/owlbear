@@ -380,6 +380,50 @@ def test_cleanup_removes_exact_worktree_keeps_branch_and_replays_receipt(tmp_pat
     assert manager.list_retained() == ()
 
 
+def test_cleanup_replays_persisted_intent_after_receipt_write_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("interrupted-cleanup")
+    original_update = coordinator.update
+    update_count = 0
+    failure_message = "simulated cleanup receipt write failure"
+
+    def fail_receipt_update(updated: ChangeCoordination) -> ChangeCoordination:
+        nonlocal update_count
+        update_count += 1
+        if update_count == 2:
+            raise CoordinationConflictError(failure_message)
+        return original_update(updated)
+
+    monkeypatch.setattr(coordinator, "update", fail_receipt_update)
+
+    with pytest.raises(CoordinationConflictError, match=failure_message):
+        manager.cleanup(coordination.change_id)
+
+    interrupted = coordinator.show(coordination.change_id)
+    assert interrupted.worktree_cleanup_intent is not None
+    assert interrupted.worktree_cleanup is None
+    assert not coordination.worktree_path.exists()
+    assert _git_ref_exists(repository, coordination.branch)
+    assert _git(repository, "rev-parse", coordination.branch) == initial
+    with pytest.raises(CoordinationConflictError, match="change already has an active writer"):
+        coordinator.acquire(
+            coordination.change_id,
+            ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build"),
+        )
+
+    monkeypatch.setattr(coordinator, "update", original_update)
+    receipt = manager.cleanup(coordination.change_id)
+
+    assert receipt.branch_head == initial
+    assert coordinator.show(coordination.change_id).worktree_cleanup == receipt
+    assert coordinator.show(coordination.change_id).worktree_cleanup_intent is None
+    assert manager.cleanup(coordination.change_id) == receipt
+
+
 def test_cleanup_refuses_missing_worktree_without_recording_cleanup(tmp_path: Path) -> None:
     repository, _ = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)

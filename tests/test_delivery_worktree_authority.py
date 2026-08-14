@@ -35,6 +35,7 @@ _INVENTORY_FUNCTIONS = frozenset(
         "list_retained",
         "list_retained_change_worktrees",
         "_registered_worktrees",
+        "_registered_worktrees_all",
         "_change_branch_heads",
         "_coordination_attention",
         "_filesystem_change_ids",
@@ -59,6 +60,12 @@ _REGISTER_WORKTREE_CALLERS = frozenset(
         ("ChangeWorkspaceManager", "ensure"),
         ("ChangeWorkspaceManager", "restart"),
         ("ChangeWorkspaceManager", "restore_worktree"),
+    }
+)
+_REMOVE_WORKTREE_CALLERS = frozenset(
+    {
+        ("ChangeWorkspaceManager", "cleanup"),
+        ("<module>", "_remove_worktrees"),
     }
 )
 _COMPLETION_CALLERS = frozenset({("PortfolioApplication", "observe_acceptance")})
@@ -153,6 +160,38 @@ class _ManagedWorktreeRegistrationVisitor(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call) -> None:
         if isinstance(node.func, ast.Attribute) and node.func.attr == "_register_worktree":
+            self.matches.append((node.lineno, tuple(self.classes), tuple(self.functions)))
+        self.generic_visit(node)
+
+    def scan(self) -> None:
+        self.visit(ast.parse(self.path.read_text(encoding="utf-8"), filename=str(self.path)))
+
+
+class _ManagedWorktreeRemovalVisitor(ast.NodeVisitor):
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.classes: list[str] = []
+        self.functions: list[str] = []
+        self.matches: list[tuple[int, tuple[str, ...], tuple[str, ...]]] = []
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self.classes.append(node.name)
+        self.generic_visit(node)
+        self.classes.pop()
+
+    def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.functions.append(node.name)
+        self.generic_visit(node)
+        self.functions.pop()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._visit_function(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._visit_function(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        if isinstance(node.func, ast.Attribute) and node.func.attr == "remove_worktree":
             self.matches.append((node.lineno, tuple(self.classes), tuple(self.functions)))
         self.generic_visit(node)
 
@@ -309,6 +348,19 @@ def test_worktree_registration_has_only_named_lifecycle_callers() -> None:
         (_scope_name(list(classes)), _scope_name(list(functions))) for _path, _line, classes, functions in matches
     }
     assert actual == _REGISTER_WORKTREE_CALLERS, "Unexpected worktree registration callers: " + repr(matches)
+
+
+def test_worktree_removal_has_only_named_cleanup_caller() -> None:
+    matches: list[tuple[Path, int, tuple[str, ...], tuple[str, ...]]] = []
+    for path in _source_files():
+        visitor = _ManagedWorktreeRemovalVisitor(path)
+        visitor.scan()
+        matches.extend((path, lineno, classes, functions) for lineno, classes, functions in visitor.matches)
+
+    actual = {
+        (_scope_name(list(classes)), _scope_name(list(functions))) for _path, _line, classes, functions in matches
+    }
+    assert actual == _REMOVE_WORKTREE_CALLERS, "Unexpected worktree removal callers: " + repr(matches)
 
 
 def _is_none_guard(node: ast.AST, name: str) -> bool:

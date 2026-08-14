@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict
 
 from owlbear_delivery import DeliveryChangeWorktreeCleanup, DeliveryRetainedChangeWorktree
 from owlbear_delivery.acceptance import CompletionReceiptConflictError
+from owlbear_delivery.change_workspace import CoordinationConflictError
 from owlbear_delivery.completed_history import (
     CompletedHistoryDiagnostic,
     CompletedHistoryDiagnosticCode,
@@ -451,6 +452,12 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
             DeliveryChangeDispositionConflictError("attention identity is stale"),
             "ERR_DELIVERY_RUNTIME_CONFLICT",
             False,
+        ),
+        (
+            "cleanup_abandoned_change_worktree",
+            CoordinationConflictError("cleanup coordination changed"),
+            "ERR_TARGET_COORDINATION_CONFLICT",
+            True,
         ),
     )
     for operation_name, failure, code, retry_safe in cases:

@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from itertools import pairwise
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Never
+from typing import TYPE_CHECKING, Literal, Never, Self
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -70,8 +70,8 @@ class ChangeWriter(WriterIdentity):
     kind: Literal["plan", "build", "repair"]
 
 
-class ChangeWorktreeCleanup(_WorkspaceModel):
-    """Durable proof that one exact Change worktree was removed."""
+class _ChangeWorktreeCleanupRecord(_WorkspaceModel):
+    """Identity-bound record for one exact Change worktree cleanup."""
 
     schema_version: Literal[1] = 1
     cleanup_id: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -81,7 +81,7 @@ class ChangeWorktreeCleanup(_WorkspaceModel):
     branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
 
     @model_validator(mode="after")
-    def _validate_identity(self) -> ChangeWorktreeCleanup:
+    def _validate_identity(self) -> Self:
         identity = "\0".join((self.change_id, self.branch, str(self.worktree_path), self.branch_head)).encode()
         if self.cleanup_id != hashlib.sha256(identity).hexdigest():
             message = "Change worktree cleanup identity is invalid"
@@ -96,8 +96,7 @@ class ChangeWorktreeCleanup(_WorkspaceModel):
         branch: str,
         worktree_path: Path,
         branch_head: str,
-    ) -> ChangeWorktreeCleanup:
-        """Create a deterministic cleanup receipt for one exact workspace identity."""
+    ) -> Self:
         identity = "\0".join((change_id, branch, str(worktree_path), branch_head)).encode()
         return cls(
             cleanup_id=hashlib.sha256(identity).hexdigest(),
@@ -106,6 +105,14 @@ class ChangeWorktreeCleanup(_WorkspaceModel):
             worktree_path=worktree_path,
             branch_head=branch_head,
         )
+
+
+class ChangeWorktreeCleanupIntent(_ChangeWorktreeCleanupRecord):
+    """Durable intent to remove one exact managed Change worktree."""
+
+
+class ChangeWorktreeCleanup(_ChangeWorktreeCleanupRecord):
+    """Durable proof that one exact Change worktree was removed."""
 
 
 class PublicationLease(_WorkspaceModel):
@@ -152,6 +159,7 @@ class ChangeCoordination(_WorkspaceModel):
     last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     writer: ChangeWriter | None = None
     publication_lease: PublicationLease | None = None
+    worktree_cleanup_intent: ChangeWorktreeCleanupIntent | None = None
     worktree_cleanup: ChangeWorktreeCleanup | None = None
 
     @model_validator(mode="before")
@@ -370,7 +378,13 @@ class PortfolioCoordinator:
         ledger = CapacityLedger.model_validate_json(ledger_bytes)
         publication_expiry = coordination.publication_expiry
         publication_active = publication_expiry is not None and publication_expiry > datetime.now(UTC)
-        if coordination.writer is not None or publication_active or change_id in ledger.change_ids:
+        if (
+            coordination.writer is not None
+            or publication_active
+            or coordination.worktree_cleanup_intent is not None
+            or coordination.worktree_cleanup is not None
+            or change_id in ledger.change_ids
+        ):
             _coordination_conflict("change already has an active writer")
         if len(ledger.change_ids) >= ledger.capacity:
             _coordination_conflict("global writer capacity is exhausted")
@@ -468,7 +482,12 @@ class PortfolioCoordinator:
         existing_expiry = coordination.publication_expiry
         same_owner = existing_lease is not None and existing_lease.owner_id == lease.owner_id
         expired = existing_expiry is not None and existing_expiry <= now_value
-        if coordination.writer is not None or (existing_lease is not None and not same_owner and not expired):
+        if (
+            coordination.writer is not None
+            or coordination.worktree_cleanup_intent is not None
+            or coordination.worktree_cleanup is not None
+            or (existing_lease is not None and not same_owner and not expired)
+        ):
             _coordination_conflict("change already has active ownership")
         reserved = coordination.model_copy(update={"publication_lease": lease})
         operation_digest = hashlib.sha256(lease.operation_id.encode()).hexdigest()
@@ -769,26 +788,105 @@ class ChangeWorkspaceManager:
         if coordination.worktree_cleanup is not None:
             return coordination.worktree_cleanup
         expected_path = self._worktree_root / change_id
-        attention = self._cleanup_attention(change_id, coordination, expected_path)
-        self._raise_worktree_attention(change_id, attention)
+        intent = coordination.worktree_cleanup_intent
+        if intent is None:
+            attention = self._cleanup_attention(change_id, coordination, expected_path)
+            self._raise_worktree_attention(change_id, attention)
+            self._require_cleanup_authority(coordination)
+            branch_head = self._resolve(coordination.branch)
+            intent = ChangeWorktreeCleanupIntent.create(
+                change_id=change_id,
+                branch=coordination.branch,
+                worktree_path=expected_path,
+                branch_head=branch_head,
+            )
+            coordination = self._coordinator.update(coordination.model_copy(update={"worktree_cleanup_intent": intent}))
+        else:
+            self._raise_worktree_attention(
+                change_id,
+                self._cleanup_intent_attention(change_id, coordination, expected_path, intent),
+            )
+            self._require_cleanup_authority(coordination)
+            branch_head = self._resolve(coordination.branch, missing_ok=True)
+            if branch_head is None:
+                self._raise_worktree_attention(
+                    change_id,
+                    {ChangeWorktreeAttentionCode.BRANCH_MISSING},
+                )
+            if branch_head != intent.branch_head:
+                self._raise_worktree_attention(
+                    change_id,
+                    {ChangeWorktreeAttentionCode.WORKTREE_HEAD_MISMATCH},
+                )
+            registrations = self._registered_worktrees_all()
+            if self._cleanup_replay_complete(expected_path, intent.branch, registrations):
+                return self._record_cleanup_receipt(coordination, intent)
+
+        self._raise_worktree_attention(
+            change_id,
+            self._cleanup_attention(change_id, coordination, expected_path),
+        )
+        self.remove_worktree(self._repository, expected_path, force=True)
+        registrations = self._registered_worktrees_all()
+        if not self._cleanup_replay_complete(expected_path, intent.branch, registrations):
+            attention = {ChangeWorktreeAttentionCode.UNEXPECTED_FILESYSTEM_STATE}
+            if any(record.branch == intent.branch for record in registrations.values()):
+                attention.add(ChangeWorktreeAttentionCode.OWNERSHIP_AMBIGUOUS)
+            self._raise_worktree_attention(change_id, attention)
+        return self._record_cleanup_receipt(coordination, intent)
+
+    @staticmethod
+    def _require_cleanup_authority(coordination: ChangeCoordination) -> None:
         if coordination.writer is not None:
             _coordination_conflict("Change worktree cleanup cannot overlap an active writer")
         if coordination.publication_expiry is not None and coordination.publication_expiry > datetime.now(UTC):
             _coordination_conflict("Change worktree cleanup cannot overlap an active publication lease")
-        branch_head = self._resolve(coordination.branch)
-        self.remove_worktree(self._repository, expected_path, force=True)
-        if expected_path.exists() or expected_path in self._registered_worktrees_all():
-            self._raise_worktree_attention(
-                change_id,
-                {ChangeWorktreeAttentionCode.UNEXPECTED_FILESYSTEM_STATE},
-            )
+
+    def _cleanup_intent_attention(
+        self,
+        change_id: str,
+        coordination: ChangeCoordination,
+        expected_path: Path,
+        intent: ChangeWorktreeCleanupIntent,
+    ) -> set[ChangeWorktreeAttentionCode]:
+        attention: set[ChangeWorktreeAttentionCode] = set()
+        if intent.change_id != change_id:
+            attention.add(ChangeWorktreeAttentionCode.OWNERSHIP_AMBIGUOUS)
+        if intent.branch != coordination.branch:
+            attention.add(ChangeWorktreeAttentionCode.BRANCH_MISMATCH)
+        if intent.worktree_path.resolve() != expected_path.resolve():
+            attention.add(ChangeWorktreeAttentionCode.COORDINATION_PATH_MISMATCH)
+        return attention
+
+    @staticmethod
+    def _cleanup_replay_complete(
+        expected_path: Path,
+        expected_branch: str,
+        registrations: dict[Path, _RegisteredGitWorktree],
+    ) -> bool:
+        if expected_path.is_symlink() or expected_path.exists() or expected_path in registrations:
+            return False
+        return not any(record.branch == expected_branch for record in registrations.values())
+
+    def _record_cleanup_receipt(
+        self,
+        coordination: ChangeCoordination,
+        intent: ChangeWorktreeCleanupIntent,
+    ) -> ChangeWorktreeCleanup:
         receipt = ChangeWorktreeCleanup.create(
-            change_id=change_id,
-            branch=coordination.branch,
-            worktree_path=expected_path,
-            branch_head=branch_head,
+            change_id=intent.change_id,
+            branch=intent.branch,
+            worktree_path=intent.worktree_path,
+            branch_head=intent.branch_head,
         )
-        self._coordinator.update(coordination.model_copy(update={"worktree_cleanup": receipt}))
+        self._coordinator.update(
+            coordination.model_copy(
+                update={
+                    "worktree_cleanup_intent": None,
+                    "worktree_cleanup": receipt,
+                }
+            )
+        )
         return receipt
 
     def refresh_integration_target(self, change_id: str) -> ChangeCoordination:

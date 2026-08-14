@@ -624,7 +624,9 @@ class PortfolioApplication:
                 receipt = self._workspace_manager.cleanup(change_id)
             except ChangeWorktreeAttentionError:
                 raise
-            except (CoordinationConflictError, OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            except CoordinationConflictError:
+                raise
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
                 self._fail("Change worktree cleanup could not complete", exc)
         return DeliveryChangeWorktreeCleanup(
             cleanup_id=receipt.cleanup_id,
@@ -1555,7 +1557,8 @@ class PortfolioApplication:
         """Start at most one ready claim per available execution slot."""
         with self._coordinator.acquisition_lock():
             for change_id in self._runtimes:
-                self._workspace_manager.refresh_integration_target(change_id)
+                if self._workspace_manager.show(change_id).worktree_cleanup is None:
+                    self._workspace_manager.refresh_integration_target(change_id)
             occupied = sum(len(runtime.active_claims()) for runtime in self._runtimes.values())
             available = max(self._execution_capacity - occupied, 0)
             launches: list[DeliveryLaunchPackage] = []
