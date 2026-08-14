@@ -6,6 +6,7 @@ import hashlib
 import json
 import shutil
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,8 @@ from owlbear_tools import delivery_migration
 from owlbear_delivery import (
     CapacityLedger,
     ChangeCoordination,
+    DeliveryChangeAbandonment,
+    DeliveryChangeStage,
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryContract,
@@ -171,6 +174,27 @@ def test_migration_accepts_legacy_integration_completion_as_terminal(tmp_path: P
     apply_delivery_state_migration(plan)
 
     assert (repository / ".owlbear/delivery/runtime/changes/change-a/frontier.json").read_bytes() == legacy_bytes
+
+
+def test_migration_accepts_abandoned_change_as_terminal(tmp_path: Path) -> None:
+    repository, _legacy_worktree, _frontier_bytes = _legacy_repository(tmp_path)
+    frontier_path = repository / ".owlbear/target/delivery/changes/change-a/frontier.json"
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+    abandonment = DeliveryChangeAbandonment.create(
+        change_id="change-a",
+        prior_stage=DeliveryChangeStage.BUILDING,
+        abandoned_at=datetime(2026, 8, 12, tzinfo=UTC),
+        reason="The Change is no longer required.",
+    )
+    frontier_path.write_bytes(_canonical(frontier.model_copy(update={"change_abandonment": abandonment})))
+
+    coordination_path = repository / ".owlbear/target/target-runtime/coordination/change-a.json"
+    coordination = ChangeCoordination.model_validate_json(coordination_path.read_bytes())
+    coordination_path.write_bytes(_canonical(coordination.model_copy(update={"last_reviewed_commit": "0" * 40})))
+
+    plan = plan_delivery_state_migration(repository)
+
+    assert plan.changes[0].frontier.change_abandonment == abandonment
 
 
 def test_migration_rejects_legacy_completion_identity_mismatch(tmp_path: Path) -> None:

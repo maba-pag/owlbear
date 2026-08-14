@@ -268,6 +268,11 @@ def _migration_changes(
         coordination = coordinations[change_id]
         source = (legacy_root / change_id).resolve()
         target = (target_root / change_id).resolve()
+        terminal = (
+            frontier.change_abandonment is not None
+            or frontier.change_completion is not None
+            or change_id in legacy_completions
+        )
         if coordination.worktree_path.resolve() not in {source, target}:
             _fail(f"coordination names an unexpected worktree path: {change_id}")
         registration = registrations.get(source) or registrations.get(target)
@@ -277,10 +282,10 @@ def _migration_changes(
                 change_id,
                 coordination,
                 registration,
-                terminal=frontier.change_completion is not None or change_id in legacy_completions,
+                terminal=terminal,
             )
             owned_paths.add(registration.path)
-        elif frontier.change_completion is None and change_id not in legacy_completions:
+        elif not terminal:
             _fail(f"nonterminal Change has no registered worktree: {change_id}")
         changes.append(
             _MigrationChange(

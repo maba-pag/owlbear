@@ -81,7 +81,7 @@ def _remote_target_exists(root: Path, remote: str, branch: str) -> bool:
 
 
 def _has_terminal_completion(frontier: dict[str, object]) -> bool:
-    if frontier.get("change_completion") is not None:
+    if frontier.get("change_abandonment") is not None or frontier.get("change_completion") is not None:
         return True
     completion = frontier.get("integration_completion")
     result_id = frontier.get("integration_result_id")
