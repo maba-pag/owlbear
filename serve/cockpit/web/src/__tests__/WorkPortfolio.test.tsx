@@ -1764,6 +1764,41 @@ it('clears publication-check results when the polled published head changes', as
   expect(within(inspector).queryByText('Unit tests')).not.toBeInTheDocument()
 })
 
+it('rejects an observation returned for a different exact head', async () => {
+  publicationChecksResponse = { ...publicationChecksResponse, exact_commit: '2'.repeat(40) }
+  const publicationCard = publicationCardForChecks()
+  currentDetail = detail({
+    card: publicationCard,
+    publication: publicationForChecks('awaiting-merge'),
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
+
+  const error = await within(inspector).findByRole('alert')
+  expect(error).toHaveTextContent('ERR_WORK_ITEM_PUBLICATION_CHECKS_OBSERVE')
+  expect(error).toHaveTextContent('do not match the current Change published head')
+  expect(within(inspector).queryByText('Unit tests')).not.toBeInTheDocument()
+})
+
+it('discloses provider checks omitted by the bounded response', async () => {
+  publicationChecksResponse = { ...publicationChecksResponse, truncated_count: 1 }
+  const publicationCard = publicationCardForChecks()
+  currentDetail = detail({
+    card: publicationCard,
+    publication: publicationForChecks('awaiting-merge'),
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
+
+  expect(await within(inspector).findByText('1 additional check not shown.')).toBeInTheDocument()
+})
+
 it('shows typed provider failure for publication-check observation', async () => {
   publicationChecksFailure = true
   const publicationCard = publicationCardForChecks()

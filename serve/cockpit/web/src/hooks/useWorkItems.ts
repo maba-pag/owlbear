@@ -410,12 +410,14 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
       && publicationHeadRef.current === requestedHead
     try {
       const observed = await observeWorkItemPublicationChecks(identity.changeId)
-      if (!isCurrent() || observed.exact_commit !== requestedHead) {
+      if (!isCurrent() || observed.change_id !== identity.changeId || observed.exact_commit !== requestedHead) {
         if (isCurrent()) {
           publicationChecksRef.current = null
           setPublicationChecks(null)
           setPublicationChecksStale(true)
-          setPublicationChecksError(new Error('Observed checks belong to a different published head. Refresh the Work Item and try again.'))
+          const error = new Error('Observed checks do not match the current Change published head. Refresh the Work Item and try again.')
+          setPublicationChecksError(error)
+          return error
         }
         return null
       }

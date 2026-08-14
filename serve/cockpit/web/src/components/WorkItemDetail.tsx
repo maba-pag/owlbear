@@ -618,7 +618,7 @@ function PublicationChecksSection(props: WorkItemDetailProps) {
   const observation = props.publicationChecks
   const errorCode = props.publicationChecksError instanceof WorkItemApiError
     ? props.publicationChecksError.code
-    : 'ERR_DELIVERY_PUBLICATION_CHECKS'
+    : 'ERR_WORK_ITEM_PUBLICATION_CHECKS_OBSERVE'
   const status = props.isObservingPublicationChecks
     ? 'Observing publication checks...'
     : props.publicationChecksStale
