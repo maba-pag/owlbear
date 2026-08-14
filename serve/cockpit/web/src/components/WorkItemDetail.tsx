@@ -161,10 +161,15 @@ function RequestsSection({ detail, pendingAction, onAnswerRequest }: WorkItemDet
 
 function ChangeDispositionSection(props: WorkItemDetailProps) {
   const [reason, setReason] = useState('')
+  const [confirmOpen, setConfirmOpen] = useState(false)
   if (props.detail.item.card.scope !== 'change-publication') return null
   const phase = props.detail.item.publication?.phase
   if (phase === 'abandoned') return null
   const canSubmit = reason.trim().length > 0 && props.pendingAction === null
+  const abandon = async () => {
+    await props.onAbandonChange(reason.trim())
+    setConfirmOpen(false)
+  }
   return (
     <section className="border-l-4 border-warning bg-surface p-static-md" aria-labelledby="change-disposition-heading">
       <PHeading id="change-disposition-heading" tag="h3" size="md">Change controls</PHeading>
@@ -185,11 +190,24 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
               {props.pendingAction === 'change-defer' ? 'Deferring...' : 'Defer Change'}
             </PButton>
           ) : null}
-          <PButton type="button" compact variant="secondary" disabled={!canSubmit} onClick={() => void props.onAbandonChange(reason.trim())}>
+          <PButton type="button" compact variant="secondary" disabled={!canSubmit} onClick={() => setConfirmOpen(true)}>
             {props.pendingAction === 'change-abandon' ? 'Abandoning...' : 'Abandon Change'}
           </PButton>
         </div>
       </div>
+      {confirmOpen ? (
+        <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm Change abandonment' }}>
+          <div className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary">
+            <PHeading tag="h2" size="lg">Confirm Change abandonment</PHeading>
+            <p className="text-sm">Abandonment is permanent. The Change will not enter completed history.</p>
+            <p className="text-sm text-contrast-medium">Reason: {reason.trim()}</p>
+            <div className="flex flex-wrap justify-end gap-static-xs">
+              <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton>
+              <PButton type="button" disabled={props.pendingAction !== null} onClick={() => void abandon()}>{props.pendingAction === 'change-abandon' ? 'Abandoning...' : 'Confirm abandon Change'}</PButton>
+            </div>
+          </div>
+        </PModal>
+      ) : null}
     </section>
   )
 }

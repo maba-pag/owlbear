@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 
 from owlbear_cockpit.deps import get_target_context
 from owlbear_cockpit.target_models import (
+    AbandonChangeBody,
     ActivityCounts,
     AnswerRequestBody,
     BackwardMoveBody,
@@ -175,7 +176,7 @@ class TargetCockpitService:
         """Resume one exact deferred Change."""
         return self._invoke(lambda: self._application.resume_change(change_id))
 
-    def abandon_change(self, change_id: str, body: ChangeDispositionReasonBody) -> object:
+    def abandon_change(self, change_id: str, body: AbandonChangeBody) -> object:
         """Terminate one uncompleted Change by explicit user disposition."""
         return self._invoke(lambda: self._application.abandon_change(change_id, body.reason))
 
@@ -375,7 +376,7 @@ def _register_publication_controls(router: APIRouter) -> None:
     @router.post("/changes/{change_id}/abandon")
     def abandon_change(
         change_id: str,
-        body: ChangeDispositionReasonBody,
+        body: AbandonChangeBody,
         service: _TargetService,
     ) -> object:
         return service.abandon_change(change_id, body)

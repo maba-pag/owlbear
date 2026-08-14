@@ -923,10 +923,11 @@ it('posts reasoned Change dispositions and resumes a deferred Change', async () 
   inputValue(reason, 'User stopped the Change')
   fireEvent.change(reason, new CustomEvent('change', { detail: { value: 'User stopped the Change' }, bubbles: true }))
   fireEvent.click(within(inspector).getByText('Abandon Change'))
+  fireEvent.click(await screen.findByText('Confirm abandon Change'))
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/abandon',
     method: 'POST',
-    body: { reason: 'User stopped the Change' },
+    body: { confirmed_abandonment: true, reason: 'User stopped the Change' },
   }))
 
   initialRender.unmount()
@@ -977,6 +978,47 @@ it('does not show Change disposition controls on an Outcome detail', async () =>
   currentDetail = detail()
   currentPortfolio = portfolio()
   renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  expect(within(inspector).queryByText('Defer Change')).not.toBeInTheDocument()
+  expect(within(inspector).queryByText('Abandon Change')).not.toBeInTheDocument()
+})
+
+it('does not show Change disposition controls for an abandoned Change', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'none',
+    needs_headline: null,
+    next_actor: 'none',
+    next_step: 'Change abandoned',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Change abandoned', done: null, total: null },
+    action: { kind: 'none', label: null, command: null },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    publication: {
+      phase: 'abandoned',
+      finalization_id: null,
+      finalized_head: null,
+      published_head: null,
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: null,
+      pull_request_number: null,
+      pull_request_head: null,
+      accepted_merge_commit: null,
+      merged_at: null,
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'abandoned', items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
 
   const inspector = await screen.findByTestId('work-item-detail')
   expect(within(inspector).queryByText('Defer Change')).not.toBeInTheDocument()

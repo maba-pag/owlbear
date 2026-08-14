@@ -524,6 +524,6 @@ export function abandonWorkItemChange(changeId: string, reason: string): Promise
   return controlRequest(
     `/api/changes/${encodeURIComponent(changeId)}/abandon`,
     'ERR_WORK_ITEM_CHANGE_ABANDON',
-    { reason },
+    { confirmed_abandonment: true, reason },
   )
 }

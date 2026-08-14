@@ -104,6 +104,13 @@ class ChangeDispositionReasonBody(_TargetHTTPModel):
     reason: str = Field(min_length=1)
 
 
+class AbandonChangeBody(_TargetHTTPModel):
+    """Explicit confirmation and reason for irreversible Change abandonment."""
+
+    confirmed_abandonment: Literal[True]
+    reason: str = Field(min_length=1)
+
+
 class BackwardMoveBody(_TargetHTTPModel):
     """Operator-selected earlier stage and reason."""
 
@@ -131,6 +138,7 @@ class BackwardMovePreviewBody(_TargetHTTPModel):
 
 
 __all__ = [
+    "AbandonChangeBody",
     "ActivityCounts",
     "AnswerRequestBody",
     "BackwardMoveBody",

@@ -793,6 +793,30 @@ def test_attention_can_be_abandoned_and_clears_active_attention(tmp_path: Path) 
     assert runtime.change_stage() == DeliveryChangeStage.ABANDONED
 
 
+def test_abandonment_clears_live_publication_and_integration_authority(tmp_path: Path) -> None:
+    runtime = _awaiting_merge_runtime(tmp_path)
+    attention = DeliveryIntegrationAttention(
+        attention_id="a" * 64,
+        code=DeliveryIntegrationAttentionCode.REPAIR_AUTHORITY,
+        change_id="delivery-runtime",
+        change_head="1" * 40,
+        target_head="2" * 40,
+        integration_target="main",
+        diagnostics=("The repair exceeded admitted authority.",),
+        retry_condition="Abandon the Change.",
+    )
+    _persist_frontier(tmp_path, runtime, integration_attention=attention)
+
+    runtime.abandon_change("user stopped the Change", datetime(2026, 8, 11, 18, tzinfo=UTC))
+
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    assert frontier.integration_attention is None
+    assert frontier.integration_repair_claim is None
+    assert frontier.pending_checkpoint is None
+    assert frontier.ready is None
+    assert frontier.merged_pull_request_latch is None
+
+
 def test_change_deferral_rejects_active_claims(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path)
     _activate(runtime, "OUT-001", "claim-deferral")

@@ -21,7 +21,7 @@ Parse the supplied value as exactly one lowercase-hyphenated `change_id` followe
 extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
-`OwlBear Delivery list_work_items list_retained_change_worktrees show_work_item show_integration_attention resolve_change_disposition reconcile_change_checkpoint mark_change_ready recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
+`OwlBear Delivery list_work_items list_retained_change_worktrees show_work_item show_integration_attention resolve_change_disposition defer_change resume_change abandon_change reconcile_change_checkpoint mark_change_ready recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
 For a Change attention, call `list_work_items` and require the Change publication card's
 `action.attention_id` to equal the supplied disposition identity; use `show_work_item` for the
 publication detail when needed. For an Integration attention, call
@@ -94,6 +94,11 @@ Use only an existing operation whose contract owns the selected result:
   reconciled publication is valid. Observe acceptance only after the reopened pull request is
   merged. An open, unmerged pull request needs no attention resolution; call
   `observe_acceptance(change_id)` only as a retry-safe waiting observation.
+- User disposition: after the user explicitly selects pause or termination, call
+  `defer_change(change_id, reason)` to retain the Change and its worktree, or
+  `abandon_change(change_id, reason)` to terminate the uncompleted Change. Call
+  `resume_change(change_id)` only for an exact currently deferred Change. Abandonment is
+  irreversible and must not be inferred from an attention diagnosis.
 - provider acceptance required: after re-reading the exact finalization, ready receipt, reconciled
   checkpoint, and publication evidence, call `observe_acceptance(change_id)` once. This operation
   reads the current provider pull request and creates the receipt-backed completion record only when

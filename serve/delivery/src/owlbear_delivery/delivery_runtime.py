@@ -1005,6 +1005,10 @@ class DeliveryFrontier(_DeliveryModel):
             or self.integration_completion is not None
             or self.change_disposition is not None
             or self.change_disposition_publication is not None
+            or self.integration_attention is not None
+            or self.integration_repair_claim is not None
+            or self.ready is not None
+            or self.merged_pull_request_latch is not None
         ):
             message = "abandoned Change cannot retain active or terminal authority"
             raise ValueError(message)
@@ -1284,6 +1288,9 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "resolve_request",
         "unblock",
         "administrative_move",
+        "defer_change",
+        "resume_change",
+        "abandon_change",
     }
 )
 
@@ -1383,6 +1390,7 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         if frontier.change_deferral is not None:
             return frontier.change_deferral
+        _require_change_mutable(frontier, "defer_change")
         if frontier.change_abandonment is not None or is_change_terminal(frontier):
             _conflict("terminal Delivery Change cannot be deferred")
         _require_no_active_change_claim(frontier, "Change deferral")
@@ -1403,6 +1411,7 @@ class DeliveryRuntime:
         frontier, previous = self._read()
         if frontier.change_abandonment is not None or is_change_terminal(frontier):
             _conflict("terminal Delivery Change cannot be resumed")
+        _require_change_mutable(frontier, "resume_change")
         deferral = frontier.change_deferral
         if deferral is None:
             _conflict("Delivery Change is not deferred")
@@ -1417,6 +1426,7 @@ class DeliveryRuntime:
             return frontier.change_abandonment
         if frontier.change_completion is not None or frontier.integration_result_id is not None:
             _conflict("completed Delivery Change cannot be abandoned")
+        _require_change_mutable(frontier, "abandon_change")
         _require_no_active_change_claim(frontier, "Change abandonment")
         prior_stage = derive_change_stage(frontier)
         if prior_stage == DeliveryChangeStage.ABANDONED:
@@ -1435,6 +1445,11 @@ class DeliveryRuntime:
                     "change_deferral": None,
                     "change_disposition": None,
                     "change_disposition_publication": None,
+                    "pending_checkpoint": None,
+                    "ready": None,
+                    "merged_pull_request_latch": None,
+                    "integration_attention": None,
+                    "integration_repair_claim": None,
                 }
             ),
         )
@@ -2629,9 +2644,13 @@ def _require_change_mutable(frontier: DeliveryFrontier, operation: str) -> None:
         _conflict("completed Delivery Change is terminal")
     if frontier.change_abandonment is not None:
         _conflict("abandoned Delivery Change is terminal")
-    if frontier.change_deferral is not None:
+    if frontier.change_deferral is not None and operation not in {"resume_change", "abandon_change"}:
         _conflict("deferred Delivery Change requires resumption before mutation")
-    if frontier.change_disposition is not None:
+    if frontier.change_disposition is not None and operation not in {
+        "defer_change",
+        "resume_change",
+        "abandon_change",
+    }:
         _conflict("Delivery Change requires attention resolution before mutation")
 
 

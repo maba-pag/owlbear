@@ -1439,12 +1439,10 @@ class PortfolioApplication:
             reason = DeliveryRetainedWorktreeCleanupBlockReason.ORPHAN
         elif completion_state_inconsistent:
             reason = DeliveryRetainedWorktreeCleanupBlockReason.COMPLETION_STATE_INCONSISTENT
-        elif completion is None:
-            reason = (
-                DeliveryRetainedWorktreeCleanupBlockReason.LEGACY_INTEGRATION_COMPLETION
-                if lifecycle == DeliveryChangeStage.COMPLETED
-                else DeliveryRetainedWorktreeCleanupBlockReason.NONTERMINAL
-            )
+        elif completion is None and lifecycle == DeliveryChangeStage.COMPLETED:
+            reason = DeliveryRetainedWorktreeCleanupBlockReason.LEGACY_INTEGRATION_COMPLETION
+        elif completion is None and lifecycle != DeliveryChangeStage.ABANDONED:
+            reason = DeliveryRetainedWorktreeCleanupBlockReason.NONTERMINAL
         elif retained.writer is not None:
             reason = DeliveryRetainedWorktreeCleanupBlockReason.ACTIVE_WRITER
         elif retained.publication_expiry is not None and retained.publication_expiry > _timestamp(self._clock()):

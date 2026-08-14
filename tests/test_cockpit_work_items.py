@@ -481,7 +481,7 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
         client.post("/api/changes/change-a/resume"),
         client.post(
             "/api/changes/change-a/abandon",
-            json={"reason": "User stopped the Change"},
+            json={"confirmed_abandonment": True, "reason": "User stopped the Change"},
         ),
         client.get("/api/work-items/completed", params={"limit": 25}),
         client.get("/api/work-items/completed/search", params={"query": "delivery", "limit": 5}),

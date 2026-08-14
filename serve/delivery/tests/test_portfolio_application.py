@@ -850,6 +850,9 @@ def test_change_lifecycle_dispositions_delegate_through_application_lock(tmp_pat
     abandonment = application.abandon_change("change-a", "User stopped the Change")
     assert abandonment.prior_stage == DeliveryChangeStage.BUILDING
     assert runtime.change_stage() == DeliveryChangeStage.ABANDONED
+    retained = application.list_retained_change_worktrees()
+    assert retained[0].cleanup_eligible is True
+    assert retained[0].cleanup_blocked_reason is None
 
 
 def test_retained_inventory_blocks_legacy_integration_completion(tmp_path: Path) -> None:
