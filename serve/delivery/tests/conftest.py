@@ -116,32 +116,80 @@ def _prepare_branch_checkout_state(repository: Path, user_state: str) -> None:
         if user_state == "conflicted":
             _git(repository, "merge", "--quit")
         return
-    rebase = _git(repository, "rebase", "--merge", base_branch, check=False)
+    rebase_mode = "--apply" if user_state == "mid-rebase-apply" else "--merge"
+    rebase = _git(repository, "rebase", rebase_mode, base_branch, check=False)
     if rebase.returncode == 0:
-        message = "expected mid-rebase setup to conflict"
+        message = f"expected {user_state} setup to conflict"
         raise AssertionError(message)
 
 
+def _prepare_cherry_pick_state(repository: Path) -> None:
+    base_branch = _git(repository, "symbolic-ref", "--short", "HEAD").stdout.strip()
+    branch = "user-cherry-pick"
+    _git(repository, "checkout", "-b", branch)
+    (repository / "product.txt").write_text("mid-cherry-pick side\n", encoding="utf-8")
+    _git(repository, "add", "product.txt")
+    _git(repository, "commit", "-m", "mid-cherry-pick side")
+    _git(repository, "checkout", base_branch)
+    (repository / "product.txt").write_text("mid-cherry-pick target\n", encoding="utf-8")
+    _git(repository, "add", "product.txt")
+    _git(repository, "commit", "-m", "mid-cherry-pick target")
+    target_commit = _git(repository, "rev-parse", "HEAD").stdout.strip()
+    _git(repository, "checkout", branch)
+    cherry_pick = _git(repository, "cherry-pick", target_commit, check=False)
+    if cherry_pick.returncode == 0:
+        message = "expected mid-cherry-pick setup to conflict"
+        raise AssertionError(message)
+
+
+def _prepare_revert_state(repository: Path) -> None:
+    (repository / "product.txt").write_text("mid-revert target\n", encoding="utf-8")
+    _git(repository, "add", "product.txt")
+    _git(repository, "commit", "-m", "mid-revert target")
+    target_commit = _git(repository, "rev-parse", "HEAD").stdout.strip()
+    branch = "user-revert"
+    _git(repository, "checkout", "-b", branch)
+    (repository / "product.txt").write_text("mid-revert side\n", encoding="utf-8")
+    _git(repository, "add", "product.txt")
+    _git(repository, "commit", "-m", "mid-revert side")
+    revert = _git(repository, "revert", "--no-edit", target_commit, check=False)
+    if revert.returncode == 0:
+        message = "expected mid-revert setup to conflict"
+        raise AssertionError(message)
+
+
+def _prepare_bisect_state(repository: Path) -> None:
+    branch = "user-bisect"
+    _git(repository, "checkout", "-b", branch)
+    for index in range(4):
+        (repository / "product.txt").write_text(f"mid-bisect-{index}\n", encoding="utf-8")
+        _git(repository, "add", "product.txt")
+        _git(repository, "commit", "-m", f"mid-bisect {index}")
+    _git(repository, "bisect", "start")
+    _git(repository, "bisect", "bad", "HEAD")
+    _git(repository, "bisect", "good", "HEAD~3")
+
+
 def _prepare_user_checkout_state(repository: Path, user_state: str) -> None:
-    if user_state == "clean":
-        return
     if user_state == "modified":
         (repository / "product.txt").write_text("modified user work\n", encoding="utf-8")
-        return
-    if user_state == "staged":
+    elif user_state == "staged":
         (repository / "product.txt").write_text("staged user work\n", encoding="utf-8")
         _git(repository, "add", "product.txt")
-        return
-    if user_state == "untracked":
+    elif user_state == "untracked":
         (repository / "untracked-user.txt").write_text("untracked user work\n", encoding="utf-8")
-        return
-    if user_state == "detached":
+    elif user_state == "detached":
         _git(repository, "checkout", "--detach", "HEAD")
-        return
-    if user_state in {"conflicted", "mid-merge", "mid-rebase"}:
+    elif user_state in {"conflicted", "mid-merge", "mid-rebase", "mid-rebase-apply"}:
         _prepare_branch_checkout_state(repository, user_state)
-        return
-    raise ValueError(f"unknown user checkout state: {user_state}")
+    elif user_state == "mid-cherry-pick":
+        _prepare_cherry_pick_state(repository)
+    elif user_state == "mid-revert":
+        _prepare_revert_state(repository)
+    elif user_state == "mid-bisect":
+        _prepare_bisect_state(repository)
+    elif user_state != "clean":
+        raise ValueError(f"unknown user checkout state: {user_state}")
 
 
 def _seed_user_checkout_metadata(repository: Path) -> None:

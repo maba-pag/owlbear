@@ -3,10 +3,10 @@
 The matrix covers clean, modified, staged, untracked, conflicted, detached,
 mid-merge, and mid-rebase user checkouts through managed target synchronization,
 publication, and cleanup. Provider failures and pre-write timeouts are retried
-through the same states. Conflicts in the managed Change worktree remain a
+through the same states. Extended Git operation markers are exercised through
+publication and cleanup. Conflicts in the managed Change worktree remain a
 separate state from conflicts in the user checkout. A post-write timeout is a
-response-unknown outcome rather than a retry-safe incident and remains covered
-by its dedicated reconciliation test.
+response-unknown outcome rather than a retry-safe incident.
 """
 
 from __future__ import annotations
@@ -118,6 +118,22 @@ _USER_CHECKOUT_STATES = (
     "mid-rebase",
 )
 
+_EXTENDED_USER_CHECKOUT_STATES = (
+    "mid-cherry-pick",
+    "mid-revert",
+    "mid-bisect",
+    "mid-rebase-apply",
+)
+
+_OPERATION_STATE_MARKERS = {
+    "mid-merge": "MERGE_HEAD",
+    "mid-rebase": "rebase-merge",
+    "mid-rebase-apply": "rebase-apply",
+    "mid-cherry-pick": "CHERRY_PICK_HEAD",
+    "mid-revert": "REVERT_HEAD",
+    "mid-bisect": "BISECT_LOG",
+}
+
 
 @pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)
 def test_publication_and_cleanup_preserve_user_checkout_states(
@@ -139,9 +155,8 @@ def test_publication_and_cleanup_preserve_user_checkout_states(
     coordinator, manager = _change_workspace(tmp_path, repository)
     _worktree, reviewed = _reviewed_change(manager, change_id)
     before = user_checkout_snapshot(repository, allowed_refs)
-    if user_state in {"mid-merge", "mid-rebase"}:
-        marker = "MERGE_HEAD" if user_state == "mid-merge" else "rebase-merge"
-        assert dict(before.operation_state)[marker]
+    if user_state in _OPERATION_STATE_MARKERS:
+        assert dict(before.operation_state)[_OPERATION_STATE_MARKERS[user_state]]
     if user_state == "conflicted":
         assert not dict(before.operation_state)["MERGE_HEAD"]
 
@@ -166,6 +181,52 @@ def test_publication_and_cleanup_preserve_user_checkout_states(
     assert replayed == receipt
     assert cleanup.branch_head == reviewed
     assert cleanup_replayed == cleanup
+    assert _head(remote, f"refs/heads/owlbear/change/{change_id}") == reviewed
+    assert _head(repository, "refs/remotes/origin/main") == initial
+    before.assert_unchanged(repository)
+
+
+@pytest.mark.parametrize("user_state", _EXTENDED_USER_CHECKOUT_STATES)
+def test_publication_and_cleanup_preserve_extended_operation_markers(
+    tmp_path: Path,
+    user_state: str,
+    user_checkout_snapshot,
+    prepare_user_checkout_state,
+    seed_user_checkout_metadata,
+) -> None:  # noqa: PLR0913
+    repository, remote, initial = _repository(tmp_path)
+    seed_user_checkout_metadata(repository)
+    prepare_user_checkout_state(repository, user_state)
+    change_id = f"preserve-{user_state}"
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, reviewed = _reviewed_change(manager, change_id)
+    before = user_checkout_snapshot(
+        repository,
+        (
+            f"refs/heads/owlbear/change/{change_id}",
+            f"refs/remotes/origin/owlbear/change/{change_id}",
+        ),
+    )
+    assert dict(before.operation_state)[_OPERATION_STATE_MARKERS[user_state]]
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+    request = PublishChangeBranch(
+        change_id=change_id,
+        expected_remote_head=None,
+        operation_id=f"{change_id}-publish",
+    )
+
+    receipt = publisher.publish(request)
+    assert publisher.publish(request) == receipt
+    cleanup = manager.cleanup(change_id)
+
+    assert receipt.published_head == reviewed
+    assert cleanup.branch_head == reviewed
     assert _head(remote, f"refs/heads/owlbear/change/{change_id}") == reviewed
     assert _head(repository, "refs/remotes/origin/main") == initial
     before.assert_unchanged(repository)
@@ -285,6 +346,7 @@ def test_sync_conflict_preserves_merge_state_and_user_checkout(
     assert merge_head.exists()
     assert b"<<<<<<<" in (worktree / "product.txt").read_bytes()
     assert _head(repository, "refs/heads/main") == local_target_head
+    assert _head(repository, "refs/remotes/origin/main") == target_head
     assert coordinator.show("sync-conflict").target_head == initial
     assert coordinator.show("sync-conflict").last_reviewed_commit == reviewed
     assert coordinator.show("sync-conflict").target_sync_receipt is None
@@ -337,6 +399,7 @@ def test_abort_target_sync_conflict_replays_and_restores_reviewed_boundary(
     assert _git(worktree, "status", "--porcelain").stdout == ""
     assert _git(worktree, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode == 128
     assert _head(repository, "refs/heads/main") == local_target_head
+    assert _head(repository, "refs/remotes/origin/main") == target_head
     before.assert_unchanged(repository)
     assert coordinator.show("sync-abort").target_sync_conflict is None
     assert coordinator.show("sync-abort").target_sync_abort_receipt == receipt
@@ -1389,9 +1452,19 @@ def test_pre_push_timeout_releases_reservation_for_new_operation(tmp_path: Path)
         )
 
 
-@pytest.mark.parametrize("incident", ["provider-failure", "timeout"])
+@pytest.mark.parametrize(
+    "incident",
+    [
+        "provider-unavailable",
+        "authentication-failure",
+        "rate-limit",
+        "remote-rejection",
+        "pre-write-timeout",
+        "post-write-timeout",
+    ],
+)
 @pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)
-def test_publication_incidents_preserve_checkout_and_retry_exact_operation(  # noqa: PLR0913
+def test_publication_incidents_preserve_checkout_and_classify_exact_operation(  # noqa: PLR0913
     tmp_path: Path,
     incident: str,
     user_state: str,
@@ -1403,8 +1476,8 @@ def test_publication_incidents_preserve_checkout_and_retry_exact_operation(  # n
     seed_user_checkout_metadata(repository)
     prepare_user_checkout_state(repository, user_state)
     coordinator, manager = _change_workspace(tmp_path, repository)
-    _worktree, reviewed = _reviewed_change(manager, f"incident-{user_state}-{incident}")
     change_id = f"incident-{user_state}-{incident}"
+    _worktree, reviewed = _reviewed_change(manager, change_id)
     publisher = ChangeBranchPublisher(
         repository,
         coordinator,
@@ -1425,12 +1498,45 @@ def test_publication_incidents_preserve_checkout_and_retry_exact_operation(  # n
         ),
     )
 
-    if incident == "provider-failure":
+    expected_codes = {
+        "provider-unavailable": PublicationProviderFailureCode.UNAVAILABLE,
+        "authentication-failure": PublicationProviderFailureCode.AUTHENTICATION_REQUIRED,
+        "rate-limit": PublicationProviderFailureCode.RATE_LIMITED,
+        "remote-rejection": PublicationProviderFailureCode.CONFLICT,
+        "pre-write-timeout": PublicationProviderFailureCode.TIMEOUT,
+        "post-write-timeout": PublicationProviderFailureCode.RESPONSE_UNKNOWN,
+    }
+    expected_retry_safety = {
+        "provider-unavailable": True,
+        "authentication-failure": False,
+        "rate-limit": True,
+        "remote-rejection": False,
+        "pre-write-timeout": True,
+        "post-write-timeout": False,
+    }
+
+    if incident in {
+        "provider-unavailable",
+        "authentication-failure",
+        "rate-limit",
+        "remote-rejection",
+    }:
         original_run = publisher._run_git
+        diagnostics = {
+            "provider-unavailable": "provider unavailable",
+            "authentication-failure": "Authentication failed",
+            "rate-limit": "rate limit exceeded",
+            "remote-rejection": "remote rejected",
+        }
 
         def reject_push(*arguments: str) -> subprocess.CompletedProcess[bytes]:
             if arguments[0] == "push":
-                return subprocess.CompletedProcess(arguments, 1, stdout=b"", stderr=b"rejected")
+                return subprocess.CompletedProcess(
+                    arguments,
+                    1,
+                    stdout=b"",
+                    stderr=diagnostics[incident].encode(),
+                )
             return original_run(*arguments)
 
         with (
@@ -1438,9 +1544,7 @@ def test_publication_incidents_preserve_checkout_and_retry_exact_operation(  # n
             pytest.raises(PublicationProviderError) as exc_info,
         ):
             publisher.publish(request)
-        assert exc_info.value.code is PublicationProviderFailureCode.UNAVAILABLE
-        assert exc_info.value.retry_safe
-    else:
+    elif incident == "pre-write-timeout":
         with (
             patch.object(
                 publisher,
@@ -1450,10 +1554,25 @@ def test_publication_incidents_preserve_checkout_and_retry_exact_operation(  # n
             pytest.raises(PublicationProviderError) as exc_info,
         ):
             publisher.publish(request)
-        assert exc_info.value.code is PublicationProviderFailureCode.TIMEOUT
-        assert exc_info.value.retry_safe
+    else:
+        with (
+            patch.object(
+                publisher,
+                "_push_exact_head",
+                side_effect=subprocess.TimeoutExpired(("git", "push"), 30),
+            ),
+            pytest.raises(PublicationProviderError) as exc_info,
+        ):
+            publisher.publish(request)
+
+    assert exc_info.value.code is expected_codes[incident]
+    assert exc_info.value.retry_safe is expected_retry_safety[incident]
 
     before.assert_unchanged(repository)
+    if incident == "post-write-timeout":
+        assert coordinator.show(change_id).publication_lease is not None
+        return
+
     receipt = publisher.publish(request)
     assert receipt.published_head == reviewed
     assert publisher.publish(request) == receipt
