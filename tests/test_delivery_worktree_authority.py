@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import re
+import shlex
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).parent.parent
@@ -112,13 +113,15 @@ _ALLOWED_PROVIDER_DOCUMENTS = frozenset({"_READY_MUTATION", "_DRAFT_MUTATION", "
 _SUBPROCESS_APIS = frozenset({"Popen", "check_call", "check_output", "run"})
 _SHELL_APIS = frozenset({"popen", "system"})
 _GIT_HELPER_NAME_PATTERN = re.compile(r"(?:^|_)git(?:_|$)", re.IGNORECASE)
-_GIT_CONTROL_KEYWORDS = frozenset({"check", "cwd", "env", "environment", "input", "input_bytes", "input_text", "shell"})
+_GIT_ARGUMENT_KEYWORDS = frozenset({"remote", "refspec", "refspecs"})
+_GIT_UPDATE_HEAD_OK_KEYWORDS = frozenset({"update-head-ok", "update_head_ok"})
 _URL_SCHEME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
 _UPDATE_HEAD_OK_FLAGS = frozenset({"--update-head-ok", "-u"})
-_FORBIDDEN_FETCH_TEXT_PATTERN = re.compile(
-    r"\bgit\s+fetch\b[^\r\n]*(?:--update-head-ok|\s-u(?:\s|$)|:\s*refs/heads(?:[/\s]|$))",
-    re.IGNORECASE,
+_GIT_GLOBAL_OPTIONS_WITH_VALUES = frozenset(
+    {"-C", "-c", "--config-env", "--exec-path", "--git-dir", "--namespace", "--super-prefix", "--work-tree"}
 )
+_SHELL_COMMAND_PREFIXES = frozenset({"!", "do", "done", "elif", "else", "if", "then", "until", "while"})
+_SHELL_COMMAND_SEPARATORS = frozenset({"&", "&&", ";", "|", "||"})
 
 
 def _source_files() -> tuple[Path, ...]:
@@ -557,6 +560,14 @@ def _resolved_literal(node: ast.AST, bindings: dict[str, ast.AST], seen: tuple[s
     return None
 
 
+def _resolved_boolean(node: ast.AST, bindings: dict[str, ast.AST], seen: tuple[str, ...] = ()) -> bool | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, bool):
+        return node.value
+    if isinstance(node, ast.Name) and node.id in bindings and node.id not in seen:
+        return _resolved_boolean(bindings[node.id], bindings, (*seen, node.id))
+    return None
+
+
 def _resolved_expression(node: ast.AST, bindings: dict[str, ast.AST], seen: tuple[str, ...] = ()) -> ast.AST:
     if isinstance(node, ast.Name) and node.id in bindings and node.id not in seen:
         return _resolved_expression(bindings[node.id], bindings, (*seen, node.id))
@@ -724,6 +735,26 @@ class _FetchVisitor(ast.NodeVisitor):
         shape = _string_shape(command, self.source, self.bindings)
         return shape if re.search(r"\bgit\s+fetch\b", shape) else None
 
+    def _helper_keyword_arguments(self, node: ast.Call) -> list[ast.AST]:
+        keyword_arguments: list[ast.AST] = []
+        for keyword in node.keywords:
+            if keyword.arg is None:
+                keyword_arguments.append(ast.Starred(value=keyword.value, ctx=ast.Load()))
+            elif keyword.arg in _GIT_ARGUMENT_KEYWORDS:
+                keyword_arguments.append(keyword.value)
+            elif keyword.arg in _GIT_UPDATE_HEAD_OK_KEYWORDS and _resolved_boolean(keyword.value, self.bindings):
+                keyword_arguments.append(ast.Constant(value="--update-head-ok"))
+        return keyword_arguments
+
+    def _append_helper_keyword_arguments(self, command_arguments: list[ast.AST], node: ast.Call) -> None:
+        keyword_arguments = self._helper_keyword_arguments(node)
+        if keyword_arguments and not any(
+            (literal := _resolved_literal(argument, self.bindings)) is None or not literal.startswith("-")
+            for argument in command_arguments
+        ):
+            command_arguments.insert(0, ast.Constant(value="__remote__"))
+        command_arguments.extend(keyword_arguments)
+
     def _fetch_arguments(self, node: ast.Call) -> tuple[ast.AST, ...] | None:
         if self._is_git_helper_call(node):
             command_index = next(
@@ -749,11 +780,7 @@ class _FetchVisitor(ast.NodeVisitor):
                 command_arguments = list(node.args)
             else:
                 command_arguments = list(node.args[command_index + 1 :])
-            command_arguments.extend(
-                keyword.value
-                for keyword in node.keywords
-                if keyword.arg is not None and keyword.arg not in _GIT_CONTROL_KEYWORDS | {"command", "cmd"}
-            )
+            self._append_helper_keyword_arguments(command_arguments, node)
             return tuple(command_arguments)
 
         if not self._is_subprocess_call(node):
@@ -854,12 +881,130 @@ def _fetch_violations(path: Path) -> tuple[str, ...]:
     return tuple(visitor.violations)
 
 
+def _logical_shell_lines(source: str) -> tuple[tuple[int, str], ...]:
+    lines = source.splitlines()
+    logical_lines: list[tuple[int, str]] = []
+    index = 0
+    while index < len(lines):
+        line_number = index + 1
+        line = lines[index]
+        folded_match = re.match(r"^(?P<indent>\s*)(?:-\s+)?run:\s*>\s*[+-]?\s*$", line)
+        if folded_match:
+            base_indent = len(folded_match.group("indent"))
+            content: list[str] = []
+            next_index = index + 1
+            while next_index < len(lines):
+                next_line = lines[next_index]
+                next_indent = len(next_line) - len(next_line.lstrip())
+                if next_line.strip() and next_indent <= base_indent:
+                    break
+                if next_line.strip():
+                    content.append(next_line.strip())
+                next_index += 1
+            if content:
+                logical_lines.append((line_number, " ".join(content)))
+                index = next_index
+                continue
+
+        command = line.rstrip()
+        while command.endswith("\\") and index + 1 < len(lines):
+            command = command[:-1].rstrip() + " " + lines[index + 1].lstrip()
+            index += 1
+        logical_lines.append((line_number, command))
+        index += 1
+    return tuple(logical_lines)
+
+
+def _shell_tokens(command: str) -> tuple[str, ...]:
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|")
+    lexer.whitespace_split = True
+    lexer.commenters = "#"
+    try:
+        return tuple(lexer)
+    except ValueError:
+        return ()
+
+
+def _is_shell_assignment(token: str) -> bool:
+    return re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", token) is not None
+
+
+def _git_fetch_index(tokens: tuple[str, ...]) -> int | None:
+    for index, token in enumerate(tokens):
+        if token != "git" or any(
+            prefix not in _SHELL_COMMAND_PREFIXES
+            and prefix not in {"command", "env", "sudo"}
+            and not _is_shell_assignment(prefix)
+            and not (prefix.startswith("-") and "sudo" in tokens[:index])
+            for prefix in tokens[:index]
+        ):
+            continue
+        option_index = index + 1
+        while option_index < len(tokens):
+            option = tokens[option_index]
+            if option == "fetch":
+                return option_index
+            if option in _GIT_GLOBAL_OPTIONS_WITH_VALUES:
+                option_index += 2
+                continue
+            if any(option.startswith(f"{name}=") for name in _GIT_GLOBAL_OPTIONS_WITH_VALUES):
+                option_index += 1
+                continue
+            if option.startswith("-"):
+                option_index += 1
+                continue
+            break
+    return None
+
+
+def _shell_segments(tokens: tuple[str, ...]) -> tuple[tuple[str, ...], ...]:
+    segments: list[tuple[str, ...]] = []
+    current: list[str] = []
+    for token in tokens:
+        if token in _SHELL_COMMAND_SEPARATORS:
+            if current:
+                segments.append(tuple(current))
+                current = []
+            continue
+        current.append(token)
+    if current:
+        segments.append(tuple(current))
+    return tuple(segments)
+
+
+def _text_fetch_reasons(arguments: tuple[str, ...]) -> tuple[str, ...]:
+    reasons: list[str] = []
+    update_flag = next((argument for argument in arguments if argument in _UPDATE_HEAD_OK_FLAGS), None)
+    if update_flag is not None:
+        reasons.append(f"uses update-head-ok option {update_flag}")
+
+    remote_seen = False
+    for argument in arguments:
+        if not remote_seen:
+            if argument == "--" or not argument.startswith("-"):
+                remote_seen = True
+            continue
+        if argument.startswith("-") or _URL_SCHEME_PATTERN.match(argument):
+            continue
+        if ":" not in argument:
+            continue
+        destination = argument.rsplit(":", maxsplit=1)[1].lstrip("+^")
+        if not destination.startswith("refs/remotes/"):
+            reasons.append(f"unsafe explicit destination {argument}")
+    return tuple(reasons)
+
+
 def _fetch_text_violations(path: Path) -> tuple[str, ...]:
-    return tuple(
-        f"fetch source contains an unsafe command at line {line_number}: {line.strip()}"
-        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
-        if _FORBIDDEN_FETCH_TEXT_PATTERN.search(line)
-    )
+    violations: list[str] = []
+    for line_number, line in _logical_shell_lines(path.read_text(encoding="utf-8")):
+        for segment in _shell_segments(_shell_tokens(line)):
+            fetch_index = _git_fetch_index(segment)
+            if fetch_index is None:
+                continue
+            reasons = _text_fetch_reasons(segment[fetch_index + 1 :])
+            if reasons:
+                violations.append(f"fetch source contains unsafe command at line {line_number}: {'; '.join(reasons)}")
+    return tuple(violations)
 
 
 def _merge_method_violations(paths: tuple[Path, ...]) -> tuple[str, ...]:
@@ -1211,7 +1356,7 @@ def test_forbidden_fetch_fixture_is_rejected_by_the_fetch_gate() -> None:
     assert {
         int(violation.rsplit("line ", maxsplit=1)[1].split(":", maxsplit=1)[0])
         for violation in violations
-        if "update-head-ok" in violation
+        if "uses update-head-ok option" in violation
     } == {10, 23, 33}
     assert {
         int(violation.rsplit("line ", maxsplit=1)[1].split(":", maxsplit=1)[0])
@@ -1232,8 +1377,8 @@ def test_forbidden_fetch_aliases_are_rejected_by_the_fetch_gate() -> None:
     assert {
         int(violation.rsplit("line ", maxsplit=1)[1].split(":", maxsplit=1)[0])
         for violation in violations
-        if "update-head-ok" in violation
-    } == {11, 18, 25, 31, 35, 39, 45, 52}
+        if "uses update-head-ok option" in violation
+    } == {11, 18, 25, 31, 35, 52}
     assert {
         int(violation.rsplit("line ", maxsplit=1)[1].split(":", maxsplit=1)[0])
         for violation in violations
@@ -1249,11 +1394,42 @@ def test_forbidden_keyword_fetch_refspec_is_rejected_by_the_fetch_gate() -> None
     assert "unsafe explicit destination" in violations[0]
 
 
+def test_forbidden_boolean_fetch_keyword_is_rejected_by_the_fetch_gate() -> None:
+    violations = _fetch_violations(_fixture_path("forbidden-fetch-boolean.py"))
+
+    assert len(violations) == 1
+    assert "update-head-ok option" in violations[0]
+
+
+def test_keyword_refspec_without_positional_remote_is_rejected_by_the_fetch_gate() -> None:
+    violations = _fetch_violations(_fixture_path("forbidden-fetch-keyword-only.py"))
+
+    assert len(violations) == 1
+    assert "unsafe explicit destination" in violations[0]
+
+
 def test_forbidden_fetch_script_fixture_is_rejected_by_the_fetch_gate() -> None:
     violations = _fetch_text_violations(_fixture_path("forbidden-fetch.sh"))
 
+    assert len(violations) == 3
+    assert {"2", "3", "4"} == {
+        violation.split(":", maxsplit=1)[0].rsplit(" ", maxsplit=1)[-1] for violation in violations
+    }
+    assert sum("uses update-head-ok option" in violation for violation in violations) == 1
+    assert sum("unsafe explicit destination" in violation for violation in violations) == 3
+
+
+def test_valid_fetch_script_fixture_is_not_rejected_by_the_fetch_gate() -> None:
+    assert not _fetch_text_violations(_fixture_path("valid-fetch.sh"))
+
+
+def test_forbidden_folded_fetch_fixture_is_rejected_by_the_fetch_gate() -> None:
+    violations = _fetch_text_violations(_fixture_path("forbidden-fetch.yml"))
+
     assert len(violations) == 1
-    assert "unsafe command" in violations[0]
+    assert "line 2" in violations[0]
+    assert "uses update-head-ok option" in violations[0]
+    assert "unsafe explicit destination" in violations[0]
 
 
 def test_forbidden_fetch_class_attributes_are_rejected_by_the_fetch_gate() -> None:
