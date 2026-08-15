@@ -1476,6 +1476,7 @@
 - ## `File-Capture Fallback`
 - ## `General Gotchas`
 - ## `OwlBear Workspace Notes`
+- ### `MegaLinter reports`
 - ### `Windows-Only Notes`
 
 ## share/skills/h-python-conventions/SKILL.md
@@ -1680,9 +1681,3 @@
 - ## `Output`
 - ## `Known Pitfalls`
 - ## `Companion Skills`
-
-## test-results/serve-cockpit-web-e2e-memo-cfc43-isible-rows-and-shown-count/error-context.md
-- # `Instructions`
-- # `Test info`
-- # `Error details`
-- # `Test source`

@@ -270,6 +270,10 @@
 - `export interface WorkItemDependency`
 - `export interface WorkItemTaskEvidence`
 - `export interface WorkItemPublicationGeneration`
+- `export type PublicationCheckKind = 'check_run' | 'status_context'`
+- `export type PublicationCheckBlockingState = 'blocking' | 'required-pending' | 'not-blocking'`
+- `export interface PublicationCheckView`
+- `export interface PublicationChecksObservationResponse`
 - `export interface WorkItemPublicationView`
 - `export interface WorkItemTargetSyncView`
 - `export interface WorkItemTargetSyncConflictView`
@@ -313,6 +317,7 @@
 - `export function previewWorkItemBackward( changeId: string, outcomeId: string, target: WorkItemStage, ): Promise<BackwardMovePreview>`
 - `export function reconcileWorkItemPublication(changeId: string): Promise<unknown>`
 - `export function markWorkItemPublicationReady(changeId: string): Promise<unknown>`
+- `export function observeWorkItemPublicationChecks(changeId: string): Promise<PublicationChecksObservationResponse>`
 - `export function observeWorkItemAcceptance(changeId: string): Promise<unknown>`
 - `export function reconcileWorkItemAcceptance( changeIds: string[], signal?: AbortSignal, ): Promise<AcceptanceReconciliationResponse>`
 - `export function resolveWorkItemAttention(changeId: string, expectedDispositionId: string): Promise<unknown>`
@@ -469,7 +474,7 @@
 
 - `import { useState } from 'react'`
 - `import { PButton, PHeading, PIcon, PInputText, PModal, PSelect, PSelectOption, PTag, } from '@porsche-design-system/components-react'`
-- `import { WorkItemApiError, type BackwardMovePreview, type DeliveryRequest, type DeliveryRequestResolution, type WorkItemDetailResponse, type WorkItemPublicationPhase, type WorkItemStage, type DeliveryWorkerRole, } from '../api/workItems'`
+- `import { WorkItemApiError, type BackwardMovePreview, type DeliveryRequest, type DeliveryRequestResolution, type WorkItemDetailResponse, type PublicationCheckBlockingState, type PublicationChecksObservationResponse, type WorkItemPublicationPhase, type WorkItemStage, type DeliveryWorkerRole, } from '../api/workItems'`
 - `import { PROGRESS_STAGE_LABELS, workItemStatusLabel, } from './workItemPresentation'`
 - `import CopyCommand from './CopyCommand'`
 
@@ -499,6 +504,9 @@
 - `function WorktreeRecoverySection(props: WorkItemDetailProps)`
 - `function WorktreeCleanupSection(props: WorkItemDetailProps)`
 - `function TargetSyncConflictSection(props: WorkItemDetailProps)`
+- `const PUBLICATION_CHECK_STATE_LABELS: Record<PublicationCheckBlockingState, string>`
+- `function PublicationCheckItem({ check }: { check: PublicationChecksObservationResponse['checks'][number] })`
+- `function PublicationChecksSection(props: WorkItemDetailProps)`
 - `function PublicationSection(props: WorkItemDetailProps)`
 - `function ActionFeedback({ error, result }: { error: Error | null; result: string | null })`
 - `export default function WorkItemDetail(props: WorkItemDetailProps)`
@@ -680,7 +688,7 @@
 ### Imports
 
 - `import { useEffect, useRef, useState } from 'react'`
-- `import { answerWorkItemRequest, abortWorkItemTargetSync, abandonWorkItemChange, cleanupAbandonedWorkItemChange, cleanupCompletedWorkItemChange, clearWorkItemBlock, deferWorkItemChange, listCompletedChanges, markWorkItemPublicationReady, moveWorkItemBackward, observeWorkItemAcceptance, previewWorkItemBackward, reconcileWorkItemPublication, recoverWorkItemClaim, recoverWorkItemChange, reconcileWorkItemAcceptance, resolveWorkItemTargetSync, resolveWorkItemAttention, resumeWorkItemChange, searchCompletedChanges, supersedeWorkItemPublication, syncWorkItemTarget, showDesignWork, showCompletedChange, workItemDetailUrl, type CompletedChangePage, type CompletedChangeRecord, type DeliveryRequestResolution, type DesignWorkDetailResponse, type WorkItemDetailResponse, type WorkItemPortfolioResponse, type WorkItemCardView, type WorkItemStage, WorkItemApiError, } from '../api/workItems'`
+- `import { answerWorkItemRequest, abortWorkItemTargetSync, abandonWorkItemChange, cleanupAbandonedWorkItemChange, cleanupCompletedWorkItemChange, clearWorkItemBlock, deferWorkItemChange, listCompletedChanges, markWorkItemPublicationReady, moveWorkItemBackward, observeWorkItemAcceptance, observeWorkItemPublicationChecks, previewWorkItemBackward, reconcileWorkItemPublication, recoverWorkItemClaim, recoverWorkItemChange, reconcileWorkItemAcceptance, resolveWorkItemTargetSync, resolveWorkItemAttention, resumeWorkItemChange, searchCompletedChanges, supersedeWorkItemPublication, syncWorkItemTarget, showDesignWork, showCompletedChange, workItemDetailUrl, type CompletedChangePage, type CompletedChangeRecord, type DeliveryRequestResolution, type DesignWorkDetailResponse, type WorkItemDetailResponse, type WorkItemPortfolioResponse, type WorkItemCardView, type PublicationChecksObservationResponse, type WorkItemStage, WorkItemApiError, } from '../api/workItems'`
 - `import { usePollingFetch } from './usePollingFetch'`
 
 ### Interfaces
