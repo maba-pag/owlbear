@@ -1578,13 +1578,17 @@ class ChangeWorkspaceManager:
         return source_ref, target_ref
 
     def _fetch_target(self, source_ref: str, target_ref: str, expected_target: str) -> str:
+        remote_prefix = f"refs/remotes/{self._remote}/"
+        if not target_ref.startswith(remote_prefix):
+            _workspace_failure("configured target ref does not belong to the configured remote")
+        remote_target_ref = f"{remote_prefix}{target_ref.removeprefix(remote_prefix)}"
         result = self._run_git(
             "fetch",
             "--no-tags",
             "--no-write-fetch-head",
             "--refmap=",
             self._remote,
-            f"{source_ref}:{target_ref}",
+            f"{source_ref}:{remote_target_ref}",
             check=False,
         )
         if result.returncode != 0:
