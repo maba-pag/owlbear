@@ -275,7 +275,7 @@ export interface WorkItemPublicationView {
 export interface WorkItemTargetSyncView {
   receipt_id: string
   operation_id: string
-  integration_target: string
+  target_branch: string
   expected_target: string
   target_head: string
   change_head_before: string

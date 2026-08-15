@@ -735,7 +735,7 @@ function PublicationSection(props: WorkItemDetailProps) {
       <PublicationChecksSection {...props} />
       {publication.target_sync ? (
         <p className="mt-static-sm text-xs text-contrast-medium">
-          Last target sync: {publication.target_sync.integration_target}
+          Last target sync: {publication.target_sync.target_branch}
           {publication.target_sync.merge_commit ? ' (merge commit)' : ' (fast-forward)'}
         </p>
       ) : null}

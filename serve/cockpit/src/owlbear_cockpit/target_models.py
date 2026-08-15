@@ -262,7 +262,7 @@ class TargetSyncResponse(_TargetHTTPModel):
     receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     operation_id: str = Field(min_length=1)
     change_id: str = Field(min_length=1)
-    integration_target: str = Field(min_length=1)
+    target_branch: str = Field(min_length=1)
     expected_target: str = Field(pattern=r"^[0-9a-f]{40}$")
     target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     change_head_before: str = Field(pattern=r"^[0-9a-f]{40}$")
@@ -272,7 +272,17 @@ class TargetSyncResponse(_TargetHTTPModel):
     @classmethod
     def from_receipt(cls, receipt: ChangeTargetSyncReceipt) -> TargetSyncResponse:
         """Convert one application sync receipt into the HTTP transport shape."""
-        return cls(**receipt.model_dump())
+        return cls(
+            receipt_id=receipt.receipt_id,
+            operation_id=receipt.operation_id,
+            change_id=receipt.change_id,
+            target_branch=receipt.integration_target,
+            expected_target=receipt.expected_target,
+            target_head=receipt.target_head,
+            change_head_before=receipt.change_head_before,
+            merged_head=receipt.merged_head,
+            merge_commit=receipt.merge_commit,
+        )
 
 
 class TargetSyncAbortResponse(_TargetHTTPModel):

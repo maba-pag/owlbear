@@ -722,7 +722,7 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
     target_sync_operation_id = target_sync_call[1][1]
     assert isinstance(target_sync_operation_id, str)
     assert target_sync_operation_id == "cockpit-target-sync-test"
-    assert responses[1].json() == ChangeTargetSyncReceipt.create(
+    target_sync_receipt = ChangeTargetSyncReceipt.create(
         operation_id=target_sync_operation_id,
         change_id="change-a",
         integration_target="main",
@@ -731,7 +731,19 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
         change_head_before="d" * 40,
         merged_head="f" * 40,
         merge_commit=True,
-    ).model_dump(mode="json")
+    )
+    assert responses[1].json() == {
+        "schema_version": 1,
+        "receipt_id": target_sync_receipt.receipt_id,
+        "operation_id": target_sync_operation_id,
+        "change_id": "change-a",
+        "target_branch": "main",
+        "expected_target": "e" * 40,
+        "target_head": "e" * 40,
+        "change_head_before": "d" * 40,
+        "merged_head": "f" * 40,
+        "merge_commit": True,
+    }
     assert responses[8].json() == {
         "cleanup_id": "c" * 64,
         "change_id": "change-a",
