@@ -21,7 +21,7 @@ Parse the supplied value as exactly one lowercase-hyphenated `change_id` followe
 extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
-`OwlBear Delivery list_work_items list_retained_change_worktrees show_work_item show_integration_attention resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_completed_change_worktree recover_change_worktree reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
+`OwlBear Delivery list_work_items list_retained_change_worktrees show_work_item show_integration_attention resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_completed_change_worktree recover_change_worktree reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target adopt_external_head promote_external_head recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
 For a Change attention, call `list_work_items` and require the Change publication card's
 `action.attention_id` to equal the supplied disposition identity; use `show_work_item` for the
 publication detail when needed. For an Integration attention, call
@@ -109,6 +109,16 @@ Use only an existing operation whose contract owns the selected result:
   `abandon_change(change_id, reason)` to terminate the uncompleted Change. Call
   `resume_change(change_id)` only for an exact currently deferred Change. Abandonment is
   irreversible and must not be inferred from an attention diagnosis.
+- External Change head adoption: after the user explicitly selects adoption and the exact expected
+  reviewed head and remote adopted head have been re-read, call
+  `adopt_external_head(change_id, expected_head, adopted_head, operation_id)`. This fast-forwards
+  only the managed Change worktree and preserves the prior reviewed boundary; adoption proves
+  provenance but does not grant review authority. Before Builder acquisition, re-read the exact
+  adopted receipt and call
+  `promote_external_head(change_id, expected_head=adopted_head, operation_id)` to admit review
+  authority for that exact head. For a completed adopted Change, hand off to the finalization
+  workflow, which performs the finalization-bound promotion after exact review. Do not use target
+  synchronization to advance an adopted head.
 - Terminal worktree cleanup: after an exact abandoned Change is confirmed, re-read
   `list_retained_change_worktrees` or the Change publication detail and call
   `cleanup_abandoned_change_worktree(change_id)` only when Delivery reports cleanup eligibility.

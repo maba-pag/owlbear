@@ -15,6 +15,7 @@ from owlbear_delivery.change_workspace import (
     CapacityLedger,
     CapacityLedgerConflictError,
     ChangeExternalHeadAdoptionReceipt,
+    ChangeExternalHeadPromotionReceipt,
     ChangeWorkspaceManager,
     ChangeCoordination,
     ChangeWorktreeAttentionError,
@@ -23,6 +24,8 @@ from owlbear_delivery.change_workspace import (
     CoordinationConflictError,
     PortfolioCoordinator,
     PublicationLease,
+    PromoteExternalHead,
+    SyncChangeWithTarget,
     WriterIdentity,
 )
 from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
@@ -776,6 +779,18 @@ def test_adopt_external_head_fast_forwards_managed_worktree_and_preserves_review
     assert coordinator.show(coordination.change_id).last_reviewed_commit == initial
     with pytest.raises(RuntimeError, match="reviewed source boundary"):
         manager.reviewed_source_head(coordination.change_id)
+    assert manager.source_head(coordination.change_id) == adopted
+    promoted = manager.promote_external_head(
+        PromoteExternalHead(
+            change_id=coordination.change_id,
+            expected_head=adopted,
+            operation_id="promote-external-change",
+        )
+    )
+    assert isinstance(promoted, ChangeExternalHeadPromotionReceipt)
+    assert promoted.promoted_head == adopted
+    assert coordinator.show(coordination.change_id).last_reviewed_commit == adopted
+    assert manager.reviewed_source_head(coordination.change_id) == adopted
     assert (
         manager.adopt_external_head(
             AdoptExternalHead(
@@ -820,7 +835,74 @@ def test_adopt_external_head_rejects_divergent_remote_without_branch_mutation(tm
 
     assert _git(repository, "rev-parse", coordination.branch) == local_descendant
     assert _git(coordination.worktree_path, "rev-parse", "HEAD") == local_descendant
+    after = coordinator.show(coordination.change_id)
+    assert after == before
+
+
+def test_adopt_external_head_replays_after_crash_between_fast_forward_and_receipt(
+    tmp_path: Path,
+) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("crash-replay-adoption")
+    _remote, adopted = _publish_external_change_head(
+        tmp_path,
+        repository,
+        coordination.branch,
+        initial,
+    )
+    request = AdoptExternalHead(
+        change_id=coordination.change_id,
+        expected_head=initial,
+        adopted_head=adopted,
+        operation_id="crash-replay-adoption",
+    )
+
+    with (
+        patch.object(manager, "_complete_external_head_adoption", side_effect=RuntimeError("simulated crash")),
+        pytest.raises(RuntimeError, match="simulated crash"),
+    ):
+        manager.adopt_external_head(request)
+
+    interrupted = coordinator.show(coordination.change_id)
+    assert interrupted.external_head_adoption_intent is not None
+    assert interrupted.external_head_adoption_receipt is None
+    assert _git(repository, "rev-parse", coordination.branch) == adopted
+    assert manager.adopt_external_head(request).adopted_head == adopted
+    assert coordinator.show(coordination.change_id).external_head_adoption_intent is None
+
+
+def test_target_sync_rejects_an_unreviewed_adopted_head(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("adopted-target-sync")
+    _remote, adopted = _publish_external_change_head(
+        tmp_path,
+        repository,
+        coordination.branch,
+        initial,
+    )
+    manager.adopt_external_head(
+        AdoptExternalHead(
+            change_id=coordination.change_id,
+            expected_head=initial,
+            adopted_head=adopted,
+            operation_id="adopt-before-target-sync",
+        )
+    )
+    before = coordinator.show(coordination.change_id)
+
+    with pytest.raises(CoordinationConflictError, match="reviewed Change head"):
+        manager.sync_with_target(
+            SyncChangeWithTarget(
+                change_id=coordination.change_id,
+                expected_target="a" * 40,
+                operation_id="target-sync-after-adoption",
+            )
+        )
+
     assert coordinator.show(coordination.change_id) == before
+    assert _git(repository, "rev-parse", coordination.branch) == adopted
 
 
 def test_adopt_external_head_rejects_active_writer_and_dirty_worktree(tmp_path: Path) -> None:
@@ -853,6 +935,43 @@ def test_adopt_external_head_rejects_active_writer_and_dirty_worktree(tmp_path: 
         )
     assert _git(repository, "rev-parse", coordination.branch) == initial
     assert coordinator.show(coordination.change_id).external_head_adoption_receipt is None
+
+
+def test_restart_rejects_reset_across_unpromoted_external_head(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("restart-adopted-change")
+    _remote, adopted = _publish_external_change_head(tmp_path, repository, coordination.branch, initial)
+    manager.adopt_external_head(
+        AdoptExternalHead(
+            change_id=coordination.change_id,
+            expected_head=initial,
+            adopted_head=adopted,
+            operation_id="adopt-before-restart",
+        )
+    )
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build")
+    coordinator.acquire(coordination.change_id, writer)
+
+    with pytest.raises(CoordinationConflictError, match="unpromoted external Change head"):
+        manager.restart(coordination.change_id, writer.attempt_id, adopted)
+
+    assert _git(repository, "rev-parse", coordination.branch) == adopted
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == adopted
+    assert coordinator.show(coordination.change_id).writer == writer
+
+
+def test_record_reviewed_rejects_backward_boundary(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("monotonic-review")
+    reviewed = _commit_new_file(coordination.worktree_path, "reviewed.txt", "reviewed\n", "reviewed")
+    manager.record_reviewed(coordination.change_id, reviewed)
+
+    with pytest.raises(RuntimeError, match="not an ancestor"):
+        manager.record_reviewed(coordination.change_id, initial)
+
+    assert coordinator.show(coordination.change_id).last_reviewed_commit == reviewed
 
 
 def test_finalization_rejects_divergent_promoted_task_history(tmp_path: Path) -> None:

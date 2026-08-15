@@ -17,6 +17,7 @@ from owlbear_delivery import (
     AdvanceDelivery,
     BlockDelivery,
     ChangeExternalHeadAdoptionReceipt,
+    ChangeExternalHeadPromotionReceipt,
     ChangeWorkspaceManager,
     ChangeTargetSyncReceipt,
     ChangeWriter,
@@ -675,6 +676,66 @@ def test_external_head_adoption_persists_receipt_invalidates_finalization_and_qu
     assert runtime.record_external_head_adoption(receipt, datetime(2026, 8, 11, 17, tzinfo=UTC)) == receipt
 
 
+def test_external_head_promotion_persists_exact_admission_and_replays_by_operation(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime(tmp_path)
+    adoption = ChangeExternalHeadAdoptionReceipt.create(
+        operation_id="adopt-delivery-runtime",
+        change_id="delivery-runtime",
+        branch="owlbear/change/delivery-runtime",
+        expected_head="1" * 40,
+        adopted_head="5" * 40,
+    )
+    runtime.record_external_head_adoption(adoption, datetime(2026, 8, 11, 16, tzinfo=UTC))
+    promotion = ChangeExternalHeadPromotionReceipt.create(
+        operation_id="promote-delivery-runtime",
+        change_id="delivery-runtime",
+        branch="owlbear/change/delivery-runtime",
+        adoption_receipt_id=adoption.receipt_id,
+        promoted_head=adoption.adopted_head,
+        provenance="explicit",
+    )
+
+    recorded = runtime.record_external_head_promotion(promotion, datetime(2026, 8, 11, 17, tzinfo=UTC))
+
+    assert recorded == promotion
+    assert runtime.external_head_promotion_receipt() == promotion
+    assert DeliveryRuntime(tmp_path, _contract()).external_head_promotion_receipt() == promotion
+    assert runtime.record_external_head_promotion(promotion, datetime(2026, 8, 11, 18, tzinfo=UTC)) == promotion
+
+
+def test_external_head_promotion_rejects_stale_or_mismatched_adoption_evidence(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    adoption = ChangeExternalHeadAdoptionReceipt.create(
+        operation_id="adopt-delivery-runtime",
+        change_id="delivery-runtime",
+        branch="owlbear/change/delivery-runtime",
+        expected_head="1" * 40,
+        adopted_head="5" * 40,
+    )
+    runtime.record_external_head_adoption(adoption, datetime(2026, 8, 11, 16, tzinfo=UTC))
+    promotion = ChangeExternalHeadPromotionReceipt.create(
+        operation_id="promote-delivery-runtime",
+        change_id="delivery-runtime",
+        branch="owlbear/change/delivery-runtime",
+        adoption_receipt_id=adoption.receipt_id,
+        promoted_head=adoption.adopted_head,
+        provenance="explicit",
+    )
+    replacement_adoption = ChangeExternalHeadAdoptionReceipt.create(
+        operation_id="adopt-replacement",
+        change_id=adoption.change_id,
+        branch=adoption.branch,
+        expected_head=adoption.expected_head,
+        adopted_head=adoption.adopted_head,
+    )
+    _persist_frontier(tmp_path, runtime, external_head_adoption_receipt=replacement_adoption)
+
+    with pytest.raises(DeliveryRuntimeConflictError, match="current adoption evidence"):
+        runtime.record_external_head_promotion(promotion, datetime(2026, 8, 11, 17, tzinfo=UTC))
+
+
 def test_target_sync_conflict_captures_attention_and_invalidates_finalization(
     tmp_path: Path,
 ) -> None:
@@ -716,7 +777,7 @@ def test_schema_nine_frontier_migrates_without_change_attention(tmp_path: Path) 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 16
+    assert canonical["schema_version"] == 17
     assert migrated.change_disposition() is None
 
 
@@ -731,7 +792,7 @@ def test_schema_ten_frontier_migrates_resolution_slot(tmp_path: Path) -> None:
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 16
+    assert canonical["schema_version"] == 17
     assert canonical["change_disposition_resolution"] is None
 
 
@@ -746,7 +807,7 @@ def test_schema_eleven_frontier_migrates_publication_identity_slot(tmp_path: Pat
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 16
+    assert canonical["schema_version"] == 17
     assert canonical["change_disposition_publication"] is None
 
 
@@ -1108,7 +1169,7 @@ def test_schema_twelve_frontier_migrates_lifecycle_disposition_slots(tmp_path: P
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 16
+    assert canonical["schema_version"] == 17
     assert migrated.change_deferral() is None
     assert migrated.change_abandonment() is None
 
@@ -1353,7 +1414,7 @@ def test_runtime_migrates_reducible_assembly_metadata_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 16
+    assert canonical["schema_version"] == 17
     assert all("assembly_required" not in binding for binding in canonical["bindings"])
     assert "integration_result_id" not in canonical
     assert "integration_completion" not in canonical
@@ -1390,7 +1451,7 @@ def test_runtime_migrates_schema_two_checkpoint_state_transactionally(tmp_path: 
     migrated = DeliveryRuntime(tmp_path, _contract())
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 16
+    assert canonical["schema_version"] == 17
     assert canonical["published_head"] is None
     assert canonical["pending_checkpoint"] is None
     assert json.loads(path.read_bytes()) == canonical
@@ -1444,7 +1505,7 @@ def test_runtime_migrates_prior_schema_without_rewriting_finalization_checkpoint
     )
     canonical = json.loads(migrated.frontier_bytes())
 
-    assert canonical["schema_version"] == 16
+    assert canonical["schema_version"] == 17
     assert canonical["pending_checkpoint"] == expected_checkpoint
     assert canonical["pending_checkpoint"]["head"] == exact_head
     assert canonical["pending_checkpoint"]["triggers"][-1] == {

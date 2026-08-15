@@ -72,6 +72,7 @@ DELIVERY_TOOLS = {
     "reconcile_change_checkpoint",
     "sync_change_with_target",
     "adopt_external_head",
+    "promote_external_head",
     "abort_target_sync_conflict",
     "resolve_target_sync_conflict",
     "supersede_publication",
@@ -513,6 +514,28 @@ async def test_external_head_adoption_tool_has_exact_contract() -> None:
         "expected_head",
         "adopted_head",
     } <= set(tools["adopt_external_head"].output_schema["required"])
+
+
+@pytest.mark.asyncio
+async def test_external_head_promotion_tool_has_exact_contract() -> None:
+    application = _PublicationApplication()
+    server = assemble_target_server(application)  # type: ignore[arg-type]
+
+    async with Client(server) as client:
+        tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+
+    promotion_schema = tools["promote_external_head"].input_schema
+    promotion_request = promotion_schema["$defs"]["ExternalHeadPromotionParams"]
+    assert set(promotion_request["properties"]) == {"change_id", "expected_head", "operation_id"}
+    assert {
+        "receipt_id",
+        "operation_id",
+        "change_id",
+        "branch",
+        "adoption_receipt_id",
+        "promoted_head",
+        "provenance",
+    } <= set(tools["promote_external_head"].output_schema["required"])
 
 
 @pytest.mark.asyncio

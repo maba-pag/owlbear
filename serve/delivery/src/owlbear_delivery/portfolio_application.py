@@ -30,6 +30,7 @@ from owlbear_delivery.change_workspace import (
     AdoptExternalHead,
     ChangeCoordination,
     ChangeExternalHeadAdoptionReceipt,
+    ChangeExternalHeadPromotionReceipt,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
     ChangeTargetSyncReceipt,
@@ -39,6 +40,7 @@ from owlbear_delivery.change_workspace import (
     ChangeWriter,
     CoordinationConflictError,
     PortfolioCoordinator,
+    PromoteExternalHead,
     RetainedChangeWorktree,
     SyncChangeWithTarget,
     TargetSyncConflictRequest,
@@ -911,6 +913,44 @@ class PortfolioApplication:
             runtime.record_external_head_adoption(receipt, _timestamp(self._clock()))
             return receipt
 
+    def promote_external_head(
+        self,
+        change_id: str,
+        expected_head: str,
+        operation_id: str,
+    ) -> ChangeExternalHeadPromotionReceipt:
+        """Promote one exact adopted head before granting Builder authority."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            self._require_external_head_promotion_change_mutable(runtime)
+            if runtime.change_disposition() is not None:
+                self._fail("external Change-head promotion requires Change attention resolution first")
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                self._fail("external Change-head promotion cannot overlap an active Delivery claim")
+            request = PromoteExternalHead(
+                change_id=change_id,
+                expected_head=expected_head,
+                operation_id=operation_id,
+            )
+            coordination = self._workspace_manager.show(change_id)
+            promotion = coordination.external_head_promotion_receipt
+            runtime_promotion = runtime.external_head_promotion_receipt()
+            if promotion != runtime_promotion and (
+                promotion is None or promotion.operation_id != operation_id or promotion.promoted_head != expected_head
+            ):
+                self._fail("external Change-head promotion requires reconciled promotion evidence")
+            adoption = coordination.external_head_adoption_receipt
+            if adoption is None or runtime.external_head_adoption_receipt() != adoption:
+                self._fail("external Change-head promotion requires reconciled adoption evidence")
+            try:
+                promoted = self._workspace_manager.promote_external_head(request)
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("external Change head could not be promoted", exc)
+            if promoted is None:
+                self._fail("external Change-head promotion has no adopted head to promote")
+            runtime.record_external_head_promotion(promoted, _timestamp(self._clock()))
+            return promoted
+
     def abort_target_sync_conflict(
         self,
         change_id: str,
@@ -1360,6 +1400,8 @@ class PortfolioApplication:
                 and existing.observations == request.observations
                 and existing.review == request.review
             ):
+                with locked_roots((self._checkpoint_lock_root(change_id),)):
+                    self._promote_finalized_external_head(change_id, existing.exact_head)
                 return existing
             self._fail(
                 "Delivery Change is already finalized with different authority",
@@ -1385,7 +1427,9 @@ class PortfolioApplication:
                 request.exact_head,
                 tuple(result.completed_commit for result in results),
             )
-            return runtime.finalize_change(request, _timestamp(self._clock()))
+            finalization = runtime.finalize_change(request, _timestamp(self._clock()))
+            self._promote_finalized_external_head(change_id, finalization.exact_head)
+            return finalization
 
     def mark_change_ready(
         self,
@@ -1849,7 +1893,10 @@ class PortfolioApplication:
         runtime = self._runtime(change_id)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             if runtime.completion_receipt() is not None:
-                return runtime.finalization()
+                finalization = runtime.finalization()
+                if finalization is not None:
+                    self._promote_finalized_external_head(change_id, finalization.exact_head)
+                return finalization
             finalization = runtime.finalization()
             ready = runtime.ready_receipt()
             observation = (
@@ -1879,6 +1926,8 @@ class PortfolioApplication:
                     )
                 )
             result = runtime.reconcile_finalization_head(observed_head, _timestamp(self._clock()))
+            if isinstance(result, DeliveryFinalizationReceipt):
+                self._promote_finalized_external_head(change_id, result.exact_head)
             if not isinstance(result, DeliveryFinalizationInvalidationReceipt) and observation is not None:
                 runtime.reconcile_pull_request_draft_state(
                     provider_draft=observation.snapshot.draft,
@@ -2613,6 +2662,7 @@ class PortfolioApplication:
                     candidate.change_id,
                     candidate.runtime,
                     candidate.binding.outcome_id,
+                    candidate.role,
                 )
                 if isinstance(source, DeliveryAcquisitionFailure):
                     failures.append(source)
@@ -2817,12 +2867,41 @@ class PortfolioApplication:
         change_id: str,
         runtime: DeliveryRuntime,
         outcome_id: str,
+        worker_role: DeliveryWorkerRole,
     ) -> _PreparedSource | DeliveryAcquisitionFailure:
         try:
             package = self._package_store.read_verified(change_id)
             self._validate_package_authority(runtime, package)
             coordination = self._workspace_manager.show(change_id)
-            source_head = self._workspace_manager.reviewed_source_head(change_id)
+            source_head = self._workspace_manager.source_head(change_id)
+            adoption = coordination.external_head_adoption_receipt
+            promotion = coordination.external_head_promotion_receipt
+            if promotion != runtime.external_head_promotion_receipt():
+                return DeliveryAcquisitionFailure(
+                    change_id=change_id,
+                    outcome_id=outcome_id,
+                    code=PortfolioApplicationError.code,
+                    detail="external Change head promotion is not reconciled to Delivery authority",
+                    retry_condition="Replay the exact external Change head promotion operation.",
+                )
+            if source_head != coordination.last_reviewed_commit and (
+                adoption is None or runtime.external_head_adoption_receipt() != adoption
+            ):
+                return DeliveryAcquisitionFailure(
+                    change_id=change_id,
+                    outcome_id=outcome_id,
+                    code=PortfolioApplicationError.code,
+                    detail="external Change head adoption is not reconciled to Delivery authority",
+                    retry_condition="Replay the exact external Change head adoption operation.",
+                )
+            if worker_role == DeliveryWorkerRole.BUILDER and source_head != coordination.last_reviewed_commit:
+                return DeliveryAcquisitionFailure(
+                    change_id=change_id,
+                    outcome_id=outcome_id,
+                    code=PortfolioApplicationError.code,
+                    detail="Builder authority requires explicit promotion of the adopted Change head",
+                    retry_condition="Promote the exact adopted Change head before acquiring Build work.",
+                )
         except (OSError, RuntimeError, ValueError) as exc:
             return DeliveryAcquisitionFailure(
                 change_id=change_id,
@@ -2832,6 +2911,25 @@ class PortfolioApplication:
                 retry_condition="Restore the admitted package and clean reviewed source boundary.",
             )
         return _PreparedSource(package, coordination, source_head)
+
+    def _promote_finalized_external_head(self, change_id: str, exact_head: str) -> None:
+        try:
+            runtime = self._runtime(change_id)
+            if self._workspace_manager.show(change_id).last_reviewed_commit == exact_head:
+                return
+            operation_id = f"finalization-{exact_head}"
+            promotion = self._workspace_manager.promote_external_head(
+                PromoteExternalHead(
+                    change_id=change_id,
+                    expected_head=exact_head,
+                    operation_id=operation_id,
+                ),
+                provenance="finalization",
+            )
+            if promotion is not None:
+                runtime.record_external_head_promotion(promotion, _timestamp(self._clock()))
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            self._fail("finalization could not promote the reviewed adopted Change head", exc)
 
     def _activate_candidate(
         self,
@@ -2874,7 +2972,7 @@ class PortfolioApplication:
         runtime: DeliveryRuntime,
         binding: OutcomeAuthorityBinding,
     ) -> DeliveryLaunchPackage:
-        source = self._prepare_source(change_id, runtime, binding.outcome_id)
+        source = self._prepare_source(change_id, runtime, binding.outcome_id, binding.active_claim.worker_role)
         if isinstance(source, DeliveryAcquisitionFailure):
             self._fail(source.detail)
         claim = binding.active_claim
@@ -3057,6 +3155,18 @@ class PortfolioApplication:
         }:
             self._fail("external Change head adoption requires a mutable Change")
 
+    def _require_external_head_promotion_change_mutable(self, runtime: DeliveryRuntime) -> None:
+        if (
+            runtime.change_stage()
+            in {
+                DeliveryChangeStage.DEFERRED,
+                DeliveryChangeStage.ABANDONED,
+                DeliveryChangeStage.COMPLETED,
+            }
+            or runtime.finalization() is not None
+        ):
+            self._fail("external Change head promotion requires a pre-finalization mutable Change")
+
     def _checkpoint_lock_root(self, change_id: str) -> Path:
         return self._target_root / "publications/checkpoints/locks" / change_id
 
@@ -3075,6 +3185,7 @@ class PortfolioApplication:
 
 
 __all__ = [
+    "ChangeExternalHeadPromotionReceipt",
     "DeliveryAcceptanceReconciliationOutcome",
     "DeliveryAcceptanceReconciliationStatus",
     "DeliveryAcquisitionFailure",

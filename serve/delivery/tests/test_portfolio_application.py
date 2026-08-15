@@ -470,6 +470,29 @@ def _advance_remote_target(tmp_path: Path, remote: Path, *, product: str | None 
     return _git(target_repository, "rev-parse", "HEAD")
 
 
+def _publish_external_change_head(
+    tmp_path: Path,
+    repository: Path,
+    branch: str,
+    base_head: str,
+) -> str:
+    remote = tmp_path / "external-change-remote.git"
+    _git(tmp_path, "init", "--bare", str(remote))
+    _git(repository, "remote", "add", "origin", str(remote))
+    _git(repository, "push", "origin", f"{base_head}:refs/heads/{branch}")
+    external = tmp_path / "external-change-repository"
+    _git(tmp_path, "clone", str(remote), str(external))
+    _git(external, "checkout", "-b", "external", base_head)
+    _git(external, "config", "user.name", "External User")
+    _git(external, "config", "user.email", "external@example.invalid")
+    (external / "external.txt").write_text("external\n", encoding="utf-8")
+    _git(external, "add", "external.txt")
+    _git(external, "commit", "-m", "external Change update")
+    adopted = _git(external, "rev-parse", "HEAD")
+    _git(external, "push", "origin", f"{adopted}:refs/heads/{branch}")
+    return adopted
+
+
 def _portfolio(  # noqa: PLR0913
     tmp_path: Path,
     stages: dict[str, DeliveryStage],
@@ -684,6 +707,136 @@ def test_application_binds_external_head_adoption_without_advancing_reviewed_aut
     publication = runtimes["change-a"].checkpoint_publication_state()
     assert publication.pending_checkpoint is not None
     assert publication.pending_checkpoint.head == "5" * 40
+
+
+def test_application_requires_adopted_head_promotion_before_build_acquisition(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    initial = coordinator.show("change-a").last_reviewed_commit
+    branch = coordinator.show("change-a").branch
+    adopted = _publish_external_change_head(tmp_path, application._workspace_manager.repository, branch, initial)  # noqa: SLF001
+
+    application.adopt_external_head("change-a", initial, adopted, "adopt-for-acquisition")
+    blocked = application.acquire_frontier_work()
+
+    assert blocked.launch_packages == ()
+    assert len(blocked.failures) == 1
+    assert "explicit promotion" in blocked.failures[0].detail
+    assert coordinator.show("change-a").last_reviewed_commit == initial
+
+    promoted = application.promote_external_head("change-a", adopted, "promote-for-acquisition")
+    assert promoted.promoted_head == adopted
+    acquired = application.acquire_frontier_work()
+
+    assert acquired.failures == ()
+    assert len(acquired.launch_packages) == 1
+    launch = acquired.launch_packages[0]
+    assert launch.source_head == adopted
+    assert launch.last_reviewed_commit == adopted
+    assert runtimes["change-a"].external_head_adoption_receipt().adopted_head == adopted
+
+
+def test_finalization_replay_promotes_an_adopted_head_after_runtime_commit(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    initial = coordinator.show("change-a").last_reviewed_commit
+    branch = coordinator.show("change-a").branch
+    adopted = _publish_external_change_head(tmp_path, application._workspace_manager.repository, branch, initial)  # noqa: SLF001
+    application.adopt_external_head("change-a", initial, adopted, "adopt-for-finalization")
+    request = _finalization_request("change-a", adopted)
+
+    with (
+        patch.object(
+            application,
+            "_promote_finalized_external_head",
+            side_effect=RuntimeError("simulated promotion crash"),
+        ),
+        pytest.raises(RuntimeError, match="simulated promotion crash"),
+    ):
+        application.finalize_change("change-a", request)
+
+    assert runtimes["change-a"].finalization() is not None
+    assert coordinator.show("change-a").last_reviewed_commit == initial
+    replayed = application.reconcile_finalization_head("change-a")
+
+    assert replayed == runtimes["change-a"].finalization()
+    assert coordinator.show("change-a").last_reviewed_commit == adopted
+
+
+def test_finalization_after_builder_child_does_not_repromote_adopted_ancestor(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    initial = coordinator.show("change-a").last_reviewed_commit
+    branch = coordinator.show("change-a").branch
+    adopted = _publish_external_change_head(tmp_path, application._workspace_manager.repository, branch, initial)  # noqa: SLF001
+    application.adopt_external_head("change-a", initial, adopted, "adopt-for-builder")
+    application.promote_external_head("change-a", adopted, "promote-for-builder")
+
+    launch = application.acquire_frontier_work().launch_packages[0]
+    task = runtimes["change-a"].show_binding("OUT-001").tasks[0]
+    builder_file = launch.worktree_path / "builder.txt"
+    builder_file.write_text("builder child\n", encoding="utf-8")
+    _git(launch.worktree_path, "add", builder_file.name)
+    _git(launch.worktree_path, "commit", "-m", "builder child")
+    child = _git(launch.worktree_path, "rev-parse", "HEAD")
+    result = application.publish_delivery_result(
+        "change-a",
+        PublishDeliveryResult(
+            outcome_id="OUT-001",
+            claim_id=launch.claim.claim_id,
+            result=_task_result(
+                "RESULT-BUILDER-CHILD",
+                "change-a",
+                runtimes["change-a"].authority_digest,
+                task,
+                child,
+            ),
+        ),
+    )
+    application.transition_delivery(
+        "change-a",
+        AdvanceDelivery(
+            outcome_id="OUT-001",
+            claim_id=launch.claim.claim_id,
+            output=result.output,
+        ),
+    )
+
+    assert coordinator.show("change-a").last_reviewed_commit == child
+    with patch.object(
+        application._workspace_manager,
+        "promote_external_head",
+        side_effect=AssertionError("finalization must not re-promote a reviewed Builder child"),
+    ):
+        finalization = application.finalize_change("change-a", _finalization_request("change-a", child))
+
+    assert finalization.exact_head == child
+
+
+def test_application_promotes_only_reconciled_adoption_evidence(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    initial = coordinator.show("change-a").last_reviewed_commit
+    branch = coordinator.show("change-a").branch
+    adopted = _publish_external_change_head(tmp_path, application._workspace_manager.repository, branch, initial)  # noqa: SLF001
+    application.adopt_external_head("change-a", initial, adopted, "adopt-for-promotion")
+
+    promoted = application.promote_external_head("change-a", adopted, "promote-for-promotion")
+    replayed = application.promote_external_head("change-a", adopted, "promote-for-promotion")
+
+    assert promoted == replayed
+    assert promoted.change_id == "change-a"
+    assert promoted.promoted_head == adopted
+    assert coordinator.show("change-a").last_reviewed_commit == adopted
+    assert runtimes["change-a"].external_head_adoption_receipt().adopted_head == adopted
 
 
 def test_application_acquires_after_real_target_sync_at_the_merged_head(tmp_path: Path) -> None:
@@ -3196,7 +3349,7 @@ dependencies: []
     assert recovered.replayed
     assert coordinator.show("change-a").last_reviewed_commit == reviewed_head
     assert application.show_change_checkpoint_publication("change-a").pending_checkpoint is not None
-    assert json.loads(frontier_path.read_bytes())["schema_version"] == 16
+    assert json.loads(frontier_path.read_bytes())["schema_version"] == 17
 
 
 def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_path: Path) -> None:
@@ -3247,7 +3400,7 @@ def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_pa
 
     assert state.pending_checkpoint is not None
     assert state.pending_checkpoint.head == coordination.last_reviewed_commit
-    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 16
+    assert json.loads((change_root / "frontier.json").read_bytes())["schema_version"] == 17
 
 
 def test_delivery_loader_injects_publication_provider_and_derives_check_head(tmp_path: Path) -> None:

@@ -16,7 +16,11 @@ from owlbear_delivery.acceptance import (
     CompletionReceiptConflictError,
     CompletionReceiptStore,
 )
-from owlbear_delivery.change_workspace import ChangeExternalHeadAdoptionReceipt, ChangeTargetSyncReceipt
+from owlbear_delivery.change_workspace import (
+    ChangeExternalHeadAdoptionReceipt,
+    ChangeExternalHeadPromotionReceipt,
+    ChangeTargetSyncReceipt,
+)
 from owlbear_delivery.draft_pull_request import (
     PublicationPullRequestObservationReceipt,
     PullRequestReadyReceipt,
@@ -994,7 +998,7 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 class DeliveryFrontier(_DeliveryModel):
     """Canonical outcome and Change checkpoint state persisted beside authority."""
 
-    schema_version: Literal[16] = 16
+    schema_version: Literal[17] = 17
     bindings: tuple[OutcomeAuthorityBinding, ...]
     published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     pending_checkpoint: DeliveryPendingCheckpoint | None = None
@@ -1006,6 +1010,7 @@ class DeliveryFrontier(_DeliveryModel):
     change_publication_history: DeliveryChangePublicationHistory | None = None
     target_sync_receipt: ChangeTargetSyncReceipt | None = None
     external_head_adoption_receipt: ChangeExternalHeadAdoptionReceipt | None = None
+    external_head_promotion_receipt: ChangeExternalHeadPromotionReceipt | None = None
     merged_pull_request_latch: DeliveryMergedPullRequestLatch | None = None
     change_completion: DeliveryChangeCompletion | None = None
     change_deferral: DeliveryChangeDeferral | None = None
@@ -1045,6 +1050,15 @@ class DeliveryFrontier(_DeliveryModel):
             or self.integration_repair_claim is not None
         ):
             message = "Delivery finalization requires completed unclaimed outcome authority"
+            raise ValueError(message)
+        promotion = self.external_head_promotion_receipt
+        adoption = self.external_head_adoption_receipt
+        if promotion is not None and (
+            adoption is None
+            or promotion.adoption_receipt_id != adoption.receipt_id
+            or promotion.promoted_head != adoption.adopted_head
+        ):
+            message = "external Change head promotion must bind the current adoption receipt"
             raise ValueError(message)
         return self
 
@@ -1309,8 +1323,8 @@ _STAGE_ORDER = {
     DeliveryStage.IMPLEMENTATION: 2,
     DeliveryStage.COMPLETED: 3,
 }
-_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15})
-_FRONTIER_SCHEMA_VERSION = 16
+_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16})
+_FRONTIER_SCHEMA_VERSION = 17
 _FINALIZATION_SCHEMA_VERSION = 2
 _LEGACY_FINALIZATION_MESSAGE = "legacy finalization authority requires explicit re-finalization"
 _LEGACY_INTEGRATION_COMPLETION_MESSAGE = "legacy Integration completion requires retirement before frontier migration"
@@ -1329,6 +1343,7 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "record_resolved_target_sync",
         "record_target_sync_abort",
         "record_external_head_adoption",
+        "record_external_head_promotion",
         "capture_target_sync_conflict",
         "mark_awaiting_merge",
         "reconcile_pull_request_draft_state",
@@ -1822,6 +1837,10 @@ class DeliveryRuntime:
         """Return the latest exact external Change-head adoption receipt, if any."""
         return self._read()[0].external_head_adoption_receipt
 
+    def external_head_promotion_receipt(self) -> ChangeExternalHeadPromotionReceipt | None:
+        """Return the latest exact external Change-head promotion receipt, if any."""
+        return self._read()[0].external_head_promotion_receipt
+
     def validate_target_sync_conflict(
         self,
         expected_disposition_id: str,
@@ -2229,6 +2248,34 @@ class DeliveryRuntime:
         self._replace(previous, updated)
         return receipt
 
+    def record_external_head_promotion(
+        self,
+        receipt: ChangeExternalHeadPromotionReceipt,
+        promoted_at: datetime,
+    ) -> ChangeExternalHeadPromotionReceipt:
+        """Persist one exact external Change-head review admission."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_external_head_promotion")
+        _require_no_active_change_claim(frontier, "external Change head promotion")
+        if promoted_at.tzinfo is None:
+            message = "external Change head promotion timestamp must include a timezone"
+            raise ValueError(message)
+        if receipt.change_id != self._contract.change_id:
+            _conflict("external Change head promotion receipt does not match the admitted Change")
+        adoption = frontier.external_head_adoption_receipt
+        if adoption is None or receipt.adoption_receipt_id != adoption.receipt_id:
+            _conflict("external Change head promotion receipt does not match current adoption evidence")
+        if receipt.promoted_head != adoption.adopted_head:
+            _conflict("external Change head promotion receipt does not match the adopted head")
+        existing = frontier.external_head_promotion_receipt
+        if existing is not None and existing.operation_id == receipt.operation_id:
+            if existing != receipt:
+                _conflict("external Change head promotion operation has different receipt evidence")
+            return existing
+        updated = frontier.model_copy(update={"external_head_promotion_receipt": receipt})
+        self._replace(previous, updated)
+        return receipt
+
     def record_resolved_target_sync(
         self,
         receipt: ChangeTargetSyncReceipt,
@@ -2375,6 +2422,7 @@ class DeliveryRuntime:
         return frontier.model_copy(
             update={
                 "external_head_adoption_receipt": receipt,
+                "external_head_promotion_receipt": None,
                 "finalization": finalization,
                 "finalization_invalidation": invalidation,
                 "ready": ready,
@@ -3086,6 +3134,14 @@ class DeliveryRuntime:
         adoption = frontier.external_head_adoption_receipt
         if adoption is not None and adoption.change_id != self._contract.change_id:
             _reference("Delivery external Change-head adoption receipt does not match its admitted Change")
+        promotion = frontier.external_head_promotion_receipt
+        if promotion is not None and (
+            promotion.change_id != self._contract.change_id
+            or adoption is None
+            or promotion.adoption_receipt_id != adoption.receipt_id
+            or promotion.promoted_head != adoption.adopted_head
+        ):
+            _reference("Delivery external Change-head promotion receipt does not match its adoption evidence")
         for receipt in (frontier.change_deferral, frontier.change_abandonment):
             if receipt is not None and receipt.change_id != self._contract.change_id:
                 _reference("Delivery Change lifecycle receipt does not match its admitted Change")

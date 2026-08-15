@@ -17,6 +17,7 @@ from pydantic import BaseModel, ValidationError
 from owlbear_delivery.acceptance import CompletionReceiptConflictError
 from owlbear_delivery.change_workspace import (
     ChangeExternalHeadAdoptionReceipt,
+    ChangeExternalHeadPromotionReceipt,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
     ChangeTargetSyncReceipt,
@@ -51,6 +52,7 @@ from owlbear_delivery_mcp.target_models import (
     AdmitDeliveryChangeParams,
     AdmitDeliveryChangeRequest,
     ChangeExternalHeadAdoptionResponse,
+    ChangeExternalHeadPromotionResponse,
     ChangeParams,
     ChangeRequest,
     ChangeTargetSyncAbortResponse,
@@ -76,6 +78,8 @@ from owlbear_delivery_mcp.target_models import (
     EmptyRequest,
     ExternalHeadAdoptionParams,
     ExternalHeadAdoptionRequest,
+    ExternalHeadPromotionParams,
+    ExternalHeadPromotionRequest,
     FinalizeDeliveryChangeParams,
     FinalizeDeliveryChangeRequest,
     MarkChangeReadyParams,
@@ -138,6 +142,7 @@ DELIVERY_OPERATION_NAMES = (
     "reconcile_change_checkpoint",
     "sync_change_with_target",
     "adopt_external_head",
+    "promote_external_head",
     "abort_target_sync_conflict",
     "resolve_target_sync_conflict",
     "supersede_publication",
@@ -424,6 +429,21 @@ class TargetMCPAdapter:
             ChangeExternalHeadAdoptionReceipt,
         )
         return ChangeExternalHeadAdoptionResponse.from_receipt(receipt)
+
+    async def promote_external_head(self, request: ExternalHeadPromotionRequest) -> ChangeExternalHeadPromotionResponse:
+        """Promote one exact adopted external Change head before Builder acquisition."""
+        params = self._validate(ExternalHeadPromotionParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.promote_external_head(
+                params.change_id,
+                params.expected_head,
+                params.operation_id,
+            ),
+            ChangeExternalHeadPromotionReceipt,
+        )
+        return ChangeExternalHeadPromotionResponse.from_receipt(receipt)
 
     async def abort_target_sync_conflict(
         self,
