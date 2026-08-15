@@ -21,7 +21,7 @@ Parse the supplied value as exactly one lowercase-hyphenated `change_id` followe
 extra, or malformed identities.
 
 If Delivery tools are deferred, run `tool_search` for
-`OwlBear Delivery list_work_items list_retained_change_worktrees show_work_item show_integration_attention resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_completed_change_worktree recover_change_worktree reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target adopt_external_head promote_external_head recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
+`OwlBear Delivery list_work_items list_retained_change_worktrees show_work_item show_integration_attention resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline reconcile_change_checkpoint mark_change_ready supersede_publication sync_change_with_target adopt_external_head promote_external_head recover_claim recover_integration_repair_claim observe_change_publication_checks observe_acceptance show_completed_change`.
 For a Change attention, call `list_work_items` and require the Change publication card's
 `action.attention_id` to equal the supplied disposition identity; use `show_work_item` for the
 publication detail when needed. For an Integration attention, call
@@ -137,6 +137,16 @@ Use only an existing operation whose contract owns the selected result:
   active publication leases, dirty or content-bearing unregistered directories, foreign registrations,
   branch/head mismatches, and other typed ownership attention remain blocked. Never force-remove a
   worktree, overwrite preserved content, or use raw Git as a recovery shortcut.
+- Publication-baseline recovery: when the exact Change publication attention identifies
+  `publication-baseline-unavailable`, re-read `show_work_item` and the current retained Change
+  evidence. Present one explicit confirmation for the exact baseline commit; never derive it from the
+  current target head or a merge base. Require exact lowercase 40-character identities for both
+  `expected_change_head` and `publication_base_head`, and call
+  `recover_publication_baseline(change_id, expected_change_head, publication_base_head, operation_id,
+  confirmed_recovery=true)` only after the reviewed head, clean managed worktree, and idle custody
+  preconditions are re-read. Recovery records immutable provenance and does not resolve the existing
+  attention; re-read the exact disposition and resolve it separately before reconciling the pending
+  checkpoint. If the baseline evidence or current head is missing or stale, report `authority-gap`.
 - provider acceptance required: after re-reading the exact finalization, ready receipt, reconciled
   checkpoint, and publication evidence, call `observe_acceptance(change_id)` once. This operation
   reads the current provider pull request and creates the receipt-backed completion record only when

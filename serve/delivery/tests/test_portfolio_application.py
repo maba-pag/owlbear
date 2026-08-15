@@ -2553,6 +2553,40 @@ def test_reconcile_checkpoint_retains_attention_when_publication_baseline_is_unk
     assert runtimes["change-a"].checkpoint_publication_state().pending_checkpoint == pending
 
 
+def test_reconcile_checkpoint_preserves_baseline_error_when_attention_conflicts(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    head = coordinator.show("change-a").last_reviewed_commit
+    pending = DeliveryPendingCheckpoint(
+        head=head,
+        triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+    )
+    _set_checkpoint(runtimes["change-a"], state_root, pending)
+    coordination = coordinator.show("change-a")
+    payload = coordination.model_dump(mode="json")
+    payload.pop("publication_base_head")
+    (state_root / "claims/changes/change-a.json").write_text(json.dumps(payload), encoding="utf-8")
+    runtimes["change-a"].capture_publication_attention(
+        datetime(2026, 8, 12, tzinfo=UTC),
+        ("existing-publication-attention",),
+    )
+    branch_publisher = Mock()
+    pull_request_publisher = Mock()
+    application._change_branch_publisher = branch_publisher  # noqa: SLF001
+    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+
+    with pytest.raises(PublicationBaselineUnavailableError):
+        application.reconcile_change_checkpoint("change-a")
+
+    assert branch_publisher.publish.call_count == 0
+    assert pull_request_publisher.publish.call_count == 0
+    retained = runtimes["change-a"].change_disposition()
+    assert retained is not None
+    assert retained.diagnostics == ("existing-publication-attention",)
+
+
 def test_recover_publication_baseline_requires_confirmation_and_preserves_attention(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,

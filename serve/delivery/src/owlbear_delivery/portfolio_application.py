@@ -7,6 +7,7 @@ import html
 import json
 import subprocess
 import uuid
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -2049,10 +2050,11 @@ class PortfolioApplication:
         try:
             automation_paths = self._workspace_manager.repository_automation_paths(change_id, head)
         except PublicationBaselineUnavailableError:
-            runtime.capture_publication_attention(
-                _timestamp(self._clock()),
-                ("publication-baseline-unavailable", f"exact-head:{head}"),
-            )
+            with suppress(DeliveryRuntimeConflictError):
+                runtime.capture_publication_attention(
+                    _timestamp(self._clock()),
+                    ("publication-baseline-unavailable", f"exact-head:{head}"),
+                )
             raise
         summary = _checkpoint_summary(pending, head, automation_paths)
         pull_request_title = _checkpoint_pull_request_title(runtime)
