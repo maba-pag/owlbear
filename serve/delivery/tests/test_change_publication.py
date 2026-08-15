@@ -278,7 +278,7 @@ def test_syncs_exact_fetched_target_in_managed_worktree_and_replays_without_ref_
     assert _head(repository, "refs/heads/main") == local_target_head
     before.assert_unchanged(repository)
     assert _coordinator.show("sync-change").last_reviewed_commit == receipt.merged_head
-    assert _coordinator.show("sync-change").publication_base_head == target_head
+    assert _coordinator.show("sync-change").publication_base_head == _initial
     assert manager.reviewed_source_head("sync-change") == receipt.merged_head
     manager.validate_finalization_head("sync-change", receipt.merged_head, ())
 
@@ -306,7 +306,7 @@ def test_fast_forward_target_sync_advances_the_reviewed_boundary(tmp_path: Path)
     assert receipt.merged_head == target_head
     assert not receipt.merge_commit
     assert coordinator.show("sync-fast-forward").last_reviewed_commit == target_head
-    assert coordinator.show("sync-fast-forward").publication_base_head == target_head
+    assert coordinator.show("sync-fast-forward").publication_base_head == initial
     assert manager.reviewed_source_head("sync-fast-forward") == target_head
     assert _head(coordination.worktree_path) == target_head
 
@@ -551,7 +551,7 @@ def test_target_sync_conflict_exit_rejects_mismatched_operation_without_mutation
 
 
 def test_resolve_target_sync_conflict_records_exact_merge_and_replays(tmp_path: Path) -> None:
-    repository, remote, _initial = _repository(tmp_path)
+    repository, remote, initial = _repository(tmp_path)
     coordinator, manager = _change_workspace(tmp_path, repository)
     worktree, reviewed = _reviewed_change(manager, "sync-resolve")
     target_head = _advance_remote_target(tmp_path, remote, product="target\n")
@@ -583,7 +583,7 @@ def test_resolve_target_sync_conflict_records_exact_merge_and_replays(tmp_path: 
     assert parents[1:] == [reviewed, target_head]
     assert coordinator.show("sync-resolve").target_sync_conflict is None
     assert coordinator.show("sync-resolve").target_sync_receipt == receipt
-    assert coordinator.show("sync-resolve").publication_base_head == target_head
+    assert coordinator.show("sync-resolve").publication_base_head == initial
     assert manager.reviewed_source_head("sync-resolve") == receipt.merged_head
     assert _head(repository, "refs/heads/main") != receipt.merged_head
     assert (repository / "product.txt").read_bytes() == user_checkout_before

@@ -180,6 +180,52 @@ class TargetSyncConflictRequest(_WorkspaceModel):
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
+class RecoverPublicationBaseline(_WorkspaceModel):
+    """Exact explicit authority for one previously unknown publication baseline."""
+
+    change_id: ChangeId
+    expected_change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    publication_base_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class PublicationBaselineRecoveryReceipt(_WorkspaceModel):
+    """Content-addressed evidence for one explicit legacy baseline recovery."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: ChangeId
+    expected_change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    publication_base_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        expected_change_head: str,
+        publication_base_head: str,
+    ) -> Self:
+        """Create deterministic evidence for one accepted baseline authority."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "expected_change_head": expected_change_head,
+            "publication_base_head": publication_base_head,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, **values)
+        return cls(receipt_id=_publication_baseline_recovery_digest(candidate), **values)
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> Self:
+        if self.receipt_id != _publication_baseline_recovery_digest(self):
+            message = "publication baseline recovery receipt identity is invalid"
+            raise ValueError(message)
+        return self
+
+
 class ChangeTargetSyncReceipt(_WorkspaceModel):
     """Durable evidence for one exact target merge in a managed Change worktree."""
 
@@ -441,7 +487,8 @@ class ChangeCoordination(_WorkspaceModel):
     worktree_path: Path
     integration_target: str = Field(min_length=1)
     target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    publication_base_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    publication_base_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    publication_baseline_recovery: PublicationBaselineRecoveryReceipt | None = None
     last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     writer: ChangeWriter | None = None
     publication_lease: PublicationLease | None = None
@@ -460,16 +507,10 @@ class ChangeCoordination(_WorkspaceModel):
     @classmethod
     def _discard_retired_publication_reservation(cls, value: object) -> object:
         if not isinstance(value, dict) or "publication_operation_id" not in value:
-            if isinstance(value, dict) and "publication_base_head" not in value and "target_head" in value:
-                migrated = dict(value)
-                migrated["publication_base_head"] = migrated["target_head"]
-                return migrated
             return value
         migrated: dict[object, object] = dict(value)
         migrated.pop("publication_operation_id", None)
         migrated.pop("publication_expires_at", None)
-        if "publication_base_head" not in migrated and "target_head" in migrated:
-            migrated["publication_base_head"] = migrated["target_head"]
         return migrated
 
     @field_validator("external_head_adoption_receipts", mode="before")
@@ -497,6 +538,7 @@ class ChangeCoordination(_WorkspaceModel):
         if self.target_sync_abort_receipt is not None and self.target_sync_abort_receipt.change_id != self.change_id:
             message = "target synchronization abort receipt does not match its Change"
             raise ValueError(message)
+        self._validate_publication_baseline_recovery()
         if (
             self.external_head_adoption_receipt is not None
             and self.external_head_adoption_receipt.change_id != self.change_id
@@ -527,6 +569,15 @@ class ChangeCoordination(_WorkspaceModel):
             message = "target synchronization abort receipt and conflict cannot coexist"
             raise ValueError(message)
         return self
+
+    def _validate_publication_baseline_recovery(self) -> None:
+        receipt = self.publication_baseline_recovery
+        if receipt is not None and receipt.change_id != self.change_id:
+            message = "publication baseline recovery receipt does not match its Change"
+            raise ValueError(message)
+        if receipt is not None and self.publication_base_head != receipt.publication_base_head:
+            message = "publication baseline recovery receipt does not match its baseline"
+            raise ValueError(message)
 
     def _validate_external_head_promotion_receipts(self) -> None:
         if (
@@ -612,6 +663,18 @@ class ChangeWorktreeAttentionError(RuntimeError):
         self.attention = attention
         detail = ", ".join(code.value for code in attention)
         super().__init__(f"Change worktree requires attention: {detail}")
+
+
+class PublicationBaselineUnavailableError(RuntimeError):
+    """A publication summary cannot be derived from known baseline authority."""
+
+    code = "ERR_PUBLICATION_BASELINE_UNAVAILABLE"
+    retry_safe = False
+
+    def __init__(self, change_id: str, detail: str) -> None:
+        self.change_id = change_id
+        self.detail = detail
+        super().__init__(detail)
 
 
 class ChangeTargetSyncConflictError(RuntimeError):
@@ -861,6 +924,25 @@ class PortfolioCoordinator:
             _coordination_conflict("workspace update cannot change ownership")
         if existing.publication_lease is not None and existing != coordination:
             _coordination_conflict("workspace update cannot change a reserved publication boundary")
+        baseline_changed = existing.publication_base_head != coordination.publication_base_head
+        baseline_recovered_explicitly = (
+            existing.publication_base_head is None
+            and coordination.publication_base_head is not None
+            and coordination.publication_baseline_recovery is not None
+        )
+        if baseline_changed and not baseline_recovered_explicitly:
+            _coordination_conflict("publication baseline requires explicit recovery")
+        if (
+            existing.publication_baseline_recovery is not None
+            and existing.publication_baseline_recovery != coordination.publication_baseline_recovery
+        ):
+            _coordination_conflict("publication baseline recovery authority cannot be replaced")
+        if (
+            existing.publication_baseline_recovery is None
+            and coordination.publication_baseline_recovery is not None
+            and existing.publication_base_head is not None
+        ):
+            _coordination_conflict("publication baseline recovery authority cannot be added")
         participant = _replacement(self._state_root, path, previous, coordination)
         try:
             self._commit(f"update-{coordination.change_id}", (participant,))
@@ -1399,6 +1481,62 @@ class ChangeWorkspaceManager:
             return coordination
         return self._coordinator.update(coordination.model_copy(update={"target_head": target_head}))
 
+    def recover_publication_baseline(
+        self,
+        change_id: str,
+        expected_change_head: str,
+        publication_base_head: str,
+        operation_id: str,
+    ) -> PublicationBaselineRecoveryReceipt:
+        """Persist one explicitly confirmed baseline for legacy publication authority."""
+        if _COMMIT_PATTERN.fullmatch(expected_change_head) is None:
+            message = "expected Change head is not an exact commit identity"
+            raise ValueError(message)
+        if _COMMIT_PATTERN.fullmatch(publication_base_head) is None:
+            message = "publication baseline is not an exact commit identity"
+            raise ValueError(message)
+        request = RecoverPublicationBaseline(
+            change_id=change_id,
+            expected_change_head=expected_change_head,
+            publication_base_head=publication_base_head,
+            operation_id=operation_id,
+        )
+        with self._coordinator.publication_lock(change_id) as lock:
+            coordination = self._coordinator.show(change_id)
+            if coordination.writer is not None or coordination.publication_lease is not None:
+                _coordination_conflict("publication baseline recovery requires an idle Change")
+            existing = coordination.publication_baseline_recovery
+            candidate = PublicationBaselineRecoveryReceipt.create(**request.model_dump())
+            if existing is not None:
+                if existing == candidate:
+                    return existing
+                _coordination_conflict("publication baseline recovery operation already has different authority")
+            if coordination.publication_base_head is not None:
+                _coordination_conflict("publication baseline is already known")
+            branch_head = self._resolve(coordination.branch)
+            if branch_head != expected_change_head or coordination.last_reviewed_commit != expected_change_head:
+                _coordination_conflict("publication baseline recovery head is stale")
+            self._require_worktree(change_id, coordination.worktree_path, coordination.branch, expected_change_head)
+            self._require_clean_worktree(coordination.worktree_path)
+            baseline = self._resolve(publication_base_head, missing_ok=True)
+            if baseline is None:
+                raise PublicationBaselineUnavailableError(change_id, "publication baseline commit cannot be resolved")
+            if not self._is_ancestor(baseline, expected_change_head, cwd=self._repository):
+                raise PublicationBaselineUnavailableError(
+                    change_id,
+                    "publication baseline is not an ancestor of the reviewed Change head",
+                )
+            self._coordinator.update(
+                coordination.model_copy(
+                    update={
+                        "publication_base_head": baseline,
+                        "publication_baseline_recovery": candidate,
+                    }
+                ),
+                lock=lock,
+            )
+            return candidate
+
     def _replay_target_sync_receipt(
         self,
         request: SyncChangeWithTarget,
@@ -1540,7 +1678,6 @@ class ChangeWorkspaceManager:
                 coordination.model_copy(
                     update={
                         "target_head": target_head,
-                        "publication_base_head": target_head,
                         "target_sync_conflict": None,
                         "target_sync_receipt": receipt,
                         "target_sync_abort_receipt": None,
@@ -1932,7 +2069,6 @@ class ChangeWorkspaceManager:
                 coordination.model_copy(
                     update={
                         "target_head": request.target_head,
-                        "publication_base_head": request.target_head,
                         "target_sync_conflict": None,
                         "target_sync_receipt": receipt,
                         "target_sync_abort_receipt": None,
@@ -1959,11 +2095,26 @@ class ChangeWorkspaceManager:
         coordination = self._coordinator.show(change_id)
         if _COMMIT_PATTERN.fullmatch(exact_head) is None:
             _workspace_failure("automation summary head is not an exact commit identity")
-        baseline = self._resolve(coordination.publication_base_head)
-        resolved_head = self._resolve(exact_head)
+        baseline = (
+            None
+            if coordination.publication_base_head is None
+            else self._resolve(coordination.publication_base_head, missing_ok=True)
+        )
+        if baseline is None:
+            raise PublicationBaselineUnavailableError(
+                change_id,
+                "publication automation summary requires an explicitly known baseline",
+            )
+        resolved_head = self._resolve(exact_head, missing_ok=True)
+        if resolved_head is None:
+            raise PublicationBaselineUnavailableError(change_id, "published Change head cannot be resolved")
         if resolved_head != exact_head:
             _workspace_failure("automation summary head does not resolve to the requested commit")
-        self._require_ancestor(baseline, resolved_head)
+        if not self._is_ancestor(baseline, resolved_head, cwd=self._repository):
+            raise PublicationBaselineUnavailableError(
+                change_id,
+                "publication baseline is not an ancestor of the published Change head",
+            )
         result = self._run_git(
             "diff",
             "--no-ext-diff",
@@ -1975,8 +2126,6 @@ class ChangeWorkspaceManager:
             resolved_head,
             "--",
             ".github/workflows",
-            "action.yml",
-            "action.yaml",
             ":(glob)**/action.yml",
             ":(glob)**/action.yaml",
             check=False,
@@ -2805,6 +2954,12 @@ def _target_sync_conflict_digest(conflict: ChangeTargetSyncConflictState) -> str
 
 
 def _target_sync_abort_digest(receipt: ChangeTargetSyncAbortReceipt) -> str:
+    payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _publication_baseline_recovery_digest(receipt: PublicationBaselineRecoveryReceipt) -> str:
     payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()

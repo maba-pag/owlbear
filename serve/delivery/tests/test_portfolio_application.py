@@ -100,6 +100,7 @@ from owlbear_delivery import (
     PortfolioApplicationHooks,
     PortfolioCoordinator,
     PublicationLease,
+    PublicationBaselineUnavailableError,
     PublicationCheck,
     PublicationCheckBlockingState,
     PublicationCheckKind,
@@ -2515,9 +2516,95 @@ def test_reconcile_checkpoint_reports_bounded_escaped_automation_paths(tmp_path:
     summary = create_request.generated_summary
     assert summary == update_request.generated_summary
     assert "### Repository automation changed" in summary
-    assert "<code>.github/workflows/&lt;run&gt;`\\nname.yml</code>" in summary
+    assert "<code>.github/workflows/&lt;run&gt;&#96;\\nname.yml</code>" in summary
     assert "x" * 300 not in summary
     assert summary.count("<code>") == 2
+
+
+def test_reconcile_checkpoint_retains_attention_when_publication_baseline_is_unknown(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    head = coordinator.show("change-a").last_reviewed_commit
+    pending = DeliveryPendingCheckpoint(
+        head=head,
+        triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+    )
+    _set_checkpoint(runtimes["change-a"], state_root, pending)
+    coordination = coordinator.show("change-a")
+    payload = coordination.model_dump(mode="json")
+    payload.pop("publication_base_head")
+    (state_root / "claims/changes/change-a.json").write_text(json.dumps(payload), encoding="utf-8")
+    branch_publisher = Mock()
+    pull_request_publisher = Mock()
+    application._change_branch_publisher = branch_publisher  # noqa: SLF001
+    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+
+    with pytest.raises(PublicationBaselineUnavailableError):
+        application.reconcile_change_checkpoint("change-a")
+
+    assert branch_publisher.publish.call_count == 0
+    assert pull_request_publisher.publish.call_count == 0
+    assert pull_request_publisher.update_generated_summary.call_count == 0
+    retained = runtimes["change-a"].change_disposition()
+    assert retained is not None
+    assert retained.kind.value == "publication-attention"
+    assert runtimes["change-a"].checkpoint_publication_state().pending_checkpoint == pending
+
+
+def test_recover_publication_baseline_requires_confirmation_and_preserves_attention(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    coordination = coordinator.show("change-a")
+    payload = coordination.model_dump(mode="json")
+    payload.pop("publication_base_head")
+    (state_root / "claims/changes/change-a.json").write_text(json.dumps(payload), encoding="utf-8")
+    runtime = runtimes["change-a"]
+    attention = runtime.capture_publication_attention(
+        datetime(2026, 8, 12, tzinfo=UTC),
+        ("publication-baseline-unavailable",),
+    )
+
+    with pytest.raises(PortfolioApplicationError, match="explicit confirmation"):
+        application.recover_publication_baseline(
+            "change-a",
+            coordination.last_reviewed_commit,
+            coordination.target_head,
+            "recover-baseline",
+        )
+
+    receipt = application.recover_publication_baseline(
+        "change-a",
+        coordination.last_reviewed_commit,
+        coordination.target_head,
+        "recover-baseline",
+        confirmed_recovery=True,
+    )
+
+    assert receipt.change_id == "change-a"
+    assert coordinator.show("change-a").publication_base_head == coordination.target_head
+    assert runtime.change_disposition() == attention
+
+
+def test_supersede_current_publication_preflights_baseline_before_provider_history(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    coordination = coordinator.show("change-a")
+    payload = coordination.model_dump(mode="json")
+    payload.pop("publication_base_head")
+    (state_root / "claims/changes/change-a.json").write_text(json.dumps(payload), encoding="utf-8")
+    provider = Mock()
+    application._draft_pull_request_publisher = provider  # noqa: SLF001
+
+    with pytest.raises(PublicationBaselineUnavailableError):
+        application.supersede_current_publication("change-a", "supersede-current")
+
+    provider.read_publication_history.assert_not_called()
 
 
 def test_later_checkpoint_reports_cumulative_automation_paths(tmp_path: Path) -> None:

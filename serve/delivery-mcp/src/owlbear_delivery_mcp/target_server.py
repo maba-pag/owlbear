@@ -23,6 +23,8 @@ from owlbear_delivery.change_workspace import (
     ChangeTargetSyncReceipt,
     ChangeWorktreeAttentionError,
     CoordinationConflictError,
+    PublicationBaselineRecoveryReceipt,
+    PublicationBaselineUnavailableError,
 )
 from owlbear_delivery.completed_history import CompletedHistoryError, CompletedHistoryStaleError
 from owlbear_delivery.delivery_runtime import (
@@ -54,6 +56,7 @@ from owlbear_delivery_mcp.target_models import (
     ChangeExternalHeadAdoptionResponse,
     ChangeExternalHeadPromotionResponse,
     ChangeParams,
+    ChangePublicationBaselineRecoveryResponse,
     ChangeRequest,
     ChangeTargetSyncAbortResponse,
     ChangeTargetSyncResponse,
@@ -90,6 +93,8 @@ from owlbear_delivery_mcp.target_models import (
     PublishDeliveryResultRequest,
     RecoverChangeWorktreeParams,
     RecoverChangeWorktreeRequest,
+    RecoverPublicationBaselineParams,
+    RecoverPublicationBaselineRequest,
     RepairClaimContextParams,
     RepairClaimContextRequest,
     ResolveChangeDispositionParams,
@@ -155,6 +160,7 @@ DELIVERY_OPERATION_NAMES = (
     "cleanup_abandoned_change_worktree",
     "cleanup_completed_change_worktree",
     "recover_change_worktree",
+    "recover_publication_baseline",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",
@@ -592,6 +598,26 @@ class TargetMCPAdapter:
         )
         return ChangeWorktreeRecoveryResponse.from_receipt(receipt)
 
+    async def recover_publication_baseline(
+        self,
+        request: RecoverPublicationBaselineRequest,
+    ) -> ChangePublicationBaselineRecoveryResponse:
+        """Recover one unknown publication baseline after explicit confirmation."""
+        params = self._validate(RecoverPublicationBaselineParams, request)
+        receipt = await asyncio.to_thread(
+            self._call_model,
+            params,
+            lambda: self._application.recover_publication_baseline(
+                params.change_id,
+                params.expected_change_head,
+                params.publication_base_head,
+                params.operation_id,
+                confirmed_recovery=params.confirmed_recovery,
+            ),
+            PublicationBaselineRecoveryReceipt,
+        )
+        return ChangePublicationBaselineRecoveryResponse.from_receipt(receipt)
+
     async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]:
         """Apply one worker-owned Delivery transition."""
         params = self._validate(TransitionDeliveryParams, request)
@@ -747,6 +773,7 @@ _NAMED_DELIVERY_ERRORS = (
     ChangeTargetSyncConflictError,
     ChangeWorktreeAttentionError,
     CoordinationConflictError,
+    PublicationBaselineUnavailableError,
     DeliveryRuntimeConflictError,
     DeliveryRuntimeReferenceError,
     DesignPackageConflictError,

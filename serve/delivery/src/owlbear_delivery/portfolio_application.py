@@ -42,6 +42,8 @@ from owlbear_delivery.change_workspace import (
     CoordinationConflictError,
     PortfolioCoordinator,
     PromoteExternalHead,
+    PublicationBaselineRecoveryReceipt,
+    PublicationBaselineUnavailableError,
     RetainedChangeWorktree,
     SyncChangeWithTarget,
     TargetSyncConflictRequest,
@@ -284,7 +286,8 @@ def _automation_path_markup(path: str) -> str:
     bounded = "".join(printable)
     if len(bounded) > _MAX_AUTOMATION_PATH_LENGTH:
         bounded = f"{bounded[: _MAX_AUTOMATION_PATH_LENGTH - 3]}..."
-    return f"<code>{html.escape(bounded, quote=True)}</code>"
+    escaped = html.escape(bounded, quote=True).replace("`", "&#96;")
+    return f"<code>{escaped}</code>"
 
 
 def _checkpoint_pull_request_title(runtime: DeliveryRuntime) -> str:
@@ -1143,6 +1146,13 @@ class PortfolioApplication:
         publisher = self._draft_pull_request_publisher
         if publisher is None:
             self._fail("publication supersession is not configured")
+        try:
+            superseding_head = self._workspace_manager.reviewed_source_head(change_id)
+            self._workspace_manager.repository_automation_paths(change_id, superseding_head)
+        except PublicationBaselineUnavailableError:
+            raise
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            self._fail("publication supersession requires a clean reviewed Change head", exc)
         provider_history = publisher.read_publication_history(ReadChangePublicationHistory(change_id=change_id))
         if provider_history is None:
             self._fail("publication supersession requires current provider publication history")
@@ -1570,6 +1580,31 @@ class PortfolioApplication:
         runtime = self._runtime(change_id)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             return runtime.resolve_change_disposition(expected_disposition_id, _timestamp(self._clock()))
+
+    def recover_publication_baseline(
+        self,
+        change_id: str,
+        expected_change_head: str,
+        publication_base_head: str,
+        operation_id: str,
+        *,
+        confirmed_recovery: bool = False,
+    ) -> PublicationBaselineRecoveryReceipt:
+        """Recover one unknown publication baseline after explicit operator confirmation."""
+        if not confirmed_recovery:
+            message = "publication baseline recovery requires explicit confirmation"
+            raise PortfolioApplicationError(message)
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                message = "publication baseline recovery cannot overlap an active claim"
+                raise PortfolioApplicationError(message)
+            return self._workspace_manager.recover_publication_baseline(
+                change_id,
+                expected_change_head,
+                publication_base_head,
+                operation_id,
+            )
 
     def defer_change(self, change_id: str, reason: str) -> DeliveryChangeDeferral:
         """Retain one nonterminal Change and pause its claimable frontier."""
@@ -2011,7 +2046,14 @@ class PortfolioApplication:
             )
 
         head = pending.head
-        automation_paths = self._workspace_manager.repository_automation_paths(change_id, head)
+        try:
+            automation_paths = self._workspace_manager.repository_automation_paths(change_id, head)
+        except PublicationBaselineUnavailableError:
+            runtime.capture_publication_attention(
+                _timestamp(self._clock()),
+                ("publication-baseline-unavailable", f"exact-head:{head}"),
+            )
+            raise
         summary = _checkpoint_summary(pending, head, automation_paths)
         pull_request_title = _checkpoint_pull_request_title(runtime)
         branch_request = PublishChangeBranch(

@@ -85,6 +85,7 @@ DELIVERY_TOOLS = {
     "cleanup_abandoned_change_worktree",
     "cleanup_completed_change_worktree",
     "recover_change_worktree",
+    "recover_publication_baseline",
     "transition_delivery",
     "recover_claim",
     "recover_integration_repair_claim",

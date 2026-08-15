@@ -24,6 +24,7 @@ from owlbear_delivery.change_workspace import (
     CoordinationConflictError,
     PortfolioCoordinator,
     PublicationLease,
+    PublicationBaselineUnavailableError,
     PromoteExternalHead,
     SyncChangeWithTarget,
     WriterIdentity,
@@ -234,7 +235,7 @@ def test_retired_scalar_publication_reservation_loads_as_abandoned(tmp_path: Pat
     coordination = ChangeCoordination.model_validate_json(json.dumps(payload))
 
     assert coordination.publication_lease is None
-    assert coordination.publication_base_head == coordination.target_head
+    assert coordination.publication_base_head is None
 
 
 def test_publication_lease_duration_is_bounded(tmp_path: Path) -> None:
@@ -364,6 +365,142 @@ def test_ensure_bases_new_changes_on_remote_tracking_target(tmp_path: Path, remo
     assert coordination.target_head == initial
     assert coordination.publication_base_head == initial
     assert _git(repository, "rev-parse", coordination.branch) == initial
+
+
+def test_refresh_target_does_not_advance_publication_baseline(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("refresh-baseline")
+    (repository / "target.txt").write_text("target\n", encoding="utf-8")
+    _git(repository, "add", "target.txt")
+    _git(repository, "commit", "-m", "advance target")
+    advanced_target = _git(repository, "rev-parse", "HEAD")
+    _git(repository, "update-ref", "refs/remotes/origin/release", advanced_target)
+
+    refreshed = manager.refresh_integration_target(coordination.change_id)
+
+    assert refreshed.target_head == advanced_target
+    assert refreshed.publication_base_head == initial
+
+
+def test_legacy_publication_baseline_recovers_once_and_replays(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("legacy-baseline")
+    (coordination.worktree_path / "workflow.txt").write_text("change\n", encoding="utf-8")
+    _git(coordination.worktree_path, "add", "workflow.txt")
+    _git(coordination.worktree_path, "commit", "-m", "reviewed Change")
+    reviewed_head = _git(coordination.worktree_path, "rev-parse", "HEAD")
+    payload = coordination.model_dump(mode="json")
+    payload.pop("publication_base_head")
+    (tmp_path / "state/claims/changes/legacy-baseline.json").write_text(json.dumps(payload), encoding="utf-8")
+    coordinator.update(
+        coordination.model_copy(update={"last_reviewed_commit": reviewed_head, "publication_base_head": None})
+    )
+
+    receipt = manager.recover_publication_baseline(
+        coordination.change_id,
+        reviewed_head,
+        initial,
+        "recover-baseline",
+    )
+    replayed = manager.recover_publication_baseline(
+        coordination.change_id,
+        reviewed_head,
+        initial,
+        "recover-baseline",
+    )
+
+    assert replayed == receipt
+    recovered = coordinator.show(coordination.change_id)
+    assert recovered.publication_base_head == initial
+    assert recovered.publication_baseline_recovery == receipt
+    with pytest.raises(CoordinationConflictError, match="different authority"):
+        manager.recover_publication_baseline(coordination.change_id, reviewed_head, initial, "other-operation")
+
+
+@pytest.mark.parametrize("custody", ["writer", "publication lease"])
+def test_publication_baseline_recovery_requires_idle_change(tmp_path: Path, custody: str) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure(f"busy-{custody.replace(' ', '-')}")
+    payload = coordination.model_dump(mode="json")
+    payload.pop("publication_base_head")
+    (tmp_path / f"state/claims/changes/{coordination.change_id}.json").write_text(json.dumps(payload), encoding="utf-8")
+    if custody == "writer":
+        coordinator.acquire(
+            coordination.change_id,
+            ChangeWriter(
+                **_identity(coordination.change_id).model_dump(),
+                job_id=1,
+                kind="build",
+            ),
+        )
+    else:
+        with coordinator.publication_lock(coordination.change_id) as lock:
+            coordinator.reserve_publication(
+                coordination.change_id,
+                PublicationLease(
+                    operation_id="busy-lease",
+                    owner_id="busy-owner",
+                    expires_at="2026-08-02T00:10:00Z",
+                ),
+                lock,
+                now="2026-08-02T00:00:00Z",
+            )
+
+    with pytest.raises(CoordinationConflictError, match="idle Change"):
+        manager.recover_publication_baseline(coordination.change_id, initial, initial, "recover-busy")
+
+
+@pytest.mark.parametrize("baseline_kind", ["missing", "non-ancestor"])
+def test_publication_baseline_recovery_rejects_unusable_baseline(tmp_path: Path, baseline_kind: str) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure(f"invalid-{baseline_kind}")
+    payload = coordination.model_dump(mode="json")
+    payload.pop("publication_base_head")
+    (tmp_path / f"state/claims/changes/{coordination.change_id}.json").write_text(json.dumps(payload), encoding="utf-8")
+    baseline = "f" * 40
+    if baseline_kind == "non-ancestor":
+        baseline = _git(repository, "commit-tree", f"{initial}^{{tree}}", "-m", "unrelated baseline")
+
+    with pytest.raises(PublicationBaselineUnavailableError):
+        manager.recover_publication_baseline(coordination.change_id, initial, baseline, f"recover-{baseline_kind}")
+
+    recovered = coordinator.show(coordination.change_id)
+    assert recovered.publication_base_head is None
+    assert recovered.publication_baseline_recovery is None
+
+
+def test_generic_update_cannot_replace_or_erase_known_publication_baseline(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("immutable-baseline")
+
+    with pytest.raises(CoordinationConflictError, match="explicit recovery"):
+        coordinator.update(coordination.model_copy(update={"publication_base_head": None}))
+    with pytest.raises(CoordinationConflictError, match="explicit recovery"):
+        coordinator.update(coordination.model_copy(update={"publication_base_head": "b" * 40}))
+
+    assert coordinator.show(coordination.change_id).publication_base_head == initial
+
+
+def test_legacy_publication_summary_fails_closed_without_baseline(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    _coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("unknown-baseline")
+    payload = coordination.model_dump(mode="json")
+    payload.pop("publication_base_head")
+    (repository / "target.txt").write_text("target\n", encoding="utf-8")
+    _git(repository, "add", "target.txt")
+    _git(repository, "commit", "-m", "advance target")
+    target_head = _git(repository, "rev-parse", "HEAD")
+    payload["target_head"] = target_head
+    (tmp_path / "state/claims/changes/unknown-baseline.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(PublicationBaselineUnavailableError, match="explicitly known baseline"):
+        manager.repository_automation_paths(coordination.change_id, initial)
 
 
 def test_repository_automation_paths_reports_changed_workflow_and_action_files(tmp_path: Path) -> None:

@@ -25,7 +25,7 @@ The server exposes these operation groups:
 |------|-------|
 | Design | `create_design_session`, `read_design_session`, `revise_design_session`, `publish_design_checkpoint`, `derive_delivery_contract`, `validate_delivery_contract`, `admit_delivery_change` |
 | Portfolio | `list_work_items`, `list_retained_change_worktrees`, `show_work_item`, `acquire_frontier_work`, `show_plan_context`, `show_build_context`, `show_finalization_context` |
-| Delivery | `publish_delivery_plan`, `publish_delivery_result`, `finalize_change`, `mark_change_ready`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `observe_acceptance`, `resolve_change_disposition`, `defer_change`, `resume_change`, `abandon_change`, `cleanup_abandoned_change_worktree`, `cleanup_completed_change_worktree`, `recover_change_worktree`, `transition_delivery`, `recover_claim` |
+| Delivery | `publish_delivery_plan`, `publish_delivery_result`, `finalize_change`, `mark_change_ready`, `reconcile_finalization_head`, `reconcile_change_checkpoint`, `sync_change_with_target`, `adopt_external_head`, `promote_external_head`, `abort_target_sync_conflict`, `resolve_target_sync_conflict`, `observe_acceptance`, `resolve_change_disposition`, `defer_change`, `resume_change`, `abandon_change`, `cleanup_abandoned_change_worktree`, `cleanup_completed_change_worktree`, `recover_change_worktree`, `recover_publication_baseline`, `transition_delivery`, `recover_claim` |
 | Publication | `observe_change_publication_checks`, `supersede_publication` |
 | Legacy compatibility | `show_integration_attention`, `recover_integration_repair_claim` |
 | Completed changes | `list_completed_changes`, `search_completed_changes`, `show_completed_change` |
@@ -73,6 +73,11 @@ authority: it preserves the prior reviewed boundary, and Builder acquisition rem
 the exact adopted head. Finalization may perform its own exact-head promotion for a completed adopted
 Change after independent review. Durable adoption and promotion receipts make both operations
 replayable after a process interruption.
+
+Legacy coordination records without publication-baseline provenance fail closed during publication
+summary generation. After confirming the exact Change head, baseline commit, and a clean idle managed
+worktree, `recover_publication_baseline` records one replayable recovery receipt. It does not resolve
+existing publication attention; use `resolve_change_disposition` separately after reviewing the repair.
 
 Delivery has no environment configuration. The server must be launched with the consuming workspace
 as its current directory. Startup fails closed when nonempty retired `.owlbear/target` or

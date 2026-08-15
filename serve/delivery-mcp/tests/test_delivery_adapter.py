@@ -16,6 +16,7 @@ from owlbear_delivery import (
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
     DeliveryRetainedChangeWorktree,
+    PublicationBaselineRecoveryReceipt,
 )
 from owlbear_delivery.acceptance import CompletionReceiptConflictError
 from owlbear_delivery.change_workspace import (
@@ -25,6 +26,7 @@ from owlbear_delivery.change_workspace import (
     ChangeTargetSyncConflictError,
     ChangeTargetSyncReceipt,
     CoordinationConflictError,
+    PublicationBaselineUnavailableError,
 )
 from owlbear_delivery.change_publication import ChangeBranchSupersessionReceipt
 from owlbear_delivery.completed_history import (
@@ -222,7 +224,7 @@ class _RecordingApplication:
         self.calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
         self.failures = failures or {}
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> Any:  # noqa: C901
         def operation(*args: object, **kwargs: object) -> object:
             self.calls.append((name, args, kwargs))
             failure = self.failures.get(name)
@@ -262,6 +264,13 @@ class _RecordingApplication:
                     worktree_path=WORKTREE_PATH,
                     branch_head=COMMIT,
                     recovery_reviewed_head=COMMIT,
+                )
+            elif name == "recover_publication_baseline":
+                result = PublicationBaselineRecoveryReceipt.create(
+                    operation_id="recover-baseline",
+                    change_id=CHANGE,
+                    expected_change_head=COMMIT,
+                    publication_base_head="a" * 40,
                 )
             elif name == "publish_delivery_plan":
                 request = args[1]
@@ -478,6 +487,13 @@ def _requests() -> dict[str, dict[str, object]]:
             "confirmed_recovery": True,
             "recovery_reviewed_head": COMMIT,
         },
+        "recover_publication_baseline": {
+            **change,
+            "confirmed_recovery": True,
+            "expected_change_head": COMMIT,
+            "publication_base_head": "a" * 40,
+            "operation_id": "recover-baseline",
+        },
         "transition_delivery": {
             **change,
             "request": {
@@ -532,7 +548,7 @@ def _assert_publication_result(operation_name: str, result: Any) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation_name", DELIVERY_OPERATION_NAMES)
-async def test_each_delivery_operation_validates_delegates_once_and_serializes(operation_name: str) -> None:
+async def test_each_delivery_operation_validates_delegates_once_and_serializes(operation_name: str) -> None:  # noqa: C901
     application = _RecordingApplication()
     adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
 
@@ -557,6 +573,9 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
     if operation_name == "recover_change_worktree":
         assert application.calls[0][1] == (CHANGE, COMMIT)
         assert application.calls[0][2] == {"confirmed_recovery": True}
+    if operation_name == "recover_publication_baseline":
+        assert application.calls[0][1] == (CHANGE, COMMIT, "a" * 40, "recover-baseline")
+        assert application.calls[0][2] == {"confirmed_recovery": True}
     if operation_name == "finalize_change":
         assert isinstance(application.calls[0][1][1], FinalizeDeliveryChange)
     if operation_name == "mark_change_ready":
@@ -574,6 +593,11 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
             "change_id": CHANGE,
             "worktree_path": str(WORKTREE_PATH),
             "recovery_reviewed_head": COMMIT,
+        },
+        "recover_publication_baseline": {
+            "change_id": CHANGE,
+            "expected_change_head": COMMIT,
+            "publication_base_head": "a" * 40,
         },
     }
     if operation_name == "list_retained_change_worktrees":
@@ -617,6 +641,20 @@ async def test_invalid_parameters_fail_before_application_delegation(operation_n
     diagnostic = json.loads(str(exc_info.value))
     assert diagnostic["code"] == "ERR_TARGET_PARAM_VALIDATION"
     assert diagnostic["retry_safe"] is False
+    assert application.calls == []
+
+
+@pytest.mark.asyncio
+async def test_publication_baseline_recovery_requires_literal_confirmation_before_delegation() -> None:
+    application = _RecordingApplication()
+    adapter = TargetMCPAdapter(application)  # type: ignore[arg-type]
+    request = {**_requests()["recover_publication_baseline"], "confirmed_recovery": False}
+
+    with pytest.raises(ToolError) as exc_info:
+        await adapter.recover_publication_baseline(request)
+
+    diagnostic = json.loads(str(exc_info.value))
+    assert diagnostic["code"] == "ERR_TARGET_PARAM_VALIDATION"
     assert application.calls == []
 
 
@@ -761,6 +799,12 @@ async def test_named_runtime_catalog_and_integration_failures_preserve_diagnosti
                 ("product.txt",),
             ),
             "ERR_TARGET_SYNC_CONFLICT",
+            False,
+        ),
+        (
+            "recover_publication_baseline",
+            PublicationBaselineUnavailableError(CHANGE, "publication baseline is unavailable"),
+            "ERR_PUBLICATION_BASELINE_UNAVAILABLE",
             False,
         ),
     )
