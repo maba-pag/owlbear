@@ -8,3 +8,5 @@ _WORKFLOW_APPROVAL_GATE
 workflowRiskGate
 WORKFLOW_RISK_CLASSIFIER
 automationBlockingPolicy
+ApprovalWorkflowGate
+approvalWorkflowPolicy

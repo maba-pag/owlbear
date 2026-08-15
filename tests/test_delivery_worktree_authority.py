@@ -96,7 +96,7 @@ _AUTOMATION_GOVERNANCE_PATTERN = re.compile(
     r"(?:workflow|automation)[ _-]*(?:approval|blocking|block|risk(?:[ _-]*class(?:ifier)?)?)"
     r"(?:[ _-]*(?:gate|policy|class(?:ifier)?))?|"
     r"(?:approval|blocking|block|risk(?:[ _-]*class(?:ifier)?)?)[ _-]*(?:workflow|automation)"
-    r"[ _-]+(?:gate|policy|class(?:ifier)?)"
+    r"[ _-]*(?:gate|policy|class(?:ifier)?)"
     r")(?![A-Za-z0-9])"
 )
 _FORBIDDEN_GIT_ADMIN_PATH_PATTERN = re.compile(
@@ -1643,7 +1643,7 @@ def test_delivery_automation_scan_covers_required_roots() -> None:
 def test_forbidden_automation_governance_fixture_is_rejected_by_the_gate() -> None:
     violations = _automation_governance_violations((_fixture_path("forbidden-automation-governance.md"),))
 
-    assert {int(violation.rsplit(":", maxsplit=1)[1]) for violation in violations} == set(range(1, 11))
+    assert {int(violation.rsplit(":", maxsplit=1)[1]) for violation in violations} == set(range(1, 13))
 
 
 def test_valid_automation_governance_fixture_is_allowed_by_the_gate() -> None:
