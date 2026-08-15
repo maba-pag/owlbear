@@ -2915,7 +2915,11 @@ class PortfolioApplication:
     def _promote_finalized_external_head(self, change_id: str, exact_head: str) -> None:
         try:
             runtime = self._runtime(change_id)
-            if self._workspace_manager.show(change_id).last_reviewed_commit == exact_head:
+            coordination = self._workspace_manager.show(change_id)
+            if coordination.last_reviewed_commit == exact_head and (
+                coordination.external_head_promotion_receipt is None
+                or coordination.external_head_promotion_receipt.promoted_head != exact_head
+            ):
                 return
             operation_id = f"finalization-{exact_head}"
             promotion = self._workspace_manager.promote_external_head(

@@ -767,6 +767,36 @@ def test_finalization_replay_promotes_an_adopted_head_after_runtime_commit(tmp_p
     assert coordinator.show("change-a").last_reviewed_commit == adopted
 
 
+def test_finalization_replay_repairs_runtime_promotion_after_workspace_commit(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    initial = coordinator.show("change-a").last_reviewed_commit
+    branch = coordinator.show("change-a").branch
+    adopted = _publish_external_change_head(tmp_path, application._workspace_manager.repository, branch, initial)  # noqa: SLF001
+    application.adopt_external_head("change-a", initial, adopted, "adopt-for-finalization-repair")
+    request = _finalization_request("change-a", adopted)
+
+    with (
+        patch.object(
+            runtimes["change-a"],
+            "record_external_head_promotion",
+            side_effect=RuntimeError("simulated runtime promotion crash"),
+        ),
+        pytest.raises(PortfolioApplicationError, match="finalization could not promote"),
+    ):
+        application.finalize_change("change-a", request)
+
+    workspace_promotion = coordinator.show("change-a").external_head_promotion_receipt
+    assert workspace_promotion is not None
+    assert runtimes["change-a"].external_head_promotion_receipt() is None
+
+    application.reconcile_finalization_head("change-a")
+
+    assert runtimes["change-a"].external_head_promotion_receipt() == workspace_promotion
+
+
 def test_finalization_after_builder_child_does_not_repromote_adopted_ancestor(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
