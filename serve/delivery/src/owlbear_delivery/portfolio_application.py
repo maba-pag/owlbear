@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import subprocess
 import uuid
@@ -179,6 +180,8 @@ _MAX_PULL_REQUEST_TITLE_LENGTH = 256
 _MAX_ACCEPTANCE_RECONCILIATION_CHANGES = 8
 _MAX_REQUIRED_CHECK_DIAGNOSTICS = 8
 _MAX_CHECK_DIAGNOSTIC_VALUE_LENGTH = 160
+_MAX_AUTOMATION_PATHS = 32
+_MAX_AUTOMATION_PATH_LENGTH = 240
 
 
 def _failed_required_publication_checks(snapshot: PublicationCheckSnapshot) -> tuple[PublicationCheck, ...]:
@@ -235,6 +238,7 @@ def _checkpoint_operation_id(kind: str, *parts: str) -> str:
 def _checkpoint_summary(
     pending: DeliveryPendingCheckpoint,
     head: str,
+    automation_paths: tuple[str, ...],
 ) -> str:
     lines = [f"Reviewed Delivery checkpoint `{head}`.", "", "Included boundaries:"]
     for trigger in pending.triggers:
@@ -246,7 +250,41 @@ def _checkpoint_summary(
             lines.append("- Finalized Change")
         else:
             lines.append("- Explicit publication request")
+    lines.extend(_automation_summary(automation_paths))
     return "\n".join(lines)
+
+
+def _automation_summary(paths: tuple[str, ...]) -> tuple[str, ...]:
+    """Render bounded repository automation paths for a generated PR summary."""
+    if not paths:
+        return ()
+    lines = ["", "### Repository automation changed"]
+    visible = paths[:_MAX_AUTOMATION_PATHS]
+    lines.extend(f"- {_automation_path_markup(path)}" for path in visible)
+    omitted = len(paths) - len(visible)
+    if omitted:
+        lines.append(f"- {omitted} additional automation path(s) omitted")
+    return tuple(lines)
+
+
+def _automation_path_markup(path: str) -> str:
+    """Escape and bound one repository-controlled path for Markdown HTML."""
+    printable = []
+    for character in path:
+        if character == "\n":
+            printable.append(r"\n")
+        elif character == "\r":
+            printable.append(r"\r")
+        elif character == "\t":
+            printable.append(r"\t")
+        elif character.isprintable():
+            printable.append(character)
+        else:
+            printable.append(f"\\u{ord(character):04x}")
+    bounded = "".join(printable)
+    if len(bounded) > _MAX_AUTOMATION_PATH_LENGTH:
+        bounded = f"{bounded[: _MAX_AUTOMATION_PATH_LENGTH - 3]}..."
+    return f"<code>{html.escape(bounded, quote=True)}</code>"
 
 
 def _checkpoint_pull_request_title(runtime: DeliveryRuntime) -> str:
@@ -257,14 +295,14 @@ def _checkpoint_pull_request_title(runtime: DeliveryRuntime) -> str:
     return f"{title[: _MAX_PULL_REQUEST_TITLE_LENGTH - 3]}..."
 
 
-def _supersession_summary(head: str, predecessor_id: str) -> str:
-    return "\n".join(
-        (
-            f"Superseding reviewed Delivery checkpoint `{head}`.",
-            "",
-            f"This publication supersedes provider publication `{predecessor_id}`.",
-        )
-    )
+def _supersession_summary(head: str, predecessor_id: str, automation_paths: tuple[str, ...]) -> str:
+    lines = [
+        f"Superseding reviewed Delivery checkpoint `{head}`.",
+        "",
+        f"This publication supersedes provider publication `{predecessor_id}`.",
+    ]
+    lines.extend(_automation_summary(automation_paths))
+    return "\n".join(lines)
 
 
 def _publication_identity(
@@ -1184,6 +1222,10 @@ class PortfolioApplication:
         provider_publisher = self._draft_pull_request_publisher
         if branch_publisher is None or provider_publisher is None:
             self._fail("publication supersession is not configured")
+        automation_paths = self._workspace_manager.repository_automation_paths(
+            context.change_id,
+            context.superseding_head,
+        )
         git_receipt = branch_publisher.supersede(
             SupersedeChangeBranch(
                 change_id=context.change_id,
@@ -1210,6 +1252,7 @@ class PortfolioApplication:
                 generated_summary=_supersession_summary(
                     context.superseding_head,
                     context.expected_publication_id,
+                    automation_paths,
                 ),
             )
         )
@@ -1968,7 +2011,8 @@ class PortfolioApplication:
             )
 
         head = pending.head
-        summary = _checkpoint_summary(pending, head)
+        automation_paths = self._workspace_manager.repository_automation_paths(change_id, head)
+        summary = _checkpoint_summary(pending, head, automation_paths)
         pull_request_title = _checkpoint_pull_request_title(runtime)
         branch_request = PublishChangeBranch(
             change_id=change_id,

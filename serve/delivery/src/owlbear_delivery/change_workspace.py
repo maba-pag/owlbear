@@ -35,6 +35,7 @@ _OCC_RETRY_LIMIT = 8
 _PUBLICATION_LEASE_MAX_SECONDS = 600
 _PUBLICATION_OPERATION_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 _CHANGE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+_COMMIT_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 _MERGE_COMMIT_MIN_PARENTS = 2
 _PORCELAIN_WORKTREE_STATUS_INDEX = 1
 
@@ -440,6 +441,7 @@ class ChangeCoordination(_WorkspaceModel):
     worktree_path: Path
     integration_target: str = Field(min_length=1)
     target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    publication_base_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     writer: ChangeWriter | None = None
     publication_lease: PublicationLease | None = None
@@ -458,10 +460,16 @@ class ChangeCoordination(_WorkspaceModel):
     @classmethod
     def _discard_retired_publication_reservation(cls, value: object) -> object:
         if not isinstance(value, dict) or "publication_operation_id" not in value:
+            if isinstance(value, dict) and "publication_base_head" not in value and "target_head" in value:
+                migrated = dict(value)
+                migrated["publication_base_head"] = migrated["target_head"]
+                return migrated
             return value
         migrated: dict[object, object] = dict(value)
         migrated.pop("publication_operation_id", None)
         migrated.pop("publication_expires_at", None)
+        if "publication_base_head" not in migrated and "target_head" in migrated:
+            migrated["publication_base_head"] = migrated["target_head"]
         return migrated
 
     @field_validator("external_head_adoption_receipts", mode="before")
@@ -1079,6 +1087,7 @@ class ChangeWorkspaceManager:
             worktree_path=worktree,
             integration_target=self._integration_target,
             target_head=target_head,
+            publication_base_head=target_head,
             last_reviewed_commit=last_reviewed_commit,
         )
         return self._coordinator.register(coordination)
@@ -1531,6 +1540,7 @@ class ChangeWorkspaceManager:
                 coordination.model_copy(
                     update={
                         "target_head": target_head,
+                        "publication_base_head": target_head,
                         "target_sync_conflict": None,
                         "target_sync_receipt": receipt,
                         "target_sync_abort_receipt": None,
@@ -1922,6 +1932,7 @@ class ChangeWorkspaceManager:
                 coordination.model_copy(
                     update={
                         "target_head": request.target_head,
+                        "publication_base_head": request.target_head,
                         "target_sync_conflict": None,
                         "target_sync_receipt": receipt,
                         "target_sync_abort_receipt": None,
@@ -1942,6 +1953,38 @@ class ChangeWorkspaceManager:
             integration_target=coordination.integration_target,
             target_head=self._resolve(self._target_ref()),
         )
+
+    def repository_automation_paths(self, change_id: str, exact_head: str) -> tuple[str, ...]:
+        """Return repository automation paths changed since the publication baseline."""
+        coordination = self._coordinator.show(change_id)
+        if _COMMIT_PATTERN.fullmatch(exact_head) is None:
+            _workspace_failure("automation summary head is not an exact commit identity")
+        baseline = self._resolve(coordination.publication_base_head)
+        resolved_head = self._resolve(exact_head)
+        if resolved_head != exact_head:
+            _workspace_failure("automation summary head does not resolve to the requested commit")
+        self._require_ancestor(baseline, resolved_head)
+        result = self._run_git(
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--no-renames",
+            "--name-only",
+            "-z",
+            baseline,
+            resolved_head,
+            "--",
+            ".github/workflows",
+            "action.yml",
+            "action.yaml",
+            ":(glob)**/action.yml",
+            ":(glob)**/action.yaml",
+            check=False,
+        )
+        if result.returncode != 0:
+            _workspace_failure("repository automation paths could not be derived")
+        paths = {path for path in result.stdout.split(b"\0") if path}
+        return tuple(os.fsdecode(path) for path in sorted(paths))
 
     def _target_refs(self) -> tuple[str, str, str]:
         target_ref = self._target_ref()

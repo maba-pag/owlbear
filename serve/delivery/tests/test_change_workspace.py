@@ -229,10 +229,12 @@ def test_retired_scalar_publication_reservation_loads_as_abandoned(tmp_path: Pat
     payload = _coordination(tmp_path, "retired-change").model_dump(mode="json")
     payload["publication_operation_id"] = "operation-retired"
     payload["publication_expires_at"] = "2099-08-02T00:10:00Z"
+    payload.pop("publication_base_head")
 
     coordination = ChangeCoordination.model_validate_json(json.dumps(payload))
 
     assert coordination.publication_lease is None
+    assert coordination.publication_base_head == coordination.target_head
 
 
 def test_publication_lease_duration_is_bounded(tmp_path: Path) -> None:
@@ -360,7 +362,42 @@ def test_ensure_bases_new_changes_on_remote_tracking_target(tmp_path: Path, remo
 
     assert local_target_head != initial
     assert coordination.target_head == initial
+    assert coordination.publication_base_head == initial
     assert _git(repository, "rev-parse", coordination.branch) == initial
+
+
+def test_repository_automation_paths_reports_changed_workflow_and_action_files(tmp_path: Path) -> None:
+    repository, _initial = _repository(tmp_path)
+    (repository / ".github/workflows").mkdir(parents=True)
+    (repository / ".github/workflows/old.yml").write_text("name: old\n", encoding="utf-8")
+    (repository / "action.yml").write_text("name: root\n", encoding="utf-8")
+    (repository / "ignored.txt").write_text("ignored\n", encoding="utf-8")
+    _git(repository, "add", ".")
+    _git(repository, "commit", "-m", "seed automation")
+    baseline = _git(repository, "rev-parse", "HEAD")
+    _git(repository, "branch", "-f", "release", baseline)
+    _git(repository, "update-ref", "refs/remotes/origin/release", baseline)
+    _coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("automation-paths")
+
+    worktree = coordination.worktree_path
+    _git(worktree, "mv", ".github/workflows/old.yml", ".github/workflows/new.yml")
+    _git(worktree, "rm", "action.yml")
+    (worktree / ".github/workflows/created.yaml").write_text("name: created\n", encoding="utf-8")
+    (worktree / "nested").mkdir()
+    (worktree / "nested/action.yaml").write_text("name: nested\n", encoding="utf-8")
+    (worktree / "ignored.txt").write_text("changed\n", encoding="utf-8")
+    _git(worktree, "add", ".")
+    _git(worktree, "commit", "-m", "change automation")
+    exact_head = _git(worktree, "rev-parse", "HEAD")
+
+    assert manager.repository_automation_paths(coordination.change_id, exact_head) == (
+        ".github/workflows/created.yaml",
+        ".github/workflows/new.yml",
+        ".github/workflows/old.yml",
+        "action.yml",
+        "nested/action.yaml",
+    )
 
 
 def test_list_retained_worktrees_returns_empty_without_coordination_store(tmp_path: Path) -> None:

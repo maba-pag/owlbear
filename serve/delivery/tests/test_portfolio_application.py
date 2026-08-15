@@ -2482,7 +2482,103 @@ def test_reconcile_first_checkpoint_publishes_branch_creates_pr_and_drains(tmp_p
     assert history.current.head_sha == head
 
 
-def test_supersede_publication_binds_git_provider_and_runtime_history(tmp_path: Path) -> None:
+def test_reconcile_checkpoint_reports_bounded_escaped_automation_paths(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    head = coordinator.show("change-a").last_reviewed_commit
+    pending = DeliveryPendingCheckpoint(
+        head=head,
+        triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+    )
+    _set_checkpoint(runtimes["change-a"], state_root, pending)
+    branch_publisher = Mock()
+    branch_publisher.publish.return_value = _branch_receipt(head)
+    pull_request_publisher = Mock()
+    pull_request_publisher.publish.return_value = _draft_receipt(head)
+    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
+    application._change_branch_publisher = branch_publisher  # noqa: SLF001
+    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+    long_path = ".github/workflows/" + ("x" * 300) + ".yml"
+
+    with patch.object(
+        application._workspace_manager,  # noqa: SLF001
+        "repository_automation_paths",
+        return_value=(".github/workflows/<run>`\nname.yml", long_path),
+    ):
+        result = application.reconcile_change_checkpoint("change-a")
+
+    assert result.reconciled
+    create_request = pull_request_publisher.publish.call_args.args[0]
+    update_request = pull_request_publisher.update_generated_summary.call_args.args[0]
+    summary = create_request.generated_summary
+    assert summary == update_request.generated_summary
+    assert "### Repository automation changed" in summary
+    assert "<code>.github/workflows/&lt;run&gt;`\\nname.yml</code>" in summary
+    assert "x" * 300 not in summary
+    assert summary.count("<code>") == 2
+
+
+def test_later_checkpoint_reports_cumulative_automation_paths(tmp_path: Path) -> None:
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    coordination = coordinator.show("change-a")
+    workflow_directory = coordination.worktree_path / ".github/workflows"
+    workflow_directory.mkdir(parents=True)
+    first_head = _commit_reviewed_head(
+        application,
+        coordination,
+        ".github/workflows/first.yml",
+        "name: first\n",
+        "first automation checkpoint",
+    )
+    first_pending = DeliveryPendingCheckpoint(
+        head=first_head,
+        triggers=(DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK),),
+    )
+    _set_checkpoint(runtimes["change-a"], state_root, first_pending)
+    branch_publisher = Mock()
+    branch_publisher.publish.return_value = _branch_receipt(first_head)
+    pull_request_publisher = Mock()
+    pull_request_publisher.publish.return_value = _draft_receipt(first_head)
+    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(first_head)
+    application._change_branch_publisher = branch_publisher  # noqa: SLF001
+    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+
+    application.reconcile_change_checkpoint("change-a")
+
+    second_head = _commit_reviewed_head(
+        application,
+        coordination,
+        ".github/workflows/second.yml",
+        "name: second\n",
+        "second automation checkpoint",
+    )
+    second_pending = DeliveryPendingCheckpoint(
+        head=second_head,
+        triggers=(
+            DeliveryCheckpointTrigger(
+                kind=DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
+                outcome_id="OUT-001",
+            ),
+        ),
+    )
+    _set_checkpoint(runtimes["change-a"], state_root, second_pending, published_head=first_head)
+    branch_publisher.publish.return_value = _branch_receipt(second_head, first_head)
+    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(second_head)
+
+    result = application.reconcile_change_checkpoint("change-a")
+
+    assert result.reconciled
+    summary = pull_request_publisher.update_generated_summary.call_args.args[0].generated_summary
+    assert "<code>.github/workflows/first.yml</code>" in summary
+    assert "<code>.github/workflows/second.yml</code>" in summary
+
+
+def test_supersede_publication_binds_git_provider_and_runtime_history(tmp_path: Path) -> None:  # noqa: PLR0915
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
@@ -2505,8 +2601,9 @@ def test_supersede_publication_binds_git_provider_and_runtime_history(tmp_path: 
         publication_identity=predecessor_identity,
     )
 
-    (coordination.worktree_path / "successor.txt").write_text("successor\n", encoding="utf-8")
-    _git(coordination.worktree_path, "add", "successor.txt")
+    (coordination.worktree_path / ".github/workflows").mkdir(parents=True)
+    (coordination.worktree_path / ".github/workflows/successor.yml").write_text("successor\n", encoding="utf-8")
+    _git(coordination.worktree_path, "add", ".github/workflows/successor.yml")
     _git(coordination.worktree_path, "commit", "-m", "successor publication")
     superseding_head = _git(coordination.worktree_path, "rev-parse", "HEAD")
     application._workspace_manager.record_reviewed("change-a", superseding_head)  # noqa: SLF001
@@ -2585,6 +2682,8 @@ def test_supersede_publication_binds_git_provider_and_runtime_history(tmp_path: 
     assert provider_request.expected_predecessor_receipt_id == predecessor.receipt_id
     assert provider_request.successor_branch == successor_branch
     assert provider_request.superseding_head == superseding_head
+    assert "### Repository automation changed" in provider_request.generated_summary
+    assert "<code>.github/workflows/successor.yml</code>" in provider_request.generated_summary
 
     _commit_reviewed_head(application, coordination, "later.txt", "later\n", "later reviewed head")
 
@@ -2812,7 +2911,8 @@ def test_reconcile_later_checkpoint_updates_summary_from_prior_published_head(tm
     application._change_branch_publisher = branch_publisher  # noqa: SLF001
     application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
 
-    result = application.reconcile_change_checkpoint("change-a")
+    with patch.object(application._workspace_manager, "repository_automation_paths", return_value=()):  # noqa: SLF001
+        result = application.reconcile_change_checkpoint("change-a")
 
     assert result.reconciled
     assert branch_publisher.publish.call_args.args[0].expected_remote_head == prior_head
@@ -3138,7 +3238,10 @@ def test_reconcile_first_pr_recovers_at_newer_head_after_provider_failure(tmp_pa
         state_root=tmp_path / "pull-requests",
     )
 
-    with pytest.raises(PublicationProviderError) as exc_info:
+    with (
+        patch.object(application._workspace_manager, "repository_automation_paths", return_value=()),  # noqa: SLF001
+        pytest.raises(PublicationProviderError) as exc_info,
+    ):
         application.reconcile_change_checkpoint("change-a")
 
     assert exc_info.value.code is PublicationProviderFailureCode.UNAVAILABLE
@@ -3149,7 +3252,8 @@ def test_reconcile_first_pr_recovers_at_newer_head_after_provider_failure(tmp_pa
         published_head=first_head,
     )
 
-    result = application.reconcile_change_checkpoint("change-a")
+    with patch.object(application._workspace_manager, "repository_automation_paths", return_value=()):  # noqa: SLF001
+        result = application.reconcile_change_checkpoint("change-a")
 
     assert result.reconciled
     assert result.draft_pull_request is not None
