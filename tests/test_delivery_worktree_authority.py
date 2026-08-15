@@ -91,6 +91,12 @@ _FORBIDDEN_CAPABILITY_PATTERNS = (
     re.compile(r"(?:auto.?merge|enablePullRequestAutoMerge)", re.IGNORECASE),
     re.compile(r"(?:merge[_]?pull[_]?request|update[_]?pull[_]?request[_]?branch)", re.IGNORECASE),
 )
+_AUTOMATION_GOVERNANCE_PATTERN = re.compile(
+    r"(?ix)\b(?:"
+    r"(?:workflow|automation)[ _-]+(?:approval|blocking|block|risk(?:[ _-]+class)?)|"
+    r"(?:approval|blocking|block|risk(?:[ _-]+class)?)[ _-]+(?:workflow|automation)"
+    r")\b"
+)
 _FORBIDDEN_GIT_ADMIN_PATH_PATTERN = re.compile(
     r"(?:\$GIT_DIR|\$GIT_COMMON_DIR|\.git[\\/]worktrees(?:[\\/]|\b)|"
     r"[\"']\.git[\"']\s*[,/]\s*[\"']worktrees[\"']|"
@@ -1077,6 +1083,41 @@ def _forbidden_capability_violations(paths: tuple[Path, ...]) -> tuple[str, ...]
     )
 
 
+def _automation_governance_files() -> tuple[Path, ...]:
+    roots = (
+        _REPO_ROOT / "serve/delivery/src",
+        _REPO_ROOT / "serve/delivery-mcp/src",
+        _REPO_ROOT / "serve/delivery-github/src",
+        _REPO_ROOT / "share/agents",
+        _REPO_ROOT / "share/instructions",
+        _REPO_ROOT / "share/skills",
+        _REPO_ROOT / ".owlbear/agents",
+        _REPO_ROOT / ".owlbear/instructions",
+        _REPO_ROOT / ".owlbear/skills",
+        _REPO_ROOT / ".github/skills",
+    )
+    files = [
+        path
+        for root in roots
+        if root.is_dir()
+        for path in root.rglob("*")
+        if path.is_file() and path.suffix in {".py", ".md"}
+    ]
+    copilot_instructions = _REPO_ROOT / ".github/copilot-instructions.md"
+    if copilot_instructions.is_file():
+        files.append(copilot_instructions)
+    return tuple(sorted(files))
+
+
+def _automation_governance_violations(paths: tuple[Path, ...]) -> tuple[str, ...]:
+    return tuple(
+        f"{path.relative_to(_REPO_ROOT)}:{line_number}"
+        for path in paths
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
+        if _AUTOMATION_GOVERNANCE_PATTERN.search(line)
+    )
+
+
 def _git_admin_path_violations(paths: tuple[Path, ...]) -> tuple[str, ...]:
     return tuple(
         f"{path.relative_to(_REPO_ROOT)}:{line_number}"
@@ -1583,6 +1624,16 @@ def test_forbidden_cockpit_and_agent_fixtures_are_rejected_by_the_capability_gat
 
     assert {int(violation.rsplit(":", maxsplit=1)[1]) for violation in cockpit_violations} == {2, 5}
     assert len(agent_violations) == 1
+
+
+def test_delivery_automation_has_no_special_approval_or_risk_gate() -> None:
+    assert not _automation_governance_violations(_automation_governance_files())
+
+
+def test_forbidden_automation_governance_fixture_is_rejected_by_the_gate() -> None:
+    violations = _automation_governance_violations((_fixture_path("forbidden-automation-governance.md"),))
+
+    assert {int(violation.rsplit(":", maxsplit=1)[1]) for violation in violations} == {1, 2, 3, 4}
 
 
 def test_delivery_sources_have_no_git_admin_artifact_path() -> None:
