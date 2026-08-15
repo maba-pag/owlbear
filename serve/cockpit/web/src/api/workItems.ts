@@ -319,9 +319,17 @@ export interface ChangeWorktreeRecoveryResponse {
   recovery_reviewed_head: string
 }
 
-export interface TargetSyncResponse extends WorkItemTargetSyncView {
+export interface TargetSyncResponse {
   schema_version: 1
+  receipt_id: string
+  operation_id: string
   change_id: string
+  target_branch: string
+  expected_target: string
+  target_head: string
+  change_head_before: string
+  merged_head: string
+  merge_commit: boolean
 }
 
 export interface TargetSyncAbortResponse {

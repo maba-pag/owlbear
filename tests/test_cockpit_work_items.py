@@ -65,6 +65,7 @@ from owlbear_delivery.work_items import (
     WorkItemPublicationView,
     WorkItemScope,
     WorkItemStage,
+    WorkItemTargetSyncView,
 )
 
 
@@ -212,6 +213,16 @@ class _DeliveryApplicationFake:
                 promise="Publish the reviewed Change.",
                 publication=WorkItemPublicationView(
                     phase=WorkItemPublicationPhase.READY_FOR_FINALIZATION,
+                    target_sync=WorkItemTargetSyncView(
+                        receipt_id="a" * 64,
+                        operation_id="sync-cockpit-test",
+                        target_branch="main",
+                        expected_target="1" * 40,
+                        target_head="1" * 40,
+                        change_head_before="2" * 40,
+                        merged_head="3" * 40,
+                        merge_commit=True,
+                    ),
                 ),
             )
         return WorkItemDetailView(
@@ -610,6 +621,24 @@ def test_list_and_detail_expose_current_bounded_delivery_state() -> None:
         ("portfolio", ()),
         ("show", ("change-a", "outcome:OUT-001")),
     ]
+
+
+def test_detail_target_sync_uses_target_branch_wire_contract() -> None:
+    client, _application = _client()
+
+    detail = client.get("/api/changes/change-a/work-items/publication")
+
+    assert detail.status_code == 200
+    assert detail.json()["item"]["publication"]["target_sync"] == {
+        "receipt_id": "a" * 64,
+        "operation_id": "sync-cockpit-test",
+        "target_branch": "main",
+        "expected_target": "1" * 40,
+        "target_head": "1" * 40,
+        "change_head_before": "2" * 40,
+        "merged_head": "3" * 40,
+        "merge_commit": True,
+    }
 
 
 def test_design_work_detail_exposes_verified_authored_sources() -> None:

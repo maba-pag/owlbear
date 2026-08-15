@@ -492,7 +492,7 @@ def test_target_sync_receipt_projects_without_receipt_only_fields() -> None:
     assert target_sync.target_sync.model_dump() == {
         "receipt_id": receipt.receipt_id,
         "operation_id": receipt.operation_id,
-        "integration_target": receipt.integration_target,
+        "target_branch": receipt.integration_target,
         "expected_target": receipt.expected_target,
         "target_head": receipt.target_head,
         "change_head_before": receipt.change_head_before,

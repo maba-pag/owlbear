@@ -302,7 +302,7 @@ class WorkItemTargetSyncView(_ProjectionModel):
 
     receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     operation_id: str = Field(min_length=1)
-    integration_target: str = Field(min_length=1)
+    target_branch: str = Field(min_length=1)
     expected_target: str = Field(pattern=r"^[0-9a-f]{40}$")
     target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     change_head_before: str = Field(pattern=r"^[0-9a-f]{40}$")
@@ -808,7 +808,7 @@ class WorkItemProjector:
                 WorkItemTargetSyncView(
                     receipt_id=target_sync.receipt_id,
                     operation_id=target_sync.operation_id,
-                    integration_target=target_sync.integration_target,
+                    target_branch=target_sync.integration_target,
                     expected_target=target_sync.expected_target,
                     target_head=target_sync.target_head,
                     change_head_before=target_sync.change_head_before,
