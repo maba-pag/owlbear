@@ -92,7 +92,7 @@ _FORBIDDEN_CAPABILITY_PATTERNS = (
 _FORBIDDEN_GIT_ADMIN_PATH_PATTERN = re.compile(
     r"(?:\$GIT_DIR|\$GIT_COMMON_DIR|\.git[\\/]worktrees(?:[\\/]|\b)|"
     r"[\"']\.git[\"']\s*[,/]\s*[\"']worktrees[\"']|"
-    r"\b[A-Za-z_]*(?:git|admin)[A-Za-z0-9_]*\s*/\s*[\"']worktrees[\"'])",
+    r"\b[A-Za-z_]*(?:^|_)(?:git|admin)(?:_|$)[A-Za-z0-9_]*\s*/\s*[\"']worktrees[\"'])",
     re.IGNORECASE,
 )
 _ALLOWED_PROVIDER_REST_CALLS = {
@@ -109,10 +109,13 @@ _ALLOWED_PROVIDER_GRAPHQL_CALLS = frozenset(
     }
 )
 _ALLOWED_PROVIDER_DOCUMENTS = frozenset({"_READY_MUTATION", "_DRAFT_MUTATION", "_OBSERVE_CHECKS_QUERY"})
+_SUBPROCESS_APIS = frozenset({"Popen", "check_call", "check_output", "run"})
+_SHELL_APIS = frozenset({"popen", "system"})
+_URL_SCHEME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
 
 
 def _source_files() -> tuple[Path, ...]:
-    return tuple(sorted(path for root in _SOURCE_ROOTS for path in root.rglob("*.py")))
+    return _production_python_files()
 
 
 def _production_python_files() -> tuple[Path, ...]:
@@ -533,6 +536,12 @@ def _resolved_literal(node: ast.AST, bindings: dict[str, ast.AST], seen: tuple[s
     return None
 
 
+def _resolved_expression(node: ast.AST, bindings: dict[str, ast.AST], seen: tuple[str, ...] = ()) -> ast.AST:
+    if isinstance(node, ast.Name) and node.id in bindings and node.id not in seen:
+        return _resolved_expression(bindings[node.id], bindings, (*seen, node.id))
+    return node
+
+
 def _resolved_sequence(
     node: ast.AST,
     bindings: dict[str, ast.AST],
@@ -576,12 +585,38 @@ def _string_shape(node: ast.AST, source: str, bindings: dict[str, ast.AST], seen
 class _FetchVisitor(ast.NodeVisitor):
     def __init__(self, source: str, module: ast.Module) -> None:
         self.source = source
-        self.module = module
-        self.bindings = _scope_bindings(module)
+        self.module_bindings = _scope_bindings(module)
+        self.bindings = self.module_bindings
+        self.subprocess_modules = self._imported_modules(module, "subprocess")
+        self.subprocess_functions = self._imported_functions(module, "subprocess")
+        self.os_modules = self._imported_modules(module, "os")
+        self.os_functions = self._imported_functions(module, "os")
+        self.class_depth = 0
+        self.function_depth = 0
+        self.class_bindings: list[dict[str, ast.AST]] = []
         self.violations: list[str] = []
+
+    @staticmethod
+    def _imported_modules(module: ast.Module, module_name: str) -> frozenset[str]:
+        aliases = {module_name}
+        for node in module.body:
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == module_name:
+                        aliases.add(alias.asname or module_name)
+        return frozenset(aliases)
+
+    @staticmethod
+    def _imported_functions(module: ast.Module, module_name: str) -> frozenset[str]:
+        aliases: set[str] = set()
+        for node in module.body:
+            if isinstance(node, ast.ImportFrom) and node.module == module_name:
+                aliases.update(alias.asname or alias.name for alias in node.names)
+        return frozenset(aliases)
 
     def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         previous_bindings = self.bindings
+        base_bindings = self.module_bindings if self.class_depth and not self.function_depth else previous_bindings
         parameters = {
             argument.arg
             for argument in (
@@ -594,9 +629,11 @@ class _FetchVisitor(ast.NodeVisitor):
             parameters.add(node.args.vararg.arg)
         if node.args.kwarg is not None:
             parameters.add(node.args.kwarg.arg)
-        self.bindings = {name: value for name, value in previous_bindings.items() if name not in parameters}
+        self.bindings = {name: value for name, value in base_bindings.items() if name not in parameters}
         self.bindings.update(_scope_bindings(node))
+        self.function_depth += 1
         self.generic_visit(node)
+        self.function_depth -= 1
         self.bindings = previous_bindings
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
@@ -605,11 +642,69 @@ class _FetchVisitor(ast.NodeVisitor):
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         self._visit_function(node)
 
-    def _fetch_arguments(self, node: ast.Call) -> tuple[ast.AST, ...] | None:
-        is_git_helper = (isinstance(node.func, ast.Attribute) and node.func.attr in {"_run_git", "_git"}) or (
-            isinstance(node.func, ast.Name) and node.func.id in {"_run_git", "_git"}
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        previous_bindings = self.bindings
+        previous_class_depth = self.class_depth
+        class_bindings = _scope_bindings(node)
+        self.bindings = {**self.module_bindings, **class_bindings}
+        self.class_bindings.append(class_bindings)
+        self.class_depth += 1
+        for statement in node.body:
+            self.visit(statement)
+        self.class_depth = previous_class_depth
+        self.class_bindings.pop()
+        self.bindings = previous_bindings
+
+    @staticmethod
+    def _call_attribute(node: ast.Call) -> str | None:
+        if isinstance(node.func, ast.Attribute):
+            return node.func.attr
+        if isinstance(node.func, ast.Name):
+            return node.func.id
+        return None
+
+    def _is_git_helper_call(self, node: ast.Call) -> bool:
+        name = self._call_attribute(node)
+        return name is not None and (name == "git" or name.endswith("_git"))
+
+    def _is_subprocess_call(self, node: ast.Call) -> bool:
+        if isinstance(node.func, ast.Name):
+            return node.func.id in self.subprocess_functions
+        return (
+            isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id in self.subprocess_modules
+            and node.func.attr in _SUBPROCESS_APIS
         )
-        if is_git_helper:
+
+    def _is_shell_call(self, node: ast.Call) -> bool:
+        if isinstance(node.func, ast.Name):
+            return node.func.id in self.os_functions
+        return (
+            isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id in self.os_modules
+            and node.func.attr in _SHELL_APIS
+        )
+
+    def _shell_fetch_shape(self, node: ast.Call) -> str | None:
+        if not (self._is_shell_call(node) or (self._is_subprocess_call(node) and node.args)):
+            return None
+        command = (
+            node.args[0]
+            if node.args
+            else next(
+                (keyword.value for keyword in node.keywords if keyword.arg == "args"),
+                None,
+            )
+        )
+        if command is None:
+            return None
+        shape = _string_shape(command, self.source, self.bindings)
+        return shape if re.search(r"\bgit\s+fetch\b", shape) else None
+
+    def _fetch_arguments(self, node: ast.Call) -> tuple[ast.AST, ...] | None:
+        if self._is_git_helper_call(node):
             command_index = next(
                 (
                     index
@@ -620,13 +715,7 @@ class _FetchVisitor(ast.NodeVisitor):
             )
             return None if command_index is None else tuple(node.args[command_index + 1 :])
 
-        is_subprocess_run = (
-            isinstance(node.func, ast.Attribute)
-            and isinstance(node.func.value, ast.Name)
-            and node.func.value.id == "subprocess"
-            and node.func.attr == "run"
-        )
-        if not is_subprocess_run:
+        if not self._is_subprocess_call(node):
             return None
         command = (
             node.args[0]
@@ -651,11 +740,49 @@ class _FetchVisitor(ast.NodeVisitor):
         )
         return None if command_index is None else tuple(command_vector[command_index + 1 :])
 
-    def visit_Call(self, node: ast.Call) -> None:
-        arguments = self._fetch_arguments(node)
-        if arguments is None:
-            self.generic_visit(node)
-            return
+    def _refspec_arguments(self, arguments: tuple[ast.AST, ...]) -> tuple[ast.AST, ...]:
+        remote_seen = False
+        refspecs: list[ast.AST] = []
+        for argument in arguments:
+            literal = _resolved_literal(argument, self.bindings)
+            if not remote_seen:
+                if literal is not None and literal.startswith("-"):
+                    continue
+                remote_seen = True
+                continue
+            if literal is not None and literal.startswith("-"):
+                continue
+            refspecs.append(argument)
+        return tuple(refspecs)
+
+    def _argument_expression(self, argument: ast.AST) -> ast.AST:
+        if isinstance(argument, ast.Attribute) and isinstance(argument.value, ast.Name) and argument.value.id == "self":
+            for bindings in reversed(self.class_bindings):
+                if argument.attr in bindings:
+                    return _resolved_expression(bindings[argument.attr], self.bindings)
+        return _resolved_expression(argument, self.bindings)
+
+    def _argument_shape(self, argument: ast.AST) -> str:
+        if isinstance(argument, ast.Attribute) and isinstance(argument.value, ast.Name) and argument.value.id == "self":
+            for bindings in reversed(self.class_bindings):
+                if argument.attr in bindings:
+                    return _string_shape(bindings[argument.attr], self.source, self.bindings)
+        return _string_shape(argument, self.source, self.bindings)
+
+    def _record_refspec_violations(self, node: ast.Call, arguments: tuple[ast.AST, ...]) -> None:
+        for argument in self._refspec_arguments(arguments):
+            shape = self._argument_shape(argument)
+            if ":" not in shape:
+                if not isinstance(self._argument_expression(argument), (ast.Constant, ast.JoinedStr)):
+                    self.violations.append(f"fetch has an unresolved explicit refspec at line {node.lineno}: {shape}")
+                continue
+            if _URL_SCHEME_PATTERN.match(shape):
+                continue
+            destination = shape.rsplit(":", maxsplit=1)[1]
+            if not destination.startswith("refs/remotes/"):
+                self.violations.append(f"fetch has an unsafe explicit destination at line {node.lineno}: {shape}")
+
+    def _record_fetch_violations(self, node: ast.Call, arguments: tuple[ast.AST, ...]) -> None:
         if any(isinstance(argument, ast.Starred) for argument in arguments):
             self.violations.append(f"fetch forwards unpacked arguments at line {node.lineno}")
         literals = tuple(_resolved_literal(argument, self.bindings) for argument in arguments)
@@ -663,13 +790,17 @@ class _FetchVisitor(ast.NodeVisitor):
             self.violations.append(f"fetch uses --update-head-ok at line {node.lineno}")
         if "--refmap=" not in literals:
             self.violations.append(f"fetch lacks an empty refmap at line {node.lineno}")
-        for argument in arguments:
-            shape = _string_shape(argument, self.source, self.bindings)
-            if ":" not in shape:
-                continue
-            destination = shape.rsplit(":", maxsplit=1)[1]
-            if not destination.startswith("refs/remotes/"):
-                self.violations.append(f"fetch has an unsafe explicit destination at line {node.lineno}: {shape}")
+        self._record_refspec_violations(node, arguments)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        shell_shape = self._shell_fetch_shape(node)
+        if shell_shape is not None:
+            self.violations.append(f"fetch uses an unstructured shell command at line {node.lineno}: {shell_shape}")
+            self.generic_visit(node)
+            return
+        arguments = self._fetch_arguments(node)
+        if arguments is not None:
+            self._record_fetch_violations(node, arguments)
         self.generic_visit(node)
 
 
@@ -1022,10 +1153,59 @@ def test_delivery_fetch_vectors_are_remote_tracking_only() -> None:
 def test_forbidden_fetch_fixture_is_rejected_by_the_fetch_gate() -> None:
     violations = _fetch_violations(_fixture_path("forbidden-fetch.py"))
 
-    assert sum("uses --update-head-ok" in violation for violation in violations) == 3
-    assert sum("lacks an empty refmap" in violation for violation in violations) == 4
-    assert sum("unsafe explicit destination" in violation for violation in violations) == 3
+    assert {
+        int(violation.rsplit("line ", maxsplit=1)[1].split(":", maxsplit=1)[0])
+        for violation in violations
+        if "uses --update-head-ok" in violation
+    } == {10, 23, 33}
+    assert {
+        int(violation.rsplit("line ", maxsplit=1)[1].split(":", maxsplit=1)[0])
+        for violation in violations
+        if "lacks an empty refmap" in violation
+    } == {10, 19, 23, 33}
+    assert {
+        int(violation.rsplit("line ", maxsplit=1)[1].split(":", maxsplit=1)[0])
+        for violation in violations
+        if "unsafe explicit destination" in violation
+    } == {10, 23, 33, 46}
     assert any("forwards unpacked arguments" in violation for violation in violations)
+
+
+def test_forbidden_fetch_aliases_are_rejected_by_the_fetch_gate() -> None:
+    violations = _fetch_violations(_fixture_path("forbidden-fetch-aliases.py"))
+
+    assert {
+        int(violation.rsplit("line ", maxsplit=1)[1].split(":", maxsplit=1)[0])
+        for violation in violations
+        if "uses --update-head-ok" in violation
+    } == {11, 18, 25, 31, 35, 54}
+    assert {
+        int(violation.rsplit("line ", maxsplit=1)[1].split(":", maxsplit=1)[0])
+        for violation in violations
+        if "unsafe explicit destination" in violation
+    } == {11, 18, 25, 31, 35, 54}
+    assert any("unstructured shell command" in violation for violation in violations)
+
+
+def test_forbidden_fetch_class_attributes_are_rejected_by_the_fetch_gate() -> None:
+    violations = _fetch_violations(_fixture_path("forbidden-fetch-class.py"))
+
+    assert len(violations) == 1
+    assert "refs/heads/main" in violations[0]
+
+
+def test_forbidden_indirect_fetch_refspecs_are_rejected_by_the_fetch_gate() -> None:
+    violations = _fetch_violations(_fixture_path("forbidden-fetch-dynamic.py"))
+
+    assert {
+        int(violation.rsplit("line ", maxsplit=1)[1].split(":", maxsplit=1)[0])
+        for violation in violations
+        if "unresolved explicit refspec" in violation
+    } == {6, 10}
+
+
+def test_fetch_url_remote_is_not_misclassified_as_a_refspec() -> None:
+    assert not _fetch_violations(_fixture_path("valid-fetch-url.py"))
 
 
 def test_fetch_resolution_is_isolated_to_each_function_scope() -> None:
@@ -1033,7 +1213,7 @@ def test_fetch_resolution_is_isolated_to_each_function_scope() -> None:
 
     assert len(violations) == 1
     assert "unsafe explicit destination" in violations[0]
-    assert "refs/heads/{target_ref}" in violations[0]
+    assert "refs/heads/main" in violations[0]
 
 
 def test_delivery_models_have_no_merge_method_field() -> None:

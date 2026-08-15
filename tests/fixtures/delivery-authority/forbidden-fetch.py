@@ -40,3 +40,13 @@ def forbidden_subprocess_fetch(target_ref):
         ],
         check=False,
     )
+
+
+def forbidden_bare_destination(repository, target_ref):
+    return _git(
+        repository,
+        "fetch",
+        "--refmap=",
+        "origin",
+        f"refs/remotes/origin/main:{target_ref}",
+    )

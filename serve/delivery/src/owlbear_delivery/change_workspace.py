@@ -1308,8 +1308,8 @@ class ChangeWorkspaceManager:
                 cwd=coordination.worktree_path,
             ):
                 _workspace_failure("target synchronization requires a clean Change worktree")
-            source_ref, target_ref = self._target_refs()
-            target_head = self._fetch_target(source_ref, target_ref, request.expected_target)
+            source_ref, target_ref, target_branch = self._target_refs()
+            target_head = self._fetch_target(source_ref, target_branch, request.expected_target)
             branch_head = self._resolve(coordination.branch)
             self._require_worktree(
                 request.change_id,
@@ -1567,7 +1567,7 @@ class ChangeWorkspaceManager:
             target_head=self._resolve(self._target_ref()),
         )
 
-    def _target_refs(self) -> tuple[str, str]:
+    def _target_refs(self) -> tuple[str, str, str]:
         target_ref = self._target_ref()
         remote_prefix = f"refs/remotes/{self._remote}/"
         if not target_ref.startswith(remote_prefix):
@@ -1575,13 +1575,10 @@ class ChangeWorkspaceManager:
         target_branch = target_ref.removeprefix(remote_prefix)
         source_ref = f"refs/heads/{target_branch}"
         self._git("check-ref-format", source_ref)
-        return source_ref, target_ref
+        return source_ref, target_ref, target_branch
 
-    def _fetch_target(self, source_ref: str, target_ref: str, expected_target: str) -> str:
-        remote_prefix = f"refs/remotes/{self._remote}/"
-        if not target_ref.startswith(remote_prefix):
-            _workspace_failure("configured target ref does not belong to the configured remote")
-        remote_target_ref = f"{remote_prefix}{target_ref.removeprefix(remote_prefix)}"
+    def _fetch_target(self, source_ref: str, target_branch: str, expected_target: str) -> str:
+        remote_target_ref = f"refs/remotes/{self._remote}/{target_branch}"
         result = self._run_git(
             "fetch",
             "--no-tags",
@@ -1593,7 +1590,7 @@ class ChangeWorkspaceManager:
         )
         if result.returncode != 0:
             _workspace_failure("configured target could not be fetched into its remote-tracking ref")
-        target_head = self._resolve(target_ref, missing_ok=True)
+        target_head = self._resolve(remote_target_ref, missing_ok=True)
         if target_head is None:
             _workspace_failure("fetched target remote-tracking ref is unavailable")
         if target_head != expected_target:
