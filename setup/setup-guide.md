@@ -148,8 +148,9 @@ with deterministic outcomes, dependencies, commitments, and proof boundaries.
 ### Delivery
 
 After admission, invoke `/orchestrate <change-id>`. Each cycle lists current work, acquires a bounded
-ordered set of launch packages, dispatches only the worker named by each package, forwards the
-worker's transition unchanged, and invokes Integration only for engine-provided ready change IDs.
+ordered set of launch packages, dispatches only the worker named by each package, and forwards the
+worker's transition unchanged. Tasks execute sequentially in the managed Change worktree and their
+promoted commits advance the Change branch directly.
 
 - Planning reads one typed plan context, publishes one independently reviewed task chain, and
   returns `advance`, `retry`, `return`, or `block`.
@@ -176,33 +177,39 @@ Worker transitions keep correction finite and typed:
 | Earlier valid stage is required | User selects an invariant-checked backward move in Cockpit | Runtime resets only the selected outcome and its affected successors |
 
 Do not recover a live claim or infer recovery from elapsed time alone. Request answers, requestless
-unblock, confirmed-dead claim recovery, backward movement, and Integration retry remain user-owned
-Cockpit controls rather than agent MCP operations.
+unblock, confirmed-dead claim recovery, backward movement, and retained legacy Integration attention
+remain user-owned Cockpit controls rather than agent MCP operations.
 
-### Integration And Completed History
+### Publication, Acceptance, And Completed History
 
-When every outcome is complete and the reviewed source boundary is current, a normal orchestration
-cycle asks the runtime to integrate the engine-provided ready change ID. Integration validates the
-package, reviewed source, target identity, and completed-history boundary before publishing the
-product tree and recoverable package snapshot atomically to the configured target.
+When every outcome is complete and the reviewed source boundary is current, run the finalization
+workflow for the exact Change head. Delivery publishes or reconciles a draft pull request for the
+Change branch, observes the required checks, and marks the PR ready only when the finalized head is
+unchanged. Target synchronization, when required, merges only the configured remote-tracking target
+into the managed Change worktree; it never updates the target branch or the user checkout.
 
-Failure preserves completed outcomes and publishes typed Integration attention with unchanged
-heads and a retry condition. Use Cockpit or `/resolve-delivery-attention <change-id> <attention-id>`
-to inspect the exact attention. New Integration repair claims, candidates, reviews, and admissions
-are retired. Treat a merge conflict without a current legacy claim as an authority gap; if persisted
-legacy claim context supplies exact attempt and claim identities, use the exact recovery operation
-and preserve its evidence. Do not edit the target or worktree directly. Cockpit and the MCP
-completed-change tools provide bounded list, search, and exact lookup of published history.
+The user merges the pull request in GitHub. Delivery never merges, enables auto-merge, updates the
+target branch, or completes from local evidence. After the merge, read-only acceptance observation
+requires the exact repository, PR, base, finalized head, merged state, merge time, and provider-
+reported merge commit. Completed history preserves the finalized Change head and accepted merge
+commit as separate identities. An open or unmerged PR waits or is deferred; it cannot complete.
+
+Persisted legacy Integration attention remains visible through compatibility surfaces only. Use
+Cockpit or `/resolve-delivery-attention <change-id> <attention-id>` to inspect that exact legacy
+attention. New Integration repair claims, candidates, reviews, and admissions are retired. Treat a
+merge conflict without a current legacy claim as an authority gap; if persisted legacy claim context
+supplies exact attempt and claim identities, use the exact recovery operation and preserve its
+evidence. Do not edit the target or worktree directly. Cockpit and the MCP completed-change tools
+provide bounded list, search, and exact lookup of receipt-backed history.
 
 ### Current Manual Boundaries
 
-- Assembly remains a live stage, projection, and required startup policy type, but current compiled
-  contracts do not require it and the agent MCP surface has no Assembly context or result-publication
-  operation. An unexpected Assembly launch is recovered by exact claim identity rather than run.
+- External Change-head adoption proves provenance only. Explicit promotion is required before an
+  adopted head becomes review authority, and finalization binds the exact reviewed head.
 - Design return persists structured successor context, but reopening and revising the Specification
   currently starts with a manual `/design` invocation.
-- Merge-conflict repair production is retired; attention resolution reports the authority gap or
-  recovers an exact persisted legacy claim when its identities are available.
+- Target-sync conflict repair remains in the managed Change worktree; Delivery never mutates the
+  configured target ref, and merge-conflict repair production is retired outside that bounded path.
 - Files under `.owlbear/research/` are frozen comparison evidence, not operational or runtime
   authority. Files under `.owlbear/legacy/` are immutable historical evidence only.
 
@@ -211,7 +218,8 @@ completed-change tools provide bounded list, search, and exact lookup of publish
 Specification: read/revise -> checkpoint -> derive -> validate -> approve/admit
 Delivery: acquire -> plan/build -> publish -> worker transition
 Correction: retry | return | block -> typed successor context
-Integration: ready -> publish target + completed package -> completed lookup
+Publication: checkpoint -> draft PR -> finalized head -> ready PR
+Acceptance: user merges PR -> observe merged evidence -> completed lookup
 ```
 
 ---

@@ -11,7 +11,8 @@ tools without any per-project configuration overhead.
 
 Agents design and admit durable semantic authority, then execute bounded Planning and Build work
 selected by the Delivery engine. Workers choose state transitions, reviewers provide independent
-advisory evidence, and the runtime owns recovery, Integration, and completed history. Skills carry
+advisory evidence, and the runtime owns recovery, sequential Change delivery, and completed history.
+Persisted legacy Integration attention remains compatibility-only. Skills carry
 domain knowledge that loads automatically by relevance, and MCP servers give agents access to
 target changes and work, the knowledge base, persistent Memory, and browser automation, all scoped
 to your project directory and shared through the filesystem.
@@ -114,7 +115,7 @@ runtime. Run `/orchestrate <change-id>` only after admission. The engine then ac
 Planning and Build work, workers select typed transitions, and independent reviewers return
 advisory evidence.
 
-The canonical Specification, Delivery, Correction, Integration, and recovery procedure is
+The canonical Specification, Delivery, Correction, publication, acceptance, and recovery procedure is
 [Target Delivery Workflow](setup/setup-guide.md#target-delivery-workflow). Cockpit exposes current
 work items, requests, typed attention, controls, and completed history. Any migrated records under
 `.owlbear/legacy/` are immutable history for inspection, never executable work.

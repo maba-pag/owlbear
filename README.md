@@ -8,7 +8,8 @@ OwlBear runs inside VS Code. A designer turns user intent into durable target au
 the exact Specification revision, and admits it only after explicit approval. The Delivery engine
 then acquires dependency-ready Planning and Build work under explicit capacity, gives each worker
 bounded typed context, and applies only worker-owned transitions. Reviewers provide advisory
-evidence; the runtime owns state, recovery, Integration, and completed history. MCP servers expose
+evidence; the runtime owns state, recovery, sequential Change delivery, and completed history.
+Persisted legacy Integration attention remains compatibility-only. MCP servers expose
 that control plane plus Knowledge, Memory, and browser automation; Cockpit provides the human
 operating and recovery surface.
 
