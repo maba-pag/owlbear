@@ -166,7 +166,7 @@ jobs:
 
           # shellcheck disable=SC2086
           todo_hits=$(grep -rHnI '^> \*\*TODO:\*\*' $paths 2>/dev/null \
-            | grep -v -e '^share/skills/w-doc-update/SKILL\.md:' \
+            | grep -v -E ':> \*\*TODO:\*\* \{category\} — \{description\} \[#\{[^{}]+\}\]$' \
             || true)
 
           if [[ -z "$todo_hits" ]]; then
