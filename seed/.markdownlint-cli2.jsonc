@@ -1,14 +1,23 @@
 {
   "ignores": [
+    ".owlbear/completed/**",
     ".owlbear/doc-index.md",
     ".owlbear/delivery/packages/**",
+    ".owlbear/delivery/runtime/**",
+    ".owlbear/delivery/worktrees/**",
     ".owlbear/hooks/**",
     ".owlbear/legacy/**",
+    ".owlbear/py-index.md",
+    ".owlbear/ts-index.md",
     ".owlbear/research/**",
     ".owlbear/memory/**",
     ".owlbear/sources/**",
     ".venv/**",
-    "node_modules/**",
+    "**/node_modules/**",
+    "megalinter-reports/**",
+    "**/scratch/**",
+    "**/test-results/**",
+    "**/worktrees/**",
     "**/*.excalidraw"
   ]
 }

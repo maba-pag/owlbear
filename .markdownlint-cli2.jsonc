@@ -1,5 +1,6 @@
 {
-  // For local markdownlint runs. Keep aligned with both exclusion settings in .mega-linter.yml.
+  // Authority for markdownlint-cli2 consumers: the pre-commit hook and VS Code extension.
+  // MegaLinter uses markdownlint-cli with .markdownlint.json and .markdownlintignore.
   "ignores": [
     ".owlbear/completed/**",
     ".owlbear/delivery/packages/**",
@@ -7,7 +8,6 @@
     ".owlbear/doc-index.md",
     ".owlbear/py-index.md",
     ".owlbear/ts-index.md",
-    ".owlbear/kanban/archive/**",
     ".owlbear/legacy/**",
     ".owlbear/memory/**",
     ".owlbear/research/**",

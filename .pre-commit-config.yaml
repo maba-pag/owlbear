@@ -25,7 +25,6 @@ exclude: |
       completed/
       |delivery/(packages|runtime)/
       |(doc|py|ts)-index\.md$
-      |kanban/archive/
       |(legacy|memory|research|sources|target)/
     )
     |store/(audit|knowledge)/.*\.db$

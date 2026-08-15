@@ -35,12 +35,13 @@ SARIF_REPORTER: true
 # Exclude paths that are generated, archived, or third-party.
 # This applies to linters that honor global regex filtering; project-mode
 # linters must enforce their own scope through native configuration.
-# Keep .markdownlint-cli2.jsonc ignores aligned for local runs.
+# MegaLinter uses markdownlint-cli; .markdownlint-cli2.jsonc is a separate
+# authority for the pre-commit hook and VS Code extension.
 FILTER_REGEX_EXCLUDE: "(\
   \\.egg-info/|\
   \\.owlbear/(\
     completed/|delivery/(packages|runtime)/|(doc|py|ts)-index\\.md$|\
-    kanban/archive/|legacy/|memory/|research/|sources/|target/\
+    legacy/|memory/|research/|sources/|target/\
   )|\
   store/(audit|knowledge)/.*\\.db$\
 )"
@@ -70,6 +71,9 @@ ADDITIONAL_EXCLUDED_DIRECTORIES:
 # ──────────────────────────────────────────────
 # Linter-specific configuration
 # ──────────────────────────────────────────────
+
+# Pin the documented default so FILTER_REGEX_EXCLUDE remains effective.
+MARKDOWN_MARKDOWNLINT_CLI_LINT_MODE: list_of_files
 
 # Ruff — uses pyproject.toml config (select=["ALL"] includes bandit S-rules)
 # MegaLinter otherwise falls back to its bundled .ruff.toml template.

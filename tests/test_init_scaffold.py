@@ -1,10 +1,11 @@
-"""Tests for #1284: Update setup/init.py — scaffold consumer copilot-instructions.md.
+"""Tests for setup/init.py scaffold behavior.
 
 Verifies that:
 - init() generates a consumer-generic copilot-instructions.md (AC1)
 - Generated file has a commented path-mapping section covering required dimensions (AC2)
 - Template uses illustrative examples with customization instruction comments (AC3)
 - Re-running init() on a customized file preserves the existing content (AC4)
+- Markdownlint configuration files are seeded and preserved on re-initialization
 """
 
 from __future__ import annotations
@@ -268,3 +269,34 @@ class TestFromAC_SkipIfExistsPreservation:
             "Add it to the frozenset in setup/init.py to preserve consumer customizations. "
             f"Current _SKIP_IF_EXISTS_REL: {sorted(skip_set)}"
         )
+
+
+class TestMarkdownlintConfigScaffolding:
+    """Markdownlint config files are seeded and preserved on re-initialization."""
+
+    def test_markdownlint_configs_are_seeded_and_preserved(
+        self, project_root: Path, tmp_path: Path, run_init_without_test_surface: Callable[..., None]
+    ) -> None:
+        module = _load_init(project_root)
+        run_init_without_test_surface(module.init, tmp_path, project_root)
+
+        custom_contents = {
+            ".markdownlint-cli2.jsonc": '{"consumer": true}\n',
+            ".markdownlint.json": '{"default": false}\n',
+            ".markdownlintignore": "consumer-specific-ignore\n",
+        }
+        skip_set = module._SKIP_IF_EXISTS_REL
+        for relative_path, content in custom_contents.items():
+            config_path = tmp_path / relative_path
+            assert config_path.is_file(), f"init() did not seed {relative_path!r}"
+            assert relative_path in skip_set, (
+                f"_SKIP_IF_EXISTS_REL does not include {relative_path!r}: {sorted(skip_set)}"
+            )
+            config_path.write_text(content, encoding="utf-8")
+
+        run_init_without_test_surface(module.init, tmp_path, project_root)
+
+        for relative_path, content in custom_contents.items():
+            assert (tmp_path / relative_path).read_text(encoding="utf-8") == content, (
+                f"init() overwrote customized {relative_path!r}"
+            )
