@@ -113,6 +113,11 @@ def _source_files() -> tuple[Path, ...]:
     return tuple(sorted(path for root in _SOURCE_ROOTS for path in root.rglob("*.py")))
 
 
+def _production_python_files() -> tuple[Path, ...]:
+    roots = (*_SOURCE_ROOTS, _REPO_ROOT / "setup", _REPO_ROOT / "seed")
+    return tuple(sorted(path for root in roots if root.is_dir() for path in root.rglob("*.py") if path.is_file()))
+
+
 def _fixture_path(name: str) -> Path:
     return _REPO_ROOT / "tests/fixtures/delivery-authority" / name
 
@@ -133,12 +138,23 @@ def _production_frontend_files() -> tuple[Path, ...]:
 
 
 def _agent_files() -> tuple[Path, ...]:
-    roots = tuple(_REPO_ROOT / name for name in ("share/agents", "share/instructions", "share/prompts", "share/skills"))
+    roots = tuple(
+        _REPO_ROOT / name
+        for name in (
+            ".owlbear/instructions",
+            ".owlbear/prompts",
+            ".owlbear/skills",
+            "share/agents",
+            "share/instructions",
+            "share/prompts",
+            "share/skills",
+        )
+    )
     return tuple(sorted(path for root in roots if root.is_dir() for path in root.rglob("*.md") if path.is_file()))
 
 
 def _production_capability_files() -> tuple[Path, ...]:
-    return tuple(sorted((*_source_files(), *_production_frontend_files(), *_agent_files())))
+    return tuple(sorted((*_production_python_files(), *_production_frontend_files(), *_agent_files())))
 
 
 def _literal_string(node: ast.AST) -> str | None:
@@ -456,34 +472,119 @@ def _has_fixed_draft_mutation_binding(module: ast.Module) -> bool:
     return branches == {"_DRAFT_MUTATION", "_READY_MUTATION"}
 
 
+def _scope_bindings(scope: ast.AST) -> dict[str, ast.AST]:
+    bindings: dict[str, ast.AST] = {}
+    for node in ast.walk(scope):
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+        elif isinstance(node, ast.AnnAssign):
+            targets = (node.target,)
+        else:
+            continue
+        for target in targets:
+            if isinstance(target, ast.Name):
+                bindings[target.id] = node.value
+    return bindings
+
+
+def _resolved_literal(node: ast.AST, bindings: dict[str, ast.AST], seen: tuple[str, ...] = ()) -> str | None:
+    literal = _literal_string(node)
+    if literal is not None:
+        return literal
+    if isinstance(node, ast.Name) and node.id in bindings and node.id not in seen:
+        return _resolved_literal(bindings[node.id], bindings, (*seen, node.id))
+    return None
+
+
+def _string_shape(node: ast.AST, source: str, bindings: dict[str, ast.AST], seen: tuple[str, ...] = ()) -> str:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Name):
+        if node.id in bindings and node.id not in seen:
+            return _string_shape(bindings[node.id], source, bindings, (*seen, node.id))
+        return f"{{{node.id}}}"
+    if isinstance(node, ast.JoinedStr):
+        parts: list[str] = []
+        for value in node.values:
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                parts.append(value.value)
+            elif isinstance(value, ast.FormattedValue):
+                parts.append(_string_shape(value.value, source, bindings, seen))
+        return "".join(parts)
+    return ast.get_source_segment(source, node) or ""
+
+
+class _FetchVisitor(ast.NodeVisitor):
+    def __init__(self, source: str, module: ast.Module) -> None:
+        self.source = source
+        self.module = module
+        self.bindings = _scope_bindings(module)
+        self.violations: list[str] = []
+
+    def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        previous_bindings = self.bindings
+        parameters = {
+            argument.arg
+            for argument in (
+                *node.args.posonlyargs,
+                *node.args.args,
+                *node.args.kwonlyargs,
+            )
+        }
+        if node.args.vararg is not None:
+            parameters.add(node.args.vararg.arg)
+        if node.args.kwarg is not None:
+            parameters.add(node.args.kwarg.arg)
+        self.bindings = {name: value for name, value in previous_bindings.items() if name not in parameters}
+        self.bindings.update(_scope_bindings(node))
+        self.generic_visit(node)
+        self.bindings = previous_bindings
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._visit_function(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._visit_function(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        if not isinstance(node.func, ast.Attribute) or node.func.attr not in {"_run_git", "_git"}:
+            self.generic_visit(node)
+            return
+        command_index = next(
+            (
+                index
+                for index, argument in enumerate(node.args)
+                if _resolved_literal(argument, self.bindings) == "fetch"
+            ),
+            None,
+        )
+        if command_index is None:
+            self.generic_visit(node)
+            return
+        arguments = node.args[command_index + 1 :]
+        if any(isinstance(argument, ast.Starred) for argument in arguments):
+            self.violations.append(f"fetch forwards unpacked arguments at line {node.lineno}")
+        literals = tuple(_resolved_literal(argument, self.bindings) for argument in arguments)
+        if "--update-head-ok" in literals:
+            self.violations.append(f"fetch uses --update-head-ok at line {node.lineno}")
+        if "--refmap=" not in literals:
+            self.violations.append(f"fetch lacks an empty refmap at line {node.lineno}")
+        for argument in arguments:
+            shape = _string_shape(argument, self.source, self.bindings)
+            if ":" not in shape:
+                continue
+            destination = shape.rsplit(":", maxsplit=1)[1]
+            if destination not in {"target_ref", "{target_ref}"} and not destination.startswith("refs/remotes/"):
+                self.violations.append(f"fetch has an unsafe explicit destination at line {node.lineno}: {shape}")
+        self.generic_visit(node)
+
+
 def _fetch_violations(path: Path) -> tuple[str, ...]:
     source = path.read_text(encoding="utf-8")
     module = ast.parse(source, filename=str(path))
-    violations: list[str] = []
-    for node in ast.walk(module):
-        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
-            continue
-        if node.func.attr not in {"_run_git", "_git"}:
-            continue
-        command_index = next(
-            (index for index, argument in enumerate(node.args) if _literal_string(argument) == "fetch"), None
-        )
-        if command_index is None:
-            continue
-        arguments = node.args[command_index + 1 :]
-        if any(isinstance(argument, ast.Starred) for argument in arguments):
-            violations.append(f"fetch forwards unpacked arguments at line {node.lineno}")
-        sources = tuple(ast.get_source_segment(source, argument) or "" for argument in arguments)
-        literals = tuple(_literal_string(argument) for argument in arguments)
-        if "--update-head-ok" in literals:
-            violations.append(f"fetch uses --update-head-ok at line {node.lineno}")
-        if "--refmap=" not in literals:
-            violations.append(f"fetch lacks an empty refmap at line {node.lineno}")
-        for argument in sources:
-            destination = argument.rsplit(":", maxsplit=1)[1] if ":" in argument else None
-            if destination is not None and "target_ref" not in destination and "refs/remotes/" not in destination:
-                violations.append(f"fetch has an unsafe explicit destination at line {node.lineno}: {argument}")
-    return tuple(violations)
+    visitor = _FetchVisitor(source, module)
+    visitor.visit(module)
+    return tuple(visitor.violations)
 
 
 def _merge_method_violations(paths: tuple[Path, ...]) -> tuple[str, ...]:
@@ -839,7 +940,7 @@ def test_delivery_models_have_no_merge_method_field() -> None:
 
 
 def test_forbidden_merge_method_fixture_is_rejected_by_the_field_gate() -> None:
-    assert _merge_method_violations((_fixture_path("forbidden-fields.py"),))
+    assert len(_merge_method_violations((_fixture_path("forbidden-fields.py"),))) == 2
 
 
 def test_cockpit_and_agents_expose_no_merge_control() -> None:
@@ -853,7 +954,7 @@ def test_forbidden_cockpit_and_agent_fixtures_are_rejected_by_the_capability_gat
     cockpit_violations = _forbidden_capability_violations((cockpit_fixture,))
     agent_violations = _forbidden_capability_violations((agent_fixture,))
 
-    assert len(cockpit_violations) == 1
+    assert {int(violation.rsplit(":", maxsplit=1)[1]) for violation in cockpit_violations} == {2, 5}
     assert len(agent_violations) == 1
 
 
@@ -862,4 +963,4 @@ def test_delivery_sources_have_no_git_admin_artifact_path() -> None:
 
 
 def test_forbidden_git_admin_fixture_is_rejected_by_the_artifact_gate() -> None:
-    assert len(_git_admin_path_violations((_fixture_path("forbidden-git-admin.py"),))) == 1
+    assert len(_git_admin_path_violations((_fixture_path("forbidden-git-admin.py"),))) == 4

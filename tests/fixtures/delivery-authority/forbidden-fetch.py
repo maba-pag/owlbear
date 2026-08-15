@@ -5,5 +5,5 @@ class ForbiddenFetcher:
             "fetch",
             "--update-head-ok",
             "origin",
-            f"{target_ref}:refs/heads/main",
+            f"refs/remotes/origin/main:refs/heads/{target_ref}",
         )
