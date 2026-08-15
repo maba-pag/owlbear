@@ -133,6 +133,9 @@ ignore = [
   "PT019",   # @patch-injected mocks with _ prefix are not unused fixtures
   "F541",    # f-string without placeholder — pre-existing in TestFromAC_* assertions
 ]
+"tests/fixtures/delivery-authority/**/*.py" = [
+  "INP001", # structural snippets are parsed as source fixtures, not imported modules
+]
 "serve/*/tests/**/*.py" = [
   "ANN",     # type annotations not required in tests
   "D",       # docstring rules not enforced in tests

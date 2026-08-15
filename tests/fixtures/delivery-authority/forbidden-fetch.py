@@ -1,8 +1,9 @@
 class ForbiddenFetcher:
-    def fetch(self, remote: str, branch: str):
-        return self._run_git(
+    def fetch(self, repository, target_ref):
+        return self._git(
+            repository,
             "fetch",
             "--update-head-ok",
-            remote,
-            f"refs/heads/{branch}:refs/heads/main",
+            "origin",
+            f"{target_ref}:refs/heads/main",
         )

@@ -90,7 +90,7 @@ _FORBIDDEN_CAPABILITY_PATTERNS = (
     re.compile(r"(?:merge[_]?pull[_]?request|update[_]?pull[_]?request[_]?branch)", re.IGNORECASE),
 )
 _FORBIDDEN_GIT_ADMIN_PATH_PATTERN = re.compile(
-    r"(?:\$GIT_DIR|\$GIT_COMMON_DIR|\.git[\\/]worktrees(?:[\\/]|\b))",
+    r"(?:\$GIT_DIR|\$GIT_COMMON_DIR|\.git[\\/]worktrees(?:[\\/]|\b)|[\"']\.git[\"']\s*/\s*[\"']worktrees[\"'])",
     re.IGNORECASE,
 )
 _ALLOWED_PROVIDER_REST_CALLS = {
@@ -118,18 +118,23 @@ def _fixture_path(name: str) -> Path:
 
 
 def _production_frontend_files() -> tuple[Path, ...]:
-    root = _REPO_ROOT / "serve/cockpit/web/src"
+    root = _REPO_ROOT / "serve/cockpit/web"
+    excluded_parts = {"__tests__", "dist", "e2e", "node_modules", "public"}
     return tuple(
         sorted(
             path
             for path in root.rglob("*")
-            if path.suffix in {".ts", ".tsx"} and "__tests__" not in path.parts and not path.name.endswith(".test.tsx")
+            if path.is_file()
+            and path.suffix in {".js", ".jsx", ".ts", ".tsx"}
+            and not any(part in excluded_parts for part in path.relative_to(root).parts)
+            and not path.stem.endswith((".spec", ".test"))
         )
     )
 
 
 def _agent_files() -> tuple[Path, ...]:
-    return tuple(sorted((_REPO_ROOT / "share/agents").glob("*.agent.md")))
+    roots = tuple(_REPO_ROOT / name for name in ("share/agents", "share/instructions", "share/prompts", "share/skills"))
+    return tuple(sorted(path for root in roots if root.is_dir() for path in root.rglob("*.md") if path.is_file()))
 
 
 def _production_capability_files() -> tuple[Path, ...]:
@@ -416,7 +421,39 @@ def _provider_graphql_violations(path: Path) -> tuple[str, ...]:
         for call in visitor.graphql_calls
         if call not in _ALLOWED_PROVIDER_GRAPHQL_CALLS
     )
+    draft_calls = ("_graphql", "set_pull_request_draft_state", "mutation")
+    if draft_calls in visitor.graphql_calls and not _has_fixed_draft_mutation_binding(module):
+        violations.append("draft-state GraphQL mutation is not bound to the fixed documents")
     return tuple(violations)
+
+
+def _has_fixed_draft_mutation_binding(module: ast.Module) -> bool:
+    method = next(
+        (
+            node
+            for node in ast.walk(module)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "set_pull_request_draft_state"
+        ),
+        None,
+    )
+    if method is None:
+        return False
+    bindings: list[ast.AST] = []
+    for node in ast.walk(method):
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+            value = node.value
+        elif isinstance(node, ast.AnnAssign):
+            targets = (node.target,)
+            value = node.value
+        else:
+            continue
+        if any(isinstance(target, ast.Name) and target.id == "mutation" for target in targets):
+            bindings.append(value)
+    if len(bindings) != 1 or not isinstance(bindings[0], ast.IfExp):
+        return False
+    branches = {branch.id for branch in (bindings[0].body, bindings[0].orelse) if isinstance(branch, ast.Name)}
+    return branches == {"_DRAFT_MUTATION", "_READY_MUTATION"}
 
 
 def _fetch_violations(path: Path) -> tuple[str, ...]:
@@ -426,9 +463,14 @@ def _fetch_violations(path: Path) -> tuple[str, ...]:
     for node in ast.walk(module):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
             continue
-        if node.func.attr not in {"_run_git", "_git"} or not node.args or _literal_string(node.args[0]) != "fetch":
+        if node.func.attr not in {"_run_git", "_git"}:
             continue
-        arguments = node.args[1:]
+        command_index = next(
+            (index for index, argument in enumerate(node.args) if _literal_string(argument) == "fetch"), None
+        )
+        if command_index is None:
+            continue
+        arguments = node.args[command_index + 1 :]
         if any(isinstance(argument, ast.Starred) for argument in arguments):
             violations.append(f"fetch forwards unpacked arguments at line {node.lineno}")
         sources = tuple(ast.get_source_segment(source, argument) or "" for argument in arguments)
@@ -438,7 +480,8 @@ def _fetch_violations(path: Path) -> tuple[str, ...]:
         if "--refmap=" not in literals:
             violations.append(f"fetch lacks an empty refmap at line {node.lineno}")
         for argument in sources:
-            if ":" in argument and "target_ref" not in argument and "refs/remotes/" not in argument:
+            destination = argument.rsplit(":", maxsplit=1)[1] if ":" in argument else None
+            if destination is not None and "target_ref" not in destination and "refs/remotes/" not in destination:
                 violations.append(f"fetch has an unsafe explicit destination at line {node.lineno}: {argument}")
     return tuple(violations)
 
@@ -782,11 +825,15 @@ def test_delivery_fetch_vectors_are_remote_tracking_only() -> None:
 
 
 def test_forbidden_fetch_fixture_is_rejected_by_the_fetch_gate() -> None:
-    assert _fetch_violations(_fixture_path("forbidden-fetch.py"))
+    violations = _fetch_violations(_fixture_path("forbidden-fetch.py"))
+
+    assert any("uses --update-head-ok" in violation for violation in violations)
+    assert any("lacks an empty refmap" in violation for violation in violations)
+    assert any("unsafe explicit destination" in violation for violation in violations)
 
 
 def test_delivery_models_have_no_merge_method_field() -> None:
-    paths = tuple(sorted((*_source_files(), *_production_frontend_files())))
+    paths = _production_capability_files()
 
     assert not _merge_method_violations(paths)
 
@@ -803,13 +850,16 @@ def test_forbidden_cockpit_and_agent_fixtures_are_rejected_by_the_capability_gat
     cockpit_fixture = _fixture_path("forbidden-cockpit.ts")
     agent_fixture = _fixture_path("forbidden-agent.agent.md")
 
-    assert _forbidden_capability_violations((cockpit_fixture,))
-    assert _forbidden_capability_violations((agent_fixture,))
+    cockpit_violations = _forbidden_capability_violations((cockpit_fixture,))
+    agent_violations = _forbidden_capability_violations((agent_fixture,))
+
+    assert len(cockpit_violations) == 1
+    assert len(agent_violations) == 1
 
 
 def test_delivery_sources_have_no_git_admin_artifact_path() -> None:
-    assert not _git_admin_path_violations(_source_files())
+    assert not _git_admin_path_violations(_production_capability_files())
 
 
 def test_forbidden_git_admin_fixture_is_rejected_by_the_artifact_gate() -> None:
-    assert _git_admin_path_violations((_fixture_path("forbidden-git-admin.py"),))
+    assert len(_git_admin_path_violations((_fixture_path("forbidden-git-admin.py"),))) == 1
