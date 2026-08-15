@@ -960,31 +960,9 @@ def _shell_tokens(command: str) -> tuple[str, ...] | None:
     lexer.whitespace_split = True
     lexer.commenters = "#"
     try:
-        tokens = tuple(lexer)
+        return tuple(lexer)
     except ValueError:
         return None
-    merged: list[str] = []
-    index = 0
-    while index < len(tokens):
-        token = tokens[index]
-        if token != "$" or index + 1 >= len(tokens):
-            merged.append(token)
-            index += 1
-            continue
-        next_token = tokens[index + 1]
-        if next_token == "(":
-            merged.append("$(")
-            index += 2
-        elif next_token == "{" and index + 3 < len(tokens) and tokens[index + 3] == "}":
-            merged.append(f"${{{tokens[index + 2]}}}")
-            index += 4
-        elif re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", next_token):
-            merged.append(f"${next_token}")
-            index += 2
-        else:
-            merged.append(token)
-            index += 1
-    return tuple(merged)
 
 
 def _shell_command_prefix(tokens: tuple[str, ...], command_index: int) -> tuple[str, ...]:
