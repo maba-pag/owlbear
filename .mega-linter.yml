@@ -1,8 +1,9 @@
 ---
 # MegaLinter configuration for OwlBear
-# https://megalinter.io/configuration/
-# Runtime image pin. Renovate updates this declaration.
-OWLBEAR_MEGALINTER_IMAGE: ghcr.io/oxsecurity/megalinter-cupcake:v9.6.0
+# https://megalinter.io/latest/config-file/
+# Native runner metadata. Local tooling derives the same image from these fields.
+MEGALINTER_FLAVOR: cupcake
+MEGALINTER_VERSION: v10.0.0
 
 # Explicit linter list — only what applies to this project
 ENABLE_LINTERS:
@@ -15,33 +16,33 @@ ENABLE_LINTERS:
   - MARKDOWN_MARKDOWNLINT
   - PYTHON_RUFF
   - PYTHON_RUFF_FORMAT
-  - REPOSITORY_TRIVY
+  - REPOSITORY_GIT_DIFF
+  - REPOSITORY_OSV_SCANNER
   - TYPESCRIPT_ES
   - YAML_YAMLLINT
 
-# Apply deterministic fixes by default. Syntax-only validators and security
-# scanners remain check-only. The CLI's --unsafe-fix mode adds Ruff unsafe
-# fixes and Stylelint lax parsing.
-APPLY_FIXES:
-  - CSS_STYLELINT
-  - MARKDOWN_MARKDOWNLINT
-  - PYTHON_RUFF
-  - PYTHON_RUFF_FORMAT
-  - TYPESCRIPT_ES
+# Allow all fixer-capable linters to apply their standard fixes by default.
+# The CLI's --no-fix mode disables fixes; --unsafe-fix adds Ruff unsafe fixes
+# and Stylelint lax fixes.
+APPLY_FIXES: all
 
 # Reporters
+CONFIG_REPORTER: false
 GITHUB_STATUS_REPORTER: true
-MARKDOWN_SUMMARY_REPORTER: true
+JSON_REPORTER: true
 SARIF_REPORTER: true
 
 # Exclude paths that are generated, archived, or third-party.
-# PRIMARY GATE: paths excluded here are never seen by any linter in CI.
+# This applies to linters that honor global regex filtering; project-mode
+# linters must enforce their own scope through native configuration.
 # Keep .markdownlint-cli2.jsonc ignores aligned for local runs.
 FILTER_REGEX_EXCLUDE: "(\
   \\.egg-info/|\
-  \\.owlbear/\
-      (completed|delivery/packages|delivery/runtime|(doc|py|ts)-index\\.md$|kanban/archive|legacy|memory|research|sources|target)|\
-  store/audit/|store/knowledge/.*\\.db$\
+  \\.owlbear/(\
+    completed/|delivery/(packages|runtime)/|(doc|py|ts)-index\\.md$|\
+    kanban/archive/|legacy/|memory/|research/|sources/|target/\
+  )|\
+  store/(audit|knowledge)/.*\\.db$\
 )"
 
 # Directory-level pre-filter (faster than regex, excluded at any depth)
@@ -114,16 +115,12 @@ JSON_JSONLINT_FILTER_REGEX_EXCLUDE: '(\.vscode/)'
 # Tabs-vs-spaces (indent_style) is still enforced.
 EDITORCONFIG_EDITORCONFIG_CHECKER_ARGUMENTS: "-f github-actions --disable-indent-size"
 
-# Trivy — vulnerability + misconfiguration scanning
-REPOSITORY_TRIVY_ARGUMENTS: "--scanners misconfig,vuln --skip-dirs .owlbear/scratch,.venv"
-
 # ──────────────────────────────────────────────
 # Performance & Display
 # ──────────────────────────────────────────────
 FLAVOR_SUGGESTIONS: false
+PARALLEL_PROCESS_NUMBER: 4
+PRINT_ALPACA: false
 SECURITY_SUGGESTIONS: false
-PARALLEL: true
 SHOW_ELAPSED_TIME: true
 SHOW_SKIPPED_LINTERS: false
-PRINT_ALPACA: false
-SKIP_LINTER_OUTPUT_SANITIZATION: true  # private repo — safe to skip for perf

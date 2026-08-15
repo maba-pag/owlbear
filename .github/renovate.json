@@ -145,14 +145,17 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "MegaLinter runtime image",
+      "description": "MegaLinter image version; keep version match last for combination write-back",
       "managerFilePatterns": [
         "/^\\.mega-linter\\.yml$/"
       ],
+      "matchStringsStrategy": "combination",
       "matchStrings": [
-        "OWLBEAR_MEGALINTER_IMAGE:\\s*(?<depName>ghcr\\.io/oxsecurity/megalinter-cupcake):v(?<currentValue>[\\d.]+)"
+        "MEGALINTER_FLAVOR:[ \\t]*(?:\\x22|')?(?:all|(?<flavor>[a-z0-9_-]+))(?:\\x22|')?",
+        "MEGALINTER_VERSION:[ \\t]*(?:\\x22|')?v(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)(?:\\x22|')?"
       ],
-      "depNameTemplate": "{{{depName}}}",
+      "extractVersionTemplate": "^v(?<version>[0-9]+\\.[0-9]+\\.[0-9]+)$",
+      "depNameTemplate": "ghcr.io/oxsecurity/megalinter{{#if flavor}}-{{{flavor}}}{{/if}}",
       "datasourceTemplate": "docker"
     }
   ],

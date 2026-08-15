@@ -1,5 +1,5 @@
 ---
-# Pre-commit config — aligned with CI (MegaLinter v9.6.0)
+# Pre-commit config — aligned with CI (MegaLinter v10)
 #
 # Commands:
 #   uv run lint [--staged] [--no-fix | --unsafe-fix]
@@ -16,19 +16,40 @@
 # Auto-fix on commit: Ruff, frontend lint hooks, trailing-whitespace,
 # end-of-file-fixer, and markdownlint.
 
-# Exclude paths matching MegaLinter FILTER_REGEX_EXCLUDE + ADDITIONAL_EXCLUDED_DIRECTORIES.
-# Keep aligned with .mega-linter.yml.
+# Exclude the same generated, archived, and third-party paths as MegaLinter
+# where pre-commit's path matching can express them.
 exclude: |
-  (?x)^(
-    \.owlbear/(doc-index|py-index|ts-index)\.md$
-    |\.owlbear/delivery/packages/
-    |\.owlbear/kanban/(archive|decisions|tasks)/
-    |\.owlbear/(legacy|memory|research|sources|target)/
-    |store/
-    |\.egg-info/
-    |coverage/
-    |dist/
-    |playwright-report/
+  (?x)(^|/)(
+    [^/]*\.egg-info/
+    |\.owlbear/(
+      completed/
+      |delivery/(packages|runtime)/
+      |(doc|py|ts)-index\.md$
+      |kanban/archive/
+      |(legacy|memory|research|sources|target)/
+    )
+    |store/(audit|knowledge)/.*\.db$
+    |(
+      \.benchmarks
+      |\.ruff_cache
+      |\.venv
+      |__pycache__
+      |_cache
+      |artifacts
+      |build
+      |coverage
+      |dist
+      |downloads
+      |htmlcov
+      |node_modules
+      |parts
+      |playwright-report
+      |scratch
+      |sdist
+      |test-results
+      |wheels
+      |worktrees
+    )/
   )
 repos:
   # ── General file checks ──────────────────────────────────

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -20,14 +21,166 @@ def _git_result(command: list[str], *, cwd: Path | None = None) -> int:  # noqa:
 def test_megalinter_image_loads_from_workspace_config(tmp_path: Path) -> None:
     config = tmp_path / ".mega-linter.yml"
     config.write_text(
-        "OWLBEAR_MEGALINTER_IMAGE: registry.example/main:v-current\n",
+        "MEGALINTER_FLAVOR: cupcake\nMEGALINTER_VERSION: v10.0.0\n",
         encoding="utf-8",
     )
 
     image = load_megalinter_image(config)
 
-    assert image.repository == "registry.example/main"
-    assert image.tag == "v-current"
+    assert image.repository == "ghcr.io/oxsecurity/megalinter-cupcake"
+    assert image.tag == "v10.0.0"
+
+
+def test_megalinter_image_matches_workspace_config() -> None:
+    image = load_megalinter_image()
+
+    assert re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", image.tag)
+
+
+@pytest.mark.parametrize(
+    "config_text",
+    [
+        'MEGALINTER_VERSION: "v10.0.0"\nMEGALINTER_FLAVOR: "cupcake"\n',
+        "MEGALINTER_FLAVOR: cupcake  # selected image flavor\nMEGALINTER_VERSION: v10.0.0  # pinned release\n",
+    ],
+)
+def test_megalinter_image_accepts_stable_yaml_variants(tmp_path: Path, config_text: str) -> None:
+    config = tmp_path / ".mega-linter.yml"
+    config.write_text(config_text, encoding="utf-8")
+
+    image = load_megalinter_image(config)
+
+    assert image.reference == "ghcr.io/oxsecurity/megalinter-cupcake:v10.0.0"
+
+
+def test_megalinter_image_uses_base_repository_for_all_flavor(tmp_path: Path) -> None:
+    config = tmp_path / ".mega-linter.yml"
+    config.write_text("MEGALINTER_VERSION: v10.0.0\n", encoding="utf-8")
+
+    image = load_megalinter_image(config)
+
+    assert image.reference == "ghcr.io/oxsecurity/megalinter:v10.0.0"
+
+
+@pytest.mark.parametrize(
+    ("config_text", "message"),
+    [
+        ("MEGALINTER_FLAVOR: cupcake\n", "invalid MEGALINTER_VERSION"),
+        (
+            "MEGALINTER_FLAVOR: cupcake\nMEGALINTER_VERSION: v10/unsafe\n",
+            "invalid MEGALINTER_VERSION",
+        ),
+        (
+            "MEGALINTER_FLAVOR: cupcake/unsafe\nMEGALINTER_VERSION: v10.0.0\n",
+            "invalid MEGALINTER_FLAVOR",
+        ),
+        (
+            "MEGALINTER_FLAVOR: cupcake\nMEGALINTER_VERSION: latest\n",
+            "invalid MEGALINTER_VERSION",
+        ),
+        (
+            "MEGALINTER_FLAVOR: cupcake\nMEGALINTER_VERSION: 10.0.0\n",
+            "invalid MEGALINTER_VERSION",
+        ),
+        (
+            "MEGALINTER_FLAVOR: cupcake\nMEGALINTER_VERSION: v10.0.0-beta\n",
+            "invalid MEGALINTER_VERSION",
+        ),
+    ],
+)
+def test_megalinter_image_rejects_invalid_native_config(
+    tmp_path: Path,
+    config_text: str,
+    message: str,
+) -> None:
+    config = tmp_path / ".mega-linter.yml"
+    config.write_text(config_text, encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        load_megalinter_image(config)
+
+
+def test_megalinter_image_rejects_non_mapping_config(tmp_path: Path) -> None:
+    config = tmp_path / ".mega-linter.yml"
+    config.write_text("- MEGALINTER_VERSION: v10.0.0\n", encoding="utf-8")
+
+    with pytest.raises(TypeError, match="must contain a YAML mapping"):
+        load_megalinter_image(config)
+
+
+def test_renovate_megalinter_manager_tracks_independent_native_fields(tmp_path: Path) -> None:
+    """Use Python regex as a syntax approximation; RE2 compatibility needs separate validation."""
+    root = Path(__file__).resolve().parents[3]
+    config = json.loads((root / ".github/renovate.json").read_text(encoding="utf-8"))
+    manager = next(
+        item for item in config["customManagers"] if item["managerFilePatterns"] == ["/^\\.mega-linter\\.yml$/"]
+    )
+    flavor_pattern, version_pattern = manager["matchStrings"]
+    flavor_pattern = flavor_pattern.replace("(?<flavor>", "(?P<flavor>")
+    version_pattern = version_pattern.replace("(?<currentValue>", "(?P<currentValue>")
+    extract_pattern = manager["extractVersionTemplate"].replace("(?<version>", "(?P<version>")
+    version_match_index = manager["matchStrings"].index(
+        "MEGALINTER_VERSION:[ \\t]*(?:\\x22|')?v(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)(?:\\x22|')?"
+    )
+
+    reordered = 'MEGALINTER_VERSION: "v10.0.0"\n# keep fields independently matchable\nMEGALINTER_FLAVOR: "cupcake"\n'
+    flavor_match = re.search(flavor_pattern, reordered)
+    version_match = re.search(version_pattern, reordered)
+    all_flavor_match = re.search(flavor_pattern, "MEGALINTER_FLAVOR: all\n")
+    next_version_match = re.search(version_pattern, "MEGALINTER_VERSION: v10.1.0")
+    native_config = (root / ".mega-linter.yml").read_text(encoding="utf-8")
+    native_flavor_match = re.search(flavor_pattern, native_config)
+    native_version_match = re.search(version_pattern, native_config)
+    extracted_version_match = re.fullmatch(extract_pattern, "v10.1.0")
+    native_image = load_megalinter_image(root / ".mega-linter.yml")
+    base_config = tmp_path / ".mega-linter-all.yml"
+    base_config.write_text(f"MEGALINTER_FLAVOR: all\nMEGALINTER_VERSION: {native_image.tag}\n", encoding="utf-8")
+    base_image = load_megalinter_image(base_config)
+    template = manager["depNameTemplate"]
+    flavor_template = "{{#if flavor}}-{{{flavor}}}{{/if}}"
+    rendered_flavored_repository = template.replace(
+        flavor_template,
+        f"-{native_flavor_match.group('flavor')}" if native_flavor_match is not None else "",
+    )
+    rendered_base_repository = template.replace(flavor_template, "")
+    allowed_manager_fields = {
+        "customType",
+        "description",
+        "fileFormat",
+        "managerFilePatterns",
+        "matchStrings",
+        "matchStringsStrategy",
+        "depNameTemplate",
+        "packageNameTemplate",
+        "datasourceTemplate",
+        "versioningTemplate",
+        "registryUrlTemplate",
+        "currentValueTemplate",
+        "extractVersionTemplate",
+        "autoReplaceStringTemplate",
+        "depTypeTemplate",
+    }
+
+    assert manager["matchStringsStrategy"] == "combination"
+    assert set(manager).issubset(allowed_manager_fields)
+    assert version_match_index == len(manager["matchStrings"]) - 1
+    assert flavor_match is not None
+    assert native_flavor_match is not None
+    assert flavor_match.group("flavor") == native_flavor_match.group("flavor")
+    assert version_match is not None
+    assert version_match.group("currentValue") == "10.0.0"
+    assert all_flavor_match is not None
+    assert all_flavor_match.groupdict()["flavor"] is None
+    assert next_version_match is not None
+    assert next_version_match.group("currentValue") == "10.1.0"
+    assert native_version_match is not None
+    assert native_version_match.group("currentValue") == native_image.tag.removeprefix("v")
+    assert extracted_version_match is not None
+    assert extracted_version_match.group("version") == "10.1.0"
+    assert rendered_flavored_repository == native_image.repository
+    assert rendered_base_repository == base_image.repository
+    for invalid_tag in ("latest", "v10", "v10.0", "v10.0.0-beta", "v10.0.0-alpha.1"):
+        assert re.fullmatch(extract_pattern, invalid_tag) is None
 
 
 def test_target_branch_prints_current_value(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: object) -> None:
