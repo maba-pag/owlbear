@@ -10,9 +10,11 @@ from unittest.mock import patch
 import pytest
 
 from owlbear_delivery.change_workspace import (
+    AdoptExternalHead,
     CapacityConfigurationConflictError,
     CapacityLedger,
     CapacityLedgerConflictError,
+    ChangeExternalHeadAdoptionReceipt,
     ChangeWorkspaceManager,
     ChangeCoordination,
     ChangeWorktreeAttentionError,
@@ -720,6 +722,137 @@ def _commit_new_file(worktree: Path, name: str, content: str, message: str) -> s
     _git(worktree, "add", name)
     _git(worktree, "commit", "-m", message)
     return _git(worktree, "rev-parse", "HEAD")
+
+
+def _publish_external_change_head(
+    tmp_path: Path,
+    repository: Path,
+    branch: str,
+    base_head: str,
+    *,
+    filename: str = "external.txt",
+) -> tuple[Path, str]:
+    remote = tmp_path / "external-remote.git"
+    _git(tmp_path, "init", "--bare", str(remote))
+    _git(repository, "remote", "add", "origin", str(remote))
+    _git(repository, "push", "origin", f"{base_head}:refs/heads/{branch}")
+    external = tmp_path / "external-repository"
+    _git(tmp_path, "clone", str(remote), str(external))
+    _git(external, "checkout", "-b", "external", base_head)
+    _git(external, "config", "user.name", "External User")
+    _git(external, "config", "user.email", "external@example.com")
+    adopted = _commit_new_file(external, filename, "external\n", "external Change update")
+    _git(external, "push", "origin", f"{adopted}:refs/heads/{branch}")
+    return remote, adopted
+
+
+def test_adopt_external_head_fast_forwards_managed_worktree_and_preserves_review_authority(
+    tmp_path: Path,
+) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("adoptable-change")
+    remote, adopted = _publish_external_change_head(
+        tmp_path,
+        repository,
+        coordination.branch,
+        initial,
+    )
+
+    receipt = manager.adopt_external_head(
+        AdoptExternalHead(
+            change_id=coordination.change_id,
+            expected_head=initial,
+            adopted_head=adopted,
+            operation_id="adopt-external-change",
+        )
+    )
+
+    assert isinstance(receipt, ChangeExternalHeadAdoptionReceipt)
+    assert receipt.expected_head == initial
+    assert receipt.adopted_head == adopted
+    assert _git(repository, "rev-parse", coordination.branch) == adopted
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == adopted
+    assert coordinator.show(coordination.change_id).last_reviewed_commit == initial
+    with pytest.raises(RuntimeError, match="reviewed source boundary"):
+        manager.reviewed_source_head(coordination.change_id)
+    assert (
+        manager.adopt_external_head(
+            AdoptExternalHead(
+                change_id=coordination.change_id,
+                expected_head=initial,
+                adopted_head=adopted,
+                operation_id="adopt-external-change",
+            )
+        )
+        == receipt
+    )
+    assert _git(remote, "rev-parse", f"refs/heads/{coordination.branch}") == adopted
+
+
+def test_adopt_external_head_rejects_divergent_remote_without_branch_mutation(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("divergent-adoption")
+    local_descendant = _commit_new_file(coordination.worktree_path, "local.txt", "local\n", "local change")
+    manager.record_reviewed(coordination.change_id, local_descendant)
+    _git(coordination.worktree_path, "checkout", coordination.branch)
+    divergent_base = _git(repository, "rev-parse", "release")
+    assert divergent_base == initial
+    _remote, divergent = _publish_external_change_head(
+        tmp_path,
+        repository,
+        coordination.branch,
+        initial,
+        filename="divergent.txt",
+    )
+    before = coordinator.show(coordination.change_id)
+
+    with pytest.raises(RuntimeError, match="not a descendant"):
+        manager.adopt_external_head(
+            AdoptExternalHead(
+                change_id=coordination.change_id,
+                expected_head=local_descendant,
+                adopted_head=divergent,
+                operation_id="reject-divergent-adoption",
+            )
+        )
+
+    assert _git(repository, "rev-parse", coordination.branch) == local_descendant
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") == local_descendant
+    assert coordinator.show(coordination.change_id) == before
+
+
+def test_adopt_external_head_rejects_active_writer_and_dirty_worktree(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("blocked-adoption")
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build")
+    coordinator.acquire(coordination.change_id, writer)
+
+    with pytest.raises(CoordinationConflictError, match="active writer"):
+        manager.adopt_external_head(
+            AdoptExternalHead(
+                change_id=coordination.change_id,
+                expected_head=initial,
+                adopted_head="b" * 40,
+                operation_id="blocked-by-writer",
+            )
+        )
+
+    coordinator.release(coordination.change_id, writer.claim_id)
+    (coordination.worktree_path / "dirty.txt").write_text("preserve\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="not clean"):
+        manager.adopt_external_head(
+            AdoptExternalHead(
+                change_id=coordination.change_id,
+                expected_head=initial,
+                adopted_head="b" * 40,
+                operation_id="blocked-by-dirty-worktree",
+            )
+        )
+    assert _git(repository, "rev-parse", coordination.branch) == initial
+    assert coordinator.show(coordination.change_id).external_head_adoption_receipt is None
 
 
 def test_finalization_rejects_divergent_promoted_task_history(tmp_path: Path) -> None:

@@ -10,6 +10,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 from owlbear_delivery.change_publication import ChangeBranchSupersessionReceipt
 from owlbear_delivery.change_workspace import (
+    ChangeExternalHeadAdoptionReceipt,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncReceipt,
     ChangeWorktreeAttentionCode,
@@ -198,6 +199,14 @@ class TargetSyncParams(ChangeParams):
     operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
+class ExternalHeadAdoptionParams(ChangeParams):
+    """Validate one exact external Change-head adoption operation."""
+
+    expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    adopted_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
 class TargetSyncConflictParams(ChangeParams):
     """Validate one exact preserved target-sync conflict exit."""
 
@@ -358,6 +367,23 @@ class ChangeTargetSyncResponse(_TargetProtocolModel):
         return cls(**receipt.model_dump())
 
 
+class ChangeExternalHeadAdoptionResponse(_TargetProtocolModel):
+    """MCP response for one exact external Change-head adoption receipt."""
+
+    schema_version: int = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: ChangeId
+    branch: str = Field(min_length=1)
+    expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    adopted_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def from_receipt(cls, receipt: ChangeExternalHeadAdoptionReceipt) -> ChangeExternalHeadAdoptionResponse:
+        """Project one domain adoption receipt into the transport contract."""
+        return cls(**receipt.model_dump())
+
+
 class ChangeTargetSyncAbortResponse(_TargetProtocolModel):
     """MCP response for one exact target-sync abort receipt."""
 
@@ -460,6 +486,10 @@ type TargetSyncRequest = Annotated[
     TargetSyncParams,
     BeforeValidator(partial(_parse_json_model, TargetSyncParams)),
 ]
+type ExternalHeadAdoptionRequest = Annotated[
+    ExternalHeadAdoptionParams,
+    BeforeValidator(partial(_parse_json_model, ExternalHeadAdoptionParams)),
+]
 type TargetSyncConflictRequest = Annotated[
     TargetSyncConflictParams,
     BeforeValidator(partial(_parse_json_model, TargetSyncConflictParams)),
@@ -504,6 +534,7 @@ __all__ = [
     "AbandonChangeRequest",
     "AdmitDeliveryChangeParams",
     "AdmitDeliveryChangeRequest",
+    "ChangeExternalHeadAdoptionResponse",
     "ChangeParams",
     "ChangeRequest",
     "ChangeTargetSyncAbortResponse",
@@ -529,6 +560,8 @@ __all__ = [
     "DeliveryStartupDiagnostic",
     "EmptyParams",
     "EmptyRequest",
+    "ExternalHeadAdoptionParams",
+    "ExternalHeadAdoptionRequest",
     "FinalizeDeliveryChangeParams",
     "FinalizeDeliveryChangeRequest",
     "MarkChangeReadyParams",

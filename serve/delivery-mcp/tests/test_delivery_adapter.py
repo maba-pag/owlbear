@@ -19,6 +19,7 @@ from owlbear_delivery import (
 )
 from owlbear_delivery.acceptance import CompletionReceiptConflictError
 from owlbear_delivery.change_workspace import (
+    ChangeExternalHeadAdoptionReceipt,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
     ChangeTargetSyncReceipt,
@@ -187,6 +188,16 @@ def _target_sync_abort_receipt() -> ChangeTargetSyncAbortReceipt:
     )
 
 
+def _external_head_adoption_receipt() -> ChangeExternalHeadAdoptionReceipt:
+    return ChangeExternalHeadAdoptionReceipt.create(
+        operation_id="adopt-change-a",
+        change_id=CHANGE,
+        branch="owlbear/change/change-a",
+        expected_head=COMMIT,
+        adopted_head="e" * 40,
+    )
+
+
 class _Result(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
@@ -260,12 +271,14 @@ class _RecordingApplication:
             elif name in {
                 "supersede_publication",
                 "sync_change_with_target",
+                "adopt_external_head",
                 "resolve_target_sync_conflict",
                 "abort_target_sync_conflict",
             }:
                 result = {
                     "supersede_publication": _supersession_receipt,
                     "sync_change_with_target": _target_sync_receipt,
+                    "adopt_external_head": _external_head_adoption_receipt,
                     "resolve_target_sync_conflict": _target_sync_receipt,
                     "abort_target_sync_conflict": _target_sync_abort_receipt,
                 }[name]()
@@ -409,6 +422,12 @@ def _requests() -> dict[str, dict[str, object]]:
             "expected_target": "c" * 40,
             "operation_id": "sync-change-a",
         },
+        "adopt_external_head": {
+            **change,
+            "expected_head": COMMIT,
+            "adopted_head": "e" * 40,
+            "operation_id": "adopt-change-a",
+        },
         "abort_target_sync_conflict": {
             **change,
             "expected_disposition_id": DIGEST,
@@ -472,12 +491,15 @@ def _assert_publication_result(operation_name: str, result: Any) -> None:
     expected_operation_id = {
         "supersede_publication": "supersede-change-a",
         "sync_change_with_target": "sync-change-a",
+        "adopt_external_head": "adopt-change-a",
         "resolve_target_sync_conflict": "sync-change-a",
         "abort_target_sync_conflict": "sync-change-a",
     }[operation_name]
     assert result.operation_id == expected_operation_id
     if operation_name == "supersede_publication":
         assert result.provider_supersession.successor_number == 8
+    elif operation_name == "adopt_external_head":
+        assert result.adopted_head == "e" * 40
     else:
         assert result.target_head == "c" * 40
 
@@ -496,6 +518,7 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
         "observe_acceptance": (CHANGE,),
         "supersede_publication": (CHANGE, DIGEST, "supersede-change-a"),
         "sync_change_with_target": (CHANGE, "c" * 40, "sync-change-a"),
+        "adopt_external_head": (CHANGE, COMMIT, "e" * 40, "adopt-change-a"),
         "abort_target_sync_conflict": (CHANGE, DIGEST, "c" * 40, "sync-change-a"),
         "resolve_target_sync_conflict": (CHANGE, DIGEST, "c" * 40, "sync-change-a"),
         "cleanup_abandoned_change_worktree": (CHANGE,),
@@ -533,6 +556,7 @@ async def test_each_delivery_operation_validates_delegates_once_and_serializes(o
     elif operation_name in {
         "supersede_publication",
         "sync_change_with_target",
+        "adopt_external_head",
         "abort_target_sync_conflict",
         "resolve_target_sync_conflict",
     }:

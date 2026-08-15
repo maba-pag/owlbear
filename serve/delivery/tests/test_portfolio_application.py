@@ -23,6 +23,7 @@ from owlbear_delivery import (
     ChangeBranchPublicationReceipt,
     ChangeBranchPublisher,
     ChangeBranchSupersessionReceipt,
+    ChangeExternalHeadAdoptionReceipt,
     ChangeTargetSyncConflictError,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictState,
@@ -648,6 +649,41 @@ def test_application_binds_target_sync_receipt_and_invalidates_finalization(tmp_
     assert runtimes["change-a"].target_sync_receipt() == receipt
     assert runtimes["change-a"].finalization() is None
     assert runtimes["change-a"].finalization_invalidation().finalization_id == finalization.finalization_id
+
+
+def test_application_binds_external_head_adoption_without_advancing_reviewed_authority(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    coordination = coordinator.show("change-a")
+    expected_head = coordination.last_reviewed_commit
+    finalization = application.finalize_change("change-a", _finalization_request("change-a", expected_head))
+    receipt = ChangeExternalHeadAdoptionReceipt.create(
+        operation_id="adopt-change-a",
+        change_id="change-a",
+        branch=coordination.branch,
+        expected_head=expected_head,
+        adopted_head="5" * 40,
+    )
+
+    with patch.object(application._workspace_manager, "adopt_external_head", return_value=receipt) as adopt:  # noqa: SLF001
+        assert application.adopt_external_head("change-a", expected_head, "5" * 40, "adopt-change-a") == receipt
+
+    request = adopt.call_args.args[0]
+    assert request.change_id == "change-a"
+    assert request.expected_head == expected_head
+    assert request.adopted_head == "5" * 40
+    assert request.operation_id == "adopt-change-a"
+    assert coordinator.show("change-a").last_reviewed_commit == expected_head
+    assert runtimes["change-a"].external_head_adoption_receipt() == receipt
+    assert runtimes["change-a"].finalization() is None
+    invalidation = runtimes["change-a"].finalization_invalidation()
+    assert invalidation is not None
+    assert invalidation.finalization_id == finalization.finalization_id
+    publication = runtimes["change-a"].checkpoint_publication_state()
+    assert publication.pending_checkpoint is not None
+    assert publication.pending_checkpoint.head == "5" * 40
 
 
 def test_application_acquires_after_real_target_sync_at_the_merged_head(tmp_path: Path) -> None:

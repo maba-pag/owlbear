@@ -27,7 +27,9 @@ from owlbear_delivery.change_publication import (
     SupersedeChangeBranch,
 )
 from owlbear_delivery.change_workspace import (
+    AdoptExternalHead,
     ChangeCoordination,
+    ChangeExternalHeadAdoptionReceipt,
     ChangeTargetSyncAbortReceipt,
     ChangeTargetSyncConflictError,
     ChangeTargetSyncReceipt,
@@ -880,6 +882,34 @@ class PortfolioApplication:
         except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
             self._fail("target synchronization target head is unavailable", exc)
         return self.sync_change_with_target(change_id, expected_target, operation_id)
+
+    def adopt_external_head(
+        self,
+        change_id: str,
+        expected_head: str,
+        adopted_head: str,
+        operation_id: str,
+    ) -> ChangeExternalHeadAdoptionReceipt:
+        """Adopt one exact remote Change descendant through managed workspace custody."""
+        runtime = self._runtime(change_id)
+        request = AdoptExternalHead(
+            change_id=change_id,
+            expected_head=expected_head,
+            adopted_head=adopted_head,
+            operation_id=operation_id,
+        )
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            self._require_external_head_adoption_change_mutable(runtime)
+            if runtime.change_disposition() is not None:
+                self._fail("external Change head adoption requires Change attention resolution first")
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                self._fail("external Change head adoption cannot overlap an active Delivery claim")
+            try:
+                receipt = self._workspace_manager.adopt_external_head(request)
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("external Change head could not be adopted", exc)
+            runtime.record_external_head_adoption(receipt, _timestamp(self._clock()))
+            return receipt
 
     def abort_target_sync_conflict(
         self,
@@ -3018,6 +3048,14 @@ class PortfolioApplication:
             DeliveryChangeStage.COMPLETED,
         }:
             self._fail("target synchronization requires a mutable Change")
+
+    def _require_external_head_adoption_change_mutable(self, runtime: DeliveryRuntime) -> None:
+        if runtime.change_stage() in {
+            DeliveryChangeStage.DEFERRED,
+            DeliveryChangeStage.ABANDONED,
+            DeliveryChangeStage.COMPLETED,
+        }:
+            self._fail("external Change head adoption requires a mutable Change")
 
     def _checkpoint_lock_root(self, change_id: str) -> Path:
         return self._target_root / "publications/checkpoints/locks" / change_id

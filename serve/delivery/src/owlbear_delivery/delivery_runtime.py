@@ -16,7 +16,7 @@ from owlbear_delivery.acceptance import (
     CompletionReceiptConflictError,
     CompletionReceiptStore,
 )
-from owlbear_delivery.change_workspace import ChangeTargetSyncReceipt
+from owlbear_delivery.change_workspace import ChangeExternalHeadAdoptionReceipt, ChangeTargetSyncReceipt
 from owlbear_delivery.draft_pull_request import (
     PublicationPullRequestObservationReceipt,
     PullRequestReadyReceipt,
@@ -1005,6 +1005,7 @@ class DeliveryFrontier(_DeliveryModel):
     change_disposition_publication: DeliveryChangePublicationIdentity | None = None
     change_publication_history: DeliveryChangePublicationHistory | None = None
     target_sync_receipt: ChangeTargetSyncReceipt | None = None
+    external_head_adoption_receipt: ChangeExternalHeadAdoptionReceipt | None = None
     merged_pull_request_latch: DeliveryMergedPullRequestLatch | None = None
     change_completion: DeliveryChangeCompletion | None = None
     change_deferral: DeliveryChangeDeferral | None = None
@@ -1327,6 +1328,7 @@ _NORMAL_CHANGE_MUTATIONS = frozenset(
         "record_target_sync",
         "record_resolved_target_sync",
         "record_target_sync_abort",
+        "record_external_head_adoption",
         "capture_target_sync_conflict",
         "mark_awaiting_merge",
         "reconcile_pull_request_draft_state",
@@ -1816,6 +1818,10 @@ class DeliveryRuntime:
         """Return the latest exact target synchronization receipt, if any."""
         return self._read()[0].target_sync_receipt
 
+    def external_head_adoption_receipt(self) -> ChangeExternalHeadAdoptionReceipt | None:
+        """Return the latest exact external Change-head adoption receipt, if any."""
+        return self._read()[0].external_head_adoption_receipt
+
     def validate_target_sync_conflict(
         self,
         expected_disposition_id: str,
@@ -2200,6 +2206,29 @@ class DeliveryRuntime:
         self._replace(previous, updated)
         return receipt
 
+    def record_external_head_adoption(
+        self,
+        receipt: ChangeExternalHeadAdoptionReceipt,
+        adopted_at: datetime,
+    ) -> ChangeExternalHeadAdoptionReceipt:
+        """Persist one adopted external head, invalidate stale finalization, and queue publication."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_external_head_adoption")
+        _require_no_active_change_claim(frontier, "external Change head adoption")
+        if adopted_at.tzinfo is None:
+            message = "external Change head adoption timestamp must include a timezone"
+            raise ValueError(message)
+        if receipt.change_id != self._contract.change_id:
+            _conflict("external Change head adoption receipt does not match the admitted Change")
+        existing = frontier.external_head_adoption_receipt
+        if existing is not None and existing.operation_id == receipt.operation_id:
+            if existing != receipt:
+                _conflict("external Change head adoption operation has different receipt evidence")
+            return existing
+        updated = self._external_head_adoption_update(frontier, receipt, adopted_at)
+        self._replace(previous, updated)
+        return receipt
+
     def record_resolved_target_sync(
         self,
         receipt: ChangeTargetSyncReceipt,
@@ -2305,6 +2334,52 @@ class DeliveryRuntime:
                 "ready": ready,
                 "pending_checkpoint": DeliveryPendingCheckpoint(
                     head=receipt.merged_head,
+                    triggers=triggers,
+                ),
+            }
+        )
+
+    def _external_head_adoption_update(
+        self,
+        frontier: DeliveryFrontier,
+        receipt: ChangeExternalHeadAdoptionReceipt,
+        adopted_at: datetime,
+    ) -> DeliveryFrontier:
+        finalization = frontier.finalization
+        invalidation = frontier.finalization_invalidation
+        ready = frontier.ready
+        if finalization is not None and finalization.exact_head != receipt.adopted_head:
+            invalidation = DeliveryFinalizationInvalidationReceipt.create(
+                DeliveryFinalizationInvalidation(
+                    change_id=self._contract.change_id,
+                    finalization_id=finalization.finalization_id,
+                    expected_head=finalization.exact_head,
+                    observed_head=receipt.adopted_head,
+                    invalidated_at=adopted_at,
+                )
+            )
+            finalization = None
+            ready = None
+
+        pending = frontier.pending_checkpoint
+        triggers = (
+            ()
+            if pending is None
+            else tuple(
+                trigger for trigger in pending.triggers if trigger.kind != DeliveryCheckpointTriggerKind.FINALIZATION
+            )
+        )
+        explicit = DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT)
+        if explicit not in triggers:
+            triggers = (*triggers, explicit)
+        return frontier.model_copy(
+            update={
+                "external_head_adoption_receipt": receipt,
+                "finalization": finalization,
+                "finalization_invalidation": invalidation,
+                "ready": ready,
+                "pending_checkpoint": DeliveryPendingCheckpoint(
+                    head=receipt.adopted_head,
                     triggers=triggers,
                 ),
             }
@@ -3008,6 +3083,9 @@ class DeliveryRuntime:
         target_sync = frontier.target_sync_receipt
         if target_sync is not None and target_sync.change_id != self._contract.change_id:
             _reference("Delivery target synchronization receipt does not match its admitted Change")
+        adoption = frontier.external_head_adoption_receipt
+        if adoption is not None and adoption.change_id != self._contract.change_id:
+            _reference("Delivery external Change-head adoption receipt does not match its admitted Change")
         for receipt in (frontier.change_deferral, frontier.change_abandonment):
             if receipt is not None and receipt.change_id != self._contract.change_id:
                 _reference("Delivery Change lifecycle receipt does not match its admitted Change")

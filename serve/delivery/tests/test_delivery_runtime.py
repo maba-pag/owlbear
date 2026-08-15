@@ -16,6 +16,7 @@ from owlbear_delivery import (
     AdministrativeDeliveryMove,
     AdvanceDelivery,
     BlockDelivery,
+    ChangeExternalHeadAdoptionReceipt,
     ChangeWorkspaceManager,
     ChangeTargetSyncReceipt,
     ChangeWriter,
@@ -634,6 +635,44 @@ def test_target_sync_persists_receipt_invalidates_finalization_and_queues_republ
     )
     assert DeliveryRuntime(tmp_path, _contract()).frontier_bytes() == runtime.frontier_bytes()
     assert runtime.record_target_sync(receipt, datetime(2026, 8, 11, 17, tzinfo=UTC)) == receipt
+
+
+def test_external_head_adoption_persists_receipt_invalidates_finalization_and_queues_republication(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime(
+        tmp_path,
+        stages=(DeliveryStage.COMPLETED, DeliveryStage.COMPLETED, DeliveryStage.COMPLETED),
+    )
+    finalization = runtime.finalize_change(
+        _finalization_request("3" * 40),
+        datetime(2026, 8, 11, 14, tzinfo=UTC),
+    )
+    receipt = ChangeExternalHeadAdoptionReceipt.create(
+        operation_id="adopt-delivery-runtime",
+        change_id="delivery-runtime",
+        branch="owlbear/change/delivery-runtime",
+        expected_head="3" * 40,
+        adopted_head="5" * 40,
+    )
+
+    recorded = runtime.record_external_head_adoption(receipt, datetime(2026, 8, 11, 16, tzinfo=UTC))
+
+    assert recorded == receipt
+    assert runtime.external_head_adoption_receipt() == receipt
+    assert runtime.finalization() is None
+    invalidation = runtime.finalization_invalidation()
+    assert invalidation is not None
+    assert invalidation.finalization_id == finalization.finalization_id
+    assert runtime.change_stage() == DeliveryChangeStage.BUILDING
+    publication = runtime.checkpoint_publication_state()
+    assert publication.pending_checkpoint is not None
+    assert publication.pending_checkpoint.head == "5" * 40
+    assert publication.pending_checkpoint.triggers == (
+        DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT),
+    )
+    assert DeliveryRuntime(tmp_path, _contract()).frontier_bytes() == runtime.frontier_bytes()
+    assert runtime.record_external_head_adoption(receipt, datetime(2026, 8, 11, 17, tzinfo=UTC)) == receipt
 
 
 def test_target_sync_conflict_captures_attention_and_invalidates_finalization(
