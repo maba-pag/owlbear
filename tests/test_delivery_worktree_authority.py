@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).parent.parent
@@ -78,10 +79,61 @@ _REMOVE_WORKTREE_CALLERS = frozenset(
 )
 _COMPLETION_CALLERS = frozenset({("PortfolioApplication", "observe_acceptance")})
 _DISPOSITION_CAPTURE_EXEMPTIONS = frozenset({"capture_change_disposition", "resolve_change_disposition"})
+_GITHUB_PROVIDER_SOURCE = _REPO_ROOT / "serve/delivery-github/src/owlbear_delivery_github/github.py"
+_FORBIDDEN_PROVIDER_TERMS = re.compile(
+    r"(?:/merge\b|auto.?merge|update.?branch|enablePullRequestAutoMerge)", re.IGNORECASE
+)
+_FORBIDDEN_FIELD_PATTERN = re.compile(r"(?<![A-Za-z0-9])(?:merge_method|mergeMethod)(?![A-Za-z0-9])")
+_FORBIDDEN_CAPABILITY_PATTERNS = (
+    re.compile(r"/merge(?:\b|/)", re.IGNORECASE),
+    re.compile(r"(?:auto.?merge|enablePullRequestAutoMerge)", re.IGNORECASE),
+    re.compile(r"(?:merge[_]?pull[_]?request|update[_]?pull[_]?request[_]?branch)", re.IGNORECASE),
+)
+_FORBIDDEN_GIT_ADMIN_PATH_PATTERN = re.compile(
+    r"(?:\$GIT_DIR|\$GIT_COMMON_DIR|\.git[\\/]worktrees(?:[\\/]|\b))",
+    re.IGNORECASE,
+)
+_ALLOWED_PROVIDER_REST_CALLS = {
+    "read_repository": ("GET", "_repository_endpoint(repository)"),
+    "read_pull_request": ("GET", 'f"{_repository_endpoint(repository)}/pulls/{number}"'),
+    "find_pull_request": ("GET", 'f"{_repository_endpoint(request.repository)}/pulls?{query}"'),
+    "create_draft_pull_request": ("POST", 'f"{_repository_endpoint(request.repository)}/pulls"'),
+    "update_pull_request": ("PATCH", 'f"{_repository_endpoint(request.repository)}/pulls/{request.number}"'),
+}
+_ALLOWED_PROVIDER_GRAPHQL_CALLS = frozenset(
+    {
+        ("_graphql", "set_pull_request_draft_state", "mutation"),
+        ("_graphql_query", "_observe_check_page", "_OBSERVE_CHECKS_QUERY"),
+    }
+)
+_ALLOWED_PROVIDER_DOCUMENTS = frozenset({"_READY_MUTATION", "_DRAFT_MUTATION", "_OBSERVE_CHECKS_QUERY"})
 
 
 def _source_files() -> tuple[Path, ...]:
     return tuple(sorted(path for root in _SOURCE_ROOTS for path in root.rglob("*.py")))
+
+
+def _fixture_path(name: str) -> Path:
+    return _REPO_ROOT / "tests/fixtures/delivery-authority" / name
+
+
+def _production_frontend_files() -> tuple[Path, ...]:
+    root = _REPO_ROOT / "serve/cockpit/web/src"
+    return tuple(
+        sorted(
+            path
+            for path in root.rglob("*")
+            if path.suffix in {".ts", ".tsx"} and "__tests__" not in path.parts and not path.name.endswith(".test.tsx")
+        )
+    )
+
+
+def _agent_files() -> tuple[Path, ...]:
+    return tuple(sorted((_REPO_ROOT / "share/agents").glob("*.agent.md")))
+
+
+def _production_capability_files() -> tuple[Path, ...]:
+    return tuple(sorted((*_source_files(), *_production_frontend_files(), *_agent_files())))
 
 
 def _literal_string(node: ast.AST) -> str | None:
@@ -261,6 +313,161 @@ class _RuntimeMutationVisitor(ast.NodeVisitor):
 
     def scan(self) -> None:
         self.visit(ast.parse(self.path.read_text(encoding="utf-8"), filename=str(self.path)))
+
+
+class _ProviderCallVisitor(ast.NodeVisitor):
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.functions: list[str] = []
+        self.rest_calls: list[tuple[str, str | None, str | None]] = []
+        self.graphql_calls: list[tuple[str, str, str | None]] = []
+
+    def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        self.functions.append(node.name)
+        self.generic_visit(node)
+        self.functions.pop()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._visit_function(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._visit_function(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        if isinstance(node.func, ast.Attribute) and node.func.attr in {"_rest", "_graphql", "_graphql_query"}:
+            function = self.functions[-1] if self.functions else "<module>"
+            if node.func.attr == "_rest":
+                method = _literal_string(node.args[1]) if len(node.args) > 1 else None
+                endpoint = ast.get_source_segment(self._source, node.args[2]) if len(node.args) > 2 else None
+                self.rest_calls.append((function, method, endpoint))
+            else:
+                query = self._query_name(node.args[1]) if len(node.args) > 1 else None
+                self.graphql_calls.append((node.func.attr, function, query))
+        self.generic_visit(node)
+
+    def _query_name(self, body: ast.AST) -> str | None:
+        if not isinstance(body, ast.Dict):
+            return None
+        for key, value in zip(body.keys, body.values, strict=False):
+            if _literal_string(key) == "query":
+                return value.id if isinstance(value, ast.Name) else None
+        return None
+
+    def scan(self) -> None:
+        self._source = self.path.read_text(encoding="utf-8")
+        self.visit(ast.parse(self._source, filename=str(self.path)))
+
+
+def _provider_rest_violations(path: Path) -> tuple[str, ...]:
+    visitor = _ProviderCallVisitor(path)
+    visitor.scan()
+    violations: list[str] = []
+    seen: dict[str, int] = {}
+    for function, method, endpoint in visitor.rest_calls:
+        seen[function] = seen.get(function, 0) + 1
+        expected = _ALLOWED_PROVIDER_REST_CALLS.get(function)
+        if expected is None:
+            violations.append(f"unexpected REST operation in {function}")
+            continue
+        expected_method, expected_endpoint = expected
+        normalized_endpoint = "".join((endpoint or "").split())
+        if (method, normalized_endpoint) != (expected_method, expected_endpoint):
+            violations.append(f"unexpected REST shape in {function}: {method} {endpoint}")
+        if _FORBIDDEN_PROVIDER_TERMS.search(endpoint or ""):
+            violations.append(f"forbidden REST route in {function}: {endpoint}")
+    for function in _ALLOWED_PROVIDER_REST_CALLS:
+        if seen.get(function, 0) != 1:
+            violations.append(f"expected exactly one REST call in {function}")
+    return tuple(violations)
+
+
+def _provider_graphql_violations(path: Path) -> tuple[str, ...]:
+    source = path.read_text(encoding="utf-8")
+    module = ast.parse(source, filename=str(path))
+    documents: dict[str, str] = {}
+    for node in ast.walk(module):
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+        elif isinstance(node, ast.AnnAssign):
+            targets = (node.target,)
+        else:
+            targets = ()
+        for target in targets:
+            value = getattr(node, "value", None)
+            if (
+                isinstance(target, ast.Name)
+                and isinstance(value, ast.Constant)
+                and isinstance(value.value, str)
+                and value.value.lstrip().startswith(("mutation", "query"))
+            ):
+                documents[target.id] = value.value
+    visitor = _ProviderCallVisitor(path)
+    visitor.scan()
+    violations = [
+        f"unexpected GraphQL document {name}" for name in documents if name not in _ALLOWED_PROVIDER_DOCUMENTS
+    ]
+    violations.extend(
+        f"forbidden GraphQL document content in {name}"
+        for name, document in documents.items()
+        if _FORBIDDEN_PROVIDER_TERMS.search(document)
+    )
+    violations.extend(
+        f"unexpected GraphQL call shape: {call!r}"
+        for call in visitor.graphql_calls
+        if call not in _ALLOWED_PROVIDER_GRAPHQL_CALLS
+    )
+    return tuple(violations)
+
+
+def _fetch_violations(path: Path) -> tuple[str, ...]:
+    source = path.read_text(encoding="utf-8")
+    module = ast.parse(source, filename=str(path))
+    violations: list[str] = []
+    for node in ast.walk(module):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        if node.func.attr not in {"_run_git", "_git"} or not node.args or _literal_string(node.args[0]) != "fetch":
+            continue
+        arguments = node.args[1:]
+        if any(isinstance(argument, ast.Starred) for argument in arguments):
+            violations.append(f"fetch forwards unpacked arguments at line {node.lineno}")
+        sources = tuple(ast.get_source_segment(source, argument) or "" for argument in arguments)
+        literals = tuple(_literal_string(argument) for argument in arguments)
+        if "--update-head-ok" in literals:
+            violations.append(f"fetch uses --update-head-ok at line {node.lineno}")
+        if "--refmap=" not in literals:
+            violations.append(f"fetch lacks an empty refmap at line {node.lineno}")
+        for argument in sources:
+            if ":" in argument and "target_ref" not in argument and "refs/remotes/" not in argument:
+                violations.append(f"fetch has an unsafe explicit destination at line {node.lineno}: {argument}")
+    return tuple(violations)
+
+
+def _merge_method_violations(paths: tuple[Path, ...]) -> tuple[str, ...]:
+    return tuple(
+        f"{path.relative_to(_REPO_ROOT)}:{line_number}"
+        for path in paths
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
+        if _FORBIDDEN_FIELD_PATTERN.search(line)
+    )
+
+
+def _forbidden_capability_violations(paths: tuple[Path, ...]) -> tuple[str, ...]:
+    return tuple(
+        f"{path.relative_to(_REPO_ROOT)}:{line_number}"
+        for path in paths
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
+        if any(pattern.search(line) for pattern in _FORBIDDEN_CAPABILITY_PATTERNS)
+    )
+
+
+def _git_admin_path_violations(paths: tuple[Path, ...]) -> tuple[str, ...]:
+    return tuple(
+        f"{path.relative_to(_REPO_ROOT)}:{line_number}"
+        for path in paths
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
+        if _FORBIDDEN_GIT_ADMIN_PATH_PATTERN.search(line)
+    )
 
 
 def _has_attribute_call(node: ast.AST, attribute: str) -> bool:
@@ -547,3 +754,62 @@ def test_retained_inventory_path_is_structurally_read_only() -> None:
     assert not matches, "Retained worktree inventory references Git mutation operations:\n" + "\n".join(
         f"{path.relative_to(_REPO_ROOT)}:{lineno} {source}" for path, lineno, source in matches
     )
+
+
+def test_github_provider_exposes_only_fixed_non_merge_operations() -> None:
+    rest_violations = _provider_rest_violations(_GITHUB_PROVIDER_SOURCE)
+    graphql_violations = _provider_graphql_violations(_GITHUB_PROVIDER_SOURCE)
+
+    assert not rest_violations, "Unexpected GitHub REST provider operation:\n" + "\n".join(rest_violations)
+    assert not graphql_violations, "Unexpected GitHub GraphQL provider operation:\n" + "\n".join(graphql_violations)
+
+
+def test_forbidden_provider_fixture_is_rejected_by_the_provider_gate() -> None:
+    fixture = _fixture_path("forbidden-provider.py")
+
+    assert _provider_rest_violations(fixture)
+    assert _provider_graphql_violations(fixture)
+
+
+def test_delivery_fetch_vectors_are_remote_tracking_only() -> None:
+    violations = tuple(
+        f"{path.relative_to(_REPO_ROOT)}: {violation}"
+        for path in _source_files()
+        for violation in _fetch_violations(path)
+    )
+
+    assert not violations, "Unsafe Delivery fetch vector:\n" + "\n".join(violations)
+
+
+def test_forbidden_fetch_fixture_is_rejected_by_the_fetch_gate() -> None:
+    assert _fetch_violations(_fixture_path("forbidden-fetch.py"))
+
+
+def test_delivery_models_have_no_merge_method_field() -> None:
+    paths = tuple(sorted((*_source_files(), *_production_frontend_files())))
+
+    assert not _merge_method_violations(paths)
+
+
+def test_forbidden_merge_method_fixture_is_rejected_by_the_field_gate() -> None:
+    assert _merge_method_violations((_fixture_path("forbidden-fields.py"),))
+
+
+def test_cockpit_and_agents_expose_no_merge_control() -> None:
+    assert not _forbidden_capability_violations(_production_capability_files())
+
+
+def test_forbidden_cockpit_and_agent_fixtures_are_rejected_by_the_capability_gate() -> None:
+    cockpit_fixture = _fixture_path("forbidden-cockpit.ts")
+    agent_fixture = _fixture_path("forbidden-agent.agent.md")
+
+    assert _forbidden_capability_violations((cockpit_fixture,))
+    assert _forbidden_capability_violations((agent_fixture,))
+
+
+def test_delivery_sources_have_no_git_admin_artifact_path() -> None:
+    assert not _git_admin_path_violations(_source_files())
+
+
+def test_forbidden_git_admin_fixture_is_rejected_by_the_artifact_gate() -> None:
+    assert _git_admin_path_violations((_fixture_path("forbidden-git-admin.py"),))
