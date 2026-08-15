@@ -2916,9 +2916,9 @@ class PortfolioApplication:
         try:
             runtime = self._runtime(change_id)
             coordination = self._workspace_manager.show(change_id)
-            if coordination.last_reviewed_commit == exact_head and (
-                coordination.external_head_promotion_receipt is None
-                or coordination.external_head_promotion_receipt.promoted_head != exact_head
+            if (
+                coordination.last_reviewed_commit == exact_head
+                and coordination.external_head_promotion_receipt == runtime.external_head_promotion_receipt()
             ):
                 return
             operation_id = f"finalization-{exact_head}"

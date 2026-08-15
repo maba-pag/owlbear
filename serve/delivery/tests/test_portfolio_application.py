@@ -797,6 +797,30 @@ def test_finalization_replay_repairs_runtime_promotion_after_workspace_commit(tm
     assert runtimes["change-a"].external_head_promotion_receipt() == workspace_promotion
 
 
+def test_finalization_replay_skips_reconciled_promotion_after_worktree_loss(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    initial = coordinator.show("change-a").last_reviewed_commit
+    branch = coordinator.show("change-a").branch
+    adopted = _publish_external_change_head(tmp_path, application._workspace_manager.repository, branch, initial)  # noqa: SLF001
+    application.adopt_external_head("change-a", initial, adopted, "adopt-for-idempotent-replay")
+    request = _finalization_request("change-a", adopted)
+    finalization = application.finalize_change("change-a", request)
+
+    shutil.rmtree(coordinator.show("change-a").worktree_path)
+
+    with patch.object(
+        application._workspace_manager,
+        "promote_external_head",
+        side_effect=AssertionError("reconciled finalization must not re-enter workspace promotion"),
+    ):
+        assert application.finalize_change("change-a", request) == finalization
+
+    assert runtimes["change-a"].external_head_promotion_receipt() is not None
+
+
 def test_finalization_after_builder_child_does_not_repromote_adopted_ancestor(tmp_path: Path) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
