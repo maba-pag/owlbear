@@ -95,6 +95,66 @@ def _status(repository: Path, allowed_file_prefixes: tuple[str, ...]) -> str:
     return "\n".join(retained) + ("\n" if retained else "")
 
 
+def _prepare_branch_checkout_state(repository: Path, user_state: str) -> None:
+    base_branch = _git(repository, "symbolic-ref", "--short", "HEAD").stdout.strip()
+    _git(repository, "config", "rebase.autoStash", "false")
+    branch = f"user-{user_state.removeprefix('mid-')}"
+    _git(repository, "checkout", "-b", branch)
+    (repository / "product.txt").write_text(f"{user_state} side\n", encoding="utf-8")
+    _git(repository, "add", "product.txt")
+    _git(repository, "commit", "-m", f"{user_state} side")
+    _git(repository, "checkout", base_branch)
+    (repository / "product.txt").write_text(f"{user_state} target\n", encoding="utf-8")
+    _git(repository, "add", "product.txt")
+    _git(repository, "commit", "-m", f"{user_state} target")
+    _git(repository, "checkout", branch)
+
+    if user_state in {"conflicted", "mid-merge"}:
+        merge = _git(repository, "merge", base_branch, check=False)
+        if merge.returncode == 0:
+            raise AssertionError(f"expected {user_state} merge setup to conflict")
+        if user_state == "conflicted":
+            _git(repository, "merge", "--quit")
+        return
+    rebase = _git(repository, "rebase", "--merge", base_branch, check=False)
+    if rebase.returncode == 0:
+        message = "expected mid-rebase setup to conflict"
+        raise AssertionError(message)
+
+
+def _prepare_user_checkout_state(repository: Path, user_state: str) -> None:
+    if user_state == "clean":
+        return
+    if user_state == "modified":
+        (repository / "product.txt").write_text("modified user work\n", encoding="utf-8")
+        return
+    if user_state == "staged":
+        (repository / "product.txt").write_text("staged user work\n", encoding="utf-8")
+        _git(repository, "add", "product.txt")
+        return
+    if user_state == "untracked":
+        (repository / "untracked-user.txt").write_text("untracked user work\n", encoding="utf-8")
+        return
+    if user_state == "detached":
+        _git(repository, "checkout", "--detach", "HEAD")
+        return
+    if user_state in {"conflicted", "mid-merge", "mid-rebase"}:
+        _prepare_branch_checkout_state(repository, user_state)
+        return
+    raise ValueError(f"unknown user checkout state: {user_state}")
+
+
+def _seed_user_checkout_metadata(repository: Path) -> None:
+    _git(repository, "config", "--local", "owlbear.user-preservation", "sentinel")
+    hooks = _admin_path(repository, "hooks")
+    hooks.mkdir(parents=True, exist_ok=True)
+    (hooks / "user-preservation-hook").write_bytes(b"preserve this hook\n")
+    _git(repository, "branch", "user-unrelated", "HEAD")
+    stash_file = repository / "stashed-user.txt"
+    stash_file.write_text("preserve this stash\n", encoding="utf-8")
+    _git(repository, "stash", "push", "--include-untracked", "-m", "user preservation sentinel")
+
+
 @dataclass(frozen=True)
 class UserCheckoutSnapshot:
     """Semantic user-checkout state used by Delivery safety regression tests."""
@@ -172,6 +232,16 @@ class UserCheckoutSnapshot:
 @pytest.fixture
 def user_checkout_snapshot() -> Callable[..., UserCheckoutSnapshot]:
     return UserCheckoutSnapshot.capture
+
+
+@pytest.fixture
+def prepare_user_checkout_state() -> Callable[[Path, str], None]:
+    return _prepare_user_checkout_state
+
+
+@pytest.fixture
+def seed_user_checkout_metadata() -> Callable[[Path], None]:
+    return _seed_user_checkout_metadata
 
 
 @pytest.fixture

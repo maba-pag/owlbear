@@ -122,6 +122,18 @@ from owlbear_delivery.portfolio_application import _required_check_diagnostics
 from owlbear_delivery.storage_io import locked_roots
 
 
+_USER_CHECKOUT_STATES = (
+    "clean",
+    "modified",
+    "staged",
+    "untracked",
+    "conflicted",
+    "detached",
+    "mid-merge",
+    "mid-rebase",
+)
+
+
 def _git(repository: Path, *arguments: str) -> str:
     return subprocess.run(
         ("git", "-C", str(repository), *arguments),
@@ -579,6 +591,33 @@ def test_finalization_uses_managed_head_and_invalidates_observed_drift(tmp_path:
     assert invalidation.observed_head == observed_head
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.BUILDING
     assert application.list_integration_attention() == ()
+
+
+@pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)
+def test_finalization_preserves_user_checkout_states(  # noqa: PLR0913
+    tmp_path: Path,
+    user_state: str,
+    user_checkout_snapshot,
+    prepare_user_checkout_state,
+    seed_user_checkout_metadata,
+) -> None:
+    application, _runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    repository = application._workspace_manager.repository  # noqa: SLF001 - inspect user checkout custody.
+    seed_user_checkout_metadata(repository)
+    prepare_user_checkout_state(repository, user_state)
+    before = user_checkout_snapshot(repository, ("refs/heads/owlbear/change/change-a",))
+    exact_head = coordinator.show("change-a").last_reviewed_commit
+    request = _finalization_request("change-a", exact_head)
+
+    receipt = application.finalize_change("change-a", request)
+    replayed = application.finalize_change("change-a", request)
+
+    assert replayed == receipt
+    assert receipt.exact_head == exact_head
+    before.assert_unchanged(repository)
 
 
 def test_application_binds_target_sync_receipt_and_invalidates_finalization(tmp_path: Path) -> None:
@@ -1543,6 +1582,39 @@ def test_reconcile_awaiting_acceptance_ignores_ineligible_changes(tmp_path: Path
     assert application.reconcile_awaiting_acceptance() == ()
 
 
+@pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)
+def test_observe_acceptance_preserves_user_checkout_states(  # noqa: PLR0913
+    tmp_path: Path,
+    user_state: str,
+    user_checkout_snapshot,
+    prepare_user_checkout_state,
+    seed_user_checkout_metadata,
+) -> None:
+    application, runtime, _provider, state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    repository = application._workspace_manager.repository  # noqa: SLF001 - inspect user checkout custody.
+    seed_user_checkout_metadata(repository)
+    prepare_user_checkout_state(repository, user_state)
+    before = user_checkout_snapshot(repository, ("refs/heads/owlbear/change/change-a",))
+    state["pull_request"] = state["pull_request"].model_copy(
+        update={
+            "state": "closed",
+            "merged": True,
+            "merge_commit_sha": "f" * 40,
+            "merged_at": datetime(2026, 8, 3, 23, tzinfo=UTC),
+            "merged_by_login": "octocat",
+        }
+    )
+
+    receipt = application.observe_acceptance("change-a")
+    replayed = application.observe_acceptance("change-a")
+
+    assert isinstance(receipt, CompletionReceipt)
+    assert replayed == receipt
+    assert receipt.accepted_merge_commit == "f" * 40
+    assert runtime.change_stage() == DeliveryChangeStage.COMPLETED
+    before.assert_unchanged(repository)
+
+
 def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # noqa: PLR0915
     tmp_path: Path,
     user_checkout_snapshot,
@@ -1734,12 +1806,23 @@ def test_change_lifecycle_dispositions_delegate_through_application_lock(tmp_pat
     assert retained[0].cleanup_blocked_reason is None
 
 
-def test_abandoned_change_worktree_cleanup_preserves_branch_and_replays_receipt(tmp_path: Path) -> None:
+@pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)
+def test_abandoned_change_worktree_cleanup_preserves_branch_and_replays_receipt(  # noqa: PLR0913
+    tmp_path: Path,
+    user_state: str,
+    user_checkout_snapshot,
+    prepare_user_checkout_state,
+    seed_user_checkout_metadata,
+) -> None:
     application, runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
+    repository = application._workspace_manager.repository  # noqa: SLF001 - inspect user checkout custody.
+    seed_user_checkout_metadata(repository)
+    prepare_user_checkout_state(repository, user_state)
     coordination = application._workspace_manager.show("change-a")  # noqa: SLF001 - inspect owned cleanup.
+    before = user_checkout_snapshot(repository, ("refs/heads/owlbear/change/change-a",))
     application.abandon_change("change-a", "User stopped the Change")
 
     receipt = application.cleanup_abandoned_change_worktree("change-a")
@@ -1751,6 +1834,7 @@ def test_abandoned_change_worktree_cleanup_preserves_branch_and_replays_receipt(
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.ABANDONED
     assert application.cleanup_abandoned_change_worktree("change-a") == receipt
     assert application.list_retained_change_worktrees() == ()
+    before.assert_unchanged(repository)
 
 
 def test_change_worktree_recovery_recreates_missing_worktree_and_replays_receipt(tmp_path: Path) -> None:

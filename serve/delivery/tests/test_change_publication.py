@@ -1,8 +1,12 @@
-"""Publication proofs for user checkout state and declared Delivery surfaces.
+"""Publication and target-sync proofs for user checkout state and Delivery surfaces.
 
-The state matrix covers staged, detached, mid-merge, and mid-rebase checkouts
-through publication and cleanup. It does not claim exhaustive coverage of every
-Git operation marker or every Delivery operation that can touch repository state.
+The matrix covers clean, modified, staged, untracked, conflicted, detached,
+mid-merge, and mid-rebase user checkouts through managed target synchronization,
+publication, and cleanup. Provider failures and pre-write timeouts are retried
+through the same states. Conflicts in the managed Change worktree remain a
+separate state from conflicts in the user checkout. A post-write timeout is a
+response-unknown outcome rather than a retry-safe incident and remains covered
+by its dedicated reconciliation test.
 """
 
 from __future__ import annotations
@@ -103,53 +107,44 @@ def _advance_remote_target(tmp_path: Path, remote: Path, *, product: str | None 
     return _head(target_repository)
 
 
-def _prepare_user_checkout_state(repository: Path, user_state: str) -> None:
-    if user_state == "staged":
-        (repository / "product.txt").write_text("staged user work\n", encoding="utf-8")
-        _git(repository, "add", "product.txt")
-        (repository / "untracked-user.txt").write_text("untracked user work\n", encoding="utf-8")
-        return
-    if user_state == "detached":
-        _git(repository, "checkout", "--detach", "HEAD")
-        return
-    _git(repository, "config", "rebase.autoStash", "false")
-    branch = f"user-{user_state.removeprefix('mid-')}"
-    _git(repository, "checkout", "-b", branch)
-    (repository / "product.txt").write_text(f"{user_state} side\n", encoding="utf-8")
-    _git(repository, "add", "product.txt")
-    _git(repository, "commit", "-m", f"{user_state} side")
-    _git(repository, "checkout", "main")
-    (repository / "product.txt").write_text(f"{user_state} target\n", encoding="utf-8")
-    _git(repository, "add", "product.txt")
-    _git(repository, "commit", "-m", f"{user_state} target")
-    _git(repository, "checkout", branch)
-    if user_state == "mid-merge":
-        _git(repository, "merge", "main", check=False)
-    else:
-        _git(repository, "rebase", "--merge", "main", check=False)
+_USER_CHECKOUT_STATES = (
+    "clean",
+    "modified",
+    "staged",
+    "untracked",
+    "conflicted",
+    "detached",
+    "mid-merge",
+    "mid-rebase",
+)
 
 
-@pytest.mark.parametrize("user_state", ["staged", "detached", "mid-merge", "mid-rebase"])
+@pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)
 def test_publication_and_cleanup_preserve_user_checkout_states(
     tmp_path: Path,
     user_state: str,
     user_checkout_snapshot,
+    prepare_user_checkout_state,
+    seed_user_checkout_metadata,
 ) -> None:
     repository, remote, initial = _repository(tmp_path)
-    _prepare_user_checkout_state(repository, user_state)
+    seed_user_checkout_metadata(repository)
+    prepare_user_checkout_state(repository, user_state)
     change_id = f"preserve-{user_state}"
     allowed_refs = (
         f"refs/heads/owlbear/change/{change_id}",
         f"refs/remotes/origin/owlbear/change/{change_id}",
-        "refs/remotes/origin/main",
     )
+
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, reviewed = _reviewed_change(manager, change_id)
     before = user_checkout_snapshot(repository, allowed_refs)
     if user_state in {"mid-merge", "mid-rebase"}:
         marker = "MERGE_HEAD" if user_state == "mid-merge" else "rebase-merge"
         assert dict(before.operation_state)[marker]
+    if user_state == "conflicted":
+        assert not dict(before.operation_state)["MERGE_HEAD"]
 
-    coordinator, manager = _change_workspace(tmp_path, repository)
-    _worktree, reviewed = _reviewed_change(manager, change_id)
     publisher = ChangeBranchPublisher(
         repository,
         coordinator,
@@ -165,19 +160,29 @@ def test_publication_and_cleanup_preserve_user_checkout_states(
         PublishChangeBranch(change_id=change_id, expected_remote_head=None, operation_id=f"{change_id}-publish")
     )
     cleanup = manager.cleanup(change_id)
+    cleanup_replayed = manager.cleanup(change_id)
 
     assert receipt.published_head == reviewed
     assert replayed == receipt
     assert cleanup.branch_head == reviewed
+    assert cleanup_replayed == cleanup
     assert _head(remote, f"refs/heads/owlbear/change/{change_id}") == reviewed
     assert _head(repository, "refs/remotes/origin/main") == initial
     before.assert_unchanged(repository)
 
 
+@pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)
 def test_syncs_exact_fetched_target_in_managed_worktree_and_replays_without_ref_pollution(
     tmp_path: Path,
+    user_state: str,
+    user_checkout_snapshot,
+    prepare_user_checkout_state,
+    seed_user_checkout_metadata,
 ) -> None:
-    repository, remote, initial = _repository(tmp_path)
+    repository, remote, _initial = _repository(tmp_path)
+    seed_user_checkout_metadata(repository)
+    prepare_user_checkout_state(repository, user_state)
+    local_target_head = _head(repository, "refs/heads/main")
     _coordinator, manager = _change_workspace(tmp_path, repository)
     worktree, _reviewed = _reviewed_change(manager, "sync-change")
     target_head = _advance_remote_target(tmp_path, remote)
@@ -186,7 +191,14 @@ def test_syncs_exact_fetched_target_in_managed_worktree_and_replays_without_ref_
         expected_target=target_head,
         operation_id="sync-change-1",
     )
-    user_checkout_before = (repository / "product.txt").read_bytes()
+    before = user_checkout_snapshot(
+        repository,
+        (
+            "refs/heads/owlbear/change/sync-change",
+            "refs/remotes/origin/owlbear/change/sync-change",
+            "refs/remotes/origin/main",
+        ),
+    )
 
     with patch.object(manager, "_run_git", wraps=manager._run_git) as run_git:
         receipt = manager.sync_with_target(request)
@@ -202,8 +214,8 @@ def test_syncs_exact_fetched_target_in_managed_worktree_and_replays_without_ref_
     assert receipt.merge_commit
     assert _head(worktree) == receipt.merged_head
     assert _head(repository, "refs/remotes/origin/main") == target_head
-    assert _head(repository, "refs/heads/main") == initial
-    assert (repository / "product.txt").read_bytes() == user_checkout_before
+    assert _head(repository, "refs/heads/main") == local_target_head
+    before.assert_unchanged(repository)
     assert _coordinator.show("sync-change").last_reviewed_commit == receipt.merged_head
     assert manager.reviewed_source_head("sync-change") == receipt.merged_head
     manager.validate_finalization_head("sync-change", receipt.merged_head, ())
@@ -236,8 +248,18 @@ def test_fast_forward_target_sync_advances_the_reviewed_boundary(tmp_path: Path)
     assert _head(coordination.worktree_path) == target_head
 
 
-def test_sync_conflict_preserves_merge_state_and_user_checkout(tmp_path: Path) -> None:
+@pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)
+def test_sync_conflict_preserves_merge_state_and_user_checkout(
+    tmp_path: Path,
+    user_state: str,
+    user_checkout_snapshot,
+    prepare_user_checkout_state,
+    seed_user_checkout_metadata,
+) -> None:
     repository, remote, initial = _repository(tmp_path)
+    seed_user_checkout_metadata(repository)
+    prepare_user_checkout_state(repository, user_state)
+    local_target_head = _head(repository, "refs/heads/main")
     coordinator, manager = _change_workspace(tmp_path, repository)
     worktree, reviewed = _reviewed_change(manager, "sync-conflict")
     target_head = _advance_remote_target(tmp_path, remote, product="target\n")
@@ -245,6 +267,14 @@ def test_sync_conflict_preserves_merge_state_and_user_checkout(tmp_path: Path) -
         change_id="sync-conflict",
         expected_target=target_head,
         operation_id="sync-conflict-1",
+    )
+    before = user_checkout_snapshot(
+        repository,
+        (
+            "refs/heads/owlbear/change/sync-conflict",
+            "refs/remotes/origin/owlbear/change/sync-conflict",
+            "refs/remotes/origin/main",
+        ),
     )
 
     with pytest.raises(ChangeTargetSyncConflictError) as raised:
@@ -254,15 +284,25 @@ def test_sync_conflict_preserves_merge_state_and_user_checkout(tmp_path: Path) -
     merge_head = Path(_git(worktree, "rev-parse", "--git-path", "MERGE_HEAD").stdout.strip())
     assert merge_head.exists()
     assert b"<<<<<<<" in (worktree / "product.txt").read_bytes()
-    assert _head(repository, "refs/heads/main") == initial
-    assert (repository / "product.txt").read_text(encoding="utf-8") == "base\n"
+    assert _head(repository, "refs/heads/main") == local_target_head
     assert coordinator.show("sync-conflict").target_head == initial
     assert coordinator.show("sync-conflict").last_reviewed_commit == reviewed
     assert coordinator.show("sync-conflict").target_sync_receipt is None
+    before.assert_unchanged(repository)
 
 
-def test_abort_target_sync_conflict_replays_and_restores_reviewed_boundary(tmp_path: Path) -> None:
-    repository, remote, initial = _repository(tmp_path)
+@pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)
+def test_abort_target_sync_conflict_replays_and_restores_reviewed_boundary(
+    tmp_path: Path,
+    user_state: str,
+    user_checkout_snapshot,
+    prepare_user_checkout_state,
+    seed_user_checkout_metadata,
+) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    seed_user_checkout_metadata(repository)
+    prepare_user_checkout_state(repository, user_state)
+    local_target_head = _head(repository, "refs/heads/main")
     coordinator, manager = _change_workspace(tmp_path, repository)
     worktree, reviewed = _reviewed_change(manager, "sync-abort")
     target_head = _advance_remote_target(tmp_path, remote, product="target\n")
@@ -271,7 +311,14 @@ def test_abort_target_sync_conflict_replays_and_restores_reviewed_boundary(tmp_p
         expected_target=target_head,
         operation_id="sync-abort-1",
     )
-    user_checkout_before = (repository / "product.txt").read_bytes()
+    before = user_checkout_snapshot(
+        repository,
+        (
+            "refs/heads/owlbear/change/sync-abort",
+            "refs/remotes/origin/owlbear/change/sync-abort",
+            "refs/remotes/origin/main",
+        ),
+    )
 
     with pytest.raises(ChangeTargetSyncConflictError):
         manager.sync_with_target(request)
@@ -289,8 +336,8 @@ def test_abort_target_sync_conflict_replays_and_restores_reviewed_boundary(tmp_p
     assert _head(worktree) == reviewed
     assert _git(worktree, "status", "--porcelain").stdout == ""
     assert _git(worktree, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode == 128
-    assert _head(repository, "refs/heads/main") == initial
-    assert (repository / "product.txt").read_bytes() == user_checkout_before
+    assert _head(repository, "refs/heads/main") == local_target_head
+    before.assert_unchanged(repository)
     assert coordinator.show("sync-abort").target_sync_conflict is None
     assert coordinator.show("sync-abort").target_sync_abort_receipt == receipt
 
@@ -1340,6 +1387,77 @@ def test_pre_push_timeout_releases_reservation_for_new_operation(tmp_path: Path)
             ).publication_lease
             is not None
         )
+
+
+@pytest.mark.parametrize("incident", ["provider-failure", "timeout"])
+@pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)
+def test_publication_incidents_preserve_checkout_and_retry_exact_operation(  # noqa: PLR0913
+    tmp_path: Path,
+    incident: str,
+    user_state: str,
+    user_checkout_snapshot,
+    prepare_user_checkout_state,
+    seed_user_checkout_metadata,
+) -> None:
+    repository, _remote, _initial = _repository(tmp_path)
+    seed_user_checkout_metadata(repository)
+    prepare_user_checkout_state(repository, user_state)
+    coordinator, manager = _change_workspace(tmp_path, repository)
+    _worktree, reviewed = _reviewed_change(manager, f"incident-{user_state}-{incident}")
+    change_id = f"incident-{user_state}-{incident}"
+    publisher = ChangeBranchPublisher(
+        repository,
+        coordinator,
+        remote="origin",
+        target_branch="main",
+        operation_root=tmp_path / "operations",
+    )
+    request = PublishChangeBranch(
+        change_id=change_id,
+        expected_remote_head=None,
+        operation_id=f"operation-{incident}",
+    )
+    before = user_checkout_snapshot(
+        repository,
+        (
+            f"refs/heads/owlbear/change/{change_id}",
+            f"refs/remotes/origin/owlbear/change/{change_id}",
+        ),
+    )
+
+    if incident == "provider-failure":
+        original_run = publisher._run_git
+
+        def reject_push(*arguments: str) -> subprocess.CompletedProcess[bytes]:
+            if arguments[0] == "push":
+                return subprocess.CompletedProcess(arguments, 1, stdout=b"", stderr=b"rejected")
+            return original_run(*arguments)
+
+        with (
+            patch.object(publisher, "_run_git", side_effect=reject_push),
+            pytest.raises(PublicationProviderError) as exc_info,
+        ):
+            publisher.publish(request)
+        assert exc_info.value.code is PublicationProviderFailureCode.UNAVAILABLE
+        assert exc_info.value.retry_safe
+    else:
+        with (
+            patch.object(
+                publisher,
+                "_remote_head",
+                side_effect=subprocess.TimeoutExpired(("git", "ls-remote"), 30),
+            ),
+            pytest.raises(PublicationProviderError) as exc_info,
+        ):
+            publisher.publish(request)
+        assert exc_info.value.code is PublicationProviderFailureCode.TIMEOUT
+        assert exc_info.value.retry_safe
+
+    before.assert_unchanged(repository)
+    receipt = publisher.publish(request)
+    assert receipt.published_head == reviewed
+    assert publisher.publish(request) == receipt
+    before.assert_unchanged(repository)
 
 
 def test_unexpected_pre_write_failure_releases_lease(tmp_path: Path) -> None:
