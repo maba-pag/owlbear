@@ -1,3 +1,4 @@
+---
 steps:
   - run: >-
       git -C /tmp/repo fetch

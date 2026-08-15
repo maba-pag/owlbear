@@ -6,6 +6,7 @@ import ast
 import re
 import shlex
 from pathlib import Path
+from typing import NamedTuple
 
 _REPO_ROOT = Path(__file__).parent.parent
 _SOURCE_ROOTS = tuple(sorted(path for path in (_REPO_ROOT / "serve").glob("*/src") if path.is_dir()))
@@ -113,15 +114,23 @@ _ALLOWED_PROVIDER_DOCUMENTS = frozenset({"_READY_MUTATION", "_DRAFT_MUTATION", "
 _SUBPROCESS_APIS = frozenset({"Popen", "check_call", "check_output", "run"})
 _SHELL_APIS = frozenset({"popen", "system"})
 _GIT_HELPER_NAME_PATTERN = re.compile(r"(?:^|_)git(?:_|$)", re.IGNORECASE)
-_GIT_ARGUMENT_KEYWORDS = frozenset({"remote", "refspec", "refspecs"})
-_GIT_UPDATE_HEAD_OK_KEYWORDS = frozenset({"update-head-ok", "update_head_ok"})
+_GIT_CONTROL_KEYWORDS = frozenset(
+    {"check", "cmd", "command", "cwd", "env", "environment", "input", "input_bytes", "input_text", "shell"}
+)
+_GIT_UPDATE_HEAD_OK_KEYWORDS = frozenset({"update_head_ok"})
 _URL_SCHEME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
 _UPDATE_HEAD_OK_FLAGS = frozenset({"--update-head-ok", "-u"})
 _GIT_GLOBAL_OPTIONS_WITH_VALUES = frozenset(
     {"-C", "-c", "--config-env", "--exec-path", "--git-dir", "--namespace", "--super-prefix", "--work-tree"}
 )
-_SHELL_COMMAND_PREFIXES = frozenset({"!", "do", "done", "elif", "else", "if", "then", "until", "while"})
+_SHELL_COMMAND_PREFIXES = frozenset({"!", "-", "run:", "do", "done", "elif", "else", "if", "then", "until", "while"})
 _SHELL_COMMAND_SEPARATORS = frozenset({"&", "&&", ";", "|", "||"})
+
+
+class _FetchInvocation(NamedTuple):
+    arguments: tuple[ast.AST, ...]
+    keyword_refspecs: tuple[ast.AST, ...] = ()
+    unresolved_update_head_ok: tuple[ast.AST, ...] = ()
 
 
 def _source_files() -> tuple[Path, ...]:
@@ -142,13 +151,16 @@ def _production_python_files() -> tuple[Path, ...]:
 def _production_command_files() -> tuple[Path, ...]:
     roots = (_REPO_ROOT / ".github/workflows", _REPO_ROOT / ".owlbear/hooks", _REPO_ROOT / ".owlbear/scripts")
     suffixes = {".bash", ".sh", ".yaml", ".yml"}
+    excluded_parts = {".venv", "dist", "node_modules"}
     return tuple(
         sorted(
             path
             for root in roots
             if root.is_dir()
             for path in root.rglob("*")
-            if path.is_file() and path.suffix in suffixes
+            if path.is_file()
+            and path.suffix in suffixes
+            and not any(part in excluded_parts for part in path.relative_to(root).parts)
         )
     )
 
@@ -735,27 +747,26 @@ class _FetchVisitor(ast.NodeVisitor):
         shape = _string_shape(command, self.source, self.bindings)
         return shape if re.search(r"\bgit\s+fetch\b", shape) else None
 
-    def _helper_keyword_arguments(self, node: ast.Call) -> list[ast.AST]:
+    def _helper_keyword_arguments(self, node: ast.Call) -> _FetchInvocation:
         keyword_arguments: list[ast.AST] = []
+        keyword_refspecs: list[ast.AST] = []
+        unresolved_update_head_ok: list[ast.AST] = []
         for keyword in node.keywords:
             if keyword.arg is None:
                 keyword_arguments.append(ast.Starred(value=keyword.value, ctx=ast.Load()))
-            elif keyword.arg in _GIT_ARGUMENT_KEYWORDS:
-                keyword_arguments.append(keyword.value)
-            elif keyword.arg in _GIT_UPDATE_HEAD_OK_KEYWORDS and _resolved_boolean(keyword.value, self.bindings):
-                keyword_arguments.append(ast.Constant(value="--update-head-ok"))
-        return keyword_arguments
+            elif keyword.arg in _GIT_UPDATE_HEAD_OK_KEYWORDS:
+                resolved_boolean = _resolved_boolean(keyword.value, self.bindings)
+                if resolved_boolean is True:
+                    keyword_arguments.append(ast.Constant(value="--update-head-ok"))
+                elif resolved_boolean is None:
+                    unresolved_update_head_ok.append(keyword.value)
+            elif keyword.arg == "remote" or keyword.arg in _GIT_CONTROL_KEYWORDS:
+                continue
+            else:
+                keyword_refspecs.append(keyword.value)
+        return _FetchInvocation(tuple(keyword_arguments), tuple(keyword_refspecs), tuple(unresolved_update_head_ok))
 
-    def _append_helper_keyword_arguments(self, command_arguments: list[ast.AST], node: ast.Call) -> None:
-        keyword_arguments = self._helper_keyword_arguments(node)
-        if keyword_arguments and not any(
-            (literal := _resolved_literal(argument, self.bindings)) is None or not literal.startswith("-")
-            for argument in command_arguments
-        ):
-            command_arguments.insert(0, ast.Constant(value="__remote__"))
-        command_arguments.extend(keyword_arguments)
-
-    def _fetch_arguments(self, node: ast.Call) -> tuple[ast.AST, ...] | None:
+    def _fetch_arguments(self, node: ast.Call) -> _FetchInvocation | None:
         if self._is_git_helper_call(node):
             command_index = next(
                 (
@@ -780,8 +791,13 @@ class _FetchVisitor(ast.NodeVisitor):
                 command_arguments = list(node.args)
             else:
                 command_arguments = list(node.args[command_index + 1 :])
-            self._append_helper_keyword_arguments(command_arguments, node)
-            return tuple(command_arguments)
+            keyword_invocation = self._helper_keyword_arguments(node)
+            command_arguments.extend(keyword_invocation.arguments)
+            return _FetchInvocation(
+                tuple(command_arguments),
+                keyword_invocation.keyword_refspecs,
+                keyword_invocation.unresolved_update_head_ok,
+            )
 
         if not self._is_subprocess_call(node):
             return None
@@ -806,7 +822,7 @@ class _FetchVisitor(ast.NodeVisitor):
             ),
             None,
         )
-        return None if command_index is None else tuple(command_vector[command_index + 1 :])
+        return None if command_index is None else _FetchInvocation(tuple(command_vector[command_index + 1 :]))
 
     def _refspec_arguments(self, arguments: tuple[ast.AST, ...]) -> tuple[ast.AST, ...]:
         remote_seen = False
@@ -837,20 +853,24 @@ class _FetchVisitor(ast.NodeVisitor):
                     return _string_shape(bindings[argument.attr], self.source, self.bindings)
         return _string_shape(argument, self.source, self.bindings)
 
-    def _record_refspec_violations(self, node: ast.Call, arguments: tuple[ast.AST, ...]) -> None:
-        for argument in self._refspec_arguments(arguments):
-            shape = self._argument_shape(argument)
-            if ":" not in shape:
-                if not isinstance(self._argument_expression(argument), (ast.Constant, ast.JoinedStr)):
-                    self.violations.append(f"fetch has an unresolved explicit refspec at line {node.lineno}: {shape}")
-                continue
-            if _URL_SCHEME_PATTERN.match(shape):
-                continue
-            destination = shape.rsplit(":", maxsplit=1)[1]
-            if not destination.startswith("refs/remotes/"):
-                self.violations.append(f"fetch has an unsafe explicit destination at line {node.lineno}: {shape}")
+    def _record_refspec_violation(self, node: ast.Call, argument: ast.AST) -> None:
+        shape = self._argument_shape(argument)
+        if ":" not in shape:
+            if not isinstance(self._argument_expression(argument), (ast.Constant, ast.JoinedStr)):
+                self.violations.append(f"fetch has an unresolved explicit refspec at line {node.lineno}: {shape}")
+            return
+        if _URL_SCHEME_PATTERN.match(shape):
+            return
+        destination = shape.rsplit(":", maxsplit=1)[1]
+        if not destination.startswith("refs/remotes/"):
+            self.violations.append(f"fetch has an unsafe explicit destination at line {node.lineno}: {shape}")
 
-    def _record_fetch_violations(self, node: ast.Call, arguments: tuple[ast.AST, ...]) -> None:
+    def _record_refspec_violations(self, node: ast.Call, invocation: _FetchInvocation) -> None:
+        for argument in (*self._refspec_arguments(invocation.arguments), *invocation.keyword_refspecs):
+            self._record_refspec_violation(node, argument)
+
+    def _record_fetch_violations(self, node: ast.Call, invocation: _FetchInvocation) -> None:
+        arguments = invocation.arguments
         if any(isinstance(argument, ast.Starred) for argument in arguments):
             self.violations.append(f"fetch forwards unpacked arguments at line {node.lineno}")
         literals = tuple(_resolved_literal(argument, self.bindings) for argument in arguments)
@@ -859,7 +879,9 @@ class _FetchVisitor(ast.NodeVisitor):
             self.violations.append(f"fetch uses update-head-ok option {update_flag} at line {node.lineno}")
         if "--refmap=" not in literals:
             self.violations.append(f"fetch lacks an empty refmap at line {node.lineno}")
-        self._record_refspec_violations(node, arguments)
+        for _ in invocation.unresolved_update_head_ok:
+            self.violations.append(f"fetch has an unresolved update-head-ok option at line {node.lineno}")
+        self._record_refspec_violations(node, invocation)
 
     def visit_Call(self, node: ast.Call) -> None:
         shell_shape = self._shell_fetch_shape(node)
@@ -867,9 +889,9 @@ class _FetchVisitor(ast.NodeVisitor):
             self.violations.append(f"fetch uses an unstructured shell command at line {node.lineno}: {shell_shape}")
             self.generic_visit(node)
             return
-        arguments = self._fetch_arguments(node)
-        if arguments is not None:
-            self._record_fetch_violations(node, arguments)
+        invocation = self._fetch_arguments(node)
+        if invocation is not None:
+            self._record_fetch_violations(node, invocation)
         self.generic_visit(node)
 
 
@@ -906,6 +928,15 @@ def _logical_shell_lines(source: str) -> tuple[tuple[int, str], ...]:
                 index = next_index
                 continue
 
+        inline_match = re.match(r"^\s*(?:-\s+)?run:\s+(?P<command>.+?)\s*$", line)
+        if inline_match and not re.match(r"^[|>]\s*[+-]?\s*$", inline_match.group("command")):
+            command = inline_match.group("command")
+            if len(command) >= 2 and command[0] == command[-1] and command[0] in {"'", '"'}:
+                command = command[1:-1]
+            logical_lines.append((line_number, command))
+            index += 1
+            continue
+
         command = line.rstrip()
         while command.endswith("\\") and index + 1 < len(lines):
             command = command[:-1].rstrip() + " " + lines[index + 1].lstrip()
@@ -915,14 +946,21 @@ def _logical_shell_lines(source: str) -> tuple[tuple[int, str], ...]:
     return tuple(logical_lines)
 
 
-def _shell_tokens(command: str) -> tuple[str, ...]:
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|")
+def _shell_tokens(command: str) -> tuple[str, ...] | None:
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()$`")
     lexer.whitespace_split = True
     lexer.commenters = "#"
     try:
         return tuple(lexer)
     except ValueError:
-        return ()
+        return None
+
+
+def _shell_command_prefix(tokens: tuple[str, ...], command_index: int) -> tuple[str, ...]:
+    for index in range(command_index - 1, -1, -1):
+        if tokens[index] in {"(", "$(", "`"}:
+            return tokens[index + 1 : command_index]
+    return tokens[:command_index]
 
 
 def _is_shell_assignment(token: str) -> bool:
@@ -936,7 +974,7 @@ def _git_fetch_index(tokens: tuple[str, ...]) -> int | None:
             and prefix not in {"command", "env", "sudo"}
             and not _is_shell_assignment(prefix)
             and not (prefix.startswith("-") and "sudo" in tokens[:index])
-            for prefix in tokens[:index]
+            for prefix in _shell_command_prefix(tokens, index)
         ):
             continue
         option_index = index + 1
@@ -997,7 +1035,12 @@ def _text_fetch_reasons(arguments: tuple[str, ...]) -> tuple[str, ...]:
 def _fetch_text_violations(path: Path) -> tuple[str, ...]:
     violations: list[str] = []
     for line_number, line in _logical_shell_lines(path.read_text(encoding="utf-8")):
-        for segment in _shell_segments(_shell_tokens(line)):
+        tokens = _shell_tokens(line)
+        if tokens is None:
+            if re.search(r"\bgit\b.*\bfetch\b", line):
+                violations.append(f"fetch source could not tokenize command at line {line_number}")
+            continue
+        for segment in _shell_segments(tokens):
             fetch_index = _git_fetch_index(segment)
             if fetch_index is None:
                 continue
@@ -1350,6 +1393,13 @@ def test_delivery_fetch_vectors_are_remote_tracking_only() -> None:
     assert not violations + text_violations, "Unsafe Delivery fetch vector:\n" + "\n".join(violations + text_violations)
 
 
+def test_command_inventory_excludes_vendored_sources() -> None:
+    paths = _production_command_files()
+
+    assert paths
+    assert all("node_modules" not in path.parts for path in paths)
+
+
 def test_forbidden_fetch_fixture_is_rejected_by_the_fetch_gate() -> None:
     violations = _fetch_violations(_fixture_path("forbidden-fetch.py"))
 
@@ -1427,9 +1477,47 @@ def test_forbidden_folded_fetch_fixture_is_rejected_by_the_fetch_gate() -> None:
     violations = _fetch_text_violations(_fixture_path("forbidden-fetch.yml"))
 
     assert len(violations) == 1
-    assert "line 2" in violations[0]
+    assert "line 3" in violations[0]
     assert "uses update-head-ok option" in violations[0]
     assert "unsafe explicit destination" in violations[0]
+
+
+def test_forbidden_inline_fetch_fixture_is_rejected_by_the_fetch_gate() -> None:
+    violations = _fetch_text_violations(_fixture_path("forbidden-fetch-inline.yml"))
+
+    assert len(violations) == 1
+    assert "line 3" in violations[0]
+    assert "uses update-head-ok option" in violations[0]
+    assert "unsafe explicit destination" in violations[0]
+
+
+def test_forbidden_substitution_fetch_fixture_is_rejected_by_the_fetch_gate() -> None:
+    violations = _fetch_text_violations(_fixture_path("forbidden-fetch-substitution.sh"))
+
+    assert len(violations) == 1
+    assert "uses update-head-ok option" in violations[0]
+    assert "unsafe explicit destination" in violations[0]
+
+
+def test_malformed_fetch_fixture_fails_closed_in_the_text_gate() -> None:
+    violations = _fetch_text_violations(_fixture_path("forbidden-fetch-malformed.sh"))
+
+    assert len(violations) == 1
+    assert "could not tokenize command" in violations[0]
+
+
+def test_unknown_fetch_keyword_is_rejected_by_the_fetch_gate() -> None:
+    violations = _fetch_violations(_fixture_path("forbidden-fetch-unknown-keyword.py"))
+
+    assert len(violations) == 1
+    assert "unsafe explicit destination" in violations[0]
+
+
+def test_unresolved_fetch_control_keyword_is_rejected_by_the_fetch_gate() -> None:
+    violations = _fetch_violations(_fixture_path("forbidden-fetch-unknown-control.py"))
+
+    assert len(violations) == 1
+    assert "unresolved update-head-ok option" in violations[0]
 
 
 def test_forbidden_fetch_class_attributes_are_rejected_by_the_fetch_gate() -> None:

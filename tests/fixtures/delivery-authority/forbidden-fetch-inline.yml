@@ -1,0 +1,3 @@
+---
+steps:
+  - run: git -C /tmp/repo fetch -u origin main:main
