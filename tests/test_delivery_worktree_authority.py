@@ -930,9 +930,7 @@ def _logical_shell_lines(source: str) -> tuple[tuple[int, str], ...]:
 
         inline_match = re.match(r"^\s*(?:-\s+)?run:\s+(?P<command>.+?)\s*$", line)
         if inline_match and not re.match(r"^[|>]\s*[+-]?\s*$", inline_match.group("command")):
-            command = inline_match.group("command")
-            if len(command) >= 2 and command[0] == command[-1] and command[0] in {"'", '"'}:
-                command = command[1:-1]
+            command = _unwrap_inline_command(inline_match.group("command"))
             logical_lines.append((line_number, command))
             index += 1
             continue
@@ -946,14 +944,47 @@ def _logical_shell_lines(source: str) -> tuple[tuple[int, str], ...]:
     return tuple(logical_lines)
 
 
+def _unwrap_inline_command(command: str) -> str:
+    if len(command) < 2 or command[0] != command[-1] or command[0] not in {"'", '"'}:
+        return command
+    try:
+        parsed = shlex.split(command)
+    except ValueError:
+        return command
+    body = command[1:-1]
+    return body if len(parsed) == 1 and parsed[0] == body else command
+
+
 def _shell_tokens(command: str) -> tuple[str, ...] | None:
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()$`")
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()`")
     lexer.whitespace_split = True
     lexer.commenters = "#"
     try:
-        return tuple(lexer)
+        tokens = tuple(lexer)
     except ValueError:
         return None
+    merged: list[str] = []
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if token != "$" or index + 1 >= len(tokens):
+            merged.append(token)
+            index += 1
+            continue
+        next_token = tokens[index + 1]
+        if next_token == "(":
+            merged.append("$(")
+            index += 2
+        elif next_token == "{" and index + 3 < len(tokens) and tokens[index + 3] == "}":
+            merged.append(f"${{{tokens[index + 2]}}}")
+            index += 4
+        elif re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", next_token):
+            merged.append(f"${next_token}")
+            index += 2
+        else:
+            merged.append(token)
+            index += 1
+    return tuple(merged)
 
 
 def _shell_command_prefix(tokens: tuple[str, ...], command_index: int) -> tuple[str, ...]:
@@ -1462,7 +1493,7 @@ def test_forbidden_fetch_script_fixture_is_rejected_by_the_fetch_gate() -> None:
     violations = _fetch_text_violations(_fixture_path("forbidden-fetch.sh"))
 
     assert len(violations) == 3
-    assert {"2", "3", "4"} == {
+    assert {"3", "4", "5"} == {
         violation.split(":", maxsplit=1)[0].rsplit(" ", maxsplit=1)[-1] for violation in violations
     }
     assert sum("uses update-head-ok option" in violation for violation in violations) == 1
@@ -1500,7 +1531,7 @@ def test_forbidden_substitution_fetch_fixture_is_rejected_by_the_fetch_gate() ->
 
 
 def test_malformed_fetch_fixture_fails_closed_in_the_text_gate() -> None:
-    violations = _fetch_text_violations(_fixture_path("forbidden-fetch-malformed.sh"))
+    violations = _fetch_text_violations(_fixture_path("forbidden-fetch-malformed.txt"))
 
     assert len(violations) == 1
     assert "could not tokenize command" in violations[0]
