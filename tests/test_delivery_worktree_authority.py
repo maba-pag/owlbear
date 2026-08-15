@@ -111,7 +111,14 @@ _ALLOWED_PROVIDER_GRAPHQL_CALLS = frozenset(
 _ALLOWED_PROVIDER_DOCUMENTS = frozenset({"_READY_MUTATION", "_DRAFT_MUTATION", "_OBSERVE_CHECKS_QUERY"})
 _SUBPROCESS_APIS = frozenset({"Popen", "check_call", "check_output", "run"})
 _SHELL_APIS = frozenset({"popen", "system"})
+_GIT_HELPER_NAME_PATTERN = re.compile(r"(?:^|_)git(?:_|$)", re.IGNORECASE)
+_GIT_CONTROL_KEYWORDS = frozenset({"check", "cwd", "env", "environment", "input", "input_bytes", "input_text", "shell"})
 _URL_SCHEME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
+_UPDATE_HEAD_OK_FLAGS = frozenset({"--update-head-ok", "-u"})
+_FORBIDDEN_FETCH_TEXT_PATTERN = re.compile(
+    r"\bgit\s+fetch\b[^\r\n]*(?:--update-head-ok|\s-u(?:\s|$)|:\s*refs/heads(?:[/\s]|$))",
+    re.IGNORECASE,
+)
 
 
 def _source_files() -> tuple[Path, ...]:
@@ -127,6 +134,20 @@ def _production_python_files() -> tuple[Path, ...]:
         _REPO_ROOT / ".owlbear/scripts",
     )
     return tuple(sorted(path for root in roots if root.is_dir() for path in root.rglob("*.py") if path.is_file()))
+
+
+def _production_command_files() -> tuple[Path, ...]:
+    roots = (_REPO_ROOT / ".github/workflows", _REPO_ROOT / ".owlbear/hooks", _REPO_ROOT / ".owlbear/scripts")
+    suffixes = {".bash", ".sh", ".yaml", ".yml"}
+    return tuple(
+        sorted(
+            path
+            for root in roots
+            if root.is_dir()
+            for path in root.rglob("*")
+            if path.is_file() and path.suffix in suffixes
+        )
+    )
 
 
 def _fixture_path(name: str) -> Path:
@@ -665,7 +686,7 @@ class _FetchVisitor(ast.NodeVisitor):
 
     def _is_git_helper_call(self, node: ast.Call) -> bool:
         name = self._call_attribute(node)
-        return name is not None and (name == "git" or name.endswith("_git"))
+        return name is not None and _GIT_HELPER_NAME_PATTERN.search(name) is not None
 
     def _is_subprocess_call(self, node: ast.Call) -> bool:
         if isinstance(node.func, ast.Name):
@@ -713,7 +734,27 @@ class _FetchVisitor(ast.NodeVisitor):
                 ),
                 None,
             )
-            return None if command_index is None else tuple(node.args[command_index + 1 :])
+            if command_index is None:
+                command_keyword = next(
+                    (
+                        keyword.value
+                        for keyword in node.keywords
+                        if keyword.arg in {"command", "cmd"}
+                        and _resolved_literal(keyword.value, self.bindings) == "fetch"
+                    ),
+                    None,
+                )
+                if command_keyword is None:
+                    return None
+                command_arguments = list(node.args)
+            else:
+                command_arguments = list(node.args[command_index + 1 :])
+            command_arguments.extend(
+                keyword.value
+                for keyword in node.keywords
+                if keyword.arg is not None and keyword.arg not in _GIT_CONTROL_KEYWORDS | {"command", "cmd"}
+            )
+            return tuple(command_arguments)
 
         if not self._is_subprocess_call(node):
             return None
@@ -786,8 +827,9 @@ class _FetchVisitor(ast.NodeVisitor):
         if any(isinstance(argument, ast.Starred) for argument in arguments):
             self.violations.append(f"fetch forwards unpacked arguments at line {node.lineno}")
         literals = tuple(_resolved_literal(argument, self.bindings) for argument in arguments)
-        if "--update-head-ok" in literals:
-            self.violations.append(f"fetch uses --update-head-ok at line {node.lineno}")
+        update_flag = next((literal for literal in literals if literal in _UPDATE_HEAD_OK_FLAGS), None)
+        if update_flag is not None:
+            self.violations.append(f"fetch uses update-head-ok option {update_flag} at line {node.lineno}")
         if "--refmap=" not in literals:
             self.violations.append(f"fetch lacks an empty refmap at line {node.lineno}")
         self._record_refspec_violations(node, arguments)
@@ -810,6 +852,14 @@ def _fetch_violations(path: Path) -> tuple[str, ...]:
     visitor = _FetchVisitor(source, module)
     visitor.visit(module)
     return tuple(visitor.violations)
+
+
+def _fetch_text_violations(path: Path) -> tuple[str, ...]:
+    return tuple(
+        f"fetch source contains an unsafe command at line {line_number}: {line.strip()}"
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
+        if _FORBIDDEN_FETCH_TEXT_PATTERN.search(line)
+    )
 
 
 def _merge_method_violations(paths: tuple[Path, ...]) -> tuple[str, ...]:
@@ -1146,8 +1196,13 @@ def test_delivery_fetch_vectors_are_remote_tracking_only() -> None:
         for path in _production_python_files()
         for violation in _fetch_violations(path)
     )
+    text_violations = tuple(
+        f"{path.relative_to(_REPO_ROOT)}: {violation}"
+        for path in _production_command_files()
+        for violation in _fetch_text_violations(path)
+    )
 
-    assert not violations, "Unsafe Delivery fetch vector:\n" + "\n".join(violations)
+    assert not violations + text_violations, "Unsafe Delivery fetch vector:\n" + "\n".join(violations + text_violations)
 
 
 def test_forbidden_fetch_fixture_is_rejected_by_the_fetch_gate() -> None:
@@ -1156,7 +1211,7 @@ def test_forbidden_fetch_fixture_is_rejected_by_the_fetch_gate() -> None:
     assert {
         int(violation.rsplit("line ", maxsplit=1)[1].split(":", maxsplit=1)[0])
         for violation in violations
-        if "uses --update-head-ok" in violation
+        if "update-head-ok" in violation
     } == {10, 23, 33}
     assert {
         int(violation.rsplit("line ", maxsplit=1)[1].split(":", maxsplit=1)[0])
@@ -1177,14 +1232,28 @@ def test_forbidden_fetch_aliases_are_rejected_by_the_fetch_gate() -> None:
     assert {
         int(violation.rsplit("line ", maxsplit=1)[1].split(":", maxsplit=1)[0])
         for violation in violations
-        if "uses --update-head-ok" in violation
-    } == {11, 18, 25, 31, 35, 54}
+        if "update-head-ok" in violation
+    } == {11, 18, 25, 31, 35, 39, 45, 52}
     assert {
         int(violation.rsplit("line ", maxsplit=1)[1].split(":", maxsplit=1)[0])
         for violation in violations
         if "unsafe explicit destination" in violation
-    } == {11, 18, 25, 31, 35, 54}
+    } == {11, 18, 25, 31, 35, 52}
     assert any("unstructured shell command" in violation for violation in violations)
+
+
+def test_forbidden_keyword_fetch_refspec_is_rejected_by_the_fetch_gate() -> None:
+    violations = _fetch_violations(_fixture_path("forbidden-fetch-keyword.py"))
+
+    assert len(violations) == 1
+    assert "unsafe explicit destination" in violations[0]
+
+
+def test_forbidden_fetch_script_fixture_is_rejected_by_the_fetch_gate() -> None:
+    violations = _fetch_text_violations(_fixture_path("forbidden-fetch.sh"))
+
+    assert len(violations) == 1
+    assert "unsafe command" in violations[0]
 
 
 def test_forbidden_fetch_class_attributes_are_rejected_by_the_fetch_gate() -> None:

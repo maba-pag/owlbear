@@ -3,4 +3,4 @@ def _git(*arguments):
 
 
 def fetch_from_url(repository):
-    return _git(repository, "fetch", "--refmap=", "https://example.com/repository.git", "main")
+    return _git(repository, "fetch", "--refmap=", "origin", "https://example.com/repository.git")

@@ -188,7 +188,12 @@ def test_syncs_exact_fetched_target_in_managed_worktree_and_replays_without_ref_
     )
     user_checkout_before = (repository / "product.txt").read_bytes()
 
-    receipt = manager.sync_with_target(request)
+    with patch.object(manager, "_run_git", wraps=manager._run_git) as run_git:
+        receipt = manager.sync_with_target(request)
+
+    fetch_calls = [call for call in run_git.call_args_list if call.args and call.args[0] == "fetch"]
+    assert len(fetch_calls) == 1
+    assert fetch_calls[0].args[-1] == "refs/heads/main:refs/remotes/origin/main"
 
     assert receipt.change_id == "sync-change"
     assert receipt.expected_target == target_head

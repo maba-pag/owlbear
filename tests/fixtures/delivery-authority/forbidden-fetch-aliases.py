@@ -32,9 +32,7 @@ def popen_fetch(target_ref):
 
 
 def check_call_fetch(target_ref):
-    return process.check_call(
-        ["git", "fetch", "--update-head-ok", "origin", f"refs/remotes/origin/main:refs/heads/{target_ref}"]
-    )
+    return process.check_call(["git", "fetch", "-u", "origin", f"refs/remotes/origin/main:refs/heads/{target_ref}"])
 
 
 def shell_fetch(target_ref):
@@ -51,4 +49,6 @@ def shell_popen_fetch(target_ref):
 
 class HelperAlias:
     def fetch(self, target_ref):
-        return self.run_git("fetch", "--update-head-ok", "origin", f"refs/remotes/origin/main:refs/heads/{target_ref}")
+        return self.execute_git_command(
+            "fetch", "--update-head-ok", "origin", f"refs/remotes/origin/main:refs/heads/{target_ref}"
+        )
