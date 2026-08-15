@@ -2,7 +2,8 @@ node_modules/
 dist/
 coverage/
 .coverage
-.owlbear*
+.owlbear/
+.owlbear-*
 *.local
 *.tsbuildinfo
 test-results/

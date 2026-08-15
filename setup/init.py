@@ -68,6 +68,27 @@ _RETIRED_OWLBEAR_GITIGNORE_LINES = frozenset(
         "# Host-local Delivery startup configuration",
         "/.owlbear/delivery/config.json",
         ".owlbear/briefs/draft-new/",
+        "# Scratch / ad-hoc workspace",
+        ".owlbear/scratch/*",
+        "!.owlbear/scratch/.gitkeep",
+        "!.owlbear/scratch/.instructions.md",
+        "# Knowledge and memory databases",
+        ".owlbear/knowledge/*.db",
+        ".owlbear/knowledge/vectors/",
+        ".owlbear/memory/*.db",
+        "# Host-local Delivery worktrees and mutable capacity ledger",
+        "/.owlbear/delivery/runtime/",
+        "/.owlbear/delivery/worktrees/",
+        "/.owlbear/worktrees/",
+        "/.owlbear/delivery/migration.json",
+        "/.owlbear/delivery/integration-retirement.json",
+        "/.owlbear/scratch/delivery-integration-retirement/",
+        "/.owlbear/target/target-runtime/capacity.json",
+        "/.owlbear/target/target-runtime/integration-verification/",
+        "# Lock files (transient runtime artifacts)",
+        "**/.storage.lock",
+        ".owlbear/target/**/.storage.lock",
+        ".owlbear/kanban/activity.jsonl",
     }
 )
 _HOOKS_REL_PREFIX = ".owlbear/hooks/"
@@ -122,7 +143,7 @@ def _build_replacements(owlbear_dir: Path, target_dir: Path) -> dict[str, str]:
     }
 
 
-def _write_gitignore(src: Path, dest: Path) -> None:
+def _write_gitignore(src: Path, dest: Path, *, retired_lines: frozenset[str] | None = None) -> None:
     """Write .gitignore, appending owlbear-managed section to existing file.
 
     If the destination file does not exist, copies the full seed .gitignore.
@@ -130,6 +151,7 @@ def _write_gitignore(src: Path, dest: Path) -> None:
     If the marker is already present, removes retired rules and adds missing current rules.
     """
     seed_content = src.read_text(encoding="utf-8")
+    retired = _RETIRED_OWLBEAR_GITIGNORE_LINES if retired_lines is None else retired_lines
 
     if not dest.exists():
         dest.write_text(seed_content, encoding="utf-8")
@@ -138,7 +160,7 @@ def _write_gitignore(src: Path, dest: Path) -> None:
     existing = dest.read_text(encoding="utf-8")
     if _OWLBEAR_GITIGNORE_MARKER in existing:
         prefix, marker, managed = existing.partition(_OWLBEAR_GITIGNORE_MARKER)
-        retained = [line for line in managed.splitlines() if line.strip() not in _RETIRED_OWLBEAR_GITIGNORE_LINES]
+        retained = [line for line in managed.splitlines() if line.strip() not in retired]
         while retained and not retained[0].strip():
             retained.pop(0)
         seed_managed = seed_content.partition(_OWLBEAR_GITIGNORE_MARKER)[2].splitlines()
@@ -146,9 +168,7 @@ def _write_gitignore(src: Path, dest: Path) -> None:
         additions = [
             line
             for line in seed_managed
-            if line.strip()
-            and line.strip() not in retained_values
-            and line.strip() not in _RETIRED_OWLBEAR_GITIGNORE_LINES
+            if line.strip() and line.strip() not in retained_values and line.strip() not in retired
         ]
         merged = "\n".join((*retained, *additions)).rstrip()
         updated = prefix + marker + ("\n" + merged + "\n" if merged else "\n")
@@ -519,6 +539,10 @@ def init(  # noqa: C901, PLR0913
 
         if rel_posix == ".gitignore":
             _write_gitignore(src, dest)
+            continue
+
+        if rel_posix == ".owlbear/.gitignore":
+            _write_gitignore(src, dest, retired_lines=frozenset())
             continue
 
         if rel_posix in _SKIP_IF_EXISTS_REL and dest.exists():

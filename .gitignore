@@ -1,4 +1,4 @@
-# Node.js (first Node code lives at serve/cockpit/web/)
+# Node.js dependencies
 node_modules/
 
 # Python bytecode and cache
@@ -62,18 +62,8 @@ playwright-report/
 # Logs
 *.log
 
-# Scratch / ad-hoc workspace (under .owlbear/)
-.owlbear/scratch/*
-!.owlbear/scratch/.gitkeep
-!.owlbear/scratch/.instructions.md
-
-# Host-local Delivery runtime and linked worktrees
-/.owlbear/delivery/runtime/
-/.owlbear/delivery/worktrees/
-
-# Agent scratch/tmp output (quality-runner, coverage runs)
-serve/cockpit/web/.owlbear-scratch-*
-serve/cockpit/web/.owlbear/
+# Lock files
+.storage.lock
 
 # Temp test/debug output
 *_output.txt
@@ -88,9 +78,6 @@ serve/cockpit/web/.owlbear/
 /task-list*.json
 /builder-notes-*.md
 
-# v2 package artifacts
-serve/*/dist/
-
 # Knowledge data
 store/knowledge/*.db
 
@@ -98,25 +85,4 @@ store/knowledge/*.db
 store/audit/
 
 # --- OwlBear managed paths ---
-
-# Scratch / ad-hoc workspace
-.owlbear/scratch/*
-!.owlbear/scratch/.gitkeep
-!.owlbear/scratch/.instructions.md
-
-# Knowledge and memory databases
-.owlbear/knowledge/*.db
-.owlbear/knowledge/vectors/
-.owlbear/memory/*.db
-
-# Host-local Delivery worktrees and mutable capacity ledger
-/.owlbear/worktrees/
-/.owlbear/delivery/migration.json
-/.owlbear/delivery/integration-retirement.json
-/.owlbear/scratch/delivery-integration-retirement/
-/.owlbear/target/target-runtime/capacity.json
-/.owlbear/target/target-runtime/integration-verification/
-
-# Lock files (transient runtime artifacts)
-**/.storage.lock
-.owlbear/kanban/activity.jsonl
+# OwlBear-specific rules live in .owlbear/.gitignore.

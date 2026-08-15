@@ -144,7 +144,10 @@ def test_init_creates_delivery_policy_without_runtime_selection_artifacts(
     assert delivery_config.remote == "origin"
     assert delivery_config.target_branch == "main"
     assert delivery_config.github_repository == "example/project"
-    assert "/.owlbear/delivery/config.json" not in (target_dir / ".gitignore").read_text(encoding="utf-8")
+    gitignore = (target_dir / ".gitignore").read_text(encoding="utf-8")
+    assert "/.owlbear/delivery/config.json" not in gitignore
+    assert "/.owlbear/delivery/runtime/" not in gitignore
+    assert "delivery/runtime/" in (target_dir / ".owlbear/.gitignore").read_text(encoding="utf-8")
     installed_text = "\n".join(
         path.read_text(encoding="utf-8")
         for path in target_dir.rglob("*")
@@ -187,6 +190,11 @@ def test_init_rerun_preserves_user_settings_and_target_records(
         + ".owlbear/briefs/draft-new/\n",
         encoding="utf-8",
     )
+    nested_gitignore_path = target_dir / ".owlbear/.gitignore"
+    nested_gitignore_path.write_text(
+        nested_gitignore_path.read_text(encoding="utf-8") + "\ncustom-consumer-rule/\n",
+        encoding="utf-8",
+    )
 
     records = {
         ".owlbear/target/changes/example/authority.json": b'{"authority":"preserved"}\n',
@@ -208,19 +216,43 @@ def test_init_rerun_preserves_user_settings_and_target_records(
     assert json.loads(delivery_config_path.read_text(encoding="utf-8"))["target_branch"] == "release"
     assert all((target_dir / path).read_bytes() == content for path, content in records.items())
     gitignore = gitignore_path.read_text(encoding="utf-8")
-    for retired in (".owlbear/briefs/draft-new/",):
-        assert retired not in gitignore
-    for preserved_legacy_rule in (
+    for retired in (
+        "/.owlbear/delivery/runtime/",
+        "/.owlbear/delivery/worktrees/",
         "/.owlbear/worktrees/",
         "/.owlbear/target/target-runtime/capacity.json",
         "/.owlbear/target/target-runtime/integration-verification/",
         ".owlbear/target/**/.storage.lock",
-        ".owlbear/target-cutover.pending",
+        ".owlbear/briefs/draft-new/",
     ):
-        assert preserved_legacy_rule in gitignore
-    assert "/.owlbear/delivery/runtime/" in gitignore
-    assert "/.owlbear/delivery/worktrees/" in gitignore
+        assert retired not in gitignore
+    assert ".owlbear/target-cutover.pending" in gitignore
+    nested_gitignore = nested_gitignore_path.read_text(encoding="utf-8")
+    assert "delivery/runtime/" in nested_gitignore
+    assert "custom-consumer-rule/" in nested_gitignore
     assert second_rerun == first_rerun
+
+
+def test_init_rerun_preserves_legacy_managed_coverage_rule(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    run_init_without_test_surface: Callable[..., None],
+) -> None:
+    target_dir = tmp_path / "project"
+    target_dir.mkdir()
+    run_init_without_test_surface(init_module.init, target_dir, _REPO_ROOT, interactive=False)
+
+    gitignore_path = target_dir / ".gitignore"
+    current = gitignore_path.read_text(encoding="utf-8")
+    prefix, marker, managed = current.partition(init_module._OWLBEAR_GITIGNORE_MARKER)
+    assert marker
+    legacy_prefix = "\n".join(line for line in prefix.splitlines() if line != ".coverage.*").rstrip()
+    legacy_managed = managed.rstrip() + "\n.coverage.*\n"
+    gitignore_path.write_text(f"{legacy_prefix}\n\n{marker}{legacy_managed}", encoding="utf-8")
+
+    run_init_without_test_surface(init_module.init, target_dir, _REPO_ROOT, interactive=False)
+
+    assert ".coverage.*" in gitignore_path.read_text(encoding="utf-8").splitlines()
 
 
 def test_init_migrates_exact_schema_one_delivery_policy(

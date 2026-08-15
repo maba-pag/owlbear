@@ -17,7 +17,7 @@ var/
 
 # Build artifacts
 build/
-_cache
+_cache/
 dist/
 sdist/
 wheels/
@@ -34,6 +34,7 @@ artifacts/
 # Testing and coverage
 .*cache
 .coverage
+.coverage.*
 coverage.json
 coverage.xml
 htmlcov/
@@ -60,23 +61,8 @@ playwright-report/
 # Logs
 *.log
 
+# Lock files
+.storage.lock
+
 # --- OwlBear managed paths ---
-
-# Scratch / ad-hoc workspace
-.owlbear/scratch/*
-!.owlbear/scratch/.gitkeep
-!.owlbear/scratch/.instructions.md
-
-# Knowledge and memory databases
-.owlbear/knowledge/*.db
-.owlbear/knowledge/vectors/
-.owlbear/memory/*.db
-
-# Host-local Delivery runtime and linked worktrees
-/.owlbear/delivery/runtime/
-/.owlbear/delivery/worktrees/
-/.owlbear/delivery/migration.json
-/.owlbear/delivery/integration-retirement.json
-/.owlbear/scratch/delivery-integration-retirement/
-
-.coverage.*
+# OwlBear-specific rules live in .owlbear/.gitignore.
