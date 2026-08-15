@@ -2,3 +2,9 @@ workflow approval gate
 automation-blocking policy
 workflow risk class
 approval-automation gate
+WorkflowRiskGate
+workflow_risk_classifier
+_WORKFLOW_APPROVAL_GATE
+workflowRiskGate
+WORKFLOW_RISK_CLASSIFIER
+automationBlockingPolicy

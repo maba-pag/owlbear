@@ -92,10 +92,12 @@ _FORBIDDEN_CAPABILITY_PATTERNS = (
     re.compile(r"(?:merge[_]?pull[_]?request|update[_]?pull[_]?request[_]?branch)", re.IGNORECASE),
 )
 _AUTOMATION_GOVERNANCE_PATTERN = re.compile(
-    r"(?ix)\b(?:"
-    r"(?:workflow|automation)[ _-]+(?:approval|blocking|block|risk(?:[ _-]+class)?)|"
-    r"(?:approval|blocking|block|risk(?:[ _-]+class)?)[ _-]+(?:workflow|automation)"
-    r")\b"
+    r"(?ix)(?<![A-Za-z0-9])(?:"
+    r"(?:workflow|automation)[ _-]*(?:approval|blocking|block|risk(?:[ _-]*class(?:ifier)?)?)"
+    r"(?:[ _-]*(?:gate|policy|class(?:ifier)?))?|"
+    r"(?:approval|blocking|block|risk(?:[ _-]*class(?:ifier)?)?)[ _-]*(?:workflow|automation)"
+    r"[ _-]+(?:gate|policy|class(?:ifier)?)"
+    r")(?![A-Za-z0-9])"
 )
 _FORBIDDEN_GIT_ADMIN_PATH_PATTERN = re.compile(
     r"(?:\$GIT_DIR|\$GIT_COMMON_DIR|\.git[\\/]worktrees(?:[\\/]|\b)|"
@@ -1084,29 +1086,18 @@ def _forbidden_capability_violations(paths: tuple[Path, ...]) -> tuple[str, ...]
 
 
 def _automation_governance_files() -> tuple[Path, ...]:
-    roots = (
-        _REPO_ROOT / "serve/delivery/src",
-        _REPO_ROOT / "serve/delivery-mcp/src",
-        _REPO_ROOT / "serve/delivery-github/src",
-        _REPO_ROOT / "share/agents",
-        _REPO_ROOT / "share/instructions",
-        _REPO_ROOT / "share/skills",
-        _REPO_ROOT / ".owlbear/agents",
-        _REPO_ROOT / ".owlbear/instructions",
-        _REPO_ROOT / ".owlbear/skills",
-        _REPO_ROOT / ".github/skills",
+    delivery_roots = tuple(
+        root for root in _SOURCE_ROOTS if root.parent.name in {"delivery", "delivery-mcp", "delivery-github"}
     )
-    files = [
+    optional_agent_root = _REPO_ROOT / ".owlbear/agents"
+    source_files = (
         path
-        for root in roots
+        for root in (*delivery_roots, optional_agent_root)
         if root.is_dir()
         for path in root.rglob("*")
         if path.is_file() and path.suffix in {".py", ".md"}
-    ]
-    copilot_instructions = _REPO_ROOT / ".github/copilot-instructions.md"
-    if copilot_instructions.is_file():
-        files.append(copilot_instructions)
-    return tuple(sorted(files))
+    )
+    return tuple(sorted({*_agent_files(), *source_files}))
 
 
 def _automation_governance_violations(paths: tuple[Path, ...]) -> tuple[str, ...]:
@@ -1630,10 +1621,33 @@ def test_delivery_automation_has_no_special_approval_or_risk_gate() -> None:
     assert not _automation_governance_violations(_automation_governance_files())
 
 
+def test_delivery_automation_scan_covers_required_roots() -> None:
+    paths = _automation_governance_files()
+    required_roots = (
+        _REPO_ROOT / "serve/delivery/src",
+        _REPO_ROOT / "serve/delivery-mcp/src",
+        _REPO_ROOT / "serve/delivery-github/src",
+        _REPO_ROOT / "share/agents",
+        _REPO_ROOT / "share/instructions",
+        _REPO_ROOT / "share/prompts",
+        _REPO_ROOT / "share/skills",
+        _REPO_ROOT / ".owlbear/instructions",
+        _REPO_ROOT / ".owlbear/prompts",
+        _REPO_ROOT / ".owlbear/skills",
+        _REPO_ROOT / ".github/skills",
+    )
+
+    assert all(any(path.is_relative_to(root) for path in paths) for root in required_roots)
+
+
 def test_forbidden_automation_governance_fixture_is_rejected_by_the_gate() -> None:
     violations = _automation_governance_violations((_fixture_path("forbidden-automation-governance.md"),))
 
-    assert {int(violation.rsplit(":", maxsplit=1)[1]) for violation in violations} == {1, 2, 3, 4}
+    assert {int(violation.rsplit(":", maxsplit=1)[1]) for violation in violations} == set(range(1, 11))
+
+
+def test_valid_automation_governance_fixture_is_allowed_by_the_gate() -> None:
+    assert not _automation_governance_violations((_fixture_path("valid-automation-governance.md"),))
 
 
 def test_delivery_sources_have_no_git_admin_artifact_path() -> None:
