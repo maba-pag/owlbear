@@ -362,7 +362,7 @@ class ChangeTargetSyncResponse(_TargetProtocolModel):
     receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
     operation_id: str = Field(min_length=1)
     change_id: ChangeId
-    integration_target: str = Field(min_length=1)
+    target_branch: str = Field(min_length=1)
     expected_target: str = Field(pattern=r"^[0-9a-f]{40}$")
     target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
     change_head_before: str = Field(pattern=r"^[0-9a-f]{40}$")
@@ -372,7 +372,17 @@ class ChangeTargetSyncResponse(_TargetProtocolModel):
     @classmethod
     def from_receipt(cls, receipt: ChangeTargetSyncReceipt) -> ChangeTargetSyncResponse:
         """Project one domain sync receipt into the transport contract."""
-        return cls(**receipt.model_dump())
+        return cls(
+            receipt_id=receipt.receipt_id,
+            operation_id=receipt.operation_id,
+            change_id=receipt.change_id,
+            target_branch=receipt.integration_target,
+            expected_target=receipt.expected_target,
+            target_head=receipt.target_head,
+            change_head_before=receipt.change_head_before,
+            merged_head=receipt.merged_head,
+            merge_commit=receipt.merge_commit,
+        )
 
 
 class ChangeExternalHeadAdoptionResponse(_TargetProtocolModel):

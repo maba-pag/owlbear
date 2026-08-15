@@ -439,13 +439,14 @@ async def test_published_result_output_forwards_unchanged_to_transition() -> Non
         "receipt_id",
         "operation_id",
         "change_id",
-        "integration_target",
+        "target_branch",
         "expected_target",
         "target_head",
         "change_head_before",
         "merged_head",
         "merge_commit",
     } <= set(tools["sync_change_with_target"].output_schema["required"])
+    assert "integration_target" not in tools["sync_change_with_target"].output_schema["properties"]
     assert transition_definitions["DeliveryTransition"]["discriminator"]["propertyName"] == "action"
     assert "output" in tools["publish_delivery_plan"].output_schema["required"]
     assert "output" in tools["publish_delivery_result"].output_schema["required"]
@@ -486,13 +487,14 @@ async def test_target_sync_conflict_tools_have_exact_contract() -> None:
         "receipt_id",
         "operation_id",
         "change_id",
-        "integration_target",
+        "target_branch",
         "expected_target",
         "target_head",
         "change_head_before",
         "merged_head",
         "merge_commit",
     } <= set(tools["resolve_target_sync_conflict"].output_schema["required"])
+    assert "integration_target" not in tools["resolve_target_sync_conflict"].output_schema["properties"]
 
 
 @pytest.mark.asyncio

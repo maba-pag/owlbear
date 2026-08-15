@@ -523,6 +523,9 @@ def _assert_publication_result(operation_name: str, result: Any) -> None:
         assert result.adopted_head == "e" * 40
     elif operation_name == "promote_external_head":
         assert result.promoted_head == "e" * 40
+    elif operation_name in {"sync_change_with_target", "resolve_target_sync_conflict"}:
+        assert result.target_branch == "main"
+        assert "integration_target" not in result.model_dump(mode="json")
     else:
         assert result.target_head == "c" * 40
 

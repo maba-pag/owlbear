@@ -56,6 +56,11 @@ Planner, Builder, and reviewer routing. Startup validates the configured remote,
 `refs/remotes/<remote>/<target_branch>` commit, and the GitHub `owner/name` identity parsed from that
 remote URL. It does not require or inspect a local target branch.
 
+`sync_change_with_target` is an allowed Change-worktree operation. It fetches the configured
+remote-tracking target and merges the exact target head into the managed Change worktree, preserving
+conflicts there for review. It never updates a local or remote target ref, touches the user checkout,
+or merges a pull request.
+
 Finalization is bound to the exact current Change head in its managed worktree. The finalizer records
 typed observations for the relevant maintained checks and obtains an independent exact-commit review;
 Delivery does not resolve or execute a target-bound verification profile. This evidence does not claim
