@@ -694,7 +694,8 @@ def _require_history_proof(context: _HistoryContext, change_id: str, frontier: _
 def _journal_for_plan(plan: DeliveryIntegrationRetirementPlan, staging_root: Path) -> _RetirementJournal:
     journal_changes = []
     for change in plan.changes:
-        relative_verification = tuple(path.relative_to(plan.runtime_root) for path in change.verification_paths)
+        verification_root = plan.runtime_root / _VERIFICATION_RELATIVE
+        relative_verification = tuple(path.relative_to(verification_root) for path in change.verification_paths)
         relative_publication = tuple(path.relative_to(plan.runtime_root) for path in change.publication_paths)
         journal_changes.append(
             _JournalChange(

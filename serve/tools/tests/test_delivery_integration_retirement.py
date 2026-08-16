@@ -479,6 +479,11 @@ def test_migration_output_with_verification_archive_is_retirable(tmp_path: Path)
         verification_root / "receipts/request-a.json",
     )
 
+    apply_delivery_integration_retirement(retirement_plan)
+
+    assert all(not path.exists() for path in retirement_plan.changes[0].verification_paths)
+    assert not (repository / ".owlbear/delivery/integration-retirement.json").exists()
+
 
 def test_migration_rejects_interrupted_retirement_before_path_migration(tmp_path: Path) -> None:
     repository, _commits, delivery_root, _archive, _branch = _fixture(tmp_path)
