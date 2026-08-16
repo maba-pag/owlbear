@@ -18,7 +18,6 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 
-from owlbear_knowledge.fetcher import HttpxContentFetcher
 from owlbear_knowledge.ingest_coordinator import IngestCoordinator
 from owlbear_knowledge.protocols.common import (
     EntityType as ProtocolEntityType,
@@ -335,14 +334,6 @@ class RegisteredSourceResult(TypedDict):
     state: str
     kind: str
     scope: str
-
-
-async def _web_read(url: str) -> str | None:
-    """Fetch a URL with the knowledge package's SSRF-safe HTTP fetcher."""
-    try:
-        return await HttpxContentFetcher().fetch(url)
-    except Exception:  # noqa: BLE001
-        return None
 
 
 @asynccontextmanager

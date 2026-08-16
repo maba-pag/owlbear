@@ -161,13 +161,6 @@ def _normalize_read_limit(limit: int) -> int:
     return min(limit, _MAX_ENRICHMENT_BATCH_SIZE)
 
 
-def _normalize_optional_read_limit(limit: int | None) -> int | None:
-    """Validate read limits that explicitly support None as unlimited."""
-    if limit is None:
-        return None
-    return _normalize_read_limit(limit)
-
-
 def _normalize_enrichment_items(value: object, *, field_name: str) -> list[dict[str, Any]]:
     """Validate MCP enrichment payload fields that must be lists of objects."""
     if value is None:
