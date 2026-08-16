@@ -53,6 +53,31 @@ Setup defaults to remote `origin` and target branch `main`. When `origin` has a 
 URL, setup infers the `owner/name` identity and `--github-repository` may be omitted. Use `--remote`
 and `--target-branch` for other publication policy. These values do not require a local target branch.
 
+## macOS Copilot profile settings
+
+When setup runs interactively on macOS, it inspects VS Code's workspace profile association for the
+consumer project directory that `setup/init.py` is initializing before changing any Copilot profile
+data:
+
+1. If a profile is associated with the project, setup shows the target and asks for confirmation.
+2. If no profile is associated, setup explains that it will offer the default profile and asks for
+  confirmation.
+3. After confirmation, setup updates only the following model entries in that profile's
+  `chatLanguageModels.json` file:
+
+  | Model | Reasoning effort |
+  |-------|------------------|
+  | `gpt-5.6-luna` | `max` |
+  | `gpt-5.6-sol` | `high` |
+  | `claude-opus-5` | `medium` |
+
+The file is written atomically, unrelated profile entries are preserved, and a missing file or
+Copilot entry is created minimally. Malformed profile JSON is left unchanged with a warning. To
+target a named profile instead of the default fallback, open
+the project in VS Code, run `Profiles: Switch Profile`, and rerun `setup/init.py`. Setup does not
+take a profile-selection command-line argument. Noninteractive setup skips this user-local profile
+mutation.
+
 ## Browser-backed tests
 
 After setup, install the Cockpit web dependencies and its Playwright Chromium binary before running

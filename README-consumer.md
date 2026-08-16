@@ -56,6 +56,25 @@ so the same owlbear repo can be shared across multiple projects on your machine.
 For more detail on what each file does and how to customise see
 [setup/setup-guide.md](setup/setup-guide.md).
 
+## macOS Copilot profile settings
+
+On macOS, an interactive `setup/init.py` run checks whether VS Code has a profile associated with
+the consumer project directory being initialized. If it finds one, setup asks before updating that
+profile. If no association exists, setup explains the fallback and asks whether to update the
+default profile instead. It changes only these user-local Copilot settings; if the profile file or
+Copilot entry is missing, setup creates the minimal structure needed:
+
+| Model | Reasoning effort |
+|-------|------------------|
+| `gpt-5.6-luna` | `max` |
+| `gpt-5.6-sol` | `high` |
+| `claude-opus-5` | `medium` |
+
+To target a named profile, open the project in VS Code, run `Profiles: Switch Profile`, and rerun
+`setup/init.py`; there is no profile-selection command-line argument. Noninteractive setup skips
+profile mutation. See [the setup guide](setup/setup-guide.md#macos-copilot-profile-settings) for
+the complete behavior.
+
 ## Directory Layout
 
 | Directory | Purpose |
