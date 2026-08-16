@@ -3869,6 +3869,35 @@ def test_delivery_loader_rejects_git_and_state_identity_before_composition(tmp_p
     assert not (runtime_root / "capacity.json").exists()
 
 
+def test_delivery_loader_preserves_legacy_integration_retirement_diagnostic(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    change_root = runtime_root / "changes/change-a"
+    change_root.mkdir(parents=True)
+    contract = _contract("change-a", b"intent\n", b"design\n")
+    (change_root / "contract.json").write_bytes(_canonical(contract))
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(
+                outcome_id="OUT-001",
+                plan_scope_id="SCOPE-001",
+            ),
+        )
+    )
+    payload = frontier.model_dump(mode="json")
+    payload["integration_result_id"] = "legacy-result"
+    payload["integration_completion"] = {}
+    (change_root / "frontier.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
+        load_delivery_application(_startup_config(), workspace_root=repository)
+
+    assert exc_info.value.field == "runtime_root"
+    assert exc_info.value.detail == "legacy Integration completion requires retirement before frontier migration"
+    assert isinstance(exc_info.value.__cause__, ValueError)
+    assert not (runtime_root / "capacity.json").exists()
+
+
 def test_design_session_read_and_revision_delegate_to_package_store(tmp_path: Path) -> None:
     application, _runtimes, _coordinator, _state_root = _portfolio(tmp_path, {})
     created = application.create_design_session("composed-delivery", b"intent\n", b"design\n")

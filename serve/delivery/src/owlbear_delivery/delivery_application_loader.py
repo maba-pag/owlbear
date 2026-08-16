@@ -287,7 +287,8 @@ def _validate_runtime_state(runtime_root: Path, contracts: dict[str, DeliveryCon
             frontier = parse_delivery_frontier(frontier_path.read_bytes())[0]
             _require_runtime_bindings(contract, frontier)
     except (OSError, ValidationError, TypeError, ValueError) as exc:
-        error = _load_error("runtime_root", "Delivery runtime state is invalid")
+        detail = str(exc) or "Delivery runtime state is invalid"
+        error = _load_error("runtime_root", detail)
         raise error from exc
 
 
