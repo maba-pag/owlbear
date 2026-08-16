@@ -18,6 +18,47 @@ Root conftest.py — shared fixtures and marker registrations for v2 tests.
 - `def pytest_configure(config: pytest.Config) -> None`
 - `def pytest_xdist_auto_num_workers(config: pytest.Config) -> int`
 
+## .github/scripts/check_node_runtime.py
+
+Validate the checked-in Node runtime against the Cockpit lower bound.
+
+### Imports
+
+- `__future__`
+- `argparse`
+- `json`
+- `pathlib`
+- `re`
+- `typing`
+
+### Interfaces
+
+- `def _raise_value_error(message: str) -> NoReturn`
+- `def _raise_type_error(message: str) -> NoReturn`
+- `def _parse_version(value: str, source: str) -> tuple[int, int, int]`
+- `def _read_node_lower_bound(path: Path) -> tuple[int, int, int]`
+- `def check_node_runtime(version_file: Path, engines_file: Path) -> None`
+- `def main() -> int`
+
+## .github/scripts/check_uv_workspace_lock.py
+
+Prove that uv lock regeneration observes workspace-member changes.
+
+### Imports
+
+- `__future__`
+- `pathlib`
+- `shutil`
+- `subprocess`
+- `tempfile`
+- `typing`
+
+### Interfaces
+
+- `def _raise_runtime_error(message: str) -> NoReturn`
+- `def _run_uv(root: Path, *arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]`
+- `def main() -> int`
+
 ## .github/skills/session-review/scripts/__init__.py
 
 Session-review executable helpers.
@@ -1284,6 +1325,10 @@ Per-change writer coordination and Git workspace management.
 - `class ChangeExternalHeadAdoptionIntent(_WorkspaceModel)`
   - `def create(cls, request: AdoptExternalHead, branch: str) -> Self`
 - `class TargetSyncConflictRequest(_WorkspaceModel)`
+- `class RecoverPublicationBaseline(_WorkspaceModel)`
+- `class PublicationBaselineRecoveryReceipt(_WorkspaceModel)`
+  - `def create(cls, *, operation_id: str, change_id: str, expected_change_head: str, publication_base_head: str) -> Self`
+  - `def _validate_receipt(self) -> Self`
 - `class ChangeTargetSyncReceipt(_WorkspaceModel)`
   - `def create(cls, *, operation_id: str, change_id: str, integration_target: str, expected_target: str, target_head: str, change_head_before: str, merged_head: str, merge_commit: bool) -> Self`
   - `def _validate_receipt(self) -> Self`
@@ -1312,12 +1357,15 @@ Per-change writer coordination and Git workspace management.
   - `def _normalize_external_head_promotion_receipts(cls, value: object) -> object`
   - `def publication_expiry(self) -> datetime | None`
   - `def _validate_target_sync_receipt(self) -> Self`
+  - `def _validate_publication_baseline_recovery(self) -> None`
   - `def _validate_external_head_promotion_receipts(self) -> None`
 - `class WorkspaceRecoverySnapshot(_WorkspaceModel)`
 - `class ChangeWorktreeAttentionCode(StrEnum)`
 - `class RetainedChangeWorktree(_WorkspaceModel)`
 - `class ChangeWorktreeAttentionError(RuntimeError)`
   - `def __init__(self, change_id: str, attention: tuple[ChangeWorktreeAttentionCode, ...]) -> None`
+- `class PublicationBaselineUnavailableError(RuntimeError)`
+  - `def __init__(self, change_id: str, detail: str) -> None`
 - `class ChangeTargetSyncConflictError(RuntimeError)`
   - `def __init__(self, change_id: str, operation_id: str, target_head: str, conflict_paths: tuple[str, ...]) -> None`
 - `class CapacityLedger(_WorkspaceModel)`
@@ -1372,6 +1420,7 @@ Per-change writer coordination and Git workspace management.
   - `def _cleanup_replay_complete(expected_path: Path, expected_branch: str, registrations: dict[Path, _RegisteredGitWorktree]) -> bool`
   - `def _record_cleanup_receipt(self, coordination: ChangeCoordination, intent: ChangeWorktreeCleanupIntent) -> ChangeWorktreeCleanup`
   - `def refresh_integration_target(self, change_id: str) -> ChangeCoordination`
+  - `def recover_publication_baseline(self, change_id: str, expected_change_head: str, publication_base_head: str, operation_id: str) -> PublicationBaselineRecoveryReceipt`
   - `def _replay_target_sync_receipt(self, request: SyncChangeWithTarget, coordination: ChangeCoordination) -> ChangeTargetSyncReceipt | None`
   - `def _persist_target_sync_conflict(self, request: SyncChangeWithTarget, coordination: ChangeCoordination, lock: PublicationLock, target_head: str, change_head_before: str) -> Never`
   - `def _require_target_sync_start(self, request: SyncChangeWithTarget, coordination: ChangeCoordination) -> None`
@@ -1393,6 +1442,7 @@ Per-change writer coordination and Git workspace management.
   - `def _commit_target_sync_resolution(self, request: TargetSyncConflictRequest, coordination: ChangeCoordination, conflict: ChangeTargetSyncConflictState) -> str`
   - `def resolve_target_sync_conflict(self, request: TargetSyncConflictRequest) -> ChangeTargetSyncReceipt`
   - `def integration_context(self, change_id: str) -> IntegrationContext`
+  - `def repository_automation_paths(self, change_id: str, exact_head: str) -> tuple[str, ...]`
   - `def _target_refs(self) -> tuple[str, str, str]`
   - `def _fetch_target(self, source_ref: str, target_branch: str, expected_target: str) -> str`
   - `def _unmerged_paths(self, worktree: Path) -> tuple[str, ...]`
@@ -1444,6 +1494,7 @@ Per-change writer coordination and Git workspace management.
 - `def _target_sync_digest(receipt: ChangeTargetSyncReceipt) -> str`
 - `def _target_sync_conflict_digest(conflict: ChangeTargetSyncConflictState) -> str`
 - `def _target_sync_abort_digest(receipt: ChangeTargetSyncAbortReceipt) -> str`
+- `def _publication_baseline_recovery_digest(receipt: PublicationBaselineRecoveryReceipt) -> str`
 - `def _external_head_adoption_digest(receipt: ChangeExternalHeadAdoptionReceipt) -> str`
 - `def _external_head_promotion_digest(receipt: ChangeExternalHeadPromotionReceipt) -> str`
 - `def _coordination_conflict(detail: str) -> Never`
@@ -2058,10 +2109,12 @@ Deterministic portfolio acquisition and bounded worker context.
 ### Imports
 
 - `__future__`
+- `contextlib`
 - `dataclasses`
 - `datetime`
 - `enum`
 - `hashlib`
+- `html`
 - `json`
 - `owlbear_delivery.acceptance`
 - `owlbear_delivery.change_publication`
@@ -2087,9 +2140,11 @@ Deterministic portfolio acquisition and bounded worker context.
 - `def _required_check_diagnostics(snapshot: PublicationCheckSnapshot, observation_id: str, failures: tuple[PublicationCheck, ...]) -> tuple[str, ...]`
 - `def _operating_scope(scope: WorkItemScope) -> PortfolioWorkScope`
 - `def _checkpoint_operation_id(kind: str, *parts: str) -> str`
-- `def _checkpoint_summary(pending: DeliveryPendingCheckpoint, head: str) -> str`
+- `def _checkpoint_summary(pending: DeliveryPendingCheckpoint, head: str, automation_paths: tuple[str, ...]) -> str`
+- `def _automation_summary(paths: tuple[str, ...]) -> tuple[str, ...]`
+- `def _automation_path_markup(path: str) -> str`
 - `def _checkpoint_pull_request_title(runtime: DeliveryRuntime) -> str`
-- `def _supersession_summary(head: str, predecessor_id: str) -> str`
+- `def _supersession_summary(head: str, predecessor_id: str, automation_paths: tuple[str, ...]) -> str`
 - `def _publication_identity(publication: DraftPullRequestPublicationReceipt) -> DeliveryChangePublicationIdentity`
 - `def _operator_claim(claim: DeliveryActiveClaim | None) -> DeliveryOperatorClaim | None`
 - `def _operator_recovery_attention(attention: DeliveryRecoveryAttention | None) -> DeliveryOperatorRecoveryAttention | None`
@@ -2164,6 +2219,7 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def _observe_required_checks_before_ready(self, change_id: str, runtime: DeliveryRuntime, exact_head: str) -> PublicationCheckObservationReceipt`
   - `def mark_current_change_ready(self, change_id: str) -> PullRequestReadyReceipt`
   - `def resolve_change_disposition(self, change_id: str, expected_disposition_id: str) -> DeliveryChangeDispositionResolution`
+  - `def recover_publication_baseline(self, change_id: str, expected_change_head: str, publication_base_head: str, operation_id: str, *, confirmed_recovery: bool = False) -> PublicationBaselineRecoveryReceipt`
   - `def defer_change(self, change_id: str, reason: str) -> DeliveryChangeDeferral`
   - `def resume_change(self, change_id: str) -> DeliveryChangeDeferral`
   - `def reconcile_awaiting_acceptance(self, change_ids: tuple[str, ...] | None = None, *, limit: int = _MAX_ACCEPTANCE_RECONCILIATION_CHANGES) -> tuple[DeliveryAcceptanceReconciliationOutcome, ...]`
@@ -3007,6 +3063,7 @@ Protocol models for the target delivery MCP surface.
 - `class CleanupAbandonedChangeParams(ChangeParams)`
 - `class CleanupCompletedChangeParams(ChangeParams)`
 - `class RecoverChangeWorktreeParams(ChangeParams)`
+- `class RecoverPublicationBaselineParams(ChangeParams)`
 - `class CreateDesignSessionParams(ChangeParams)`
 - `class ReviseDesignSessionParams(CreateDesignSessionParams)`
 - `class WorkItemParams(ChangeParams)`
@@ -3030,6 +3087,8 @@ Protocol models for the target delivery MCP surface.
   - `def from_receipt(cls, receipt: DeliveryChangeWorktreeCleanup) -> ChangeWorktreeCleanupResponse`
 - `class ChangeWorktreeRecoveryResponse(_TargetProtocolModel)`
   - `def from_receipt(cls, receipt: DeliveryChangeWorktreeRecovery) -> ChangeWorktreeRecoveryResponse`
+- `class ChangePublicationBaselineRecoveryResponse(_TargetProtocolModel)`
+  - `def from_receipt(cls, receipt: PublicationBaselineRecoveryReceipt) -> ChangePublicationBaselineRecoveryResponse`
 - `class DeliveryResultPublication(_TargetProtocolModel)`
   - `def from_candidate(cls, candidate: DeliveryResultCandidate) -> DeliveryResultPublication`
 - `class DeliveryPublicationSupersessionResponse(_TargetProtocolModel)`
@@ -3118,6 +3177,7 @@ Strict MCPServer adapter for the Delivery portfolio application.
   - `async def cleanup_abandoned_change_worktree(self, request: CleanupAbandonedChangeRequest) -> ChangeWorktreeCleanupResponse`
   - `async def cleanup_completed_change_worktree(self, request: CleanupCompletedChangeRequest) -> ChangeWorktreeCleanupResponse`
   - `async def recover_change_worktree(self, request: RecoverChangeWorktreeRequest) -> ChangeWorktreeRecoveryResponse`
+  - `async def recover_publication_baseline(self, request: RecoverPublicationBaselineRequest) -> ChangePublicationBaselineRecoveryResponse`
   - `async def transition_delivery(self, request: TransitionDeliveryRequest) -> dict[str, object]`
   - `async def recover_claim(self, request: ClaimContextRequest) -> dict[str, object]`
   - `async def recover_integration_repair_claim(self, request: RepairClaimContextRequest) -> dict[str, object]`
@@ -4600,23 +4660,72 @@ Classify dependency-update diffs for focused CI proof.
 - `__future__`
 - `argparse`
 - `dataclasses`
-- `enum`
 - `json`
 - `pathlib`
 - `typing`
 
 ### Interfaces
 
-- `class FixMode(StrEnum)`
 - `class DependencyScope`
   - `def compatibility(self) -> bool`
   - `def applicable(self) -> bool`
   - `def github_outputs(self) -> dict[str, str]`
 - `def classify_dependency_change(paths: Iterable[str], diff: str) -> DependencyScope`
-- `def select_fix_mode(labels: Iterable[str]) -> FixMode`
 - `def _read_paths(path: Path) -> list[str]`
 - `def _write_outputs(path: Path, values: dict[str, str]) -> None`
 - `def main() -> int`
+
+## serve/tools/src/owlbear_tools/dependency_environment.py
+
+Reconcile the checked-out dependency environment.
+
+### Imports
+
+- `__future__`
+- `argparse`
+- `dataclasses`
+- `json`
+- `os`
+- `owlbear_tools.commands`
+- `owlbear_tools.quality_runtime`
+- `pathlib`
+- `re`
+- `shutil`
+- `subprocess`
+- `sys`
+- `tempfile`
+
+### Interfaces
+
+- `class OperationResult`
+- `def _run(command: list[str], *, cwd: Path, capture: bool = False, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]`
+- `def _captured_output(result: subprocess.CompletedProcess[str]) -> str`
+- `def _version(value: str, source: str) -> tuple[int, int, int]`
+- `def _check_node_runtime(root: Path) -> OperationResult`
+- `def _selected_npm_roots(*, include_all: bool, include_browsers: bool) -> tuple[tuple[str, Path], ...]`
+- `def _process_result(name: str, result: subprocess.CompletedProcess[str]) -> OperationResult`
+- `def _sync_npm(root: Path, name: str, repository: Path) -> OperationResult`
+- `def _sync_pds(repository: Path) -> OperationResult`
+- `def _sync_browsers(root: Path, name: str, repository: Path) -> OperationResult`
+- `def _sync_results(repository: Path, options: argparse.Namespace) -> list[OperationResult]`
+- `def _uv_status(repository: Path) -> OperationResult`
+- `def _npm_changes(payload: object) -> tuple[dict[str, str], ...]`
+- `def _npm_package_value(value: object) -> str | None`
+- `def _npm_package_version(value: object) -> str | None`
+- `def _npm_json(output: str) -> object | None`
+- `def _npm_reports_changes(payload: object) -> bool`
+- `def _npm_status(root: Path, name: str, repository: Path) -> OperationResult`
+- `def _tree_files(root: Path) -> dict[str, bytes]`
+- `def _pds_status(repository: Path) -> OperationResult`
+- `def _browser_status(root: Path, name: str, repository: Path) -> OperationResult`
+- `def _status_results(repository: Path, options: argparse.Namespace) -> list[OperationResult]`
+- `def _add_profile_arguments(parser: argparse.ArgumentParser) -> None`
+- `def _successful(result: OperationResult) -> bool`
+- `def _print_results(title: str, results: list[OperationResult], *, verbose: bool) -> None`
+- `def _print_recommendation(*, include_all: bool) -> None`
+- `def _finish(exit_code: int) -> None`
+- `def dep_sync() -> None`
+- `def dep_status() -> None`
 
 ## serve/tools/src/owlbear_tools/doc_index.py
 
@@ -4662,31 +4771,6 @@ Regenerate all OwlBear navigation indexes concurrently.
 
 - `def generate_indexes(root: Path) -> None`
 - `def main() -> None`
-
-## serve/tools/src/owlbear_tools/maintenance.py
-
-Project dependency and asset maintenance commands.
-
-### Imports
-
-- `__future__`
-- `argparse`
-- `os`
-- `owlbear_tools.commands`
-- `owlbear_tools.quality_runtime`
-- `pathlib`
-- `shutil`
-- `subprocess`
-- `sys`
-- `tempfile`
-
-### Interfaces
-
-- `def _run(command: list[str], *, cwd: Path | None = None) -> int`
-- `def _finish(exit_code: int) -> None`
-- `def deps_status() -> None`
-- `def deps_sync() -> None`
-- `def pds_sync() -> None`
 
 ## serve/tools/src/owlbear_tools/megalinter.py
 
@@ -4969,7 +5053,7 @@ OwlBear workspace initialiser — setup/init.py.
 - `def _merge_settings(owlbear: dict, existing: dict) -> dict`
 - `def _replace_placeholders(content: str, replacements: dict[str, str]) -> str`
 - `def _build_replacements(owlbear_dir: Path, target_dir: Path) -> dict[str, str]`
-- `def _write_gitignore(src: Path, dest: Path) -> None`
+- `def _write_gitignore(src: Path, dest: Path, *, retired_lines: frozenset[str] | None = None) -> None`
 - `def _write_settings(src: Path, dest: Path, replacements: dict[str, str]) -> None`
 - `def _write_mcp(src: Path, dest: Path, replacements: dict[str, str]) -> None`
 - `def _write_seed_file(src: Path, dest: Path, replacements: dict[str, str]) -> None`

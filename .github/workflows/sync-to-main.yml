@@ -17,7 +17,7 @@ name: Sync dev to main
         type: boolean
         default: true
       sync_delivery:
-        description: "serve/delivery/ + serve/delivery-mcp/"
+        description: "serve/delivery/ + serve/delivery-mcp/ + serve/delivery-github/"
         type: boolean
         default: true
       sync_knowledge:
@@ -144,14 +144,16 @@ jobs:
           paths=""
           if [[ "$SYNC_SHARE" == "true" ]]; then paths="$paths share"; fi
           if [[ "$SYNC_BROWSER" == "true" ]]; then paths="$paths serve/browser serve/browser-mcp"; fi
-          if [[ "$SYNC_DELIVERY" == "true" ]]; then paths="$paths serve/delivery serve/delivery-mcp"; fi
+          if [[ "$SYNC_DELIVERY" == "true" ]]; then
+            paths="$paths serve/delivery serve/delivery-mcp serve/delivery-github"
+          fi
           if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then paths="$paths serve/knowledge serve/knowledge-mcp"; fi
           if [[ "$SYNC_COCKPIT" == "true" ]]; then paths="$paths serve/cockpit"; fi
           if [[ "$SYNC_TOOLS" == "true" ]]; then paths="$paths serve/tools"; fi
           if [[ "$SYNC_MEMORY" == "true" ]]; then paths="$paths serve/memory serve/memory-mcp"; fi
           if [[ "$SYNC_SETUP" == "true" ]]; then paths="$paths setup seed"; fi
           if [[ "$SYNC_INFRA" == "true" ]]; then
-            paths="$paths .github/workflows .github/renovate.json"
+            paths="$paths .github/workflows .github/renovate.json .github/scripts"
             paths="$paths .vscode .editorconfig .gitattributes .gitignore"
             paths="$paths .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore"
             paths="$paths .mega-linter.yml .python-version"
@@ -195,7 +197,7 @@ jobs:
             paths="$paths serve/browser serve/browser-mcp"
           fi
           if [[ "$SYNC_DELIVERY" == "true" ]]; then
-            paths="$paths serve/delivery serve/delivery-mcp"
+            paths="$paths serve/delivery serve/delivery-mcp serve/delivery-github"
           fi
           if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then
             paths="$paths serve/knowledge serve/knowledge-mcp"
@@ -213,7 +215,7 @@ jobs:
             paths="$paths setup seed"
           fi
           if [[ "$SYNC_INFRA" == "true" ]]; then
-            paths="$paths .github/workflows .github/renovate.json"
+            paths="$paths .github/workflows .github/renovate.json .github/scripts"
             paths="$paths .vscode .editorconfig .gitattributes .gitignore"
             paths="$paths .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore"
             paths="$paths .mega-linter.yml .python-version"
@@ -274,7 +276,7 @@ jobs:
             git rm -rf . --quiet || true
             git checkout dev -- \
               share serve setup seed \
-              .github/workflows .github/renovate.json \
+              .github/workflows .github/renovate.json .github/scripts \
               .vscode .editorconfig .gitattributes .gitignore \
               .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore \
               .mega-linter.yml .python-version \
@@ -304,8 +306,8 @@ jobs:
 
               if [[ "$SYNC_DELIVERY" == "true" ]]; then
                 echo "--- serve/delivery + serve/delivery-mcp"
-                git rm -rf serve/delivery serve/delivery-mcp --quiet 2>/dev/null || true
-                git checkout dev -- serve/delivery serve/delivery-mcp
+                git rm -rf serve/delivery serve/delivery-mcp serve/delivery-github --quiet 2>/dev/null || true
+                git checkout dev -- serve/delivery serve/delivery-mcp serve/delivery-github
               fi
 
               if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then
@@ -343,7 +345,7 @@ jobs:
               echo "--- infra (CI, linters, root configs)"
               git rm -rf .github .vscode --quiet 2>/dev/null || true
               git checkout dev -- \
-                .github/workflows .github/renovate.json \
+                .github/workflows .github/renovate.json .github/scripts \
                 .vscode .editorconfig .gitattributes .gitignore \
                 .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore \
                 .mega-linter.yml .python-version \
@@ -429,6 +431,7 @@ jobs:
             ["serve/browser-mcp/"]="$SYNC_BROWSER"
             ["serve/delivery/"]="$SYNC_DELIVERY"
             ["serve/delivery-mcp/"]="$SYNC_DELIVERY"
+            ["serve/delivery-github/"]="$SYNC_DELIVERY"
             ["serve/knowledge/"]="$SYNC_KNOWLEDGE"
             ["serve/knowledge-mcp/"]="$SYNC_KNOWLEDGE"
             ["serve/cockpit/"]="$SYNC_COCKPIT"

@@ -32,6 +32,16 @@ Each command regenerates its complete index on every invocation. Generated index
 
 `migrate-delivery-state` validates retired authority without mutation unless `--apply` is present. Apply moves registered Change worktrees through Git, preserves unrelated registered worktrees under ignored scratch storage, archives retired state under `.owlbear/legacy/delivery-state-migration/`, and resumes safely from an interrupted attempt.
 
+### Dependency environment
+
+Use `uv run dep-sync` to reconcile the checked-out manifests and lockfiles with the local Python and Cockpit npm environments. Use `uv run dep-status` for a read-only check. Both commands support `--all` (`-a`) for the complete workspace profile; `--pds` (`-p`) includes generated Porsche Design System assets, and `--browsers` (`-b`) installs the Playwright Chromium browser. Status also supports `--verbose` (`-v`) and `--json` (`-j`).
+
+These commands consume the dependency versions already selected in the checkout. Hosted Renovate remains responsible for selecting updates and opening pull requests; synchronization never edits manifests or lockfiles.
+
+### Dependency profile
+
+The dependency commands use the repository checkout and do not require environment variables. The default profile covers the uv workspace and the Cockpit npm root; `--all` adds the other npm roots, PDS assets, and Playwright Chromium.
+
 ### Public API
 
 ```python
@@ -60,7 +70,7 @@ The documentation index excludes workspace state, generated indexes, caches, ext
 
 ## Configuration
 
-No environment variables. Index commands write fixed artifacts under `.owlbear/`; `migrate-delivery-state` accepts an optional repository path and the `--apply` flag.
+No environment variables. Index commands write fixed artifacts under `.owlbear/`; `migrate-delivery-state` accepts an optional repository path and the `--apply` flag. Dependency commands use the repository checkout and do not require environment variables.
 
 ## Dependencies
 

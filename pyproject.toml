@@ -13,7 +13,7 @@ dev = [
   "pytest-timeout>=2.4.0",
   "pytest-xdist>=3.8.0",
   "pyyaml>=6.0.3",
-  "ruff>=0.15.14",
+  "ruff==0.16.2",
   "ruamel.yaml>=0.18.0",
 ]
 
@@ -81,6 +81,10 @@ ignore = [
   "PLR2004", # small CLI scripts use argument-count sentinels inline
   "PTH201", # scripts compare relative Path('.') for JSON output compatibility
   "T201",   # print() is intentional in CLI scripts
+]
+".github/scripts/*.py" = [
+  "INP001", # .github/scripts/ contains direct-run CI helpers, not an importable package
+  "T201",   # print() is intentional in direct-run CI helpers
 ]
 "seed/.owlbear/scripts/*.py" = [
   "INP001", # seed/.owlbear/scripts/ is not a package — direct-run files are expected here

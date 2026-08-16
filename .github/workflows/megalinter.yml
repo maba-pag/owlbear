@@ -80,6 +80,38 @@ jobs:
             echo "CSS_STYLELINT_ARGUMENTS=--fix=lax"
           } >> "$GITHUB_ENV"
 
+      - name: Verify MegaLinter version alignment
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          config = Path(".mega-linter.yml").read_text(encoding="utf-8")
+          workflow = Path(".github/workflows/megalinter.yml").read_text(encoding="utf-8")
+          flavor_match = re.search(
+              r"^MEGALINTER_FLAVOR:\s*(?P<flavor>[a-z0-9-]+)\s*$",
+              config,
+              re.MULTILINE,
+          )
+          config_match = re.search(
+              r"^MEGALINTER_VERSION:\s*v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)\s*$",
+              config,
+              re.MULTILINE,
+          )
+          workflow_match = re.search(
+              r"uses:\s*oxsecurity/megalinter/flavors/"
+              r"(?P<flavor>[a-z0-9-]+)@[^\s]+\s+#\s*"
+              r"v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)",
+              workflow,
+          )
+          if flavor_match is None or config_match is None or workflow_match is None:
+              raise SystemExit("MegaLinter version declarations are incomplete")
+          if flavor_match.group("flavor") != workflow_match.group("flavor"):
+              raise SystemExit("native and action MegaLinter flavors diverge")
+          if config_match.group("version") != workflow_match.group("version"):
+              raise SystemExit("native and action MegaLinter versions diverge")
+          PY
+
       - name: MegaLinter
         id: megalinter
         uses: oxsecurity/megalinter/flavors/cupcake@15e5b45552097e318c93de385779ce3b1084052c  # v10.0.0

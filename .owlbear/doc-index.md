@@ -1006,6 +1006,8 @@
 ## serve/tools/README.md
 - # `owlbear-tools — Workspace Utilities`
 - ## `Launch / Usage`
+- ### `Dependency environment`
+- ### `Dependency profile`
 - ### `Public API`
 - ### `Excluded directories`
 - ## `Configuration`
@@ -1025,7 +1027,7 @@
 - ### `Specification`
 - ### `Delivery`
 - ### `Correction And Recovery`
-- ### `Integration And Completed History`
+- ### `Publication, Acceptance, And Completed History`
 - ### `Current Manual Boundaries`
 - ## `Verify It Works`
 - ## `Launch Cockpit`

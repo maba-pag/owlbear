@@ -13,22 +13,6 @@ External repos and resources studied during OwlBear development.
 | GitHub GraphQL API — Mutations | <https://docs.github.com/en/graphql/reference/mutations> | Named draft and ready-state pull-request mutations used by the fixed publication adapter | `serve/delivery-github/src/owlbear_delivery_github/github.py` | 2026-08-11 |
 | GitHub GraphQL API — Checks and commits | <https://docs.github.com/en/graphql/reference/checks#checkrun> | Paginated check-run and status-context rollups, exact-PR required flags, and provider timing fields used by the read-only check observer | `serve/delivery-github/src/owlbear_delivery_github/github.py` | 2026-08-11 |
 
-## Dependency Verification and Consumer Tooling Review
-
-| Source | URL | What | Where Used | Date |
-|--------|-----|------|------|------|
-| GitHub Actions workflow syntax | <https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idname> | Explicit job display names and default-branch workflow registration behavior | `.owlbear/research/dependency-verification-consumer-tooling-review.md` | 2026-08-08 |
-| GitHub-hosted runners reference | <https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories> | Standard Ubuntu runner storage capacity | `.owlbear/research/dependency-verification-consumer-tooling-review.md` | 2026-08-08 |
-| GitHub dependency graph | <https://docs.github.com/en/code-security/concepts/supply-chain-security/dependency-graph> | Dependency Graph capabilities and relationship to alerts and dependency review | `.owlbear/research/dependency-verification-consumer-tooling-review.md` | 2026-08-08 |
-| GitHub dependency graph data | <https://docs.github.com/en/code-security/concepts/supply-chain-security/dependency-graph-data> | Static analysis, Automatic Dependency Submission, Python Dependabot graph jobs, precedence, and billing behavior | `.owlbear/research/dependency-verification-consumer-tooling-review.md` | 2026-08-08 |
-| MegaLinter flavors | <https://megalinter.io/latest/flavors/> | Cupcake's 93-linter scope and flavor model | `.owlbear/research/dependency-verification-consumer-tooling-review.md` | 2026-08-08 |
-| actions/cache | <https://github.com/actions/cache> | Exact and prefix cache-key behavior, branch scope, rolling-key quota trade-offs | `.owlbear/research/dependency-verification-consumer-tooling-review.md` | 2026-08-08 |
-| actions/setup-node | <https://github.com/actions/setup-node> | npm global-cache paths, exact lock-derived keys, and the explicit exclusion of `node_modules` | `.owlbear/research/dependency-verification-consumer-tooling-review.md` | 2026-08-08 |
-| astral-sh/setup-uv | <https://github.com/astral-sh/setup-uv> | uv cache paths, exact dependency-derived keys, pruning, and cache security boundaries | `.owlbear/research/dependency-verification-consumer-tooling-review.md` | 2026-08-08 |
-| bahmutov/npm-install | <https://github.com/bahmutov/npm-install> | npm cache/install behavior and month-based rolling restore keys | `.owlbear/research/dependency-verification-consumer-tooling-review.md` | 2026-08-08 |
-| e18e/action-dependency-diff | <https://github.com/e18e/action-dependency-diff> | JavaScript lockfile analysis, npm metadata checks, and comment/artifact publication modes | `.owlbear/research/dependency-verification-consumer-tooling-review.md` | 2026-08-08 |
-| pozetroninc/github-action-get-latest-release | <https://github.com/pozetroninc/github-action-get-latest-release> | GitHub release API lookup behavior and dynamic release output | `.owlbear/research/dependency-verification-consumer-tooling-review.md` | 2026-08-08 |
-
 ## Spec-Driven Development Frameworks
 
 | Source | URL | What | Where Used | Date |

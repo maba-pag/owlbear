@@ -122,6 +122,7 @@ def test_renovate_megalinter_manager_tracks_independent_native_fields(tmp_path: 
     flavor_match = re.search(flavor_pattern, reordered)
     version_match = re.search(version_pattern, reordered)
     all_flavor_match = re.search(flavor_pattern, "MEGALINTER_FLAVOR: all\n")
+    all_prefixed_flavor_match = re.search(flavor_pattern, "MEGALINTER_FLAVOR: all-cupcake\n")
     next_version_match = re.search(version_pattern, "MEGALINTER_VERSION: v10.1.0")
     native_config = (root / ".mega-linter.yml").read_text(encoding="utf-8")
     native_flavor_match = re.search(flavor_pattern, native_config)
@@ -166,6 +167,8 @@ def test_renovate_megalinter_manager_tracks_independent_native_fields(tmp_path: 
     assert version_match.group("currentValue") == "10.0.0"
     assert all_flavor_match is not None
     assert all_flavor_match.groupdict()["flavor"] is None
+    assert all_prefixed_flavor_match is not None
+    assert all_prefixed_flavor_match.group("flavor") == "all-cupcake"
     assert next_version_match is not None
     assert next_version_match.group("currentValue") == "10.1.0"
     assert native_version_match is not None

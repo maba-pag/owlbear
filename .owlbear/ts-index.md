@@ -281,7 +281,7 @@
 - `export interface WorkItemWorktreeRecoveryView`
 - `export interface ChangeWorktreeCleanupResponse`
 - `export interface ChangeWorktreeRecoveryResponse`
-- `export interface TargetSyncResponse extends WorkItemTargetSyncView`
+- `export interface TargetSyncResponse`
 - `export interface TargetSyncAbortResponse`
 - `export interface PublicationSupersessionResponse`
 - `export interface WorkItemDetailView`

@@ -53,9 +53,8 @@ doctor = "owlbear_tools.project:doctor"
 target-branch = "owlbear_tools.delivery_config:target_branch"
 migrate-delivery-state = "owlbear_tools.delivery_migration:main"
 retire-delivery-integration = "owlbear_tools.delivery_integration_retirement:main"
-deps-status = "owlbear_tools.maintenance:deps_status"
-deps-sync = "owlbear_tools.maintenance:deps_sync"
-pds-sync = "owlbear_tools.maintenance:pds_sync"
+dep-status = "owlbear_tools.dependency_environment:dep_status"
+dep-sync = "owlbear_tools.dependency_environment:dep_sync"
 megalint-clean = "owlbear_tools.megalinter:megalint_clean"
 
 [tool.uv.sources]
