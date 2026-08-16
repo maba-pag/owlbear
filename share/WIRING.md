@@ -48,12 +48,12 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | designer-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
 | planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch and terminal mutation; publishes advisory-reviewed task chains and returns worker-owned transitions |
 | planner-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
-| orchestrator | GPT-5.6 Terra | `w-orchestration` | planner, builder, memory-curator, Explore | Reports and acquires portfolio work, dispatches task claims, recovers exact failed claims including retained legacy repair claims, forwards task transitions, and reports typed Integration attention; no repository write tools |
-| builder | GPT-5.6 Terra | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; task Build returns a lifecycle transition; `SessionStart`: repository context; `PostToolUse`: lint changed files |
+| orchestrator | GPT-5.6 Luna | `w-orchestration` | planner, builder, memory-curator, Explore | Reports and acquires portfolio work, dispatches task claims, recovers exact failed claims including retained legacy repair claims, forwards task transitions, and reports typed Integration attention; no repository write tools |
+| builder | GPT-5.6 Luna | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; task Build returns a lifecycle transition; `SessionStart`: repository context; `PostToolUse`: lint changed files |
 | build-reviewer | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or finalization review with read-only Git; `PreToolUse`: deny writes except scratch and terminal mutation |
-| finalizer | GPT-5.6 Terra | `w-change-finalization`, `h-codebase-orientation` | build-reviewer | User-invoked exact Change proof and finalization; `PreToolUse`: deny writes and terminal mutation |
-| test-curator | GPT-5.6 Terra | `w-test-curation` | None | `PreToolUse`: deny source writes |
-| memory-curator | GPT-5.6 Terra | `w-mem-curation` | None | None |
+| finalizer | GPT-5.6 Sol | `w-change-finalization`, `h-codebase-orientation` | build-reviewer | User-invoked exact Change proof and finalization; `PreToolUse`: deny writes and terminal mutation |
+| test-curator | GPT-5.6 Luna | `w-test-curation` | None | `PreToolUse`: deny source writes |
+| memory-curator | GPT-5.6 Luna | `w-mem-curation` | None | None |
 | knowledge-ingestor | GPT-5.6 Luna | `h-knowledge-ops` | None | None |
 | knowledge-enricher | GPT-5.6 Luna | `w-knowledge-enrichment`, `h-knowledge-ops` | None | None |
 

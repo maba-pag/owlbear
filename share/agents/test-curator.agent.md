@@ -4,7 +4,7 @@ description: "Test suite curation — transient-proof cleanup and durable regres
 argument-hint: "Curate tests"
 user-invocable: true
 disable-model-invocation: true
-model: GPT-5.6 Terra (copilot)
+model: GPT-5.6 Luna (copilot)
 tools:
   [vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createFile, edit/editFiles, edit/rename, search, owlbear-memory/recall_memory, owlbear-memory/save_memory]
 agents: []

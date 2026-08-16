@@ -4,7 +4,7 @@ description: "Memory maintenance — deduplicate, consolidate, prune, and promot
 argument-hint: "Curate: Periodic curation"
 user-invocable: true
 disable-model-invocation: true
-model: GPT-5.6 Terra (copilot)
+model: GPT-5.6 Luna (copilot)
 tools:
   [vscode/toolSearch, vscode/askQuestions, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search, owlbear-memory/curate_memory, owlbear-memory/delete_agent_memories, owlbear-memory/delete_memory, owlbear-memory/list_memories, owlbear-memory/read_memory, owlbear-memory/rename_agent_memories]
 agents: []
