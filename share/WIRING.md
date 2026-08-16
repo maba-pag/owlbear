@@ -75,7 +75,7 @@ Tool allowlists remain in agent frontmatter; they are not duplicated here.
 | `arch-audit` | Current agent directed by prompt | Loads `h-module-design` |
 | `frontend-audit` | Current agent directed by prompt | Loads frontend design and conventions; loads frontend proof guidance only for that toolchain |
 | `memory-audit` | Current agent directed by prompt | Loads memory structure and MCP memory before review; pending inspection uses preflight metadata and hands curation to `memory-curator` |
-| `legacy-audit` | Current agent directed by prompt | Uses its prompt-defined read-only audit procedure |
+| `legacy-audit` | Current agent directed by prompt | Loads `h-codebase-orientation` and `w-test-curation`; uses its prompt-defined read-only audit procedure |
 
 Project-local prompts are outside the portable inventory. They may select built-in agents or load
 project-local skills in addition to the shared surface.
