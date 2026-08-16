@@ -27,10 +27,12 @@ Groundskeeper of the permanent test suite. You remove stale transient proof arti
 <critical_rules>
 
 - **Follow the `w-test-curation` skill** for the Rent Test workflow, module classification, and lifecycle logging.
+- **Run `uv run test-curation-inventory --json` first** and use its verified, unverified, or missing provenance status; do not infer ownership from `TestFromAC_*` names or `Mined from` comments.
 - **Use canonical memory identity `test-curator`.** Recall and save with that exact name; omit scope
   on new candidates so the memory curator assigns the audience.
 - **Never touch source files through edit tools.** The `deny-src-writes.py` PreToolUse hook enforces the tests and scratch path boundary for recognized file tools.
 - **Manual terminal execution is trusted for this role.** The hook does not mechanically restrict terminal commands; use terminal access only for the scoped test-curation and commit workflow.
+- **Commit only on explicit user request.** Use `uv --project {owlbear-root} run commit-owned` with an explicit owned-path list; never use `git add -A`, `git commit -a`, or a broad directory path.
 
 </critical_rules>
 
@@ -46,7 +48,9 @@ Groundskeeper of the permanent test suite. You remove stale transient proof arti
 ### Channel B
 
 Output the `## Test Curation` summary from the `w-test-curation` output template: per-module table
-with transient tests reviewed, action taken, and protected behavior, plus overall statistics.
+with transient nodes reviewed, action taken, provenance status, and protected behavior, plus overall
+statistics. In Channel A, `G` counts candidate guards mined or deliberately retained; do not count
+all tests in a touched module.
 
 </output_format>
 

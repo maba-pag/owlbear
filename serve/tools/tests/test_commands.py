@@ -87,6 +87,7 @@ def test_internal_help_renders_indexes_aggregate(monkeypatch: object, capsys: ob
     assert "    doc-index [PATH]" in output
     assert "    py-index [PATH]" in output
     assert "    ts-index [PATH]" in output
+    assert "test-curation-inventory" in output
 
 
 @pytest.mark.parametrize(("topic", "heading"), [("s", "Setup:"), ("m", "Maintenance:"), ("i", "Internal:")])
