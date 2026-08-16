@@ -1317,6 +1317,10 @@ class DeliveryRuntimeReferenceError(ValueError):
     code = "ERR_DELIVERY_RUNTIME_REFERENCE"
 
 
+class DeliveryRuntimeMigrationError(ValueError):
+    """A legacy frontier requires explicit migration before startup."""
+
+
 _STAGE_ORDER = {
     DeliveryStage.DESIGN: 0,
     DeliveryStage.PLANNING: 1,
@@ -3250,13 +3254,13 @@ def _normalize_legacy_integration_completion(payload: dict[str, object]) -> None
     result_id = payload.pop("integration_result_id", None)
     completion = payload.pop("integration_completion", None)
     if result_id is not None or completion is not None:
-        raise ValueError(_LEGACY_INTEGRATION_COMPLETION_MESSAGE)
+        raise DeliveryRuntimeMigrationError(_LEGACY_INTEGRATION_COMPLETION_MESSAGE)
 
 
 def _reject_legacy_finalization(payload: dict[str, object]) -> None:
     finalization = payload.get("finalization")
     if isinstance(finalization, dict) and finalization.get("schema_version") != _FINALIZATION_SCHEMA_VERSION:
-        raise ValueError(_LEGACY_FINALIZATION_MESSAGE)
+        raise DeliveryRuntimeMigrationError(_LEGACY_FINALIZATION_MESSAGE)
 
 
 def _backfill_checkpoint_state(
@@ -3576,6 +3580,7 @@ __all__ = [
     "DeliveryReviewReceipt",
     "DeliveryRuntime",
     "DeliveryRuntimeConflictError",
+    "DeliveryRuntimeMigrationError",
     "DeliveryRuntimeReferenceError",
     "DeliveryStage",
     "DeliveryTaskDefinition",

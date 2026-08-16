@@ -73,6 +73,7 @@ from owlbear_delivery import (
     DeliveryRolePolicy,
     DeliveryRuntime,
     DeliveryRuntimeConflictError,
+    DeliveryRuntimeMigrationError,
     DeliveryStage,
     DeliveryStartupConfig,
     DeliveryTaskDefinition,
@@ -3866,6 +3867,7 @@ def test_delivery_loader_rejects_git_and_state_identity_before_composition(tmp_p
             workspace_root=runtime_repository,
         )
     assert runtime_error.value.field == "runtime_root"
+    assert runtime_error.value.detail == "Delivery runtime state is invalid"
     assert not (runtime_root / "capacity.json").exists()
 
 
@@ -3894,7 +3896,7 @@ def test_delivery_loader_preserves_legacy_integration_retirement_diagnostic(tmp_
 
     assert exc_info.value.field == "runtime_root"
     assert exc_info.value.detail == "legacy Integration completion requires retirement before frontier migration"
-    assert isinstance(exc_info.value.__cause__, ValueError)
+    assert isinstance(exc_info.value.__cause__, DeliveryRuntimeMigrationError)
     assert not (runtime_root / "capacity.json").exists()
 
 

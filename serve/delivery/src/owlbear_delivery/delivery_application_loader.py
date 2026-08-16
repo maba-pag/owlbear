@@ -23,6 +23,7 @@ from owlbear_delivery.completed_history import CompletedHistoryCatalog
 from owlbear_delivery.delivery_runtime import (
     DeliveryFrontier,
     DeliveryRuntime,
+    DeliveryRuntimeMigrationError,
     DeliveryWorkerRole,
     parse_delivery_frontier,
 )
@@ -286,9 +287,11 @@ def _validate_runtime_state(runtime_root: Path, contracts: dict[str, DeliveryCon
             frontier_path = runtime_root / "changes" / contract.change_id / "frontier.json"
             frontier = parse_delivery_frontier(frontier_path.read_bytes())[0]
             _require_runtime_bindings(contract, frontier)
+    except DeliveryRuntimeMigrationError as exc:
+        error = _load_error("runtime_root", str(exc))
+        raise error from exc
     except (OSError, ValidationError, TypeError, ValueError) as exc:
-        detail = str(exc) or "Delivery runtime state is invalid"
-        error = _load_error("runtime_root", detail)
+        error = _load_error("runtime_root", "Delivery runtime state is invalid")
         raise error from exc
 
 
