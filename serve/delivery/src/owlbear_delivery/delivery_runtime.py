@@ -2064,6 +2064,7 @@ class DeliveryRuntime:
             completion_id=receipt.completion_id,
             title=self._contract.title,
             outcome_titles=tuple(outcome.title for outcome in self._contract.outcomes),
+            outcome_promises=tuple(outcome.promise for outcome in self._contract.outcomes),
         )
         if frontier.change_completion is not None:
             if (

@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 import CopyCommand from './CopyCommand'
 import { designCommand, designWorkTitle } from './designWorkPresentation'
+import { workItemStatusClassName } from './workItemPresentation'
 
 interface DesignWorkSectionProps {
   changeIds: string[]
@@ -13,7 +14,7 @@ export default function DesignWorkSection({ changeIds, selectedChangeId, onSelec
   return (
     <section className="min-w-0" aria-labelledby="design-work-heading" data-testid="design-work-section">
       <h2 id="design-work-heading" className="mb-static-sm border-b border-contrast-lower px-static-sm pb-static-xs text-md font-semibold text-primary">Design work</h2>
-      <div className="mb-static-sm hidden grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] text-2xs font-semibold uppercase text-contrast-high md:grid" aria-hidden="true">
+      <div className="mb-static-sm hidden grid-cols-[minmax(0,44fr)_minmax(0,24fr)_minmax(0,32fr)] text-2xs font-semibold uppercase text-contrast-high md:grid" aria-hidden="true">
         <span className="px-static-sm py-static-xs">Work</span>
         <span className="px-static-sm py-static-xs">Progress</span>
         <span className="px-static-sm py-static-xs">Status</span>
@@ -30,7 +31,7 @@ export default function DesignWorkSection({ changeIds, selectedChangeId, onSelec
               ].join(' ')}
               data-design-work={changeId}
             >
-              <dl className="grid gap-static-sm md:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] md:gap-0">
+              <dl className="grid gap-static-sm md:grid-cols-[minmax(0,44fr)_minmax(0,24fr)_minmax(0,32fr)] md:gap-0">
                 <div className="min-w-0 md:pr-static-sm">
                   <dt className="sr-only">Work</dt>
                   <dd>
@@ -57,7 +58,7 @@ export default function DesignWorkSection({ changeIds, selectedChangeId, onSelec
                 <div className="md:pl-static-sm">
                   <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high md:sr-only">Status</dt>
                   <dd>
-                    <span className="block font-medium text-primary">Continue Design</span>
+                    <span className={`inline-flex items-center rounded-sm border px-static-xs py-1 text-xs font-semibold leading-none ${workItemStatusClassName('ready')}`} data-status-tone="ready">Needs design</span>
                     <CopyCommand command={designCommand(changeId)} className="mt-1" />
                   </dd>
                 </div>

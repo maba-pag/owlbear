@@ -207,6 +207,8 @@ const completed: CompletedChangeRecord = {
   source_target_commit: 'e'.repeat(40),
   title: 'Portfolio redesign',
   semantic_summary: 'Shipped the grouped Delivery workspace.',
+  outcome_titles: ['Ship the grouped Delivery workspace'],
+  outcome_promises: ['Give operators a clear view of grouped Delivery work.'],
 }
 
 const receiptCompleted: CompletedChangeRecord = {
@@ -216,6 +218,8 @@ const receiptCompleted: CompletedChangeRecord = {
   completion_id: '1'.repeat(64),
   title: 'Receipt-backed delivery',
   semantic_summary: 'Accepted through a merged pull request.',
+  outcome_titles: ['Accept the merged Delivery change'],
+  outcome_promises: ['Record the accepted change with durable evidence.'],
   finalization_receipt_id: '2'.repeat(64),
   finalized_change_head: '3'.repeat(40),
   repository_identity: 'owlbear/example',
@@ -533,7 +537,8 @@ it('presents Change-grouped Outcomes by work, progress, and status', async () =>
   expect(table).toHaveTextContent('Work')
   expect(table).toHaveTextContent('Progress')
   expect(table).toHaveTextContent('Status')
-  expect(table).toHaveTextContent('Builder working')
+  expect(table).toHaveTextContent('Working')
+  expect(table).toHaveTextContent('Builder')
   expect(table).toHaveTextContent('Decision required')
   expect(table).toHaveTextContent('Answer request')
   expect(table).toHaveTextContent('Outcome: OUT-001')
@@ -649,7 +654,7 @@ it('filters grouped rows by Change and Needs without conflating Activity', async
 
   selectValue(selects[1], 'you')
   selectValue(selects[0], 'change-beta')
-  expect(await screen.findByText('No portfolio entries match the current filters.')).toBeInTheDocument()
+  expect(await screen.findByText('No matching delivery work')).toBeInTheDocument()
   expect(screen.queryByText('No current Delivery work.')).not.toBeInTheDocument()
 })
 
@@ -781,6 +786,39 @@ it('keeps claim recovery and backward movement explicit and confirmable', async 
   expect(await screen.findByText('Moved backward. Reset: OUT-002.')).toBeInTheDocument()
 })
 
+it('closes confirmation modals with Escape without performing the action', async () => {
+  const { container } = renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+  await screen.findByTestId('work-item-detail')
+
+  fireEvent.click(screen.getByText('Administrative actions'))
+  const [stage, reason] = await waitFor(() => {
+    const elements = [
+      namedPdsHost(container, 'p-select', 'backward-stage'),
+      namedPdsHost(container, 'p-input-text', 'backward-reason'),
+    ]
+    expect(elements.every(Boolean)).toBe(true)
+    return elements as [Element, Element]
+  })
+  selectValue(stage, 'planning')
+  inputValue(reason, 'Authority changed')
+  fireEvent.click(screen.getByText('Review backward move'))
+  await screen.findByText('The following Outcomes will be reset:')
+
+  fireEvent.keyDown(screen.getByText('Confirm backward move'), { key: 'Escape' })
+
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+  expect(requests.some(({ url, method }) => method === 'POST' && url.endsWith('/move-backward'))).toBe(false)
+})
+
+it('closes the primary work-item flyout with Escape', async () => {
+  renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+  const detailView = await screen.findByTestId('work-item-detail')
+
+  fireEvent.keyDown(detailView, { key: 'Escape' })
+
+  await waitFor(() => expect(screen.queryByTestId('work-item-detail')).not.toBeInTheDocument())
+})
+
 it('reconciles a pending publication checkpoint from the Change publication view', async () => {
   const publicationCard = card({
     item_key: 'publication',
@@ -831,6 +869,8 @@ it('reconciles a pending publication checkpoint from the Change publication view
   expect(inspector).toHaveTextContent('Checkpoint triggers: finalization')
   expect(screen.getByLabelText('Delivery portfolio status')).toHaveTextContent('1Ready')
   expect(publicationRow).toHaveTextContent('Checkpoint pending')
+  expect(within(publicationRow).getByText('Ready')).toHaveAttribute('data-status-tone', 'ready')
+  expect(within(publicationRow).getByText('Ready')).not.toHaveTextContent('Checkpoint pending')
   fireEvent.click(within(inspector).getByText('Publish checkpoint'))
   await waitFor(() => expect(requests).toContainEqual({
     url: '/api/changes/change-alpha/publication/reconcile',
@@ -1646,7 +1686,7 @@ it('confirms and recovers a missing Change worktree from its exact reviewed head
   expect(await screen.findByText('Missing Change worktree recovered.')).toBeInTheDocument()
 })
 
-it('uses the Done status tag without leaking the internal Stage field', async () => {
+it('uses the Complete status tag without leaking the internal Stage field', async () => {
   currentDetail = detail({
     card: card({
       stage: 'completed',
@@ -1659,7 +1699,7 @@ it('uses the Done status tag without leaking the internal Stage field', async ()
   renderPage('/delivery/change-alpha/outcome%3AOUT-001')
 
   const inspector = await screen.findByTestId('work-item-detail')
-  expect(inspector).toHaveTextContent('Done')
+  expect(inspector).toHaveTextContent('Complete')
   expect(inspector).not.toHaveTextContent('Completed')
   expect(inspector).not.toHaveTextContent('Stage')
   expect(inspector).toHaveTextContent('Progress1 of 1 Delivery tasks reviewed')
@@ -1977,12 +2017,29 @@ it('presents legacy completion package provenance explicitly', async () => {
   renderPage()
   fireEvent.click(screen.getByText('Completed history'))
   const record = await screen.findByTestId('completed-change-record')
-  fireEvent.click(within(record).getByText('Inspect'))
+  fireEvent.click(within(record).getByRole('button', { name: 'Inspect Portfolio redesign' }))
 
   const detailView = await screen.findByTestId('completed-change-detail')
+  const openFlyout = Array.from(document.querySelectorAll('p-flyout')).find((element) => (element as HTMLElement & { open: boolean }).open)
+  expect(openFlyout).toBeInTheDocument()
+  expect(detailView).toHaveTextContent('Purpose')
+  expect(detailView).toHaveTextContent('Give operators a clear view of grouped Delivery work.')
+  expect(detailView).toHaveTextContent('Delivered outcomes')
+  expect(detailView).toHaveTextContent('Ship the grouped Delivery workspace')
+  expect(detailView).toHaveTextContent('Historical delivery')
   expect(detailView).toHaveTextContent('Legacy package')
   expect(detailView).toHaveTextContent('.owlbear/legacy/completed/change-alpha')
   expect(detailView).toHaveTextContent('.owlbear/completed/change-alpha')
+})
+
+it('explains when completed history is empty', async () => {
+  completedRecords = []
+  renderPage()
+  fireEvent.click(screen.getByText('Completed history'))
+
+  const emptyState = await screen.findByTestId('completed-history-empty-state')
+  expect(emptyState).toHaveTextContent('No completed changes yet')
+  expect(emptyState).toHaveTextContent('Accepted Delivery changes will appear here with their merge evidence.')
 })
 
 it('presents receipt completion identities without graph claims', async () => {
@@ -1990,16 +2047,31 @@ it('presents receipt completion identities without graph claims', async () => {
   renderPage()
   fireEvent.click(screen.getByText('Completed history'))
   const record = await screen.findByTestId('completed-change-record')
-  fireEvent.click(within(record).getByText('Inspect'))
+  const pullRequest = within(record).getByRole('link', { name: 'PR #42' })
+  expect(pullRequest).toHaveAttribute('href', 'https://github.com/owlbear/example/pull/42')
+  expect(within(record).getByText(/Aug 11, 2026/)).toBeInTheDocument()
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+  fireEvent.click(within(record).getByRole('button', { name: 'Copy accepted merge commit' }))
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith('4'.repeat(40)))
+  fireEvent.click(within(record).getByRole('button', { name: 'Inspect Receipt-backed delivery' }))
 
   const detailView = await screen.findByTestId('completed-change-detail')
+  expect(detailView).toHaveTextContent('Purpose')
+  expect(detailView).toHaveTextContent('Record the accepted change with durable evidence.')
+  expect(detailView).toHaveTextContent('Delivered outcomes')
+  expect(detailView).toHaveTextContent('Accept the merged Delivery change')
+  expect(detailView).toHaveTextContent('Accepted delivery')
   expect(detailView).toHaveTextContent('Completion receipt')
   expect(detailView).toHaveTextContent('owlbear/example')
   expect(detailView).toHaveTextContent('#42')
+  expect(detailView).toHaveTextContent('main')
   expect(detailView).toHaveTextContent('Finalized Change head')
   expect(detailView).toHaveTextContent('3'.repeat(40))
   expect(detailView).toHaveTextContent('Accepted merge commit')
   expect(detailView).toHaveTextContent('4'.repeat(40))
+  expect(within(detailView).getByRole('button', { name: 'Copy completion ID' })).toBeInTheDocument()
+  expect(within(detailView).getByRole('button', { name: 'Copy finalized Change head' })).toBeInTheDocument()
   expect(detailView).not.toHaveTextContent(/ancestor|descendant|merged into|merge method/i)
 })
 

@@ -6,7 +6,11 @@ import type {
 } from '../api/workItems'
 import { workItemIdentity, type WorkItemIdentity } from '../hooks/useWorkItems'
 import CopyCommand from './CopyCommand'
-import { PROGRESS_STAGE_LABELS, workItemStatusLabel } from './workItemPresentation'
+import {
+  PROGRESS_STAGE_LABELS,
+  workItemStatus,
+  workItemStatusClassName,
+} from './workItemPresentation'
 
 interface WorkPortfolioTableProps {
   groups: ChangeGroupView[]
@@ -77,23 +81,37 @@ function ActionLink({ item, onSelect, subdued = false }: { item: WorkItemCardVie
 }
 
 function ProgressState({ item }: { item: WorkItemCardView }) {
-  if (item.stage === null) return <strong className="block font-medium text-primary">{item.progress.label}</strong>
-  if (item.stage === 'completed') return <strong className="block font-medium text-primary">{item.progress.label}</strong>
-  const stage = PROGRESS_STAGE_LABELS[item.stage]
+  const stage = item.stage === null ? null : PROGRESS_STAGE_LABELS[item.stage]
+  const quantified = item.progress.done !== null && item.progress.total !== null && item.progress.total > 0
+  const percentage = quantified
+    ? Math.min(100, Math.round((item.progress.done as number / (item.progress.total as number)) * 100))
+    : null
   return (
     <span>
-      <strong className="block font-medium text-primary">{stage}</strong>
+      {stage ? <strong className="block font-medium text-primary">{stage}</strong> : null}
+      {percentage !== null ? (
+        <span
+          className="mt-1 block h-1.5 w-full max-w-40 overflow-hidden rounded-full bg-contrast-low"
+          role="progressbar"
+          aria-label={`${item.progress.label} progress`}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={percentage}
+        >
+          <span className="block h-full rounded-full bg-primary" style={{ width: `${percentage}%` }} />
+        </span>
+      ) : null}
       <span className="mt-0.5 block text-xs text-contrast-medium">{item.progress.label}</span>
     </span>
   )
 }
 
 function CurrentState({ item, onSelect }: { item: WorkItemCardView; onSelect: WorkPortfolioTableProps['onSelect'] }) {
-  const state = workItemStatusLabel(item)
-  const urgent = item.needs === 'you'
+  const state = workItemStatus(item)
   return (
     <span>
-      <span className={urgent ? 'block font-semibold text-error' : 'block font-medium text-primary'}>{state}</span>
+      <span className={`inline-flex items-center rounded-sm border px-static-xs py-1 text-xs font-semibold leading-none ${workItemStatusClassName(state.tone)}`} data-status-tone={state.tone}>{state.label}</span>
+      {state.detail ? <span className="mt-1 block text-xs text-contrast-medium">{state.detail}</span> : null}
       {item.activity.task_id ? <span className="mt-0.5 block text-xs text-contrast-medium">Task {item.activity.task_id}</span> : null}
       {item.action.kind !== 'none' ? <span className="mt-0.5 block"><ActionLink item={item} onSelect={onSelect} /></span> : null}
     </span>
@@ -107,9 +125,9 @@ function DesktopTable({ group, selected, onSelect }: GroupTableProps) {
       <table className="w-full min-w-[48rem] table-fixed border-separate border-spacing-y-1 text-left text-sm">
         <caption className="sr-only">Current Outcomes for {group.title}</caption>
         <colgroup>
-          <col className="w-[40%]" />
-          <col className="w-[25%]" />
-          <col className="w-[35%]" />
+          <col className="w-[44%]" />
+          <col className="w-[24%]" />
+          <col className="w-[32%]" />
         </colgroup>
         <thead>
           <tr className="text-2xs font-semibold uppercase text-contrast-high">
@@ -184,7 +202,7 @@ function PublicationGate({ group, selected, onSelect }: GroupTableProps) {
       aria-label={`Change publication for ${group.title}`}
       data-work-item={workItemIdentity(item)}
     >
-      <dl className="grid gap-static-sm md:grid-cols-[minmax(0,40fr)_minmax(0,25fr)_minmax(0,35fr)] md:items-start md:gap-0">
+      <dl className="grid gap-static-sm md:grid-cols-[minmax(0,44fr)_minmax(0,24fr)_minmax(0,32fr)] md:items-start md:gap-0">
         <div className="min-w-0 md:px-static-sm md:py-static-sm">
           <dt className="sr-only">Work</dt>
           <dd>

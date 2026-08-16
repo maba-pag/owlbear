@@ -30,7 +30,7 @@ class CompletionPullRequestIdentity(_AcceptanceModel):
 
 
 class CompletionDisplayMetadata(_AcceptanceModel):
-    """Content-validated presentation text captured from admitted Change authority."""
+    """Content-validated semantic display text captured from admitted Change authority."""
 
     schema_version: Literal[1] = 1
     display_id: str = Field(pattern=_DIGEST_PATTERN)
@@ -38,6 +38,7 @@ class CompletionDisplayMetadata(_AcceptanceModel):
     completion_id: str = Field(pattern=_DIGEST_PATTERN)
     title: str = Field(min_length=1)
     outcome_titles: tuple[str, ...] = Field(min_length=1)
+    outcome_promises: tuple[str, ...] | None = None
 
     @classmethod
     def create(
@@ -47,8 +48,9 @@ class CompletionDisplayMetadata(_AcceptanceModel):
         completion_id: str,
         title: str,
         outcome_titles: tuple[str, ...],
+        outcome_promises: tuple[str, ...] | None = None,
     ) -> CompletionDisplayMetadata:
-        """Create display metadata without adding presentation text to acceptance evidence."""
+        """Create semantic display metadata without adding source documents to evidence."""
         payload = {
             "schema_version": 1,
             "change_id": change_id,
@@ -56,6 +58,8 @@ class CompletionDisplayMetadata(_AcceptanceModel):
             "title": title,
             "outcome_titles": outcome_titles,
         }
+        if outcome_promises is not None:
+            payload["outcome_promises"] = outcome_promises
         return cls(display_id=_digest(payload), **payload)
 
     @model_validator(mode="after")
@@ -63,7 +67,13 @@ class CompletionDisplayMetadata(_AcceptanceModel):
         if any(not title for title in self.outcome_titles):
             message = "completion display Outcome titles must be nonempty"
             raise ValueError(message)
-        if self.display_id != _digest(self.model_dump(mode="json", exclude={"display_id"})):
+        if self.outcome_promises is not None and (
+            len(self.outcome_promises) != len(self.outcome_titles)
+            or any(not promise for promise in self.outcome_promises)
+        ):
+            message = "completion display Outcome promises must match nonempty Outcome titles"
+            raise ValueError(message)
+        if self.display_id != _digest(self.model_dump(mode="json", exclude={"display_id"}, exclude_none=True)):
             message = "completion display metadata identity is invalid"
             raise ValueError(message)
         return self

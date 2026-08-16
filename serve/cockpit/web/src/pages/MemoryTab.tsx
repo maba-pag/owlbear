@@ -850,7 +850,14 @@ function MemoryTab() {
           </PButtonPure>
         </div>
 
-        {!hasEntries && hasFetched && !isFetching ? <p className="rounded-lg border border-contrast-low bg-canvas p-static-lg text-center">No memory entries yet</p> : null}
+        {!hasEntries && hasFetched && !isFetching ? (
+          <section className="grid min-h-40 place-items-center border border-dashed border-contrast-low bg-canvas px-static-lg py-static-xl text-center" data-testid="memory-empty-state">
+            <div className="grid max-w-[44rem] gap-static-xs">
+              <PHeading tag="h2" size="small">No memory entries yet</PHeading>
+              <p className="text-sm leading-relaxed text-contrast-medium">Entries saved to Memory will appear here for review and curation.</p>
+            </div>
+          </section>
+        ) : null}
 
         {hasEntries && !hasVisibleEntries ? (
           <div className="rounded-lg border border-contrast-low bg-canvas p-static-md text-center">

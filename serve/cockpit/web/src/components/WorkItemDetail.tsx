@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import {
   PButton,
   PHeading,
@@ -23,6 +23,8 @@ import {
 } from '../api/workItems'
 import {
   PROGRESS_STAGE_LABELS,
+  workItemStatus,
+  workItemStatusClassName,
   workItemStatusLabel,
 } from './workItemPresentation'
 import CopyCommand from './CopyCommand'
@@ -32,6 +34,21 @@ type FieldValueEvent = { target?: { value?: unknown }; detail?: { value?: unknow
 function fieldValue(event: FieldValueEvent): string {
   const value = event.detail?.value ?? event.target?.value
   return typeof value === 'string' ? value : ''
+}
+
+function ConfirmationContent({ children, onClose }: { children: ReactNode; onClose: () => void }) {
+  return (
+    <div
+      className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary"
+      onKeyDownCapture={(event) => {
+        if (event.key !== 'Escape') return
+        event.preventDefault()
+        onClose()
+      }}
+    >
+      {children}
+    </div>
+  )
 }
 
 interface WorkItemDetailProps {
@@ -94,7 +111,7 @@ function DetailHeader({ detail }: Pick<WorkItemDetailProps, 'detail'>) {
         <PHeading id="work-detail-heading" tag="h2" size="lg">{card.scope === 'outcome' ? card.title : 'Publication'}</PHeading>
       </div>
       <div className="flex flex-wrap gap-static-xs">
-        <PTag compact>{workItemStatusLabel(card)}</PTag>
+        <span className={`inline-flex items-center rounded-sm border px-static-xs py-1 text-xs font-semibold leading-none ${workItemStatusClassName(workItemStatus(card).tone)}`}>{workItemStatusLabel(card)}</span>
       </div>
     </div>
   )
@@ -211,7 +228,7 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
       </div>
       {confirmOpen ? (
         <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm Change abandonment' }}>
-          <div className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary">
+          <ConfirmationContent onClose={() => setConfirmOpen(false)}>
             <PHeading tag="h2" size="lg">Confirm Change abandonment</PHeading>
             <p className="text-sm">Abandonment is permanent. The Change will not enter completed history.</p>
             <p className="text-sm text-contrast-medium">Reason: {reason.trim()}</p>
@@ -219,7 +236,7 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
               <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton>
               <PButton type="button" disabled={props.pendingAction !== null} onClick={() => void abandon()}>{props.pendingAction === 'change-abandon' ? 'Abandoning...' : 'Confirm abandon Change'}</PButton>
             </div>
-          </div>
+          </ConfirmationContent>
         </PModal>
       ) : null}
     </section>
@@ -280,7 +297,7 @@ function ClaimSection({ detail, pendingAction, onRecoverClaim }: WorkItemDetailP
       </PButton>
       {confirmOpen ? (
         <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm lost claim' }}>
-          <div className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary">
+          <ConfirmationContent onClose={() => setConfirmOpen(false)}>
             <PHeading tag="h2" size="lg">Confirm lost claim</PHeading>
             <p className="text-sm">Confirm the worker has stopped and this exact claim is lost. No process-status inference is used.</p>
             <dl className="grid gap-static-xs break-all text-sm"><dt>Attempt</dt><dd>{claim.attempt_id}</dd><dt>Claim</dt><dd>{claim.claim_id}</dd></dl>
@@ -288,7 +305,7 @@ function ClaimSection({ detail, pendingAction, onRecoverClaim }: WorkItemDetailP
               <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton>
               <PButton type="button" disabled={pendingAction !== null} onClick={() => void recover()}>{pendingAction === 'recover' ? 'Recovering...' : 'Confirm lost and recover'}</PButton>
             </div>
-          </div>
+          </ConfirmationContent>
         </PModal>
       ) : null}
     </section>
@@ -380,7 +397,7 @@ function BackwardMoveSection({ detail, pendingAction, onPreviewBackward, onMoveB
       </div>
       {confirmOpen ? (
         <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm backward move' }}>
-          <div className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary"><PHeading tag="h2" size="lg">Move to {target ? PROGRESS_STAGE_LABELS[target] : ''}</PHeading><p className="text-sm">The following Outcomes will be reset:</p><ul className="grid list-disc gap-static-xs pl-static-lg text-sm">{preview?.invalidated_outcome_ids.map((outcomeId) => <li key={outcomeId}>{outcomeId}</li>)}</ul><p className="text-sm text-contrast-medium">Reason: {reason.trim()}</p><div className="flex flex-wrap justify-end gap-static-xs"><PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton><PButton type="button" disabled={pendingAction !== null} onClick={() => void move()}>{pendingAction === 'move' ? 'Moving...' : 'Confirm backward move'}</PButton></div></div>
+          <ConfirmationContent onClose={() => setConfirmOpen(false)}><PHeading tag="h2" size="lg">Move to {target ? PROGRESS_STAGE_LABELS[target] : ''}</PHeading><p className="text-sm">The following Outcomes will be reset:</p><ul className="grid list-disc gap-static-xs pl-static-lg text-sm">{preview?.invalidated_outcome_ids.map((outcomeId) => <li key={outcomeId}>{outcomeId}</li>)}</ul><p className="text-sm text-contrast-medium">Reason: {reason.trim()}</p><div className="flex flex-wrap justify-end gap-static-xs"><PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton><PButton type="button" disabled={pendingAction !== null} onClick={() => void move()}>{pendingAction === 'move' ? 'Moving...' : 'Confirm backward move'}</PButton></div></ConfirmationContent>
         </PModal>
       ) : null}
       </div>
@@ -474,7 +491,7 @@ function WorktreeRecoverySection(props: WorkItemDetailProps) {
       </PButton>
       {confirmOpen ? (
         <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm worktree recovery' }}>
-          <div className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary">
+          <ConfirmationContent onClose={() => setConfirmOpen(false)}>
             <PHeading tag="h2" size="lg">Recover missing worktree</PHeading>
             <p className="text-sm">The managed worktree will be recreated at its canonical path. The Change branch and reviewed head will remain unchanged.</p>
             <div className="flex flex-wrap justify-end gap-static-xs">
@@ -483,7 +500,7 @@ function WorktreeRecoverySection(props: WorkItemDetailProps) {
                 {props.pendingAction === pendingAction ? 'Recovering...' : 'Confirm worktree recovery'}
               </PButton>
             </div>
-          </div>
+          </ConfirmationContent>
         </PModal>
       ) : null}
     </section>
@@ -524,7 +541,7 @@ function WorktreeCleanupSection(props: WorkItemDetailProps) {
       </PButton>
       {confirmOpen ? (
         <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': `Confirm ${actionName.toLowerCase()}` }}>
-          <div className="grid w-[min(32rem,calc(100vw-2rem))] gap-static-md text-primary">
+          <ConfirmationContent onClose={() => setConfirmOpen(false)}>
             <PHeading tag="h2" size="lg">{actionName}</PHeading>
             <p className="text-sm">The worktree directory will be removed. The Change branch and cleanup receipt will remain.</p>
             <div className="flex flex-wrap justify-end gap-static-xs">
@@ -533,7 +550,7 @@ function WorktreeCleanupSection(props: WorkItemDetailProps) {
                 {props.pendingAction === pendingAction ? 'Cleaning...' : `Confirm ${actionName.toLowerCase()}`}
               </PButton>
             </div>
-          </div>
+          </ConfirmationContent>
         </PModal>
       ) : null}
     </section>

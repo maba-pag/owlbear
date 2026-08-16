@@ -420,6 +420,8 @@ interface CompletedChangeRecordBase {
   completion_id: string
   title: string
   semantic_summary: string
+  outcome_titles: string[]
+  outcome_promises?: string[] | null
 }
 
 export interface LegacyCompletedChangeRecord extends CompletedChangeRecordBase {

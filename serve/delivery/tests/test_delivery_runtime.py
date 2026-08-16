@@ -1337,6 +1337,7 @@ def test_completion_receipt_and_terminal_frontier_publish_atomically(tmp_path: P
     assert display.completion_id == receipt.completion_id
     assert display.title == runtime.contract.title
     assert display.outcome_titles == tuple(outcome.title for outcome in runtime.contract.outcomes)
+    assert display.outcome_promises == tuple(outcome.promise for outcome in runtime.contract.outcomes)
     with pytest.raises(DeliveryRuntimeConflictError, match="terminal"):
         runtime.reconcile_finalization_head("4" * 40, datetime(2026, 8, 11, 19, tzinfo=UTC))
 

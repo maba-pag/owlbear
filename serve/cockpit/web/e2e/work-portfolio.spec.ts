@@ -82,7 +82,7 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(table).toContainText('Decision required')
     await expect(table).toContainText('Ready for finalization')
     await expect(table).toContainText('Waiting on OUT-002')
-    await expect(table).toContainText('Done')
+    await expect(table).toContainText('Complete')
     await expect(table).not.toContainText('Reviewed')
 
     const summary = page.getByLabel('Delivery portfolio status')

@@ -137,7 +137,7 @@ export function PortfolioHeaderSummary({ operating, totals, needsFilter, onNeeds
         </span>
       </div>
       <div
-        className="flex min-w-0 flex-wrap items-center gap-x-static-md gap-y-static-xs border-t border-contrast-low pt-static-xs sm:translate-y-0.5 sm:self-center sm:border-l sm:border-t-0 sm:pl-static-lg sm:pt-0"
+        className="flex min-w-0 flex-wrap items-center gap-x-static-md gap-y-static-xs border-t border-contrast-low pt-static-xs sm:translate-y-0.5 sm:self-center sm:border-l sm:border-t-0 sm:pl-static-md sm:pt-0"
         role="group"
         aria-label="Work item status"
         data-testid="portfolio-work-summary"

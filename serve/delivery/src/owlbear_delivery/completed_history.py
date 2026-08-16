@@ -175,6 +175,8 @@ class _CompletedChangeRecordBase(_CompletedHistoryModel):
     completion_id: Digest
     title: str = Field(min_length=1)
     semantic_summary: str = Field(min_length=1)
+    outcome_titles: tuple[str, ...] = Field(min_length=1)
+    outcome_promises: tuple[str, ...] | None = None
 
 
 class LegacyCompletedChangeRecord(_CompletedChangeRecordBase):
@@ -324,7 +326,7 @@ class CompletedHistoryCatalog:
         contract = self._verify_design_package(target_commit, path, snapshot)
         self._verify_runtime_capture(target_commit, path, snapshot, contract)
         introducing_commit, source_commit = self._introduction(target_commit, snapshot)
-        summary = " | ".join((contract.title, *(outcome.title for outcome in contract.outcomes)))
+        outcome_titles = tuple(outcome.title for outcome in contract.outcomes)
         return LegacyCompletedChangeRecord(
             change_id=snapshot.manifest.change_id,
             completion_id=snapshot.completion_id,
@@ -334,7 +336,9 @@ class CompletedHistoryCatalog:
             introducing_target_commit=introducing_commit,
             source_target_commit=source_commit,
             title=contract.title,
-            semantic_summary=summary,
+            semantic_summary=" | ".join(outcome_titles),
+            outcome_titles=outcome_titles,
+            outcome_promises=tuple(outcome.promise for outcome in contract.outcomes),
         )
 
     @staticmethod
@@ -345,7 +349,9 @@ class CompletedHistoryCatalog:
             change_id=receipt.change_id,
             completion_id=receipt.completion_id,
             title=display.title,
-            semantic_summary=" | ".join((display.title, *display.outcome_titles)),
+            semantic_summary=" | ".join(display.outcome_titles),
+            outcome_titles=display.outcome_titles,
+            outcome_promises=display.outcome_promises,
             finalization_receipt_id=receipt.finalization_receipt_id,
             finalized_change_head=receipt.finalized_change_head,
             repository_identity=receipt.repository_identity,

@@ -282,6 +282,7 @@ def _publish_receipt(
         completion_id=receipt.completion_id,
         title=title,
         outcome_titles=(f"Ship {title}",),
+        outcome_promises=(f"Deliver the purpose of {title}.",),
     )
     store = CompletionReceiptStore(runtime_root)
     for participant in (store.participant(receipt), store.display_participant(display)):
@@ -315,6 +316,9 @@ def test_catalog_pages_searches_and_shows_verified_sibling_history(tmp_path: Pat
     assert second_page.next_cursor is None
     assert search.records == (shown,)
     assert isinstance(shown, LegacyCompletedChangeRecord)
+    assert shown.semantic_summary == "Ship Beta search"
+    assert shown.outcome_titles == ("Ship Beta search",)
+    assert shown.outcome_promises == ("Return a verified semantic record.",)
     assert shown.introducing_target_commit == commits["second"]
     assert shown.source_target_commit == commits["first"]
     assert shown.completion_path == ".owlbear/legacy/completed/change-b"
@@ -393,7 +397,10 @@ def test_catalog_combines_legacy_and_receipt_history_without_false_graph_claims(
         ("change-b", "completion-receipt"),
         ("change-c", "completion-receipt"),
     )
+    assert page.records[1].semantic_summary == "Ship Beta accepted"
+    assert page.records[1].outcome_promises == ("Deliver the purpose of Beta accepted.",)
     assert search.records[0].completion_id == replacement.completion_id
+    assert search.records[0].semantic_summary == "Ship Beta accepted"
     assert isinstance(shown, ReceiptCompletedChangeRecord)
     assert shown.finalized_change_head == added.finalized_change_head
     assert shown.accepted_merge_commit == added.accepted_merge_commit

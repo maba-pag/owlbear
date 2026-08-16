@@ -1,5 +1,5 @@
-import { useDeferredValue, useEffect, useRef, useState, type CSSProperties } from 'react'
-import { PButton, PButtonPure, PFlyout, PIcon, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'
+import { useDeferredValue, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { PButton, PButtonPure, PFlyout, PHeading, PIcon, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'
 import { useLocation, useNavigate } from 'react-router'
 import type { ChangeGroupView, WorkItemNeed } from '../api/workItems'
 import CompletedHistoryWorkspace from '../components/CompletedHistoryWorkspace'
@@ -236,6 +236,19 @@ function PortfolioWorkspace({
   return <WorkPortfolioTable groups={groups} selected={selected} emptyMessage={emptyMessage} onSelect={onSelect} />
 }
 
+function EmptyPortfolioState({ filtered }: { filtered: boolean }) {
+  return (
+    <section className="grid min-h-40 place-items-center border border-dashed border-contrast-low bg-surface px-static-lg py-static-xl text-center" data-testid="work-empty-state">
+      <div className="grid max-w-[44rem] gap-static-xs">
+        <PHeading tag="h2" size="small">{filtered ? 'No matching delivery work' : 'No current Delivery work'}</PHeading>
+        <p className="text-sm leading-relaxed text-contrast-medium">
+          {filtered ? 'Try clearing a filter to see the rest of the portfolio.' : 'Newly admitted Changes and active Outcomes will appear here.'}
+        </p>
+      </div>
+    </section>
+  )
+}
+
 function EmptyDetail({ error, retry, onClose }: { error: Error | null; retry: () => void; onClose: () => void }) {
   if (error) return (
     <div className="grid gap-static-sm" role="alert">
@@ -251,14 +264,14 @@ function EmptyDetail({ error, retry, onClose }: { error: Error | null; retry: ()
 }
 
 export default function WorkPortfolioPage() {
-  const { portfolio, hasData, error, isLoading, retry } = useWorkPortfolio()
-  useAcceptanceReconciliation(portfolio, retry)
+  const [workspace, setWorkspace] = useState<'current' | 'history'>('current')
+  const { portfolio, hasData, error, isLoading, retry } = useWorkPortfolio(workspace === 'history')
+  useAcceptanceReconciliation(portfolio, retry, workspace === 'history')
   const location = useLocation()
   const navigate = useNavigate()
   const [changeFilter, setChangeFilter] = useState('')
   const [needsFilter, setNeedsFilter] = useState<WorkItemNeed | ''>('')
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [workspace, setWorkspace] = useState<'current' | 'history'>('current')
   const deferredChange = useDeferredValue(changeFilter)
   const deferredNeeds = useDeferredValue(needsFilter)
   const selected = parseSelection(location.pathname)
@@ -291,6 +304,13 @@ export default function WorkPortfolioPage() {
   const closeInspector = () => {
     restoreFocusAfterClose.current = true
     navigate('/delivery')
+  }
+
+  const handleInspectorKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Escape') return
+    if (event.target instanceof HTMLElement && event.target.closest('p-modal')) return
+    event.preventDefault()
+    closeInspector()
   }
 
   useEffect(() => {
@@ -402,7 +422,7 @@ export default function WorkPortfolioPage() {
                   />
                 ) : null}
                 {filteredGroups.length === 0 && visibleDesignWorkIds.length === 0 ? (
-                  <p className="py-static-lg text-sm text-contrast-medium">{isFiltered ? 'No portfolio entries match the current filters.' : 'No current Delivery work.'}</p>
+                  <EmptyPortfolioState filtered={isFiltered} />
                 ) : null}
                 <PortfolioOperatingSummary operating={portfolio.operating} />
               </>
@@ -420,6 +440,7 @@ export default function WorkPortfolioPage() {
         style={{ '--p-flyout-width': 'min(56rem, 100vw)' } as CSSProperties}
         aria={{ 'aria-label': 'Work Item detail' }}
         onDismiss={closeInspector}
+        onKeyDownCapture={handleInspectorKeyDown}
       >
         <div className="min-w-0 max-w-full p-static-lg">
           {selected ? <SelectedDetail key={selectedIdentity} identity={selected} onChanged={retry} onClose={closeInspector} /> : null}

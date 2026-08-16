@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBeforeUnload, useBlocker } from 'react-router'
-import { PButton, PModal } from '@porsche-design-system/components-react'
+import { PButton, PHeading, PModal } from '@porsche-design-system/components-react'
 import MarkdownPreview from '../components/MarkdownPreview'
 
 import { fetchIdeas, IdeasSaveConflictError, saveIdeas } from '../api/ideas'
@@ -466,7 +466,17 @@ function IdeasPage() {
               className="min-h-0 flex-1 overflow-auto p-static-md"
               onScroll={updateIdeasScrollCue}
             >
-              <MarkdownPreview>{content}</MarkdownPreview>
+              {content.trim() ? (
+                <MarkdownPreview>{content}</MarkdownPreview>
+              ) : (
+                <div className="grid min-h-full place-items-center px-static-lg py-static-xl text-center" data-testid="ideas-empty-state">
+                  <div className="grid max-w-[34rem] gap-static-xs">
+                    <PHeading tag="h2" size="small">No ideas yet</PHeading>
+                    <p className="text-sm leading-relaxed text-contrast-medium">This notebook is empty. Switch to Edit to start writing.</p>
+                    <PButton type="button" compact className="mx-auto" onClick={() => setPreviewMode(false)}>Start writing</PButton>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <textarea

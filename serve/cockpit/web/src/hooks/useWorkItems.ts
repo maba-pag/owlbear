@@ -85,11 +85,12 @@ function acceptanceChangeIds(portfolio: WorkItemPortfolioResponse): string[] {
     .sort()
 }
 
-export function useWorkPortfolio() {
+export function useWorkPortfolio(paused = false) {
   const [portfolio, setPortfolio] = useState<WorkItemPortfolioResponse | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const polling = usePollingFetch<WorkItemPortfolioResponse>('/api/work-items', {
     intervalMs: 3_000,
+    paused,
     onSuccess: (data) => {
       setPortfolio(data)
       setError(null)
@@ -109,6 +110,7 @@ export function useWorkPortfolio() {
 export function useAcceptanceReconciliation(
   portfolio: WorkItemPortfolioResponse,
   onChanged: () => void,
+  paused = false,
 ): void {
   const changeIds = acceptanceChangeIds(portfolio)
   const changeIdsKey = changeIds.join('\u0000')
@@ -118,7 +120,7 @@ export function useAcceptanceReconciliation(
   onChangedRef.current = onChanged
 
   useEffect(() => {
-    if (!changeIdsKey) return
+    if (paused || !changeIdsKey) return
 
     let active = true
     let inFlight = false
@@ -191,7 +193,7 @@ export function useAcceptanceReconciliation(
       controller?.abort()
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [changeIdsKey])
+  }, [changeIdsKey, paused])
 }
 
 export function useDesignWorkDetail(changeId: string) {
