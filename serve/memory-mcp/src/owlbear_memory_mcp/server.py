@@ -20,6 +20,9 @@ from owlbear_memory_mcp.tools import (
     assess_memories as assess_memories_impl,
 )
 from owlbear_memory_mcp.tools import (
+    commit_memory_batch as commit_memory_batch_impl,
+)
+from owlbear_memory_mcp.tools import (
     curate_memory as curate_memory_impl,
 )
 from owlbear_memory_mcp.tools import (
@@ -52,6 +55,7 @@ __all__ = [
     "app_lifespan",
     "approve_memory",
     "assess_memories",
+    "commit_memory_batch",
     "curate_memory",
     "delete_agent_memories",
     "delete_memory",
@@ -72,6 +76,7 @@ _Agent = Annotated[str, Field(min_length=1)]
 _RecallAgent = Annotated[StrictStr | Literal[0] | None, Field(default=None)]
 _Limit = Annotated[int, Field(ge=0)]
 _Categories = Annotated[list[MemoryCategory], Field(min_length=1)]
+_BatchSession = Literal["curation", "review"]
 
 
 @dataclass
@@ -79,6 +84,7 @@ class AppContext:
     """Runtime context passed through MCP lifespan to all tools."""
 
     engine: MemoryEngine
+    memory_dir: Path
 
 
 @asynccontextmanager
@@ -92,6 +98,7 @@ async def app_lifespan(
         raise RuntimeError(message)
     yield AppContext(
         engine=MemoryEngine(memory_dir=workspace_root / _DEFAULT_MEMORY_DIR),
+        memory_dir=workspace_root / _DEFAULT_MEMORY_DIR,
     )
 
 
@@ -184,6 +191,12 @@ async def curate_memory(  # noqa: PLR0913
         confidence=confidence,
         scope_agents=scope_agents,
     )
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
+async def commit_memory_batch(ctx: Context, *, session_type: _BatchSession) -> dict[str, Any]:  # pragma: no cover
+    """Commit reviewed non-pending memory entries for one curation or review session."""
+    return await commit_memory_batch_impl(ctx, session_type=session_type)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))

@@ -11,6 +11,7 @@ import json
 import re
 import shlex
 import sys
+from pathlib import Path
 
 _WRITE_TOOLS = {
     "create_file",
@@ -19,10 +20,23 @@ _WRITE_TOOLS = {
     "apply_patch",
     "create_directory",
     "editFiles",
+    "edit/createDirectory",
+    "edit/createFile",
+    "edit/editFiles",
+    "edit/rename",
+    "rename",
 }
 
-_SCRATCH_RE = re.compile(r"(^|/)\.owlbear/scratch(/|$)")
-_RESEARCH_RE = re.compile(r"(^|/)\.owlbear/research(/|$)")
+_PATH_FIELDS = (
+    "filePath",
+    "dirPath",
+    "oldPath",
+    "newPath",
+    "oldFilePath",
+    "newFilePath",
+    "sourcePath",
+    "targetPath",
+)
 _TERMINAL_TOOLS = {"execute/runInTerminal", "runInTerminal", "run_in_terminal"}
 _GIT_COMMAND_RE = re.compile(r"\bgit\b(?P<arguments>[^\n;&|]*)")
 _READ_ONLY_GIT_COMMANDS = {
@@ -68,13 +82,10 @@ def _extract_paths(tool_input: object) -> list[str]:
         return []
     paths: list[str] = []
 
-    fp = tool_input.get("filePath")
-    if isinstance(fp, str) and fp:
-        paths.append(fp)
-
-    dp = tool_input.get("dirPath")
-    if isinstance(dp, str) and dp:
-        paths.append(dp)
+    for field_name in _PATH_FIELDS:
+        value = tool_input.get(field_name)
+        if isinstance(value, str) and value:
+            paths.append(value)
 
     patch_input = tool_input.get("input")
     if isinstance(patch_input, str):
@@ -101,16 +112,25 @@ def _extract_paths(tool_input: object) -> list[str]:
     return paths
 
 
-def _normalize(path: str) -> str:
-    return path.replace("\\", "/").removeprefix("./")
+def _normalize(path: str) -> str | None:
+    root = Path.cwd().resolve()
+    candidate = Path(path.replace("\\", "/"))
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    try:
+        return candidate.resolve(strict=False).relative_to(root).as_posix()
+    except OSError, RuntimeError, ValueError:
+        return None
 
 
 def _is_scratch_path(normalized: str) -> bool:
-    return _SCRATCH_RE.search(normalized) is not None
+    return normalized == ".owlbear/scratch" or normalized.startswith(".owlbear/scratch/")
 
 
 def _is_allowed_write_path(normalized: str, *, allow_research: bool) -> bool:
-    return _is_scratch_path(normalized) or (allow_research and _RESEARCH_RE.search(normalized) is not None)
+    return _is_scratch_path(normalized) or (
+        allow_research and (normalized == ".owlbear/research" or normalized.startswith(".owlbear/research/"))
+    )
 
 
 def _git_command(arguments: str) -> str | None:
@@ -181,6 +201,9 @@ def main() -> None:
     except json.JSONDecodeError, ValueError:
         print("{}")
         return
+    if not isinstance(payload, dict):
+        print("{}")
+        return
 
     tool_name = payload.get("tool_name", "")
 
@@ -197,16 +220,17 @@ def main() -> None:
 
     paths = _extract_paths(payload.get("tool_input"))
     if not paths:
-        print("{}")
+        _deny("read-only path guard: write target is missing")
         return
 
     allow_research = "--allow-research" in sys.argv
     allowed_description = ".owlbear/scratch/ or .owlbear/research/" if allow_research else ".owlbear/scratch/"
     for path in paths:
         normalized = _normalize(path)
-        if not _is_allowed_write_path(normalized, allow_research=allow_research):
+        if normalized is None or not _is_allowed_write_path(normalized, allow_research=allow_research):
+            display_path = path if normalized is None else normalized
             _deny(
-                f"read-only path guard: write to '{normalized}' is denied. "
+                f"read-only path guard: write to '{display_path}' is denied. "
                 f"Only {allowed_description} is writable for this agent."
             )
             return

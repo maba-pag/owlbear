@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.mcpserver.exceptions import ToolError
@@ -16,6 +19,8 @@ from owlbear_memory import (
 )
 from pydantic import ValidationError
 
+from owlbear_memory_mcp.git import commit_batch
+
 if TYPE_CHECKING:
     from mcp.server.mcpserver import Context
 
@@ -24,6 +29,7 @@ __all__ = [
     "SLOT_EXPLORE",
     "approve_memory",
     "assess_memories",
+    "commit_memory_batch",
     "curate_memory",
     "delete_agent_memories",
     "delete_memory",
@@ -42,6 +48,7 @@ _ASSESSMENT_BUCKETS = (
     "didnt_use",
     "factually_wrong",
 )
+_LOGGER = logging.getLogger(__name__)
 
 
 def _allowed_assessment_values() -> str:
@@ -54,6 +61,18 @@ def _engine_from_ctx(ctx: Context) -> MemoryEngine:
     except AttributeError as exc:
         msg = "memory engine is not available in MCP context"
         raise ToolError(msg) from exc
+
+
+def _memory_dir_from_ctx(ctx: Context) -> Path:
+    try:
+        memory_dir = ctx.request_context.lifespan_context.memory_dir
+    except AttributeError as exc:
+        msg = "memory directory is not available in MCP context"
+        raise ToolError(msg) from exc
+    if not isinstance(memory_dir, Path):
+        msg = "memory directory is not available in MCP context"
+        raise ToolError(msg)
+    return memory_dir
 
 
 def _validate_scope(agents: list[str]) -> None:
@@ -219,6 +238,33 @@ async def save_memory(  # noqa: PLR0913
         raise ToolError(_teaching_validation_message(exc)) from exc
     hint = "Saved as pending and unscoped. The memory curator assigns relevance scope before promotion."
     return _with_hint(_entry_to_dict(entry), hint)
+
+
+async def commit_memory_batch(ctx: Context, *, session_type: str) -> dict[str, Any]:
+    """Commit non-pending memory entries through the state-aware Git helper."""
+    memory_dir = _memory_dir_from_ctx(ctx)
+    try:
+        commit_sha = commit_batch(memory_dir, session_type=session_type)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+    except (OSError, subprocess.CalledProcessError) as exc:
+        _LOGGER.exception("Memory batch commit failed", exc_info=exc)
+        msg = "memory batch commit failed"
+        raise ToolError(msg) from None
+
+    if not commit_sha:
+        return {
+            "session_type": session_type,
+            "commit_sha": None,
+            "committed": False,
+            "hint": "No memory changes to commit.",
+        }
+    return {
+        "session_type": session_type,
+        "commit_sha": commit_sha,
+        "committed": True,
+        "hint": "Reviewed memory changes committed.",
+    }
 
 
 async def list_memories(

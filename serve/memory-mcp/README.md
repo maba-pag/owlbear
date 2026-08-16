@@ -25,7 +25,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 | `agents.py` | Dynamic canonical-agent discovery from active VS Code agent locations |
 | `server.py` | MCPServer app definition, tool registration, lifespan wiring |
 | `tools.py` | Tool implementation — validation, state transitions, response formatting |
-| `git.py` | Batch commit helper — stages non-pending entries by session type |
+| `git.py` | State-aware batch commit implementation used by the MCP operation |
 | `__main__.py` | Entry point for `python -m owlbear_memory_mcp` |
 
 Engine and model types (`MemoryEngine`, `MemoryEntry`, `MemoryCategory`, `MemoryState`, error types) are provided by the `owlbear-memory` workspace package.
@@ -69,6 +69,7 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 | `delete_agent_memories` | Preserve historical provenance, remove the retired role from scopes, and physically delete entries left without an audience |
 | `approve_memory` | Promote `curated→approved`; user-initiated only (not exposed to any agent) |
 | `assess_memories` | Process batch assessment submissions; increments counters for `outstanding`/`unremarkable`/`didnt_use`, delegates `factually_wrong` to confirmation cycle; returns per-entry `{entry_id, success}` or `{entry_id, success=False, error}` results |
+| `commit_memory_batch` | Commit non-pending memory entries for one explicit `curation` or `review` session and return the commit SHA or a no-op result |
 
 All mutating tools return a `hint` field describing the transition or action taken.
 
@@ -117,20 +118,14 @@ has no environment configuration.
 
 ## Batch Commits
 
-Pending entries are intentionally left uncommitted. After curation or review, commit only reviewed entries with the state-aware helper:
+Pending entries are intentionally left uncommitted. After curation or review, call the dedicated MCP operation:
 
-```bash
-uv run python -m owlbear_memory_mcp.git curation
-uv run python -m owlbear_memory_mcp.git review
+```text
+owlbear-memory/commit_memory_batch(session_type="curation")
+owlbear-memory/commit_memory_batch(session_type="review")
 ```
 
-The `--project` path must point to the OwlBear installation root. Find the correct value from the `owlbear-memory` server entry in `.vscode/mcp.json` (look for the `--project` argument in the `args` array). Example:
-
-```bash
-uv --project ../owlbear run python -m owlbear_memory_mcp.git review
-```
-
-The helper stages only non-pending `.owlbear/memory/*.md` files and returns the commit SHA, or `no memory changes to commit` when there is nothing to commit.
+The operation stages only non-pending `.owlbear/memory/*.md` files and returns the commit SHA, or a no-op result when there is nothing to commit. The lower-level `git.py` module remains an internal implementation detail.
 
 ## Dependencies
 

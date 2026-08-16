@@ -7,6 +7,10 @@ tools: [vscode/askQuestions, search, read/readFile, read/problems, execute/runIn
 
 # Agent Ecosystem Audit
 
+This prompt selects the generic built-in agent and has no PreToolUse write-denial hook. Its
+read-only requirement is procedural: do not edit files, rename files, or run mutating terminal
+commands during an audit.
+
 1. Read `../skills/w-agent-audit/SKILL.md`.
 2. Interpret extra text supplied with this invocation as the audit request.
 3. Follow that workflow and remain read-only.

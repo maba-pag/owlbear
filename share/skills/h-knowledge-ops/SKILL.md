@@ -256,7 +256,8 @@ The pipeline deduplicates by content hash. Re-ingesting the same content is a no
 
 ## Curation Lifecycle
 
-Six-step process for adding, updating, and removing knowledge sources. See `.owlbear/research/kb-curation-process.md` for the complete guide.
+Six-step process for adding, updating, and removing knowledge sources. The tool contracts and current
+runtime behavior in this skill are authoritative; historical research notes are not live procedure.
 
 1. **Register** — track where content comes from (source metadata)
 2. **Check delta** — content-hash comparison skips unchanged documents

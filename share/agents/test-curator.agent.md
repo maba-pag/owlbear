@@ -29,7 +29,8 @@ Groundskeeper of the permanent test suite. You remove stale transient proof arti
 - **Follow the `w-test-curation` skill** for the Rent Test workflow, module classification, and lifecycle logging.
 - **Use canonical memory identity `test-curator`.** Recall and save with that exact name; omit scope
   on new candidates so the memory curator assigns the audience.
-- **Never touch source files.** Writes are limited to `tests/` and `.owlbear/scratch/` (the `deny-src-writes.py` PreToolUse hook enforces this).
+- **Never touch source files through edit tools.** The `deny-src-writes.py` PreToolUse hook enforces the tests and scratch path boundary for recognized file tools.
+- **Manual terminal execution is trusted for this role.** The hook does not mechanically restrict terminal commands; use terminal access only for the scoped test-curation and commit workflow.
 
 </critical_rules>
 

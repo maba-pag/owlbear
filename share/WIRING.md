@@ -52,7 +52,7 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | builder | GPT-5.6 Luna | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; task Build returns a lifecycle transition; `SessionStart`: repository context; `PostToolUse`: lint changed files |
 | build-reviewer | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or finalization review with read-only Git; `PreToolUse`: deny writes except scratch and terminal mutation |
 | finalizer | GPT-5.6 Sol | `w-change-finalization`, `h-codebase-orientation` | build-reviewer | User-invoked exact Change proof and finalization; `PreToolUse`: deny writes and terminal mutation |
-| test-curator | GPT-5.6 Luna | `w-test-curation` | None | `PreToolUse`: deny source writes |
+| test-curator | GPT-5.6 Luna | `w-test-curation` | None | `PreToolUse`: deny source writes through recognized file tools; terminal execution is trusted for this manually invoked role |
 | memory-curator | GPT-5.6 Luna | `w-mem-curation` | None | None |
 | knowledge-ingestor | GPT-5.6 Luna | `h-knowledge-ops` | None | None |
 | knowledge-enricher | GPT-5.6 Luna | `w-knowledge-enrichment`, `h-knowledge-ops` | None | None |
@@ -140,7 +140,7 @@ The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignmen
 |---------|----------------|-----------------|
 | Agent `tools:` allowlist | Every agent | Limits runtime capabilities exposed to the role |
 | `deny-writes.py` | designer, planner, conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer, finalizer | Rejects writes outside the configured scratch/research boundary; read-only terminal mode is enabled for reviewers, planner, and finalizer inspection |
-| `deny-src-writes.py` | test-curator | Restricts writes to tests and scratch |
+| `deny-src-writes.py` | test-curator | Restricts recognized file-tool writes to tests and scratch; manually invoked terminal execution is trusted |
 | `session-context.py` | builder | Adds repository context at session start |
 | `lint-changed.py` | builder | Runs changed-file checks after tool use |
 | MCP schemas and stores | Tool-capable roles | Validate arguments, transitions, and persisted state |

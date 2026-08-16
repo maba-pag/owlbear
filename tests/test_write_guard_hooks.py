@@ -38,7 +38,15 @@ def _invoke(
     *,
     argv: list[str] | None = None,
 ) -> dict[str, Any]:
-    raw = json.dumps(payload).encode()
+    return _invoke_raw(module, json.dumps(payload).encode(), argv=argv)
+
+
+def _invoke_raw(
+    module: types.ModuleType,
+    raw: bytes,
+    *,
+    argv: list[str] | None = None,
+) -> dict[str, Any]:
     mock_stdin = MagicMock()
     mock_stdin.buffer.read.return_value = raw
     captured: list[str] = []
@@ -78,6 +86,21 @@ def deny_src_module(request: pytest.FixtureRequest) -> types.ModuleType:
 
 
 class TestDenyWrites:
+    @pytest.mark.parametrize("raw", [b"", b"{", b"[]", b"null"])
+    def test_malformed_or_non_object_input_fails_open(
+        self,
+        deny_writes_module: types.ModuleType,
+        raw: bytes,
+    ) -> None:
+        assert _invoke_raw(deny_writes_module, raw) == {}
+
+    def test_unknown_tool_fails_open(self, deny_writes_module: types.ModuleType) -> None:
+        payload = {
+            "tool_name": "future/write_tool",
+            "tool_input": {"filePath": "README.md"},
+        }
+        assert _is_allowed(_invoke(deny_writes_module, payload))
+
     def test_allows_scratch_file(self, deny_writes_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "create_file",
@@ -97,6 +120,24 @@ class TestDenyWrites:
             },
         }
         assert _is_allowed(_invoke(deny_writes_module, payload))
+
+    def test_allows_rename_within_scratch(self, deny_writes_module: types.ModuleType) -> None:
+        payload = {
+            "tool_name": "edit/rename",
+            "tool_input": {
+                "oldPath": ".owlbear/scratch/old.txt",
+                "newPath": ".owlbear/scratch/new.txt",
+            },
+        }
+        assert _is_allowed(_invoke(deny_writes_module, payload))
+
+    @pytest.mark.parametrize("path", ["../outside/.owlbear/scratch/escape.txt", "serve/.owlbear/scratch/../../app.py"])
+    def test_denies_traversal_rename(self, deny_writes_module: types.ModuleType, path: str) -> None:
+        payload = {
+            "tool_name": "edit/rename",
+            "tool_input": {"oldPath": path, "newPath": ".owlbear/scratch/new.txt"},
+        }
+        assert _is_denied(_invoke(deny_writes_module, payload))
 
     def test_denies_apply_patch_outside_scratch(self, deny_writes_module: types.ModuleType) -> None:
         payload = {
@@ -172,6 +213,21 @@ class TestReadOnlyTerminalGuard:
 
 
 class TestDenySrcWrites:
+    @pytest.mark.parametrize("raw", [b"", b"{", b"[]", b"null"])
+    def test_malformed_or_non_object_input_fails_open(
+        self,
+        deny_src_module: types.ModuleType,
+        raw: bytes,
+    ) -> None:
+        assert _invoke_raw(deny_src_module, raw) == {}
+
+    def test_unknown_tool_fails_open(self, deny_src_module: types.ModuleType) -> None:
+        payload = {
+            "tool_name": "future/write_tool",
+            "tool_input": {"filePath": "serve/app.py"},
+        }
+        assert _is_allowed(_invoke(deny_src_module, payload))
+
     def test_allows_test_file(self, deny_src_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "create_file",
@@ -255,4 +311,16 @@ class TestDenySrcWrites:
             "tool_name": "apply_patch",
             "tool_input": {"input": "*** Begin Patch\n*** Update File: serve/app.py\n@@\n-old\n+new\n*** End Patch"},
         }
+        assert _is_denied(_invoke(deny_src_module, payload))
+
+    def test_allows_rename_within_test_surface(self, deny_src_module: types.ModuleType) -> None:
+        payload = {
+            "tool_name": "edit/rename",
+            "tool_input": {"oldPath": "tests/test_old.py", "newPath": "tests/test_new.py"},
+        }
+        assert _is_allowed(_invoke(deny_src_module, payload))
+
+    @pytest.mark.parametrize("path", ["../outside/tests/test_escape.py", "serve/tests/../../app.py"])
+    def test_denies_traversal_write(self, deny_src_module: types.ModuleType, path: str) -> None:
+        payload = {"tool_name": "create_file", "tool_input": {"filePath": path}}
         assert _is_denied(_invoke(deny_src_module, payload))

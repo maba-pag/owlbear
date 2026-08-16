@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from pathlib import Path
 
 _WRITE_TOOLS = {
     "create_file",
@@ -19,13 +20,23 @@ _WRITE_TOOLS = {
     "apply_patch",
     "create_directory",
     "editFiles",
+    "edit/createDirectory",
+    "edit/createFile",
+    "edit/editFiles",
+    "edit/rename",
+    "rename",
 }
 
-_TESTS_RE = re.compile(r"(^|/)tests/")
-_DUNDER_TESTS_RE = re.compile(r"(^|/)__tests__/")
-_E2E_RE = re.compile(r"(^|/)e2e/")
-_TEST_FILE_RE = re.compile(r"(^|/)[^/]+\.(?:test|spec)\.[cm]?[jt]sx?$")
-_SCRATCH_RE = re.compile(r"(^|/)\.owlbear/scratch(/|$)")
+_PATH_FIELDS = (
+    "filePath",
+    "dirPath",
+    "oldPath",
+    "newPath",
+    "oldFilePath",
+    "newFilePath",
+    "sourcePath",
+    "targetPath",
+)
 
 
 def _extract_paths(tool_input: object) -> list[str]:
@@ -33,13 +44,10 @@ def _extract_paths(tool_input: object) -> list[str]:
         return []
     paths: list[str] = []
 
-    fp = tool_input.get("filePath")
-    if isinstance(fp, str) and fp:
-        paths.append(fp)
-
-    dp = tool_input.get("dirPath")
-    if isinstance(dp, str) and dp:
-        paths.append(dp)
+    for field_name in _PATH_FIELDS:
+        value = tool_input.get(field_name)
+        if isinstance(value, str) and value:
+            paths.append(value)
 
     patch_input = tool_input.get("input")
     if isinstance(patch_input, str):
@@ -67,13 +75,27 @@ def _extract_paths(tool_input: object) -> list[str]:
 
 
 def _is_allowed_path(path: str) -> bool:
+    path_parts = Path(path).parts
+    filename = Path(path).name
     return bool(
-        _TESTS_RE.search(path)
-        or _DUNDER_TESTS_RE.search(path)
-        or _E2E_RE.search(path)
-        or _TEST_FILE_RE.search(path)
-        or _SCRATCH_RE.search(path)
+        "tests" in path_parts
+        or "__tests__" in path_parts
+        or "e2e" in path_parts
+        or re.fullmatch(r"[^/]+\.(?:test|spec)\.[cm]?[jt]sx?", filename)
+        or path == ".owlbear/scratch"
+        or path.startswith(".owlbear/scratch/")
     )
+
+
+def _normalize(path: str) -> str | None:
+    root = Path.cwd().resolve()
+    candidate = Path(path.replace("\\", "/"))
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    try:
+        return candidate.resolve(strict=False).relative_to(root).as_posix()
+    except OSError, RuntimeError, ValueError:
+        return None
 
 
 def main() -> None:
@@ -84,6 +106,9 @@ def main() -> None:
     except json.JSONDecodeError, ValueError:
         print("{}")
         return
+    if not isinstance(payload, dict):
+        print("{}")
+        return
 
     tool_name = payload.get("tool_name", "")
     if not tool_name or tool_name not in _WRITE_TOOLS:
@@ -92,18 +117,25 @@ def main() -> None:
 
     paths = _extract_paths(payload.get("tool_input"))
     if not paths:
-        print("{}")
+        response = {
+            "hookSpecificOutput": {
+                "permissionDecision": "deny",
+                "permissionDecisionReason": "test-writer path guard: write target is missing",
+            }
+        }
+        print(json.dumps(response))
         return
 
     for p in paths:
-        normalized = p.replace("\\", "/").removeprefix("./")
-        if not _is_allowed_path(normalized):
+        normalized = _normalize(p)
+        if normalized is None or not _is_allowed_path(normalized):
+            display_path = p if normalized is None else normalized
             response = {
                 "hookSpecificOutput": {
                     "permissionDecision": "deny",
                     "permissionDecisionReason": (
                         f"test-writer path guard: write target "
-                        f"'{normalized}' is outside the allowed "
+                        f"'{display_path}' is outside the allowed "
                         "test surfaces. Only writes to tests/, __tests__/, e2e/, "
                         "colocated *.test.* or *.spec.* files, or "
                         ".owlbear/scratch/ are permitted."

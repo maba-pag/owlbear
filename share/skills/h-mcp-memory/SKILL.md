@@ -19,7 +19,7 @@ For curation workflow, see `w-mem-curation`.
 | Outcome owners | designer, planner, builder, orchestrator | `recall_memory`, `save_memory` (`builder` also assesses) |
 | Specialist producers | test-curator, knowledge-ingestor, knowledge-enricher | `recall_memory`, `save_memory` |
 | Read-only reviewers | build-reviewer, planner-challenger, designer-challenger, conceptual-design-reviewer | `recall_memory`; return candidates to their parent |
-| Memory curator | memory-curator | `list_memories`, `read_memory`, `curate_memory`, `delete_memory`, agent lifecycle tools |
+| Memory curator | memory-curator | `list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `commit_memory_batch`, agent lifecycle tools |
 
 These profiles are intentionally asymmetric. Producers save unscoped pending candidates with any
 non-blank provenance label; the curator
@@ -55,14 +55,12 @@ them to `approved`; `delete_memory` may soft-delete them when the user chooses r
 ### Batch commits
 
 Pending entries are not committed. After curation or review, use the state-aware
-helper instead of broad-adding `.owlbear/memory`:
+Memory MCP operation instead of direct Git commands or broad-adding `.owlbear/memory`:
 
 ```text
-uv --project ../owlbear run python -m owlbear_memory_mcp.git curation
-uv --project ../owlbear run python -m owlbear_memory_mcp.git review
+owlbear-memory/commit_memory_batch(session_type="curation")
+owlbear-memory/commit_memory_batch(session_type="review")
 ```
-
-The `--project` path must point to the OwlBear installation root. Find the correct value from the `owlbear-memory` server entry in `.vscode/mcp.json` (look for the `--project` argument in the `args` array).
 
 ## Tool Summary
 
@@ -73,6 +71,7 @@ The `--project` path must point to the OwlBear installation root. Find the corre
 | `recall_memory` | Recall scoped identity-bearing memory blocks for agent pre-flight | `agent`, `categories`, `limit` |
 | `read_memory` | Read one full memory entry by ID | `entry_id` |
 | `assess_memories` | Record whether recalled entries were useful for a completed task | `task_id`, `assessments` |
+| `commit_memory_batch` | Commit reviewed non-pending entries for one curation or review session | `session_type` (`curation` or `review`) |
 | `curate_memory` | Curator mutation and code-managed state transition tool | `entry_id`, optional mutable fields, `scope_agents` |
 | `delete_memory` | Lifecycle-aware deletion with hard/soft semantics | `entry_id` |
 | `rename_agent_memories` | Rewrite provenance and scopes after an agent rename | `old_name`, `new_name` |

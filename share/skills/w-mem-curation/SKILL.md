@@ -107,13 +107,13 @@ Do not inspect, create, migrate, or defer notes in `/memories/` paths. If old fi
 
 ## Step 6 — Batch Commit MCP Memory
 
-Before returning, commit reviewed MCP memory mutations with the state-aware helper:
+Before returning, commit reviewed MCP memory mutations with the dedicated MCP operation:
 
-```bash
-uv --project ../owlbear run python -m owlbear_memory_mcp.git curation
+```text
+owlbear-memory/commit_memory_batch(session_type="curation")
 ```
 
-The `--project` path must point to the OwlBear installation root. Find the correct value from the `owlbear-memory` server entry in `.vscode/mcp.json` (look for the `--project` argument in the `args` array). The helper stages only non-pending `.owlbear/memory/*.md` entries; do not broad-add `.owlbear/memory`.
+The MCP operation stages only non-pending `.owlbear/memory/*.md` entries and returns the commit SHA or a no-op result. Do not use a terminal or broad-add `.owlbear/memory`.
 
 ## Step 7 — Return Channel A Signal
 
@@ -139,6 +139,6 @@ Return the verdict:
 - **Global scope by habit:** `['*']` floods all agents. Prefer named role scopes unless the learning is truly universal.
 - **Auto-resolving conflicts:** conflicting lessons must be deferred in periodic mode or resolved with the user in manual mode.
 - **Reporting identity-only uncertainty:** keep it pending silently in periodic mode; do not add its count or ID to defer/conflict summaries.
-- **Broad memory commits:** use the state-aware helper so pending entries stay uncommitted.
+- **Broad memory commits:** use `commit_memory_batch` so pending entries stay uncommitted.
 - **Manual lifecycle rewrites:** use the agent lifecycle tools when definitions are renamed or
  deleted so provenance and relevance cannot drift.
