@@ -83,3 +83,16 @@ def test_inventory_distinguishes_unverified_and_missing_provenance(tmp_path: Pat
     candidates = {candidate["path"]: candidate for candidate in document["candidates"]}
     assert candidates["tests/test_unverified_1235.py"]["provenance"] == "unverified"
     assert candidates["tests/test_missing_1236.py"]["provenance"] == "missing"
+
+
+def test_inventory_deduplicates_overlapping_package_test_roots(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text('[tool.pytest.ini_options]\ntestpaths = ["serve"]\n', encoding="utf-8")
+    tests = tmp_path / "serve" / "tools" / "tests"
+    tests.mkdir(parents=True)
+    candidate = tests / "test_duplicate_1234.py"
+    candidate.write_text("from __future__ import annotations\n", encoding="utf-8")
+
+    document = inventory(tmp_path)
+
+    assert document["counts"]["total"] == 1
+    assert [item["path"] for item in document["candidates"]] == ["serve/tools/tests/test_duplicate_1234.py"]

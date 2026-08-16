@@ -67,7 +67,7 @@ all tests in a touched module.
 Inventory: 12 archived task-tests across 4 modules. Module A had only removal
 proofs and duplicate import assertions — deleted. Module B contained a real
 error-handling regression guard — mined one durable assertion with provenance,
-then deleted the task-test. Focused tests stayed green. Committed.
+then deleted the task-test. Focused tests stayed green. The user explicitly requested the scoped commit; committed only the owned paths.
 </good_example>
 
 <good_example why="Graceful revert on gate failure">

@@ -105,7 +105,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | `w-frontier-planning` | planner |
 | `w-packet-building` | builder |
 | `r-challenger-protocol` | conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer |
-| `h-codebase-orientation` | designer-challenger, planner-challenger, builder, build-reviewer |
+| `h-codebase-orientation` | designer-challenger, planner-challenger, builder, build-reviewer, finalizer |
 | `h-module-design` | designer-challenger, planner-challenger |
 | `h-frontend-design` | conceptual-design-reviewer |
 | `r-workspace-governance` | builder |
