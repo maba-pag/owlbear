@@ -13,6 +13,7 @@ import difflib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -94,6 +95,12 @@ _RETIRED_OWLBEAR_GITIGNORE_LINES = frozenset(
 _HOOKS_REL_PREFIX = ".owlbear/hooks/"
 _DELIVERY_CONFIG_PATH = Path(".owlbear/delivery/config.json")
 _DELIVERY_CONFIG_SCHEMA_VERSION = 2
+_DEFAULT_PROFILE_ASSOCIATION = "__default__profile__"
+_COPILOT_REASONING_SETTINGS = {
+    "gpt-5.6-luna": "max",
+    "gpt-5.6-sol": "high",
+    "claude-opus-5": "medium",
+}
 
 # Regex: match // line-comments outside of strings.  Handles the common JSONC
 # patterns VS Code uses (trailing comments like `true, // old value`).  Does
@@ -393,6 +400,394 @@ def _is_interactive_session() -> bool:
     return sys.stdin.isatty() and sys.stdout.isatty()
 
 
+class _CopilotProfileTarget:
+    """Identify one VS Code profile settings file."""
+
+    __slots__ = ("associated", "profile_id", "settings_path", "user_data_root")
+
+    def __init__(
+        self,
+        user_data_root: Path,
+        settings_path: Path,
+        profile_id: str | None,
+        *,
+        associated: bool,
+    ) -> None:
+        self.user_data_root = user_data_root
+        self.settings_path = settings_path
+        self.profile_id = profile_id
+        self.associated = associated
+
+
+def _unique_paths(paths: list[Path]) -> list[Path]:
+    """Return paths in order without duplicate resolved locations."""
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for path in paths:
+        resolved = path.expanduser().resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            unique.append(resolved)
+    return unique
+
+
+def _vscode_app_from_command(command: str) -> Path | None:
+    """Extract a VS Code application path from one macOS process command."""
+    for app_name in ("Visual Studio Code - Insiders.app", "Visual Studio Code.app"):
+        marker = f"/{app_name}/"
+        marker_start = command.find(marker)
+        if marker_start >= 0:
+            return Path(command[: marker_start + 1] + app_name)
+    return None
+
+
+def _user_data_roots_for_vscode_app(app_path: Path) -> list[Path]:
+    """Return standard or portable user-data roots for a VS Code app."""
+    is_insiders = "Insiders" in app_path.name
+    standard_name = "Code - Insiders" if is_insiders else "Code"
+    portable_name = "code-insiders-portable-data" if is_insiders else "code-portable-data"
+    portable_root = app_path.parent / portable_name / "user-data"
+    if portable_root.is_dir():
+        return [portable_root]
+    return [Path.home() / "Library" / "Application Support" / standard_name]
+
+
+def _user_data_paths_from_tokens(tokens: list[str]) -> list[Path]:
+    """Extract existing user-data paths from one tokenized process command."""
+    paths: list[Path] = []
+    for index, argument in enumerate(tokens):
+        if argument == "--user-data-dir" and index + 1 < len(tokens):
+            path_parts = tokens[index + 1 :]
+        elif argument.startswith("--user-data-dir="):
+            path_parts = [argument.partition("=")[2], *tokens[index + 1 :]]
+        else:
+            continue
+        stop = next(
+            (position for position, part in enumerate(path_parts) if part.startswith("--")),
+            len(path_parts),
+        )
+        path_parts = path_parts[:stop]
+        if path_parts:
+            paths.append(Path(" ".join(path_parts)))
+    return paths
+
+
+def _running_macos_vscode_user_data_roots() -> list[Path]:
+    """Discover user-data roots from running VS Code processes when possible."""
+    if sys.platform != "darwin":
+        return []
+    try:
+        completed = subprocess.run(
+            ["ps", "-axo", "command="],  # noqa: S607
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return []
+    if completed.returncode != 0:
+        return []
+
+    roots: list[Path] = []
+    for command in completed.stdout.splitlines():
+        try:
+            tokens = shlex.split(command)
+        except ValueError:
+            continue
+        app_path = _vscode_app_from_command(command)
+        if app_path is None:
+            continue
+        roots.extend(_user_data_paths_from_tokens(tokens))
+        roots.extend(_user_data_roots_for_vscode_app(app_path))
+    return [root for root in _unique_paths(roots) if root.is_dir()]
+
+
+def _macos_vscode_user_data_roots() -> list[Path]:
+    """Return discoverable stable, Insiders, and portable macOS user-data roots."""
+    if sys.platform != "darwin":
+        return []
+
+    support_dir = Path.home() / "Library" / "Application Support"
+    roots = [*_running_macos_vscode_user_data_roots()]
+    roots.extend((support_dir / "Code", support_dir / "Code - Insiders"))
+    for app_parent in (Path("/Applications"), Path.home() / "Applications"):
+        for app_name, portable_name in (
+            ("Visual Studio Code.app", "code-portable-data"),
+            ("Visual Studio Code - Insiders.app", "code-insiders-portable-data"),
+        ):
+            portable_root = app_parent / portable_name / "user-data"
+            if (app_parent / app_name).is_dir() and portable_root.is_dir():
+                roots.append(portable_root)
+    return _unique_paths(roots)
+
+
+def _workspace_profile_association(
+    user_data_root: Path,
+    target_dir: Path,
+) -> tuple[bool, str | None] | None:
+    """Read a workspace profile association from VS Code's local state."""
+    state_path = user_data_root / "User" / "globalStorage" / "storage.json"
+    if not state_path.is_file():
+        return None
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except OSError, json.JSONDecodeError:
+        return None
+    association: tuple[bool, str | None] | None = None
+    if isinstance(state, dict):
+        profile_associations = state.get("profileAssociations")
+        if isinstance(profile_associations, dict):
+            workspaces = profile_associations.get("workspaces")
+            if isinstance(workspaces, dict):
+                workspace_uri = target_dir.resolve().as_uri()
+                profile_id = workspaces.get(workspace_uri)
+                if profile_id == _DEFAULT_PROFILE_ASSOCIATION:
+                    association = True, None
+                elif isinstance(profile_id, str) and profile_id:
+                    association = True, profile_id
+    return association
+
+
+def _make_copilot_profile_target(
+    user_data_root: Path,
+    profile_id: str | None,
+    *,
+    associated: bool,
+) -> _CopilotProfileTarget:
+    """Build and validate a profile settings target."""
+    user_dir = user_data_root / "User"
+    if profile_id is None:
+        settings_path = user_dir / "chatLanguageModels.json"
+    else:
+        profile_dir = user_dir / "profiles" / profile_id
+        if not profile_dir.is_dir():
+            message = f"VS Code profile association points to missing profile '{profile_id}' under {profile_dir}."
+            raise RuntimeError(message)
+        settings_path = profile_dir / "chatLanguageModels.json"
+    return _CopilotProfileTarget(user_data_root, settings_path, profile_id, associated=associated)
+
+
+def _find_associated_copilot_profile(
+    roots: list[Path],
+    target_dir: Path,
+) -> _CopilotProfileTarget | None:
+    """Find the unique profile associated with the target project."""
+    matches: list[_CopilotProfileTarget] = []
+    for root in roots:
+        association = _workspace_profile_association(root, target_dir)
+        if association is None:
+            continue
+        _, profile_id = association
+        matches.append(_make_copilot_profile_target(root, profile_id, associated=True))
+    if len(matches) > 1:
+        locations = ", ".join(str(match.settings_path) for match in matches)
+        message = f"Multiple VS Code profile associations were found for this project: {locations}"
+        raise RuntimeError(message)
+    return matches[0] if matches else None
+
+
+def _select_default_copilot_profile(
+    roots: list[Path],
+    target_dir: Path,
+) -> _CopilotProfileTarget:
+    """Select one safe default-profile target when no association exists."""
+    del target_dir
+    active_roots = _running_macos_vscode_user_data_roots()
+    if len(active_roots) == 1:
+        return _make_copilot_profile_target(active_roots[0], None, associated=False)
+    if len(active_roots) > 1:
+        locations = ", ".join(str(root) for root in active_roots)
+        message = f"Multiple running VS Code user-data roots were found: {locations}"
+        raise RuntimeError(message)
+
+    existing_roots = [root for root in roots if (root / "User").is_dir()]
+    if len(existing_roots) == 1:
+        return _make_copilot_profile_target(existing_roots[0], None, associated=False)
+    if len(existing_roots) > 1:
+        locations = ", ".join(str(root) for root in existing_roots)
+        message = f"Multiple VS Code user-data roots were found: {locations}"
+        raise RuntimeError(message)
+
+    standard_root = Path.home() / "Library" / "Application Support" / "Code"
+    return _make_copilot_profile_target(standard_root, None, associated=False)
+
+
+def _profile_display_path(path: Path) -> str:
+    """Render a profile path compactly for an interactive prompt."""
+    try:
+        return f"~/{path.relative_to(Path.home()).as_posix()}"
+    except ValueError:
+        return str(path)
+
+
+def _profile_display_name(target: _CopilotProfileTarget) -> str:
+    """Return the stable profile label available to the setup script."""
+    if target.profile_id is None:
+        return "Default Profile"
+    return f"profile ID {target.profile_id}"
+
+
+def _profile_json_indent(raw: str | None) -> int | str:
+    """Preserve the existing profile file's common indentation when possible."""
+    if raw is not None:
+        for line in raw.splitlines()[1:]:
+            stripped = line.lstrip()
+            if stripped:
+                return line[: len(line) - len(stripped)]
+    return 2
+
+
+def _update_copilot_reasoning_settings(path: Path) -> tuple[object, bool, str | None]:
+    """Return updated profile JSON, whether it changed, and its original text."""
+    raw = path.read_text(encoding="utf-8") if path.exists() else None
+    data: object = json.loads(raw) if raw is not None else []
+    if not isinstance(data, list):
+        message = f"Copilot profile settings must be a JSON array: {path}"
+        raise TypeError(message)
+
+    copilot_entries = [entry for entry in data if isinstance(entry, dict) and entry.get("vendor") == "copilot"]
+    if len(copilot_entries) > 1:
+        message = f"Multiple Copilot entries were found in profile settings: {path}"
+        raise RuntimeError(message)
+    if not copilot_entries:
+        copilot_entry: dict[str, object] = {
+            "name": "GitHub Copilot Chat",
+            "vendor": "copilot",
+            "settings": {},
+        }
+        data.append(copilot_entry)
+    else:
+        copilot_entry = copilot_entries[0]
+
+    settings = copilot_entry.get("settings")
+    if settings is None:
+        settings = {}
+        copilot_entry["settings"] = settings
+    if not isinstance(settings, dict):
+        message = f"Copilot profile settings must contain an object-valued 'settings': {path}"
+        raise TypeError(message)
+
+    changed = False
+    for model_id, reasoning_effort in _COPILOT_REASONING_SETTINGS.items():
+        model_settings = settings.get(model_id)
+        if model_settings is None:
+            model_settings = {}
+            settings[model_id] = model_settings
+        if not isinstance(model_settings, dict):
+            message = f"Model settings for '{model_id}' must be an object: {path}"
+            raise TypeError(message)
+        if model_settings.get("reasoningEffort") != reasoning_effort:
+            model_settings["reasoningEffort"] = reasoning_effort
+            changed = True
+    return data, changed, raw
+
+
+def _write_copilot_profile_atomically(
+    path: Path,
+    data: object,
+    *,
+    original_text: str | None,
+) -> None:
+    """Write profile JSON atomically while retaining its existing file mode."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = json.dumps(data, ensure_ascii=False, indent=_profile_json_indent(original_text)) + "\n"
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            delete=False,
+        ) as temporary:
+            temporary.write(content)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+            temporary_path = Path(temporary.name)
+        if path.exists():
+            temporary_path.chmod(path.stat().st_mode & 0o777)
+        temporary_path.replace(path)
+    finally:
+        if temporary_path is not None:
+            with suppress(FileNotFoundError):
+                temporary_path.unlink()
+
+
+def _confirm_copilot_profile_update(target: _CopilotProfileTarget) -> bool:
+    """Ask for confirmation before changing one profile's reasoning settings."""
+    association_text = (
+        "associated with this project"
+        if target.associated
+        else "selected as the default profile because no profile is associated with this project"
+    )
+    print(
+        "\nOwlBear model thinking settings (Luna: max, Sol: high, Opus 5: medium) "
+        f"will be written to the VS Code profile {association_text}:"
+    )
+    print(f"  Profile: {_profile_display_name(target)}")
+    print(f"  File: {_profile_display_path(target.settings_path)}")
+    print("These settings are required for OwlBear's minimum performance and cost-efficiency standard.")
+    print("No other profile settings will be changed.")
+    if not target.associated:
+        print(
+            "To target a named profile instead, use 'Profiles: Switch Profile' in VS Code for this project, "
+            "then run setup/init.py again."
+        )
+    try:
+        answer = input("Implement these settings? [Y/n] ").strip().lower()
+    except EOFError:
+        return False
+    return answer not in {"n", "no"}
+
+
+def _print_profile_association_help(target_dir: Path) -> None:
+    """Explain how to associate a different VS Code profile with the project."""
+    print(
+        f"\nNo VS Code profile was changed for {target_dir.resolve()}. "
+        "To configure a named profile, open this project in VS Code, switch to the intended "
+        "profile with 'Profiles: Switch Profile', then run setup/init.py again."
+    )
+
+
+def _configure_copilot_profile(target_dir: Path, *, interactive: bool) -> None:
+    """Configure the associated or default macOS VS Code Copilot profile."""
+    if sys.platform != "darwin":
+        return
+    if not interactive:
+        warnings.warn(
+            "VS Code Copilot profile settings were not changed because setup is non-interactive.",
+            stacklevel=2,
+        )
+        return
+
+    roots = _macos_vscode_user_data_roots()
+    try:
+        target = _find_associated_copilot_profile(roots, target_dir)
+        if target is None:
+            target = _select_default_copilot_profile(roots, target_dir)
+    except RuntimeError as exc:
+        warnings.warn(f"Could not determine a unique VS Code profile target: {exc}", stacklevel=2)
+        _print_profile_association_help(target_dir)
+        return
+
+    try:
+        data, changed, original_text = _update_copilot_reasoning_settings(target.settings_path)
+    except (OSError, RuntimeError, json.JSONDecodeError) as exc:
+        warnings.warn(f"Could not inspect VS Code Copilot profile settings: {exc}", stacklevel=2)
+        return
+    if not changed:
+        print(f"VS Code profile {_profile_display_name(target)} already has the required Copilot settings.")
+    elif not _confirm_copilot_profile_update(target):
+        _print_profile_association_help(target_dir)
+    else:
+        try:
+            _write_copilot_profile_atomically(target.settings_path, data, original_text=original_text)
+        except OSError as exc:
+            warnings.warn(f"Could not write VS Code Copilot profile settings: {exc}", stacklevel=2)
+        else:
+            print(f"Updated VS Code profile settings: {_profile_display_path(target.settings_path)}")
+
+
 def _should_replace_hook_file(
     dest: Path,
     *,
@@ -568,6 +963,7 @@ def init(  # noqa: C901, PLR0913
         github_repository,
         interactive=interactive_mode,
     )
+    _configure_copilot_profile(target_dir, interactive=interactive_mode)
 
 
 # ---------------------------------------------------------------------------

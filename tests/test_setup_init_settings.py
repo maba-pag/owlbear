@@ -31,6 +31,25 @@ def init_module() -> types.ModuleType:
     return _load_init_module()
 
 
+def _write_workspace_profile_association(
+    user_data_root: Path,
+    target_dir: Path,
+    profile_id: str,
+) -> None:
+    storage_path = user_data_root / "User" / "globalStorage" / "storage.json"
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_text(
+        json.dumps(
+            {
+                "profileAssociations": {
+                    "workspaces": {target_dir.resolve().as_uri(): profile_id},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_init_writes_settings_without_hook_locations_and_with_local_hints(
     tmp_path: Path,
     init_module: types.ModuleType,
@@ -328,6 +347,7 @@ def test_init_interactive_target_defaults_to_checked_out_branch(
     target_dir.mkdir()
     monkeypatch.setattr(init_module, "_current_branch", lambda _target: "develop")
     monkeypatch.setattr(init_module, "_valid_branch_name", lambda _target, branch: branch == "develop")
+    monkeypatch.setattr(init_module, "_configure_copilot_profile", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("builtins.input", lambda _prompt: "")
 
     run_init_without_test_surface(init_module.init, target_dir, _REPO_ROOT, interactive=True)
@@ -364,3 +384,189 @@ def test_init_does_not_scaffold_retired_verification_profile(
     )
 
     assert not profile_path.exists()
+
+
+def test_copilot_profile_resolves_workspace_association(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+) -> None:
+    target_dir = tmp_path / "project"
+    user_data_root = tmp_path / "Code"
+    profile_dir = user_data_root / "User" / "profiles" / "named-profile"
+    target_dir.mkdir()
+    profile_dir.mkdir(parents=True)
+    _write_workspace_profile_association(user_data_root, target_dir, "named-profile")
+
+    target = init_module._find_associated_copilot_profile([user_data_root], target_dir)
+
+    assert target is not None
+    assert target.associated is True
+    assert target.profile_id == "named-profile"
+    assert target.settings_path == profile_dir / "chatLanguageModels.json"
+
+
+def test_copilot_profile_falls_back_to_one_default_user_data_root(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target_dir = tmp_path / "project"
+    user_data_root = tmp_path / "Code"
+    target_dir.mkdir()
+    (user_data_root / "User").mkdir(parents=True)
+    monkeypatch.setattr(init_module, "_running_macos_vscode_user_data_roots", list)
+
+    target = init_module._select_default_copilot_profile([user_data_root], target_dir)
+
+    assert target.associated is False
+    assert target.profile_id is None
+    assert target.settings_path == user_data_root / "User" / "chatLanguageModels.json"
+
+
+def test_copilot_profile_creation_and_reasoning_settings(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target_dir = tmp_path / "project"
+    user_data_root = tmp_path / "Code"
+    profile_dir = user_data_root / "User" / "profiles" / "named-profile"
+    target_dir.mkdir()
+    profile_dir.mkdir(parents=True)
+    _write_workspace_profile_association(user_data_root, target_dir, "named-profile")
+    monkeypatch.setattr(init_module.sys, "platform", "darwin")
+    monkeypatch.setattr(init_module, "_macos_vscode_user_data_roots", lambda: [user_data_root])
+    monkeypatch.setattr("builtins.input", lambda _prompt: "")
+
+    init_module._configure_copilot_profile(target_dir, interactive=True)
+
+    profile_data = json.loads((profile_dir / "chatLanguageModels.json").read_text(encoding="utf-8"))
+    copilot_settings = profile_data[0]["settings"]
+    assert {
+        model_id: copilot_settings[model_id]["reasoningEffort"] for model_id in init_module._COPILOT_REASONING_SETTINGS
+    } == {
+        "gpt-5.6-luna": "max",
+        "gpt-5.6-sol": "high",
+        "claude-opus-5": "medium",
+    }
+
+
+def test_copilot_profile_preserves_unrelated_entries(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target_dir = tmp_path / "project"
+    user_data_root = tmp_path / "Code"
+    profile_dir = user_data_root / "User" / "profiles" / "named-profile"
+    profile_path = profile_dir / "chatLanguageModels.json"
+    target_dir.mkdir()
+    profile_dir.mkdir(parents=True)
+    _write_workspace_profile_association(user_data_root, target_dir, "named-profile")
+    original_data = [
+        {"name": "Other provider", "vendor": "other", "settings": {"keep": True}},
+        {
+            "name": "GitHub Copilot Chat",
+            "vendor": "copilot",
+            "settings": {
+                "unrelated-model": {"reasoningEffort": "low", "custom": "preserve"},
+                "gpt-5.6-luna": {"custom": "preserve"},
+            },
+        },
+    ]
+    profile_path.write_text(json.dumps(original_data, indent=4) + "\n", encoding="utf-8")
+    monkeypatch.setattr(init_module.sys, "platform", "darwin")
+    monkeypatch.setattr(init_module, "_macos_vscode_user_data_roots", lambda: [user_data_root])
+    monkeypatch.setattr("builtins.input", lambda _prompt: "y")
+
+    init_module._configure_copilot_profile(target_dir, interactive=True)
+
+    profile_data = json.loads(profile_path.read_text(encoding="utf-8"))
+    assert profile_data[0] == original_data[0]
+    assert profile_data[1]["settings"]["unrelated-model"] == original_data[1]["settings"]["unrelated-model"]
+    assert profile_data[1]["settings"]["gpt-5.6-luna"] == {
+        "custom": "preserve",
+        "reasoningEffort": "max",
+    }
+    assert profile_data[1]["settings"]["gpt-5.6-sol"] == {"reasoningEffort": "high"}
+    assert profile_data[1]["settings"]["claude-opus-5"] == {"reasoningEffort": "medium"}
+
+
+def test_copilot_profile_decline_preserves_file(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target_dir = tmp_path / "project"
+    user_data_root = tmp_path / "Code"
+    profile_dir = user_data_root / "User" / "profiles" / "named-profile"
+    profile_path = profile_dir / "chatLanguageModels.json"
+    target_dir.mkdir()
+    profile_dir.mkdir(parents=True)
+    _write_workspace_profile_association(user_data_root, target_dir, "named-profile")
+    original_text = '[{"vendor": "copilot", "settings": {}}]\n'
+    profile_path.write_text(original_text, encoding="utf-8")
+    monkeypatch.setattr(init_module.sys, "platform", "darwin")
+    monkeypatch.setattr(init_module, "_macos_vscode_user_data_roots", lambda: [user_data_root])
+    monkeypatch.setattr("builtins.input", lambda _prompt: "n")
+
+    init_module._configure_copilot_profile(target_dir, interactive=True)
+
+    assert profile_path.read_text(encoding="utf-8") == original_text
+
+
+def test_copilot_profile_malformed_json_is_left_unchanged(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target_dir = tmp_path / "project"
+    user_data_root = tmp_path / "Code"
+    profile_dir = user_data_root / "User" / "profiles" / "named-profile"
+    profile_path = profile_dir / "chatLanguageModels.json"
+    target_dir.mkdir()
+    profile_dir.mkdir(parents=True)
+    _write_workspace_profile_association(user_data_root, target_dir, "named-profile")
+    malformed_text = "{not valid json\n"
+    profile_path.write_text(malformed_text, encoding="utf-8")
+    monkeypatch.setattr(init_module.sys, "platform", "darwin")
+    monkeypatch.setattr(init_module, "_macos_vscode_user_data_roots", lambda: [user_data_root])
+
+    with pytest.warns(UserWarning, match="Could not inspect"):
+        init_module._configure_copilot_profile(target_dir, interactive=True)
+
+    assert profile_path.read_text(encoding="utf-8") == malformed_text
+
+
+def test_copilot_profile_rejects_ambiguous_associations(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+) -> None:
+    target_dir = tmp_path / "project"
+    roots = [tmp_path / "Code", tmp_path / "Code - Insiders"]
+    target_dir.mkdir()
+    for root in roots:
+        (root / "User" / "profiles" / "named-profile").mkdir(parents=True)
+        _write_workspace_profile_association(root, target_dir, "named-profile")
+
+    with pytest.raises(RuntimeError, match="Multiple VS Code profile associations"):
+        init_module._find_associated_copilot_profile(roots, target_dir)
+
+
+def test_copilot_profile_skips_noninteractive_and_non_macos(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target_dir = tmp_path / "project"
+    target_dir.mkdir()
+    monkeypatch.setattr(
+        init_module, "_macos_vscode_user_data_roots", lambda: pytest.fail("discovery should be skipped")
+    )
+
+    monkeypatch.setattr(init_module.sys, "platform", "darwin")
+    with pytest.warns(UserWarning, match="non-interactive"):
+        init_module._configure_copilot_profile(target_dir, interactive=False)
+
+    monkeypatch.setattr(init_module.sys, "platform", "linux")
+    init_module._configure_copilot_profile(target_dir, interactive=True)

@@ -89,6 +89,7 @@ def test_interactive_replace_overwrites_existing_hook(
     _make_seed_hook(owlbear_dir, "seed-version")
     existing = _make_existing_hook(target_dir, "local-version")
     monkeypatch.setattr(init_module, "_select_target_branch", lambda *_args, **_kwargs: "main")
+    monkeypatch.setattr(init_module, "_configure_copilot_profile", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("builtins.input", lambda _prompt: "replace")
 
     run_init_without_test_surface(init_module.init, target_dir, owlbear_dir, interactive=True)
@@ -107,6 +108,7 @@ def test_interactive_skip_keeps_existing_hook(
     _make_seed_hook(owlbear_dir, "seed-version")
     existing = _make_existing_hook(target_dir, "local-version")
     monkeypatch.setattr(init_module, "_select_target_branch", lambda *_args, **_kwargs: "main")
+    monkeypatch.setattr(init_module, "_configure_copilot_profile", lambda *_args, **_kwargs: None)
     monkeypatch.setattr("builtins.input", lambda _prompt: "skip")
 
     run_init_without_test_surface(init_module.init, target_dir, owlbear_dir, interactive=True)
