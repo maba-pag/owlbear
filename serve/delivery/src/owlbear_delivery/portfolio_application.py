@@ -1520,17 +1520,22 @@ class PortfolioApplication:
             ):
                 receipt = self._draft_pull_request_publisher.mark_ready(request)
                 return runtime.mark_awaiting_merge(receipt)
-            self._observe_required_checks_before_ready(change_id, runtime, finalization.exact_head)
+            observation, failures = self._observe_required_checks_for_ready(
+                change_id,
+                finalization.exact_head,
+            )
             receipt = self._draft_pull_request_publisher.mark_ready(request)
-            return runtime.mark_awaiting_merge(receipt)
+            ready = runtime.mark_awaiting_merge(receipt)
+            if failures:
+                self._record_required_check_attention(runtime, observation, failures, ready)
+            return ready
 
-    def _observe_required_checks_before_ready(
+    def _observe_required_checks_for_ready(
         self,
         change_id: str,
-        runtime: DeliveryRuntime,
         exact_head: str,
-    ) -> PublicationCheckObservationReceipt:
-        """Retain failing provider-required checks before changing pull-request state."""
+    ) -> tuple[PublicationCheckObservationReceipt, tuple[PublicationCheck, ...]]:
+        """Observe provider-required checks without gating the pull-request ready state."""
         publisher = self._draft_pull_request_publisher
         if publisher is None:
             message = "draft pull-request publication is not configured"
@@ -1539,21 +1544,26 @@ class PortfolioApplication:
             ObserveChangePublicationChecks(change_id=change_id, published_head=exact_head)
         )
         failures = _failed_required_publication_checks(observation.snapshot)
-        if not failures:
-            return observation
-        history = runtime.publication_history()
-        if history is None or history.current.head_sha != exact_head:
-            message = "required publication checks failed but current publication identity is unavailable"
-            raise PortfolioApplicationError(message)
-        disposition = runtime.capture_publication_attention(
+        return observation, failures
+
+    @staticmethod
+    def _record_required_check_attention(
+        runtime: DeliveryRuntime,
+        observation: PublicationCheckObservationReceipt,
+        failures: tuple[PublicationCheck, ...],
+        ready: PullRequestReadyReceipt,
+    ) -> None:
+        """Retain failing provider-required checks after the PR is ready."""
+        runtime.capture_publication_attention(
             observation.observed_at,
             _required_check_diagnostics(observation.snapshot, observation.observation_id, failures),
-            publication_identity=history.current,
-        )
-        raise RequiredPublicationChecksFailedError(
-            exact_head=exact_head,
-            observation_id=observation.observation_id,
-            disposition_id=disposition.disposition_id,
+            publication_identity=DeliveryChangePublicationIdentity(
+                change_id=ready.change_id,
+                repository=ready.repository,
+                number=ready.number,
+                node_id=ready.node_id,
+                head_sha=ready.head_sha,
+            ),
         )
 
     def mark_current_change_ready(self, change_id: str) -> PullRequestReadyReceipt:
@@ -2734,9 +2744,6 @@ class PortfolioApplication:
     def acquire_frontier_work(self) -> DeliveryAcquisitionResult:
         """Start at most one ready claim per available execution slot."""
         with self._coordinator.acquisition_lock():
-            for change_id in self._runtimes:
-                if self._workspace_manager.show(change_id).worktree_cleanup is None:
-                    self._workspace_manager.refresh_integration_target(change_id)
             occupied = sum(len(runtime.active_claims()) for runtime in self._runtimes.values())
             available = max(self._execution_capacity - occupied, 0)
             launches: list[DeliveryLaunchPackage] = []

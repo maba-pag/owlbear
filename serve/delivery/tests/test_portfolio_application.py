@@ -111,7 +111,6 @@ from owlbear_delivery import (
     ReadChangePublicationCheckObservations,
     DeliveryRetainedWorktreeCleanupBlockReason,
     RetryDelivery,
-    RequiredPublicationChecksFailedError,
     classify_publication_check,
     load_delivery_application,
 )
@@ -1474,20 +1473,10 @@ def test_mark_change_ready_captures_required_check_failure(
         mark_ready=False,
     )
 
-    with pytest.raises(RequiredPublicationChecksFailedError) as exc_info:
-        application.mark_current_change_ready("change-a")
+    ready = application.mark_current_change_ready("change-a")
 
     disposition = runtime.change_disposition()
     assert disposition is not None
-    assert disposition.diagnostics[:4] == (
-        "required-publication-check-failure",
-        f"exact-head:{exact_head}",
-        f"check-observation:{exc_info.value.observation_id}",
-        "failing-required-checks:1",
-    )
-    assert runtime.change_disposition_publication() == runtime.publication_history().current
-    assert runtime.ready_receipt() is None
-    assert provider.set_pull_request_draft_state.call_count == 0
     observations = application._draft_pull_request_publisher.read_check_observations(  # noqa: SLF001
         ReadChangePublicationCheckObservations(
             change_id="change-a",
@@ -1496,7 +1485,19 @@ def test_mark_change_ready_captures_required_check_failure(
             exact_commit=exact_head,
         )
     )
-    assert tuple(observation.observation_id for observation in observations) == (exc_info.value.observation_id,)
+    assert len(observations) == 1
+    observation_id = observations[0].observation_id
+    assert disposition.diagnostics[:4] == (
+        "required-publication-check-failure",
+        f"exact-head:{exact_head}",
+        f"check-observation:{observation_id}",
+        "failing-required-checks:1",
+    )
+    assert runtime.change_disposition_publication() == runtime.publication_history().current
+    assert ready.head_sha == exact_head
+    assert runtime.ready_receipt() == ready
+    assert provider.set_pull_request_draft_state.call_count == 1
+    assert tuple(observation.observation_id for observation in observations) == (observation_id,)
 
 
 @pytest.mark.parametrize(
@@ -1568,7 +1569,7 @@ def test_classify_publication_check_preserves_ready_semantics(
     assert classify_publication_check(check) is expected
 
 
-def test_required_check_attention_requires_reconciled_publication_identity(tmp_path: Path) -> None:
+def test_required_check_attention_records_after_ready_without_preexisting_publication_identity(tmp_path: Path) -> None:
     application, runtime, provider, _state, _exact_head, _state_root = _awaiting_acceptance_fixture(
         tmp_path,
         checks=lambda head: (
@@ -1586,11 +1587,11 @@ def test_required_check_attention_requires_reconciled_publication_identity(tmp_p
         record_publication_identity=False,
     )
 
-    with pytest.raises(PortfolioApplicationError, match="publication identity is unavailable"):
-        application.mark_current_change_ready("change-a")
+    ready = application.mark_current_change_ready("change-a")
 
-    assert runtime.change_disposition() is None
-    assert provider.set_pull_request_draft_state.call_count == 0
+    assert runtime.change_disposition() is not None
+    assert runtime.ready_receipt() == ready
+    assert provider.set_pull_request_draft_state.call_count == 1
 
 
 def test_required_check_attention_retries_with_stable_diagnostics_after_resolution(tmp_path: Path) -> None:
@@ -1610,18 +1611,18 @@ def test_required_check_attention_retries_with_stable_diagnostics_after_resoluti
         mark_ready=False,
     )
 
-    with pytest.raises(RequiredPublicationChecksFailedError):
-        application.mark_current_change_ready("change-a")
+    ready = application.mark_current_change_ready("change-a")
     first = runtime.change_disposition()
     assert first is not None
+    assert runtime.ready_receipt() == ready
 
     application.resolve_change_disposition("change-a", first.disposition_id)
 
-    with pytest.raises(RequiredPublicationChecksFailedError):
-        application.mark_current_change_ready("change-a")
-    second = runtime.change_disposition()
-    assert second is not None
-    assert second.diagnostics == first.diagnostics
+    replayed = application.mark_current_change_ready("change-a")
+
+    assert replayed == ready
+    assert runtime.change_disposition() is None
+    assert _provider.observe_checks.call_count == 1
 
 
 def test_mark_change_ready_replays_existing_ready_without_reobserving_checks(tmp_path: Path) -> None:
@@ -4404,6 +4405,23 @@ def test_acquisition_does_not_create_integration_repair_claim(tmp_path: Path) ->
     assert acquired.integration_attention[0].code == DeliveryIntegrationAttentionCode.MERGE_CONFLICT
     assert runtimes["change-a"].integration_repair_claim() is None
     assert coordinator.show("change-a").writer is None
+
+
+def test_acquisition_does_not_refresh_target_head(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.COMPLETED},
+    )
+    initial_target = coordinator.show("change-a").target_head
+    repository = tmp_path / "repository"
+    (repository / "product.txt").write_text("target side\n", encoding="utf-8")
+    _git(repository, "add", "product.txt")
+    _git(repository, "commit", "-m", "concurrent target")
+    _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
+
+    application.acquire_frontier_work()
+
+    assert coordinator.show("change-a").target_head == initial_target
 
 
 def _prepare_legacy_integration_repair(tmp_path: Path):
