@@ -17,6 +17,7 @@ _SKILLS_ROOT = _REPO_ROOT / "share/skills"
 _INSTRUCTIONS_ROOT = _REPO_ROOT / "share/instructions"
 _AGENT_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_agents.py"
 _SKILL_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_skills.py"
+_PROMPT_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_prompts.py"
 
 _EXPECTED_AGENTS = {
     "build-reviewer",
@@ -130,6 +131,7 @@ def _load_module(path: Path, name: str) -> types.ModuleType:
 
 _AGENT_VALIDATOR = _load_module(_AGENT_VALIDATOR_PATH, "agent_validator")
 _SKILL_VALIDATOR = _load_module(_SKILL_VALIDATOR_PATH, "skill_validator")
+_PROMPT_VALIDATOR = _load_module(_PROMPT_VALIDATOR_PATH, "prompt_validator")
 
 
 def _agent_text(
@@ -166,6 +168,13 @@ agents: {agents}
 def _write_agent(tmp_path: Path, name: str, content: str) -> Path:
     tmp_path.mkdir(parents=True, exist_ok=True)
     path = tmp_path / f"{name}.agent.md"
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
+def _write_prompt(tmp_path: Path, name: str, content: str) -> Path:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    path = tmp_path / f"{name}.prompt.md"
     path.write_text(content, encoding="utf-8")
     return path
 
@@ -260,6 +269,86 @@ def test_agent_validator_rejects_unresolved_required_skills(tmp_path: Path) -> N
     errors = _AGENT_VALIDATOR.validate_agent(path)
 
     assert any("required skills do not resolve" in error for error in errors)
+
+
+def test_agent_validator_requires_declared_role_hooks(tmp_path: Path) -> None:
+    path = _write_agent(tmp_path, "builder", _agent_text("builder"))
+
+    errors = _AGENT_VALIDATOR.validate_agent(path)
+
+    assert any("missing required SessionStart hook" in error for error in errors)
+    assert any("missing required PostToolUse hook" in error for error in errors)
+
+
+def test_agent_validator_rejects_missing_hook_scripts(tmp_path: Path) -> None:
+    content = _agent_text("reader").replace(
+        "agents: []\n---",
+        """agents: []
+hooks:
+  PreToolUse:
+    - type: command
+      command: uv run python .owlbear/hooks/missing.py
+---""",
+    )
+    path = _write_agent(tmp_path, "reader", content)
+
+    errors = _AGENT_VALIDATOR.validate_agent(path)
+
+    assert any("hook script does not exist" in error for error in errors)
+
+
+def test_agent_validator_discovers_project_local_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    local_root = tmp_path / ".owlbear/agents"
+    path = _write_agent(local_root, "local-agent", _agent_text("local-agent"))
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_AGENT_ROOTS", (local_root,))
+
+    assert _AGENT_VALIDATOR._discover_agent_files() == [path]
+
+
+def test_prompt_validator_accepts_current_prompt_roots() -> None:
+    prompt_files = _PROMPT_VALIDATOR._discover_prompt_files()
+
+    assert prompt_files
+    assert all(_PROMPT_VALIDATOR.validate_prompt(path) == [] for path in prompt_files)
+
+
+def test_prompt_validator_rejects_unresolved_agent_and_skill(tmp_path: Path) -> None:
+    path = _write_prompt(
+        tmp_path / "prompts",
+        "broken",
+        """---
+description: Broken prompt
+agent: missing-agent
+---
+
+Read `h-missing` and `../skills/h-missing/SKILL.md`.
+""",
+    )
+
+    errors = _PROMPT_VALIDATOR.validate_prompt(path)
+
+    assert any("prompt agent does not resolve" in error for error in errors)
+    assert any("referenced skill file does not exist" in error for error in errors)
+    assert any("referenced skill does not exist" in error for error in errors)
+
+
+def test_skill_validator_discovers_project_local_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    local_root = tmp_path / ".owlbear/skills"
+    skill_dir = local_root / "h-local"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        """---
+name: h-local
+description: "Handbook: Local"
+---
+
+# Local
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(_SKILL_VALIDATOR, "_SKILL_ROOTS", (local_root,))
+
+    assert _SKILL_VALIDATOR.main([]) == 0
 
 
 def test_skill_validator_accepts_vendor_fields_and_rejects_missing_metadata(tmp_path: Path) -> None:

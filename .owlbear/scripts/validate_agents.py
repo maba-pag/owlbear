@@ -7,16 +7,18 @@ Checks each agents/*.agent.md file for:
   - Presence of 'resolveMemoryFileUri' anywhere
   - Unknown tool names not in the canonical registry
   - Frontmatter agents: ↔ body <agents> table alignment
+    - Hook declaration shape, script paths, and required role contracts
   - ND3 agents have disable-model-invocation: false
 
 Usage:
     python .owlbear/scripts/validate_agents.py [<agent_file> ...]
-    # No args = discover and validate all agents in share/agents/
+        # No args = discover and validate all agents in share/ and .owlbear/
 """
 
 from __future__ import annotations
 
 import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -60,7 +62,40 @@ KNOWN_MCP_SERVERS: frozenset[str] = frozenset(
 # to avoid double-reporting the same tool with two different error messages.
 _BANNED_TOOL_NAMES: frozenset[str] = frozenset({"todos", "todo", "manage_todo_list", "resolveMemoryFileUri"})
 
-_AGENTS_DIR = Path(__file__).resolve().parents[2] / "share" / "agents"
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_AGENT_ROOTS = (_REPO_ROOT / "share" / "agents", _REPO_ROOT / ".owlbear" / "agents")
+_SKILL_ROOTS = (_REPO_ROOT / "share" / "skills", _REPO_ROOT / ".owlbear" / "skills")
+_HOOK_EVENTS = frozenset({"SessionStart", "PreToolUse", "PostToolUse"})
+_REQUIRED_HOOKS: dict[str, dict[str, frozenset[str]]] = {
+    "build-reviewer": {
+        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py --terminal-read-only"}),
+    },
+    "builder": {
+        "SessionStart": frozenset({"uv run python .owlbear/hooks/session-context.py"}),
+        "PostToolUse": frozenset({"uv run python .owlbear/hooks/lint-changed.py"}),
+    },
+    "conceptual-design-reviewer": {
+        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py"}),
+    },
+    "designer": {
+        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py --allow-research --terminal-read-only"}),
+    },
+    "designer-challenger": {
+        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py"}),
+    },
+    "finalizer": {
+        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py --terminal-read-only"}),
+    },
+    "planner": {
+        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py --terminal-read-only"}),
+    },
+    "planner-challenger": {
+        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py"}),
+    },
+    "test-curator": {
+        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-src-writes.py"}),
+    },
+}
 
 # Known ND3 agents — must have disable-model-invocation: false.
 # See share/WIRING.md § "Nesting Depth" for the canonical list.
@@ -92,6 +127,17 @@ _REQUIRED_SECTIONS = (
     "boundaries",
     "examples",
 )
+
+
+def _frontmatter_data(fm_lines: list[str]) -> dict[str, object]:
+    """Return parsed frontmatter when it is a mapping, otherwise an empty mapping."""
+    if not fm_lines:
+        return {}
+    try:
+        parsed = yaml.safe_load("\n".join(fm_lines))
+    except yaml.YAMLError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def _frontmatter_lines(content: str) -> list[str]:
@@ -183,6 +229,78 @@ def _body_agents_table(content: str) -> list[str]:
             if len(cells) >= _AGENT_TABLE_MIN_CELLS and cells[1] and cells[1] != "Agent":
                 agents.append(cells[1])
     return agents
+
+
+def _hook_entry_command(
+    event: str,
+    index: int,
+    entry: object,
+    agent_file: Path,
+) -> tuple[str | None, list[str]]:
+    """Validate one hook entry and return its command plus any diagnostics."""
+    if not isinstance(entry, dict):
+        return None, [f"{agent_file}: hooks.{event}[{index}] must be a mapping"]
+
+    errors: list[str] = []
+    if entry.get("type") != "command":
+        errors.append(f"{agent_file}: hooks.{event}[{index}] must use type: command")
+    command = entry.get("command")
+    if not isinstance(command, str) or not command.strip():
+        errors.append(f"{agent_file}: hooks.{event}[{index}] needs a non-empty command")
+        return None, errors
+
+    command = command.strip()
+    try:
+        tokens = shlex.split(command)
+    except ValueError as exc:
+        errors.append(f"{agent_file}: hooks.{event}[{index}] command is not shell-parseable: {exc}")
+        return command, errors
+    errors.extend(
+        f"{agent_file}: hook script does not exist: {token}"
+        for token in tokens
+        if token.startswith(".owlbear/hooks/") and not (_REPO_ROOT / token).is_file()
+    )
+    return command, errors
+
+
+def _hook_commands(fm_lines: list[str], agent_file: Path) -> tuple[dict[str, list[str]], list[str]]:
+    """Parse hook commands and validate their declaration shape and local script paths."""
+    hooks = _frontmatter_data(fm_lines).get("hooks")
+    if hooks is None:
+        return {}, []
+    if not isinstance(hooks, dict):
+        return {}, [f"{agent_file}: hooks must be a mapping of lifecycle event to command entries"]
+
+    commands: dict[str, list[str]] = {}
+    errors: list[str] = []
+    for event, entries in hooks.items():
+        if event not in _HOOK_EVENTS:
+            errors.append(f"{agent_file}: hooks contains unsupported lifecycle event '{event}'")
+        if not isinstance(entries, list):
+            errors.append(f"{agent_file}: hooks.{event} must be a list")
+            continue
+
+        event_commands: list[str] = []
+        for index, entry in enumerate(entries):
+            command, entry_errors = _hook_entry_command(event, index, entry, agent_file)
+            errors.extend(entry_errors)
+            if command is not None:
+                event_commands.append(command)
+        commands[event] = event_commands
+
+    return commands, errors
+
+
+def _check_hooks(fm_lines: list[str], agent_file: Path) -> list[str]:
+    """Validate declared hooks and enforce the current safety-hook contracts."""
+    commands, errors = _hook_commands(fm_lines, agent_file)
+    expected = _REQUIRED_HOOKS.get(agent_file.stem.replace(".agent", ""), {})
+    for event, required_commands in expected.items():
+        declared = set(commands.get(event, []))
+        missing = sorted(required_commands - declared)
+        if missing:
+            errors.append(f"{agent_file}: missing required {event} hook(s): {missing}")
+    return errors
 
 
 def _check_unknown_tools(fm_lines: list[str], agent_file: Path) -> list[str]:
@@ -287,7 +405,10 @@ def _check_delegation(content: str, fm_lines: list[str], agent_file: Path) -> li
     if in_body_not_fm:
         errors.append(f"{agent_file}: in <agents> table but missing from frontmatter agents:: {sorted(in_body_not_fm)}")
 
-    unresolved = sorted(agent for agent in fm_custom if not (agent_file.parent / f"{agent}.agent.md").is_file())
+    agent_roots = (agent_file.parent, *_AGENT_ROOTS)
+    unresolved = sorted(
+        agent for agent in fm_custom if not any((root / f"{agent}.agent.md").is_file() for root in agent_roots)
+    )
     if unresolved:
         errors.append(f"{agent_file}: delegated agents do not resolve beside caller: {unresolved}")
     return errors
@@ -299,8 +420,10 @@ def _check_required_reading(content: str, agent_file: Path) -> list[str]:
     if match is None:
         return []
     skill_names = set(re.findall(r"`([hwr]-[a-z0-9-]+)`", match.group(1)))
-    skills_root = agent_file.parent.parent / "skills"
-    unresolved = sorted(name for name in skill_names if not (skills_root / name / "SKILL.md").is_file())
+    skill_roots = (agent_file.parent.parent / "skills", *_SKILL_ROOTS)
+    unresolved = sorted(
+        name for name in skill_names if not any((root / name / "SKILL.md").is_file() for root in skill_roots)
+    )
     if not unresolved:
         return []
     return [f"{agent_file}: required skills do not resolve beside agent tree: {unresolved}"]
@@ -313,6 +436,7 @@ def validate_agent(agent_file: Path) -> list[str]:
     errors = [
         *_check_structure(content, fm_lines, agent_file),
         *_check_tool_policy(content, fm_lines, agent_file),
+        *_check_hooks(fm_lines, agent_file),
         *_check_delegation(content, fm_lines, agent_file),
         *_check_required_reading(content, agent_file),
     ]
@@ -325,15 +449,21 @@ def validate_agent(agent_file: Path) -> list[str]:
     return errors
 
 
+def _discover_agent_files() -> list[Path]:
+    """Discover agents from every active project customization root."""
+    return sorted({agent_file for root in _AGENT_ROOTS if root.is_dir() for agent_file in root.glob("*.agent.md")})
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point.  Accepts agent file paths; no args = all agents."""
     args = argv if argv is not None else sys.argv[1:]
 
     if not args:
-        if not _AGENTS_DIR.is_dir():
-            sys.stderr.write(f"Agent directory not found: {_AGENTS_DIR}\n")
+        agent_files = _discover_agent_files()
+        if not agent_files:
+            roots = ", ".join(str(root) for root in _AGENT_ROOTS)
+            sys.stderr.write(f"No agent files found in active roots: {roots}\n")
             return 1
-        agent_files = sorted(_AGENTS_DIR.glob("*.agent.md"))
     else:
         agent_files = [Path(p) for p in args]
 

@@ -17,6 +17,9 @@ from skills_ref.errors import ParseError
 from skills_ref.parser import find_skill_md, parse_frontmatter
 from skills_ref.validator import validate_metadata
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_SKILL_ROOTS = (_REPO_ROOT / "share" / "skills", _REPO_ROOT / ".owlbear" / "skills")
+
 # OwlBear-specific VS Code vendor fields — not part of the Agent Skills Spec.
 _VENDOR_FIELDS = frozenset({"user-invocable", "argument-hint", "disable-model-invocation"})
 
@@ -58,15 +61,19 @@ def main(argv: list[str] | None = None) -> int:
     """CLI entry point.  Accepts skill directory paths as positional arguments.
 
     When called with no arguments, auto-discovers all skill directories under
-    ``share/skills/``.
+    the active ``share/skills/`` and ``.owlbear/skills/`` roots.
     """
     args = argv if argv is not None else sys.argv[1:]
 
     if not args:
         # Auto-discover skill directories (cross-platform, no shell glob needed).
-        skills_root = Path("share/skills")
-        if skills_root.is_dir():
-            args = [str(p) for p in sorted(skills_root.iterdir()) if p.is_dir()]
+        args = [
+            str(skill_dir)
+            for root in _SKILL_ROOTS
+            if root.is_dir()
+            for skill_dir in sorted(root.iterdir())
+            if skill_dir.is_dir()
+        ]
         if not args:
             sys.stderr.write("Usage: validate_skills.py [<skill_dir> ...]\n")
             return 1

@@ -191,8 +191,18 @@ repos:
         name: Validate Agent Tool Names
         language: system
         entry: uv run --frozen python .owlbear/scripts/validate_agents.py
-        files: ^share/agents/.*\.agent\.md$
-        pass_filenames: true
+        files: >-
+          (?x)
+          ^(?:share/agents|\.owlbear/agents)/.*\.agent\.md$
+          |^\.owlbear/hooks/.*\.py$
+          |^\.owlbear/scripts/validate_agents\.py$
+        pass_filenames: false
+      - id: validate-prompts
+        name: Validate Agent Prompts
+        language: system
+        entry: uv run --frozen python .owlbear/scripts/validate_prompts.py
+        files: '^(?:share|\.owlbear)/(?:agents|prompts|skills)/.*|^\.owlbear/scripts/validate_prompts\.py$'
+        pass_filenames: false
       # TODO marker scan — warning only (always exit 0, output always shown)
       - id: todo-check
         name: TODO marker scan
