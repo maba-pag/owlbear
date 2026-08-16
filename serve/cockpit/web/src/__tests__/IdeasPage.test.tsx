@@ -1,15 +1,4 @@
-/**
- * Consolidation integration test — Ideas Notebook end-to-end (task #1666)
- *
- * Cross-feature integration across all Ideas Notebook subtasks:
- *   #1662 — core edit/save/dirty state
- *   #1663 — markdown preview toggle
- *   #1664 — unsaved-changes navigation guard
- *   #1665 — external-edit awareness and conflict resolution
- *
- * Durable file: no task-ID suffix — maintained by test-curator after archival.
- * Use descriptive describe names; do NOT use TestFromAC_ prefix here.
- */
+/** Durable integration tests for the Ideas Notebook workflow. */
 
 import { Suspense, type ComponentType } from 'react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
@@ -17,6 +6,8 @@ import { render, fireEvent, act, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider, useNavigate } from 'react-router'
 import IdeasPage from '../pages/IdeasPage'
 import { routeConfig } from '../routes'
+
+// Mined from #1666: Ideas Notebook loading, editing, preview, navigation, and conflict flows.
 
 // ─── Fetch mock factories ──────────────────────────────────────────────────────
 

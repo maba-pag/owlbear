@@ -1,21 +1,6 @@
+"""Protect the Cockpit Memory API's real engine-to-route state-machine flow."""
+
 from __future__ import annotations
-
-"""Durable integration tests: Cockpit Memory Tab end-to-end (#1673).
-
-Consolidation backstop: verifies the full engine->API chain works together
-after all 6 sibling tasks (#1667-#1672) have been implemented.
-
-AC coverage:
-  AC1: Real MemoryEngine via DI override + FastAPI TestClient; full state-machine
-       flow: save→pending, edit-with-scope_agents→curated, approve→approved,
-       edit→curated (downgrade), delete→soft-deleted
-  AC2: Every API call returns HTTP 200 and entry.state matches expected transition;
-       GET /api/memories after save returns entry with state=pending and parse_errors=0
-  AC3: edit with scope_agents → pending→curated; approve → curated→approved;
-       edit of approved → curated (downgrade); delete of curated → {success:true}
-  AC4: All 6 sibling test files exist and Python modules are importable without errors;
-       cross-package import chain (owlbear_memory ← cockpit) is intact
-"""
 
 from pathlib import Path
 
@@ -24,6 +9,8 @@ from fastapi.testclient import TestClient
 
 from owlbear_memory.engine import MemoryEngine
 from owlbear_memory.models import MemoryCategory, MemoryState
+
+# Mined from #1673: real-engine Cockpit Memory API state-machine integration.
 
 # ---------------------------------------------------------------------------
 # Fixtures

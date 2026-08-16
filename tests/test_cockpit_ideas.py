@@ -1,13 +1,4 @@
-"""Failing tests for cockpit Ideas API — GET/PUT /api/ideas (#1660).
-
-RED phase — all tests must fail until the route is implemented in GREEN.
-
-AC coverage:
-  - AC1: GET /api/ideas → {"content": "..."} from file; {"content": ""} when absent
-  - AC2: PUT /api/ideas accepts {"content": "..."}, writes via atomic_write, creates on first
-         write, returns 204
-  - AC3: get_ideas_path dependency returns Path, overridable via app.dependency_overrides
-"""
+"""Behavioral tests for the Cockpit Ideas API and optimistic concurrency."""
 
 from __future__ import annotations
 
@@ -20,6 +11,8 @@ import pytest
 
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient
+
+# Mined from #1660: Ideas API persistence, validation, and save-time conflicts.
 
 
 # ---------------------------------------------------------------------------

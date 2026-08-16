@@ -1,19 +1,4 @@
-"""RED-phase tests for memory state machine extension: contested, disputed, stale states.
-
-Task #1840 — P2-01: State machine — contested, disputed, stale states.
-
-AC coverage:
-- AC1: MemoryState enum includes contested/disputed/stale in both packages;
-       list_memories default state set includes all three;
-       _state_rank_for_list: contested=1 (curated tier), disputed=stale=3 (deleted tier).
-- AC2: MemoryEngine.resolve(entry_id, expected_updated_at) transitions
-       {contested, disputed, stale}→approved with OCC; sets approved_at;
-       TransitionError for non-resolvable states (pending, approved, curated, deleted).
-- AC3: recall_memory excludes disputed and stale; includes contested;
-       contested added to recall visible set and state_rank dict.
-- AC4: edit() raises TransitionError for contested/disputed/stale;
-       delete() soft-deletes (state→deleted) from contested/disputed/stale.
-"""
+"""Protect memory state transitions, recall visibility, and soft-delete behavior."""
 
 from __future__ import annotations
 
@@ -26,6 +11,8 @@ from owlbear_memory import MemoryEngine, MemoryEntry
 from owlbear_memory import storage
 from owlbear_memory.errors import ConcurrencyError, TransitionError
 from owlbear_memory.models import MemoryState
+
+# Mined from #1840: contested, disputed, and stale state behavior.
 
 # ---------------------------------------------------------------------------
 # Shared constants

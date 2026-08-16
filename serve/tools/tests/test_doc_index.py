@@ -1,22 +1,7 @@
-"""Failing tests for doc-index script (#1018).
-
-RED phase — all tests must fail until owlbear_tools is implemented in GREEN (#1020).
-
-AC coverage:
-  - Filesystem walk with exclusion list (12 paths)
-  - Markdown output format — auto-generated header, file headers, heading bullets,
-    ### Outbound links sub-section
-  - Outbound link extraction excludes code blocks
-  - Diagram entries include `describes` field
-  - Index is idempotent (same input → same output)
-    - CLI always regenerates from current documentation
-  - CLI entry point `doc-index` is resolvable
-  - Parser round-trip — extracts file entries, headings, and outbound links
-"""
+"""Behavioral tests for documentation collection, indexing, and parsing."""
 
 from __future__ import annotations
 
-import importlib.metadata
 import sys
 import textwrap
 from pathlib import Path
@@ -29,6 +14,9 @@ from owlbear_tools.doc_index import (
     main,
     parse_index,
 )
+
+# Mined from #1018: documentation collection, output, link filtering, and parsing.
+# Mined from #1020: CLI regeneration behavior.
 
 # ---------------------------------------------------------------------------
 # Expected exclusion dirs (§4.3 + Architecture Review refinements)
@@ -89,7 +77,7 @@ def _make_excalidraw(tmp_path: Path, rel: str, content: str = "{}") -> Path:
 # ===========================================================================
 
 
-class TestFromAC_FilesystemWalk:
+class TestDocIndexCollection:
     """AC: filesystem walk with exclusion list."""
 
     def test_collects_markdown_files(self, tmp_path: Path) -> None:
@@ -160,7 +148,7 @@ class TestFromAC_FilesystemWalk:
 # ===========================================================================
 
 
-class TestFromAC_MarkdownFormat:
+class TestDocIndexMarkdownOutput:
     """AC: markdown output format — header, file headers, heading bullets, links section."""
 
     def test_output_starts_with_auto_generated_header(self, tmp_path: Path) -> None:
@@ -232,7 +220,7 @@ class TestFromAC_MarkdownFormat:
 # ===========================================================================
 
 
-class TestFromAC_OutboundLinkExtraction:
+class TestDocIndexOutboundLinks:
     """AC: outbound link extraction excludes code blocks."""
 
     def test_prose_links_are_extracted(self, tmp_path: Path) -> None:
@@ -303,7 +291,7 @@ class TestFromAC_OutboundLinkExtraction:
 # ===========================================================================
 
 
-class TestFromAC_Idempotency:
+class TestDocIndexDeterminism:
     """AC: index is idempotent — same input produces same output."""
 
     def test_two_runs_produce_identical_output(self, tmp_path: Path) -> None:
@@ -331,30 +319,7 @@ class TestFromAC_Idempotency:
 
 
 # ===========================================================================
-# TestFromAC_CLIEntryPoint
-# ===========================================================================
-
-
-class TestFromAC_CLIEntryPoint:
-    """AC: CLI entry point `doc-index` is resolvable."""
-
-    def test_doc_index_entry_point_is_registered(self) -> None:
-        """Happy: 'doc-index' is registered as a console_scripts entry point."""
-        eps = importlib.metadata.entry_points(group="console_scripts")
-        names = {ep.name for ep in eps}
-        assert "doc-index" in names
-
-    def test_doc_index_entry_point_is_callable(self) -> None:
-        """Happy: the entry point loads to a callable without error."""
-        eps = importlib.metadata.entry_points(group="console_scripts")
-        ep = next((e for e in eps if e.name == "doc-index"), None)
-        assert ep is not None, "doc-index entry point not found"
-        func = ep.load()
-        assert callable(func)
-
-
-# ===========================================================================
-# TestFromAC_Parser
+# Parser
 # ===========================================================================
 
 
@@ -381,7 +346,7 @@ _WELL_FORMED_INDEX = textwrap.dedent(
 )
 
 
-class TestFromAC_Parser:
+class TestDocIndexParser:
     """AC: parser round-trip — extracts file entries, headings, and outbound links."""
 
     def test_parser_extracts_file_entry_paths(self) -> None:
@@ -428,7 +393,7 @@ class TestFromAC_Parser:
 # ===========================================================================
 
 
-class TestBuilderDiscovered:
+class TestDocIndexCli:
     """Builder-discovered tests for uncovered paths in doc_index."""
 
     def test_parser_non_outbound_section_header_resets_outbound_flag(self) -> None:

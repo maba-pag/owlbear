@@ -1,19 +1,4 @@
-"""RED-phase tests for confirmation cycle: factually-wrong → contested/disputed.
-
-Task #1845 — P2-06: Confirmation cycle — factually-wrong to contested/disputed
-
-AC coverage:
-- AC1: MemoryEntry.contested_by_task field in both packages (default None, frontmatter-serialized);
-       record_factually_wrong raises ValidationError for empty/whitespace task_id;
-       approved/curated entries transition to contested with contested_by_task = task_id;
-       contested entry remains in recall results.
-- AC2: contested + non-None contested_by_task ≠ task_id → disputed;
-       contested + contested_by_task=None → initial confirmation (stays contested, stores task_id).
-- AC3: same task_id on contested → no mutation, entry returned unchanged;
-       non-voteable states raise TransitionError.
-- AC4: expected_updated_at mismatch raises ConcurrencyError (before state logic);
-       None skips OCC check unconditionally.
-"""
+"""Protect the memory confirmation cycle and its optimistic concurrency ordering."""
 
 from __future__ import annotations
 
@@ -25,6 +10,8 @@ from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState
 from owlbear_memory import storage
 from owlbear_memory.errors import ConcurrencyError, TransitionError, ValidationError
 from owlbear_memory_mcp.models import MemoryEntry as McpMemoryEntry
+
+# Mined from #1845: factually-wrong confirmation, disputed transitions, and OCC ordering.
 
 # ---------------------------------------------------------------------------
 # Constants

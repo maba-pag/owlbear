@@ -1,17 +1,6 @@
+"""Behavioral tests for Cockpit memory routes and optimistic concurrency."""
+
 from __future__ import annotations
-
-"""Failing tests for cockpit memory routes with OCC (#1670).
-
-RED phase — all tests must fail until routes are implemented in GREEN.
-
-AC coverage:
-  - AC1: GET /api/memories → { entries: [...], parse_errors: int }, all 11 entry fields, all states
-  - AC2: POST /api/memories/{id}/approve → 200 { entry }, 404/409/422 with MEM_ codes
-  - AC3: POST /api/memories/{id}/edit → 200 { entry }, state transition, extra fields forbidden, errors
-  - AC4: Edit route forwarding contract — per-field (title, scope_agents) + combined + positional args
-  - AC5: POST /api/memories/{id}/delete → 200 { success: true }, hard/soft delete, errors
-  - AC6: Memory exception handlers in main.py use owlbear_memory.errors imports, MEM_ codes
-"""
 
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
@@ -20,6 +9,8 @@ import pytest
 
 from owlbear_memory.errors import ConcurrencyError, NotFoundError, TransitionError
 from owlbear_memory.models import MemoryCategory, MemoryEntry, MemoryState
+
+# Mined from #1670: memory route payloads, forwarding, state transitions, and errors.
 
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient

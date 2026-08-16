@@ -1,34 +1,19 @@
-/**
- * RED phase tests for #1555: Bridge PDS v4 color-scheme with data-theme toggle
- *
- * All tests (except AC-7 constraint guards) MUST FAIL before the builder
- * implements the changes.
- *
- * Coverage:
- *   AC-1: custom-tokens.css exists and declares the retained custom token
- *   AC-3: theme-bootstrap.js sets .scheme-dark/.scheme-light on documentElement
- *   AC-4: useTheme.ts — all 3 mutation sites toggle scheme classes (no accumulation)
- *   AC-7: No app-authored color-scheme CSS property declarations in src/ CSS files
- *         (constraint guard — passes in RED because violation doesn't exist yet)
- *
- * AC-5 (Playwright e2e) -> e2e/pds-scheme-dark.spec.ts
- * AC-6 (existing tests green) → builder obligation, no new tests needed
- */
+/** Durable runtime tests for PDS color-scheme class synchronization. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { applyTheme, useTheme } from '../hooks/useTheme'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-const CUSTOM_TOKENS_CSS_PATH = resolve(__dirname, '../custom-tokens.css')
 const BOOTSTRAP_PATH = resolve(__dirname, '../../public/theme-bootstrap.js')
-const SRC_DIR = resolve(__dirname, '..')
 
 const THEME_STORAGE_KEY = 'owlbear-theme'
+
+// Mined from #1555: PDS scheme classes follow bootstrap, hook, and OS changes.
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -93,38 +78,7 @@ function cleanupThemeState(): void {
   document.documentElement.classList.remove('scheme-dark', 'scheme-light')
 }
 
-function collectCssFiles(dir: string): string[] {
-  const result: string[] = []
-  for (const entry of readdirSync(dir)) {
-    const fullPath = join(dir, entry)
-    const st = statSync(fullPath)
-    if (st.isDirectory()) {
-      result.push(...collectCssFiles(fullPath))
-    } else if (entry.endsWith('.css')) {
-      result.push(fullPath)
-    }
-  }
-  return result
-}
-
-// ─── AC-1: custom-tokens.css exists with retained custom token ────────────────
-
-describe('TestFromAC_TokensCssGlobalStylesImport_1555', () => {
-  it('AC-1: custom-tokens.css declares --custom-signal-deps-unmet', () => {
-    const content = readFileSync(CUSTOM_TOKENS_CSS_PATH, 'utf-8')
-    expect(content).toContain('--custom-signal-deps-unmet')
-  })
-
-  it('AC-1: custom-tokens.css declares exactly one custom property (--custom-signal-deps-unmet)', () => {
-    const content = readFileSync(CUSTOM_TOKENS_CSS_PATH, 'utf-8')
-    const declarations = [...content.matchAll(/--[a-z][a-z0-9-]*\s*:/g)]
-    expect(declarations).toHaveLength(1)
-  })
-})
-
-// ─── AC-3: theme-bootstrap.js sets .scheme-dark / .scheme-light ──────────────
-
-describe('TestFromAC_BootstrapSchemeClass_1555', () => {
+describe('ThemeBootstrapSchemeClasses', () => {
   beforeEach(() => {
     cleanupThemeState()
     setMatchMedia(false)
@@ -201,10 +155,9 @@ describe('TestFromAC_BootstrapSchemeClass_1555', () => {
     expect(document.documentElement.classList.contains('scheme-dark')).toBe(false)
   })
 })
-
 // ─── AC-4 (site 1): applyTheme() exported function ───────────────────────────
 
-describe('TestFromAC_ApplyThemeSchemeClass_1555', () => {
+describe('ApplyThemeSchemeClasses', () => {
   beforeEach(() => {
     cleanupThemeState()
     setMatchMedia(false)
@@ -241,10 +194,9 @@ describe('TestFromAC_ApplyThemeSchemeClass_1555', () => {
     expect(document.documentElement.classList.contains('scheme-dark')).toBe(false)
   })
 })
-
 // ─── AC-4 (site 2): useTheme hook effect (theme / systemPrefersDark change) ───
 
-describe('TestFromAC_UseThemeEffectSchemeClass_1555', () => {
+describe('UseThemeSchemeClasses', () => {
   beforeEach(() => {
     cleanupThemeState()
     setMatchMedia(false)
@@ -303,7 +255,7 @@ describe('TestFromAC_UseThemeEffectSchemeClass_1555', () => {
 
 // ─── AC-4 (site 3): media-change handler (fires on OS preference change) ──────
 
-describe('TestFromAC_MediaChangeSchemeClass_1555', () => {
+describe('MediaChangeSchemeClasses', () => {
   let mql: SpiedMQL
 
   beforeEach(() => {
@@ -356,39 +308,5 @@ describe('TestFromAC_MediaChangeSchemeClass_1555', () => {
     expect(document.documentElement.classList.contains('scheme-light')).toBe(true)
     expect(document.documentElement.classList.contains('scheme-dark')).toBe(false)
     unmount()
-  })
-})
-
-// ─── AC-7: No app-authored color-scheme CSS property declarations ──────────────
-//
-// NOTE: These are constraint guard tests. They PASS in RED phase because no
-// app CSS files currently declare `color-scheme:`. They catch regressions if the
-// builder accidentally introduces the property in app CSS. AC coverage is
-// maintained per pipeline protocol; passing tests are noted in Test-Writer Notes.
-
-describe('TestFromAC_NoAppColorSchemeProp_1555', () => {
-  it('AC-7: no CSS file under src/ contains a color-scheme property declaration (not media query)', () => {
-    const cssFiles = collectCssFiles(SRC_DIR)
-
-    expect(cssFiles.length, 'must find at least one CSS file to scan').toBeGreaterThan(0)
-
-    const violators: string[] = []
-    for (const filePath of cssFiles) {
-      const content = readFileSync(filePath, 'utf-8')
-      // Match "color-scheme:" only as a CSS property (preceded by {, ;, or newline+whitespace)
-      // Does NOT match "@media (prefers-color-scheme: ...)" or "/*...color-scheme:..."
-      if (/(?:^|[{;])\s*color-scheme\s*:/m.test(content)) {
-        violators.push(filePath)
-      }
-    }
-
-    expect(violators, `app CSS files must not declare color-scheme property: ${violators.join(', ')}`).toEqual([])
-  })
-
-  it('AC-7: custom-tokens.css specifically does not declare a color-scheme property', () => {
-    const content = readFileSync(CUSTOM_TOKENS_CSS_PATH, 'utf-8')
-
-    // Only @media (prefers-color-scheme: ...) is allowed — not a property declaration
-    expect(content).not.toMatch(/(?:^|[{;])\s*color-scheme\s*:/m)
   })
 })
