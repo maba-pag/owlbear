@@ -10,7 +10,18 @@ from unittest.mock import patch
 
 import pytest
 
-from owlbear_tools.megalinter import MegaLinterImage, load_megalinter_image, megalint, megalint_clean
+from owlbear_tools.megalinter import (
+    DockerRuntimeApp,
+    FixMode,
+    MegaLinterImage,
+    load_megalinter_image,
+    megalint,
+    megalint_clean,
+    run_megalint,
+    _wait_for_docker,
+)
+
+_TEST_IMAGE = MegaLinterImage(reference="registry.example/megalinter-main:v-current")
 
 
 def test_megalinter_image_loads_from_workspace_config(tmp_path: Path) -> None:
@@ -101,6 +112,147 @@ def test_megalinter_image_rejects_non_mapping_config(tmp_path: Path) -> None:
 
     with pytest.raises(TypeError, match="must contain a YAML mapping"):
         load_megalinter_image(config)
+
+
+def test_run_megalint_uses_ready_docker_without_starting_runtime() -> None:
+    with (
+        patch("owlbear_tools.megalinter.load_megalinter_image", return_value=_TEST_IMAGE),
+        patch("owlbear_tools.megalinter._find_docker_binary", return_value="docker"),
+        patch("owlbear_tools.megalinter._docker_is_ready", return_value=True),
+        patch("owlbear_tools.megalinter._start_docker_app") as start_app,
+        patch("owlbear_tools.megalinter._call", return_value=0) as call,
+    ):
+        assert run_megalint(FixMode.NONE) == 0
+
+    start_app.assert_not_called()
+    assert call.call_args.args[0][:2] == ["docker", "run"]
+
+
+def test_run_megalint_starts_runtime_and_leaves_it_running_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = DockerRuntimeApp(name="OrbStack", process_name="OrbStack")
+    monkeypatch.delenv("OWLBEAR_DOCKER_STOP_RUNTIME", raising=False)
+
+    with (
+        patch("owlbear_tools.megalinter.sys.platform", "darwin"),
+        patch("owlbear_tools.megalinter.load_megalinter_image", return_value=_TEST_IMAGE),
+        patch("owlbear_tools.megalinter._find_docker_binary", return_value=None),
+        patch("owlbear_tools.megalinter._installed_docker_apps", return_value=(app,)),
+        patch("owlbear_tools.megalinter._app_is_running", return_value=False),
+        patch("owlbear_tools.megalinter._start_docker_app") as start_app,
+        patch("owlbear_tools.megalinter._wait_for_docker", return_value="docker"),
+        patch("owlbear_tools.megalinter._stop_docker_app") as stop_app,
+        patch("owlbear_tools.megalinter._call", return_value=0),
+    ):
+        assert run_megalint(FixMode.NONE) == 0
+
+    start_app.assert_called_once_with(app)
+    stop_app.assert_not_called()
+
+
+def test_run_megalint_stops_runtime_started_by_invocation_when_requested(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = DockerRuntimeApp(name="OrbStack", process_name="OrbStack")
+    monkeypatch.setenv("OWLBEAR_DOCKER_STOP_RUNTIME", "1")
+
+    with (
+        patch("owlbear_tools.megalinter.sys.platform", "darwin"),
+        patch("owlbear_tools.megalinter.load_megalinter_image", return_value=_TEST_IMAGE),
+        patch("owlbear_tools.megalinter._find_docker_binary", return_value=None),
+        patch("owlbear_tools.megalinter._installed_docker_apps", return_value=(app,)),
+        patch("owlbear_tools.megalinter._app_is_running", return_value=False),
+        patch("owlbear_tools.megalinter._start_docker_app"),
+        patch("owlbear_tools.megalinter._wait_for_docker", return_value="docker"),
+        patch("owlbear_tools.megalinter._stop_docker_app") as stop_app,
+        patch("owlbear_tools.megalinter._call", return_value=0),
+    ):
+        assert run_megalint(FixMode.NONE) == 0
+
+    stop_app.assert_called_once_with(app)
+
+
+def test_run_megalint_does_not_stop_a_preexisting_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = DockerRuntimeApp(name="OrbStack", process_name="OrbStack")
+    monkeypatch.setenv("OWLBEAR_DOCKER_STOP_RUNTIME", "1")
+
+    with (
+        patch("owlbear_tools.megalinter.sys.platform", "darwin"),
+        patch("owlbear_tools.megalinter.load_megalinter_image", return_value=_TEST_IMAGE),
+        patch("owlbear_tools.megalinter._find_docker_binary", return_value="docker"),
+        patch("owlbear_tools.megalinter._docker_is_ready", return_value=False),
+        patch("owlbear_tools.megalinter._installed_docker_apps", return_value=(app,)),
+        patch("owlbear_tools.megalinter._app_is_running", return_value=True),
+        patch("owlbear_tools.megalinter._wait_for_docker", return_value="docker"),
+        patch("owlbear_tools.megalinter._stop_docker_app") as stop_app,
+        patch("owlbear_tools.megalinter._call", return_value=0),
+    ):
+        assert run_megalint(FixMode.NONE) == 0
+
+    stop_app.assert_not_called()
+
+
+def test_run_megalint_cleans_started_runtime_after_readiness_timeout() -> None:
+    app = DockerRuntimeApp(name="OrbStack", process_name="OrbStack")
+
+    with (
+        patch("owlbear_tools.megalinter.sys.platform", "darwin"),
+        patch("owlbear_tools.megalinter.load_megalinter_image", return_value=_TEST_IMAGE),
+        patch("owlbear_tools.megalinter._find_docker_binary", return_value=None),
+        patch("owlbear_tools.megalinter._installed_docker_apps", return_value=(app,)),
+        patch("owlbear_tools.megalinter._app_is_running", return_value=False),
+        patch("owlbear_tools.megalinter._start_docker_app"),
+        patch("owlbear_tools.megalinter._wait_for_docker", return_value=None),
+        patch("owlbear_tools.megalinter._stop_docker_app") as stop_app,
+        pytest.raises(RuntimeError, match="did not make Docker ready"),
+    ):
+        run_megalint(FixMode.NONE)
+
+    stop_app.assert_called_once_with(app)
+
+
+def test_run_megalint_reports_cleanup_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    app = DockerRuntimeApp(name="OrbStack", process_name="OrbStack")
+    monkeypatch.setenv("OWLBEAR_DOCKER_STOP_RUNTIME", "yes")
+
+    with (
+        patch("owlbear_tools.megalinter.load_megalinter_image", return_value=_TEST_IMAGE),
+        patch("owlbear_tools.megalinter._acquire_docker_runtime", return_value=("docker", app)),
+        patch("owlbear_tools.megalinter._stop_docker_app", side_effect=RuntimeError("quit failed")),
+        patch("owlbear_tools.megalinter._call", return_value=0),
+    ):
+        assert run_megalint(FixMode.NONE) == 0
+
+    assert "Warning: Docker runtime cleanup failed: quit failed" in capsys.readouterr().err
+
+
+def test_run_megalint_rejects_unavailable_runtime_on_non_macos() -> None:
+    with (
+        patch("owlbear_tools.megalinter.sys.platform", "linux"),
+        patch("owlbear_tools.megalinter.load_megalinter_image", return_value=_TEST_IMAGE),
+        patch("owlbear_tools.megalinter._find_docker_binary", return_value=None),
+        patch("owlbear_tools.megalinter._installed_docker_apps") as installed_apps,
+        pytest.raises(RuntimeError, match="unavailable on this platform"),
+    ):
+        run_megalint(FixMode.NONE)
+
+    installed_apps.assert_not_called()
+
+
+def test_wait_for_docker_retries_until_engine_is_ready() -> None:
+    with (
+        patch("owlbear_tools.megalinter._find_docker_binary", return_value="docker"),
+        patch("owlbear_tools.megalinter._docker_is_ready", side_effect=[False, True]) as is_ready,
+        patch("owlbear_tools.megalinter.time.monotonic", side_effect=[0.0, 1.0]),
+        patch("owlbear_tools.megalinter.time.sleep"),
+    ):
+        assert _wait_for_docker() == "docker"
+
+    assert is_ready.call_count == 2
 
 
 def test_renovate_megalinter_manager_tracks_independent_native_fields(tmp_path: Path) -> None:

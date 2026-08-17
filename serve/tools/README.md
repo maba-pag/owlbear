@@ -30,6 +30,8 @@ uv run migrate-delivery-state . --apply
 
 Each command regenerates its complete index on every invocation. Generated indexes are advisory navigation aids; source files remain authoritative.
 
+`uv run megalint` runs the pinned MegaLinter image through Docker. On macOS, if the Docker CLI or engine is unavailable, it checks for OrbStack and Docker Desktop, starts the first installed runtime that can become ready, waits for Docker, and retries the command. It stops only a runtime started by this invocation when `OWLBEAR_DOCKER_STOP_RUNTIME=1` is set; otherwise the runtime remains available for later commands. Other platforms require a ready Docker engine.
+
 `migrate-delivery-state` validates retired authority without mutation unless `--apply` is present. Apply moves registered Change worktrees through Git, preserves unrelated registered worktrees under ignored scratch storage, archives retired state under `.owlbear/legacy/delivery-state-migration/`, and resumes safely from an interrupted attempt.
 
 ### Dependency environment
@@ -70,7 +72,7 @@ The documentation index excludes workspace state, generated indexes, caches, ext
 
 ## Configuration
 
-No environment variables. Index commands write fixed artifacts under `.owlbear/`; `migrate-delivery-state` accepts an optional repository path and the `--apply` flag. Dependency commands use the repository checkout and do not require environment variables.
+Index commands write fixed artifacts under `.owlbear/`; `migrate-delivery-state` accepts an optional repository path and the `--apply` flag. Dependency commands use the repository checkout and do not require environment variables. Set `OWLBEAR_DOCKER_STOP_RUNTIME=1` when `megalint` should stop a runtime it started after the command finishes.
 
 ## Dependencies
 
