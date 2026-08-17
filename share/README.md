@@ -24,6 +24,12 @@ directories. Workspace configuration selects the active roots. Do not assume the
 edited is the tree VS Code currently loads: inspect `.vscode/settings.json` before diagnosing a
 loading problem.
 
+## Visual Orientation
+
+The [MCP topology diagram](diagrams/mcp-topology.svg) shows the five seeded stdio servers and the
+runtime surfaces behind them. Its [editable Excalidraw source](diagrams/mcp-topology.excalidraw) is
+descriptive; `seed/.vscode/mcp.json` and the server implementations remain authoritative.
+
 ## Product Boundary
 
 The ecosystem targets **GitHub Copilot custom agents in VS Code**. Its frontmatter fields, tool

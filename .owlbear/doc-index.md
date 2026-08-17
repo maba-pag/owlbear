@@ -25,6 +25,7 @@
 - [setup/setup-guide.md](setup/setup-guide.md)
 - [the setup guide](setup/setup-guide.md#macos-copilot-profile-settings)
 - [Target Delivery Workflow](setup/setup-guide.md#target-delivery-workflow)
+- [MCP topology diagram](share/diagrams/mcp-topology.svg)
 - [Target Delivery Workflow](setup/setup-guide.md#target-delivery-workflow)
 - [setup guide](setup/setup-guide.md#refreshing-consumer-configs)
 - [setup/sharing-guide.md](setup/sharing-guide.md)
@@ -35,7 +36,6 @@
 - ## `Current Status`
 - ## `Directory Structure`
 - ## `Getting Started`
-- ## `License`
 
 ### Outbound links
 - [uv](https://docs.astral.sh/uv/)
@@ -1106,6 +1106,7 @@
 ## share/README.md
 - # `share/ - Agent Ecosystem`
 - ## `Directory Layout`
+- ## `Visual Orientation`
 - ## `Product Boundary`
 - ## `Effective Instruction Stack`
 - ### `Skill Loading Tiers`
@@ -1119,6 +1120,8 @@
 
 ### Outbound links
 - [WIRING.md](WIRING.md)
+- [MCP topology diagram](diagrams/mcp-topology.svg)
+- [editable Excalidraw source](diagrams/mcp-topology.excalidraw)
 - [WIRING.md](WIRING.md)
 - [WIRING.md](WIRING.md)
 - [WIRING.md](WIRING.md)
@@ -1176,8 +1179,6 @@
 - ### `Channel B`
 
 ## share/diagrams/mcp-topology.excalidraw
-
-## share/diagrams/memory-layers.excalidraw
 
 ## share/instructions/agent-ecosystem.instructions.md
 

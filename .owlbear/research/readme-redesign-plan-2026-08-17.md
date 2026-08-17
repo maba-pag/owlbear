@@ -108,7 +108,8 @@ safe.
 | R5k | Validated no-op | Tools README already documented index maintenance and configuration |
 | Index refresh | Complete | `.owlbear/doc-index.md` regenerated and committed in `72d9d84` |
 | R6 | Complete | Shared ecosystem README validated against `.vscode/settings.json`, `WIRING.md`, and `h-agent-structure`; Markdownlint passed with no edit required |
-| R7-R8 | Pending | Useful diagrams and second-developer verification remain |
+| R7 | Complete | Archived stale memory-layer diagrams under `.owlbear/legacy/diagrams/`; corrected the five-server MCP topology, added an SVG preview, and linked the topology and first-success flow from active docs; `jq`, binding-reference, `xmllint`, link-target, Markdownlint, and whitespace checks passed |
+| R8 | Pending | Second-developer verification and final currency checks remain |
 
 ## Editorial contract
 
@@ -150,3 +151,6 @@ safe.
 - **2026-08-17:** Replaced numbered-release language with the rolling-`main` policy. Removed
   version alignment, release tags, date-based versions, and changelog work from scope. Added
   sequential package work units and explicit acceptance checks.
+- **2026-08-17:** Completed R7 by archiving stale memory-layer diagrams, correcting the seeded
+  five-server MCP topology, adding a rendered SVG preview, and linking diagrams from the newcomer
+  journey and shared ecosystem orientation.

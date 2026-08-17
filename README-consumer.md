@@ -183,6 +183,19 @@ After setup verification, try a small real change:
 3. Run `/orchestrate <change-id>` after admission.
 4. Open Cockpit from the project root and confirm the Change and its current work are visible.
 
+```mermaid
+flowchart LR
+    clone["Clone owlbear and your project"] --> setup["Run setup/init.py"]
+    setup --> vscode["Open the project in VS Code"]
+    vscode --> verify{"Agents and five MCP servers visible?"}
+    verify -->|yes| workflow["Run /ideate -> /design -> /orchestrate"]
+    workflow --> cockpit["Open Cockpit and confirm the Change"]
+    verify -->|no| troubleshoot["Check setup guide and MCP: List Servers"]
+    troubleshoot --> verify
+```
+
+See the [MCP topology diagram](share/diagrams/mcp-topology.svg) for the server boundary.
+
 Expected outcome: the project has loaded OwlBear, the five MCP servers are available, and one
 small Change can move from design into visible Delivery work. Use the [Target Delivery Workflow](setup/setup-guide.md#target-delivery-workflow)
 when you need the complete procedure.
