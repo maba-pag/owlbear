@@ -85,7 +85,15 @@ prose, branch state, or cached results.
 Continue independent task work when possible, then report the exact attention as bounded action at
 the end of the cycle.
 
-## Step 5 - Refresh
+## Step 5 - Run Periodic Housekeeping
+
+Count completed acquisition cycles from 1 within this orchestrator invocation. After every tenth
+completed cycle, dispatch `memory-curator` with exactly `Curate: Periodic curation`. This is
+non-Delivery housekeeping, not a launch package: provide no task, Change, outcome, attempt, or claim
+identity; do not call `transition_delivery` or `recover_claim` for it. Report its result separately
+and continue acquisition unless its own dispatch failure is a fail-closed tool condition.
+
+## Step 6 - Refresh
 
 Finish the current acquired batch, discard it, and call `acquire_frontier_work` again. Continue
 independent changes when one outcome returns or blocks. Stop when launch packages are empty, or when
@@ -98,8 +106,9 @@ stages as bounded acquisition attention and stop; do not infer a launch or mutat
 
 ## Output
 
-Report forwarded transition identities, typed Integration attention, exact recovery results,
-unclaimed acquisition failures, bounded acquisition attention, and cycle count. Report quiescence
+Report forwarded transition identities, typed Integration attention, periodic housekeeping results,
+exact recovery results, unclaimed acquisition failures, bounded acquisition attention, and cycle
+count. Report quiescence
 only when both acquisition and the final work-item projection are empty. Do not translate those typed
 results into invented completion or scheduling state.
 

@@ -166,9 +166,10 @@ Use broad mode to identify patterns and priorities, not to deeply rewrite every 
    roots defined above.
 2. Discover current files and counts; do not copy catalog counts from a prompt.
 3. Run the read-only validators documented by the ecosystem when available. In this repository,
-   start with `uv run python .owlbear/scripts/validate_agents.py` and
-   `uv run python .owlbear/scripts/validate_skills.py`; use Markdownlint or `git diff --check` only
-   when relevant. If a validator is absent or fails to run, record the command and result under
+   start with `uv run python .owlbear/scripts/validate_agents.py`,
+   `uv run python .owlbear/scripts/validate_skills.py`, and
+   `uv run python .owlbear/scripts/validate_prompts.py`; use Markdownlint or `git diff --check`
+   only when relevant. If a validator is absent or fails to run, record the command and result under
    Coverage, then continue with source inspection. Validator output is evidence, not the entire
    audit.
 4. Build a metadata-level loading map from frontmatter, `required_reading`, `applyTo`, prompt agents,
