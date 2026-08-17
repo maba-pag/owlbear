@@ -1,7 +1,6 @@
-import os as operating_system
+import os as operating_system  # noqa: I001
 import subprocess as process
-from subprocess import Popen, check_output
-from subprocess import run as execute
+from subprocess import Popen, check_output, run as execute
 
 
 def _git(*arguments):
