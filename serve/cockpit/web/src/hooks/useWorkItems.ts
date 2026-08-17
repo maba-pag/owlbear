@@ -23,7 +23,6 @@ import {
   searchCompletedChanges,
   supersedeWorkItemPublication,
   syncWorkItemTarget,
-  showDesignWork,
   showCompletedChange,
   workItemDetailUrl,
   type CompletedChangePage,
@@ -36,6 +35,7 @@ import {
   type PublicationChecksObservationResponse,
   type WorkItemStage,
   WorkItemApiError,
+  designWorkDetailUrl,
 } from '../api/workItems'
 import { usePollingFetch } from './usePollingFetch'
 
@@ -71,7 +71,7 @@ const EMPTY_PORTFOLIO: WorkItemPortfolioResponse = {
   },
 }
 
-const EMPTY_HISTORY: CompletedChangePage = { records: [], next_cursor: null }
+const EMPTY_HISTORY: CompletedChangePage = { records: [], total_count: 0, next_cursor: null }
 
 const ACCEPTANCE_RECONCILIATION_INTERVAL_MS = 30_000
 const ACCEPTANCE_RECONCILIATION_MAX_BACKOFF_MS = 5 * 60_000
@@ -88,6 +88,7 @@ function acceptanceChangeIds(portfolio: WorkItemPortfolioResponse): string[] {
 export function useWorkPortfolio(paused = false) {
   const [portfolio, setPortfolio] = useState<WorkItemPortfolioResponse | null>(null)
   const [error, setError] = useState<Error | null>(null)
+  const wasPaused = useRef(paused)
   const polling = usePollingFetch<WorkItemPortfolioResponse>('/api/work-items', {
     intervalMs: 3_000,
     paused,
@@ -97,6 +98,11 @@ export function useWorkPortfolio(paused = false) {
     },
     onError: setError,
   })
+  useEffect(() => {
+    const resumed = wasPaused.current && !paused
+    wasPaused.current = paused
+    if (resumed) polling.refetch()
+  }, [paused, polling.refetch])
 
   return {
     portfolio: portfolio ?? EMPTY_PORTFOLIO,
@@ -111,22 +117,32 @@ export function useAcceptanceReconciliation(
   portfolio: WorkItemPortfolioResponse,
   onChanged: () => void,
   paused = false,
-): void {
+): { providerError: Error | null; providerChangeIds: string[]; isRetrying: boolean; retry: () => void } {
   const changeIds = acceptanceChangeIds(portfolio)
   const changeIdsKey = changeIds.join('\u0000')
   const changeIdsRef = useRef(changeIds)
   const onChangedRef = useRef(onChanged)
+  const [providerError, setProviderError] = useState<Error | null>(null)
+  const [providerChangeIds, setProviderChangeIds] = useState<string[]>([])
+  const [isRetrying, setIsRetrying] = useState(false)
+  const [retryNonce, setRetryNonce] = useState(0)
+  const providerFailureCountRef = useRef(0)
   changeIdsRef.current = changeIds
   onChangedRef.current = onChanged
 
   useEffect(() => {
-    if (paused || !changeIdsKey) return
+    if (!changeIdsKey) providerFailureCountRef.current = 0
+    if (paused || !changeIdsKey) {
+      setProviderError(null)
+      setProviderChangeIds([])
+      setIsRetrying(false)
+      return
+    }
 
     let active = true
     let inFlight = false
     let timer: ReturnType<typeof setTimeout> | null = null
     let controller: AbortController | null = null
-    let providerFailureCount = 0
 
     const clearTimer = () => {
       if (timer !== null) {
@@ -140,7 +156,7 @@ export function useAcceptanceReconciliation(
     const scheduleNext = () => {
       if (!active || !isVisible() || changeIdsRef.current.length === 0) return
       const delay = Math.min(
-        ACCEPTANCE_RECONCILIATION_INTERVAL_MS * (2 ** providerFailureCount),
+        ACCEPTANCE_RECONCILIATION_INTERVAL_MS * (2 ** providerFailureCountRef.current),
         ACCEPTANCE_RECONCILIATION_MAX_BACKOFF_MS,
       )
       timer = setTimeout(() => {
@@ -157,19 +173,34 @@ export function useAcceptanceReconciliation(
       let providerUnavailable = false
       try {
         const result = await reconcileWorkItemAcceptance(requestedIds, controller.signal)
-        providerUnavailable = result.outcomes.some((outcome) => outcome.status === 'provider-unavailable')
+        const unavailable = result.outcomes.filter((outcome) => outcome.status === 'provider-unavailable')
+        providerUnavailable = unavailable.length > 0
+        if (providerUnavailable) {
+          const affectedIds = unavailable.map((outcome) => outcome.change_id)
+          const detail = unavailable.map((outcome) => outcome.detail).find((value): value is string => Boolean(value))
+          setProviderChangeIds(affectedIds)
+          setProviderError(new Error(detail ?? 'The provider was unavailable while checking GitHub acceptance.'))
+        } else {
+          setProviderChangeIds([])
+          setProviderError(null)
+        }
         if (result.outcomes.some((outcome) => outcome.status !== 'waiting')) {
           onChangedRef.current()
         }
       } catch (caught: unknown) {
         if (!(caught instanceof DOMException && caught.name === 'AbortError')) {
           providerUnavailable = true
+          setProviderChangeIds(requestedIds)
+          setProviderError(caught instanceof Error ? caught : new Error('The provider was unavailable while checking GitHub acceptance.'))
         }
       } finally {
         inFlight = false
         controller = null
         if (active) {
-          providerFailureCount = providerUnavailable ? Math.min(providerFailureCount + 1, 4) : 0
+          setIsRetrying(false)
+          providerFailureCountRef.current = providerUnavailable
+            ? Math.min(providerFailureCountRef.current + 1, 4)
+            : 0
           scheduleNext()
         }
       }
@@ -193,36 +224,47 @@ export function useAcceptanceReconciliation(
       controller?.abort()
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [changeIdsKey, paused])
+  }, [changeIdsKey, paused, retryNonce])
+
+  return {
+    providerError,
+    providerChangeIds,
+    isRetrying,
+    retry: () => {
+      providerFailureCountRef.current = 0
+      setProviderError(null)
+      setProviderChangeIds([])
+      setIsRetrying(true)
+      setRetryNonce((value) => value + 1)
+    },
+  }
 }
 
 export function useDesignWorkDetail(changeId: string) {
-  const [retryNonce, setRetryNonce] = useState(0)
-  const [resource, setResource] = useState<AsyncResource<DesignWorkDetailResponse>>({
-    data: null,
-    error: null,
-    isLoading: true,
+  const [data, setData] = useState<DesignWorkDetailResponse | null>(null)
+  const [detailError, setDetailError] = useState<Error | null>(null)
+  const polling = usePollingFetch<DesignWorkDetailResponse>(designWorkDetailUrl(changeId), {
+    intervalMs: 3_000,
+    onSuccess: (next) => {
+      if (next.change_id !== changeId) return
+      setData(next)
+      setDetailError(null)
+    },
+    onError: setDetailError,
   })
 
   useEffect(() => {
-    let active = true
-    setResource({ data: null, error: null, isLoading: true })
-    void showDesignWork(changeId)
-      .then((data) => active && setResource({ data, error: null, isLoading: false }))
-      .catch((caught: unknown) => {
-        if (!active) return
-        setResource({
-          data: null,
-          error: caught instanceof Error ? caught : new Error('Design work is unavailable'),
-          isLoading: false,
-        })
-      })
-    return () => {
-      active = false
-    }
-  }, [changeId, retryNonce])
+    setData(null)
+    setDetailError(null)
+  }, [changeId])
 
-  return { ...resource, retry: () => setRetryNonce((value) => value + 1) }
+  return {
+    data,
+    error: detailError,
+    isLoading: polling.isFetching && data === null,
+    isRefreshing: polling.isFetching,
+    retry: polling.refetch,
+  }
 }
 
 export function useCompletedHistory(query: string) {
@@ -232,6 +274,8 @@ export function useCompletedHistory(query: string) {
     isLoading: true,
   })
   const [retryNonce, setRetryNonce] = useState(0)
+  const [failedCursor, setFailedCursor] = useState<string | null>(null)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const requestGeneration = useRef(0)
   const latestQuery = useRef(query)
   latestQuery.current = query
@@ -239,21 +283,29 @@ export function useCompletedHistory(query: string) {
   useEffect(() => {
     let active = true
     const generation = ++requestGeneration.current
+    const controller = new AbortController()
+    setFailedCursor(null)
+    setIsLoadingMore(false)
     setResource((current) => ({ ...current, isLoading: true, error: null }))
-    const request = query ? searchCompletedChanges(query) : listCompletedChanges()
+    const request = query
+      ? searchCompletedChanges(query, undefined, controller.signal)
+      : listCompletedChanges(undefined, controller.signal)
     void request
       .then((data) => active && generation === requestGeneration.current
         && setResource({ data, error: null, isLoading: false }))
       .catch((caught: unknown) => {
         if (!active || generation !== requestGeneration.current) return
+        const error = caught instanceof Error ? caught : new Error('Completed history is unavailable')
         setResource({
-          data: null,
-          error: caught instanceof Error ? caught : new Error('Completed history is unavailable'),
+          data: resource.data,
+          error,
           isLoading: false,
         })
+        setFailedCursor(null)
       })
     return () => {
       active = false
+      controller.abort()
     }
   }, [query, retryNonce])
 
@@ -262,24 +314,35 @@ export function useCompletedHistory(query: string) {
     if (!current?.next_cursor || resource.isLoading) return
     const generation = requestGeneration.current
     const requestedQuery = query
+    const cursor = current.next_cursor
+    setFailedCursor(null)
+    setIsLoadingMore(true)
     setResource({ data: current, error: null, isLoading: true })
     try {
       const next = query
-        ? await searchCompletedChanges(query, current.next_cursor)
-        : await listCompletedChanges(current.next_cursor)
+        ? await searchCompletedChanges(query, cursor)
+        : await listCompletedChanges(cursor)
       if (generation !== requestGeneration.current || requestedQuery !== latestQuery.current) return
+      setIsLoadingMore(false)
       setResource({
-        data: { records: [...current.records, ...next.records], next_cursor: next.next_cursor },
+        data: {
+          records: [...current.records, ...next.records],
+          total_count: next.total_count,
+          next_cursor: next.next_cursor,
+        },
         error: null,
         isLoading: false,
       })
+      setFailedCursor(null)
     } catch (caught: unknown) {
       if (generation !== requestGeneration.current || requestedQuery !== latestQuery.current) return
+      setIsLoadingMore(false)
       setResource({
         data: current,
         error: caught instanceof Error ? caught : new Error('Completed history is unavailable'),
         isLoading: false,
       })
+      setFailedCursor(cursor)
     }
   }
 
@@ -287,7 +350,12 @@ export function useCompletedHistory(query: string) {
     page: resource.data ?? EMPTY_HISTORY,
     error: resource.error,
     isLoading: resource.isLoading,
+    isLoadingMore,
     loadMore,
+    canRetryLoadMore: failedCursor !== null,
+    retryLoadMore: () => {
+      void loadMore()
+    },
     retry: () => {
       requestGeneration.current += 1
       setRetryNonce((value) => value + 1)
@@ -301,6 +369,7 @@ export function useCompletedChange(identity: { changeId: string; completionId: s
     error: null,
     isLoading: false,
   })
+  const [retryNonce, setRetryNonce] = useState(0)
 
   useEffect(() => {
     let active = true
@@ -312,7 +381,13 @@ export function useCompletedChange(identity: { changeId: string; completionId: s
     }
     setResource({ data: null, error: null, isLoading: true })
     void showCompletedChange(identity.changeId, identity.completionId)
-      .then((data) => active && setResource({ data, error: null, isLoading: false }))
+      .then((data) => {
+        if (!active) return
+        if (data.change_id !== identity.changeId || data.completion_id !== identity.completionId) {
+          throw new Error('Completed change detail did not match the requested identity')
+        }
+        setResource({ data, error: null, isLoading: false })
+      })
       .catch((caught: unknown) => {
         if (!active) return
         setResource({
@@ -324,9 +399,12 @@ export function useCompletedChange(identity: { changeId: string; completionId: s
     return () => {
       active = false
     }
-  }, [identity?.changeId, identity?.completionId])
+  }, [identity?.changeId, identity?.completionId, retryNonce])
 
-  return resource
+  return {
+    ...resource,
+    retry: () => setRetryNonce((value) => value + 1),
+  }
 }
 
 export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => void) {
@@ -362,6 +440,11 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     setPublicationChecksError(null)
     setPublicationChecksStale(false)
     setIsObservingPublicationChecks(false)
+    setData(null)
+    setDetailError(null)
+    setPendingAction(null)
+    setActionError(null)
+    setActionResult(null)
   }, [identityKey])
 
   const polling = usePollingFetch<WorkItemDetailResponse>(
@@ -469,6 +552,7 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
       data,
       error: detailError,
       isLoading: polling.isFetching && data === null,
+      isRefreshing: polling.isFetching,
     },
     pendingAction,
     actionError,
@@ -491,6 +575,7 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
     previewBackward: async (target: WorkItemStage) => {
       setPendingAction('preview')
       setActionError(null)
+      setActionResult(null)
       try {
         return await previewWorkItemBackward(identity.changeId, data!.item.card.work_item_id, target)
       } catch (caught: unknown) {
@@ -516,8 +601,11 @@ export function useWorkItemDetail(identity: WorkItemIdentity, onChanged: () => v
         setActionResult(invalidated ? `Moved backward. Reset: ${invalidated}.` : 'Moved backward.')
         polling.refetch()
         onChanged()
+        return null
       } catch (caught: unknown) {
-        setActionError(caught instanceof Error ? caught : new Error('Backward move failed'))
+        const error = caught instanceof Error ? caught : new Error('Backward move failed')
+        setActionError(error)
+        return error
       } finally {
         setPendingAction(null)
       }

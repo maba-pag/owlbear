@@ -34,8 +34,12 @@ describe('RoutesConfigContracts', () => {
   it('matches only valid route families and rejects malformed deep links', () => {
     expect(routeForPath('/delivery')?.path).toBe('/delivery')
     expect(routeForPath('/delivery/change-alpha/outcome%3AOUT-001')?.path).toBe('/delivery')
+    expect(routeForPath('/delivery/history')?.path).toBe('/delivery')
+    expect(routeForPath('/delivery/history/change-alpha/1111111111111111111111111111111111111111111111111111111111111111')?.path).toBe('/delivery')
     expect(routeForPath('/delivery/change-alpha')).toBeUndefined()
     expect(routeForPath('/delivery/change-alpha/outcome%3AOUT-001/extra')).toBeUndefined()
+    expect(routeForPath('/delivery/history/change-alpha')).toBeUndefined()
+    expect(routeForPath('/delivery/history/change-alpha/abc/extra')).toBeUndefined()
     expect(routeForPath('/unknown')).toBeUndefined()
   })
 })

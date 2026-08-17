@@ -458,6 +458,7 @@ export type CompletedChangeRecord = LegacyCompletedChangeRecord | ReceiptComplet
 
 export interface CompletedChangePage {
   records: CompletedChangeRecord[]
+  total_count: number
   next_cursor: string | null
 }
 
@@ -511,17 +512,17 @@ export function listWorkItems(): Promise<WorkItemPortfolioResponse> {
   return workItemRequest('/api/work-items', { fallbackCode: 'ERR_WORK_ITEM_PORTFOLIO' })
 }
 
-export function listCompletedChanges(cursor?: string): Promise<CompletedChangePage> {
+export function listCompletedChanges(cursor?: string, signal?: AbortSignal): Promise<CompletedChangePage> {
   const query = cursor ? `?${new URLSearchParams({ cursor }).toString()}` : ''
-  return workItemRequest(`/api/work-items/completed${query}`, { fallbackCode: 'ERR_COMPLETED_HISTORY' })
+  return workItemRequest(`/api/work-items/completed${query}`, { fallbackCode: 'ERR_COMPLETED_HISTORY', signal })
 }
 
-export function searchCompletedChanges(query: string, cursor?: string): Promise<CompletedChangePage> {
+export function searchCompletedChanges(query: string, cursor?: string, signal?: AbortSignal): Promise<CompletedChangePage> {
   const parameters = new URLSearchParams({ query })
   if (cursor) parameters.set('cursor', cursor)
   return workItemRequest(
     `/api/work-items/completed/search?${parameters.toString()}`,
-    { fallbackCode: 'ERR_COMPLETED_HISTORY_SEARCH' },
+    { fallbackCode: 'ERR_COMPLETED_HISTORY_SEARCH', signal },
   )
 }
 
@@ -544,9 +545,13 @@ export function showWorkItem(changeId: string, itemKey: string): Promise<WorkIte
   )
 }
 
+export function designWorkDetailUrl(changeId: string): string {
+  return `/api/design-work/${encodeURIComponent(changeId)}`
+}
+
 export function showDesignWork(changeId: string): Promise<DesignWorkDetailResponse> {
   return workItemRequest(
-    `/api/design-work/${encodeURIComponent(changeId)}`,
+    designWorkDetailUrl(changeId),
     { fallbackCode: 'ERR_DESIGN_WORK_DETAIL' },
   )
 }

@@ -41,7 +41,9 @@ export function routeForPath(pathname: string): RouteConfigEntry | undefined {
   return routeConfig.find((route) => {
     if (route.path !== '/delivery') return pathname === route.path
     const segments = pathname.split('/').filter(Boolean)
-    return segments[0] === 'delivery' && (segments.length === 1 || segments.length === 3)
+    const isHistoryRoute = segments[1] === 'history' && (segments.length === 2 || segments.length === 4)
+    const isLiveRoute = segments.length === 1 || (segments.length === 3 && segments[1] !== 'history')
+    return segments[0] === 'delivery' && (isLiveRoute || isHistoryRoute)
   })
 }
 

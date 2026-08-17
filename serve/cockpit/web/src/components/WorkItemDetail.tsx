@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import {
   PButton,
   PHeading,
@@ -60,7 +60,7 @@ interface WorkItemDetailProps {
   onClearBlock: (blockId: string, note: string, locators: string[]) => Promise<Error | null>
   onRecoverClaim: (attemptId: string, claimId: string) => Promise<Error | null>
   onPreviewBackward: (target: WorkItemStage) => Promise<BackwardMovePreview | null>
-  onMoveBackward: (target: WorkItemStage, reason: string, snapshotVersion: string) => Promise<void>
+  onMoveBackward: (target: WorkItemStage, reason: string, snapshotVersion: string) => Promise<Error | null>
   onReconcilePublication: () => Promise<Error | null>
   onMarkPublicationReady: () => Promise<Error | null>
   publicationChecks: PublicationChecksObservationResponse | null
@@ -193,13 +193,15 @@ function RequestsSection({ detail, pendingAction, onAnswerRequest }: WorkItemDet
 function ChangeDispositionSection(props: WorkItemDetailProps) {
   const [reason, setReason] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [actionFailed, setActionFailed] = useState(false)
   if (props.detail.item.card.scope !== 'change-publication') return null
   const phase = props.detail.item.publication?.phase
   if (phase === 'abandoned') return null
   const canSubmit = reason.trim().length > 0 && props.pendingAction === null
   const abandon = async () => {
-    await props.onAbandonChange(reason.trim())
-    setConfirmOpen(false)
+    const error = await props.onAbandonChange(reason.trim())
+    setActionFailed(error !== null)
+    if (!error) setConfirmOpen(false)
   }
   return (
     <section className="border-l-4 border-warning bg-surface p-static-md" aria-labelledby="change-disposition-heading">
@@ -221,7 +223,7 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
               {props.pendingAction === 'change-defer' ? 'Deferring...' : 'Defer Change'}
             </PButton>
           ) : null}
-          <PButton type="button" compact variant="secondary" disabled={!canSubmit} onClick={() => setConfirmOpen(true)}>
+          <PButton type="button" compact variant="secondary" disabled={!canSubmit} onClick={() => { setActionFailed(false); setConfirmOpen(true) }}>
             {props.pendingAction === 'change-abandon' ? 'Abandoning...' : 'Abandon Change'}
           </PButton>
         </div>
@@ -232,6 +234,7 @@ function ChangeDispositionSection(props: WorkItemDetailProps) {
             <PHeading tag="h2" size="lg">Confirm Change abandonment</PHeading>
             <p className="text-sm">Abandonment is permanent. The Change will not enter completed history.</p>
             <p className="text-sm text-contrast-medium">Reason: {reason.trim()}</p>
+            {actionFailed && props.actionError ? <ActionFeedback error={props.actionError} result={null} /> : null}
             <div className="flex flex-wrap justify-end gap-static-xs">
               <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton>
               <PButton type="button" disabled={props.pendingAction !== null} onClick={() => void abandon()}>{props.pendingAction === 'change-abandon' ? 'Abandoning...' : 'Confirm abandon Change'}</PButton>
@@ -276,13 +279,15 @@ function elapsedAge(startedAt: string): string {
   return `${Math.max(Math.floor(elapsed / 60_000), 0)}m`
 }
 
-function ClaimSection({ detail, pendingAction, onRecoverClaim }: WorkItemDetailProps) {
+function ClaimSection({ detail, pendingAction, actionError, onRecoverClaim }: WorkItemDetailProps) {
   const claim = detail.item.active_claim
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [actionFailed, setActionFailed] = useState(false)
   if (!claim) return null
   const recover = async () => {
-    await onRecoverClaim(claim.attempt_id, claim.claim_id)
-    setConfirmOpen(false)
+    const error = await onRecoverClaim(claim.attempt_id, claim.claim_id)
+    setActionFailed(error !== null)
+    if (!error) setConfirmOpen(false)
   }
   return (
     <section aria-labelledby="work-claim-heading">
@@ -292,7 +297,7 @@ function ClaimSection({ detail, pendingAction, onRecoverClaim }: WorkItemDetailP
         <div className="flex justify-between gap-static-sm"><dt>Started</dt><dd>{elapsedAge(claim.started_at)} ago</dd></div>
         {claim.task_id ? <div className="flex justify-between gap-static-sm"><dt>Task</dt><dd>{claim.task_id}</dd></div> : null}
       </dl>
-      <PButton className="mt-static-md" type="button" compact variant="secondary" disabled={pendingAction !== null} onClick={() => setConfirmOpen(true)}>
+      <PButton className="mt-static-md" type="button" compact variant="secondary" disabled={pendingAction !== null} onClick={() => { setActionFailed(false); setConfirmOpen(true) }}>
         Recover confirmed-lost claim
       </PButton>
       {confirmOpen ? (
@@ -301,6 +306,7 @@ function ClaimSection({ detail, pendingAction, onRecoverClaim }: WorkItemDetailP
             <PHeading tag="h2" size="lg">Confirm lost claim</PHeading>
             <p className="text-sm">Confirm the worker has stopped and this exact claim is lost. No process-status inference is used.</p>
             <dl className="grid gap-static-xs break-all text-sm"><dt>Attempt</dt><dd>{claim.attempt_id}</dd><dt>Claim</dt><dd>{claim.claim_id}</dd></dl>
+            {actionFailed && actionError ? <ActionFeedback error={actionError} result={null} /> : null}
             <div className="flex flex-wrap justify-end gap-static-xs">
               <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton>
               <PButton type="button" disabled={pendingAction !== null} onClick={() => void recover()}>{pendingAction === 'recover' ? 'Recovering...' : 'Confirm lost and recover'}</PButton>
@@ -372,15 +378,30 @@ function BackwardMoveSection({ detail, pendingAction, onPreviewBackward, onMoveB
   const [reason, setReason] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [preview, setPreview] = useState<BackwardMovePreview | null>(null)
-  const canMove = Boolean(target && reason.trim()) && pendingAction === null
+  const [previewStale, setPreviewStale] = useState(false)
+  const targetIsAvailable = target !== '' && available.includes(target)
+  const canMove = targetIsAvailable && Boolean(reason.trim()) && pendingAction === null
+  useEffect(() => {
+    if (!target || available.includes(target)) return
+    setTarget('')
+    setPreview(null)
+    setConfirmOpen(false)
+  }, [currentStage, target])
+  useEffect(() => {
+    if (!preview || preview.snapshot_version === detail.item.snapshot_version) return
+    setPreview(null)
+    setConfirmOpen(false)
+    setPreviewStale(true)
+  }, [detail.item.snapshot_version, preview])
   if (detail.item.card.scope !== 'outcome' || available.length === 0) return null
   const move = async () => {
-    if (!target || !preview) return
-    await onMoveBackward(target, reason.trim(), preview.snapshot_version)
-    setConfirmOpen(false)
+    if (!target || !preview || preview.snapshot_version !== detail.item.snapshot_version) return
+    const error = await onMoveBackward(target, reason.trim(), preview.snapshot_version)
+    if (!error) setConfirmOpen(false)
   }
   const review = async () => {
-    if (!target) return
+    if (!targetIsAvailable) return
+    setPreviewStale(false)
     const next = await onPreviewBackward(target)
     if (!next) return
     setPreview(next)
@@ -391,10 +412,11 @@ function BackwardMoveSection({ detail, pendingAction, onPreviewBackward, onMoveB
       <summary className="cursor-pointer text-xs font-semibold uppercase text-contrast-medium">Administrative actions</summary>
       <div className="mt-static-md">
       <div className="mt-static-sm flex flex-wrap items-end gap-static-sm">
-        <PSelect compact className="w-48" label="Earlier stage" name="backward-stage" value={target} disabled={pendingAction !== null} onChange={(event) => { setTarget(fieldValue(event as FieldValueEvent) as WorkItemStage | ''); setPreview(null) }}><PSelectOption value="">Select a stage</PSelectOption>{available.map((stage) => <PSelectOption key={stage} value={stage}>{PROGRESS_STAGE_LABELS[stage]}</PSelectOption>)}</PSelect>
+        <PSelect compact className="w-48" label="Earlier stage" name="backward-stage" value={target} disabled={pendingAction !== null} onChange={(event) => { setTarget(fieldValue(event as FieldValueEvent) as WorkItemStage | ''); setPreview(null); setPreviewStale(false) }}><PSelectOption value="">Select a stage</PSelectOption>{available.map((stage) => <PSelectOption key={stage} value={stage}>{PROGRESS_STAGE_LABELS[stage]}</PSelectOption>)}</PSelect>
         <PInputText compact className="min-w-48 flex-1" name="backward-reason" label="Reason" value={reason} disabled={pendingAction !== null} onChange={(event) => setReason(fieldValue(event as FieldValueEvent))} onInput={(event) => setReason(fieldValue(event as FieldValueEvent))} />
         <PButton className="w-fit" type="button" compact variant="secondary" disabled={!canMove} onClick={() => void review()}>{pendingAction === 'preview' ? 'Preparing preview...' : 'Review backward move'}</PButton>
       </div>
+      {previewStale ? <p className="mt-static-md border-l-4 border-warning bg-surface p-static-sm text-sm" role="status">The backward-move preview expired because Delivery changed. Review the move again.</p> : null}
       {confirmOpen ? (
         <PModal open role="alertdialog" aria-modal="true" dismissButton={false} disableBackdropClick onDismiss={() => setConfirmOpen(false)} aria={{ role: 'alertdialog', 'aria-label': 'Confirm backward move' }}>
           <ConfirmationContent onClose={() => setConfirmOpen(false)}><PHeading tag="h2" size="lg">Move to {target ? PROGRESS_STAGE_LABELS[target] : ''}</PHeading><p className="text-sm">The following Outcomes will be reset:</p><ul className="grid list-disc gap-static-xs pl-static-lg text-sm">{preview?.invalidated_outcome_ids.map((outcomeId) => <li key={outcomeId}>{outcomeId}</li>)}</ul><p className="text-sm text-contrast-medium">Reason: {reason.trim()}</p><div className="flex flex-wrap justify-end gap-static-xs"><PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton><PButton type="button" disabled={pendingAction !== null} onClick={() => void move()}>{pendingAction === 'move' ? 'Moving...' : 'Confirm backward move'}</PButton></div></ConfirmationContent>
@@ -468,6 +490,7 @@ function IdentityRow({ label, value }: { label: string; value: string | number |
 function WorktreeRecoverySection(props: WorkItemDetailProps) {
   const recovery = props.detail.item.publication?.worktree_recovery
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [actionFailed, setActionFailed] = useState(false)
   if (!recovery) return null
   if (!recovery.eligible || !recovery.recovery_reviewed_head) {
     return recovery.blocked_reason ? (
@@ -478,15 +501,16 @@ function WorktreeRecoverySection(props: WorkItemDetailProps) {
   }
   const pendingAction = 'change-worktree-recover'
   const run = async () => {
-    await props.onRecoverChangeWorktree(recovery.recovery_reviewed_head as string)
-    setConfirmOpen(false)
+    const error = await props.onRecoverChangeWorktree(recovery.recovery_reviewed_head as string)
+    setActionFailed(error !== null)
+    if (!error) setConfirmOpen(false)
   }
   return (
     <section className="mt-static-md border-l-4 border-warning bg-surface p-static-md" aria-labelledby="worktree-recovery-heading">
       <PHeading id="worktree-recovery-heading" tag="h4" size="sm">Missing worktree</PHeading>
       <p className="mt-static-xs text-sm">Delivery can recreate the missing worktree from the exact reviewed Change head.</p>
       <code className="mt-static-sm block break-all text-xs text-contrast-medium">Reviewed head: {recovery.recovery_reviewed_head}</code>
-      <PButton className="mt-static-md" type="button" compact variant="secondary" disabled={props.pendingAction !== null} onClick={() => setConfirmOpen(true)}>
+      <PButton className="mt-static-md" type="button" compact variant="secondary" disabled={props.pendingAction !== null} onClick={() => { setActionFailed(false); setConfirmOpen(true) }}>
         {props.pendingAction === pendingAction ? 'Recovering...' : 'Recover missing worktree'}
       </PButton>
       {confirmOpen ? (
@@ -494,6 +518,7 @@ function WorktreeRecoverySection(props: WorkItemDetailProps) {
           <ConfirmationContent onClose={() => setConfirmOpen(false)}>
             <PHeading tag="h2" size="lg">Recover missing worktree</PHeading>
             <p className="text-sm">The managed worktree will be recreated at its canonical path. The Change branch and reviewed head will remain unchanged.</p>
+            {actionFailed && props.actionError ? <ActionFeedback error={props.actionError} result={null} /> : null}
             <div className="flex flex-wrap justify-end gap-static-xs">
               <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton>
               <PButton type="button" disabled={props.pendingAction !== null} onClick={() => void run()}>
@@ -511,6 +536,7 @@ function WorktreeCleanupSection(props: WorkItemDetailProps) {
   const publication = props.detail.item.publication
   const cleanup = publication?.worktree_cleanup
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [actionFailed, setActionFailed] = useState(false)
   if (!publication || !cleanup) return null
   const terminal = publication.phase === 'abandoned' || publication.phase === 'acceptance-observed'
   if (!terminal) return null
@@ -529,14 +555,15 @@ function WorktreeCleanupSection(props: WorkItemDetailProps) {
   const actionName = completed ? 'Clean completed worktree' : 'Clean abandoned worktree'
   const pendingAction = completed ? 'change-cleanup-completed' : 'change-cleanup-abandoned'
   const run = async () => {
-    await action()
-    setConfirmOpen(false)
+    const error = await action()
+    setActionFailed(error !== null)
+    if (!error) setConfirmOpen(false)
   }
   return (
     <section className="mt-static-md border-l-4 border-warning bg-surface p-static-md" aria-labelledby="worktree-cleanup-heading">
       <PHeading id="worktree-cleanup-heading" tag="h4" size="sm">Retained worktree</PHeading>
       <p className="mt-static-xs text-sm">The terminal Change worktree is clean and ready for removal. Its branch is preserved.</p>
-      <PButton className="mt-static-md" type="button" compact variant="secondary" disabled={props.pendingAction !== null} onClick={() => setConfirmOpen(true)}>
+      <PButton className="mt-static-md" type="button" compact variant="secondary" disabled={props.pendingAction !== null} onClick={() => { setActionFailed(false); setConfirmOpen(true) }}>
         {props.pendingAction === pendingAction ? 'Cleaning...' : actionName}
       </PButton>
       {confirmOpen ? (
@@ -544,6 +571,7 @@ function WorktreeCleanupSection(props: WorkItemDetailProps) {
           <ConfirmationContent onClose={() => setConfirmOpen(false)}>
             <PHeading tag="h2" size="lg">{actionName}</PHeading>
             <p className="text-sm">The worktree directory will be removed. The Change branch and cleanup receipt will remain.</p>
+            {actionFailed && props.actionError ? <ActionFeedback error={props.actionError} result={null} /> : null}
             <div className="flex flex-wrap justify-end gap-static-xs">
               <PButton type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>Cancel</PButton>
               <PButton type="button" disabled={props.pendingAction !== null} onClick={() => void run()}>
@@ -631,8 +659,9 @@ function PublicationChecksSection(props: WorkItemDetailProps) {
     && (publication.phase === 'pull-request-draft' || publication.phase === 'awaiting-merge')
     && publication.published_head !== null
     && publication.publication_generations.length > 0
-  if (!observable) return null
   const observation = props.publicationChecks
+  const retainsEvidence = observation !== null || props.publicationChecksStale
+  if (!observable && !retainsEvidence) return null
   const errorCode = props.publicationChecksError instanceof WorkItemApiError
     ? props.publicationChecksError.code
     : 'ERR_WORK_ITEM_PUBLICATION_CHECKS_OBSERVE'
@@ -647,16 +676,18 @@ function PublicationChecksSection(props: WorkItemDetailProps) {
     <section className="border-l border-contrast-low bg-surface p-static-md" aria-labelledby="publication-checks-heading">
       <div className="flex flex-wrap items-start justify-between gap-static-sm">
         <PHeading id="publication-checks-heading" tag="h4" size="sm">Publication checks</PHeading>
-        <PButton
-          type="button"
-          compact
-          variant="secondary"
-          data-testid="publication-checks-observe"
-          disabled={props.isObservingPublicationChecks}
-          onClick={() => void props.onObservePublicationChecks()}
-        >
-          {props.isObservingPublicationChecks ? 'Checking...' : 'Check publication'}
-        </PButton>
+        {observable ? (
+          <PButton
+            type="button"
+            compact
+            variant="secondary"
+            data-testid="publication-checks-observe"
+            disabled={props.isObservingPublicationChecks || props.pendingAction !== null}
+            onClick={() => void props.onObservePublicationChecks()}
+          >
+            {props.isObservingPublicationChecks ? 'Checking...' : 'Check publication'}
+          </PButton>
+        ) : null}
       </div>
       <p className="mt-static-sm text-sm" aria-live="polite" role="status" data-testid="publication-checks-status">{status}</p>
       {props.publicationChecksError ? (
@@ -770,7 +801,7 @@ function PublicationSection(props: WorkItemDetailProps) {
       ) : null}
       {publication.pending_checkpoint_triggers.length > 0 ? <p className="mt-static-sm text-xs text-contrast-medium">Checkpoint triggers: {publication.pending_checkpoint_triggers.join(', ')}</p> : null}
       {action.command ? <CopyCommand command={action.command} className="mt-static-md" /> : null}
-      {!action.command && control && action.label ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null} onClick={() => void control()}>{pending ? 'Working...' : action.label}</PButton> : null}
+      {!action.command && control && action.label ? <PButton className="mt-static-md" type="button" compact disabled={props.pendingAction !== null || props.isObservingPublicationChecks} onClick={() => void control()}>{pending ? 'Working...' : action.label}</PButton> : null}
       {canSupersede ? (
         <PButton
           className="mt-static-md"
@@ -778,14 +809,14 @@ function PublicationSection(props: WorkItemDetailProps) {
           compact
           variant="secondary"
           data-testid="publication-supersede"
-          disabled={props.pendingAction !== null}
+          disabled={props.pendingAction !== null || props.isObservingPublicationChecks}
           onClick={() => void props.onSupersedePublication()}
         >
           {props.pendingAction === 'publication-supersede' ? 'Superseding...' : 'Supersede publication'}
         </PButton>
       ) : null}
       {!publication.attention && !['deferred', 'abandoned', 'acceptance-observed'].includes(publication.phase) ? (
-        <PButton className="mt-static-md" type="button" compact variant="secondary" disabled={props.pendingAction !== null} onClick={() => void props.onSyncTarget()}>
+        <PButton className="mt-static-md" type="button" compact variant="secondary" disabled={props.pendingAction !== null || props.isObservingPublicationChecks} onClick={() => void props.onSyncTarget()}>
           {props.pendingAction === 'target-sync' ? 'Syncing target...' : 'Sync with target'}
         </PButton>
       ) : null}

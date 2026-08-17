@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { PorscheDesignSystemProvider, PToast } from '@porsche-design-system/components-react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, useLocation } from 'react-router'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type {
   ChangeGroupView,
   CompletedChangeRecord,
+  DesignWorkDetailResponse,
   PortfolioOperatingView,
   WorkItemCardView,
   WorkItemDetailResponse,
@@ -236,14 +237,40 @@ const receiptCompleted: CompletedChangeRecord = {
 
 let currentPortfolio: WorkItemPortfolioResponse
 let currentDetail: WorkItemDetailResponse
+let currentDesignWork: DesignWorkDetailResponse
 let portfolioAfterPublication: WorkItemPortfolioResponse | null
 let portfolioFailure: boolean
 let detailFailure: boolean
+let pendingDetailItemKey: string | null
+let pendingDetailRelease: (() => void) | null
+let pendingMutationPath: string | null
+let pendingMutationRelease: (() => void) | null
+let pendingPublicationChecksObservation: boolean
+let pendingPublicationChecksRelease: (() => void) | null
+let moveBackwardUpdatesDetailStage: WorkItemCardView['stage']
+let moveBackwardFailure: boolean
+let mutationFailurePath: string | null
+let designFailure: boolean
 let acceptanceObservationFailure: boolean
+let acceptanceReconciliationProviderUnavailable: boolean
 let publicationChecksFailure: boolean
 let publicationChecksResponse: PublicationChecksObservationResponse
 let supersedeFailuresRemaining: number
 let completedRecords: CompletedChangeRecord[]
+let completedDetailRecord: CompletedChangeRecord | null
+let completedDetailMismatch: CompletedChangeRecord | null
+let completedHistoryNextCursor: string | null
+let completedHistoryPageRecords: CompletedChangeRecord[]
+let completedHistoryPageFailuresRemaining: number
+let completedDetailFailuresRemaining: number
+let completedDetailNotFound: boolean
+let completedHistoryFailuresRemaining: number
+let completedHistorySearchPending: boolean
+let completedHistorySearchFailuresRemaining: number
+let completedHistorySearchRecords: CompletedChangeRecord[]
+let completedHistorySearchNextCursor: string | null
+let completedHistorySearchPageRecords: CompletedChangeRecord[]
+let completedHistorySearchRelease: (() => void) | null
 let requests: Array<{ url: string; method: string; body: unknown }>
 
 function response(payload: unknown, status = 200): Response {
@@ -268,25 +295,67 @@ function installFetch() {
       return portfolioFailure ? response({ detail: 'Temporary polling failure' }, 503) : response(currentPortfolio)
     }
     if (method === 'GET' && url.startsWith('/api/changes/change-alpha/work-items/')) {
+      if (pendingDetailItemKey !== null && url.endsWith(pendingDetailItemKey)) {
+        await new Promise<void>((resolve) => { pendingDetailRelease = resolve })
+      }
       return detailFailure ? response({ detail: 'Delivery runtime is absent: change-alpha' }, 409) : response(currentDetail)
     }
     if (method === 'GET' && url === '/api/design-work/design-draft') {
-      return response({
-        change_id: 'design-draft',
-        package_id: 'd'.repeat(64),
-        intent_markdown: '# Design Draft\n\nShape a coherent operator workflow.',
-        design_markdown: '# Architecture\n\nKeep authority explicit.',
-      })
+      return designFailure ? response({ detail: 'Design source temporarily unavailable' }, 503) : response(currentDesignWork)
     }
     if (method === 'GET' && url === '/api/work-items/completed') {
-      return response({ records: completedRecords, next_cursor: null })
+      if (completedHistoryFailuresRemaining > 0) {
+        completedHistoryFailuresRemaining -= 1
+        return response({ detail: 'Completed history unavailable' }, 503)
+      }
+      return response({
+        records: completedRecords,
+        total_count: completedRecords.length + completedHistoryPageRecords.length,
+        next_cursor: completedHistoryNextCursor,
+      })
+    }
+    if (method === 'GET' && url.startsWith('/api/work-items/completed?cursor=')) {
+      if (completedHistoryPageFailuresRemaining > 0) {
+        completedHistoryPageFailuresRemaining -= 1
+        return response({ detail: 'Next completed history page unavailable' }, 503)
+      }
+      return response({
+        records: completedHistoryPageRecords,
+        total_count: completedRecords.length + completedHistoryPageRecords.length,
+        next_cursor: null,
+      })
+    }
+    if (method === 'GET' && url.startsWith('/api/work-items/completed/search?')) {
+      if (completedHistorySearchPending) {
+        await new Promise<void>((resolve) => { completedHistorySearchRelease = resolve })
+      }
+      if (completedHistorySearchFailuresRemaining > 0) {
+        completedHistorySearchFailuresRemaining -= 1
+        return response({ detail: 'Completed history search unavailable' }, 503)
+      }
+      const pageRequest = url.includes('cursor=')
+      return response({
+        records: pageRequest ? completedHistorySearchPageRecords : completedHistorySearchRecords,
+        total_count: completedHistorySearchRecords.length + completedHistorySearchPageRecords.length,
+        next_cursor: pageRequest ? null : completedHistorySearchNextCursor,
+      })
     }
     if (method === 'GET' && url.startsWith('/api/work-items/completed/')) {
-      const selected = completedRecords.find((record) => url.includes(record.completion_id))
+      const selected = completedDetailMismatch ?? (completedDetailRecord && url.includes(completedDetailRecord.completion_id)
+        ? completedDetailRecord
+        : completedRecords.find((record) => url.includes(record.completion_id)))
+      if (completedDetailNotFound) return response({ detail: 'Completion detail was removed' }, 404)
+      if (completedDetailFailuresRemaining > 0) {
+        completedDetailFailuresRemaining -= 1
+        return response({ detail: 'Completion detail temporarily unavailable' }, 503)
+      }
       return selected ? response(selected) : response({ detail: 'Not found' }, 404)
     }
 
     if (method === 'POST' && url.endsWith('/publication/checks/observe')) {
+      if (pendingPublicationChecksObservation) {
+        await new Promise<void>((resolve) => { pendingPublicationChecksRelease = resolve })
+      }
       if (publicationChecksFailure) {
         return response({
           detail: {
@@ -298,6 +367,28 @@ function installFetch() {
         }, 502)
       }
       return response(publicationChecksResponse)
+    }
+    if (method === 'POST' && url === '/api/work-items/acceptance/reconcile') {
+      return response({
+        outcomes: [{
+          change_id: 'change-alpha',
+          status: acceptanceReconciliationProviderUnavailable ? 'provider-unavailable' : 'waiting',
+          code: acceptanceReconciliationProviderUnavailable ? 'ERR_DELIVERY_PROVIDER_UNAVAILABLE' : null,
+          detail: acceptanceReconciliationProviderUnavailable ? 'GitHub acceptance provider unavailable' : null,
+          completion_id: null,
+        }],
+      })
+    }
+
+    if (method === 'POST' && mutationFailurePath && url.endsWith(mutationFailurePath)) {
+      return response({
+        detail: {
+          code: 'ERR_DELIVERY_CONTROL_CONFLICT',
+          detail: 'The Delivery operation was rejected while the confirmation was open.',
+          authority: 'delivery',
+          retry_safe: true,
+        },
+      }, 409)
     }
 
     if (method === 'POST' && url.includes('/requests/')) {
@@ -327,6 +418,22 @@ function installFetch() {
       })
     }
     if (method === 'POST' && url.endsWith('/move-backward')) {
+      if (moveBackwardFailure) {
+        return response({
+          detail: {
+            code: 'ERR_DELIVERY_ADMINISTRATIVE_MOVE',
+            detail: 'The Delivery frontier changed before the move was applied.',
+            authority: 'delivery',
+            retry_safe: true,
+          },
+        }, 409)
+      }
+      if (moveBackwardUpdatesDetailStage) {
+        currentDetail = detail({
+          ...currentDetail.item,
+          card: { ...currentDetail.item.card, stage: moveBackwardUpdatesDetailStage },
+        })
+      }
       return response({ invalidated_outcome_ids: ['OUT-002'], move: {} })
     }
     if (method === 'POST' && (
@@ -345,6 +452,9 @@ function installFetch() {
       || url.endsWith('/worktree/cleanup/completed')
       || url.endsWith('/worktree/recover')
     )) {
+      if (pendingMutationPath && url.endsWith(pendingMutationPath)) {
+        await new Promise<void>((resolve) => { pendingMutationRelease = resolve })
+      }
       if (url.endsWith('/acceptance/observe') && acceptanceObservationFailure) {
         return response({
           detail: {
@@ -434,19 +544,41 @@ function namedPdsHost(container: HTMLElement, tagName: 'p-input-text' | 'p-selec
 function renderPage(path = '/delivery') {
   return render(
     <PorscheDesignSystemProvider>
-      <MemoryRouter initialEntries={[path]}><WorkPortfolioPage /></MemoryRouter>
+      <MemoryRouter initialEntries={[path]}><LocationProbe /><WorkPortfolioPage /></MemoryRouter>
       <PToast />
     </PorscheDesignSystemProvider>,
   )
 }
 
+function LocationProbe() {
+  const location = useLocation()
+  return <output data-testid="test-location">{location.pathname}</output>
+}
+
 beforeEach(() => {
   currentPortfolio = portfolio()
   currentDetail = detail()
+  currentDesignWork = {
+    change_id: 'design-draft',
+    package_id: 'd'.repeat(64),
+    intent_markdown: '# Design Draft\n\nShape a coherent operator workflow.',
+    design_markdown: '# Architecture\n\nKeep authority explicit.',
+  }
   portfolioAfterPublication = null
   portfolioFailure = false
   detailFailure = false
+  pendingDetailItemKey = null
+  pendingDetailRelease = null
+  pendingMutationPath = null
+  pendingMutationRelease = null
+  pendingPublicationChecksObservation = false
+  pendingPublicationChecksRelease = null
+  moveBackwardUpdatesDetailStage = null
+  moveBackwardFailure = false
+  mutationFailurePath = null
+  designFailure = false
   acceptanceObservationFailure = false
+  acceptanceReconciliationProviderUnavailable = false
   publicationChecksFailure = false
   publicationChecksResponse = {
     schema_version: 1,
@@ -491,6 +623,20 @@ beforeEach(() => {
   }
   supersedeFailuresRemaining = 0
   completedRecords = [completed]
+  completedDetailRecord = null
+  completedDetailMismatch = null
+  completedHistoryNextCursor = null
+  completedHistoryPageRecords = []
+  completedHistoryPageFailuresRemaining = 0
+  completedDetailFailuresRemaining = 0
+  completedDetailNotFound = false
+  completedHistoryFailuresRemaining = 0
+  completedHistorySearchPending = false
+  completedHistorySearchFailuresRemaining = 0
+  completedHistorySearchRecords = []
+  completedHistorySearchNextCursor = null
+  completedHistorySearchPageRecords = []
+  completedHistorySearchRelease = null
   requests = []
   installFetch()
 })
@@ -593,6 +739,8 @@ it('shows unadmitted Design work on the board and opens its verified sources', a
 
   const detailView = await screen.findByTestId('design-work-detail')
   expect(detailView).toHaveTextContent('Shape a coherent operator workflow.')
+  const flyout = document.querySelector('p-flyout') as HTMLElement & { aria?: { 'aria-label'?: string } }
+  expect(flyout.aria?.['aria-label']).toBe('Design detail')
   expect(detailView).toHaveTextContent('Continue with/design design-draft')
   expect(within(detailView).getByRole('button', { name: 'Copy command /design design-draft' })).toBeInTheDocument()
   fireEvent.click(screen.getByText('Design', { selector: 'summary' }))
@@ -602,6 +750,101 @@ it('shows unadmitted Design work on the board and opens its verified sources', a
   expect(guidance).toHaveTextContent('Continue Design with')
   expect(within(guidance).getByText('/design design-draft', { selector: 'code' })).toBeInTheDocument()
   expect(within(guidance).getByRole('button', { name: 'Copy command /design design-draft' })).toBeInTheDocument()
+})
+
+it('uses Design-specific unavailable detail copy and retry action', async () => {
+  currentPortfolio = {
+    ...portfolio(),
+    operating: {
+      ...portfolio().operating,
+      draft_design_change_ids: ['design-draft'],
+    },
+  }
+  designFailure = true
+  renderPage('/delivery/design-draft/design')
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('This Design work is unavailable.')
+  expect(alert).toHaveTextContent('Retry Design')
+  expect(alert).not.toHaveTextContent('This Work Item is unavailable.')
+
+  designFailure = false
+  fireEvent.click(within(alert).getByText('Retry Design', { exact: true }))
+  expect(await screen.findByTestId('design-work-detail')).toBeInTheDocument()
+})
+
+it('refreshes open Design detail after an authored package revision', async () => {
+  vi.useFakeTimers()
+  try {
+    currentPortfolio = {
+      ...portfolio(),
+      operating: {
+        ...portfolio().operating,
+        draft_design_change_ids: ['design-draft'],
+      },
+    }
+    renderPage('/delivery/design-draft/design')
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const detailView = screen.getByTestId('design-work-detail')
+    expect(detailView).toHaveTextContent('Keep authority explicit.')
+
+    currentDesignWork = {
+      ...currentDesignWork,
+      package_id: 'e'.repeat(64),
+      design_markdown: '# Architecture\n\nUse the revised authority.',
+    }
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+
+    expect(detailView).toHaveTextContent('Use the revised authority.')
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('shows stale Design detail state and retries the refresh in place', async () => {
+  renderPage('/delivery/design-draft/design')
+  const detailView = await screen.findByTestId('design-work-detail')
+  designFailure = true
+
+  const alert = await screen.findByRole('alert', {}, { timeout: 4_000 })
+  expect(alert).toHaveTextContent('Showing the last successful Design detail; live updates paused.')
+  expect(alert).toHaveTextContent('Design source temporarily unavailable')
+  expect(detailView).toBeInTheDocument()
+
+  designFailure = false
+  fireEvent.click(within(alert).getByText('Retry Design', { exact: true }))
+  await waitFor(() => expect(screen.queryByText('Showing the last successful Design detail; live updates paused.')).not.toBeInTheDocument())
+  expect(screen.getByTestId('design-work-detail')).toBeInTheDocument()
+}, 6_000)
+
+it('closes removed Design detail after a portfolio refresh', async () => {
+  const initialPortfolio = portfolio()
+  currentPortfolio = {
+    ...initialPortfolio,
+    operating: {
+      ...initialPortfolio.operating,
+      draft_design_change_ids: ['design-draft'],
+    },
+  }
+  renderPage('/delivery/design-draft/design')
+  await screen.findByTestId('design-work-detail')
+
+  currentPortfolio = portfolio()
+  fireEvent.click(screen.getByRole('button', { name: 'Completed history', exact: true }))
+  await screen.findByTestId('completed-history-workspace')
+  fireEvent.click(screen.getByRole('button', { name: 'Current delivery', exact: true }))
+
+  await waitFor(() => {
+    const openFlyout = Array.from(document.querySelectorAll('p-flyout')).find((element) => (element as HTMLElement & { open: boolean }).open)
+    expect(openFlyout).toBeUndefined()
+  })
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Current delivery', exact: true })).toHaveFocus())
 })
 
 it('filters grouped rows by Change and Needs without conflating Activity', async () => {
@@ -634,7 +877,11 @@ it('filters grouped rows by Change and Needs without conflating Activity', async
   await waitFor(() => expect(needsYou).toHaveAttribute('aria-pressed', 'false'))
   expect(screen.queryByTestId('work-shown-count')).not.toBeInTheDocument()
 
-  fireEvent.click(screen.getByTestId('work-filters-toggle'))
+  const filterToggle = screen.getByTestId('work-filters-toggle')
+  fireEvent.click(filterToggle)
+  expect(filterToggle).toHaveAttribute('aria-expanded', 'true')
+  expect(filterToggle).toHaveAttribute('aria-controls', 'work-filters-panel')
+  expect(screen.getByTestId('work-filters-panel')).toHaveAttribute('id', 'work-filters-panel')
   const selects = container.querySelectorAll('p-select')
   selectValue(selects[0], 'change-alpha')
   selectValue(selects[1], 'you')
@@ -656,6 +903,50 @@ it('filters grouped rows by Change and Needs without conflating Activity', async
   selectValue(selects[0], 'change-beta')
   expect(await screen.findByText('No matching delivery work')).toBeInTheDocument()
   expect(screen.queryByText('No current Delivery work.')).not.toBeInTheDocument()
+})
+
+it('keeps routed detail open when filters hide its portfolio row', async () => {
+  const secondGroup = group({
+    change_id: 'change-beta',
+    title: 'Runtime hardening',
+    snapshot_version: 'b'.repeat(64),
+    items: [card({
+      change_id: 'change-beta',
+      title: 'Blocked runtime task',
+      needs: 'dependency',
+      needs_headline: 'Waiting on OUT-009',
+      next_actor: 'dependency',
+      next_step: 'Waiting on OUT-009',
+    })],
+  })
+  currentPortfolio = portfolio([group(), secondGroup])
+  const { container } = renderPage()
+  const table = await screen.findByTestId('work-portfolio-table')
+  fireEvent.click(within(table).getAllByRole('link', { name: /Delivery foundation/ })[0])
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  fireEvent.click(screen.getByTestId('work-filters-toggle'))
+  const selects = container.querySelectorAll('p-select')
+  selectValue(selects[1], 'dependency')
+
+  await waitFor(() => expect(table).not.toHaveTextContent('Delivery foundation'))
+  expect(inspector).toBeInTheDocument()
+  expect(screen.getByTestId('work-filters-panel')).toBeInTheDocument()
+
+  fireEvent.keyDown(inspector, { key: 'Escape' })
+  await waitFor(() => expect(screen.getByTestId('work-filters-toggle')).toHaveFocus())
+})
+
+it('restores focus to the clicked work item after closing its detail', async () => {
+  renderPage()
+  const table = await screen.findByTestId('work-portfolio-table')
+  const itemLink = within(table).getAllByRole('link', { name: /Delivery foundation/ })[0]
+
+  fireEvent.click(itemLink)
+  const inspector = await screen.findByTestId('work-item-detail')
+  fireEvent.keyDown(inspector, { key: 'Escape' })
+
+  await waitFor(() => expect(itemLink).toHaveFocus())
 })
 
 it('opens routed semantic detail with acceptance and bounded task evidence', async () => {
@@ -710,6 +1001,93 @@ it('answers a decision request and refetches its resolved state', async () => {
   expect(await screen.findByText('Keep it')).toBeInTheDocument()
 })
 
+it('clears action feedback when switching to another work item', async () => {
+  currentDetail = detail({
+    requests: [{
+      request_id: 'REQ-001',
+      kind: 'decision',
+      outcome_id: 'OUT-001',
+      summary: 'Choose the retained contract',
+      options: [{ option_id: 'keep', label: 'Keep it' }],
+      resolution: null,
+    }],
+  })
+  const { container } = renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+  await screen.findByText('Choose the retained contract')
+
+  const submit = screen.getByText('Submit answer') as HTMLElement & { disabled: boolean }
+  const option = await waitFor(() => {
+    const element = namedPdsHost(container, 'p-select', 'request-REQ-001-option')
+    expect(element).not.toBeNull()
+    return element!
+  })
+  selectValue(option, 'keep')
+  await waitFor(() => expect(submit.disabled).toBe(false))
+  fireEvent.click(submit)
+  expect(await screen.findByText('Request answered.')).toBeInTheDocument()
+
+  fireEvent.click(screen.getAllByRole('link', { name: 'User controls' })[0])
+  await waitFor(() => expect(screen.queryByText('Request answered.')).not.toBeInTheDocument())
+})
+
+it('shows a loading state instead of stale detail while switching work items', async () => {
+  renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+  await screen.findByTestId('work-item-detail')
+  pendingDetailItemKey = 'outcome%3AOUT-002'
+
+  try {
+    fireEvent.click(screen.getAllByRole('link', { name: 'User controls' })[0])
+    await screen.findByText('Loading Work Item details...')
+  } finally {
+    pendingDetailRelease?.()
+    pendingDetailItemKey = null
+    pendingDetailRelease = null
+  }
+})
+
+it('clears earlier action feedback before previewing a backward move', async () => {
+  currentDetail = detail({
+    card: card({ stage: 'planning' }),
+    requests: [{
+      request_id: 'REQ-001',
+      kind: 'decision',
+      outcome_id: 'OUT-001',
+      summary: 'Choose the retained contract',
+      options: [{ option_id: 'keep', label: 'Keep it' }],
+      resolution: null,
+    }],
+  })
+  const { container } = renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+  await screen.findByText('Choose the retained contract')
+
+  const submit = screen.getByText('Submit answer') as HTMLElement & { disabled: boolean }
+  const option = await waitFor(() => {
+    const element = namedPdsHost(container, 'p-select', 'request-REQ-001-option')
+    expect(element).not.toBeNull()
+    return element!
+  })
+  selectValue(option, 'keep')
+  await waitFor(() => expect(submit.disabled).toBe(false))
+  fireEvent.click(submit)
+  expect(await screen.findByText('Request answered.')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByText('Administrative actions'))
+  const [stage, reason] = await waitFor(() => {
+    const elements = [
+      namedPdsHost(container, 'p-select', 'backward-stage'),
+      namedPdsHost(container, 'p-input-text', 'backward-reason'),
+    ]
+    expect(elements.every(Boolean)).toBe(true)
+    return elements as [Element, Element]
+  })
+  selectValue(stage, 'design')
+  inputValue(reason, 'Authority changed')
+  fireEvent.click(screen.getByText('Review backward move'))
+
+  await screen.findByText('The following Outcomes will be reset:')
+  expect(screen.queryByText('Request answered.')).not.toBeInTheDocument()
+})
+
 it('requires evidence before clearing a requestless block', async () => {
   currentDetail = detail({
     block: {
@@ -743,6 +1121,43 @@ it('requires evidence before clearing a requestless block', async () => {
 
   await waitFor(() => expect(requests.some(({ url, method }) => method === 'POST' && url.includes('/blocks/BLOCK-001/clear'))).toBe(true))
   expect(await screen.findByText('Block cleared.')).toBeInTheDocument()
+})
+
+it('keeps block evidence available when clearing the block fails', async () => {
+  currentDetail = detail({
+    block: {
+      block_id: 'BLOCK-001',
+      reason: 'Proof is missing',
+      unblock_condition: 'Verify external evidence',
+      expected_evidence: ['Evidence locator'],
+      locators: ['request:REQ-001'],
+      request_id: null,
+      resolution_note: null,
+      resolution_locators: [],
+      resume_commit: null,
+    },
+  })
+  mutationFailurePath = '/clear'
+  const { container } = renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+  const clear = await screen.findByText('Clear block') as HTMLElement & { disabled: boolean }
+  const [note, locator] = await waitFor(() => {
+    const elements = [
+      namedPdsHost(container, 'p-input-text', 'block-note'),
+      namedPdsHost(container, 'p-input-text', 'block-locator'),
+    ]
+    expect(elements.every(Boolean)).toBe(true)
+    return elements as [Element, Element]
+  })
+  inputValue(note, 'Verified externally')
+  inputValue(locator, 'request:REQ-001')
+  await waitFor(() => expect(clear.disabled).toBe(false))
+  fireEvent.click(clear)
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('The Delivery operation was rejected while the confirmation was open.')
+  expect((note as HTMLElement & { value: string }).value).toBe('Verified externally')
+  expect((locator as HTMLElement & { value: string }).value).toBe('request:REQ-001')
+  await waitFor(() => expect(clear.disabled).toBe(false))
 })
 
 it('keeps claim recovery and backward movement explicit and confirmable', async () => {
@@ -784,6 +1199,134 @@ it('keeps claim recovery and backward movement explicit and confirmable', async 
     body: { target: 'planning', reason: 'Authority changed', snapshot_version: 'a'.repeat(64) },
   }))
   expect(await screen.findByText('Moved backward. Reset: OUT-002.')).toBeInTheDocument()
+})
+
+it('keeps claim recovery confirmation open when recovery fails', async () => {
+  currentDetail = detail({
+    card: card({ stage: 'implementation' }),
+    active_claim: {
+      attempt_id: 'attempt-one',
+      claim_id: 'claim-one',
+      started_at: '2026-08-08T10:00:00Z',
+      worker_role: 'builder',
+      task_id: 'TASK-001',
+    },
+  })
+  mutationFailurePath = '/claims/recover'
+  renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+  await screen.findByText('Recover confirmed-lost claim')
+  fireEvent.click(screen.getByText('Recover confirmed-lost claim'))
+  fireEvent.click(screen.getByText('Confirm lost and recover'))
+
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/outcomes/OUT-001/claims/recover',
+    method: 'POST',
+    body: { attempt_id: 'attempt-one', claim_id: 'claim-one', confirmed_lost: true },
+  }))
+  const dialog = screen.getByRole('alertdialog')
+  expect(within(dialog).getByRole('alert')).toHaveTextContent('The Delivery operation was rejected while the confirmation was open.')
+  expect(within(dialog).getByText('Confirm lost claim')).toBeInTheDocument()
+})
+
+it('clears a backward target that becomes invalid after a successful move', async () => {
+  currentDetail = detail({ card: card({ stage: 'implementation' }) })
+  moveBackwardUpdatesDetailStage = 'planning'
+  const { container } = renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+  await screen.findByTestId('work-item-detail')
+
+  fireEvent.click(screen.getByText('Administrative actions'))
+  const [stage, reason] = await waitFor(() => {
+    const elements = [
+      namedPdsHost(container, 'p-select', 'backward-stage'),
+      namedPdsHost(container, 'p-input-text', 'backward-reason'),
+    ]
+    expect(elements.every(Boolean)).toBe(true)
+    return elements as [Element, Element]
+  })
+  selectValue(stage, 'planning')
+  inputValue(reason, 'Authority changed')
+  fireEvent.click(screen.getByText('Review backward move'))
+  await screen.findByText('The following Outcomes will be reset:')
+  fireEvent.click(screen.getByText('Confirm backward move'))
+
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/outcomes/OUT-001/move-backward',
+    method: 'POST',
+    body: { target: 'planning', reason: 'Authority changed', snapshot_version: 'a'.repeat(64) },
+  }))
+  await waitFor(() => expect((stage as HTMLElement & { value: string }).value).toBe(''))
+  expect((screen.getByText('Review backward move') as HTMLElement & { disabled: boolean }).disabled).toBe(true)
+})
+
+it('expires a backward preview when polling detects a newer snapshot', async () => {
+  vi.useFakeTimers()
+  try {
+    currentDetail = detail({ card: card({ stage: 'implementation' }) })
+    renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    fireEvent.click(screen.getByText('Administrative actions'))
+    const stage = namedPdsHost(document.body, 'p-select', 'backward-stage')
+    const reason = namedPdsHost(document.body, 'p-input-text', 'backward-reason')
+    expect(stage).not.toBeNull()
+    expect(reason).not.toBeNull()
+    selectValue(stage!, 'planning')
+    inputValue(reason!, 'Authority changed')
+    fireEvent.click(screen.getByText('Review backward move'))
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(screen.getByText('The following Outcomes will be reset:')).toBeInTheDocument()
+
+    currentDetail = detail({
+      ...currentDetail.item,
+      snapshot_version: 'b'.repeat(64),
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+
+    expect(screen.queryByText('The following Outcomes will be reset:')).not.toBeInTheDocument()
+    expect(screen.getByText('The backward-move preview expired because Delivery changed. Review the move again.')).toBeInTheDocument()
+    expect(requests.some(({ url, method }) => method === 'POST' && url.endsWith('/move-backward'))).toBe(false)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('keeps backward confirmation open when the move fails', async () => {
+  currentDetail = detail({ card: card({ stage: 'implementation' }) })
+  moveBackwardFailure = true
+  const { container } = renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+  await screen.findByTestId('work-item-detail')
+
+  fireEvent.click(screen.getByText('Administrative actions'))
+  const [stage, reason] = await waitFor(() => {
+    const elements = [
+      namedPdsHost(container, 'p-select', 'backward-stage'),
+      namedPdsHost(container, 'p-input-text', 'backward-reason'),
+    ]
+    expect(elements.every(Boolean)).toBe(true)
+    return elements as [Element, Element]
+  })
+  selectValue(stage, 'planning')
+  inputValue(reason, 'Authority changed')
+  fireEvent.click(screen.getByText('Review backward move'))
+  await screen.findByText('The following Outcomes will be reset:')
+  fireEvent.click(screen.getByText('Confirm backward move'))
+
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/outcomes/OUT-001/move-backward',
+    method: 'POST',
+    body: { target: 'planning', reason: 'Authority changed', snapshot_version: 'a'.repeat(64) },
+  }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('The Delivery frontier changed before the move was applied.')
+  expect(screen.getByText('The following Outcomes will be reset:')).toBeInTheDocument()
+  expect(screen.getByRole('alertdialog')).toBeInTheDocument()
 })
 
 it('closes confirmation modals with Escape without performing the action', async () => {
@@ -1312,6 +1855,35 @@ it('shows GitHub merge as user-owned work with observation as the only Cockpit c
   expect(within(inspector).queryByRole('alert')).not.toBeInTheDocument()
 })
 
+it('surfaces acceptance-reconciliation provider failure with an immediate retry', async () => {
+  const publicationCard = card({
+    item_key: 'publication',
+    work_item_id: 'change-alpha',
+    scope: 'change-publication',
+    title: 'Change publication',
+    stage: null,
+    needs: 'you',
+    needs_headline: 'Merge pull request in GitHub',
+    next_actor: 'you',
+    next_step: 'Merge pull request in GitHub',
+    activity: { state: 'idle', worker_role: null, started_at: null, task_id: null },
+    progress: { kind: 'publication', label: 'Awaiting merge in GitHub', done: null, total: null },
+    action: { kind: 'observe-acceptance', label: 'Check GitHub acceptance', command: null },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', items: [publicationCard] })])
+  acceptanceReconciliationProviderUnavailable = true
+  renderPage()
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('GitHub acceptance checks are unavailable for change-alpha.')
+  expect(alert).toHaveTextContent('GitHub acceptance provider unavailable')
+
+  acceptanceReconciliationProviderUnavailable = false
+  fireEvent.click(within(alert).getByText('Retry acceptance check'))
+  await waitFor(() => expect(screen.queryByText('GitHub acceptance checks are unavailable for change-alpha.')).not.toBeInTheDocument())
+  expect(requests.filter((request) => request.url === '/api/work-items/acceptance/reconcile')).toHaveLength(2)
+})
+
 it('shows Change attention diagnostics and resolves the selected disposition', async () => {
   const attentionId = 'a'.repeat(64)
   const publicationCard = card({
@@ -1488,6 +2060,40 @@ it('posts reasoned Change dispositions and resumes a deferred Change', async () 
   }))
 })
 
+it('keeps Change abandonment confirmation open when abandonment fails', async () => {
+  const publicationCard = publicationCardForChecks({
+    next_step: 'Finalize the reviewed Change',
+    progress: { kind: 'publication', label: 'Ready for finalization', done: null, total: null },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    publication: publicationForChecks('ready-for-finalization'),
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'finalization', items: [publicationCard] })])
+  mutationFailurePath = '/abandon'
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  const reason = await waitFor(() => {
+    const element = namedPdsHost(inspector, 'p-input-text', 'change-disposition-reason')
+    expect(element).not.toBeNull()
+    return element!
+  })
+  inputValue(reason, 'User stopped the Change')
+  fireEvent.change(reason, new CustomEvent('change', { detail: { value: 'User stopped the Change' }, bubbles: true }))
+  fireEvent.click(within(inspector).getByText('Abandon Change'))
+  fireEvent.click(await screen.findByText('Confirm abandon Change'))
+
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/abandon',
+    method: 'POST',
+    body: { confirmed_abandonment: true, reason: 'User stopped the Change' },
+  }))
+  const dialog = screen.getByRole('alertdialog')
+  expect(within(dialog).getByRole('alert')).toHaveTextContent('The Delivery operation was rejected while the confirmation was open.')
+  expect(within(dialog).getByText('Confirm Change abandonment')).toBeInTheDocument()
+})
+
 it('does not show Change disposition controls on an Outcome detail', async () => {
   currentDetail = detail()
   currentPortfolio = portfolio()
@@ -1587,6 +2193,47 @@ it('confirms and cleans an eligible abandoned Change worktree', async () => {
   expect(await screen.findByText('Abandoned Change worktree cleaned up.')).toBeInTheDocument()
 })
 
+it('keeps abandoned worktree cleanup confirmation open when cleanup fails', async () => {
+  const publicationCard = publicationCardForChecks({
+    next_step: 'Change abandoned',
+    progress: { kind: 'publication', label: 'Change abandoned', done: null, total: null },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    publication: {
+      phase: 'abandoned',
+      finalization_id: null,
+      finalized_head: null,
+      published_head: null,
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: null,
+      pull_request_number: null,
+      pull_request_head: null,
+      accepted_merge_commit: null,
+      merged_at: null,
+      worktree_cleanup: { eligible: true, blocked_reason: null, completion_id: null },
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'abandoned', items: [publicationCard] })])
+  mutationFailurePath = '/worktree/cleanup/abandoned'
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  fireEvent.click(within(inspector).getByText('Clean abandoned worktree'))
+  fireEvent.click(await screen.findByText('Confirm clean abandoned worktree'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/worktree/cleanup/abandoned',
+    method: 'POST',
+    body: null,
+  }))
+  const dialog = screen.getByRole('alertdialog')
+  expect(within(dialog).getByRole('alert')).toHaveTextContent('The Delivery operation was rejected while the confirmation was open.')
+  expect(within(dialog).getByText('Clean abandoned worktree')).toBeInTheDocument()
+})
+
 it('cleans an eligible completed Change worktree with its exact completion identity', async () => {
   const completionId = 'e'.repeat(64)
   const publicationCard = card({
@@ -1684,6 +2331,48 @@ it('confirms and recovers a missing Change worktree from its exact reviewed head
     body: { confirmed_recovery: true, recovery_reviewed_head: reviewedHead },
   }))
   expect(await screen.findByText('Missing Change worktree recovered.')).toBeInTheDocument()
+})
+
+it('keeps missing worktree recovery confirmation open when recovery fails', async () => {
+  const reviewedHead = '1'.repeat(40)
+  const publicationCard = publicationCardForChecks({
+    next_step: 'Change abandoned',
+    progress: { kind: 'publication', label: 'Change abandoned', done: null, total: null },
+  })
+  currentDetail = detail({
+    card: publicationCard,
+    publication: {
+      phase: 'abandoned',
+      finalization_id: null,
+      finalized_head: null,
+      published_head: null,
+      pending_checkpoint_head: null,
+      pending_checkpoint_triggers: [],
+      invalidated_expected_head: null,
+      invalidated_observed_head: null,
+      repository: null,
+      pull_request_number: null,
+      pull_request_head: null,
+      accepted_merge_commit: null,
+      merged_at: null,
+      worktree_recovery: { eligible: true, blocked_reason: null, recovery_reviewed_head: reviewedHead },
+    },
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'abandoned', items: [publicationCard] })])
+  mutationFailurePath = '/worktree/recover'
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  fireEvent.click(within(inspector).getByText('Recover missing worktree'))
+  fireEvent.click(await screen.findByText('Confirm worktree recovery'))
+  await waitFor(() => expect(requests).toContainEqual({
+    url: '/api/changes/change-alpha/worktree/recover',
+    method: 'POST',
+    body: { confirmed_recovery: true, recovery_reviewed_head: reviewedHead },
+  }))
+  const dialog = screen.getByRole('alertdialog')
+  expect(within(dialog).getByRole('alert')).toHaveTextContent('The Delivery operation was rejected while the confirmation was open.')
+  expect(within(dialog).getByText('Recover missing worktree')).toBeInTheDocument()
 })
 
 it('uses the Complete status tag without leaking the internal Stage field', async () => {
@@ -1804,6 +2493,79 @@ it('clears publication-check results when the polled published head changes', as
   expect(within(inspector).queryByText('Unit tests')).not.toBeInTheDocument()
 })
 
+it('keeps observed publication checks visible across a phase change with the same head', async () => {
+  const publicationCard = publicationCardForChecks()
+  currentDetail = detail({
+    card: publicationCard,
+    publication: publicationForChecks('awaiting-merge'),
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
+  renderPage('/delivery/change-alpha/publication')
+
+  const inspector = await screen.findByTestId('work-item-detail')
+  fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
+  await within(inspector).findByText('Unit tests')
+
+  currentDetail = detail({
+    card: publicationCard,
+    publication: {
+      ...publicationForChecks('awaiting-merge'),
+      phase: 'checkpoint-pending',
+      pending_checkpoint_head: '1'.repeat(40),
+      pending_checkpoint_triggers: ['finalization'],
+    },
+  })
+  await waitFor(() => {
+    expect(within(inspector).getByText('Checkpoint pending')).toBeInTheDocument()
+    expect(within(inspector).queryByTestId('publication-checks-observe')).not.toBeInTheDocument()
+  }, { timeout: 6_000 })
+  expect(within(inspector).getByText('Unit tests')).toBeInTheDocument()
+})
+
+it('disables publication-check observation while another publication action is pending', async () => {
+  const publicationCard = publicationCardForChecks()
+  currentDetail = detail({
+    card: publicationCard,
+    publication: publicationForChecks('awaiting-merge'),
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
+  pendingMutationPath = '/target/sync'
+  const inspector = (renderPage('/delivery/change-alpha/publication'), await screen.findByTestId('work-item-detail'))
+
+  try {
+    fireEvent.click(within(inspector).getByText('Sync with target'))
+    const observe = within(inspector).getByTestId('publication-checks-observe') as HTMLElement & { disabled: boolean }
+    await waitFor(() => expect(observe.disabled).toBe(true))
+  } finally {
+    pendingMutationRelease?.()
+    pendingMutationPath = null
+    pendingMutationRelease = null
+  }
+})
+
+it('disables publication actions while publication-check observation is pending', async () => {
+  const publicationCard = publicationCardForChecks()
+  currentDetail = detail({
+    card: publicationCard,
+    publication: publicationForChecks('awaiting-merge'),
+  })
+  currentPortfolio = portfolio([group({ lifecycle: 'awaiting-merge', outcome_completed: 2, items: [publicationCard] })])
+  pendingPublicationChecksObservation = true
+  renderPage('/delivery/change-alpha/publication')
+  const inspector = await screen.findByTestId('work-item-detail')
+
+  try {
+    fireEvent.click(within(inspector).getByTestId('publication-checks-observe'))
+    const sync = within(inspector).getByText('Sync with target') as HTMLElement & { disabled: boolean }
+    await waitFor(() => expect(sync.disabled).toBe(true))
+    expect(requests.filter(({ url, method }) => method === 'POST' && url.endsWith('/target/sync'))).toHaveLength(0)
+  } finally {
+    pendingPublicationChecksRelease?.()
+    pendingPublicationChecksObservation = false
+    pendingPublicationChecksRelease = null
+  }
+})
+
 it('rejects an observation returned for a different exact head', async () => {
   publicationChecksResponse = { ...publicationChecksResponse, exact_commit: '2'.repeat(40) }
   const publicationCard = publicationCardForChecks()
@@ -1866,6 +2628,22 @@ it('keeps cached routed detail visible when a background refresh fails', async (
   expect(alert).toHaveTextContent('Temporary polling failure')
   expect(alert).not.toHaveTextContent('Work portfolio is unavailable')
   expect(detailView).toBeInTheDocument()
+  expect(screen.getByTestId('work-item-detail')).toBeInTheDocument()
+}, 6_000)
+
+it('shows stale Work Item detail state and retries the refresh in place', async () => {
+  renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+  await screen.findByTestId('work-item-detail')
+  detailFailure = true
+
+  const alert = await screen.findByRole('alert', {}, { timeout: 4_000 })
+  expect(alert).toHaveTextContent('Showing the last successful Work Item detail; live updates paused.')
+  expect(alert).toHaveTextContent('Delivery runtime is absent: change-alpha')
+  expect(screen.getByTestId('work-item-detail')).toBeInTheDocument()
+
+  detailFailure = false
+  fireEvent.click(within(alert).getByText('Retry Work Item', { exact: true }))
+  await waitFor(() => expect(screen.queryByText('Showing the last successful Work Item detail; live updates paused.')).not.toBeInTheDocument())
   expect(screen.getByTestId('work-item-detail')).toBeInTheDocument()
 }, 6_000)
 
@@ -2010,7 +2788,23 @@ it('moves a completed selected Change into completed history instead of leaving 
   fireEvent.click(within(inspector).getByText('Complete accepted Change'))
 
   expect(await screen.findByTestId('completed-history-workspace')).toHaveTextContent('Completed changes')
+  await waitFor(() => expect(screen.getByTestId('test-location')).toHaveTextContent('/delivery/history'))
   expect(await screen.findByText('Portfolio redesign')).toBeInTheDocument()
+})
+
+it('closes live detail before entering completed history', async () => {
+  renderPage('/delivery/change-alpha/outcome%3AOUT-001')
+  await screen.findByTestId('work-item-detail')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Completed history', exact: true }))
+
+  await screen.findByTestId('completed-history-workspace')
+  expect(screen.queryByTestId('work-item-detail')).not.toBeInTheDocument()
+  await waitFor(() => {
+    const openFlyout = Array.from(document.querySelectorAll('p-flyout')).find((element) => (element as HTMLElement & { open: boolean }).open)
+    expect(openFlyout).toBeUndefined()
+  })
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Completed history', exact: true })).toHaveFocus())
 })
 
 it('presents legacy completion package provenance explicitly', async () => {
@@ -2032,6 +2826,23 @@ it('presents legacy completion package provenance explicitly', async () => {
   expect(detailView).toHaveTextContent('.owlbear/completed/change-alpha')
 })
 
+it('refreshes current delivery immediately after returning from completed history', async () => {
+  currentPortfolio = portfolio([group({ title: 'Initial delivery' })])
+  renderPage()
+  await screen.findByRole('heading', { name: 'Initial delivery', exact: true })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Completed history', exact: true }))
+  await screen.findByTestId('completed-history-workspace')
+  currentPortfolio = portfolio([group({ title: 'Refreshed delivery' })])
+  const requestsBeforeReturn = requests.filter(({ method, url }) => method === 'GET' && url === '/api/work-items').length
+
+  fireEvent.click(screen.getByRole('button', { name: 'Current delivery', exact: true }))
+  await screen.findByRole('heading', { name: 'Refreshed delivery', exact: true })
+
+  const requestsAfterReturn = requests.filter(({ method, url }) => method === 'GET' && url === '/api/work-items').length
+  expect(requestsAfterReturn).toBeGreaterThan(requestsBeforeReturn)
+})
+
 it('explains when completed history is empty', async () => {
   completedRecords = []
   renderPage()
@@ -2040,6 +2851,311 @@ it('explains when completed history is empty', async () => {
   const emptyState = await screen.findByTestId('completed-history-empty-state')
   expect(emptyState).toHaveTextContent('No completed changes yet')
   expect(emptyState).toHaveTextContent('Accepted Delivery changes will appear here with their merge evidence.')
+})
+
+it('distinguishes no matching completed history and clears the search', async () => {
+  completedRecords = [completed]
+  const { container } = renderPage()
+  fireEvent.click(screen.getByText('Completed history'))
+  await screen.findByTestId('completed-change-record')
+
+  const search = container.querySelector('p-input-search')
+  expect(search).not.toBeNull()
+  inputValue(search as Element, 'unmatched history')
+
+  const emptyState = await screen.findByTestId('completed-history-empty-state')
+  expect(emptyState).toHaveTextContent('No completed changes match "unmatched history"')
+  expect(emptyState).toHaveTextContent('Try a different search or clear the current search.')
+  fireEvent.click(within(emptyState).getByText('Clear search', { exact: true }))
+
+  await waitFor(() => expect(screen.getByTestId('completed-change-record')).toBeInTheDocument())
+})
+
+it('marks previous completed history results while a search is pending', async () => {
+  completedRecords = [completed, receiptCompleted]
+  completedHistorySearchPending = true
+  const { container } = renderPage()
+  fireEvent.click(screen.getByText('Completed history'))
+  await waitFor(() => expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2))
+
+  try {
+    const search = container.querySelector('p-input-search')
+    expect(search).not.toBeNull()
+    inputValue(search as Element, 'unmatched history')
+
+    const staleStatus = await screen.findByTestId('completed-history-stale-status')
+    expect(staleStatus).toHaveTextContent('Previous results are shown until the search finishes.')
+    expect(screen.getByTestId('completed-history-results')).toHaveAttribute('aria-busy', 'true')
+    expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2)
+    expect(screen.getAllByTestId('completed-change-record')[0]).toHaveAttribute('data-stale', 'true')
+  } finally {
+    completedHistorySearchRelease?.()
+    completedHistorySearchPending = false
+    completedHistorySearchRelease = null
+  }
+
+  await screen.findByTestId('completed-history-empty-state')
+})
+
+it('retains previous completed history when a search fails', async () => {
+  completedRecords = [completed, receiptCompleted]
+  completedHistoryNextCursor = 'page-2'
+  completedHistorySearchFailuresRemaining = 1
+  completedHistorySearchRecords = [receiptCompleted]
+  const { container } = renderPage()
+  fireEvent.click(screen.getByText('Completed history'))
+  await waitFor(() => expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2))
+
+  const search = container.querySelector('p-input-search')
+  expect(search).not.toBeNull()
+  inputValue(search as Element, 'Beta')
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('Completed history is unavailable.')
+  expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2)
+  expect(screen.getByTestId('completed-history-stale-status')).toHaveTextContent('Previous results are shown while this search is retried.')
+  const loadMore = screen.getByText('Load more', { exact: true }).closest('p-button') as HTMLElement & { disabled?: boolean }
+  expect(loadMore.disabled).toBe(true)
+
+  fireEvent.click(within(alert).getByText('Retry history', { exact: true }))
+  await screen.findByText('Receipt-backed delivery', { exact: true })
+  expect(screen.getAllByTestId('completed-change-record')).toHaveLength(1)
+  expect(screen.queryByTestId('completed-history-stale-status')).not.toBeInTheDocument()
+})
+
+it('disables load more while a completed history search is pending', async () => {
+  completedRecords = [completed, receiptCompleted]
+  completedHistoryNextCursor = 'page-2'
+  completedHistorySearchPending = true
+  const { container } = renderPage()
+  fireEvent.click(screen.getByText('Completed history'))
+  await waitFor(() => expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2))
+
+  try {
+    const search = container.querySelector('p-input-search')
+    expect(search).not.toBeNull()
+    inputValue(search as Element, 'Beta')
+    await screen.findByTestId('completed-history-stale-status')
+
+    const loadMore = screen.getByTestId('completed-history-load-more').closest('p-button') as HTMLElement & { disabled?: boolean }
+    expect(loadMore.disabled).toBe(true)
+  } finally {
+    completedHistorySearchRelease?.()
+    completedHistorySearchPending = false
+    completedHistorySearchRelease = null
+  }
+})
+
+it('appends paginated results for a completed history search', async () => {
+  completedHistorySearchRecords = [completed]
+  completedHistorySearchNextCursor = 'search-page-2'
+  completedHistorySearchPageRecords = [receiptCompleted]
+  const { container } = renderPage()
+  fireEvent.click(screen.getByText('Completed history'))
+  await waitFor(() => expect(screen.getAllByTestId('completed-change-record')).toHaveLength(1))
+
+  const search = container.querySelector('p-input-search')
+  expect(search).not.toBeNull()
+  inputValue(search as Element, 'Beta')
+  await screen.findByTestId('completed-history-load-more')
+
+  fireEvent.click(screen.getByTestId('completed-history-load-more'))
+  await screen.findByText('Receipt-backed delivery', { exact: true })
+  expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2)
+  expect(requests.filter(({ url, method }) => method === 'GET'
+    && url === '/api/work-items/completed/search?query=Beta&cursor=search-page-2')).toHaveLength(1)
+  await waitFor(() => expect(screen.getByTestId('completed-history-workspace')).toHaveFocus())
+})
+
+it('closes completed history detail when a settled search removes the selected record', async () => {
+  completedRecords = [completed, receiptCompleted]
+  completedHistorySearchPending = true
+  const { container } = renderPage()
+  fireEvent.click(screen.getByText('Completed history'))
+  await waitFor(() => expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2))
+
+  try {
+    const search = container.querySelector('p-input-search')
+    expect(search).not.toBeNull()
+    inputValue(search as Element, 'unmatched history')
+    await screen.findByTestId('completed-history-stale-status')
+
+    const record = screen.getAllByTestId('completed-change-record').find((candidate) => candidate.textContent?.includes('Portfolio redesign'))
+    expect(record).toBeDefined()
+    fireEvent.click(within(record!).getByRole('button', { name: 'Inspect Portfolio redesign' }))
+    await screen.findByTestId('completed-change-detail')
+
+    completedHistorySearchRelease?.()
+    completedHistorySearchPending = false
+    await screen.findByTestId('completed-history-empty-state')
+    await waitFor(() => {
+      const openFlyout = Array.from(document.querySelectorAll('p-flyout')).find((element) => (element as HTMLElement & { open: boolean }).open)
+      expect(openFlyout).toBeUndefined()
+    })
+  } finally {
+    completedHistorySearchRelease?.()
+    completedHistorySearchPending = false
+    completedHistorySearchRelease = null
+  }
+})
+
+it('debounces completed history search requests while typing', async () => {
+  completedRecords = [completed, receiptCompleted]
+  const { container } = renderPage()
+  fireEvent.click(screen.getByText('Completed history'))
+  await waitFor(() => expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2))
+
+  const search = container.querySelector('p-input-search')
+  expect(search).not.toBeNull()
+  for (const value of ['a', 'al', 'alp', 'alph', 'alpha']) inputValue(search as Element, value)
+
+  const searchRequests = () => requests.filter(({ url, method }) => method === 'GET' && url.startsWith('/api/work-items/completed/search?'))
+  await waitFor(() => expect(searchRequests()).toHaveLength(1), { timeout: 2_000 })
+  expect(searchRequests()[0].url).toContain('query=alpha')
+})
+
+it('retries failed completed history detail in place', async () => {
+  completedRecords = [completed]
+  completedDetailFailuresRemaining = 1
+  renderPage()
+  fireEvent.click(screen.getByText('Completed history'))
+  const record = await screen.findByTestId('completed-change-record')
+  fireEvent.click(within(record).getByRole('button', { name: 'Inspect Portfolio redesign' }))
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('Completion detail is unavailable.')
+  fireEvent.click(within(alert).getByText('Retry completion detail', { exact: true }))
+
+  await screen.findByTestId('completed-change-detail')
+  expect(screen.getByTestId('completed-change-detail')).toHaveTextContent('Historical delivery')
+  expect(requests.filter(({ url, method }) => method === 'GET' && url.includes('/api/work-items/completed/change-alpha?')).length).toBe(2)
+})
+
+it('closes a listed completion when its detail is confirmed missing', async () => {
+  completedRecords = [completed]
+  renderPage()
+  fireEvent.click(screen.getByText('Completed history'))
+  const record = await screen.findByTestId('completed-change-record')
+  const trigger = within(record).getByRole('button', { name: 'Inspect Portfolio redesign' })
+  completedDetailNotFound = true
+  fireEvent.click(trigger)
+
+  await waitFor(() => {
+    const openFlyout = Array.from(document.querySelectorAll('p-flyout')).find((element) => (element as HTMLElement & { open: boolean }).open)
+    expect(openFlyout).toBeUndefined()
+  })
+  await waitFor(() => expect(trigger).toHaveFocus())
+})
+
+it('closes a missing completion despite a failed history page load', async () => {
+  completedRecords = [completed]
+  completedHistoryNextCursor = 'page-2'
+  completedHistoryPageFailuresRemaining = 1
+  renderPage()
+  fireEvent.click(screen.getByText('Completed history'))
+  const record = await screen.findByTestId('completed-change-record')
+  const trigger = within(record).getByRole('button', { name: 'Inspect Portfolio redesign' })
+
+  fireEvent.click(screen.getByText('Load more', { exact: true }))
+  await screen.findByText('Retry loading more', { exact: true })
+  completedDetailNotFound = true
+  fireEvent.click(trigger)
+
+  await waitFor(() => {
+    const openFlyout = Array.from(document.querySelectorAll('p-flyout')).find((element) => (element as HTMLElement & { open: boolean }).open)
+    expect(openFlyout).toBeUndefined()
+  })
+  await waitFor(() => expect(trigger).toHaveFocus())
+})
+
+it('returns focus to history after appending the final page', async () => {
+  const nextRecord: CompletedChangeRecord = {
+    ...completed,
+    change_id: 'change-beta',
+    completion_id: 'f'.repeat(64),
+    title: 'Second historical change',
+  }
+  completedRecords = [completed]
+  completedHistoryNextCursor = 'page-2'
+  completedHistoryPageRecords = [nextRecord]
+  renderPage()
+  fireEvent.click(screen.getByText('Completed history'))
+  await screen.findByTestId('completed-history-load-more')
+
+  fireEvent.click(screen.getByTestId('completed-history-load-more'))
+  await screen.findByText('Second historical change', { exact: true })
+  await waitFor(() => expect(screen.getByTestId('completed-history-workspace')).toHaveFocus())
+})
+
+it('keeps a valid later-page completion deep link open', async () => {
+  completedRecords = [completed]
+  completedDetailRecord = receiptCompleted
+  completedHistoryNextCursor = 'page-2'
+  renderPage(`/delivery/history/${receiptCompleted.change_id}/${receiptCompleted.completion_id}`)
+
+  const detailView = await screen.findByTestId('completed-change-detail')
+  expect(detailView).toHaveTextContent('Receipt-backed delivery')
+  expect(screen.getByTestId('completed-history-workspace')).toBeInTheDocument()
+})
+
+it('keeps a deep-linked completion open while the initial history list fails', async () => {
+  completedHistoryFailuresRemaining = 1
+  renderPage(`/delivery/history/${completed.change_id}/${completed.completion_id}`)
+
+  const detailView = await screen.findByTestId('completed-change-detail')
+  expect(detailView).toHaveTextContent('Historical delivery')
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('Completed history is unavailable.')
+
+  fireEvent.click(within(alert).getByText('Retry history', { exact: true }))
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+  expect(screen.getByTestId('completed-change-detail')).toBe(detailView)
+
+  fireEvent.click(within(detailView).getByText('Close', { exact: true }))
+  await waitFor(() => expect(screen.getByTestId('completed-history-workspace')).toHaveFocus())
+})
+
+it('rejects a completion detail response with the wrong identity', async () => {
+  completedDetailMismatch = receiptCompleted
+  renderPage(`/delivery/history/${completed.change_id}/${completed.completion_id}`)
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('Completion detail is unavailable.')
+  expect(alert).toHaveTextContent('did not match the requested identity')
+  expect(screen.queryByText('Receipt-backed delivery')).not.toBeInTheDocument()
+
+  completedDetailMismatch = null
+  fireEvent.click(within(alert).getByText('Retry completion detail', { exact: true }))
+  const detailView = await screen.findByTestId('completed-change-detail')
+  expect(detailView).toHaveTextContent('Historical delivery')
+})
+
+it('retries a failed completed history page without resetting loaded records', async () => {
+  const nextRecord: CompletedChangeRecord = {
+    ...completed,
+    change_id: 'change-beta',
+    completion_id: 'f'.repeat(64),
+    title: 'Second historical change',
+  }
+  completedRecords = [completed]
+  completedHistoryNextCursor = 'page-2'
+  completedHistoryPageRecords = [nextRecord]
+  completedHistoryPageFailuresRemaining = 1
+  renderPage()
+  fireEvent.click(screen.getByText('Completed history'))
+  await screen.findByTestId('completed-change-record')
+  expect(screen.getByTestId('completed-history-count')).toHaveTextContent('2')
+
+  fireEvent.click(screen.getByText('Load more', { exact: true }))
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('Could not load more completed history.')
+  expect(within(alert).getByText('Retry loading more', { exact: true })).toBeInTheDocument()
+  expect(screen.getAllByTestId('completed-change-record')).toHaveLength(1)
+
+  fireEvent.click(within(alert).getByText('Retry loading more', { exact: true }))
+  await screen.findByText('Second historical change', { exact: true })
+  expect(screen.getAllByTestId('completed-change-record')).toHaveLength(2)
+  expect(requests.filter(({ url, method }) => method === 'GET' && url === '/api/work-items/completed?cursor=page-2')).toHaveLength(2)
 })
 
 it('presents receipt completion identities without graph claims', async () => {

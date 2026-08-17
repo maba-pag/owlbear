@@ -1,15 +1,43 @@
-import { useDeferredValue, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { PButton, PHeading, PIcon, PInputSearch, PFlyout, PTag } from '@porsche-design-system/components-react'
-import type { CompletedChangeRecord, ReceiptCompletedChangeRecord } from '../api/workItems'
+import { useLocation, useNavigate } from 'react-router'
+import { WorkItemApiError, type CompletedChangeRecord, type ReceiptCompletedChangeRecord } from '../api/workItems'
 import { useCopyToClipboard } from './CopyCommand'
 import { useCompletedChange, useCompletedHistory } from '../hooks/useWorkItems'
 import WorkspaceViewHeader, { WorkspaceViewCount } from './WorkspaceViewHeader'
 
 type FieldValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }
+interface CompletedHistorySelection {
+  changeId: string
+  completionId: string
+}
+
+function parseSelection(pathname: string): CompletedHistorySelection | null {
+  const parts = pathname.split('/').filter(Boolean)
+  if (parts.length !== 4 || parts[0] !== 'delivery' || parts[1] !== 'history') return null
+  try {
+    return { changeId: decodeURIComponent(parts[2]), completionId: decodeURIComponent(parts[3]) }
+  } catch {
+    return null
+  }
+}
+
+function historyDetailPath(record: CompletedChangeRecord): string {
+  return `/delivery/history/${encodeURIComponent(record.change_id)}/${encodeURIComponent(record.completion_id)}`
+}
 
 function fieldValue(event: FieldValueEvent): string {
   const value = event.detail?.value ?? event.target?.value
   return typeof value === 'string' ? value : ''
+}
+
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value)
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setDebouncedValue(value), delayMs)
+    return () => window.clearTimeout(timeoutId)
+  }, [delayMs, value])
+  return debouncedValue
 }
 
 function isReceipt(record: CompletedChangeRecord): record is ReceiptCompletedChangeRecord {
@@ -64,17 +92,22 @@ function CopyValue({ label, value, truncate = false }: { label: string; value: s
  */
 function CompletedRecord({
   record,
+  stale,
   onSelect,
 }: {
   record: CompletedChangeRecord
+  stale: boolean
   onSelect: (trigger: HTMLElement) => void
 }) {
   return (
     <article
       className={[
-        'relative grid gap-x-static-lg gap-y-static-sm border-b border-contrast-low bg-surface py-static-md hover:bg-frosted-soft',
+        'relative grid gap-x-static-lg gap-y-static-sm border-b border-contrast-low py-static-md',
+        stale ? 'bg-frosted-soft' : 'bg-surface hover:bg-frosted-soft',
         'md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] md:items-start',
       ].join(' ')}
+      aria-label={stale ? `${record.title}, previous search result` : undefined}
+      data-stale={stale ? 'true' : undefined}
       data-testid="completed-change-record"
     >
       <div className="min-w-0">
@@ -223,25 +256,65 @@ function CompletedDetail({ record, onClose }: { record: CompletedChangeRecord; o
 }
 
 export default function CompletedHistoryWorkspace() {
+  const location = useLocation()
+  const navigate = useNavigate()
   const [query, setQuery] = useState('')
-  const deferredQuery = useDeferredValue(query.trim())
-  const history = useCompletedHistory(deferredQuery)
-  const [selected, setSelected] = useState<{ changeId: string; completionId: string } | null>(null)
+  const searchQuery = useDebouncedValue(query.trim(), 300)
+  const history = useCompletedHistory(searchQuery)
+  const canRetryLoadMore = history.canRetryLoadMore
+  const isQueryLoading = history.isLoading && !history.isLoadingMore
+  const showingStaleResults = (isQueryLoading || (history.error !== null && !canRetryLoadMore)) && history.page.records.length > 0
+  const selected = parseSelection(location.pathname)
   const detail = useCompletedChange(selected)
   const lastTrigger = useRef<HTMLElement | null>(null)
+  const historyWorkspace = useRef<HTMLElement | null>(null)
   const restoreFocusAfterClose = useRef(false)
+  const loadMoreFocusPending = useRef(false)
+  const loadMoreQuery = useRef<string | null>(null)
+  const previousSelectedKey = useRef<string | null>(selected ? `${selected.changeId}:${selected.completionId}` : null)
+  const selectedKey = selected ? `${selected.changeId}:${selected.completionId}` : null
 
   const closeSelected = () => {
+    if (!selected) return
     restoreFocusAfterClose.current = true
-    setSelected(null)
+    navigate('/delivery/history', { replace: true })
   }
+
+  useEffect(() => {
+    if (previousSelectedKey.current && !selectedKey) restoreFocusAfterClose.current = true
+    previousSelectedKey.current = selectedKey
+  }, [selectedKey])
+
+  useEffect(() => {
+    if (!selected) return
+    if (detail.error instanceof WorkItemApiError && detail.error.status === 404) {
+      restoreFocusAfterClose.current = true
+      navigate('/delivery/history', { replace: true })
+      return
+    }
+    if (isQueryLoading || history.error || detail.isLoading) return
+    const present = history.page.records.some((record) => record.change_id === selected.changeId
+      && record.completion_id === selected.completionId)
+    if (present) return
+    if (searchQuery) {
+      restoreFocusAfterClose.current = true
+      navigate('/delivery/history', { replace: true })
+      return
+    }
+    if (detail.data) return
+  }, [detail.data, detail.error, detail.isLoading, history.error, history.page.records, isQueryLoading, navigate, searchQuery, selected])
 
   useEffect(() => {
     if (selected || !restoreFocusAfterClose.current) return
     let secondFrame: number | null = null
     const firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
-        lastTrigger.current?.focus()
+        const trigger = lastTrigger.current
+        if (trigger?.isConnected && !trigger.closest('[data-stale="true"]')) {
+          trigger.focus()
+        } else {
+          historyWorkspace.current?.focus()
+        }
         restoreFocusAfterClose.current = false
       })
     })
@@ -249,7 +322,17 @@ export default function CompletedHistoryWorkspace() {
       window.cancelAnimationFrame(firstFrame)
       if (secondFrame !== null) window.cancelAnimationFrame(secondFrame)
     }
-  }, [selected])
+  }, [selectedKey])
+
+  useEffect(() => {
+    if (history.isLoadingMore || !loadMoreFocusPending.current) return
+    const requestedQuery = loadMoreQuery.current
+    loadMoreFocusPending.current = false
+    loadMoreQuery.current = null
+    if (history.error || requestedQuery !== searchQuery) return
+    const loadMoreButton = historyWorkspace.current?.querySelector<HTMLElement>('[data-testid="completed-history-load-more"]')
+    ;(loadMoreButton ?? historyWorkspace.current)?.focus()
+  }, [history.error, history.isLoadingMore, searchQuery])
 
   function handleFlyoutKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
     if (event.key !== 'Escape') return
@@ -258,12 +341,17 @@ export default function CompletedHistoryWorkspace() {
   }
 
   return (
-    <section aria-labelledby="completed-history-heading" data-testid="completed-history-workspace">
+    <section
+      ref={historyWorkspace}
+      tabIndex={-1}
+      aria-labelledby="completed-history-heading"
+      data-testid="completed-history-workspace"
+    >
       <WorkspaceViewHeader
         headingId="completed-history-heading"
         title="Completed changes"
         metaTestId="completed-history-count"
-        meta={<WorkspaceViewCount separator value={history.page.records.length} unit={history.page.records.length === 1 ? 'completed change' : 'completed changes'} />}
+        meta={<WorkspaceViewCount separator value={history.page.total_count} unit={history.page.total_count === 1 ? 'completed change' : 'completed changes'} />}
         tools={(
           <PInputSearch
             compact
@@ -274,7 +362,6 @@ export default function CompletedHistoryWorkspace() {
             value={query}
             clear
             indicator
-            loading={history.isLoading}
             onInput={(event) => setQuery(fieldValue(event as FieldValueEvent))}
             onChange={(event) => setQuery(fieldValue(event as FieldValueEvent))}
           />
@@ -283,35 +370,80 @@ export default function CompletedHistoryWorkspace() {
 
       {history.error ? (
         <div className="mt-static-lg flex flex-wrap items-center gap-static-sm border-l-4 border-danger bg-surface p-static-md" role="alert">
-          <span className="min-w-0 flex-1">Completed history is unavailable. {history.error.message}</span>
-          <PButton type="button" variant="secondary" onClick={history.retry}>Retry history</PButton>
+          <span className="min-w-0 flex-1">{canRetryLoadMore ? 'Could not load more completed history.' : 'Completed history is unavailable.'} {history.error.message}</span>
+          <PButton
+            type="button"
+            variant="secondary"
+            loading={history.isLoading}
+            onClick={canRetryLoadMore ? history.retryLoadMore : history.retry}
+          >
+            {canRetryLoadMore ? 'Retry loading more' : 'Retry history'}
+          </PButton>
         </div>
       ) : null}
       {history.isLoading && history.page.records.length === 0 ? <p className="mt-static-lg" role="status">Loading completed history...</p> : null}
+      {showingStaleResults ? (
+        <p
+          id="completed-history-stale-status"
+          className="mt-static-lg border-l-4 border-info bg-frosted-soft p-static-sm text-sm"
+          role="status"
+          data-testid="completed-history-stale-status"
+        >
+          {history.error ? 'Previous results are shown while this search is retried.' : 'Updating completed history results. Previous results are shown until the search finishes.'}
+        </p>
+      ) : null}
       {!history.isLoading && !history.error && history.page.records.length === 0 ? (
         <section className="mt-static-lg grid min-h-40 place-items-center border border-dashed border-contrast-low bg-surface px-static-lg py-static-xl text-center" data-testid="completed-history-empty-state">
           <div className="grid max-w-[44rem] gap-static-xs">
-            <PHeading tag="h3" size="small">No completed changes yet</PHeading>
-            <p className="text-sm leading-relaxed text-contrast-medium">Accepted Delivery changes will appear here with their merge evidence.</p>
+            <PHeading tag="h3" size="small">
+              {searchQuery ? `No completed changes match "${searchQuery}"` : 'No completed changes yet'}
+            </PHeading>
+            <p className="text-sm leading-relaxed text-contrast-medium">
+              {searchQuery ? 'Try a different search or clear the current search.' : 'Accepted Delivery changes will appear here with their merge evidence.'}
+            </p>
+            {searchQuery ? (
+              <PButton type="button" variant="secondary" className="mx-auto" onClick={() => setQuery('')}>
+                Clear search
+              </PButton>
+            ) : null}
           </div>
         </section>
       ) : null}
 
       {history.page.records.length > 0 ? (
-        <div className="min-w-0">
+        <div
+          className="min-w-0"
+          aria-busy={history.isLoading}
+          aria-describedby={showingStaleResults ? 'completed-history-stale-status' : undefined}
+          data-testid="completed-history-results"
+        >
           <div className="min-w-0">
             {history.page.records.map((record) => (
               <CompletedRecord
                 key={record.completion_id}
                 record={record}
+                stale={showingStaleResults}
                 onSelect={(trigger) => {
                   lastTrigger.current = trigger
-                  setSelected({ changeId: record.change_id, completionId: record.completion_id })
+                  navigate(historyDetailPath(record))
                 }}
               />
             ))}
             {history.page.next_cursor ? (
-              <PButton type="button" variant="secondary" className="mt-static-lg" loading={history.isLoading} onClick={() => void history.loadMore()}>
+              <PButton
+                type="button"
+                variant="secondary"
+                className="mt-static-lg"
+                data-testid="completed-history-load-more"
+                loading={history.isLoading}
+                disabled={history.error !== null || history.isLoading}
+                onClick={() => {
+                  if (history.isLoading) return
+                  loadMoreFocusPending.current = true
+                  loadMoreQuery.current = searchQuery
+                  void history.loadMore()
+                }}
+              >
                 Load more
               </PButton>
             ) : null}
@@ -334,7 +466,12 @@ export default function CompletedHistoryWorkspace() {
           {selected ? <>
             {detail.data ? <CompletedDetail record={detail.data} onClose={closeSelected} /> : null}
             {detail.isLoading ? <p role="status">Loading completion detail...</p> : null}
-            {detail.error ? <p role="alert">Completion detail is unavailable. {detail.error.message}</p> : null}
+            {detail.error ? (
+              <div className="flex flex-wrap items-center gap-static-sm border-l-4 border-danger bg-surface p-static-md" role="alert">
+                <span className="min-w-0 flex-1">Completion detail is unavailable. {detail.error.message}</span>
+                <PButton type="button" variant="secondary" loading={detail.isLoading} disabled={detail.isLoading} onClick={detail.retry}>Retry completion detail</PButton>
+              </div>
+            ) : null}
           </> : null}
         </div>
       </PFlyout>

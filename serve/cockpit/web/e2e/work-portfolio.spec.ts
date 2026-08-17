@@ -281,7 +281,11 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(designDetail).not.toBeVisible()
     await expect(page).toHaveURL(/\/delivery$/)
 
-    await page.getByTestId('work-filters-toggle').click()
+    const filterToggle = page.getByTestId('work-filters-toggle')
+    await expect(filterToggle).toHaveAttribute('aria-controls', 'work-filters-panel')
+    await filterToggle.click()
+    await expect(filterToggle).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.getByTestId('work-filters-panel')).toBeVisible()
     await selectValue(page.locator('p-select[name="work-needs-filter"]'), 'you')
     await expect(page.getByTestId('work-shown-count')).toContainText('3 of 9')
     await expect(page.getByTestId('design-work-section')).toBeVisible()
@@ -481,6 +485,7 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(page.getByTestId('desktop-product-navigation').getByLabel('Delivery')).toHaveAttribute('aria-current', 'page')
 
     await page.getByRole('button', { name: 'Dismiss flyout' }).click()
+    await expect(page.getByRole('button', { name: 'Current delivery', exact: true })).toBeFocused()
     const historyResponse = page.waitForResponse((response) =>
       response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/work-items/completed')
     await page.getByRole('button', { name: 'Completed history' }).click()
@@ -501,6 +506,337 @@ test.describe('assembled Delivery portfolio', () => {
     await expect(completionDetail).toBeVisible()
     await expectNoHorizontalOverflow(page)
     await page.screenshot({ path: testInfo.outputPath('delivery-completed-history-mobile.png'), fullPage: true })
+  })
+
+  test('closing detail does not leave a history entry that reopens it', async ({ page }) => {
+    await page.goto('/delivery')
+
+    const inspected = await inspect(page, 'Build operator controls')
+    await page.getByRole('button', { name: 'Dismiss flyout' }).click()
+    await expect(page.getByTestId('work-item-detail')).not.toBeVisible()
+    await expect(page).toHaveURL(/\/delivery$/)
+
+    await page.goBack()
+    await expect(page).toHaveURL(/\/delivery$/)
+    await expect(page.getByTestId('work-item-detail')).not.toBeVisible()
+    await expect(inspected.trigger).toBeVisible()
+  })
+
+  test('browser Back from detail restores the originating trigger focus', async ({ page }) => {
+    await page.goto('/delivery')
+
+    const inspected = await inspect(page, 'Build operator controls')
+    await page.goBack()
+    await expect(page).toHaveURL(/\/delivery$/)
+    await expect(page.getByTestId('work-item-detail')).not.toBeVisible()
+    await expect(inspected.trigger).toBeFocused()
+  })
+
+  test('refreshes current delivery immediately after returning from completed history', async ({ page }) => {
+    let refreshPortfolio = false
+    await page.route('**/api/work-items', async (route) => {
+      const response = await route.fetch()
+      if (!refreshPortfolio) {
+        await route.fulfill({ response })
+        return
+      }
+      const payload = await response.json() as { groups: Array<Record<string, unknown>> }
+      const [firstGroup, ...remainingGroups] = payload.groups
+      await route.fulfill({
+        response,
+        body: JSON.stringify({
+          ...payload,
+          groups: firstGroup
+            ? [{ ...firstGroup, title: 'Refreshed portfolio' }, ...remainingGroups]
+            : payload.groups,
+        }),
+      })
+    })
+
+    try {
+      await page.goto('/delivery')
+      await expect(page.getByText('Work portfolio E2E', { exact: true })).toBeVisible()
+      await page.getByRole('button', { name: 'Completed history' }).click()
+      await expect(page.getByTestId('completed-history-workspace')).toBeVisible()
+
+      refreshPortfolio = true
+      await page.getByRole('button', { name: 'Current delivery' }).click()
+      await expect(page.getByText('Refreshed portfolio', { exact: true })).toBeVisible({ timeout: 1_000 })
+    } finally {
+      await page.unroute('**/api/work-items')
+    }
+  })
+
+  test('completed history detail dismisses on Escape and restores record focus', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 760 })
+    await page.goto('/delivery')
+
+    const historyResponse = page.waitForResponse((response) =>
+      response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/work-items/completed')
+    await page.getByRole('button', { name: 'Completed history' }).click()
+    expect((await historyResponse).status()).toBe(200)
+    const receiptRecord = page.getByTestId('completed-change-record').filter({ hasText: 'Beta search' })
+    await expect(receiptRecord).toBeVisible()
+    const trigger = receiptRecord.getByRole('button', { name: 'Inspect' })
+    await trigger.click()
+
+    const completionDetail = page.getByTestId('completed-change-detail')
+    await expect(completionDetail).toContainText('Completion receipt')
+    await completionDetail.getByRole('button', { name: 'Close' }).focus()
+    await page.keyboard.press('Escape')
+    await expect(completionDetail).not.toBeVisible()
+    await expect(trigger).toBeFocused()
+  })
+
+  test('browser Back from completed history detail restores record focus', async ({ page }) => {
+    await page.goto('/delivery')
+    await page.getByRole('button', { name: 'Completed history' }).click()
+
+    const receiptRecord = page.getByTestId('completed-change-record').filter({ hasText: 'Beta search' })
+    const trigger = receiptRecord.getByRole('button', { name: 'Inspect' })
+    await trigger.click()
+
+    const completionDetail = page.getByTestId('completed-change-detail')
+    await expect(completionDetail).toContainText('Completion receipt')
+    await expect(page).toHaveURL(/\/delivery\/history\/[^/]+\/[^/]+$/)
+
+    await page.goBack()
+    await expect(completionDetail).not.toBeVisible()
+    await expect(trigger).toBeFocused()
+    await expect(page.getByTestId('completed-history-workspace')).toBeVisible()
+  })
+
+  test('completed history detail survives reload and restores workspace focus', async ({ page }) => {
+    await page.goto('/delivery')
+    await page.getByRole('button', { name: 'Completed history' }).click()
+
+    const receiptRecord = page.getByTestId('completed-change-record').filter({ hasText: 'Beta search' })
+    await receiptRecord.getByRole('button', { name: 'Inspect' }).click()
+
+    const completionDetail = page.getByTestId('completed-change-detail')
+    await expect(completionDetail).toContainText('Completion receipt')
+    await expect(page).toHaveURL(/\/delivery\/history\/[^/]+\/[^/]+$/)
+
+    await page.reload()
+    await expect(page).toHaveURL(/\/delivery\/history\/[^/]+\/[^/]+$/)
+    await expect(completionDetail).toContainText('Finalized Change head')
+
+    await completionDetail.getByRole('button', { name: 'Close' }).click()
+    await expect(completionDetail).not.toBeVisible()
+    await expect(page.getByTestId('completed-history-workspace')).toBeFocused()
+  })
+
+  test('completed history detail closes with its Close button and restores record focus', async ({ page }) => {
+    await page.goto('/delivery')
+    await page.getByRole('button', { name: 'Completed history' }).click()
+
+    const receiptRecord = page.getByTestId('completed-change-record').filter({ hasText: 'Beta search' })
+    const trigger = receiptRecord.getByRole('button', { name: 'Inspect' })
+    await trigger.click()
+
+    const completionDetail = page.getByTestId('completed-change-detail')
+    await expect(completionDetail).toContainText('Completion receipt')
+    await completionDetail.getByRole('button', { name: 'Close' }).click()
+    await expect(completionDetail).not.toBeVisible()
+    await expect(trigger).toBeFocused()
+  })
+
+  test('completed history detail closes from the backdrop and restores record focus', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 760 })
+    await page.goto('/delivery')
+    await page.getByRole('button', { name: 'Completed history' }).click()
+
+    const receiptRecord = page.getByTestId('completed-change-record').filter({ hasText: 'Beta search' })
+    const trigger = receiptRecord.getByRole('button', { name: 'Inspect' })
+    await trigger.click()
+
+    const completionDetail = page.getByTestId('completed-change-detail')
+    await expect(completionDetail).toContainText('Completion receipt')
+    const backdropPoint = await page.locator('p-flyout').last().evaluate((element) => {
+      const dialog = element.shadowRoot?.querySelector('dialog')
+      if (!dialog) return null
+      const box = dialog.getBoundingClientRect()
+      return { x: box.left + 16, y: box.top + box.height / 2 }
+    })
+    expect(backdropPoint).not.toBeNull()
+    await page.mouse.click(backdropPoint!.x, backdropPoint!.y)
+    await expect(completionDetail).not.toBeVisible()
+    await expect(trigger).toBeFocused()
+  })
+
+  test('completed history restores focus when a pending search replaces the open detail trigger', async ({ page }) => {
+    let releaseSearch: (() => void) | undefined
+    const searchBlocked = new Promise<void>((resolve) => {
+      releaseSearch = resolve
+    })
+    await page.route('**/api/work-items/completed/search**', async (route) => {
+      await searchBlocked
+      await route.continue()
+    })
+
+    try {
+      await page.goto('/delivery')
+      await page.getByRole('button', { name: 'Completed history' }).click()
+      await expect(page.getByTestId('completed-change-record')).toHaveCount(2)
+
+      const searchInput = page.locator('p-input-search[name="completed-history-search"]').locator('input')
+      await searchInput.fill('Beta')
+      await expect(page.getByTestId('completed-history-stale-status')).toBeVisible()
+
+      const legacyRecord = page.getByTestId('completed-change-record').filter({ hasText: 'Alpha delivery' })
+      const trigger = legacyRecord.getByRole('button', { name: 'Inspect' })
+      await trigger.click()
+      await expect(page.getByTestId('completed-change-detail')).toContainText('Legacy package')
+
+      releaseSearch?.()
+      await expect(page.getByTestId('completed-change-record')).toHaveCount(1)
+      await expect(page.getByTestId('completed-change-record').filter({ hasText: 'Beta search' })).toBeVisible()
+      await expect(page.getByTestId('completed-change-detail')).not.toBeVisible()
+      await expect(page.getByTestId('completed-history-workspace')).toBeFocused()
+    } finally {
+      releaseSearch?.()
+      await page.unroute('**/api/work-items/completed/search**')
+    }
+  })
+
+  test('completed history focuses its workspace when detail closes during a pending search', async ({ page }) => {
+    let releaseSearch: (() => void) | undefined
+    const searchBlocked = new Promise<void>((resolve) => {
+      releaseSearch = resolve
+    })
+    await page.route('**/api/work-items/completed/search**', async (route) => {
+      await searchBlocked
+      await route.continue()
+    })
+
+    try {
+      await page.goto('/delivery')
+      await page.getByRole('button', { name: 'Completed history' }).click()
+      await expect(page.getByTestId('completed-change-record')).toHaveCount(2)
+
+      const searchInput = page.locator('p-input-search[name="completed-history-search"]').locator('input')
+      await searchInput.fill('Beta')
+      await expect(page.getByTestId('completed-history-stale-status')).toBeVisible()
+
+      const legacyRecord = page.getByTestId('completed-change-record').filter({ hasText: 'Alpha delivery' })
+      await legacyRecord.getByRole('button', { name: 'Inspect' }).click()
+      const completionDetail = page.getByTestId('completed-change-detail')
+      await expect(completionDetail).toContainText('Legacy package')
+
+      await completionDetail.getByRole('button', { name: 'Close' }).click()
+      await expect(completionDetail).not.toBeVisible()
+      await expect(page.getByTestId('completed-history-workspace')).toBeFocused()
+
+      releaseSearch?.()
+      await expect(page.getByTestId('completed-change-record')).toHaveCount(1)
+      await expect(page.getByTestId('completed-history-workspace')).toBeFocused()
+    } finally {
+      releaseSearch?.()
+      await page.unroute('**/api/work-items/completed/search**')
+    }
+  })
+
+  test('completed history search remains editable while results are pending', async ({ page }) => {
+    let releaseSearch: (() => void) | undefined
+    const searchBlocked = new Promise<void>((resolve) => {
+      releaseSearch = resolve
+    })
+    await page.route('**/api/work-items/completed/search**', async (route) => {
+      await searchBlocked
+      await route.continue()
+    })
+
+    try {
+      await page.goto('/delivery')
+      await page.getByRole('button', { name: 'Completed history' }).click()
+      await expect(page.getByTestId('completed-change-record')).toHaveCount(2)
+
+      const search = page.locator('p-input-search[name="completed-history-search"]')
+      const input = search.locator('input')
+      await input.fill('Beta')
+      await expect(page.getByTestId('completed-history-stale-status')).toBeVisible()
+      await expect(page.getByTestId('completed-history-results')).toHaveAttribute('aria-busy', 'true')
+
+      await input.fill('Alpha')
+      await expect(input).toHaveValue('Alpha')
+      releaseSearch?.()
+
+      await expect(page.getByTestId('completed-change-record')).toHaveCount(1)
+      await expect(page.getByText('Alpha delivery', { exact: true })).toBeVisible()
+      await expect(page.getByText('Beta search', { exact: true })).not.toBeVisible()
+    } finally {
+      releaseSearch?.()
+      await page.unroute('**/api/work-items/completed/search**')
+    }
+  })
+
+  test('automatically removed Work Item routes to history and restores view focus', async ({ page }) => {
+    let removeSelectedChange = false
+    await page.route('**/api/work-items', async (route) => {
+      const response = await route.fetch()
+      if (!removeSelectedChange) {
+        await route.fulfill({ response })
+        return
+      }
+      const payload = await response.json() as { groups: Array<{ change_id: string }> }
+      await route.fulfill({
+        response,
+        body: JSON.stringify({
+          ...payload,
+          groups: payload.groups.filter((group) => group.change_id !== 'work-e2e'),
+        }),
+      })
+    })
+
+    try {
+      await page.goto('/delivery')
+      await inspect(page, 'Build operator controls')
+      const historyView = page.getByRole('button', { name: 'Completed history' })
+      removeSelectedChange = true
+      await page.waitForResponse((response) =>
+        response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/work-items')
+      await expect(page.getByTestId('completed-history-workspace')).toBeVisible()
+      await expect(historyView).toBeFocused()
+    } finally {
+      await page.unroute('**/api/work-items')
+    }
+  })
+
+  test('automatically closes removed Design detail and restores current view focus', async ({ page }) => {
+    let removeDesign = false
+    await page.route('**/api/work-items', async (route) => {
+      const response = await route.fetch()
+      if (!removeDesign) {
+        await route.fulfill({ response })
+        return
+      }
+      const payload = await response.json() as { operating: { draft_design_change_ids: string[] } }
+      await route.fulfill({
+        response,
+        body: JSON.stringify({
+          ...payload,
+          operating: {
+            ...payload.operating,
+            draft_design_change_ids: [],
+          },
+        }),
+      })
+    })
+
+    try {
+      await page.goto('/delivery')
+      const designTrigger = page.getByTestId('design-work-section').getByRole('link', { name: 'Design Operations Roadmap' })
+      await designTrigger.click()
+      await expect(page.getByTestId('design-work-detail')).toBeVisible()
+
+      removeDesign = true
+      await page.waitForResponse((response) =>
+        response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/work-items')
+      await expect(page.getByTestId('design-work-detail')).not.toBeVisible()
+      await expect(page.getByRole('button', { name: 'Current delivery' })).toBeFocused()
+    } finally {
+      await page.unroute('**/api/work-items')
+    }
   })
 
   test('unknown paths render the global Not Found view', async ({ page }, testInfo) => {

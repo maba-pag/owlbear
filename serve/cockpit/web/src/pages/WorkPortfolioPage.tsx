@@ -20,6 +20,7 @@ import {
 } from '../hooks/useWorkItems'
 
 type SelectValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }
+type FocusDestination = 'trigger' | 'current-view' | 'history-view'
 
 function selectedValue(event: SelectValueEvent): string {
   const value = event.detail?.value ?? event.target?.value
@@ -44,6 +45,7 @@ function PortfolioViewSwitch({ workspace, onChange }: { workspace: 'current' | '
             'border-b-2 pb-static-xs pt-1 text-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
             workspace === value ? 'border-primary font-semibold text-primary' : 'border-transparent font-medium text-contrast-medium hover:text-primary',
           ].join(' ')}
+          data-workspace-view={value}
           aria-pressed={workspace === value}
           onClick={() => onChange(value)}
         >
@@ -87,16 +89,17 @@ function PortfolioFilterTools(props: FilterProps) {
           onClick={() => props.onNeedsFilter('')}
         />
       ) : null}
-      <PButtonPure
+      <button
         type="button"
-        icon="filter"
-        size="small"
+        className="inline-flex items-center gap-1 border-0 bg-transparent p-0 text-xs font-medium text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus hover:text-primary"
         data-testid="work-filters-toggle"
-        aria={{ 'aria-expanded': props.open }}
+        aria-expanded={props.open}
+        aria-controls="work-filters-panel"
         onClick={props.onToggle}
       >
+        <PIcon name="filter" size="inherit" aria-hidden="true" />
         {activeCount > 0 ? `Filter (${activeCount})` : 'Filter'}
-      </PButtonPure>
+      </button>
     </>
   )
 }
@@ -162,11 +165,28 @@ function parseSelection(pathname: string): WorkItemIdentity | null {
   }
 }
 
+function isHistoryRoute(pathname: string): boolean {
+  const parts = pathname.split('/').filter(Boolean)
+  return parts[0] === 'delivery' && parts[1] === 'history' && (parts.length === 2 || parts.length === 4)
+}
+
 function SelectedDesignDetail({ changeId, onClose }: { changeId: string; onClose: () => void }) {
   const detail = useDesignWorkDetail(changeId)
-  if (detail.data) return <DesignWorkDetail detail={detail.data} />
+  if (detail.data) return (
+    <>
+      {detail.error ? (
+        <div className="mb-static-lg flex flex-wrap items-center gap-static-sm border-l-4 border-warning bg-surface p-static-md" role="alert">
+          <span className="min-w-0 flex-1">Showing the last successful Design detail; live updates paused. {detail.error.message}</span>
+          <PButton type="button" variant="secondary" disabled={detail.isRefreshing} onClick={detail.retry}>
+            {detail.isRefreshing ? 'Retrying Design...' : 'Retry Design'}
+          </PButton>
+        </div>
+      ) : null}
+      <DesignWorkDetail detail={detail.data} />
+    </>
+  )
   if (detail.isLoading) return <p role="status">Loading Design work...</p>
-  return <EmptyDetail error={detail.error} retry={detail.retry} onClose={onClose} />
+  return <EmptyDetail error={detail.error} retry={detail.retry} onClose={onClose} subject="Design work" retryLabel="Retry Design" />
 }
 
 function SelectedWorkItemDetail({
@@ -180,36 +200,46 @@ function SelectedWorkItemDetail({
 }) {
   const selectedDetail = useWorkItemDetail(identity, onChanged)
   if (selectedDetail.detail.data) return (
-    <WorkItemDetail
-      detail={selectedDetail.detail.data}
-      pendingAction={selectedDetail.pendingAction}
-      actionError={selectedDetail.actionError}
-      actionResult={selectedDetail.actionResult}
-      onAnswerRequest={selectedDetail.answerRequest}
-      onClearBlock={selectedDetail.clearBlock}
-      onRecoverClaim={selectedDetail.recoverClaim}
-      onPreviewBackward={selectedDetail.previewBackward}
-      onMoveBackward={selectedDetail.moveBackward}
-      onReconcilePublication={selectedDetail.reconcilePublication}
-      onMarkPublicationReady={selectedDetail.markPublicationReady}
-      publicationChecks={selectedDetail.publicationChecks}
-      publicationChecksError={selectedDetail.publicationChecksError}
-      publicationChecksStale={selectedDetail.publicationChecksStale}
-      isObservingPublicationChecks={selectedDetail.isObservingPublicationChecks}
-      onObservePublicationChecks={selectedDetail.observePublicationChecks}
-      onObserveAcceptance={selectedDetail.observeAcceptance}
-      onResolveAttention={selectedDetail.resolveAttention}
-      onSupersedePublication={selectedDetail.supersedePublication}
-      onSyncTarget={selectedDetail.syncTarget}
-      onAbortTargetSync={selectedDetail.abortTargetSync}
-      onResolveTargetSync={selectedDetail.resolveTargetSync}
-      onDeferChange={selectedDetail.deferChange}
-      onResumeChange={selectedDetail.resumeChange}
-      onAbandonChange={selectedDetail.abandonChange}
-      onCleanupAbandonedChange={selectedDetail.cleanupAbandonedChange}
-      onCleanupCompletedChange={selectedDetail.cleanupCompletedChange}
-      onRecoverChangeWorktree={selectedDetail.recoverChangeWorktree}
-    />
+    <>
+      {selectedDetail.detail.error ? (
+        <div className="mb-static-lg flex flex-wrap items-center gap-static-sm border-l-4 border-warning bg-surface p-static-md" role="alert">
+          <span className="min-w-0 flex-1">Showing the last successful Work Item detail; live updates paused. {selectedDetail.detail.error.message}</span>
+          <PButton type="button" variant="secondary" disabled={selectedDetail.detail.isRefreshing} onClick={selectedDetail.retry}>
+            {selectedDetail.detail.isRefreshing ? 'Retrying Work Item...' : 'Retry Work Item'}
+          </PButton>
+        </div>
+      ) : null}
+      <WorkItemDetail
+        detail={selectedDetail.detail.data}
+        pendingAction={selectedDetail.pendingAction}
+        actionError={selectedDetail.actionError}
+        actionResult={selectedDetail.actionResult}
+        onAnswerRequest={selectedDetail.answerRequest}
+        onClearBlock={selectedDetail.clearBlock}
+        onRecoverClaim={selectedDetail.recoverClaim}
+        onPreviewBackward={selectedDetail.previewBackward}
+        onMoveBackward={selectedDetail.moveBackward}
+        onReconcilePublication={selectedDetail.reconcilePublication}
+        onMarkPublicationReady={selectedDetail.markPublicationReady}
+        publicationChecks={selectedDetail.publicationChecks}
+        publicationChecksError={selectedDetail.publicationChecksError}
+        publicationChecksStale={selectedDetail.publicationChecksStale}
+        isObservingPublicationChecks={selectedDetail.isObservingPublicationChecks}
+        onObservePublicationChecks={selectedDetail.observePublicationChecks}
+        onObserveAcceptance={selectedDetail.observeAcceptance}
+        onResolveAttention={selectedDetail.resolveAttention}
+        onSupersedePublication={selectedDetail.supersedePublication}
+        onSyncTarget={selectedDetail.syncTarget}
+        onAbortTargetSync={selectedDetail.abortTargetSync}
+        onResolveTargetSync={selectedDetail.resolveTargetSync}
+        onDeferChange={selectedDetail.deferChange}
+        onResumeChange={selectedDetail.resumeChange}
+        onAbandonChange={selectedDetail.abandonChange}
+        onCleanupAbandonedChange={selectedDetail.cleanupAbandonedChange}
+        onCleanupCompletedChange={selectedDetail.cleanupCompletedChange}
+        onRecoverChangeWorktree={selectedDetail.recoverChangeWorktree}
+      />
+    </>
   )
   if (selectedDetail.detail.isLoading) return <p role="status">Loading Work Item details...</p>
   return <EmptyDetail error={selectedDetail.detail.error} retry={selectedDetail.retry} onClose={onClose} />
@@ -249,26 +279,38 @@ function EmptyPortfolioState({ filtered }: { filtered: boolean }) {
   )
 }
 
-function EmptyDetail({ error, retry, onClose }: { error: Error | null; retry: () => void; onClose: () => void }) {
+function EmptyDetail({
+  error,
+  retry,
+  onClose,
+  subject = 'Work Item',
+  retryLabel = 'Retry item',
+}: {
+  error: Error | null
+  retry: () => void
+  onClose: () => void
+  subject?: string
+  retryLabel?: string
+}) {
   if (error) return (
     <div className="grid gap-static-sm" role="alert">
-      <span>This Work Item is unavailable. It may have completed or the link may be invalid.</span>
+      <span>This {subject} is unavailable. It may have completed or the link may be invalid.</span>
       <details>
         <summary className="cursor-pointer text-xs font-semibold">Technical evidence</summary>
         <p className="mt-static-xs break-words text-xs text-contrast-medium">{error.message}</p>
       </details>
-      <div className="flex flex-wrap gap-static-sm"><PButton type="button" variant="secondary" onClick={retry}>Retry item</PButton><PButton type="button" variant="secondary" onClick={onClose}>Back to current delivery</PButton></div>
+      <div className="flex flex-wrap gap-static-sm"><PButton type="button" variant="secondary" onClick={retry}>{retryLabel}</PButton><PButton type="button" variant="secondary" onClick={onClose}>Back to current delivery</PButton></div>
     </div>
   )
   return null
 }
 
 export default function WorkPortfolioPage() {
-  const [workspace, setWorkspace] = useState<'current' | 'history'>('current')
-  const { portfolio, hasData, error, isLoading, retry } = useWorkPortfolio(workspace === 'history')
-  useAcceptanceReconciliation(portfolio, retry, workspace === 'history')
   const location = useLocation()
   const navigate = useNavigate()
+  const [workspace, setWorkspace] = useState<'current' | 'history'>(() => isHistoryRoute(location.pathname) ? 'history' : 'current')
+  const { portfolio, hasData, error, isLoading, retry } = useWorkPortfolio(workspace === 'history')
+  const acceptanceReconciliation = useAcceptanceReconciliation(portfolio, retry, workspace === 'history')
   const [changeFilter, setChangeFilter] = useState('')
   const [needsFilter, setNeedsFilter] = useState<WorkItemNeed | ''>('')
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -279,6 +321,8 @@ export default function WorkPortfolioPage() {
   const lastTrigger = useRef<HTMLElement | null>(null)
   const lastTriggerIdentity = useRef<string | null>(null)
   const restoreFocusAfterClose = useRef(false)
+  const previousSelectedIdentity = useRef<string | null>(null)
+  const focusDestination = useRef<FocusDestination>('trigger')
   const selectedWasPresent = useRef(false)
   const designWorkIds = portfolio.operating.draft_design_change_ids
   const changes = [
@@ -301,9 +345,35 @@ export default function WorkPortfolioPage() {
   const totalEntryCount = portfolio.totals.total + designWorkIds.length
   const isFiltered = Boolean(deferredChange || deferredNeeds)
 
-  const closeInspector = () => {
+  const closeInspector = (destination: FocusDestination = 'trigger') => {
     restoreFocusAfterClose.current = true
-    navigate('/delivery')
+    focusDestination.current = destination
+    navigate('/delivery', { replace: true })
+  }
+
+  useEffect(() => {
+    setWorkspace(isHistoryRoute(location.pathname) ? 'history' : 'current')
+  }, [location.pathname])
+
+  const handleWorkspaceChange = (nextWorkspace: 'current' | 'history') => {
+    if (nextWorkspace === 'history') {
+      setWorkspace('history')
+      if (selected) {
+        restoreFocusAfterClose.current = true
+        focusDestination.current = 'history-view'
+        navigate('/delivery/history', { replace: true })
+      } else if (!isHistoryRoute(location.pathname)) {
+        navigate('/delivery/history')
+      }
+      return
+    }
+    setWorkspace('current')
+    if (restoreFocusAfterClose.current) {
+      focusDestination.current = 'current-view'
+    }
+    if (isHistoryRoute(location.pathname)) {
+      navigate('/delivery', { replace: true })
+    }
   }
 
   const handleInspectorKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -314,36 +384,55 @@ export default function WorkPortfolioPage() {
   }
 
   useEffect(() => {
-    if (selected || !restoreFocusAfterClose.current) return
+    if (selected) {
+      previousSelectedIdentity.current = selectedIdentity
+      return
+    }
+    if (!previousSelectedIdentity.current && !restoreFocusAfterClose.current) return
+    previousSelectedIdentity.current = null
     let secondFrame: number | null = null
     const firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
         const primaryTrigger = Array.from(document.querySelectorAll<HTMLElement>('[data-work-item-primary-trigger]'))
           .find((candidate) => candidate.dataset.workItemIdentity === lastTriggerIdentity.current)
-        const focusTarget = lastTrigger.current?.isConnected ? lastTrigger.current : primaryTrigger
+        const destination = focusDestination.current
+        const triggerFocusTarget = lastTrigger.current?.isConnected ? lastTrigger.current : primaryTrigger
+        const focusTarget = destination === 'history-view'
+          ? document.querySelector<HTMLElement>('[data-workspace-view="history"]')
+          : destination === 'current-view'
+            ? document.querySelector<HTMLElement>('[data-workspace-view="current"]')
+            : triggerFocusTarget
+              ?? (isFiltered ? document.querySelector<HTMLElement>('[data-testid="work-filters-toggle"]') : null)
+              ?? document.querySelector<HTMLElement>('[data-workspace-view="current"]')
         focusTarget?.focus()
         restoreFocusAfterClose.current = false
+        focusDestination.current = 'trigger'
       })
     })
     return () => {
       window.cancelAnimationFrame(firstFrame)
       if (secondFrame !== null) window.cancelAnimationFrame(secondFrame)
     }
-  }, [selectedIdentity])
+  }, [isFiltered, selectedIdentity])
 
   useEffect(() => {
     if (!selected || !hasData) {
       selectedWasPresent.current = false
       return
     }
-    const present = portfolio.groups.some((group) => group.change_id === selected.changeId
-      && group.items.some((item) => item.item_key === selected.itemKey))
+    const isDesignWork = selected.itemKey === 'design'
+    const present = isDesignWork
+      ? designWorkIds.includes(selected.changeId)
+      : portfolio.groups.some((group) => group.change_id === selected.changeId
+        && group.items.some((item) => item.item_key === selected.itemKey))
     if (present) selectedWasPresent.current = true
     if (!present && selectedWasPresent.current) {
       selectedWasPresent.current = false
-      const changeCompleted = portfolio.groups.every((group) => group.change_id !== selected.changeId)
+      const changeCompleted = !isDesignWork && portfolio.groups.every((group) => group.change_id !== selected.changeId)
+      restoreFocusAfterClose.current = true
+      focusDestination.current = changeCompleted ? 'history-view' : 'current-view'
       if (changeCompleted) setWorkspace('history')
-      navigate('/delivery', { replace: true })
+      navigate(changeCompleted ? '/delivery/history' : '/delivery', { replace: true })
     }
   }, [hasData, navigate, portfolio.groups, selected])
 
@@ -374,7 +463,7 @@ export default function WorkPortfolioPage() {
         ) : undefined}
       />
 
-      <PortfolioViewSwitch workspace={workspace} onChange={setWorkspace} />
+      <PortfolioViewSwitch workspace={workspace} onChange={handleWorkspaceChange} />
 
       <div
         className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-static-lg overflow-y-auto overflow-x-hidden px-static-lg py-static-lg"
@@ -396,6 +485,17 @@ export default function WorkPortfolioPage() {
                 <PIcon name="error" aria-hidden="true" />
                 <span className="min-w-0 flex-1">{hasData ? 'Showing the last successful refresh — live updates paused.' : 'Work portfolio is unavailable.'} {error.message}</span>
                 <PButton type="button" variant="secondary" onClick={retry}>Retry portfolio</PButton>
+              </section>
+            ) : null}
+            {acceptanceReconciliation.providerError ? (
+              <section className="flex flex-wrap items-center gap-static-sm border-l-4 border-warning bg-surface p-static-md" role="alert">
+                <PIcon name="warning" aria-hidden="true" />
+                <span className="min-w-0 flex-1">
+                  GitHub acceptance checks are unavailable for {acceptanceReconciliation.providerChangeIds.join(', ')}. {acceptanceReconciliation.providerError.message}
+                </span>
+                <PButton type="button" variant="secondary" loading={acceptanceReconciliation.isRetrying} onClick={acceptanceReconciliation.retry}>
+                  {acceptanceReconciliation.isRetrying ? 'Retrying acceptance check...' : 'Retry acceptance check'}
+                </PButton>
               </section>
             ) : null}
 
@@ -438,8 +538,8 @@ export default function WorkPortfolioPage() {
         background="canvas"
         fullscreen={{ base: true, m: false }}
         style={{ '--p-flyout-width': 'min(56rem, 100vw)' } as CSSProperties}
-        aria={{ 'aria-label': 'Work Item detail' }}
-        onDismiss={closeInspector}
+        aria={{ 'aria-label': selected?.itemKey === 'design' ? 'Design detail' : 'Work Item detail' }}
+        onDismiss={() => closeInspector()}
         onKeyDownCapture={handleInspectorKeyDown}
       >
         <div className="min-w-0 max-w-full p-static-lg">

@@ -56,14 +56,18 @@ function outcome(changeId: string, status: AcceptanceReconciliationResponse['out
   return { change_id: changeId, status, code: null, detail: null, completion_id: null }
 }
 
-function Harness({ portfolioData, onChanged }: { portfolioData: WorkItemPortfolioResponse; onChanged: () => void }) {
-  useAcceptanceReconciliation(portfolioData, onChanged)
+type ReconciliationStatus = ReturnType<typeof useAcceptanceReconciliation>
+
+function Harness({ portfolioData, onChanged, onStatus, paused = false }: { portfolioData: WorkItemPortfolioResponse; onChanged: () => void; onStatus?: (status: ReconciliationStatus) => void; paused?: boolean }) {
+  const status = useAcceptanceReconciliation(portfolioData, onChanged, paused)
+  onStatus?.(status)
   return null
 }
 
 let visible = true
 let responses: AcceptanceReconciliationResponse[]
 let requests: Array<{ body: unknown }>
+let latestStatus: ReconciliationStatus
 
 async function settle() {
   await act(async () => {
@@ -87,6 +91,12 @@ beforeEach(() => {
   visible = true
   responses = [{ outcomes: [outcome('change-a', 'waiting')] }]
   requests = []
+  latestStatus = {
+    providerError: null,
+    providerChangeIds: [],
+    isRetrying: false,
+    retry: vi.fn(),
+  }
   vi.useFakeTimers()
   vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visible ? 'visible' : 'hidden')
   vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -149,16 +159,64 @@ it('backs off locally after provider-unavailable outcomes', async () => {
     { outcomes: [outcome('change-a', 'provider-unavailable')] },
     { outcomes: [outcome('change-a', 'waiting')] },
   ]
-  render(<Harness portfolioData={portfolio(['change-a'])} onChanged={onChanged} />)
+  render(<Harness portfolioData={portfolio(['change-a'])} onChanged={onChanged} onStatus={(status) => { latestStatus = status }} />)
   await settle()
   expect(requests).toHaveLength(1)
   expect(onChanged).toHaveBeenCalledTimes(1)
+  expect(latestStatus.providerChangeIds).toEqual(['change-a'])
+  expect(latestStatus.providerError?.message).toBe('The provider was unavailable while checking GitHub acceptance.')
 
   await advance(30_000)
   expect(requests).toHaveLength(1)
   await advance(30_000)
   expect(requests).toHaveLength(2)
   expect(onChanged).toHaveBeenCalledTimes(1)
+})
+
+it('retries provider failure immediately and clears the issue after recovery', async () => {
+  responses = [
+    { outcomes: [outcome('change-a', 'provider-unavailable')] },
+    { outcomes: [outcome('change-a', 'waiting')] },
+  ]
+  render(<Harness portfolioData={portfolio(['change-a'])} onChanged={vi.fn()} onStatus={(status) => { latestStatus = status }} />)
+  await settle()
+  expect(latestStatus.providerChangeIds).toEqual(['change-a'])
+
+  act(() => latestStatus.retry())
+  await settle()
+  expect(requests).toHaveLength(2)
+  expect(latestStatus.providerChangeIds).toEqual([])
+  expect(latestStatus.providerError).toBeNull()
+})
+
+it('preserves provider backoff across a workspace pause and resume', async () => {
+  responses = [
+    { outcomes: [outcome('change-a', 'provider-unavailable')] },
+    { outcomes: [outcome('change-a', 'provider-unavailable')] },
+    { outcomes: [outcome('change-a', 'provider-unavailable')] },
+    { outcomes: [outcome('change-a', 'provider-unavailable')] },
+    { outcomes: [outcome('change-a', 'waiting')] },
+  ]
+  const portfolioData = portfolio(['change-a'])
+  const { rerender } = render(<Harness portfolioData={portfolioData} onChanged={vi.fn()} />)
+  await settle()
+  expect(requests).toHaveLength(1)
+
+  await advance(60_000)
+  expect(requests).toHaveLength(2)
+  await advance(120_000)
+  expect(requests).toHaveLength(3)
+
+  rerender(<Harness portfolioData={portfolioData} onChanged={vi.fn()} paused />)
+  await settle()
+  rerender(<Harness portfolioData={portfolioData} onChanged={vi.fn()} />)
+  await settle()
+  expect(requests).toHaveLength(4)
+
+  await advance(60_000)
+  expect(requests).toHaveLength(4)
+  await advance(240_000)
+  expect(requests).toHaveLength(5)
 })
 
 it('reconciles immediately when a resumed Change re-enters the observed set', async () => {
