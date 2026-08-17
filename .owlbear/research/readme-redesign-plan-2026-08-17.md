@@ -1,6 +1,6 @@
 # README and Documentation UX Plan
 
-> **Status:** Active implementation plan
+> **Status:** Complete implementation plan
 > **Decision date:** 2026-08-17
 > **Scope:** Newcomer-facing documentation and package orientation
 
@@ -109,7 +109,7 @@ safe.
 | Index refresh | Complete | `.owlbear/doc-index.md` regenerated and committed in `72d9d84` |
 | R6 | Complete | Shared ecosystem README validated against `.vscode/settings.json`, `WIRING.md`, and `h-agent-structure`; Markdownlint passed with no edit required |
 | R7 | Complete | Archived stale memory-layer diagrams under `.owlbear/legacy/diagrams/`; corrected the five-server MCP topology, added an SVG preview, and linked the topology and first-success flow from active docs; `jq`, binding-reference, `xmllint`, link-target, Markdownlint, and whitespace checks passed |
-| R8 | Pending | Second-developer verification and final currency checks remain |
+| R8 | Complete | Second-developer dry run passed: 84 focused setup, seed, sync, and Cockpit tests; 34 local links resolved; workflow YAML and seeded JSON parsed; five stdio servers, four shared customization roots, and the `/ideate` -> `/design` -> `/orchestrate` prompts were verified |
 
 ## Editorial contract
 
@@ -133,18 +133,18 @@ safe.
 
 ## Acceptance checklist
 
-- [ ] Root documentation says `main` is the rolling consumer branch and contains no product version.
-- [ ] No package version fields, tags, or release metadata were changed for this work.
+- [x] Root documentation says `main` is the rolling consumer branch and contains no product version.
+- [x] No package version fields, tags, or release metadata were changed for this work.
 - [x] The unsupported MIT claim was removed because no root license file or declaration exists.
-- [ ] `README.md` and `README-consumer.md` remain separate and route to the setup authority.
-- [ ] Both root audiences can reach a first successful setup and verification path.
-- [ ] All 11 package READMEs use the required package shape and link to the correct parent.
-- [ ] Browser and Knowledge are visibly marked alpha with honest validation limits.
-- [ ] Known factual issues are corrected, including paths, dependencies, output semantics, and
+- [x] `README.md` and `README-consumer.md` remain separate and route to the setup authority.
+- [x] Both root audiences can reach a first successful setup and verification path.
+- [x] All 11 package READMEs use the required package shape and link to the correct parent.
+- [x] Browser and Knowledge are visibly marked alpha with honest validation limits.
+- [x] Known factual issues are corrected, including paths, dependencies, output semantics, and
   current Delivery terminology.
-- [ ] Local links resolve and the generated documentation index is refreshed after the sweep.
-- [ ] Diagrams are retained only when they answer a documented user or maintainer question.
-- [ ] A second-developer dry run supplies the final usability evidence.
+- [x] Local links resolve and the generated documentation index is refreshed after the sweep.
+- [x] Diagrams are retained only when they answer a documented user or maintainer question.
+- [x] A second-developer dry run supplies the final usability evidence.
 
 ## Change log for this plan
 
@@ -154,3 +154,6 @@ safe.
 - **2026-08-17:** Completed R7 by archiving stale memory-layer diagrams, correcting the seeded
   five-server MCP topology, adding a rendered SVG preview, and linking diagrams from the newcomer
   journey and shared ecosystem orientation.
+- **2026-08-17:** Completed R8 with a second-developer dry run, focused setup and Cockpit tests,
+  local-link validation, seed/workflow parsing, and final Python, Delivery terminology, and
+  rolling-main documentation repairs.

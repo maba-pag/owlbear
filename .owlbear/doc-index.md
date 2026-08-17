@@ -24,9 +24,9 @@
 - [git-scm.com](https://git-scm.com/)
 - [setup/setup-guide.md](setup/setup-guide.md)
 - [the setup guide](setup/setup-guide.md#macos-copilot-profile-settings)
-- [Target Delivery Workflow](setup/setup-guide.md#target-delivery-workflow)
+- [Delivery Workflow](setup/setup-guide.md#delivery-workflow)
 - [MCP topology diagram](share/diagrams/mcp-topology.svg)
-- [Target Delivery Workflow](setup/setup-guide.md#target-delivery-workflow)
+- [Delivery Workflow](setup/setup-guide.md#delivery-workflow)
 - [setup guide](setup/setup-guide.md#refreshing-consumer-configs)
 - [setup/sharing-guide.md](setup/sharing-guide.md)
 
@@ -1059,7 +1059,7 @@
 - ## `What Setup Creates`
 - ## `Shared vs Copied`
 - ## `Refreshing Consumer Configs`
-- ## `Target Delivery Workflow`
+- ## `Delivery Workflow`
 - ### `Specification`
 - ### `Delivery`
 - ### `Correction And Recovery`

@@ -50,7 +50,7 @@ The remaining packages support these surfaces and are documented individually un
 
 ## Getting Started
 
-Development requires Python 3.14+, [uv](https://docs.astral.sh/uv/), VS Code with GitHub Copilot,
+Development requires Python 3.14.6+, [uv](https://docs.astral.sh/uv/), VS Code with GitHub Copilot,
 and Git. The Cockpit frontend additionally requires the Node version pinned in
 `serve/cockpit/web/.nvmrc`.
 

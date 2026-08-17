@@ -45,7 +45,7 @@ name: Sync dev to main
         type: boolean
         default: true
       message:
-        description: "Optional note for the sync commit (e.g. 'cockpit v0.2.0')"
+        description: "Optional note for the rolling-main sync commit (e.g. 'refresh consumer docs')"
         type: string
         required: false
 

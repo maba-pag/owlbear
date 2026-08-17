@@ -34,7 +34,7 @@ module maturity and validation status are documented separately.
 
 | Requirement | Why | How to get it |
 | --- | --- | --- |
-| Python 3.14+ | OwlBear runtime | [python.org](https://www.python.org/downloads/) |
+| Python 3.14.6+ | OwlBear runtime | [python.org](https://www.python.org/downloads/) |
 | [uv](https://docs.astral.sh/uv/) | Package manager and MCP server launcher | [Installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
 | VS Code | IDE | [code.visualstudio.com](https://code.visualstudio.com/) |
 | GitHub Copilot extension | Chat and agents | VS Code Extensions marketplace |
@@ -148,7 +148,7 @@ Planning and Build work, workers select typed transitions, and independent revie
 advisory evidence.
 
 The canonical Specification, Delivery, Correction, publication, acceptance, and recovery procedure is
-[Target Delivery Workflow](setup/setup-guide.md#target-delivery-workflow). Cockpit exposes current
+[Delivery Workflow](setup/setup-guide.md#delivery-workflow). Cockpit exposes current
 work items, requests, typed attention, controls, and completed history. Any migrated records under
 `.owlbear/legacy/` are immutable history for inspection, never executable work.
 
@@ -197,7 +197,7 @@ flowchart LR
 See the [MCP topology diagram](share/diagrams/mcp-topology.svg) for the server boundary.
 
 Expected outcome: the project has loaded OwlBear, the five MCP servers are available, and one
-small Change can move from design into visible Delivery work. Use the [Target Delivery Workflow](setup/setup-guide.md#target-delivery-workflow)
+small Change can move from design into visible Delivery work. Use the [Delivery Workflow](setup/setup-guide.md#delivery-workflow)
 when you need the complete procedure.
 
 ## Troubleshooting
