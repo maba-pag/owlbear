@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 import mcp
 import pytest
@@ -19,8 +19,8 @@ def _text(result: CallToolResult) -> str:
 
 
 def _git(repository: Path, *args: str) -> str:
-    result = subprocess.run(
-        ["git", *args],
+    result = subprocess.run(  # noqa: S603
+        ["git", *args],  # noqa: S607
         cwd=repository,
         check=True,
         capture_output=True,
