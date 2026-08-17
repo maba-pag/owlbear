@@ -41,7 +41,7 @@ The consumer branch intentionally excludes the dev-only `.github/` automation tr
 
 | Attribute | Value |
 | --- | --- |
-| Stack | React 19 + Vite 8 + TypeScript 6 + Porsche Design System React 4 + React Router 7 + React Compiler (`babel-plugin-react-compiler`) |
+| Stack | React 19 + Vite 8 + TypeScript 6 + Porsche Design System React 4 + React Router 8 + React Compiler (`babel-plugin-react-compiler`) |
 | Test runner | Vitest 4 (`npm test`) |
 | E2E test runner | Playwright (version locked by `serve/cockpit/web/package-lock.json`) via `npm run test:e2e` — Chromium only; requires `npx playwright install chromium` once |
 | CSS/HTML lint | Stylelint (`npm run lint:css`) and HTMLHint (`npm run lint:html`) |

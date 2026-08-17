@@ -4,7 +4,7 @@
 It contains roles, reusable instructions, user-invoked prompts, and visual references. This guide
 is for contributors changing that layer and for agents that need to locate the correct authority.
 
-[Back to the workspace guide](../README.md) · [Package map](../serve/README.md) ·
+[Project README](../README.md) · [Package map](../serve/README.md) ·
 [Derived wiring map](WIRING.md)
 
 ## Choose your next action
@@ -218,6 +218,10 @@ project-local `.owlbear/` roots:
  exercises the changed decision.
 
 ## Validation
+
+These validator commands are for the OwlBear development checkout. The consumer `main` branch
+ships the shared customization files but not the development-only `.owlbear/` validator scripts or
+the repository test suite; contributors should run them from the `dev` checkout.
 
 Run structural validators after changing agents, skills, or prompts:
 

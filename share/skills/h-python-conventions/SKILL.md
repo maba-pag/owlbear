@@ -9,7 +9,7 @@ user-invocable: false
 ## Package Management
 
 - Use `uv` — never bare `pip`. Run scripts with `uv run` (e.g., `uv run pytest`, `uv run ruff check`).
-- Install deps: `uv sync --all-extras` (reads `pyproject.toml`). Never bare `uv sync` — dev dependencies (pytest, ruff, coverage) are declared as extras and get removed without `--all-extras`.
+- Install the complete development environment with `uv sync --locked --all-packages --all-extras --all-groups` (reads the workspace manifests and lockfile). Never rely on bare `uv sync` for repository checks.
 
 ## Code Style
 

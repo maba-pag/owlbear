@@ -32,7 +32,9 @@ releases. Browser and Knowledge are available but remain Alpha until field use v
 ## Before you start
 
 Install Python 3.14.6+, [uv](https://docs.astral.sh/uv/), VS Code with the GitHub Copilot
-extension, and Git. Your project and OwlBear checkout must be on the same drive on Windows.
+extension, [GitHub CLI](https://cli.github.com/), and Git. Your project and OwlBear checkout must
+be on the same drive on Windows. Authenticate the CLI with `gh auth login`; publication requires
+`gh auth status` to report an active account.
 
 The project should already be a Git checkout with a GitHub `origin`. If it has no GitHub remote,
 pass its `OWNER/NAME` explicitly to `setup/init.py` as shown below.
@@ -45,7 +47,7 @@ clone command.
 
 ```shell
 # Clone the rolling consumer branch once.
-git clone https://github.com/maba-pag/owlbear.git owlbear
+git clone -b main https://github.com/maba-pag/owlbear.git owlbear
 
 # Only if the project is not already checked out.
 git clone https://github.com/OWNER/PROJECT.git my-project

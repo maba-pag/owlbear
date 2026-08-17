@@ -1,6 +1,8 @@
 # owlbear-browser — Browser Content Fetcher
 
-Authenticated web content extraction via Playwright and Edge CDP. Launches a browser with an existing user profile so that logged-in sessions (SSO, SharePoint, etc.) are available without re-authentication.
+Authenticated web content extraction via Playwright and Edge CDP. Launches a persistent Chromium
+profile; a dedicated OwlBear profile is created by default, while an existing profile can be passed
+when a logged-in session is required.
 
 **Use this guide when:** you need to extend the alpha authenticated page acquisition or its cleaned
 content extraction API.
@@ -19,13 +21,11 @@ No standalone launch. Use via `BrowserContentFetcher` or call `extract_content` 
 ### Fetch a page with Playwright
 
 ```python
-from owlbear_browser import BrowserContentFetcher, PlaywrightLauncher
+from owlbear_browser import AcquisitionRequest, PlaywrightLauncher
 
 async with PlaywrightLauncher() as launcher:
-    async with launcher.new_context() as context:
-        fetcher = BrowserContentFetcher(context)
-        text = await fetcher.fetch("https://example.com/page")
-        print(text)  # cleaned plain-text content
+    result = await launcher.acquire(AcquisitionRequest(url="https://example.com/page"))
+    print(result.status)
 ```
 
 ### Public API
@@ -41,7 +41,9 @@ async with PlaywrightLauncher() as launcher:
 
 ## Configuration
 
-No environment variables. The `PlaywrightLauncher` accepts an optional `user_data_dir` path pointing to an existing browser profile directory (e.g. `~/.config/microsoft-edge`).
+No environment variables. The `PlaywrightLauncher` accepts an optional `user_data_dir` path
+pointing to an existing browser profile directory. If the default dedicated profile has no session,
+the visible browser can be used for manual login.
 
 ## Dependencies
 
@@ -51,4 +53,5 @@ No environment variables. The `PlaywrightLauncher` accepts an optional `user_dat
 | `trafilatura` | HTML-to-text extraction |
 | `lxml` | HTML parsing (trafilatura dependency) |
 
-> **First-time setup:** Install Playwright browsers once with `playwright install chromium` (or the relevant browser).
+> **First-time setup:** From a consumer project using a sibling OwlBear checkout, install Chromium
+> with `uv run --project ../owlbear playwright install chromium`.

@@ -1,8 +1,8 @@
 # Security Policy
 
-## Supported Versions
+## Supported Branches
 
-| Version | Supported |
+| Branch | Supported |
 | --- | --- |
 | main | ✅ Yes |
 | dev | No |
@@ -24,8 +24,8 @@ to submit a report confidentially.
 1. Submit a report via GitHub private vulnerability reporting.
 2. We confirm receipt and assess severity within 5 business days.
 3. We work with the reporter to validate and scope the issue.
-4. A fix is released before or alongside public disclosure.
-5. The reporter is credited in the release notes unless they prefer otherwise.
+4. A fix is published before or alongside public disclosure.
+5. The reporter is credited in the advisory unless they prefer otherwise.
 
 We follow responsible disclosure principles. Please allow reasonable time for a fix
 before making any public disclosure.

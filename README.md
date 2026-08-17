@@ -34,9 +34,10 @@ The main terms are simple:
 | Change | One approved piece of work tracked from design through review and publication |
 | Cockpit | The browser UI for seeing work and taking human-owned actions |
 
-The normal path is `/ideate` to refine the outcome, `/design` to approve the work package, and
-`/orchestrate <change-id>` to run it. The Delivery engine keeps the work ordered and reviewed;
-you decide when to approve, answer, recover, publish, or merge.
+The normal path is `/ideate` to refine the outcome, `/design` to approve the work package,
+`/orchestrate` to run currently eligible work across the portfolio, and
+`/finalize-change <change-id>` to prepare one reviewed Change for publication. The Delivery engine
+keeps the work ordered and reviewed; you decide when to approve, answer, recover, publish, or merge.
 
 ## Current surfaces
 
@@ -64,7 +65,7 @@ Git. Cockpit frontend development also needs the Node version pinned in
 ```shell
 git clone -b dev https://github.com/maba-pag/owlbear.git
 cd owlbear
-uv sync --all-extras
+uv sync --locked --all-packages --all-extras --all-groups
 ```
 
 Open this checkout directly in VS Code. Its repository settings already load the shared

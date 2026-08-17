@@ -100,7 +100,8 @@ jobs:
           cockpit_paths=$(manifest_paths cockpit)
           tools_paths=$(manifest_paths tools)
           memory_paths=$(manifest_paths memory)
-          serve_paths="$browser_paths $delivery_paths $knowledge_paths $cockpit_paths $tools_paths $memory_paths"
+          serve_paths="serve/README.md $browser_paths $delivery_paths"
+          serve_paths+=" $knowledge_paths $cockpit_paths $tools_paths $memory_paths"
           setup_paths=$(manifest_paths setup)
           infra_paths=$(manifest_paths infra)
           all_consumer_paths=$(manifest_paths all)
@@ -152,6 +153,7 @@ jobs:
             echo "BROWSER_PATHS=$browser_paths"
             echo "DELIVERY_PATHS=$delivery_paths"
             echo "KNOWLEDGE_PATHS=$knowledge_paths"
+            echo "COCKPIT_PATHS=$cockpit_paths"
             echo "TOOLS_PATHS=$tools_paths"
             echo "MEMORY_PATHS=$memory_paths"
             echo "SERVE_PATHS=$serve_paths"
@@ -292,6 +294,7 @@ jobs:
           if [[ "$ALL_SCOPES" == "all" ]]; then
             echo "=== Full wipe — all scopes selected"
             git rm -rf . --quiet || true
+            # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
             git checkout dev -- $ALL_CONSUMER_PATHS
             git mv -f README-consumer.md README.md
           else
@@ -300,6 +303,7 @@ jobs:
             if [[ "$SYNC_SHARE" == "true" ]]; then
               echo "--- share/"
               git rm -rf share --quiet 2>/dev/null || true
+              # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
               git checkout dev -- $SHARE_PATHS
             fi
 
@@ -307,41 +311,48 @@ jobs:
             if [[ "$ALL_SERVE" == "true" ]]; then
               echo "--- serve/ (all packages)"
               git rm -rf serve --quiet 2>/dev/null || true
+              # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
               git checkout dev -- $SERVE_PATHS
             else
               if [[ "$SYNC_BROWSER" == "true" ]]; then
                 echo "--- serve/browser + serve/browser-mcp"
                 git rm -rf serve/browser serve/browser-mcp --quiet 2>/dev/null || true
+                # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
                 git checkout dev -- $BROWSER_PATHS
               fi
 
               if [[ "$SYNC_DELIVERY" == "true" ]]; then
                 echo "--- serve/delivery + serve/delivery-mcp"
                 git rm -rf serve/delivery serve/delivery-mcp serve/delivery-github --quiet 2>/dev/null || true
+                # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
                 git checkout dev -- $DELIVERY_PATHS
               fi
 
               if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then
                 echo "--- serve/knowledge + serve/knowledge-mcp"
                 git rm -rf serve/knowledge serve/knowledge-mcp --quiet 2>/dev/null || true
+                # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
                 git checkout dev -- $KNOWLEDGE_PATHS
               fi
 
               if [[ "$SYNC_COCKPIT" == "true" ]]; then
                 echo "--- serve/cockpit"
                 git rm -rf serve/cockpit --quiet 2>/dev/null || true
+                # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
                 git checkout dev -- $COCKPIT_PATHS
               fi
 
               if [[ "$SYNC_TOOLS" == "true" ]]; then
                 echo "--- serve/tools"
                 git rm -rf serve/tools --quiet 2>/dev/null || true
+                # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
                 git checkout dev -- $TOOLS_PATHS
               fi
 
               if [[ "$SYNC_MEMORY" == "true" ]]; then
                 echo "--- serve/memory + serve/memory-mcp"
                 git rm -rf serve/memory serve/memory-mcp --quiet 2>/dev/null || true
+                # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
                 git checkout dev -- $MEMORY_PATHS
               fi
             fi
@@ -349,12 +360,14 @@ jobs:
             if [[ "$SYNC_SETUP" == "true" ]]; then
               echo "--- setup/ + seed/"
               git rm -rf setup seed --quiet 2>/dev/null || true
+              # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
               git checkout dev -- $SETUP_PATHS
             fi
 
             if [[ "$SYNC_INFRA" == "true" ]]; then
               echo "--- infra (linters, editor & consumer root configs)"
               git rm -rf .github .vscode --quiet 2>/dev/null || true
+              # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
               git checkout dev -- $INFRA_PATHS
               git mv -f README-consumer.md README.md
             fi

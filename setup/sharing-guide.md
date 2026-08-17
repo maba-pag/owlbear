@@ -18,7 +18,7 @@ Both repos must sit in a sibling layout for the relative paths to work. On Windo
 they must also be on the same drive.
 
 > **Windows limitation:** owlbear and the project must be on the **same drive**.
-Cross-drive relative paths raise a `ValueError` in `init.py` before any files are
+> Cross-drive relative paths raise a `ValueError` in `init.py` before any files are
 > written. macOS and Linux are not affected.
 
 ---
@@ -29,7 +29,7 @@ Walk the teammate through these steps:
 
 ```shell
 # 1. Clone owlbear to a convenient parent directory
-git clone https://github.com/maba-pag/owlbear.git ~/Dev/owlbear
+git clone -b main https://github.com/maba-pag/owlbear.git ~/Dev/owlbear
 
 # 2. Clone the project repository as a sibling
 git clone https://github.com/OWNER/PROJECT.git ~/Dev/my-project
@@ -49,12 +49,10 @@ code .
 Setup infers the GitHub `owner/name` identity from the default `origin` remote. If the project uses a
 different remote or has no inferable GitHub URL, pass `--remote NAME --github-repository OWNER/NAME`.
 
-After VS Code opens, have the teammate verify the setup using the **Diagnostics view**
-(right-click the Chat panel → "Diagnostics") — it should show owlbear agents, skills,
-and instructions loaded from the shared installation.
-
-See [setup-guide.md](setup-guide.md) for the full verification checklist and
-troubleshooting reference.
+After VS Code opens, have the teammate follow the canonical
+[installation verification](setup-guide.md#verify-the-installation). It checks both the shared
+customization roots and all five seeded MCP servers. Before the first workflow, also run
+`gh auth status` and confirm an active account.
 
 To launch Cockpit for the shared project, run it from the project directory and point uv
 at the sibling owlbear clone:

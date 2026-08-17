@@ -50,6 +50,8 @@ def test_sync_workflow_consumes_manifest_projections() -> None:
 
     assert "sync_manifest.py paths" in workflow
     assert "sync_manifest.py excluded" in workflow
+    assert 'serve_paths="serve/README.md ' in workflow
+    assert 'echo "COCKPIT_PATHS=$cockpit_paths"' in workflow
     assert "git checkout dev -- $ALL_CONSUMER_PATHS" in workflow
     assert "git checkout dev -- $INFRA_PATHS" in workflow
     assert "for excluded_path in $CONSUMER_EXCLUDED_PATHS" in workflow

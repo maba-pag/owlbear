@@ -12,6 +12,7 @@ Before running setup, ensure the following are installed on your machine:
 | [uv](https://docs.astral.sh/uv/) | Package manager and MCP server launcher | [Installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
 | VS Code | IDE | [code.visualstudio.com](https://code.visualstudio.com/) |
 | GitHub Copilot extension | Chat and agents | VS Code Extensions marketplace |
+| [GitHub CLI](https://cli.github.com/) | GitHub publication and pull-request operations | [Installation guide](https://cli.github.com/manual/installation) |
 | Git | Clone and version control | [git-scm.com](https://git-scm.com/) |
 
 > **Windows limitation:** owlbear and your project must be on the **same drive**.
@@ -39,7 +40,7 @@ project's GitHub identity.
 ```shell
 # Only if the project is not already checked out.
 git clone https://github.com/OWNER/PROJECT.git my-project
-git clone https://github.com/maba-pag/owlbear.git owlbear
+git clone -b main https://github.com/maba-pag/owlbear.git owlbear
 cd my-project
 ```
 
@@ -69,7 +70,7 @@ code .
 **Expected result:** VS Code opens the project directory, not the OwlBear checkout. The shared
 agents, skills, instructions, and prompts are loaded from the sibling OwlBear path.
 
-### 4. Verify the installation
+### 4. Confirm it loaded
 
 Open **Chat: Open Customizations** and then **MCP: List Servers**. The exact checks are in
 [Verify the installation](#verify-the-installation).
@@ -83,10 +84,13 @@ roots appear in Chat Customizations.
 2. Confirm that OwlBear agents, skills, instructions, and prompts are listed.
 3. Run **MCP: List Servers** and confirm these five servers show `running`:
    `owlbear-delivery`, `owlbear-knowledge`, `owlbear-memory`, `owlbear-browser`, and `markitdown`.
+4. Before the first workflow, run `gh auth status` and confirm the GitHub CLI reports an active
+  account.
 
 If a customization root is missing, inspect `.vscode/settings.json` and compare its relative
 OwlBear path with the location of the checkout. If a server is missing, inspect `.vscode/mcp.json`,
-run `uv sync --all-extras` in the OwlBear checkout, and rerun setup from the project root.
+run `uv sync --locked --all-packages --all-extras --all-groups` in the OwlBear checkout, and rerun
+setup from the project root.
 
 ## First successful workflow
 
@@ -95,8 +99,11 @@ After verification, prove the installation with one small outcome:
 1. Run `/ideate` and describe the outcome.
 2. Continue with `/design`, review the proposed work, and approve admission. When it succeeds,
    note the returned lowercase, hyphenated Change ID, for example `improve-search`.
-3. Run `/orchestrate improve-search` after admission. Planning and Build work then proceed in order.
+3. Run `/orchestrate` after admission. It acquires currently eligible work across the portfolio;
+  Planning and Build then proceed in order.
 4. Launch Cockpit from the project root and confirm the Change is visible.
+5. Run `/finalize-change improve-search` after the Change is complete, then review and merge the
+  pull request in GitHub.
 
 ```shell
 uv run --project ../owlbear cockpit
@@ -236,10 +243,10 @@ with deterministic outcomes, dependencies, commitments, and proof boundaries.
 
 ### Delivery
 
-After admission, invoke `/orchestrate <change-id>`. Each cycle lists current work, acquires a bounded
-ordered set of launch packages, dispatches only the worker named by each package, and forwards the
-worker's transition unchanged. Tasks execute sequentially in the managed Change worktree and their
-promoted commits advance the Change branch directly.
+After admission, invoke `/orchestrate`. Each cycle lists current work, acquires a bounded ordered
+set of launch packages across the portfolio, dispatches only the worker named by each package, and
+forwards the worker's transition unchanged. Tasks execute sequentially in the managed Change
+worktree and their promoted commits advance the Change branch directly.
 
 - Planning reads one typed plan context, publishes one independently reviewed task chain, and
   returns `advance`, `retry`, `return`, or `block`.
@@ -271,11 +278,12 @@ remain user-owned Cockpit controls rather than agent MCP operations.
 
 ### Publication, Acceptance, And Completed History
 
-When every outcome is complete and the reviewed source boundary is current, run the finalization
-workflow for the exact Change head. Delivery publishes or reconciles a draft pull request for the
-Change branch, observes the required checks, and marks the PR ready only when the finalized head is
-unchanged. Target synchronization, when required, merges only the configured remote-tracking target
-into the managed Change worktree; it never updates the target branch or the user checkout.
+When every outcome is complete and the reviewed source boundary is current, run
+`/finalize-change <change-id>` for the exact Change head. Delivery publishes or reconciles a draft
+pull request for the Change branch, observes the required checks, and marks the PR ready only when
+the finalized head is unchanged. Target synchronization, when required, merges only the configured
+remote-tracking target into the managed Change worktree; it never updates the target branch or the
+user checkout.
 
 The user merges the pull request in GitHub. Delivery never merges, enables auto-merge, updates the
 target branch, or completes from local evidence. After the merge, read-only acceptance observation
@@ -303,11 +311,11 @@ provide bounded list, search, and exact lookup of receipt-backed history.
   authority. Files under `.owlbear/legacy/` are immutable historical evidence only.
 
 ```text
-/ideate -> /design -> explicit admission -> /orchestrate
+/ideate -> /design -> explicit admission -> /orchestrate -> /finalize-change <change-id>
 Specification: read/revise -> checkpoint -> derive -> validate -> approve/admit
 Delivery: acquire -> plan/build -> publish -> worker transition
 Correction: retry | return | block -> typed successor context
-Publication: checkpoint -> draft PR -> finalized head -> ready PR
+Publication: finalize-change -> checkpoint -> draft PR -> finalized head -> ready PR
 Acceptance: user merges PR -> observe merged evidence -> completed lookup
 ```
 
@@ -415,7 +423,7 @@ override or tool-exclusion environment settings.
 
 | Symptom | Likely cause | Resolution |
 | --- | --- | --- |
-| Agents not appearing in picker | Wrong path in `chat.agentFilesLocations` | Open Diagnostics view; verify path relative to project root matches owlbear location |
+| Agents not appearing in picker | Wrong path in `chat.agentFilesLocations` | Run **Chat: Open Customizations**; verify the path relative to project root matches owlbear location |
 | Skills not auto-loading | `chat.agentSkillsLocations` missing or path wrong | Check `.vscode/settings.json`; re-run `init.py` if the key is absent |
 | Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |

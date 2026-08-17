@@ -18,6 +18,7 @@
 - [Package map](../serve/README.md)
 - [Setup guide](../setup/setup-guide.md)
 - [uv](https://docs.astral.sh/uv/)
+- [GitHub CLI](https://cli.github.com/)
 - [setup guide](../setup/setup-guide.md)
 - [Verify the installation](../setup/setup-guide.md#verify-the-installation)
 - [First successful workflow](../setup/setup-guide.md#first-successful-workflow)
@@ -52,7 +53,7 @@
 
 ## SECURITY.md
 - # `Security Policy`
-- ## `Supported Versions`
+- ## `Supported Branches`
 - ## `Reporting a Vulnerability`
 - ## `Disclosure Policy`
 
@@ -1098,7 +1099,7 @@
 - ### `1. Put both repositories side by side`
 - ### `2. Run setup from the project root`
 - ### `3. Open the project in VS Code`
-- ### `4. Verify the installation`
+- ### `4. Confirm it loaded`
 - ## `Verify the installation`
 - ## `First successful workflow`
 - ## `macOS Copilot profile settings`
@@ -1124,6 +1125,8 @@
 - [uv](https://docs.astral.sh/uv/)
 - [Installation guide](https://docs.astral.sh/uv/getting-started/installation/)
 - [code.visualstudio.com](https://code.visualstudio.com/)
+- [GitHub CLI](https://cli.github.com/)
+- [Installation guide](https://cli.github.com/manual/installation)
 - [git-scm.com](https://git-scm.com/)
 - [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests)
 - [Verify the installation](../setup/setup-guide.md#verify-the-installation)
@@ -1149,7 +1152,7 @@
 - ## `Troubleshooting`
 
 ### Outbound links
-- [setup-guide.md](../setup/setup-guide.md)
+- [installation verification](../setup/setup-guide.md#verify-the-installation)
 - [Customization](../setup/setup-guide.md#adding-local-agents)
 - [official installation guide](https://docs.astral.sh/uv/getting-started/installation/)
 
@@ -1175,7 +1178,7 @@
 - ## `Maintenance Boundaries`
 
 ### Outbound links
-- [Back to the workspace guide](../README.md)
+- [Project README](../README.md)
 - [Package map](../serve/README.md)
 - [Derived wiring map](../share/WIRING.md)
 - [Agents](../share/README.md#agents)

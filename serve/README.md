@@ -35,9 +35,9 @@ VS Code agents
     -> Tools -> Delivery
 ```
 
-The package guides are the next level of detail. The root guide explains the project and contributor
-checkout; the consumer guide explains installation into another project; the setup guide owns exact
-commands and recovery steps.
+The package guides are the next level of detail. The project README covers the current checkout and
+the consumer README covers installation into another project when both are present; on `main`, the
+consumer README becomes the project README. The setup guide owns exact commands and recovery steps.
 
 ## Package groups
 

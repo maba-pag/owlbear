@@ -43,11 +43,33 @@ remains the procedural authority; README files orient readers and route them the
 
 R0-R8 improved factual trust and verified the existing paths. That is not the same as a complete
 reader-first redesign. R9-R14 rebuilt the front doors around evaluator, consumer, contributor, and
-package-integrator journeys. An independent Opus 5 review then found two executable-path blockers
-and several routing and duplication defects. The review-driven corrections are included in the R14
-closeout: the consumer path uses a real OwlBear clone URL and one sibling layout, developer-only
-browser tests live in the Cockpit guide, package links work after the consumer README is renamed on
-`main`, and the development README explains the contributor checkout boundary.
+package-integrator journeys. Two ordinary read-only reviews, one using Claude Opus 5 and one using
+GPT-5.6 Sol, then found executable-path blockers and several routing, accuracy, and synchronization
+defects. The review-driven corrections are included in the R14 closeout: the consumer path uses a
+real OwlBear clone URL and one sibling layout, developer-only browser tests live in the Cockpit
+guide, package links work after the consumer README is renamed on `main`, the development README
+explains the contributor checkout boundary, and the rolling-main workflow retains the package map.
+
+## Independent review pass
+
+Both reviewers were ordinary read-only subagents; no prepared workflow reviewer was used. Findings
+were checked against the live prompts, package APIs, setup code, tests, and sync workflow before
+being rated and routed:
+
+| Finding | Rating | Decision |
+| --- | --- | --- |
+| `/orchestrate <change-id>` documented an argument the prompt does not accept | Critical | Implemented: docs now describe portfolio-wide `/orchestrate` |
+| The first-success path did not name `/finalize-change` | High | Implemented: the reachable finalization command is documented |
+| Consumer publication prerequisites omitted GitHub CLI authentication | High | Implemented: `gh` prerequisite and `gh auth status` check added |
+| Browser core example used nonexistent `new_context()` API | High | Implemented: example now uses the exported acquisition contract |
+| Browser profile and Chromium installation guidance diverged from the launcher | Medium | Implemented: default profile, override, manual login, and install path clarified |
+| Browser MCP documentation made a blanket allowlist/SSRF claim that `acquire` does not enforce | High | Documentation narrowed and the limitation is explicit; runtime hardening is deferred to a focused Browser change |
+| Cockpit-only sync did not export `COCKPIT_PATHS` | High | Implemented with a sync-manifest regression assertion |
+| Serve-only sync omitted `serve/README.md` | High | Implemented so the package map survives granular projections |
+| Shared validation instructions leaked development-only paths to consumers | Medium | Implemented: validation is labeled as development-checkout-only |
+| Memory edit state documentation contradicted the engine | Medium | Implemented: non-deleted flagged states are documented as preserved during field edits |
+| Security and ecosystem docs used stale release/version or branch language | Medium | Implemented: branch terminology and current package-map wording are aligned |
+| License disclosure, visual evaluator polish, Cockpit `dist` troubleshooting, sharing duplication, and Python patch-level wording | Low or open decision | Deferred: licensing was explicitly left out, and the remaining polish is outside this correction slice |
 
 ## Documentation boundaries
 
@@ -180,7 +202,7 @@ safe.
 - [x] Evaluator, consumer, contributor, and package-integrator dry runs each reach a useful next action.
 - [x] The reopened structural redesign is committed in scoped units without changing versions, tags, releases, or unrelated worktree changes.
 
-## Change log for this plan
+## Decision history
 
 - **2026-08-17:** Replaced numbered-release language with the rolling-`main` policy. Removed
   version alignment, release tags, date-based versions, and changelog work from scope. Added
@@ -204,3 +226,8 @@ safe.
   after the generated `main` rename, and several front doors duplicated procedural authority.
   Corrected those paths, added the contributor checkout route, normalized sharing placeholders, and
   revalidated source and virtual-`main` links plus the focused documentation and setup test suite.
+- **2026-08-17:** Two ordinary read-only reviews, using Claude Opus 5 and GPT-5.6 Sol, were
+  reconciled against live source and rated in the independent review table. Reader blockers,
+  package-documentation contradictions, stale branch/release wording, and rolling-main sync defects
+  were corrected. Browser MCP runtime allowlist/SSRF hardening remains a separate deferred change;
+  no license disclosure was added after explicit user choice.

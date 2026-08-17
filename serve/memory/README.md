@@ -99,9 +99,9 @@ Pydantic `BaseModel` representing a single markdown-backed memory entry.
 | `pending` | Newly created, awaiting curation |
 | `curated` | Reviewed and refined |
 | `approved` | Accepted for active use |
-| `contested` | Under dispute; visible in recall; edit blocked — use `resolve()` to return to approved |
-| `disputed` | Challenged as incorrect; excluded from recall; edit blocked — use `resolve()` to return to approved |
-| `stale` | Flagged as potentially outdated; excluded from recall; edit blocked — use `resolve()` to return to approved |
+| `contested` | Under dispute; visible in recall; field edits preserve this state — use `resolve()` to return to approved |
+| `disputed` | Challenged as incorrect; excluded from recall; field edits preserve this state — use `resolve()` to return to approved |
+| `stale` | Flagged as potentially outdated; excluded from recall; field edits preserve this state — use `resolve()` to return to approved |
 | `deleted` | Logically deleted (file may still exist) |
 
 ---
@@ -198,7 +198,7 @@ Exported from the `owlbear_memory` package top-level. Used internally by `Memory
 | `resolve(id, expected_updated_at)` | `(str, str) → MemoryEntry` | contested/disputed/stale → approved; sets `approved_at`; raises `TransitionError` / `ConcurrencyError` |
 | `record_factually_wrong(id, task_id, expected_updated_at)` | `(str, str, str \| None) → MemoryEntry` | approved/curated → contested (stores `contested_by_task`, clears `approved_at`); contested + same `task_id` → no-op; contested + different `task_id` → disputed; raises `ValidationError` (empty/whitespace `task_id`), `TransitionError` (non-voteable state), `ConcurrencyError` (OCC mismatch, evaluated before state guard) |
 | `record_assessment(entry_id, bucket, expected_updated_at)` | `(str, str, str \| None) → MemoryEntry` | Increments the specified counter (`outstanding`, `unremarkable`, or `didnt_use`); recomputes `score` via `compute_score`; calls `try_stale_transition` when slot-efficiency threshold exceeded. Raises `TransitionError` (non-voteable state), `ConcurrencyError` (OCC mismatch), `ValidationError` (invalid bucket). `expected_updated_at` optional — pass `None` to skip OCC check. |
-| `edit(id, fields, expected_updated_at)` | `(str, EditPayload, str) → MemoryEntry` | State-machine rules apply; blocked from contested/disputed/stale; raises `TransitionError` / `ConcurrencyError` |
+| `edit(id, fields, expected_updated_at)` | `(str, EditPayload, str) → MemoryEntry` | State-machine rules apply; contested/disputed/stale preserve their state while fields are updated; deleted entries are blocked; raises `TransitionError` / `ConcurrencyError` |
 | `delete(id, expected_updated_at)` | `(str, str) → MemoryEntry` | Hard-delete for pending, soft-delete for curated/approved/contested/disputed/stale; raises `TransitionError` / `ConcurrencyError` |
 | `try_stale_transition(entry)` | `(MemoryEntry) → MemoryEntry` | Calls `check_slot_efficiency`; when True and state in {approved, curated, contested}, writes state=stale with refreshed updated_at. Returns unchanged entry (no error) when predicate is False or state is ineligible. No OCC. Logs INFO on transition. |
 | `load()` | `() → list[MemoryEntry]` | Force full reparse; skips malformed files (lenient) |

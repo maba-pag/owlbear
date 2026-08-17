@@ -1,6 +1,9 @@
 # owlbear-browser-mcp — Browser MCP Server
 
-MCP server that exposes browser automation tools to pipeline agents for authenticated web content fetching. Uses Playwright with an existing Edge profile so SSO-protected pages are accessible without re-authentication. Navigation is restricted to an explicit domain allowlist; SSRF protections block private and loopback addresses.
+MCP server that exposes browser automation tools to pipeline agents for authenticated web content
+fetching. Uses Playwright with a persistent Chromium profile; a dedicated profile is created by
+default, while `PLAYWRIGHT_USER_DATA_DIR` can point to an existing profile. The `navigate` tool is
+restricted to an explicit domain allowlist and applies SSRF checks.
 
 **Use this guide when:** you need to configure the alpha browser server or change its allowlisted
 Edge/CDP actions and accessibility-snapshot boundary.
@@ -52,4 +55,9 @@ converted into a generic transport error.
 | `mcp[cli]` | MCPServer framework and CLI |
 | `owlbear-browser` | Playwright-based content fetcher (workspace package) |
 
-> **First-time setup:** Install Playwright browsers once with `playwright install chromium` before starting the server.
+> **First-time setup:** From a consumer project using a sibling OwlBear checkout, install Chromium
+> with `uv run --project ../owlbear playwright install chromium` before starting the server.
+
+`acquire` currently does not apply the same MCP-side allowlist and SSRF preflight as `navigate`.
+Treat it as a separate capability and do not use it for untrusted URLs until those boundaries are
+unified.
