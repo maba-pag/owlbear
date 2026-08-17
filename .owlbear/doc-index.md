@@ -3,6 +3,7 @@
 ## README-consumer.md
 - # `OwlBear`
 - ## `Overview`
+- ## `Current Status`
 - ## `Prerequisites`
 - ## `Quick Start`
 - ## `macOS Copilot profile settings`
@@ -10,22 +11,28 @@
 - ## `Cockpit (Consumer Launch)`
 - ## `Target Workflow`
 - ## `Verification`
+- ## `First Successful Workflow`
+- ## `Troubleshooting`
 - ## `Updates`
 - ## `Sharing with Teammates`
 
 ### Outbound links
 - [python.org](https://www.python.org/downloads/)
 - [uv](https://docs.astral.sh/uv/)
+- [Installation guide](https://docs.astral.sh/uv/getting-started/installation/)
 - [code.visualstudio.com](https://code.visualstudio.com/)
 - [git-scm.com](https://git-scm.com/)
 - [setup/setup-guide.md](setup/setup-guide.md)
 - [the setup guide](setup/setup-guide.md#macos-copilot-profile-settings)
 - [Target Delivery Workflow](setup/setup-guide.md#target-delivery-workflow)
+- [Target Delivery Workflow](setup/setup-guide.md#target-delivery-workflow)
+- [setup guide](setup/setup-guide.md#refreshing-consumer-configs)
 - [setup/sharing-guide.md](setup/sharing-guide.md)
 
 ## README.md
 - # `OwlBear`
 - ## `Overview`
+- ## `Current Status`
 - ## `Directory Structure`
 - ## `Getting Started`
 - ## `License`
@@ -75,22 +82,22 @@
 - [transcript extractor](./scripts/extract_transcript.py)
 
 ## .owlbear/ideas.md
-- ## `Delivery implementation audit and improvement plan`
-- ### `Why the old proposal no longer applies directly`
-- ### `Audit method and baseline`
-- ### `Architecture generations currently present`
-- ### `Reconciliation of the initial assessment`
-- ### `Priority 0 — prevent acquisition from revoking live work`
-- ### `Priority 0 — preserve Design stage in work-item projection`
-- ### `Priority 1 — retire the confirmed dead Integration API`
-- ### `Priority 1 decision — complete or remove Assembly`
-- ### `Priority 1 — prove and remove empty authority reintroduction`
-- ### `Priority 2 — make startup authorization a pure steady-state gate`
-- ### `Priority 2 — replace the transitional work-item projection`
-- ### `Priority 2 — validate supported concurrency before adding new lock abstractions`
-- ### `Priority 3 — reassess naming and decomposition after deletion`
-- ### `Reviewed and retained — Delivery MCP module split`
-- ### `Recommended execution order`
+- # `Delivery implementation audit and improvement plan`
+- ## `Why the old proposal no longer applies directly`
+- ## `Audit method and baseline`
+- ## `Architecture generations currently present`
+- ## `Reconciliation of the initial assessment`
+- ## `Priority 0 — prevent acquisition from revoking live work`
+- ## `Priority 0 — preserve Design stage in work-item projection`
+- ## `Priority 1 — retire the confirmed dead Integration API`
+- ## `Priority 1 decision — complete or remove Assembly`
+- ## `Priority 1 — prove and remove empty authority reintroduction`
+- ## `Priority 2 — make startup authorization a pure steady-state gate`
+- ## `Priority 2 — replace the transitional work-item projection`
+- ## `Priority 2 — validate supported concurrency before adding new lock abstractions`
+- ## `Priority 3 — reassess naming and decomposition after deletion`
+- ## `Reviewed and retained — Delivery MCP module split`
+- ## `Recommended execution order`
 - ## `Memory`
 - ## `Code index — push detail into file headers, keep the index thin`
 - ### `Status quo`
@@ -902,7 +909,7 @@
 - [README.md](../../README.md)
 
 ## serve/delivery-mcp/README.md
-- # `owlbear-delivery-mcp — Target Delivery MCP Server`
+- # `owlbear-delivery-mcp — Delivery MCP Server`
 - ## `Launch / Usage`
 - ### `Tools`
 - ## `Configuration`
@@ -989,7 +996,8 @@
 
 ## serve/memory/README.md
 - # `owlbear-memory — Memory Primitives`
-- ## `Usage`
+- ## `Launch / Usage`
+- ## `Configuration`
 - ## `Models`
 - ### ``MemoryEntry``
 - ### ``MemoryCategory` (StrEnum)`
@@ -1050,6 +1058,7 @@
 - ## `Browser-backed tests`
 - ## `What Setup Creates`
 - ## `Shared vs Copied`
+- ## `Refreshing Consumer Configs`
 - ## `Target Delivery Workflow`
 - ### `Specification`
 - ### `Delivery`
