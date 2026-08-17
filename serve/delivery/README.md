@@ -6,7 +6,10 @@ bounded execution and writer capacity, publishes reviewed Change checkpoints, ob
 pull-request acceptance, and projects recoverable completed history. It retains legacy Target cutover
 and evidence contracts for historical consumers; canonical Change delivery does not use them.
 
-Parent project: [README.md](../../README.md)
+**Use this guide when:** you need to extend or integrate the core Change authority, understand its
+worktree and publication boundaries, or call its public stores and runtimes.
+
+Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
 
 ## Launch / Usage
 

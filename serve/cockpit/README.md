@@ -5,7 +5,10 @@ served as built static assets from `dist/`. The backend loads the canonical Deli
 and projects admitted semantic work items, requests, evidence, Memory, and Ideas without becoming
 Delivery authority.
 
-→ Parent: [README.md](../../README.md)
+**Use this guide when:** you need to build, launch, or package Cockpit, or trace its frontend/backend
+boundary and human operator controls.
+
+Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
 
 ---
 

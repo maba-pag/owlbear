@@ -2,7 +2,10 @@
 
 Fixed-operation GitHub publication adapters for Delivery. The package provides a GitHub CLI transport and a deterministic in-memory implementation of the transport-free provider contract owned by `owlbear-delivery`; it cannot merge pull requests or issue generic provider requests.
 
-→ Parent: [README.md](../../README.md)
+**Use this guide when:** you need to change or test the GitHub pull-request publication boundary used
+by Delivery.
+
+Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
 
 ---
 

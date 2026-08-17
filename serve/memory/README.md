@@ -4,7 +4,10 @@ Transport-free memory primitives for the OwlBear pipeline. Provides Pydantic mod
 domain error types, and atomic file I/O for markdown-backed memory entries — no HTTP or
 CLI dependency. Suitable for embedding in MCP servers and the Cockpit backend.
 
-→ Parent: [README.md](../../README.md)
+**Use this guide when:** you need to extend file-backed memory storage, entry lifecycle rules, or the
+engine API used by MCP and Cockpit.
+
+Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
 
 ---
 

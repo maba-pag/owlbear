@@ -1,6 +1,6 @@
 # README and Documentation UX Plan
 
-> **Status:** Complete implementation plan
+> **Status:** Reopened for structural redesign
 > **Decision date:** 2026-08-17
 > **Scope:** Newcomer-facing documentation and package orientation
 
@@ -38,6 +38,14 @@ reading the whole repository:
 The documentation should provide one coherent path while preserving the necessary distinction
 between the contributor/development front door and the consumer front door. The setup guide
 remains the procedural authority; README files orient readers and route them there.
+
+## Expectation gap
+
+R0-R8 improved factual trust and verified the existing paths. That is not the same as a complete
+reader-first redesign. The current front doors still lead with internal architecture, repeat setup
+and workflow material, offer weak role routing, and make optional operator detail compete with the
+first successful action. The plan remains open until the information architecture is redesigned
+and verified against evaluator, consumer, contributor, and package-integrator journeys.
 
 ## Documentation boundaries
 
@@ -80,7 +88,19 @@ The next unit starts only after the previous unit's focused validation passes.
 | R5k | Orient utility tools | `serve/tools/README.md` | R5j | Tool package purpose and the commands relevant to documentation maintenance are discoverable |
 | R6 | Reconcile shared ecosystem orientation | `share/README.md` and package cross-links | R5k | Shared categories, loading model, and next links match the live tree without enumerating volatile files |
 | R7 | Add only useful diagrams | `share/diagrams/` and references from active docs | R6 | Stale memory-layers material is archived or replaced; MCP topology and first-success flow reflect current code and are linked from a user journey |
-| R8 | Run newcomer verification | All maintained documentation | R7 | A second developer can complete setup and identify the next workflow; broken links and factual gaps are recorded and repaired |
+| R8 | Complete narrow verification | All maintained documentation | R7 | Focused link, lint, and executable checks establish a factual baseline; this verification does not by itself close the structural redesign |
+
+The original R0-R8 sequence established factual trust and verified the existing paths. The
+following units are the reopened structural redesign and must be completed in order:
+
+| ID | Work unit | Maintained surfaces | Depends on | Completion proof |
+| --- | --- | --- | --- | --- |
+| R9 | Design reader routes | All newcomer and contributor entry docs | R8 | Each audience starts with a goal or role route, receives the minimum vocabulary before internal detail, and has one named next action |
+| R10 | Rebuild development front door | `README.md` | R9 | An evaluator or contributor can choose a path, understand the product boundary, and reach setup, package orientation, or contribution guidance without architecture-first navigation |
+| R11 | Rebuild consumer front door | `README-consumer.md` | R9 | A consumer can identify the rolling `main` product surface, complete the shortest setup route, verify it, and find troubleshooting without package archaeology |
+| R12 | Reorder setup authority | `setup/setup-guide.md` | R10, R11 | The first setup path has four bounded actions with expected results; verification and first workflow precede optional reference detail; exact commands remain in this authority |
+| R13 | Add package and ecosystem routing | `serve/README.md`, `serve/*/README.md`, `share/README.md`, `.github/sync-manifest.json` | R12 | Package and shared-ecosystem readers choose by job, every package guide links to the package map, and the map reaches the current package set on `main` |
+| R14 | Verify redesigned journeys | All maintained documentation and `.owlbear/doc-index.md` | R10, R11, R12, R13 | Evaluator, consumer, contributor, and package-integrator dry runs each reach a useful next action; links, Markdownlint, index generation, and focused tests pass |
 
 The package units are intentionally sequential even where some could be edited in parallel:
 that keeps each package's vocabulary and cross-links reviewable, and makes a partial handoff
@@ -109,7 +129,13 @@ safe.
 | Index refresh | Complete | `.owlbear/doc-index.md` regenerated and committed in `72d9d84` |
 | R6 | Complete | Shared ecosystem README validated against `.vscode/settings.json`, `WIRING.md`, and `h-agent-structure`; Markdownlint passed with no edit required |
 | R7 | Complete | Archived stale memory-layer diagrams under `.owlbear/legacy/diagrams/`; corrected the five-server MCP topology, added an SVG preview, and linked the topology and first-success flow from active docs; `jq`, binding-reference, `xmllint`, link-target, Markdownlint, and whitespace checks passed |
-| R8 | Complete | Second-developer dry run passed: 84 focused setup, seed, sync, and Cockpit tests; 34 local links resolved; workflow YAML and seeded JSON parsed; five stdio servers, four shared customization roots, and the `/ideate` -> `/design` -> `/orchestrate` prompts were verified |
+| R8 | Complete as narrow verification | Second-developer dry run passed: 84 focused setup, seed, sync, and Cockpit tests; 34 local links resolved; workflow YAML and seeded JSON parsed; five stdio servers, four shared customization roots, and the `/ideate` -> `/design` -> `/orchestrate` prompts were verified. This is retained as factual baseline evidence, not final structural acceptance |
+| R9 | Complete | Reader routes are explicit in the development, consumer, setup, package-map, package, and shared-ecosystem entry surfaces |
+| R10 | Complete | Development README rebuilt around role-first paths, plain-language definitions, current surfaces, and contribution/package next steps |
+| R11 | Complete | Consumer README rebuilt around setup, verification, first workflow, current rolling-main policy, and troubleshooting |
+| R12 | Complete | Setup authority reordered around prerequisites, four expected-result actions, verification, and first successful workflow; duplicate verification authority removed and existing-project versus clone-project wording clarified |
+| R13 | Complete | Goal-based `serve/README.md` package map, synchronized consumer inclusion, shared-ecosystem routing, and package-guide navigation are in place |
+| R14 | Complete | Evaluator, consumer, contributor, and package-integrator dry runs passed; 18 changed Markdown files and 142 local links resolved; Markdownlint, `git diff --check`, Ruff, documentation-index tests, and 135 focused setup/sync/Cockpit/tool tests passed |
 
 ## Editorial contract
 
@@ -144,7 +170,13 @@ safe.
   current Delivery terminology.
 - [x] Local links resolve and the generated documentation index is refreshed after the sweep.
 - [x] Diagrams are retained only when they answer a documented user or maintainer question.
-- [x] A second-developer dry run supplies the final usability evidence.
+- [x] Historical narrow verification supplies factual baseline evidence.
+- [x] Each front door routes by reader role or goal before architecture and internal vocabulary.
+- [x] The consumer front door sends first-time users to the shortest setup and verification path before optional detail.
+- [x] The setup authority presents one first-success path with expected results and no duplicate verification authority.
+- [x] The package map lets a reader choose by job, and every package guide links back to it with concise use context.
+- [x] Evaluator, consumer, contributor, and package-integrator dry runs each reach a useful next action.
+- [ ] The reopened structural redesign is committed in scoped units without changing versions, tags, releases, or unrelated worktree changes.
 
 ## Change log for this plan
 
@@ -157,3 +189,9 @@ safe.
 - **2026-08-17:** Completed R8 with a second-developer dry run, focused setup and Cockpit tests,
   local-link validation, seed/workflow parsing, and final Python, Delivery terminology, and
   rolling-main documentation repairs.
+- **2026-08-17:** Reopened the plan for structural redesign after review found that R0-R8 improved
+  factual trust but did not sufficiently change the reader journey. Added R9-R14 for reader routes,
+  role-first front doors, setup ordering, package/ecosystem routing, and four-role verification.
+- **2026-08-17:** Rebased generated documentation-index links from their source documents so the
+  index remains navigable from `.owlbear/`, including same-file anchors, and added a regression test
+  for nested package links.

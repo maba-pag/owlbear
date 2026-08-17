@@ -2,7 +2,10 @@
 
 Graph-augmented vector retrieval engine for the OwlBear pipeline. Provides document ingestion, entity extraction, semantic search, and per-turn context injection for agent prompts.
 
-→ Parent: [README.md](../../README.md)
+**Use this guide when:** you need to embed or extend the alpha Knowledge engine's ingestion, storage,
+retrieval, graph, or enrichment boundary.
+
+Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
 
 **Status:** Alpha. The engine is implemented and available to the pipeline, but it still needs
 real-world validation before it should be treated as a generally validated capability.

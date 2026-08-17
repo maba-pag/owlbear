@@ -17,6 +17,7 @@
       ".markdownlintignore",
       ".python-version",
       ".yamllint.yml",
+      "serve/README.md",
       "README-consumer.md",
       "SECURITY.md",
       "pyproject.toml",

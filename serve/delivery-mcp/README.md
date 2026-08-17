@@ -5,7 +5,10 @@ publication and acceptance, and completed Change history. It is registered in VS
 `owlbear-delivery` and composes the Delivery portfolio from
 explicit startup configuration.
 
-→ Parent: [README.md](../../README.md)
+**Use this guide when:** you need to configure the seeded `owlbear-delivery` server or understand
+the agent-facing Design, Planning, Build, publication, and acceptance tools.
+
+Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
 
 ---
 

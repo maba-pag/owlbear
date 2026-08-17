@@ -1,13 +1,40 @@
 # share/ - Agent Ecosystem
 
-`share/` is the portable GitHub Copilot customization layer shipped by OwlBear. It contains the
-roles, procedures, rules, domain handbooks, contextual instructions, prompts, and visual assets that
-OwlBear-enabled workspaces consume. Its primary audience is agents and contributors changing that
-ecosystem.
+`share/` is the portable GitHub Copilot customization layer that OwlBear-enabled workspaces load.
+It contains roles, reusable instructions, user-invoked prompts, and visual references. This guide
+is for contributors changing that layer and for agents that need to locate the correct authority.
 
-This guide explains how the parts compose and how to change them safely. It intentionally avoids a
-file-by-file catalog. [WIRING.md](WIRING.md) is the derived snapshot of current roles and loading
-relationships; executable frontmatter and file bodies remain authoritative.
+[Back to the workspace guide](../README.md) · [Package map](../serve/README.md) ·
+[Derived wiring map](WIRING.md)
+
+## Choose your next action
+
+| You need to... | Start with | Authority to change |
+| --- | --- | --- |
+| Add or change a Copilot role | [Agents](#agents) | An `.agent.md` file and its required readings |
+| Add a reusable workflow or rule | [Skills](#skills) | A `w-`, `r-`, or `h-` skill file |
+| Apply a rule automatically by file type | [Instructions](#instructions) | An `.instructions.md` file and its `applyTo` scope |
+| Add a user command | [Prompts](#prompts) | A `.prompt.md` file and its selected agent |
+| Understand why something loaded | [Effective instruction stack](#effective-instruction-stack) | The matching roots and direct dependency |
+| Check delegation, hooks, or tools | [WIRING.md](WIRING.md) | Executable frontmatter and hook/source files |
+| Validate an ecosystem change | [Validation](#validation) | The focused validator and regression test |
+
+## The one-minute model
+
+Agents are Copilot roles. Skills teach reusable procedures or domain knowledge. Instructions apply
+rules to matching files. Prompts are user-facing entry points. Hooks and MCP schemas are the hard
+controls that can reject an operation; prose can only guide a model. WIRING.md summarizes the live
+relationships, but the executable files remain authoritative.
+
+The normal path is:
+
+```text
+prompt -> agent -> required/on-demand skills -> tools and hooks -> runtime authority
+```
+
+Project-specific overrides live under `.owlbear/{agents,skills,instructions,prompts}/`. Workspace
+settings select both the shared and project-local roots, so inspect `.vscode/settings.json` before
+diagnosing a loading problem.
 
 ## Directory Layout
 
@@ -19,10 +46,28 @@ relationships; executable frontmatter and file bodies remain authoritative.
 | `prompts/` | User-invoked one-shot entry points | `{verb}.prompt.md` or `{scope}-{verb}.prompt.md` |
 | `diagrams/` | Shared explanatory visual assets | Descriptive filenames |
 
-Project-specific customizations use the corresponding `.owlbear/{agents,skills,instructions,prompts}/`
-directories. Workspace configuration selects the active roots. Do not assume the source tree being
-edited is the tree VS Code currently loads: inspect `.vscode/settings.json` before diagnosing a
-loading problem.
+## Agents
+
+Start with the agent file when the change concerns a role's identity, tools, hooks, delegation,
+required reading, or output contract. Its frontmatter is load-bearing; update direct dependencies
+and WIRING.md when those relationships change.
+
+## Skills
+
+Use `w-` for ordered workflows, `r-` for shared rules, and `h-` for handbooks loaded when a domain
+needs deeper knowledge. Required reading belongs in an agent only when the skill is needed in nearly
+every session; specialist material should load on demand immediately before its decision.
+
+## Instructions
+
+Instruction frontmatter controls `applyTo` matching. Keep an instruction concise and point to the
+full skill that owns the procedure. More specific rules do not automatically erase broader rules;
+resolve conflicts by identifying the job and its fit authority.
+
+## Prompts
+
+Prompts are user-facing workflow entry points. They collect the smallest input needed and route to
+the agent or workflow that owns the next decision. They should not become a second copy of a skill.
 
 ## Visual Orientation
 

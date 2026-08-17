@@ -214,6 +214,25 @@ class TestDocIndexMarkdownOutput:
         entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
         assert "### Outbound links" not in entry_text
 
+    def test_relative_outbound_links_are_rebased_to_index(self, tmp_path: Path) -> None:
+        """Boundary: generated links resolve from .owlbear/doc-index.md, not their source file."""
+        _make_md(tmp_path, "README.md", "# Root\n")
+        _make_md(
+            tmp_path,
+            "serve/example/README.md",
+            "# Package\n\n[Root](../../README.md) [Section](#configuration)\n",
+        )
+        index_path = tmp_path / ".owlbear" / "doc-index.md"
+
+        generate_index(tmp_path)
+
+        text = index_path.read_text()
+        entry_start = text.index("## serve/example/README.md")
+        next_entry = text.find("\n## ", entry_start + 1)
+        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
+        assert "[Root](../README.md)" in entry_text
+        assert "[Section](../serve/example/README.md#configuration)" in entry_text
+
 
 # ===========================================================================
 # TestFromAC_OutboundLinkExtraction

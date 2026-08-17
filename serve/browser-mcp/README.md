@@ -2,7 +2,10 @@
 
 MCP server that exposes browser automation tools to pipeline agents for authenticated web content fetching. Uses Playwright with an existing Edge profile so SSO-protected pages are accessible without re-authentication. Navigation is restricted to an explicit domain allowlist; SSRF protections block private and loopback addresses.
 
-→ Parent: [README.md](../../README.md)
+**Use this guide when:** you need to configure the alpha browser server or change its allowlisted
+Edge/CDP actions and accessibility-snapshot boundary.
+
+Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
 
 **Status:** Alpha. Authenticated browser acquisition is implemented, but the server still needs
 real-world validation across target sites, Edge profiles, and SSO environments.

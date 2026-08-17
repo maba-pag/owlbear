@@ -9,11 +9,10 @@ Before running setup, ensure the following are installed on your machine:
 | Requirement | Why | How to get it |
 | --- | --- | --- |
 | Python 3.14.6+ | OwlBear runtime | [python.org](https://www.python.org/downloads/) |
-| [uv](https://docs.astral.sh/uv/) | Package manager and MCP server launcher | `pip install uv` or see uv docs |
+| [uv](https://docs.astral.sh/uv/) | Package manager and MCP server launcher | [Installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
 | VS Code | IDE | [code.visualstudio.com](https://code.visualstudio.com/) |
 | GitHub Copilot extension | Chat and agents | VS Code Extensions marketplace |
 | Git | Clone and version control | [git-scm.com](https://git-scm.com/) |
-| Chromium | Browser MCP and Cockpit browser tests | Run `npx playwright install chromium` after installing npm dependencies |
 
 > **Windows limitation:** owlbear and your project must be on the **same drive**.
 > `init.py` uses relative paths, and `os.path.relpath` raises `ValueError` when
@@ -22,36 +21,95 @@ Before running setup, ensure the following are installed on your machine:
 <!-- separate blockquotes -->
 
 > **macOS and Linux:** Python, uv, VS Code, and Git work natively on both platforms. Browser-backed
-> commands still require the separate Chromium download described above.
+> commands still require the separate Chromium download described below.
+
+Chromium is optional for setup. Install it later only when you use the Browser MCP or run
+Cockpit's browser-backed tests; see [browser-backed tests](#browser-backed-tests).
 
 ---
 
 ## Quick Start
 
+This is the complete first-time path. Run it from the parent directory of both repositories.
+If your project is already checked out, skip the first command. Replace
+`your-org/your-project` and the relative paths with your values.
+
+### 1. Put both repositories side by side
+
 ```shell
-# 1. Clone owlbear alongside your project directory
+# Only if the project is not already checked out.
+git clone https://github.com/your-org/your-project.git
 git clone https://github.com/your-org/owlbear.git
+cd your-project
+```
 
-# 2. Create your project directory
-mkdir my-project
+**Expected result:** the OwlBear checkout and the project are siblings, for example
+`~/work/owlbear` and `~/work/your-project`. On Windows they are on the same drive.
 
-# 3. Bootstrap the OwlBear workspace from inside your project directory
-cd my-project
+### 2. Run setup from the project root
+
+```shell
 uv run --project ../owlbear python ../owlbear/setup/init.py \
-  --github-repository your-org/my-project
+  --github-repository your-org/your-project
+```
 
-# 4. Open the project in VS Code
+If the project has a GitHub `origin`, setup can infer the repository and the final flag may be
+omitted. Use `--remote` or `--target-branch` only when your publication policy differs from the
+defaults `origin` and `main`.
+
+**Expected result:** setup creates or merges `.vscode/settings.json` and `.vscode/mcp.json`, writes
+tracked `.owlbear/delivery/config.json`, and copies the project-local hooks and runtime templates.
+
+### 3. Open the project in VS Code
+
+```shell
 code .
 ```
 
-> **Windows:** use backslashes:
-> `uv run --project ..\owlbear python ..\owlbear\setup\init.py --github-repository your-org/my-project`.
-> owlbear and your project
-> must be on the same drive.
+**Expected result:** VS Code opens the project directory, not the OwlBear checkout. The shared
+agents, skills, instructions, and prompts are loaded from the sibling OwlBear path.
 
-Setup defaults to remote `origin` and target branch `main`. When `origin` has a GitHub HTTPS or SSH
-URL, setup infers the `owner/name` identity and `--github-repository` may be omitted. Use `--remote`
-and `--target-branch` for other publication policy. These values do not require a local target branch.
+### 4. Verify the installation
+
+Open **Chat: Open Customizations** and then **MCP: List Servers**. The exact checks are in
+[Verify the installation](#verify-the-installation).
+
+**Expected result:** the five seeded MCP servers are running and the shared OwlBear customization
+roots appear in Chat Customizations.
+
+## Verify the installation
+
+1. Open Copilot Chat and run **Chat: Open Customizations**.
+2. Confirm that OwlBear agents, skills, instructions, and prompts are listed.
+3. Run **MCP: List Servers** and confirm these five servers show `running`:
+   `owlbear-delivery`, `owlbear-knowledge`, `owlbear-memory`, `owlbear-browser`, and `markitdown`.
+
+If a customization root is missing, inspect `.vscode/settings.json` and compare its relative
+OwlBear path with the location of the checkout. If a server is missing, inspect `.vscode/mcp.json`,
+run `uv sync --all-extras` in the OwlBear checkout, and rerun setup from the project root.
+
+## First successful workflow
+
+After verification, prove the installation with one small outcome:
+
+1. Run `/ideate` and describe the outcome.
+2. Run `/design`, review the proposed Change, and approve it.
+3. Run `/orchestrate <change-id>` after approval.
+4. Launch Cockpit from the project root and confirm the Change is visible.
+
+```shell
+uv run --project ../owlbear cockpit
+```
+
+Expected result: Cockpit opens at `http://127.0.0.1:8420` and reads the current project. Use
+`COCKPIT_NO_OPEN=1` to suppress the browser or `COCKPIT_PORT` to choose another port.
+
+**Expected result:** one Change has visible work and a clear next action. Use the
+[Delivery workflow reference](#delivery-workflow) only when you need the detailed correction,
+publication, acceptance, or recovery procedure.
+
+> The remaining sections are optional setup and reference material. The first successful workflow
+> above is the shortest path to a working project.
 
 ## macOS Copilot profile settings
 
@@ -273,27 +331,9 @@ Acceptance: user merges PR -> observe merged evidence -> completed lookup
 
 ---
 
-## Verify It Works
-
-After opening the project in VS Code, use the **Diagnostics view** to confirm everything loaded correctly:
-
-1. Open the Copilot Chat panel.
-2. Open the **Chat Customizations** window (from Chat settings or Command Palette).
-3. Verify each of the following appears:
-
-| What to check | How to verify |
-| --- | --- |
-| OwlBear agents loaded | Chat Customizations shows agents from `../owlbear/share/agents/` |
-| OwlBear skills loaded | Chat Customizations shows skills from `../owlbear/share/skills/` |
-| Instructions loaded | Chat Customizations shows `*.instructions.md` files from `../owlbear/share/instructions/` |
-| MCP servers running | Run `MCP: List Servers` from the Command Palette — `owlbear-delivery`, `owlbear-knowledge`, `owlbear-memory`, `owlbear-browser`, and `markitdown` should show `running` |
-
-For runtime debugging, use **"Show Agent Debug Logs"** (Chat view ellipsis `…` menu) —
-this shows chronological tool calls, LLM requests, and prompt discovery events.
-
 ---
 
-## Launch Cockpit
+## Cockpit details
 
 Cockpit is the browser UI for target work items, requests, typed attention, recovery controls,
 completed history, Memory, Ideas, and immutable legacy inventory. Launch it from the project root

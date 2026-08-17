@@ -4,7 +4,10 @@ MCP server for agent institutional memory. Pipeline and ideation agents record l
 
 Storage is file-based: each entry is a markdown file with YAML frontmatter in `.owlbear/memory/`. The MCPServer app name and VS Code registration key are both `owlbear-memory`.
 
-→ Parent: [README.md](../../README.md)
+**Use this guide when:** you need to change the seeded `owlbear-memory` tools, scoped retrieval, or
+the human approval and curation lifecycle.
+
+Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
 
 ---
 

@@ -2,7 +2,10 @@
 
 Workspace utility scripts for the OwlBear project. Provides generated documentation, Python, and ECMAScript indexes used by agents for navigation.
 
-→ Parent: [README.md](../../README.md)
+**Use this guide when:** you need to maintain documentation and source indexes, synchronize local
+dependencies, or run repository migration utilities.
+
+Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
 
 ---
 
