@@ -24,33 +24,33 @@ Before running setup, ensure the following are installed on your machine:
 > commands still require the separate Chromium download described below.
 
 Chromium is optional for setup. Install it later only when you use the Browser MCP or run
-Cockpit's browser-backed tests; see [browser-backed tests](#browser-backed-tests).
+Cockpit's browser-backed tests; see the [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests).
 
 ---
 
 ## Quick Start
 
 This is the complete first-time path. Run it from the parent directory of both repositories.
-If your project is already checked out, skip the first command. Replace
-`your-org/your-project` and the relative paths with your values.
+If your project is already checked out, skip its clone command. Replace `OWNER/PROJECT` with the
+project's GitHub identity.
 
 ### 1. Put both repositories side by side
 
 ```shell
 # Only if the project is not already checked out.
-git clone https://github.com/your-org/your-project.git
-git clone https://github.com/your-org/owlbear.git
-cd your-project
+git clone https://github.com/OWNER/PROJECT.git my-project
+git clone https://github.com/maba-pag/owlbear.git owlbear
+cd my-project
 ```
 
 **Expected result:** the OwlBear checkout and the project are siblings, for example
-`~/work/owlbear` and `~/work/your-project`. On Windows they are on the same drive.
+`~/work/owlbear` and `~/work/my-project`. On Windows they are on the same drive.
 
 ### 2. Run setup from the project root
 
 ```shell
 uv run --project ../owlbear python ../owlbear/setup/init.py \
-  --github-repository your-org/your-project
+  --github-repository OWNER/PROJECT
 ```
 
 If the project has a GitHub `origin`, setup can infer the repository and the final flag may be
@@ -93,18 +93,17 @@ run `uv sync --all-extras` in the OwlBear checkout, and rerun setup from the pro
 After verification, prove the installation with one small outcome:
 
 1. Run `/ideate` and describe the outcome.
-2. Run `/design`, review the proposed Change, and approve it.
-3. Run `/orchestrate <change-id>` after approval.
+2. Continue with `/design`, review the proposed work, and approve admission. When it succeeds,
+   note the returned lowercase, hyphenated Change ID, for example `improve-search`.
+3. Run `/orchestrate improve-search` after admission. Planning and Build work then proceed in order.
 4. Launch Cockpit from the project root and confirm the Change is visible.
 
 ```shell
 uv run --project ../owlbear cockpit
 ```
 
-Expected result: Cockpit opens at `http://127.0.0.1:8420` and reads the current project. Use
-`COCKPIT_NO_OPEN=1` to suppress the browser or `COCKPIT_PORT` to choose another port.
-
-**Expected result:** one Change has visible work and a clear next action. Use the
+Expected result: Cockpit opens at `http://127.0.0.1:8420`, reads the current project, and shows one
+Change with visible work and a clear next action. Use the
 [Delivery workflow reference](#delivery-workflow) only when you need the detailed correction,
 publication, acceptance, or recovery procedure.
 
@@ -136,24 +135,7 @@ the project in VS Code, run `Profiles: Switch Profile`, and rerun `setup/init.py
 take a profile-selection command-line argument. Noninteractive setup skips this user-local profile
 mutation.
 
-## Browser-backed tests
-
-After setup, install the Cockpit web dependencies and its Playwright Chromium binary before running
-browser-backed tests:
-
-```shell
-cd my-project
-npm ci --prefix serve/cockpit/web
-cd serve/cockpit/web
-npx playwright install chromium
-cd ../../..
-uv run test-e2e
-```
-
-Expected outcome: the maintained Cockpit smoke tests start without an executable-missing error.
-The npm and uv caches do not contain Playwright browser binaries. If the runner reports that a
-Chromium executable does not exist, run `npx playwright install chromium` again from
-`serve/cockpit/web`.
+For development-only browser-backed tests, use the [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests).
 
 ---
 

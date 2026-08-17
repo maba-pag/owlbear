@@ -9,7 +9,7 @@ and evidence contracts for historical consumers; canonical Change delivery does 
 **Use this guide when:** you need to extend or integrate the core Change authority, understand its
 worktree and publication boundaries, or call its public stores and runtimes.
 
-Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
+Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
 ## Launch / Usage
 

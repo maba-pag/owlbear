@@ -5,7 +5,7 @@ MCP server that exposes the `owlbear-knowledge` engine as tools for pipeline age
 **Use this guide when:** you need to configure the alpha `owlbear-knowledge` server or change its
 agent-facing source, search, and enrichment tools.
 
-Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
+Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
 **Status:** Alpha. The server exposes the current Knowledge tool surface, but end-to-end
 real-world validation is still pending.

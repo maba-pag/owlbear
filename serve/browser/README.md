@@ -5,7 +5,7 @@ Authenticated web content extraction via Playwright and Edge CDP. Launches a bro
 **Use this guide when:** you need to extend the alpha authenticated page acquisition or its cleaned
 content extraction API.
 
-Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
+Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
 **Status:** Alpha. Authenticated acquisition is implemented, but Browser still needs
 real-world validation across the target sites and session environments.

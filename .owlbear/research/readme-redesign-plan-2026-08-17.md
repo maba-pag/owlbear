@@ -1,6 +1,6 @@
 # README and Documentation UX Plan
 
-> **Status:** Complete — structural redesign committed in `7ca1aa2`
+> **Status:** Complete — structural redesign and review-driven corrections validated
 > **Decision date:** 2026-08-17
 > **Scope:** Newcomer-facing documentation and package orientation
 
@@ -39,13 +39,15 @@ The documentation should provide one coherent path while preserving the necessar
 between the contributor/development front door and the consumer front door. The setup guide
 remains the procedural authority; README files orient readers and route them there.
 
-## Expectation gap
+## Review finding and resolution
 
 R0-R8 improved factual trust and verified the existing paths. That is not the same as a complete
-reader-first redesign. The current front doors still lead with internal architecture, repeat setup
-and workflow material, offer weak role routing, and make optional operator detail compete with the
-first successful action. The plan remains open until the information architecture is redesigned
-and verified against evaluator, consumer, contributor, and package-integrator journeys.
+reader-first redesign. R9-R14 rebuilt the front doors around evaluator, consumer, contributor, and
+package-integrator journeys. An independent Opus 5 review then found two executable-path blockers
+and several routing and duplication defects. The review-driven corrections are included in the R14
+closeout: the consumer path uses a real OwlBear clone URL and one sibling layout, developer-only
+browser tests live in the Cockpit guide, package links work after the consumer README is renamed on
+`main`, and the development README explains the contributor checkout boundary.
 
 ## Documentation boundaries
 
@@ -135,7 +137,7 @@ safe.
 | R11 | Complete | Consumer README rebuilt around setup, verification, first workflow, current rolling-main policy, and troubleshooting |
 | R12 | Complete | Setup authority reordered around prerequisites, four expected-result actions, verification, and first successful workflow; duplicate verification authority removed and existing-project versus clone-project wording clarified |
 | R13 | Complete | Goal-based `serve/README.md` package map, synchronized consumer inclusion, shared-ecosystem routing, and package-guide navigation are in place |
-| R14 | Complete | Evaluator, consumer, contributor, and package-integrator dry runs passed; 18 changed Markdown files and 142 local links resolved; Markdownlint, `git diff --check`, Ruff, documentation-index tests, and 135 focused setup/sync/Cockpit/tool tests passed |
+| R14 | Complete | Review-driven evaluator, consumer, contributor, and package-integrator checks passed; source and virtual-`main` local-link walks found no broken links; `uv run doc-index`, Markdownlint, and `git diff --check` passed; 101 focused documentation, setup, sync, and Cockpit tests passed |
 
 ## Editorial contract
 
@@ -197,3 +199,8 @@ safe.
   for nested package links.
 - **2026-08-17:** Committed the structural redesign and index repair in scoped commit `7ca1aa2`;
   unrelated workflow, research, and lint-policy changes remained outside the commit.
+- **2026-08-17:** An independent Opus 5 review found that the consumer clone example was not
+  executable, browser-backed tests were misplaced in consumer setup, package links were not safe
+  after the generated `main` rename, and several front doors duplicated procedural authority.
+  Corrected those paths, added the contributor checkout route, normalized sharing placeholders, and
+  revalidated source and virtual-`main` links plus the focused documentation and setup test suite.

@@ -5,7 +5,7 @@ MCP server that exposes browser automation tools to pipeline agents for authenti
 **Use this guide when:** you need to configure the alpha browser server or change its allowlisted
 Edge/CDP actions and accessibility-snapshot boundary.
 
-Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
+Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
 **Status:** Alpha. Authenticated browser acquisition is implemented, but the server still needs
 real-world validation across target sites, Edge profiles, and SSO environments.

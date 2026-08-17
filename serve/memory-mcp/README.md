@@ -7,7 +7,7 @@ Storage is file-based: each entry is a markdown file with YAML frontmatter in `.
 **Use this guide when:** you need to change the seeded `owlbear-memory` tools, scoped retrieval, or
 the human approval and curation lifecycle.
 
-Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
+Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
 ---
 

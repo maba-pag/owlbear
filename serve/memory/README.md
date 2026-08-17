@@ -7,7 +7,7 @@ CLI dependency. Suitable for embedding in MCP servers and the Cockpit backend.
 **Use this guide when:** you need to extend file-backed memory storage, entry lifecycle rules, or the
 engine API used by MCP and Cockpit.
 
-Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
+Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
 ---
 

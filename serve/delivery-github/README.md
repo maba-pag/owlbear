@@ -5,7 +5,7 @@ Fixed-operation GitHub publication adapters for Delivery. The package provides a
 **Use this guide when:** you need to change or test the GitHub pull-request publication boundary used
 by Delivery.
 
-Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
+Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
 ---
 

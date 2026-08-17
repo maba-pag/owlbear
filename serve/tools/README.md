@@ -5,7 +5,7 @@ Workspace utility scripts for the OwlBear project. Provides generated documentat
 **Use this guide when:** you need to maintain documentation and source indexes, synchronize local
 dependencies, or run repository migration utilities.
 
-Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
+Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
 ---
 

@@ -29,10 +29,10 @@ Walk the teammate through these steps:
 
 ```shell
 # 1. Clone owlbear to a convenient parent directory
-git clone https://github.com/your-org/owlbear.git ~/Dev/owlbear
+git clone https://github.com/maba-pag/owlbear.git ~/Dev/owlbear
 
 # 2. Clone the project repository as a sibling
-git clone https://github.com/your-org/my-project.git ~/Dev/my-project
+git clone https://github.com/OWNER/PROJECT.git ~/Dev/my-project
 
 # 3. Bootstrap owlbear into the project workspace
 cd ~/Dev/my-project
@@ -158,5 +158,5 @@ organization agent registry as a complement to the local installation.
 | Delivery MCP or Cockpit reports that a legacy root requires migration | Preserve the reported state unchanged and complete the dedicated Delivery migration before restarting |
 | Cockpit opens the wrong workspace | Launch from the project root or pass the intended project directory to `uv --directory` |
 | Hook updates not taking effect after `git pull` | Re-run `init.py`; use `--replace-hooks` if local hook files differ and you want the seeded versions restored |
-| `uv` not found | Install uv globally: `pip install uv` or see [uv docs](https://docs.astral.sh/uv/) |
+| `uv` not found | Install uv using the [official installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
 | Different owlbear checkout states between teammates | Use the same branch (`main` for consumer use or `dev` for OwlBear development), then `git pull` and rerun `init.py` to refresh copied runtime files |

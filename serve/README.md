@@ -3,8 +3,7 @@
 Use this page when you know what you want to add, run, or understand, but not which package
 owns it. Start with the job, then open the package guide for commands and configuration.
 
-[Back to the workspace guide](../README.md) · [Consumer setup](../README-consumer.md) ·
-[Setup authority](../setup/setup-guide.md)
+[Project README](../README.md) · [Setup authority](../setup/setup-guide.md)
 
 ## Choose by job
 

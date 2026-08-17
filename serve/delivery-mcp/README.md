@@ -8,7 +8,7 @@ explicit startup configuration.
 **Use this guide when:** you need to configure the seeded `owlbear-delivery` server or understand
 the agent-facing Design, Planning, Build, publication, and acceptance tools.
 
-Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
+Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
 ---
 

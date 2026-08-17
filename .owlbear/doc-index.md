@@ -6,26 +6,24 @@
 - ## `What you get`
 - ## `Before you start`
 - ## `Fast path`
-- ## `Verify the setup`
-- ## `Try the first workflow`
-- ## `Open Cockpit`
+- ## `After setup`
 - ## `Keep it current`
-- ## `Troubleshooting`
 
 ### Outbound links
 - [Fast path](../README-consumer.md#fast-path)
-- [Verify the setup](../README-consumer.md#verify-the-setup)
-- [Try the first workflow](../README-consumer.md#try-the-first-workflow)
-- [Open Cockpit](../README-consumer.md#open-cockpit)
+- [Verify the installation](../setup/setup-guide.md#verify-the-installation)
+- [First successful workflow](../setup/setup-guide.md#first-successful-workflow)
+- [Cockpit details](../setup/setup-guide.md#cockpit-details)
 - [Sharing guide](../setup/sharing-guide.md)
 - [Package map](../serve/README.md)
 - [Setup guide](../setup/setup-guide.md)
 - [uv](https://docs.astral.sh/uv/)
 - [setup guide](../setup/setup-guide.md)
-- [Cockpit](../README-consumer.md#open-cockpit)
-- [Delivery Workflow](../setup/setup-guide.md#delivery-workflow)
-- [configuration refresh](../setup/setup-guide.md#refreshing-consumer-configs)
-- [package guide](../serve/README.md)
+- [Verify the installation](../setup/setup-guide.md#verify-the-installation)
+- [First successful workflow](../setup/setup-guide.md#first-successful-workflow)
+- [Cockpit details](../setup/setup-guide.md#cockpit-details)
+- [Troubleshooting](../setup/setup-guide.md#troubleshooting)
+- [refresh procedures](../setup/setup-guide.md#refreshing-consumer-configs)
 - [setup guide](../setup/setup-guide.md)
 
 ## README.md
@@ -34,6 +32,7 @@
 - ## `What OwlBear does`
 - ## `Current surfaces`
 - ## `Develop OwlBear`
+- ### `Choose a starting point`
 - ## `Where things live`
 
 ### Outbound links
@@ -45,7 +44,9 @@
 - [Sharing guide](../setup/sharing-guide.md)
 - [package map](../serve/README.md)
 - [uv](https://docs.astral.sh/uv/)
-- [setup guide](../setup/setup-guide.md)
+- [Shared ecosystem guide](../share/README.md)
+- [Package map](../serve/README.md)
+- [Setup guide](../setup/setup-guide.md)
 - [package map](../serve/README.md)
 - [loading model](../share/README.md)
 
@@ -198,8 +199,7 @@
 - ## `Package groups`
 
 ### Outbound links
-- [Back to the workspace guide](../README.md)
-- [Consumer setup](../README-consumer.md)
+- [Project README](../README.md)
 - [Setup authority](../setup/setup-guide.md)
 - [Delivery MCP](../serve/delivery-mcp/README.md)
 - [Delivery core](../serve/delivery/README.md)
@@ -240,6 +240,7 @@
 - # `owlbear-cockpit — Steering Cockpit Package`
 - ## `Launch / Usage`
 - ## `Frontend Surface`
+- ## `Browser-backed tests`
 - ## `Delivery Evidence`
 - ## `Configuration`
 - ## `Delivery Packaging`
@@ -1101,7 +1102,6 @@
 - ## `Verify the installation`
 - ## `First successful workflow`
 - ## `macOS Copilot profile settings`
-- ## `Browser-backed tests`
 - ## `What Setup Creates`
 - ## `Shared vs Copied`
 - ## `Refreshing Consumer Configs`
@@ -1125,9 +1125,10 @@
 - [Installation guide](https://docs.astral.sh/uv/getting-started/installation/)
 - [code.visualstudio.com](https://code.visualstudio.com/)
 - [git-scm.com](https://git-scm.com/)
-- [browser-backed tests](../setup/setup-guide.md#browser-backed-tests)
+- [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests)
 - [Verify the installation](../setup/setup-guide.md#verify-the-installation)
 - [Delivery workflow reference](../setup/setup-guide.md#delivery-workflow)
+- [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests)
 - [Delivery MCP reference](../serve/delivery-mcp/README.md)
 - [WIRING.md](../share/WIRING.md)
 - [Cockpit package guide](../serve/cockpit/README.md)
@@ -1150,7 +1151,7 @@
 ### Outbound links
 - [setup-guide.md](../setup/setup-guide.md)
 - [Customization](../setup/setup-guide.md#adding-local-agents)
-- [uv docs](https://docs.astral.sh/uv/)
+- [official installation guide](https://docs.astral.sh/uv/getting-started/installation/)
 
 ## share/README.md
 - # `share/ - Agent Ecosystem`

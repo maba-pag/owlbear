@@ -21,6 +21,9 @@ You describe an outcome. Copilot helps refine it, creates an approved work packa
 result through reviewed steps. Cockpit shows the current work and gives a person the controls for
 requests, recovery, publication, and completed history.
 
+OwlBear expects VS Code with GitHub Copilot and a Git project with a GitHub repository identity. A
+completed Delivery change becomes a pull request for a person to review and merge.
+
 The main terms are simple:
 
 | Term | Meaning |
@@ -59,10 +62,14 @@ Git. Cockpit frontend development also needs the Node version pinned in
 `serve/cockpit/web/.nvmrc`.
 
 ```shell
-git clone -b dev https://github.com/OWNER/owlbear.git
+git clone -b dev https://github.com/maba-pag/owlbear.git
 cd owlbear
 uv sync --all-extras
 ```
+
+Open this checkout directly in VS Code. Its repository settings already load the shared
+`share/` and project-local `.owlbear/` agent, skill, instruction, and prompt roots; do not run
+consumer setup against the OwlBear checkout itself.
 
 Run the repository checks:
 
@@ -71,8 +78,20 @@ uv run test --all
 uv run lint --no-fix
 ```
 
-For the exact development commands, consumer installation, and recovery procedures, use the
-[setup guide](setup/setup-guide.md). The guide owns commands; this page owns orientation.
+### Choose a starting point
+
+| You are changing... | Start with |
+| --- | --- |
+| Agents, skills, instructions, prompts, or hooks | [Shared ecosystem guide](share/README.md) |
+| A runtime package or MCP server | [Package map](serve/README.md) |
+| Consumer setup, refresh, or recovery | [Setup guide](setup/setup-guide.md) |
+
+For package or shared-ecosystem changes, use the focused guide first, then run the scoped checks
+for the paths you changed. `uv run test --all` and `uv run lint --no-fix` are the full development
+checks.
+
+The guide for each surface owns its exact commands and validation. This page keeps the development
+checkout and the next decision visible.
 
 ## Where things live
 

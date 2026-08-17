@@ -8,7 +8,7 @@ Delivery authority.
 **Use this guide when:** you need to build, launch, or package Cockpit, or trace its frontend/backend
 boundary and human operator controls.
 
-Package map: [serve/README.md](../README.md) · Workspace guide: [README.md](../../README.md)
+Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
 ---
 
@@ -68,6 +68,23 @@ repository.
 | E2E runner | Playwright `^1.61.1` (`npm run test:e2e`) |
 | CSS/HTML lint | Stylelint `^17.12.0` (`npm run lint:css`), HTMLHint `^1.9.2` (`npm run lint:html`) |
 | Build output | `serve/cockpit/dist/` via `npm run build` |
+
+## Browser-backed tests
+
+These tests run from the OwlBear development checkout, not from a consumer project. Install the
+web dependencies and Chromium once, then run the maintained Cockpit gate:
+
+```shell
+cd /path/to/owlbear
+npm ci --prefix serve/cockpit/web
+cd serve/cockpit/web
+npx playwright install chromium
+cd ../../..
+uv run test-e2e
+```
+
+Expected result: the Cockpit smoke tests start without an executable-missing error. Consumer
+workspaces use the prebuilt bundle and do not run this developer-only procedure.
 
 ## Delivery Evidence
 
