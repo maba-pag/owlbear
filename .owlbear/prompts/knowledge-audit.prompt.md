@@ -5,17 +5,13 @@ description: audit the knowledge module
 
 lets do an audit of the knowledge module (serve/knowledge/ and serve/knowledge-mcp/ primarily). this is the central knowledge database including a knowledge graph that is used via mcp and powered by manually run agents. this manual part is intentional for now.
 
-## What This Module Does
+## Current System Boundary
 
-The knowledge module is a graph-augmented hybrid retrieval system:
-
-- **Embedding model:** BGE-M3 producing dense (1024-d), sparse (BM25-like), and ColBERT (per-token × 1024-d) vectors. ColBERT is the primary reason this model was chosen — all three vector types must be stored and used.
-- **Storage:** SQLite (metadata, entities, relations, enrichment state) + Qdrant (hybrid vector storage with named vectors for dense/sparse/colbert).
-- **Pipeline:** Intake → Chunking (512 tokens, 50 overlap) → Embedding (hybrid) → Graph Building (entity/relation extraction via agent) → Retrieval (vector+graph augmented).
-- **Enrichment:** Two-phase agent-driven process. Phase 1: per-chunk entity and edge extraction. Phase 2: cross-source consolidation of matching entities.
-- **MCP server:** Wraps core module as tools for agent use (search, ingest, enrich, consolidate, stats).
-
-The intended use case is ingesting whole documentation sets (confluence spaces, documentation sites, requirement sources) and making them accessible to agents with cross-source linking — connecting requirements to solutions, designs to implementations, across different source documents. This replaces slow web tools that have no connection between sources.
+Read `h-knowledge-ops` before scanning. It is the current authority for the live MCP tools,
+source lifecycle, enrichment queue, graph behavior, scopes, and accepted risks. Use the current
+`serve/knowledge/README.md` and `serve/knowledge-mcp/README.md` to verify implementation claims.
+This prompt defines audit intent and evidence standards; it does not preserve historical
+architecture.
 
 ## Audit Scope
 
