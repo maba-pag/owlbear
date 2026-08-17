@@ -1,4 +1,4 @@
-# owlbear-delivery-mcp — Target Delivery MCP Server
+# owlbear-delivery-mcp — Delivery MCP Server
 
 MCP server for authored Design, sequential Delivery planning and execution, provider-observed
 publication and acceptance, and completed Change history. It is registered in VS Code as
