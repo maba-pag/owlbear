@@ -13,7 +13,7 @@ _PACKAGE_FILES = ("authority.json", "design.md", "intent.md", "manifest.json")
 
 
 def _git(repository: Path, *arguments: str, input_bytes: bytes | None = None) -> str:
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603
         (_GIT, "-C", str(repository), *arguments),
         check=True,
         capture_output=True,
@@ -63,7 +63,7 @@ def test_create_replays_identity_and_rejects_divergence_or_drift(repository: Pat
     assert (active_root / "sample-change/design.md").read_bytes() == b"drift\n"
 
     for unsafe in ("Uppercase", "leading-", "../escape", "two--hyphens"):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="change identity must contain"):
             store.create(unsafe, b"intent", b"design")
 
 

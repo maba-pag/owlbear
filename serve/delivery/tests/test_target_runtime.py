@@ -24,10 +24,10 @@ from owlbear_delivery.target_runtime import (
     TargetAttemptState,
     TargetJob,
     TargetJobState,
+    TargetRecoveryError,
     TargetRequest,
     TargetRuntime,
     TargetRuntimeConflictError,
-    TargetRecoveryError,
     TargetRuntimeReferenceError,
     TargetTask,
 )

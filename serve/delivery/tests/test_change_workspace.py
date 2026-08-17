@@ -14,18 +14,18 @@ from owlbear_delivery.change_workspace import (
     CapacityConfigurationConflictError,
     CapacityLedger,
     CapacityLedgerConflictError,
+    ChangeCoordination,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
     ChangeWorkspaceManager,
-    ChangeCoordination,
-    ChangeWorktreeAttentionError,
     ChangeWorktreeAttentionCode,
+    ChangeWorktreeAttentionError,
     ChangeWriter,
     CoordinationConflictError,
     PortfolioCoordinator,
-    PublicationLease,
-    PublicationBaselineUnavailableError,
     PromoteExternalHead,
+    PublicationBaselineUnavailableError,
+    PublicationLease,
     SyncChangeWithTarget,
     WriterIdentity,
 )
@@ -259,8 +259,8 @@ def test_publication_lease_duration_is_bounded(tmp_path: Path) -> None:
 
 
 def _git(repository: Path, *arguments: str) -> str:
-    return subprocess.run(
-        ("git", "-C", str(repository), *arguments),
+    return subprocess.run(  # noqa: S603
+        ("git", "-C", str(repository), *arguments),  # noqa: S607
         check=True,
         capture_output=True,
         text=True,
@@ -269,8 +269,8 @@ def _git(repository: Path, *arguments: str) -> str:
 
 def _git_ref_exists(repository: Path, reference: str) -> bool:
     return (
-        subprocess.run(
-            ("git", "-C", str(repository), "rev-parse", "--verify", reference),
+        subprocess.run(  # noqa: S603
+            ("git", "-C", str(repository), "rev-parse", "--verify", reference),  # noqa: S607
             check=False,
             capture_output=True,
         ).returncode
@@ -322,7 +322,7 @@ def test_list_retained_worktrees_is_sorted_and_batches_git_reads(tmp_path: Path)
         sorted((path.name, path.read_bytes()) for path in (tmp_path / "state/claims/changes").iterdir())
     )
     before_worktrees = _git(repository, "worktree", "list", "--porcelain")
-    original_run_git = manager._run_git
+    original_run_git = manager._run_git  # noqa: SLF001
 
     with patch.object(manager, "_run_git", wraps=original_run_git) as run_git:
         retained = manager.list_retained()
@@ -710,7 +710,7 @@ def test_ensure_rejects_invalid_change_id_before_git_access(tmp_path: Path) -> N
     _coordinator, manager = _manager(tmp_path, repository)
     before = _workspace_bytes(repository, tmp_path / "state")
     with (
-        patch.object(manager, "_git", wraps=manager._git) as git,
+        patch.object(manager, "_git", wraps=manager._git) as git,  # noqa: SLF001
         pytest.raises(ValueError, match="safe worktree identity"),
     ):
         manager.ensure("../invalid")
@@ -1230,7 +1230,7 @@ def test_coordinator_translates_capacity_ledger_conflict(
         state_root.mkdir(parents=True)
         ledger_path.write_text(CapacityLedger(capacity=2).model_dump_json(), encoding="utf-8")
 
-    original_commit = PortfolioCoordinator._commit
+    original_commit = PortfolioCoordinator._commit  # noqa: SLF001
 
     def race(
         coordinator: PortfolioCoordinator,
@@ -1320,7 +1320,7 @@ def test_restart_recovers_from_each_git_interruption(tmp_path: Path, interruptio
         coordination.change_id,
         ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build"),
     )
-    original_git = manager._git
+    original_git = manager._git  # noqa: SLF001
 
     def interrupt_after_git(*arguments: str, **kwargs) -> str:
         result = original_git(*arguments, **kwargs)
@@ -1365,7 +1365,7 @@ def test_restart_recovers_missing_worktree_at_each_git_interruption(tmp_path: Pa
     writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build")
     coordinator.acquire(coordination.change_id, writer)
     _git(repository, "worktree", "remove", str(coordination.worktree_path))
-    original_git = manager._git
+    original_git = manager._git  # noqa: SLF001
 
     def interrupt_after_git(*arguments: str, **kwargs) -> str:
         result = original_git(*arguments, **kwargs)

@@ -4,30 +4,31 @@ import hashlib
 import json
 from datetime import UTC, datetime
 
+from owlbear_delivery.change_workspace import ChangeTargetSyncReceipt
 from owlbear_delivery.delivery_runtime import (
     DeliveryActiveClaim,
     DeliveryBlock,
-    DeliveryChangeDisposition,
-    DeliveryChangeDispositionKind,
     DeliveryChangeAbandonment,
     DeliveryChangeDeferral,
+    DeliveryChangeDisposition,
+    DeliveryChangeDispositionKind,
     DeliveryChangePublicationHistory,
     DeliveryChangePublicationIdentity,
     DeliveryChangeStage,
-    DeliveryFrontier,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
     DeliveryFinalization,
     DeliveryFinalizationInvalidation,
     DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
+    DeliveryFrontier,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryMergedPullRequestLatch,
-    DeliveryPendingCheckpoint,
     DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryOperatorMove,
+    DeliveryPendingCheckpoint,
     DeliveryRequest,
     DeliveryRequestKind,
     DeliveryReturnContext,
@@ -40,7 +41,6 @@ from owlbear_delivery.delivery_runtime import (
     OutcomeAuthorityBinding,
 )
 from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
-from owlbear_delivery.change_workspace import ChangeTargetSyncReceipt
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCommitmentClass,
@@ -55,8 +55,8 @@ from owlbear_delivery.work_items import (
     WorkItemAttention,
     WorkItemNeed,
     WorkItemNextActor,
-    WorkItemPublicationPhase,
     WorkItemProjector,
+    WorkItemPublicationPhase,
     WorkItemStage,
 )
 

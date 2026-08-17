@@ -46,8 +46,8 @@ from owlbear_delivery.target_contract import (
 
 
 def _git(repository: Path, *arguments: str) -> str:
-    return subprocess.run(
-        ("git", "-C", str(repository), *arguments),
+    return subprocess.run(  # noqa: S603
+        ("git", "-C", str(repository), *arguments),  # noqa: S607
         check=True,
         capture_output=True,
         text=True,

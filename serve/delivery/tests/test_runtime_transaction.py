@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 import yaml
@@ -29,7 +29,7 @@ def test_locked_roots_rejects_symlink_roots_and_lock_files(tmp_path: Path) -> No
         pass
 
     (root / ".storage.lock").symlink_to(tmp_path / "outside")
-    with pytest.raises(OSError), locked_roots((root,)):
+    with pytest.raises(OSError, match="Too many levels of symbolic links"), locked_roots((root,)):
         pass
 
 
@@ -307,7 +307,7 @@ def test_concurrent_processes_publish_one_immutable_participant_set(tmp_path: Pa
         f"RuntimeTransaction(Path({str(manifest_root)!r}), 'shared', "
         f"(TransactionParticipant(Path({str(work_root)!r}), Path('jobs/plan.yaml'), b'plan'),)).commit()\n"
     )
-    processes = [subprocess.Popen([sys.executable, "-c", command]) for _ in range(2)]
+    processes = [subprocess.Popen([sys.executable, "-c", command]) for _ in range(2)]  # noqa: S603
     for process in processes:
         process.wait()
 

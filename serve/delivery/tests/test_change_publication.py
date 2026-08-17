@@ -9,6 +9,8 @@ separate state from conflicts in the user checkout. A post-write timeout is a
 response-unknown outcome rather than a retry-safe incident.
 """
 
+# ruff: noqa: SLF001
+
 from __future__ import annotations
 
 import subprocess
@@ -24,9 +26,8 @@ from owlbear_delivery import (
     ChangeBranchPublisher,
     ChangeBranchSupersessionReceipt,
     ChangeTargetSyncConflictError,
-    TargetSyncConflictRequest,
-    ChangeWriter,
     ChangeWorkspaceManager,
+    ChangeWriter,
     CoordinationConflictError,
     PortfolioCoordinator,
     PublicationLease,
@@ -35,13 +36,14 @@ from owlbear_delivery import (
     PublishChangeBranch,
     SupersedeChangeBranch,
     SyncChangeWithTarget,
+    TargetSyncConflictRequest,
     WriterIdentity,
 )
 from owlbear_delivery.git_executable import resolve_git_executable
 
 
 def _git(repository: Path, *arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    return subprocess.run(  # noqa: S603
         (resolve_git_executable(), "-C", str(repository), *arguments),
         check=check,
         capture_output=True,
@@ -193,7 +195,7 @@ def test_publication_and_cleanup_preserve_extended_operation_markers(
     user_checkout_snapshot,
     prepare_user_checkout_state,
     seed_user_checkout_metadata,
-) -> None:  # noqa: PLR0913
+) -> None:
     repository, remote, initial = _repository(tmp_path)
     seed_user_checkout_metadata(repository)
     prepare_user_checkout_state(repository, user_state)
@@ -1469,7 +1471,7 @@ def test_pre_push_timeout_releases_reservation_for_new_operation(tmp_path: Path)
     ],
 )
 @pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)
-def test_publication_incidents_preserve_checkout_and_classify_exact_operation(  # noqa: PLR0913
+def test_publication_incidents_preserve_checkout_and_classify_exact_operation(  # noqa: PLR0913, PLR0917
     tmp_path: Path,
     incident: str,
     user_state: str,

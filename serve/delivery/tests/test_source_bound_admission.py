@@ -34,7 +34,7 @@ _GIT = resolve_git_executable()
 
 
 def _git(repository: Path, *arguments: str) -> str:
-    return subprocess.run(
+    return subprocess.run(  # noqa: S603
         (_GIT, "-C", str(repository), *arguments),
         check=True,
         capture_output=True,

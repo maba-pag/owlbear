@@ -12,7 +12,6 @@ import pytest
 
 from owlbear_delivery.git_executable import resolve_git_executable
 
-
 _OPERATION_MARKERS = (
     "MERGE_HEAD",
     "CHERRY_PICK_HEAD",
@@ -25,7 +24,7 @@ _OPERATION_MARKERS = (
 
 
 def _git(repository: Path, *arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    return subprocess.run(  # noqa: S603
         (resolve_git_executable(), "-C", str(repository), *arguments),
         check=check,
         capture_output=True,
@@ -112,7 +111,8 @@ def _prepare_branch_checkout_state(repository: Path, user_state: str) -> None:
     if user_state in {"conflicted", "mid-merge"}:
         merge = _git(repository, "merge", base_branch, check=False)
         if merge.returncode == 0:
-            raise AssertionError(f"expected {user_state} merge setup to conflict")
+            message = f"expected {user_state} merge setup to conflict"
+            raise AssertionError(message)
         if user_state == "conflicted":
             _git(repository, "merge", "--quit")
         return
@@ -189,7 +189,8 @@ def _prepare_user_checkout_state(repository: Path, user_state: str) -> None:
     elif user_state == "mid-bisect":
         _prepare_bisect_state(repository)
     elif user_state != "clean":
-        raise ValueError(f"unknown user checkout state: {user_state}")
+        message = f"unknown user checkout state: {user_state}"
+        raise ValueError(message)
 
 
 def _seed_user_checkout_metadata(repository: Path) -> None:

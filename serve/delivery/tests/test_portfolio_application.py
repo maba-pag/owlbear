@@ -1,3 +1,5 @@
+# ruff: noqa: SLF001
+
 from __future__ import annotations
 
 import hashlib
@@ -18,45 +20,46 @@ import pytest
 
 from owlbear_delivery import (
     AdministrativeDeliveryMove,
+    AdvanceDelivery,
+    BlockDelivery,
     CapacityLedger,
     CapacityLedgerConflictError,
     ChangeBranchPublicationReceipt,
     ChangeBranchPublisher,
     ChangeBranchSupersessionReceipt,
     ChangeExternalHeadAdoptionReceipt,
-    ChangeTargetSyncConflictError,
     ChangeTargetSyncAbortReceipt,
+    ChangeTargetSyncConflictError,
     ChangeTargetSyncConflictState,
     ChangeTargetSyncReceipt,
+    ChangeWorkspaceManager,
     ChangeWorktreeAttentionCode,
     ChangeWorktreeAttentionError,
-    AdvanceDelivery,
-    BlockDelivery,
-    CompletedHistoryCatalog,
-    ChangeWorkspaceManager,
     ChangeWriter,
+    CompletedHistoryCatalog,
     CompletionReceipt,
     CoordinationConflictError,
-    DeliveryApplicationLoadError,
-    DeliveryHostConfig,
-    DeliveryCommitment,
-    DeliveryCommitmentClass,
+    CreateOrReconcileDraftPullRequest,
+    DeliveryAcceptanceWaitingError,
     DeliveryAdmissionConflictError,
     DeliveryAdmissionRequest,
+    DeliveryApplicationLoadError,
     DeliveryAuthorityRegistry,
-    DeliveryClaimRecoveryStatus,
-    DeliveryAcceptanceWaitingError,
+    DeliveryChangePublicationIdentity,
     DeliveryChangeStage,
     DeliveryChangeWorktreeCleanup,
     DeliveryChangeWorktreeRecovery,
-    DeliveryContract,
     DeliveryCheckpointPublicationState,
     DeliveryCheckpointTrigger,
     DeliveryCheckpointTriggerKind,
-    DeliveryChangePublicationIdentity,
+    DeliveryClaimRecoveryStatus,
+    DeliveryCommitment,
+    DeliveryCommitmentClass,
+    DeliveryContract,
     DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
     DeliveryFrontier,
+    DeliveryHostConfig,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryObservation,
@@ -68,6 +71,7 @@ from owlbear_delivery import (
     DeliveryRequestKind,
     DeliveryRequestOption,
     DeliveryRequestResolution,
+    DeliveryRetainedWorktreeCleanupBlockReason,
     DeliveryReview,
     DeliveryReviewReceipt,
     DeliveryRolePolicy,
@@ -79,50 +83,47 @@ from owlbear_delivery import (
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryWorkerRole,
-    FinalizeDeliveryChange,
-    DesignPackageManifest,
     DesignPackageConflictError,
+    DesignPackageManifest,
     DesignPackageStore,
-    DraftPullRequestPublicationReceipt,
     DraftPullRequestPublicationHistory,
-    DraftPullRequestSupersessionReceipt,
-    CreateOrReconcileDraftPullRequest,
+    DraftPullRequestPublicationReceipt,
     DraftPullRequestPublisher,
-    MarkChangePullRequestReady,
+    DraftPullRequestSupersessionReceipt,
+    FinalizeDeliveryChange,
     GeneratedPullRequestSummaryReceipt,
-    OutcomeAuthorityBinding,
+    MarkChangePullRequestReady,
     ObserveChangePublicationChecks,
     ObserveChangePublicationPullRequest,
-    ReadChangePublicationHistory,
+    OutcomeAuthorityBinding,
     PortfolioApplication,
     PortfolioApplicationConfig,
     PortfolioApplicationDependencies,
     PortfolioApplicationError,
     PortfolioApplicationHooks,
     PortfolioCoordinator,
-    PublicationLease,
     PublicationBaselineUnavailableError,
     PublicationCheck,
     PublicationCheckBlockingState,
     PublicationCheckKind,
     PublicationCheckSnapshot,
+    PublicationLease,
     PublishDeliveryPlan,
     PublishDeliveryResult,
     ReadChangePublicationCheckObservations,
-    DeliveryRetainedWorktreeCleanupBlockReason,
+    ReadChangePublicationHistory,
     RetryDelivery,
     classify_publication_check,
     load_delivery_application,
 )
+from owlbear_delivery.portfolio_application import _required_check_diagnostics
 from owlbear_delivery.publication_provider import (
     PublicationProviderError,
     PublicationProviderFailureCode,
     PublicationPullRequest,
     PublicationRepository,
 )
-from owlbear_delivery.portfolio_application import _required_check_diagnostics
 from owlbear_delivery.storage_io import locked_roots
-
 
 _USER_CHECKOUT_STATES = (
     "clean",
@@ -137,8 +138,8 @@ _USER_CHECKOUT_STATES = (
 
 
 def _git(repository: Path, *arguments: str) -> str:
-    return subprocess.run(
-        ("git", "-C", str(repository), *arguments),
+    return subprocess.run(  # noqa: S603
+        ("git", "-C", str(repository), *arguments),  # noqa: S607
         check=True,
         capture_output=True,
         text=True,
@@ -147,8 +148,8 @@ def _git(repository: Path, *arguments: str) -> str:
 
 def _git_ref_exists(repository: Path, reference: str) -> bool:
     return (
-        subprocess.run(
-            ("git", "-C", str(repository), "rev-parse", "--verify", reference),
+        subprocess.run(  # noqa: S603
+            ("git", "-C", str(repository), "rev-parse", "--verify", reference),  # noqa: S607
             check=False,
             capture_output=True,
         ).returncode
@@ -161,7 +162,7 @@ def _commit_reviewed_head(application, coordination, filename: str, content: str
     _git(coordination.worktree_path, "add", filename)
     _git(coordination.worktree_path, "commit", "-m", message)
     head = _git(coordination.worktree_path, "rev-parse", "HEAD")
-    application._workspace_manager.record_reviewed("change-a", head)  # noqa: SLF001
+    application._workspace_manager.record_reviewed("change-a", head)
     return head
 
 
@@ -494,7 +495,7 @@ def _publish_external_change_head(
     return adopted
 
 
-def _portfolio(  # noqa: PLR0913
+def _portfolio(
     tmp_path: Path,
     stages: dict[str, DeliveryStage],
     *,
@@ -619,7 +620,7 @@ def test_finalization_uses_managed_head_and_invalidates_observed_drift(tmp_path:
 
 
 @pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)
-def test_finalization_preserves_user_checkout_states(  # noqa: PLR0913
+def test_finalization_preserves_user_checkout_states(
     tmp_path: Path,
     user_state: str,
     user_checkout_snapshot,
@@ -630,7 +631,7 @@ def test_finalization_preserves_user_checkout_states(  # noqa: PLR0913
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
     )
-    repository = application._workspace_manager.repository  # noqa: SLF001 - inspect user checkout custody.
+    repository = application._workspace_manager.repository
     seed_user_checkout_metadata(repository)
     prepare_user_checkout_state(repository, user_state)
     before = user_checkout_snapshot(repository, ("refs/heads/owlbear/change/change-a",))
@@ -691,7 +692,7 @@ def test_application_binds_external_head_adoption_without_advancing_reviewed_aut
         adopted_head="5" * 40,
     )
 
-    with patch.object(application._workspace_manager, "adopt_external_head", return_value=receipt) as adopt:  # noqa: SLF001
+    with patch.object(application._workspace_manager, "adopt_external_head", return_value=receipt) as adopt:
         assert application.adopt_external_head("change-a", expected_head, "5" * 40, "adopt-change-a") == receipt
 
     request = adopt.call_args.args[0]
@@ -717,7 +718,7 @@ def test_application_requires_adopted_head_promotion_before_build_acquisition(tm
     )
     initial = coordinator.show("change-a").last_reviewed_commit
     branch = coordinator.show("change-a").branch
-    adopted = _publish_external_change_head(tmp_path, application._workspace_manager.repository, branch, initial)  # noqa: SLF001
+    adopted = _publish_external_change_head(tmp_path, application._workspace_manager.repository, branch, initial)
 
     application.adopt_external_head("change-a", initial, adopted, "adopt-for-acquisition")
     blocked = application.acquire_frontier_work()
@@ -746,7 +747,7 @@ def test_finalization_replay_promotes_an_adopted_head_after_runtime_commit(tmp_p
     )
     initial = coordinator.show("change-a").last_reviewed_commit
     branch = coordinator.show("change-a").branch
-    adopted = _publish_external_change_head(tmp_path, application._workspace_manager.repository, branch, initial)  # noqa: SLF001
+    adopted = _publish_external_change_head(tmp_path, application._workspace_manager.repository, branch, initial)
     application.adopt_external_head("change-a", initial, adopted, "adopt-for-finalization")
     request = _finalization_request("change-a", adopted)
 
@@ -775,7 +776,7 @@ def test_finalization_replay_repairs_runtime_promotion_after_workspace_commit(tm
     )
     initial = coordinator.show("change-a").last_reviewed_commit
     branch = coordinator.show("change-a").branch
-    adopted = _publish_external_change_head(tmp_path, application._workspace_manager.repository, branch, initial)  # noqa: SLF001
+    adopted = _publish_external_change_head(tmp_path, application._workspace_manager.repository, branch, initial)
     application.adopt_external_head("change-a", initial, adopted, "adopt-for-finalization-repair")
     request = _finalization_request("change-a", adopted)
 
@@ -805,7 +806,7 @@ def test_finalization_replay_skips_reconciled_promotion_after_worktree_loss(tmp_
     )
     initial = coordinator.show("change-a").last_reviewed_commit
     branch = coordinator.show("change-a").branch
-    adopted = _publish_external_change_head(tmp_path, application._workspace_manager.repository, branch, initial)  # noqa: SLF001
+    adopted = _publish_external_change_head(tmp_path, application._workspace_manager.repository, branch, initial)
     application.adopt_external_head("change-a", initial, adopted, "adopt-for-idempotent-replay")
     request = _finalization_request("change-a", adopted)
     finalization = application.finalize_change("change-a", request)
@@ -829,7 +830,7 @@ def test_finalization_after_builder_child_does_not_repromote_adopted_ancestor(tm
     )
     initial = coordinator.show("change-a").last_reviewed_commit
     branch = coordinator.show("change-a").branch
-    adopted = _publish_external_change_head(tmp_path, application._workspace_manager.repository, branch, initial)  # noqa: SLF001
+    adopted = _publish_external_change_head(tmp_path, application._workspace_manager.repository, branch, initial)
     application.adopt_external_head("change-a", initial, adopted, "adopt-for-builder")
     application.promote_external_head("change-a", adopted, "promote-for-builder")
 
@@ -881,7 +882,7 @@ def test_application_promotes_only_reconciled_adoption_evidence(tmp_path: Path) 
     )
     initial = coordinator.show("change-a").last_reviewed_commit
     branch = coordinator.show("change-a").branch
-    adopted = _publish_external_change_head(tmp_path, application._workspace_manager.repository, branch, initial)  # noqa: SLF001
+    adopted = _publish_external_change_head(tmp_path, application._workspace_manager.repository, branch, initial)
     application.adopt_external_head("change-a", initial, adopted, "adopt-for-promotion")
 
     promoted = application.promote_external_head("change-a", adopted, "promote-for-promotion")
@@ -899,9 +900,9 @@ def test_application_acquires_after_real_target_sync_at_the_merged_head(tmp_path
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
-    repository = application._workspace_manager.repository  # noqa: SLF001
+    repository = application._workspace_manager.repository
     remote = tmp_path / "remote.git"
-    subprocess.run(("git", "init", "--bare", str(remote)), check=True, capture_output=True)
+    subprocess.run(("git", "init", "--bare", str(remote)), check=True, capture_output=True)  # noqa: S603, S607
     _git(repository, "remote", "add", "origin", str(remote))
     _git(repository, "push", "origin", "refs/heads/main:refs/heads/main")
     target_head = _advance_remote_target(tmp_path, remote)
@@ -912,7 +913,7 @@ def test_application_acquires_after_real_target_sync_at_the_merged_head(tmp_path
     assert acquired.failures == ()
     assert len(acquired.launch_packages) == 1
     assert acquired.launch_packages[0].source_head == receipt.merged_head
-    assert application._workspace_manager.reviewed_source_head("change-a") == receipt.merged_head  # noqa: SLF001
+    assert application._workspace_manager.reviewed_source_head("change-a") == receipt.merged_head
 
 
 def test_application_captures_target_sync_conflict_as_publication_attention(tmp_path: Path) -> None:
@@ -969,7 +970,7 @@ def test_target_sync_rejects_terminal_or_deferred_change_before_workspace_mutati
     before = coordinator.show("change-a")
 
     with (
-        patch.object(application._workspace_manager, "sync_with_target") as workspace_sync,  # noqa: SLF001
+        patch.object(application._workspace_manager, "sync_with_target") as workspace_sync,
         pytest.raises(PortfolioApplicationError, match="requires a mutable Change"),
     ):
         application.sync_change_with_target("change-a", "2" * 40, "sync-lifecycle")
@@ -998,7 +999,7 @@ def test_application_aborts_target_sync_conflict_and_resolves_exact_attention(tm
         restored_head=exact_head,
     )
 
-    with patch.object(application._workspace_manager, "abort_target_sync_conflict", return_value=receipt):  # noqa: SLF001
+    with patch.object(application._workspace_manager, "abort_target_sync_conflict", return_value=receipt):
         assert (
             application.abort_target_sync_conflict(
                 "change-a",
@@ -1037,7 +1038,7 @@ def test_application_records_semantic_target_resolution_with_exact_runtime_recei
         merge_commit=True,
     )
 
-    with patch.object(application._workspace_manager, "resolve_target_sync_conflict", return_value=receipt):  # noqa: SLF001
+    with patch.object(application._workspace_manager, "resolve_target_sync_conflict", return_value=receipt):
         assert (
             application.resolve_target_sync_conflict(
                 "change-a",
@@ -1073,7 +1074,7 @@ def test_target_sync_conflict_exit_rejects_deferred_change_before_workspace_muta
     application.defer_change("change-a", "Wait before resolving the preserved merge")
 
     with (
-        patch.object(application._workspace_manager, operation) as workspace_exit,  # noqa: SLF001
+        patch.object(application._workspace_manager, operation) as workspace_exit,
         pytest.raises(PortfolioApplicationError, match="requires a mutable Change"),
     ):
         getattr(application, operation)(
@@ -1106,7 +1107,7 @@ def test_target_sync_conflict_exit_rejects_abandoned_change_before_workspace_mut
     application.abandon_change("change-a", "Stop the unresolved Change")
 
     with (
-        patch.object(application._workspace_manager, operation) as workspace_exit,  # noqa: SLF001
+        patch.object(application._workspace_manager, operation) as workspace_exit,
         pytest.raises(DeliveryRuntimeConflictError, match="target synchronization"),
     ):
         getattr(application, operation)(
@@ -1125,9 +1126,9 @@ def test_abandoning_preserved_target_sync_conflict_surfaces_cleanup_attention(tm
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
-    repository = application._workspace_manager.repository  # noqa: SLF001
+    repository = application._workspace_manager.repository
     remote = tmp_path / "remote.git"
-    subprocess.run(("git", "init", "--bare", str(remote)), check=True, capture_output=True)
+    subprocess.run(("git", "init", "--bare", str(remote)), check=True, capture_output=True)  # noqa: S603, S607
     _git(repository, "remote", "add", "origin", str(remote))
     _git(repository, "push", "origin", "refs/heads/main:refs/heads/main")
     target_head = _advance_remote_target(tmp_path, remote, product="target\n")
@@ -1135,7 +1136,7 @@ def test_abandoning_preserved_target_sync_conflict_surfaces_cleanup_attention(tm
     (coordination.worktree_path / "product.txt").write_text("change\n", encoding="utf-8")
     _git(coordination.worktree_path, "add", "product.txt")
     _git(coordination.worktree_path, "commit", "-m", "change branch edit")
-    application._workspace_manager.record_reviewed(  # noqa: SLF001
+    application._workspace_manager.record_reviewed(
         "change-a",
         _git(coordination.worktree_path, "rev-parse", "HEAD"),
     )
@@ -1188,7 +1189,7 @@ def test_finalization_rejects_change_head_drift_before_persistence(tmp_path: Pat
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
     )
-    coordination = application._workspace_manager.show("change-a")  # noqa: SLF001 - test authority setup.
+    coordination = application._workspace_manager.show("change-a")
     exact_head = coordination.last_reviewed_commit
     request = _finalization_request("change-a", exact_head)
     (coordination.worktree_path / "unreviewed.txt").write_text("unreviewed\n", encoding="utf-8")
@@ -1297,7 +1298,7 @@ def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Pat
         return pull_requests[0]
 
     provider.set_pull_request_draft_state.side_effect = set_draft_state
-    application._draft_pull_request_publisher = publisher  # noqa: SLF001
+    application._draft_pull_request_publisher = publisher
     checkpoint = runtimes["change-a"].checkpoint_publication_state()
     assert checkpoint.pending_checkpoint is not None
     ready_request = MarkChangePullRequestReady(
@@ -1341,7 +1342,7 @@ def test_finalization_invalidates_provider_pull_request_head_drift(tmp_path: Pat
     assert invalidation.finalization_id == receipt.finalization_id
     assert invalidation.expected_head == exact_head
     assert invalidation.observed_head == "f" * 40
-    assert application._workspace_manager.observed_change_head("change-a") == exact_head  # noqa: SLF001
+    assert application._workspace_manager.observed_change_head("change-a") == exact_head
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.BUILDING
     assert pull_requests[0].draft is True
     assert provider.set_pull_request_draft_state.call_count == 3
@@ -1420,7 +1421,7 @@ def _awaiting_acceptance_fixture(
             generated_summary="Finalized Change A.",
         )
     )
-    application._draft_pull_request_publisher = publisher  # noqa: SLF001
+    application._draft_pull_request_publisher = publisher
     checkpoint = runtime.checkpoint_publication_state()
     assert checkpoint.pending_checkpoint is not None
     runtime.record_checkpoint_branch_publication(checkpoint, exact_head)
@@ -1477,7 +1478,7 @@ def test_mark_change_ready_captures_required_check_failure(
 
     disposition = runtime.change_disposition()
     assert disposition is not None
-    observations = application._draft_pull_request_publisher.read_check_observations(  # noqa: SLF001
+    observations = application._draft_pull_request_publisher.read_check_observations(
         ReadChangePublicationCheckObservations(
             change_id="change-a",
             repository="example/project",
@@ -1514,7 +1515,7 @@ def test_mark_change_ready_does_not_gate_on_pending_or_nonblocking_checks(
     kind: PublicationCheckKind,
     status: str,
     conclusion: str | None,
-    required: bool,  # noqa: FBT001
+    required: bool,  # noqa: FBT001 - pytest parametrization supplies this boolean positionally.
 ) -> None:
     application, runtime, provider, _state, exact_head, _state_root = _awaiting_acceptance_fixture(
         tmp_path,
@@ -1829,7 +1830,7 @@ def test_reconcile_awaiting_acceptance_ignores_ineligible_changes(tmp_path: Path
 
 
 @pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)
-def test_observe_acceptance_preserves_user_checkout_states(  # noqa: PLR0913
+def test_observe_acceptance_preserves_user_checkout_states(
     tmp_path: Path,
     user_state: str,
     user_checkout_snapshot,
@@ -1837,7 +1838,7 @@ def test_observe_acceptance_preserves_user_checkout_states(  # noqa: PLR0913
     seed_user_checkout_metadata,
 ) -> None:
     application, runtime, _provider, state, _exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
-    repository = application._workspace_manager.repository  # noqa: SLF001 - inspect user checkout custody.
+    repository = application._workspace_manager.repository
     seed_user_checkout_metadata(repository)
     prepare_user_checkout_state(repository, user_state)
     before = user_checkout_snapshot(repository, ("refs/heads/owlbear/change/change-a",))
@@ -1861,7 +1862,7 @@ def test_observe_acceptance_preserves_user_checkout_states(  # noqa: PLR0913
     before.assert_unchanged(repository)
 
 
-def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # noqa: PLR0915
+def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # noqa: PLR0915 - scenario covers full replay lifecycle.
     tmp_path: Path,
     user_checkout_snapshot,
 ) -> None:
@@ -1930,7 +1931,7 @@ def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # n
             generated_summary="Finalized Change A.",
         )
     )
-    application._draft_pull_request_publisher = publisher  # noqa: SLF001
+    application._draft_pull_request_publisher = publisher
     checkpoint = runtime.checkpoint_publication_state()
     assert checkpoint.pending_checkpoint is not None
     runtime.record_checkpoint_branch_publication(checkpoint, exact_head)
@@ -2053,7 +2054,7 @@ def test_change_lifecycle_dispositions_delegate_through_application_lock(tmp_pat
 
 
 @pytest.mark.parametrize("user_state", _USER_CHECKOUT_STATES)
-def test_abandoned_change_worktree_cleanup_preserves_branch_and_replays_receipt(  # noqa: PLR0913
+def test_abandoned_change_worktree_cleanup_preserves_branch_and_replays_receipt(
     tmp_path: Path,
     user_state: str,
     user_checkout_snapshot,
@@ -2064,10 +2065,10 @@ def test_abandoned_change_worktree_cleanup_preserves_branch_and_replays_receipt(
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
-    repository = application._workspace_manager.repository  # noqa: SLF001 - inspect user checkout custody.
+    repository = application._workspace_manager.repository
     seed_user_checkout_metadata(repository)
     prepare_user_checkout_state(repository, user_state)
-    coordination = application._workspace_manager.show("change-a")  # noqa: SLF001 - inspect owned cleanup.
+    coordination = application._workspace_manager.show("change-a")
     before = user_checkout_snapshot(repository, ("refs/heads/owlbear/change/change-a",))
     application.abandon_change("change-a", "User stopped the Change")
 
@@ -2076,7 +2077,7 @@ def test_abandoned_change_worktree_cleanup_preserves_branch_and_replays_receipt(
     assert isinstance(receipt, DeliveryChangeWorktreeCleanup)
     assert receipt.change_id == "change-a"
     assert not coordination.worktree_path.exists()
-    assert _git_ref_exists(application._workspace_manager.repository, coordination.branch)  # noqa: SLF001
+    assert _git_ref_exists(application._workspace_manager.repository, coordination.branch)
     assert runtimes["change-a"].change_stage() == DeliveryChangeStage.ABANDONED
     assert application.cleanup_abandoned_change_worktree("change-a") == receipt
     assert application.list_retained_change_worktrees() == ()
@@ -2088,7 +2089,7 @@ def test_change_worktree_recovery_recreates_missing_worktree_and_replays_receipt
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
-    coordination = application._workspace_manager.show("change-a")  # noqa: SLF001 - inspect recovery authority.
+    coordination = application._workspace_manager.show("change-a")
     shutil.rmtree(coordination.worktree_path)
 
     receipt = application.recover_change_worktree(
@@ -2143,7 +2144,7 @@ def test_change_worktree_recovery_requires_exact_reviewed_head(tmp_path: Path) -
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
-    coordination = application._workspace_manager.show("change-a")  # noqa: SLF001 - inspect recovery authority.
+    coordination = application._workspace_manager.show("change-a")
     shutil.rmtree(coordination.worktree_path)
 
     with pytest.raises(CoordinationConflictError, match="recovery reviewed head differs"):
@@ -2161,8 +2162,8 @@ def test_change_worktree_recovery_rebuilds_missing_coordination_without_target_m
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
-    coordination = application._workspace_manager.show("change-a")  # noqa: SLF001 - inspect recovery authority.
-    target_head = _git(application._workspace_manager.repository, "rev-parse", "HEAD")  # noqa: SLF001
+    coordination = application._workspace_manager.show("change-a")
+    target_head = _git(application._workspace_manager.repository, "rev-parse", "HEAD")
     (state_root / "claims/changes/change-a.json").unlink()
     shutil.rmtree(coordination.worktree_path)
 
@@ -2173,8 +2174,8 @@ def test_change_worktree_recovery_rebuilds_missing_coordination_without_target_m
     )
 
     assert receipt.recovery_reviewed_head == coordination.last_reviewed_commit
-    assert application._workspace_manager.show("change-a").last_reviewed_commit == coordination.last_reviewed_commit  # noqa: SLF001
-    assert _git(application._workspace_manager.repository, "rev-parse", "HEAD") == target_head  # noqa: SLF001
+    assert application._workspace_manager.show("change-a").last_reviewed_commit == coordination.last_reviewed_commit
+    assert _git(application._workspace_manager.repository, "rev-parse", "HEAD") == target_head
 
 
 def test_change_worktree_recovery_rejects_active_publication_lease(tmp_path: Path) -> None:
@@ -2222,10 +2223,10 @@ def test_abandoned_change_worktree_cleanup_surfaces_lost_worktree_attention(tmp_
         tmp_path,
         {"change-a": DeliveryStage.IMPLEMENTATION},
     )
-    coordination = application._workspace_manager.show("change-a")  # noqa: SLF001
+    coordination = application._workspace_manager.show("change-a")
     application.abandon_change("change-a", "User stopped the Change")
     _git(
-        application._workspace_manager.repository,  # noqa: SLF001
+        application._workspace_manager.repository,
         "worktree",
         "remove",
         "--force",
@@ -2310,10 +2311,10 @@ def test_retained_inventory_reports_orphans_nonterminal_and_worktree_attention(t
             "change-c": DeliveryStage.PLANNING,
         },
     )
-    del application._runtimes["change-a"]  # noqa: SLF001 - test an orphaned retained runtime row.
-    attention_coordination = application._workspace_manager.show("change-b")  # noqa: SLF001
+    del application._runtimes["change-a"]
+    attention_coordination = application._workspace_manager.show("change-b")
     _git(
-        application._workspace_manager.repository,  # noqa: SLF001
+        application._workspace_manager.repository,
         "worktree",
         "remove",
         "--force",
@@ -2462,8 +2463,8 @@ def test_reconcile_first_checkpoint_publishes_branch_creates_pr_and_drains(tmp_p
     pull_request_publisher = Mock()
     pull_request_publisher.publish.return_value = _draft_receipt(head)
     pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
-    application._change_branch_publisher = branch_publisher  # noqa: SLF001
-    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
 
     result = application.reconcile_change_checkpoint("change-a")
     replayed = application.reconcile_change_checkpoint("change-a")
@@ -2501,12 +2502,12 @@ def test_reconcile_checkpoint_reports_bounded_escaped_automation_paths(tmp_path:
     pull_request_publisher = Mock()
     pull_request_publisher.publish.return_value = _draft_receipt(head)
     pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
-    application._change_branch_publisher = branch_publisher  # noqa: SLF001
-    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
     long_path = ".github/workflows/" + ("x" * 300) + ".yml"
 
     with patch.object(
-        application._workspace_manager,  # noqa: SLF001
+        application._workspace_manager,
         "repository_automation_paths",
         return_value=(".github/workflows/<run>`\nname.yml", long_path),
     ):
@@ -2540,8 +2541,8 @@ def test_reconcile_checkpoint_retains_attention_when_publication_baseline_is_unk
     (state_root / "claims/changes/change-a.json").write_text(json.dumps(payload), encoding="utf-8")
     branch_publisher = Mock()
     pull_request_publisher = Mock()
-    application._change_branch_publisher = branch_publisher  # noqa: SLF001
-    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
 
     with pytest.raises(PublicationBaselineUnavailableError):
         application.reconcile_change_checkpoint("change-a")
@@ -2576,8 +2577,8 @@ def test_reconcile_checkpoint_preserves_baseline_error_when_attention_conflicts(
     )
     branch_publisher = Mock()
     pull_request_publisher = Mock()
-    application._change_branch_publisher = branch_publisher  # noqa: SLF001
-    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
 
     with pytest.raises(PublicationBaselineUnavailableError):
         application.reconcile_change_checkpoint("change-a")
@@ -2635,7 +2636,7 @@ def test_supersede_current_publication_preflights_baseline_before_provider_histo
     payload.pop("publication_base_head")
     (state_root / "claims/changes/change-a.json").write_text(json.dumps(payload), encoding="utf-8")
     provider = Mock()
-    application._draft_pull_request_publisher = provider  # noqa: SLF001
+    application._draft_pull_request_publisher = provider
 
     with pytest.raises(PublicationBaselineUnavailableError):
         application.supersede_current_publication("change-a", "supersede-current")
@@ -2643,7 +2644,9 @@ def test_supersede_current_publication_preflights_baseline_before_provider_histo
     provider.read_publication_history.assert_not_called()
 
 
-def test_later_checkpoint_reports_cumulative_automation_paths(tmp_path: Path) -> None:
+def test_later_checkpoint_reports_cumulative_automation_paths(
+    tmp_path: Path,
+) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
@@ -2668,8 +2671,8 @@ def test_later_checkpoint_reports_cumulative_automation_paths(tmp_path: Path) ->
     pull_request_publisher = Mock()
     pull_request_publisher.publish.return_value = _draft_receipt(first_head)
     pull_request_publisher.update_generated_summary.return_value = _summary_receipt(first_head)
-    application._change_branch_publisher = branch_publisher  # noqa: SLF001
-    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
 
     application.reconcile_change_checkpoint("change-a")
 
@@ -2701,7 +2704,9 @@ def test_later_checkpoint_reports_cumulative_automation_paths(tmp_path: Path) ->
     assert "<code>.github/workflows/second.yml</code>" in summary
 
 
-def test_supersede_publication_binds_git_provider_and_runtime_history(tmp_path: Path) -> None:  # noqa: PLR0915
+def test_supersede_publication_binds_git_provider_and_runtime_history(  # noqa: PLR0915 - scenario covers provider history.
+    tmp_path: Path,
+) -> None:
     application, runtimes, coordinator, _state_root = _portfolio(
         tmp_path,
         {"change-a": DeliveryStage.COMPLETED},
@@ -2729,7 +2734,7 @@ def test_supersede_publication_binds_git_provider_and_runtime_history(tmp_path: 
     _git(coordination.worktree_path, "add", ".github/workflows/successor.yml")
     _git(coordination.worktree_path, "commit", "-m", "successor publication")
     superseding_head = _git(coordination.worktree_path, "rev-parse", "HEAD")
-    application._workspace_manager.record_reviewed("change-a", superseding_head)  # noqa: SLF001
+    application._workspace_manager.record_reviewed("change-a", superseding_head)
 
     operation_id = "supersede-change-a"
     successor_branch = "owlbear/change/change-a+s1"
@@ -2784,8 +2789,8 @@ def test_supersede_publication_binds_git_provider_and_runtime_history(tmp_path: 
         successor_provider_history,
     )
     pull_request_publisher.supersede.return_value = provider_receipt
-    application._change_branch_publisher = branch_publisher  # noqa: SLF001
-    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
 
     receipt = application.supersede_publication("change-a", predecessor.receipt_id, operation_id)
     replayed = application.supersede_publication("change-a", predecessor.receipt_id, operation_id)
@@ -2824,7 +2829,7 @@ def test_supersede_current_publication_resolves_provider_receipt_before_delegati
     predecessor = _draft_receipt("3" * 40)
     provider = Mock()
     provider.read_publication_history.return_value = _draft_history((predecessor,), (None,))
-    application._draft_pull_request_publisher = provider  # noqa: SLF001
+    application._draft_pull_request_publisher = provider
     expected = object()
 
     with patch.object(application, "supersede_publication", return_value=expected) as supersede:
@@ -2859,8 +2864,8 @@ def test_supersede_publication_requires_attention_bound_to_runtime_publication(t
     branch_publisher = Mock()
     pull_request_publisher = Mock()
     pull_request_publisher.target_branch = "main"
-    application._change_branch_publisher = branch_publisher  # noqa: SLF001
-    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
 
     with pytest.raises(PortfolioApplicationError, match="attention does not retain"):
         application.supersede_publication("change-a", predecessor.receipt_id, "supersede-change-a")
@@ -2923,8 +2928,8 @@ def test_supersede_publication_preserves_finalization_when_provider_fails(tmp_pa
         "provider unavailable",
         retry_safe=True,
     )
-    application._change_branch_publisher = branch_publisher  # noqa: SLF001
-    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
 
     with pytest.raises(PublicationProviderError, match="provider unavailable"):
         application.supersede_publication("change-a", predecessor.receipt_id, operation_id)
@@ -2951,8 +2956,8 @@ def test_reconcile_checkpoint_rejects_summary_for_a_different_pull_request(tmp_p
     pull_request_publisher = Mock()
     pull_request_publisher.publish.return_value = _draft_receipt(head)
     pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head, number=8)
-    application._change_branch_publisher = branch_publisher  # noqa: SLF001
-    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
 
     with pytest.raises(DeliveryRuntimeConflictError, match="does not match the current publication"):
         application.reconcile_change_checkpoint("change-a")
@@ -2970,7 +2975,7 @@ def test_reconcile_derives_bounded_provider_text_from_authored_titles(tmp_path: 
     )
     runtime = runtimes["change-a"]
     head = coordinator.show("change-a").last_reviewed_commit
-    runtime._contract = runtime.contract.model_copy(  # noqa: SLF001
+    runtime._contract = runtime.contract.model_copy(
         update={
             "title": f"  {'Title ' * 40}\x00{'Title ' * 40}  ",
             "outcomes": (
@@ -2996,8 +3001,8 @@ def test_reconcile_derives_bounded_provider_text_from_authored_titles(tmp_path: 
     pull_request_publisher = Mock()
     pull_request_publisher.publish.return_value = _draft_receipt(head)
     pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
-    application._change_branch_publisher = branch_publisher  # noqa: SLF001
-    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
 
     result = application.reconcile_change_checkpoint("change-a")
 
@@ -3031,10 +3036,10 @@ def test_reconcile_later_checkpoint_updates_summary_from_prior_published_head(tm
     branch_publisher.publish.return_value = _branch_receipt(head, prior_head)
     pull_request_publisher = Mock()
     pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
-    application._change_branch_publisher = branch_publisher  # noqa: SLF001
-    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
 
-    with patch.object(application._workspace_manager, "repository_automation_paths", return_value=()):  # noqa: SLF001
+    with patch.object(application._workspace_manager, "repository_automation_paths", return_value=()):
         result = application.reconcile_change_checkpoint("change-a")
 
     assert result.reconciled
@@ -3079,8 +3084,8 @@ def test_reconcile_checkpoint_retains_newer_head_after_first_pr_creation(tmp_pat
         return _draft_receipt(head)
 
     pull_request_publisher.publish.side_effect = create_pull_request
-    application._change_branch_publisher = branch_publisher  # noqa: SLF001
-    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
 
     result = application.reconcile_change_checkpoint("change-a")
 
@@ -3131,8 +3136,8 @@ def test_reconcile_checkpoint_records_remote_head_after_local_invalidation(tmp_p
 
     branch_publisher.publish.side_effect = publish_branch
     pull_request_publisher = Mock()
-    application._change_branch_publisher = branch_publisher  # noqa: SLF001
-    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
 
     result = application.reconcile_change_checkpoint("change-a")
 
@@ -3171,8 +3176,8 @@ def test_reconcile_published_head_stops_after_concurrent_invalidation(tmp_path: 
 
     branch_publisher.publish.side_effect = verify_branch
     pull_request_publisher = Mock()
-    application._change_branch_publisher = branch_publisher  # noqa: SLF001
-    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
 
     result = application.reconcile_change_checkpoint("change-a")
 
@@ -3228,8 +3233,8 @@ def test_reconcile_serializes_administrative_invalidation_through_provider_work(
     pull_request_publisher = Mock()
     pull_request_publisher.publish.return_value = _draft_receipt(head)
     pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
-    application._change_branch_publisher = branch_publisher  # noqa: SLF001
-    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         reconcile_future = executor.submit(application.reconcile_change_checkpoint, "change-a")
@@ -3268,8 +3273,8 @@ def test_reconcile_checkpoint_replays_pr_after_lost_local_acknowledgment(tmp_pat
     pull_request_publisher = Mock()
     pull_request_publisher.publish.return_value = _draft_receipt(head)
     pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
-    application._change_branch_publisher = branch_publisher  # noqa: SLF001
-    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
     runtime = runtimes["change-a"]
 
     with (
@@ -3353,8 +3358,8 @@ def test_reconcile_first_pr_recovers_at_newer_head_after_provider_failure(tmp_pa
     provider.find_pull_request.side_effect = find_pull_request
     provider.create_draft_pull_request.side_effect = create_pull_request
     provider.read_pull_request.side_effect = lambda _repository, _number: pull_requests[0]
-    application._change_branch_publisher = branch_publisher  # noqa: SLF001
-    application._draft_pull_request_publisher = DraftPullRequestPublisher(  # noqa: SLF001
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = DraftPullRequestPublisher(
         provider,
         repository="example/project",
         target_branch="main",
@@ -3362,7 +3367,7 @@ def test_reconcile_first_pr_recovers_at_newer_head_after_provider_failure(tmp_pa
     )
 
     with (
-        patch.object(application._workspace_manager, "repository_automation_paths", return_value=()),  # noqa: SLF001
+        patch.object(application._workspace_manager, "repository_automation_paths", return_value=()),
         pytest.raises(PublicationProviderError) as exc_info,
     ):
         application.reconcile_change_checkpoint("change-a")
@@ -3375,7 +3380,7 @@ def test_reconcile_first_pr_recovers_at_newer_head_after_provider_failure(tmp_pa
         published_head=first_head,
     )
 
-    with patch.object(application._workspace_manager, "repository_automation_paths", return_value=()):  # noqa: SLF001
+    with patch.object(application._workspace_manager, "repository_automation_paths", return_value=()):
         result = application.reconcile_change_checkpoint("change-a")
 
     assert result.reconciled
@@ -3398,8 +3403,8 @@ def test_reconcile_unanchored_checkpoint_waits_without_provider_calls(tmp_path: 
     _set_checkpoint(runtimes["change-a"], state_root, pending)
     branch_publisher = Mock()
     pull_request_publisher = Mock()
-    application._change_branch_publisher = branch_publisher  # noqa: SLF001
-    application._draft_pull_request_publisher = pull_request_publisher  # noqa: SLF001
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
 
     result = application.reconcile_change_checkpoint("change-a")
 
@@ -3420,7 +3425,7 @@ def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path
     assert application.list_work_items() == ()
     assert (runtime_root / "capacity.json").is_file()
     assert CapacityLedger.model_validate_json((runtime_root / "capacity.json").read_bytes()).capacity == 1
-    assert application._execution_capacity == 1  # noqa: SLF001
+    assert application._execution_capacity == 1
     assert not (repository / ".owlbear/target").exists()
     assert not (repository / ".owlbear/worktrees").exists()
 
@@ -3438,7 +3443,7 @@ def test_delivery_loader_uses_host_capacity_for_writer_and_execution_limits(tmp_
 
     ledger = CapacityLedger.model_validate_json((repository / ".owlbear/delivery/runtime/capacity.json").read_bytes())
     assert ledger.capacity == 2
-    assert application._execution_capacity == 3  # noqa: SLF001
+    assert application._execution_capacity == 3
 
 
 @pytest.mark.parametrize(
@@ -3618,7 +3623,7 @@ dependencies: []
     frontier_path.write_text(json.dumps(payload), encoding="utf-8")
     legacy_frontier = frontier_path.read_bytes()
     (state_root / "claims/changes/change-a.json").unlink()
-    del application._runtimes["change-a"]  # noqa: SLF001
+    del application._runtimes["change-a"]
     request = DeliveryAdmissionRequest(change_id="change-a", active_claim_ids=())
 
     with pytest.raises(CoordinationConflictError, match="exact recovery reviewed head"):
@@ -3692,8 +3697,8 @@ def test_delivery_loader_injects_publication_provider_and_derives_check_head(tmp
         workspace_root=repository,
         publication_provider=provider,
     )
-    assert isinstance(application._change_branch_publisher, ChangeBranchPublisher)  # noqa: SLF001
-    assert isinstance(application._draft_pull_request_publisher, DraftPullRequestPublisher)  # noqa: SLF001
+    assert isinstance(application._change_branch_publisher, ChangeBranchPublisher)
+    assert isinstance(application._draft_pull_request_publisher, DraftPullRequestPublisher)
     checks_request = ObserveChangePublicationChecks(
         change_id="change-a",
         published_head="1" * 40,
@@ -3707,7 +3712,7 @@ def test_delivery_loader_injects_publication_provider_and_derives_check_head(tmp
 
     with (
         patch.object(
-            application._draft_pull_request_publisher,  # noqa: SLF001
+            application._draft_pull_request_publisher,
             "observe_checks",
             return_value=sentinel.check_snapshot,
         ) as observe_checks,
@@ -3721,7 +3726,7 @@ def test_delivery_loader_injects_publication_provider_and_derives_check_head(tmp
 def test_delivery_loader_without_provider_fails_closed_for_checkpoint_operations(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     application = load_delivery_application(_startup_config(), workspace_root=repository)
-    assert isinstance(application._change_branch_publisher, ChangeBranchPublisher)  # noqa: SLF001
+    assert isinstance(application._change_branch_publisher, ChangeBranchPublisher)
     with pytest.raises(PortfolioApplicationError, match="not configured"):
         application.reconcile_change_checkpoint("change-a")
     with pytest.raises(PortfolioApplicationError, match="not configured"):
@@ -4081,13 +4086,13 @@ def test_work_item_queries_do_not_resolve_integration_target(
         {"change-b": DeliveryStage.COMPLETED, "change-a": DeliveryStage.PLANNING},
     )
     resolved = []
-    integration_context = application._workspace_manager.integration_context  # noqa: SLF001
+    integration_context = application._workspace_manager.integration_context
 
-    def record_resolution(change_id: str):  # noqa: ANN202
+    def record_resolution(change_id: str):
         resolved.append(change_id)
         return integration_context(change_id)
 
-    monkeypatch.setattr(application._workspace_manager, "integration_context", record_resolution)  # noqa: SLF001
+    monkeypatch.setattr(application._workspace_manager, "integration_context", record_resolution)
 
     listed = application.list_work_items()
     shown = application.show_work_item("change-a", "OUT-001")
@@ -4350,7 +4355,9 @@ def _publish_merge_conflict_attention(
         target_head=target_head,
         integration_target="main",
         diagnostics=("merge conflict",),
-        retry_condition="Repair admission is retired; resolve the retained attention or recover the exact legacy claim.",
+        retry_condition=(
+            "Repair admission is retired; resolve the retained attention or recover the exact legacy claim."
+        ),
     )
     runtime = runtimes[change_id]
     frontier_path = state_root / "changes" / change_id / "frontier.json"
@@ -4366,7 +4373,7 @@ def _activate_legacy_integration_repair(
     state_root: Path,
     change_id: str,
 ):
-    claim = application._new_claim(DeliveryWorkerRole.INTEGRATION_REPAIRER, None)  # noqa: SLF001
+    claim = application._new_claim(DeliveryWorkerRole.INTEGRATION_REPAIRER, None)
     runtime = runtimes[change_id]
     frontier_path = state_root / "changes" / change_id / "frontier.json"
     frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
@@ -4397,7 +4404,7 @@ def test_acquisition_does_not_create_integration_repair_claim(tmp_path: Path) ->
     _git(repository, "commit", "-m", "concurrent target")
     _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
     target_head = _git(repository, "rev-parse", "main")
-    application._workspace_manager.refresh_integration_target("change-a")  # noqa: SLF001
+    application._workspace_manager.refresh_integration_target("change-a")
     _publish_merge_conflict_attention(runtimes, state_root, "change-a", reviewed, target_head)
 
     acquired = application.acquire_frontier_work()
@@ -4436,7 +4443,7 @@ def _prepare_legacy_integration_repair(tmp_path: Path):
     _git(repository, "commit", "-m", "concurrent target")
     _git(repository, "update-ref", "refs/remotes/origin/main", "HEAD")
     target_head = _git(repository, "rev-parse", "main")
-    application._workspace_manager.refresh_integration_target("change-a")  # noqa: SLF001
+    application._workspace_manager.refresh_integration_target("change-a")
     _publish_merge_conflict_attention(runtimes, state_root, "change-a", reviewed, target_head)
     claim = _activate_legacy_integration_repair(application, runtimes, coordinator, state_root, "change-a")
     return application, runtimes, coordinator, state_root, reviewed, claim
