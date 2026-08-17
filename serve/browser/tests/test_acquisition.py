@@ -6,14 +6,13 @@ import pytest
 
 from owlbear_browser import AcquisitionRequest, AcquisitionStatus, AcquisitionSuccess, BrowserContentFetcher
 
-
 pytestmark = pytest.mark.browser
 
 
 class _FixtureHandler(BaseHTTPRequestHandler):
     requests: ClassVar[list[str]] = []
 
-    def do_GET(self) -> None:  # noqa: C901, N802, PLR0911, PLR0915
+    def do_GET(self) -> None:  # noqa: C901, PLR0911, PLR0915
         self.requests.append(self.path)
         if self.path == "/start":
             self.send_response(302)
@@ -96,7 +95,7 @@ async def test_acquire_waits_for_rendered_content_and_keeps_links_inert() -> Non
     server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
     Thread(target=server.serve_forever, daemon=True).start()
     try:
-        from playwright.async_api import async_playwright
+        from playwright.async_api import async_playwright  # noqa: PLC0415
 
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch()
@@ -131,7 +130,7 @@ async def test_authentication_page_stays_open_and_retry_reuses_it() -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
     Thread(target=server.serve_forever, daemon=True).start()
     try:
-        from owlbear_browser.playwright_launcher import PlaywrightLauncher
+        from owlbear_browser.playwright_launcher import PlaywrightLauncher  # noqa: PLC0415
 
         async with PlaywrightLauncher(headless=True) as launcher:
             auth_url = f"http://127.0.0.1:{server.server_port}/auth"
@@ -156,7 +155,7 @@ async def test_acquire_reports_missing_content_selector() -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
     Thread(target=server.serve_forever, daemon=True).start()
     try:
-        from playwright.async_api import async_playwright
+        from playwright.async_api import async_playwright  # noqa: PLC0415
 
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch()
@@ -190,7 +189,7 @@ async def test_acquire_rejects_invalid_final_page_states(path: str, expected_sta
     server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
     Thread(target=server.serve_forever, daemon=True).start()
     try:
-        from playwright.async_api import async_playwright
+        from playwright.async_api import async_playwright  # noqa: PLC0415
 
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch()
@@ -215,7 +214,7 @@ async def test_acquire_does_not_misclassify_login_terminology() -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
     Thread(target=server.serve_forever, daemon=True).start()
     try:
-        from playwright.async_api import async_playwright
+        from playwright.async_api import async_playwright  # noqa: PLC0415
 
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch()
@@ -232,7 +231,7 @@ async def test_acquire_does_not_misclassify_login_terminology() -> None:
 
 @pytest.mark.asyncio
 async def test_acquire_reports_unsupported_target_at_public_boundary() -> None:
-    from playwright.async_api import async_playwright
+    from playwright.async_api import async_playwright  # noqa: PLC0415
 
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch()
@@ -247,7 +246,7 @@ async def test_acquire_rejects_download_navigation() -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
     Thread(target=server.serve_forever, daemon=True).start()
     try:
-        from playwright.async_api import async_playwright
+        from playwright.async_api import async_playwright  # noqa: PLC0415
 
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch()
@@ -276,7 +275,7 @@ async def test_acquire_reports_unready_content(
     server = ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
     Thread(target=server.serve_forever, daemon=True).start()
     try:
-        from playwright.async_api import async_playwright
+        from playwright.async_api import async_playwright  # noqa: PLC0415
 
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch()

@@ -20,7 +20,7 @@ def test_request_accepts_private_http_url_and_rejects_prohibited_inputs() -> Non
     with pytest.raises(ValueError, match="URL credentials"):
         AcquisitionRequest("https://user:secret@example.test/page")
     with pytest.raises(ValueError, match="credentials"):
-        AcquisitionRequest("https://example.test", password="secret")
+        AcquisitionRequest("https://example.test", password="secret")  # noqa: S106
 
 
 def test_links_are_absolute_fragmentless_and_ordered() -> None:
