@@ -43,11 +43,9 @@ def _is_blocked_ip(ip_str: str) -> bool:
         addr = ipaddress.ip_address(ip_str)
     except ValueError:
         return True  # unparseable → block
-    check: ipaddress.IPv4Address | ipaddress.IPv6Address
-    if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
-        check = addr.ipv4_mapped
-    else:
-        check = addr
+    check: ipaddress.IPv4Address | ipaddress.IPv6Address = (
+        addr.ipv4_mapped if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None else addr
+    )
     return check.is_loopback or check.is_private or check.is_link_local or check.is_reserved or check.is_unspecified
 
 

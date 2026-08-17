@@ -12,6 +12,8 @@ DNS is mocked via ``socket.getaddrinfo``.  The implementation must use
 ``asyncio.to_thread(socket.getaddrinfo, ...)`` so this patch intercepts it.
 """
 
+# ruff: noqa: N801
+
 from __future__ import annotations
 
 import socket
@@ -19,7 +21,6 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from mcp.server.mcpserver.exceptions import ToolError
 
 from owlbear_browser_mcp.allowlist import DomainAllowlist
