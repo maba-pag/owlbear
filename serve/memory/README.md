@@ -8,7 +8,7 @@ CLI dependency. Suitable for embedding in MCP servers and the Cockpit backend.
 
 ---
 
-## Usage
+## Launch / Usage
 
 Import and use directly:
 
@@ -37,6 +37,16 @@ entry = read_entry(entry_path)
 write_entry(entry_path, entry, memory_dir=memory_dir)
 delete_entry(entry_path, memory_dir=memory_dir)
 ```
+
+---
+
+## Configuration
+
+The package reads no environment variables and has no standalone launch command. Pass the
+workspace memory directory to `MemoryEngine` or the storage functions explicitly. Consumer
+workspaces conventionally use `.owlbear/memory`; the directory is created when the engine first
+starts or writes an entry. The `owlbear-memory-mcp` adapter owns MCP configuration and user-facing
+lifecycle operations.
 
 ---
 
