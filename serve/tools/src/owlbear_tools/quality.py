@@ -40,6 +40,7 @@ _PRECOMMIT_FIX_HOOKS: dict[str, tuple[str, str, str | None]] = {
     "format-eof": ("end-of-file-fix", "", None),
 }
 _PRECOMMIT_CHECK_HOOKS = {
+    "lint-json": "eslint-json",
     "lint-yaml": "yamllint",
     "lint-shell": "shellcheck",
     "lint-actions": "actionlint",
@@ -49,6 +50,7 @@ _AGGREGATES: dict[str, tuple[str, ...]] = {
     "lint": (
         "lint-python",
         "lint-markdown",
+        "lint-json",
         "lint-yaml",
         "lint-shell",
         "lint-actions",
@@ -313,6 +315,11 @@ def lint_python() -> None:
 def lint_markdown() -> None:
     """Run Markdown lint checks."""
     _run_public_leaf("lint-markdown", fixes=True, allow_unsafe=False, staged=True)
+
+
+def lint_json() -> None:
+    """Run JSON and JSONC ESLint checks."""
+    _run_public_leaf("lint-json", fixes=False, allow_unsafe=False, staged=True)
 
 
 def lint_yaml() -> None:

@@ -69,7 +69,6 @@
   },
   "chat.viewSessions.orientation": "stacked",
   "diffEditor.hideUnchangedRegions.enabled": false,
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
   "editor.formatOnPaste": false,
   "editor.formatOnSave": false,
   "editor.links": false,

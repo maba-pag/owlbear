@@ -12,7 +12,7 @@ ENABLE_LINTERS:
   - CSS_STYLELINT
   - EDITORCONFIG_EDITORCONFIG_CHECKER
   - HTML_HTMLHINT
-  - JSON_JSONLINT
+  - JAVASCRIPT_ES
   - MARKDOWN_MARKDOWNLINT
   - PYTHON_RUFF
   - PYTHON_RUFF_FORMAT
@@ -94,7 +94,7 @@ TYPESCRIPT_ES_RULES_PATH: serve/cockpit/web
 TYPESCRIPT_ES_ARGUMENTS: "--max-warnings 0"
 
 # CSS — use the Cockpit web policy instead of MegaLinter defaults.
-CSS_STYLELINT_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/.*\.css$'
+CSS_STYLELINT_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/src/.*\.css$'
 CSS_STYLELINT_CONFIG_FILE: .stylelintrc.json
 CSS_STYLELINT_RULES_PATH: serve/cockpit/web
 
@@ -109,9 +109,15 @@ ACTION_ACTIONLINT_FILTER_REGEX_INCLUDE: '^(\.github/workflows/.*\.ya?ml)$'
 # YAML — strict mode
 YAML_YAMLLINT_ARGUMENTS: "--strict"
 
-# JSON — quiet output; exclude JSONC files (VS Code settings use comments)
-JSON_JSONLINT_ARGUMENTS: "--quiet"
-JSON_JSONLINT_FILTER_REGEX_EXCLUDE: '(\.vscode/)'
+# JSON — use the repository-owned flat config for strict JSON and JSONC.
+JAVASCRIPT_ES_FILTER_REGEX_INCLUDE: '(^|/).*\.(json|jsonc)$'
+JAVASCRIPT_ES_FILE_EXTENSIONS:
+  - .json
+  - .jsonc
+JAVASCRIPT_ES_CONFIG_FILE: eslint-json.config.cjs
+JAVASCRIPT_ES_RULES_PATH: .
+JAVASCRIPT_ES_CLI_EXECUTABLE: serve/cockpit/web/node_modules/.bin/eslint
+JAVASCRIPT_ES_ARGUMENTS: "--no-config-lookup --no-warn-ignored --no-error-on-unmatched-pattern"
 
 # EditorConfig — GitHub Actions annotations
 # --disable-indent-size: ruff handles Python indent; editorconfig-checker

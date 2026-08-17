@@ -3,7 +3,6 @@
 .owlbear/completed
 .owlbear/delivery/packages
 .owlbear/delivery/runtime
-.owlbear/delivery/worktrees
 .owlbear/doc-index.md
 .owlbear/legacy
 .owlbear/memory

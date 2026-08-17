@@ -170,6 +170,12 @@ repos:
         files: ^serve/cockpit/web/src/.*\.css$
         pass_filenames: false
         stages: [manual]
+      - id: eslint-json
+        name: ESLint (JSON/JSONC)
+        language: system
+        entry: npm run lint:json
+        files: .*(\.json|\.jsonc)$
+        pass_filenames: false
       # Frontend — extra (no CI equivalent, catches type errors early)
       # Manual stage: tsc --noEmit is a whole-project check — can't scope to
       # staged files. Run explicitly: uv run pre-commit run typecheck-frontend --all-files --hook-stage manual
@@ -177,7 +183,7 @@ repos:
         name: TypeScript (Cockpit frontend)
         language: system
         entry: npx --prefix serve/cockpit/web tsc --noEmit --project serve/cockpit/web/tsconfig.json
-        files: ^serve/cockpit/web/src/.*\.(ts|tsx)$
+        files: ^serve/cockpit/web/(src/.*\.(ts|tsx)|vite\.config\.ts|vitest\.setup\.ts)$
         pass_filenames: false
         stages: [manual]
       # Project-specific validators

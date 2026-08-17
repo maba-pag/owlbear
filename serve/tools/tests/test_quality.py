@@ -38,6 +38,7 @@ def test_lint_runs_the_normal_local_suite() -> None:
     assert commands == [
         ["pre-commit", "run", "ruff-fix", "--all-files"],
         ["pre-commit", "run", "markdownlint-fix", "--all-files"],
+        ["pre-commit", "run", "eslint-json", "--all-files"],
         ["pre-commit", "run", "yamllint", "--all-files"],
         ["pre-commit", "run", "shellcheck", "--all-files"],
         ["pre-commit", "run", "actionlint", "--all-files"],
@@ -132,6 +133,7 @@ def test_quality_full_executes_todo_last() -> None:
         "format-eof",
         "lint-python",
         "lint-markdown",
+        "lint-json",
         "lint-yaml",
         "lint-shell",
         "lint-actions",
