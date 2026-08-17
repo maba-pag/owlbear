@@ -60,9 +60,6 @@ def wrap_untrusted_content(text: str, *, source_url: str | None = None) -> str:
     if _OPEN_TAG in text:
         return text
 
-    if source_url is not None:
-        open_tag = f'{_OPEN_TAG} url="{source_url}">'
-    else:
-        open_tag = f"{_OPEN_TAG}>"
+    open_tag = f'{_OPEN_TAG} url="{source_url}">' if source_url is not None else f"{_OPEN_TAG}>"
 
     return f"{open_tag}\n{_ADVISORY}\n{text}\n{_CLOSE_TAG}"

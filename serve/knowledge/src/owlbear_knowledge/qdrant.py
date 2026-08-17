@@ -213,7 +213,10 @@ class QdrantVectorStore:
         rerank) but scored by dense cosine similarity — an absolute metric
         suitable for threshold filtering.
         """
-        assert query_embedding.sparse is not None  # guaranteed by caller
+        sparse = query_embedding.sparse
+        if sparse is None:
+            msg = "hybrid search requires a sparse embedding"
+            raise ValueError(msg)
         dense_prefetch = qmodels.Prefetch(
             query=query_embedding.dense,
             using="dense",
@@ -221,8 +224,8 @@ class QdrantVectorStore:
         )
         sparse_prefetch = qmodels.Prefetch(
             query=qmodels.SparseVector(
-                indices=query_embedding.sparse.indices,
-                values=query_embedding.sparse.values,
+                indices=sparse.indices,
+                values=sparse.values,
             ),
             using="sparse",
             limit=top_k * 10,
