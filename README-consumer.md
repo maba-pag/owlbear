@@ -17,12 +17,25 @@ domain knowledge that loads automatically by relevance, and MCP servers give age
 target changes and work, the knowledge base, persistent Memory, and browser automation, all scoped
 to your project directory and shared through the filesystem.
 
+The consumer surface follows the rolling `main` branch. OwlBear has no numbered product releases;
+module maturity and validation status are documented separately.
+
+## Current Status
+
+| Surface | Status | Validation signal |
+| --- | --- | --- |
+| Delivery | Core / active | Primary workflow for reviewed Change delivery |
+| Cockpit | Core / active | Human operating and recovery surface |
+| Memory | Available | Persistent workspace memory surface |
+| Knowledge | Alpha | Needs real-world validation |
+| Browser | Alpha | Needs real-world validation |
+
 ## Prerequisites
 
 | Requirement | Why | How to get it |
 | --- | --- | --- |
 | Python 3.14+ | OwlBear runtime | [python.org](https://www.python.org/downloads/) |
-| [uv](https://docs.astral.sh/uv/) | Package manager and MCP server launcher | `pip install uv` or see uv docs |
+| [uv](https://docs.astral.sh/uv/) | Package manager and MCP server launcher | [Installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
 | VS Code | IDE | [code.visualstudio.com](https://code.visualstudio.com/) |
 | GitHub Copilot extension | Chat and agents | VS Code Extensions marketplace |
 | Git | Clone and version control | [git-scm.com](https://git-scm.com/) |
@@ -155,11 +168,33 @@ After VS Code opens, verify the installation loaded correctly:
 | OwlBear agents loaded | Chat Customizations lists agents from the owlbear `agents/` directory |
 | OwlBear skills loaded | Chat Customizations lists skills from the owlbear `skills/` directory |
 | Instructions loaded | Chat Customizations includes `*.instructions.md` files from owlbear |
-| MCP servers running | Command Palette → `MCP: List Servers` — `owlbear-delivery`, `owlbear-memory`, and `owlbear-knowledge` show `running` |
+| MCP servers running | Command Palette → `MCP: List Servers` — `owlbear-delivery`, `owlbear-knowledge`, `owlbear-memory`, `owlbear-browser`, and `markitdown` show `running` |
 
 > If agents or skills do not appear, check that `chat.agentFilesLocations` and
 > `chat.agentSkillsLocations` in `.vscode/settings.json` point to the correct relative
 > path to your owlbear clone.
+
+## First Successful Workflow
+
+After setup verification, try a small real change:
+
+1. Run `/ideate` with the outcome you want.
+2. Run `/design` to create or resume the durable Change and approve its exact design.
+3. Run `/orchestrate <change-id>` after admission.
+4. Open Cockpit from the project root and confirm the Change and its current work are visible.
+
+Expected outcome: the project has loaded OwlBear, the five MCP servers are available, and one
+small Change can move from design into visible Delivery work. Use the [Target Delivery Workflow](setup/setup-guide.md#target-delivery-workflow)
+when you need the complete procedure.
+
+## Troubleshooting
+
+| Symptom | First check |
+| --- | --- |
+| Agents, skills, or instructions are missing | Confirm the relative paths in `.vscode/settings.json`, then rerun `setup/init.py` from the project root |
+| An MCP server is missing or stopped | Open `MCP: List Servers`, confirm the owlbear clone path, and run `uv sync --all-extras` in the clone |
+| Cockpit cannot find `dist/` | Launch it from the consumer project root and refresh the latest `main` branch artifacts |
+| Browser or Knowledge does not produce the expected result | Treat the surface as alpha, check its package README, and record the reproducible gap for follow-up |
 
 ## Updates
 
