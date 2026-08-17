@@ -286,7 +286,7 @@ After opening the project in VS Code, use the **Diagnostics view** to confirm ev
 | OwlBear agents loaded | Chat Customizations shows agents from `../owlbear/share/agents/` |
 | OwlBear skills loaded | Chat Customizations shows skills from `../owlbear/share/skills/` |
 | Instructions loaded | Chat Customizations shows `*.instructions.md` files from `../owlbear/share/instructions/` |
-| MCP servers running | Run `MCP: List Servers` from the Command Palette — `owlbear-delivery`, `owlbear-memory`, and `owlbear-knowledge` should show `running` |
+| MCP servers running | Run `MCP: List Servers` from the Command Palette — `owlbear-delivery`, `owlbear-knowledge`, `owlbear-memory`, `owlbear-browser`, and `markitdown` should show `running` |
 
 For runtime debugging, use **"Show Agent Debug Logs"** (Chat view ellipsis `…` menu) —
 this shows chronological tool calls, LLM requests, and prompt discovery events.
