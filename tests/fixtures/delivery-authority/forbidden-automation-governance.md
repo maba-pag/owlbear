@@ -1,3 +1,5 @@
+# Forbidden identifier fixture
+
 workflow approval gate
 automation-blocking policy
 workflow risk class

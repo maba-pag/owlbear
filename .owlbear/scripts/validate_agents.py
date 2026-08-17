@@ -224,10 +224,16 @@ def _body_agents_table(content: str) -> list[str]:
     agents: list[str] = []
     for raw_line in m.group(1).splitlines():
         line = raw_line.strip()
-        if line.startswith("|") and not line.startswith("| Agent") and not line.startswith("|---"):
-            cells = [c.strip() for c in line.split("|")]
-            if len(cells) >= _AGENT_TABLE_MIN_CELLS and cells[1] and cells[1] != "Agent":
-                agents.append(cells[1])
+        if not line.startswith("|") or line.startswith("| Agent"):
+            continue
+        cells = [c.strip() for c in line.split("|")]
+        if (
+            len(cells) >= _AGENT_TABLE_MIN_CELLS
+            and cells[1]
+            and cells[1] != "Agent"
+            and not re.fullmatch(r":?-+:?", cells[1])
+        ):
+            agents.append(cells[1])
     return agents
 
 

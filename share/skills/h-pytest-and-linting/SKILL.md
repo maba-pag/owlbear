@@ -22,7 +22,7 @@ Before constructing a command, inspect the nearest applicable configuration and 
 Use these placeholders below:
 
 | Placeholder | Meaning |
-|-------------|---------|
+| --- | --- |
 | `{project-runner}` | Configured execution prefix, such as `uv run`, `poetry run`, or empty in an active environment |
 | `{focused-test}` | One test file, node ID, or package-local test target |
 | `{test-roots}` | Configured test directories; omit when pytest `testpaths` already provides complete discovery |
@@ -69,7 +69,7 @@ acceptable. For focused validation, pass only the changed Python files or owning
 ### Default flags
 
 | Tool | Flags |
-|------|-------|
+| --- | --- |
 | pytest | `-q --tb=short` (add `-v` only for debugging) |
 | ruff | none needed |
 
@@ -103,7 +103,7 @@ Read `.owlbear/scratch/pytest-output.txt` then delete it.
 Apply these only when the target is the OwlBear repository or matching configuration is verified:
 
 | Command | Scope |
-|---------|-------|
+| --- | --- |
 | `uv run test` or `uv run test --all` | Complete Python and Cockpit frontend unit-test suites |
 | `uv run test [PATH ...]` | Tests owning the explicit paths; routes to pytest and/or Vitest |
 | `uv run test-e2e [SPEC ...]` | Cockpit maintained fast Playwright gate |
@@ -129,7 +129,7 @@ mutually exclusive; review the resulting diff whenever unsafe fixes are enabled.
 aggregates are listed by `uv run help quality`.
 
 | Marker | Local meaning |
-|--------|---------------|
+| --- | --- |
 | `api` | Requires live network; routine local runs exclude it with `-m "not api"` |
 | `slow` | Long-running |
 | `integration` | Requires the `kanban-md` binary |

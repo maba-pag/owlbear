@@ -20,7 +20,7 @@ to your project directory and shared through the filesystem.
 ## Prerequisites
 
 | Requirement | Why | How to get it |
-|-------------|-----|---------------|
+| --- | --- | --- |
 | Python 3.14+ | OwlBear runtime | [python.org](https://www.python.org/downloads/) |
 | [uv](https://docs.astral.sh/uv/) | Package manager and MCP server launcher | `pip install uv` or see uv docs |
 | VS Code | IDE | [code.visualstudio.com](https://code.visualstudio.com/) |
@@ -65,7 +65,7 @@ default profile instead. It changes only these user-local Copilot settings; if t
 Copilot entry is missing, setup creates the minimal structure needed:
 
 | Model | Reasoning effort |
-|-------|------------------|
+| --- | --- |
 | `gpt-5.6-luna` | `max` |
 | `gpt-5.6-sol` | `high` |
 | `claude-opus-5` | `medium` |
@@ -78,7 +78,7 @@ the complete behavior.
 ## Directory Layout
 
 | Directory | Purpose |
-|-----------|---------|
+| --- | --- |
 | `share/agents/` | Agent definitions (`.agent.md`) — loaded into VS Code automatically |
 | `share/skills/` | Agent skills (`SKILL.md`) — domain knowledge loaded by relevance |
 | `share/instructions/` | Shared instruction files (`*.instructions.md`) |
@@ -121,7 +121,7 @@ repository itself. If you launch Cockpit from outside the consumer project direc
 use `uv run --project ../owlbear --directory /path/to/project cockpit`.
 
 | Variable | Default | Purpose |
-|----------|---------|---------|
+| --- | --- | --- |
 | `COCKPIT_PORT` | `8420` | Override listen port (1-65535) |
 | `COCKPIT_NO_OPEN` | unset | Set to `1` to suppress browser auto-open |
 
@@ -151,7 +151,7 @@ After VS Code opens, verify the installation loaded correctly:
 3. Confirm the following appear:
 
 | What to check | How to verify |
-|---------------|---------------|
+| --- | --- |
 | OwlBear agents loaded | Chat Customizations lists agents from the owlbear `agents/` directory |
 | OwlBear skills loaded | Chat Customizations lists skills from the owlbear `skills/` directory |
 | Instructions loaded | Chat Customizations includes `*.instructions.md` files from owlbear |

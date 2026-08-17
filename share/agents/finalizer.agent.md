@@ -42,7 +42,7 @@ evidence no longer matches the context.
 <agents>
 
 | Agent | When | Example |
-|-------|------|---------|
+| --- | --- | --- |
 | build-reviewer | Review the exact clean Change head and its observations | `Review finalization: change=cache, commit=abc123` |
 
 </agents>

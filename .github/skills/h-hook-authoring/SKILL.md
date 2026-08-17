@@ -25,7 +25,7 @@ Use this handbook when adding or changing a VS Code agent hook, an agent frontma
 ## Choose The Lifecycle Event
 
 | Event | Appropriate responsibility | Keep out |
-|---|---|---|
+| --- | --- | --- |
 | `SessionStart` | Inject small, current context that helps the selected agent orient itself | Selecting work, mutating authority, or making a startup failure look like successful work |
 | `PreToolUse` | Allow, deny, or narrowly transform a tool request before execution | Broad policy inference, product decisions, or checks that require post-execution state |
 | `PostToolUse` | Run a bounded check or return feedback about a completed tool call | Treating a warning as a blocked result unless the owning contract explicitly requires blocking |
@@ -81,7 +81,7 @@ an actual affected file from an edit request that contains no supported path.
 ## Review Checklist
 
 | Question | Passing signal |
-|---|---|
+| --- | --- |
 | Is the hook attached to the correct lifecycle event? | The event crosses the claimed boundary before or after the relevant tool action |
 | Is the hard owner explicit? | Script, declaration, validator, or test owns the behavior; prose only explains it |
 | Is the contract observable? | Tests assert parsed output, decision, context, or exit behavior rather than invocation alone |

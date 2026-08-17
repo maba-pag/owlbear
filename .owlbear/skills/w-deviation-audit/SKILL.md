@@ -56,7 +56,7 @@ lower confidence. Do not reconstruct missing evidence from conversation history 
 Choose the smallest existing owner that can change the observed outcome:
 
 | Signal | Candidate owner | Route |
-|---|---|---|
+| --- | --- | --- |
 | Product or implementation behavior is wrong | Source owner and native Delivery | Design or Planning, then bounded Build |
 | A durable regression is missing or proof is weak | Domain test owner and `w-test-curation` | Test-curation or native Delivery |
 | Task boundary, plan, or accepted intent is incomplete | Design or Planning authority | Return through the owning Delivery stage |
@@ -88,7 +88,7 @@ Return:
 - Worktree status: {unchanged | bounded read-only failure}
 
 | Observation | Placement | Evidence | Owner and route | Action | Confidence |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | {short identity} | {code | test | design | planning | skill | instruction | prompt | hook/runtime | no-change} | {observed | documented | inferred; locators} | {owner; native next workflow} | {bounded recommendation} | {high | medium | low} |
 
 ### Limits

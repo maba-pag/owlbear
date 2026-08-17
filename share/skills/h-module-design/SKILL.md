@@ -12,7 +12,7 @@ class, package, service, or tier-spanning slice can all be modules.
 ## Module Quality Vocabulary
 
 | Concept | Definition | Diagnostic |
-|---------|------------|------------|
+| --- | --- | --- |
 | **Module** | Something with an interface and an implementation | Name the responsibility it hides, not its file type or framework role. |
 | **Interface** | Everything a caller must know to use a module correctly, including invariants, ordering, errors, configuration, and performance | If callers must understand internals, the effective interface is larger than its type signature. |
 | **Implementation** | Behavior hidden inside a module | Internal composition does not need to become caller knowledge or an external seam. |
@@ -48,7 +48,7 @@ reach past the interface, reconsider the module shape before adding more test-on
 ## Dependency Classification
 
 | Type | Example | Seam needed? |
-|------|---------|--------------|
+| --- | --- | --- |
 | In-process | Direct function call | Rarely |
 | Local-substitutable | File-system or process adapter | Maybe |
 | Remote-but-owned | A separately deployed service owned by the same project | Yes |

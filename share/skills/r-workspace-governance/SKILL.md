@@ -58,7 +58,7 @@ reverting them.
 ## OwlBear-Managed Artifact Placement
 
 | Artifact | Location | Rule |
-|----------|----------|------|
+| --- | --- | --- |
 | Temporary output, debug files, and one-off scripts | `.owlbear/scratch/{task-id}-{description}.{ext}` | Untracked; delete before task closure. |
 | Approved external repository clones | `.owlbear/scratch/research/{repo-name}/` | Inspect only; delete before task closure. |
 | Durable research findings | `.owlbear/research/{slug}.md` | Tracked; include the task reference. |
@@ -79,7 +79,7 @@ the corresponding `.owlbear/agents/`, `.owlbear/skills/`, `.owlbear/instructions
 External code and patterns must be logged in `.owlbear/sources/overview.md`:
 
 | Column | Description |
-|--------|-------------|
+| --- | --- |
 | Source | Project or article name |
 | URL | Link to the repository, article, or documentation |
 | What | Pattern, code snippet, architecture idea, or other material used |

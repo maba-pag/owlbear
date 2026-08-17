@@ -52,7 +52,7 @@ periodic memory-curator housekeeping is the explicit non-Delivery dispatch defin
 <agents>
 
 | Agent | When | Example |
-|-------|------|---------|
+| --- | --- | --- |
 | planner | Acquired launch whose worker role is `planner` | Serialized `DeliveryLaunchPackage` |
 | builder | Acquired Build launch | Serialized `DeliveryLaunchPackage` |
 | memory-curator | Cycle 3, then every tenth completed acquisition cycle thereafter — periodic curation, no task ID | `Curate: Periodic curation` |
@@ -70,7 +70,7 @@ The orchestrator does not produce Channel A signals — it is the loop, not a pi
 
 During execution, announce each step:
 
-```
+```text
 Cycle 1 (Acquisition): 2 launches, 1 Integration attention
 Cycle 1 (1/2): change-one OUT-003 (builder)
 Cycle 1 (2/2): change-two OUT-001 (planner)
@@ -80,7 +80,7 @@ Housekeeping: none
 
 At session end:
 
-```
+```text
 Session complete:
   Transitioned claims: <change/outcome/claim identities>
   Integration attention: <change identities and typed attention>

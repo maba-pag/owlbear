@@ -1,10 +1,10 @@
-## Delivery implementation audit and improvement plan
+# Delivery implementation audit and improvement plan
 
 **Status:** Active improvement plan. This section supersedes the retired Kanban decomposition
 proposal after a source-level review of the current `owlbear-delivery` and `owlbear-delivery-mcp`
 implementations on 2026-08-07.
 
-### Why the old proposal no longer applies directly
+## Why the old proposal no longer applies directly
 
 The retired proposal correctly identified that one 2,738-line `KanbanEngine` and one 1,221-line
 `AgentView` concentrated too many responsibilities. Those classes no longer exist. The current
@@ -17,7 +17,7 @@ into mixins or forwarding-only managers would increase the effective interface w
 ownership. The more consequential current problems are lifecycle correctness and the coexistence of
 active schema-v2 Delivery with retained target-v1 cutover and execution contracts.
 
-### Audit method and baseline
+## Audit method and baseline
 
 The assessment was challenged independently per proposed measure, then reconciled against direct
 source reads, current artifacts, and focused test execution. Reviewer conclusions were not accepted
@@ -36,7 +36,7 @@ Baseline on 2026-08-07:
 - Current source hotspots:
 
 | Class or file | Measured size | Assessment |
-|---|---:|---|
+| --- | ---: | --- |
 | `PortfolioApplication` | 865 class lines, 56 methods | Large, but its acquisition, recovery, projection, and Integration orchestration are real responsibilities. Do not split by line count alone. |
 | `ChangeWorkspaceManager` | 805 class lines, 49 methods | Large, but Git/worktree invariants span creation, recovery, proof, and Integration. Remove dead paths before considering extraction. |
 | `DeliveryRuntime` | 699 class lines, 35 methods | Cohesive owner of one schema-v2 frontier and its mechanical transitions. Keep intact unless a behavior-driven boundary emerges. |
@@ -54,10 +54,10 @@ Current startup verification measurement for this workspace:
 The timing is evidence about this workspace only. It is not, by itself, a reason to weaken startup
 integrity.
 
-### Architecture generations currently present
+## Architecture generations currently present
 
 | Generation | Current role | Main modules |
-|---|---|---|
+| --- | --- | --- |
 | Active schema-v2 Delivery | Authored package compilation, source-bound admission, outcome stages, claims, task results, Integration, and completed history | `delivery_runtime.py`, `target_contract.py`, the `DeliveryAuthorityRegistry` half of `target_admission.py`, `portfolio_application.py` |
 | Retained target-v1 execution | Job/attempt/review/receipt runtime and semantic authority used by cutover/finalizer and retained public evidence contracts | `target_runtime.py`, `target_authority.py`, the `TargetAuthorityRegistry` half of `target_admission.py` |
 | One-time cutover and snapshot retention | Bootstrap source retirement, snapshot verification, receipt publication, and mutation gate | `target_cutover.py`, `snapshot.py`, `setup/finalize.py` |
@@ -67,10 +67,10 @@ The active and retained generations are not cleanly isolated. `target_admission.
 registries, the package root exports both generations, and the active work-item read path converts
 schema-v2 contracts and frontiers back into target-v1 authority/evidence models.
 
-### Reconciliation of the initial assessment
+## Reconciliation of the initial assessment
 
 | Initial claim | Validated disposition | Corrected conclusion |
-|---|---|---|
+| --- | --- | --- |
 | Split `DeliveryRuntime` because it is large | Rejected | The class has one state owner and one transition vocabulary. Extracting claim/binding helpers would mostly expose internal invariants. |
 | Split `PortfolioApplication` and `ChangeWorkspaceManager` now | Deferred | First remove obsolete paths and fix live lifecycle defects. Reapply the module deletion test afterward. |
 | Merge MCP `server.py` and `target_server.py` | Rejected | `server.py` owns environment resolution, authorization, composition, and lifespan. `target_server.py` owns the typed adapter, error translation, and registration. The provider indirection is required because tools register before lifespan construction. |
@@ -81,7 +81,7 @@ schema-v2 contracts and frontiers back into target-v1 authority/evidence models.
 | Remove Assembly immediately | Decision required | Assembly is unreachable through current compilation and incomplete at MCP, but is intentionally represented in runtime and UI contracts. Choose complete, remove, or explicitly defer it; do not leave it accidentally half-live. |
 | Broadly rename all `target_*` modules | Rejected for now | `target` still has a real cutover/activation meaning. Rename only symbols proven stale after target-v1 retirement; do not rename serialized artifact paths for aesthetics. |
 
-### Priority 0 — prevent acquisition from revoking live work
+## Priority 0 — prevent acquisition from revoking live work
 
 **Finding: confirmed live lifecycle defect. Confidence: 0.98.**
 
@@ -150,7 +150,7 @@ failure correctly. The current behavior is higher risk because it can revoke hea
   replacement acquire, because orchestration itself is an agent workflow rather than an executable
   test harness.
 
-### Priority 0 — preserve Design stage in work-item projection
+## Priority 0 — preserve Design stage in work-item projection
 
 **Finding: confirmed user-visible projection defect. Confidence: 0.97.**
 
@@ -192,7 +192,7 @@ should expose typed return context rather than synthesizing target-v1 semantic e
 - The returned item's own `dependency_ready` is false; this discriminates the corrected
   user-attention state from today's Planning/agent projection.
 
-### Priority 1 — retire the confirmed dead Integration API
+## Priority 1 — retire the confirmed dead Integration API
 
 **Finding: confirmed source-and-test-only path. Confidence: 0.96 inside this repository.**
 
@@ -268,7 +268,7 @@ source of any new attention or completion state.
 - Current Integration attention, target-CAS loss, replay, cleanup, and reviewed repair tests remain
   green, including the independent-application shared-lock contention proof.
 
-### Priority 1 decision — complete or remove Assembly
+## Priority 1 decision — complete or remove Assembly
 
 **Finding: unreachable/incomplete active capability. Confidence: 0.99 for reachability, 0.65 for
 product disposition.**
@@ -320,7 +320,7 @@ proof now. Use C only as a time-bounded bridge.
 - If removed, no active source, serialized schema, tool, projector, or Cockpit branch names Assembly.
 - If deferred, attempts to create Assembly state fail with a typed diagnostic before publication.
 
-### Priority 1 — prove and remove empty authority reintroduction
+## Priority 1 — prove and remove empty authority reintroduction
 
 **Finding: target-v1 cutover capability remains executable but has no repository-local non-empty
 producer. Confidence: 0.91 for this repository, 0.65 for external workspaces.**
@@ -370,7 +370,7 @@ loss remains unacceptable.
 - Historical snapshots remain byte-verifiable by the chosen retention mechanism.
 - Package root and README clearly distinguish active Delivery from archived evidence.
 
-### Priority 2 — make startup authorization a pure steady-state gate
+## Priority 2 — make startup authorization a pure steady-state gate
 
 **Finding: current startup authorization mixes gate, audit, and replay cleanup. Confidence: 0.95.**
 
@@ -418,7 +418,7 @@ not a cryptographic trust root.
 - Explicit snapshot audit detects altered archive bytes.
 - MCP and Cockpit startup contract tests pass against the pure gate.
 
-### Priority 2 — replace the transitional work-item projection
+## Priority 2 — replace the transitional work-item projection
 
 **Finding: active code depends on a lossy schema-v2-to-target-v1 conversion. Confidence: 0.88.**
 
@@ -459,7 +459,7 @@ the target-v1 generation if no such consumer remains.
 - Active projection imports no target-v1 authority or evidence models.
 - No test claims active behavior solely by constructing a target-v1 projector fixture.
 
-### Priority 2 — validate supported concurrency before adding new lock abstractions
+## Priority 2 — validate supported concurrency before adding new lock abstractions
 
 **Finding: repeated frontier reads exist, but the initially claimed stale-publication race was not
 valid. Confidence: 0.84.**
@@ -490,7 +490,7 @@ snapshot model without a demonstrated behavior gap.
   closed or observes a coherent successor.
 - Measure actual frontier-read cost before proposing an optimization.
 
-### Priority 3 — reassess naming and decomposition after deletion
+## Priority 3 — reassess naming and decomposition after deletion
 
 Do not broadly rename `target_*` or split the three large active classes while both architecture
 generations remain present. Today `target` has at least three meanings: the activated filesystem
@@ -526,7 +526,7 @@ otherwise the current overloaded names still describe materially different gener
 - Any extracted module passes the deletion test: removing it would force hidden complexity back into
   multiple callers, not merely remove one forwarding hop.
 
-### Reviewed and retained — Delivery MCP module split
+## Reviewed and retained — Delivery MCP module split
 
 No improvement measure is currently justified for the split between
 `owlbear_delivery_mcp.server` and `owlbear_delivery_mcp.target_server`.
@@ -545,7 +545,7 @@ gain or lose a material responsibility, or a second transport adapter must estab
 
 Revisit only if one responsibility changes materially; do not merge files to reduce file count.
 
-### Recommended execution order
+## Recommended execution order
 
 1. Stop automatic recovery of active claims during acquisition; add multi-instance regression proof.
 2. Fix Design-return work-item projection through the public application boundary.

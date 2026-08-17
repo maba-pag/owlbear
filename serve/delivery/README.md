@@ -18,7 +18,7 @@ configuration reference.
 The main public areas are:
 
 | Area | Contracts |
-|------|-----------|
+| --- | --- |
 | Authored Specification | `DesignPackageStore` create, verified read, compare-and-swap revision, and checkpoint |
 | Compilation and admission | Deterministic contract derivation, validation, package binding, and atomic runtime admission |
 | Operational Delivery | `DeliveryRuntime` and `PortfolioApplication` outcome stages, frontier acquisition, typed role contexts, publication, worker transitions, requests, and exact-claim recovery |
@@ -43,7 +43,7 @@ Delivery roots; setup seeds that policy but does not create host-local capacity 
 ## Dependencies
 
 | Package | Purpose |
-|---------|---------|
+| --- | --- |
 | `pydantic` | Strict native schemas and validation |
 | `ruamel.yaml` | Canonical YAML parsing and serialization |
 | `pyyaml` | Manifest loading |

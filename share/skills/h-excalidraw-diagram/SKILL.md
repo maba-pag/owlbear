@@ -122,7 +122,7 @@ Chen notation mapped to Excalidraw shapes. Use for data models, schema design, d
 ## Shape Meaning
 
 | Concept Type | Shape |
-|---|---|
+| --- | --- |
 | Labels, descriptions | free-floating text |
 | Section titles | free-floating text |
 | Timeline markers | small `ellipse` (10–20 px) |
@@ -138,7 +138,7 @@ Rule: Default to no container. Add shapes only when they carry meaning. Target <
 ## Container vs. Free-Floating Text
 
 | Use a Container When | Use Free-Floating Text When |
-|---|---|
+| --- | --- |
 | Element is a focal point | Element is a label or description |
 | Arrows must connect to it | Describes something nearby |
 | Shape carries meaning (e.g., diamond) | Section title, subtitle, or annotation |
@@ -162,7 +162,7 @@ Build large diagrams section by section — never generate a complete diagram in
 ## Reference Files
 
 | File | Purpose |
-|------|---------|
+| --- | --- |
 | `references/color-palette.md` | Semantic color mapping for fills, strokes, and text |
 | `references/element-templates.md` | JSON snippets for every element type (rectangle, diamond, ellipse, arrow, text, line) |
 | `references/json-schema.md` | Excalidraw JSON document structure and field reference |

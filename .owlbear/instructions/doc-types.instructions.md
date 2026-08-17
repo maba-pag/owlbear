@@ -10,7 +10,7 @@ Project-local rule IDs for documentation shape, placement mapping, and audience 
 ## Rule IDs
 
 | Prefix | Section |
-|--------|---------|
+| --- | --- |
 | `STR` | Required Sections |
 | `PLC` | Placement Mapping |
 | `AUD` | Audience Targets |
@@ -58,7 +58,7 @@ Project-local rule IDs for documentation shape, placement mapping, and audience 
 `PLC-3` Doc-type-to-location mapping:
 
 | Doc type | Canonical location |
-|----------|--------------------|
+| --- | --- |
 | Root README | `/README.md` |
 | Consumer README | `/README-consumer.md` (if needed) |
 | SECURITY.md | `/SECURITY.md` |
@@ -73,7 +73,7 @@ Project-local rule IDs for documentation shape, placement mapping, and audience 
 `AUD-1` Each doc type has a defined primary audience. Content must match that audience's knowledge level and intent.
 
 | Doc type | Primary audience | Knowledge level |
-|----------|------------------|-----------------|
+| --- | --- | --- |
 | Root README | New evaluators, contributors | No prior OwlBear knowledge |
 | SECURITY.md | Security researchers, users | Familiar with disclosure norms |
 | Package README | Developers integrating the package | Python-fluent, unfamiliar with this package |

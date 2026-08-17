@@ -1643,7 +1643,7 @@ def test_delivery_automation_scan_covers_required_roots() -> None:
 def test_forbidden_automation_governance_fixture_is_rejected_by_the_gate() -> None:
     violations = _automation_governance_violations((_fixture_path("forbidden-automation-governance.md"),))
 
-    assert {int(violation.rsplit(":", maxsplit=1)[1]) for violation in violations} == set(range(1, 13))
+    assert {int(violation.rsplit(":", maxsplit=1)[1]) for violation in violations} == set(range(3, 15))
 
 
 def test_valid_automation_governance_fixture_is_allowed_by_the_gate() -> None:

@@ -12,7 +12,7 @@ blocks its active outcome. A request is a durable graph dependency, not a genera
 ## Choose The Request Kind
 
 | Kind | Use when | Required response |
-|------|----------|-------------------|
+| --- | --- | --- |
 | Decision Request (DR) | The user must choose among materially different valid paths | One listed option or a free-text decision |
 | Action Request (AR) | The user or an explicitly invoked authorized workflow must perform an operation | A free-text outcome with the requested evidence |
 

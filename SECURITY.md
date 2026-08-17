@@ -3,9 +3,9 @@
 ## Supported Versions
 
 | Version | Supported |
-| ------- | --------- |
-| main    | ✅ Yes    |
-| dev     | No        |
+| --- | --- |
+| main | ✅ Yes |
+| dev | No |
 
 ## Reporting a Vulnerability
 

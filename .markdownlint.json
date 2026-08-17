@@ -3,9 +3,14 @@
   "MD024": {
     "siblings_only": true
   },
-  "MD029": false,
+  "MD029": {
+    "style": "one_or_ordered"
+  },
   "MD033": false,
-  "MD040": false,
-  "MD041": false,
-  "MD060": false
+  "MD041": {
+    "front_matter_title": "^\\s*(?:title|name|description)\\s*[:=]"
+  },
+  "MD060": {
+    "style": "compact"
+  }
 }

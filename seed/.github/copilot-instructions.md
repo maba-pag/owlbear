@@ -14,7 +14,7 @@ Describe your project in 2-4 sentences.
 <!-- Include source packages, frontend root, and test paths so generated answers are path-aware. -->
 
 | Path | Purpose |
-|------|---------|
+| --- | --- |
 | `src/` | Main application or library source code |
 | `src/domain/` | Core business logic modules (example) |
 | `frontend/` or `web/` | Frontend root for UI code (example) |
@@ -27,7 +27,7 @@ Describe your project in 2-4 sentences.
 <!-- Replace with concrete language, framework, runtime, and package manager details. -->
 
 | Component | Technology | Notes |
-|-----------|------------|-------|
+| --- | --- | --- |
 | Backend | Python / Node.js / Go (example) | Add your actual backend stack |
 | Frontend | React / Vue / Svelte (example) | Keep only what you use |
 | Testing | pytest / vitest / playwright (example) | List real commands |

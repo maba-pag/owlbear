@@ -23,7 +23,7 @@ Curated and approved MCP entries are what future agents recall. Pending entries 
 ## State Machine
 
 | From | To | Trigger | Tool | Actor |
-|------|----|---------|------|-------|
+| --- | --- | --- | --- | --- |
 | `pending` | `curated` | Curator validates content and assigns scope | `curate_memory(scope_agents=[...])` | curator agent |
 | `curated` | `approved` | User signs off in review prompt | `approve_memory` | human user |
 | `approved` | `curated` | Curator edits obsolete or imprecise content | `curate_memory(...)` | curator agent |
@@ -65,7 +65,7 @@ ordinary content or scope uncertainty remain reportable.
 For each MCP pending entry or file-inbox note, classify by meaning:
 
 | Rating | Meaning | Default action |
-|--------|---------|----------------|
+| --- | --- | --- |
 | PROMOTE | Specific, actionable, non-obvious, and not already covered | Curate into MCP with explicit scope |
 | DEFER | Plausible but lacks enough evidence, scope clarity, or wording quality | Leave pending and report the entry ID |
 | DELETE | Generic, empty, obvious, stale, or wrong | Delete/prune |
@@ -79,7 +79,7 @@ Deduplicate by meaning, not wording. Before deleting as duplicate, read the like
 Every promoted entry needs non-empty `scope_agents`.
 
 | Scope | Use when |
-|-------|----------|
+| --- | --- |
 | `['builder']`, `['build-reviewer']`, etc. | The learning applies to one or a few roles |
 | `['builder', 'build-reviewer']` | A shared handoff or quality pattern spans roles |
 | `['*']` | The learning applies to nearly every agent |
@@ -93,7 +93,7 @@ in relevance scope. A deleted agent may remain in immutable historical provenanc
 ## Step 4 — Act On MCP Entries
 
 | Rating | MCP action |
-|--------|------------|
+| --- | --- |
 | PROMOTE | Call `curate_memory(entry_id=..., scope_agents=[...])`; optionally improve title/content/categories/confidence in the same call |
 | DEFER | Leave pending and, in periodic mode, include ordinary content/scope uncertainty or conflict in the return report; do not report identity-only uncertainty |
 | DELETE / DUPLICATE | Call `delete_memory(entry_id=...)` |

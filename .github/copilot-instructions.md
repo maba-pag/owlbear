@@ -7,7 +7,7 @@ OwlBear is a laptop-resident AI development system built around VS Code and GitH
 ## 2. Repository Branches
 
 | Branch | Role | Contents |
-|--------|------|----------|
+| --- | --- | --- |
 | `dev` | Default repository working branch | Full workspace: `share/`, `serve/`, `seed/`, `setup/`, `.owlbear/`, `store/`, `tests/`, `pyproject.toml` |
 | `main` | Consumer-facing branch — auto-synced product subset | Product files only: `share/`, `serve/`, `seed/`, `setup/`, `pyproject.toml`, `uv.lock`, `README.md`, `.gitignore`, `.python-version`, `SECURITY.md`, `.github/`, `.mega-linter.yml`, `.editorconfig`, `.markdownlint.json` |
 
@@ -20,7 +20,7 @@ so never commit directly to `main`. The workflow builds the Cockpit SPA bundle
 ## Directory Structure
 
 | Directory | Purpose |
-|-----------|---------|
+| --- | --- |
 | `serve/` | Python workspace packages; source under `serve/*/src/`, package tests under `serve/*/tests/` |
 | `share/agents/` | Agent definitions (`.agent.md`) |
 | `share/skills/` | Agent skills (`SKILL.md` — `w-`, `r-`, `h-` prefixed) |
@@ -37,7 +37,7 @@ so never commit directly to `main`. The workflow builds the Cockpit SPA bundle
 `serve/cockpit/web/` is the frontend package — the only Node.js/npm code in this otherwise Python-only monorepo.
 
 | Attribute | Value |
-|-----------|-------|
+| --- | --- |
 | Stack | React 19 + Vite 8 + TypeScript 6 + Porsche Design System React 4 + React Router 7 + React Compiler (`babel-plugin-react-compiler`) |
 | Test runner | Vitest 4 (`npm test`) |
 | E2E test runner | Playwright (version locked by `serve/cockpit/web/package-lock.json`) via `npm run test:e2e` — Chromium only; requires `npx playwright install chromium` once |
@@ -53,7 +53,7 @@ All other `serve/` packages are Python — use `uv run` for those.
 `serve/cockpit/src/owlbear_cockpit/` is the Python FastAPI backend — read/write API consumed by the Cockpit frontend.
 
 | Attribute | Value |
-|-----------|-------|
+| --- | --- |
 | Stack | FastAPI + Pydantic v2 |
 | Endpoints | REST API under `/api/` — see `owlbear_cockpit/routes/` for current routes |
 | Launch | `uv run cockpit` — starts uvicorn on `127.0.0.1:8420` (default) and auto-opens browser; `COCKPIT_PORT` overrides port; `COCKPIT_NO_OPEN=1` suppresses browser; requires built `dist/` |
@@ -64,7 +64,7 @@ All other `serve/` packages are Python — use `uv run` for those.
 Maps source paths to the test scope that covers them. Used by quality-runner `mode=full` with `changed_paths` for domain-scoped regression testing.
 
 | Source prefix | Test scope | Toolchain |
-|---------------|-----------|-----------|
+| --- | --- | --- |
 | `serve/cockpit/web/` | `npm test` in `serve/cockpit/web/` | vitest |
 | `serve/cockpit/` (Python, not `web/`) | `tests/test_cockpit_*` | pytest |
 | `serve/delivery/` | `serve/delivery/tests/` `tests/test_engine_*` `tests/test_delivery_*` | pytest |

@@ -88,7 +88,7 @@ No platform-specific configuration is required:
 ## What's Shared vs. Project-Local
 
 | Resource | Location | Shared? |
-|----------|----------|---------|
+| --- | --- | --- |
 | Agents (`.agent.md`) | `../owlbear/share/agents/` | Yes — all teammates get the same agents |
 | Skills (`SKILL.md`) | `../owlbear/share/skills/` | Yes — all teammates get the same skills |
 | Instructions (`*.instructions.md`) | `../owlbear/share/instructions/` | Yes — shared baseline |
@@ -151,7 +151,7 @@ organization agent registry as a complement to the local installation.
 ## Troubleshooting
 
 | Symptom | Resolution |
-|---------|------------|
+| --- | --- |
 | `ValueError` during `init.py` | Ensure owlbear and project are on the same Windows drive |
 | Agents missing after setup | Run `init.py` again; check that `.vscode/settings.json` was created and contains `chat.agentFilesLocations` pointing to the owlbear installation |
 | Cockpit command not found in project | Run `uv run --project ../owlbear cockpit` from the project root instead of plain `uv run cockpit` |

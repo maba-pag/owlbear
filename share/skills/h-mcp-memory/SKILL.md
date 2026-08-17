@@ -15,7 +15,7 @@ For curation workflow, see `w-mem-curation`.
 ## Agent Access Matrix
 
 | Role | Agents | Available Tools |
-|------|--------|----------------|
+| --- | --- | --- |
 | Outcome owners | designer, planner, builder, orchestrator | `recall_memory`, `save_memory` (`builder` also assesses) |
 | Specialist producers | test-curator, knowledge-ingestor, knowledge-enricher | `recall_memory`, `save_memory` |
 | Read-only reviewers | build-reviewer, planner-challenger, designer-challenger, conceptual-design-reviewer | `recall_memory`; return candidates to their parent |
@@ -65,7 +65,7 @@ owlbear-memory/commit_memory_batch(session_type="review")
 ## Tool Summary
 
 | Tool | Description | Key parameters |
-|------|-------------|----------------|
+| --- | --- | --- |
 | `save_memory` | Create a new `pending` memory entry | `title`, `content`, `categories`, `confidence`, `source_agent`, `scope_agents` |
 | `list_memories` | List metadata filtered by state/category/scope | `states`, `categories`, `scope_agents` |
 | `recall_memory` | Recall scoped identity-bearing memory blocks for agent pre-flight | `agent`, `categories`, `limit` |
@@ -83,7 +83,7 @@ owlbear-memory/commit_memory_batch(session_type="review")
 Creates a new `pending` entry in `.owlbear/memory/*.md`.
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --- | --- | --- | --- |
 | `title` | str | (required) | Human-readable title, used for stable filename slug at creation |
 | `content` | str | (required) | Markdown body content |
 | `categories` | list[str] | (required) | One or more category values |
@@ -104,7 +104,7 @@ Returns metadata-only entries sorted for lifecycle priority. `contested` shares 
 Default behavior (when `states` is omitted): includes every non-deleted state.
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --- | --- | --- | --- |
 | `states` | list[str] \| null | `null` | Optional explicit state filter |
 | `categories` | list[str] \| null | `null` | Optional category filter |
 | `scope_agents` | list[str] \| null | `null` | Optional agent-scope filter |
@@ -116,7 +116,7 @@ Returns: metadata entries (no `content`) with fields including `id`, `title`, `c
 Reads one full entry by `entry_id`.
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --- | --- | --- | --- |
 | `entry_id` | str | (required) | Entry identifier |
 
 Behavior:
@@ -129,7 +129,7 @@ Behavior:
 Returns identity-bearing markdown blocks scoped to one agent for pre-flight loading.
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --- | --- | --- | --- |
 | `agent` | str | (required) | Agent name requesting relevant memory |
 | `categories` | list[str] \| null | `null` | Optional category filter |
 | `limit` | int \| null | `20` | Maximum entries to return; non-negative |
@@ -150,19 +150,19 @@ Records how useful recalled memory entries were for a completed task. Include ev
 by `recall_memory` in one assessment batch.
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --- | --- | --- | --- |
 | `task_id` | str | (required) | Non-empty identifier for the completed task |
 | `assessments` | list[dict[str, str]] | (required) | Non-empty list of per-entry assessments |
 
 Each assessment item requires these fields:
 
 | Field | Type | Description |
-|-------|------|-------------|
+| --- | --- | --- |
 | `entry_id` | str | Recalled memory entry identifier |
 | `bucket` | str | One of the accepted bucket values below |
 
 | Bucket | Meaning |
-|--------|---------|
+| --- | --- |
 | `outstanding` | The entry's guidance was genuinely great for this task |
 | `unremarkable` | The entry was applied or referenced and was adequate |
 | `didnt_use` | The entry was not applied or referenced |
@@ -182,7 +182,7 @@ Returns: `results`, containing `entry_id` and `success` for each item, plus `err
 Curator update tool for content edits and lifecycle transitions.
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --- | --- | --- | --- |
 | `entry_id` | str | (required) | Entry identifier |
 | `title` | str \| null | `null` | Replace title |
 | `content` | str \| null | `null` | Replace markdown body |
@@ -227,7 +227,7 @@ it, while `*` is anonymous provenance rather than a named identity.
 Curator-only lifecycle mutation.
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --- | --- | --- | --- |
 | `entry_id` | str | (required) | Entry identifier |
 
 Behavior:
@@ -243,7 +243,7 @@ Returns: updated entry object.
 Approves a curated entry.
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --- | --- | --- | --- |
 | `entry_id` | str | (required) | Entry identifier |
 
 Behavior:
@@ -259,7 +259,7 @@ Returns: updated entry object.
 Allowed category values:
 
 | Value | Meaning |
-|-------|---------|
+| --- | --- |
 | `domain-knowledge` | Verified technical fact |
 | `behaviour` | Repeatable process behavior |
 | `pitfall` | Failure mode and prevention |
@@ -316,7 +316,7 @@ delete_agent_memories(agent="retired-agent")
 Recommended category mapping for post-task reflection bullets:
 
 | Bullet type | Category |
-|-------------|----------|
+| --- | --- |
 | `problems_faced` | `domain-knowledge` |
 | `workarounds_applied` | `domain-knowledge` |
 | `patterns_discovered` | `behaviour` |
@@ -333,7 +333,7 @@ identities are discovered from workspace agent locations; the server has no envi
 All tools raise `ToolError` (surfaced as MCP error responses) for invalid operations:
 
 | Error | Trigger | Example |
-|-------|---------|---------|
+| --- | --- | --- |
 | Entry not found | Invalid `entry_id` | `read_memory(entry_id="nonexistent")` |
 | Invalid state transition | Wrong source state | `approve_memory` on a `pending` entry |
 | Deleted entry access | Reading a soft-deleted entry | `read_memory` on `state=deleted` |

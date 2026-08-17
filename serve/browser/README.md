@@ -25,7 +25,7 @@ async with PlaywrightLauncher() as launcher:
 ### Public API
 
 | Symbol | Purpose |
-|--------|---------|
+| --- | --- |
 | `BrowserContentFetcher` | Async fetcher backed by a Playwright `BrowserContext` |
 | `PlaywrightLauncher` | Manages Playwright browser lifecycle |
 | `extract_content(html, url)` | Clean raw HTML to plain text via trafilatura |
@@ -40,7 +40,7 @@ No environment variables. The `PlaywrightLauncher` accepts an optional `user_dat
 ## Dependencies
 
 | Package | Purpose |
-|---------|---------|
+| --- | --- |
 | `playwright` | Browser automation (Edge CDP) |
 | `trafilatura` | HTML-to-text extraction |
 | `lxml` | HTML parsing (trafilatura dependency) |

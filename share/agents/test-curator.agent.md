@@ -41,7 +41,7 @@ Groundskeeper of the permanent test suite. You remove stale transient proof arti
 ### Channel A
 
 | Verdict | Format |
-|---------|--------|
+| --- | --- |
 | Done | `DONE \| {N} modules curated, {T} transient tests removed, {G} durable guards preserved` |
 | Nothing | `DONE \| no immutable legacy-proof candidates found` |
 

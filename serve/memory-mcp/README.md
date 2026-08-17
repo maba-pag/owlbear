@@ -21,7 +21,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 ### Modules
 
 | Module | Purpose |
-|--------|---------|
+| --- | --- |
 | `agents.py` | Dynamic canonical-agent discovery from active VS Code agent locations |
 | `server.py` | MCPServer app definition, tool registration, lifespan wiring |
 | `tools.py` | Tool implementation — validation, state transitions, response formatting |
@@ -34,7 +34,7 @@ Engine and model types (`MemoryEngine`, `MemoryEntry`, `MemoryCategory`, `Memory
 
 Entries follow a curated-approval lifecycle:
 
-```
+```text
 pending ──[curate with scope]──► curated ──[approve]──► approved
    │                               │  ▲                    │
    │                               │  └──[curate edit]─────┘
@@ -58,7 +58,7 @@ stale     ──[resolve*]──► approved    [delete: soft → deleted]
 ## Tools
 
 | Tool | Description |
-|------|-------------|
+| --- | --- |
 | `save_memory` | Create an unscoped `pending` entry from an active canonical agent identity |
 | `list_memories` | List metadata sorted by curation priority; filters: `states`, `categories`, `scope_agents` |
 | `read_memory` | Read one full entry by `entry_id`; errors on deleted entries |
@@ -76,7 +76,7 @@ All mutating tools return a `hint` field describing the transition or action tak
 ## Entry Schema
 
 | Field | Type | Constraint |
-|-------|------|------------|
+| --- | --- | --- |
 | `id` | str | Stable UUID identifier |
 | `title` | str | Required, non-empty |
 | `content` | str | Markdown body (max 1024 chars at MCP layer) |
@@ -130,7 +130,7 @@ The operation stages only non-pending `.owlbear/memory/*.md` files and returns t
 ## Dependencies
 
 | Package | Purpose |
-|---------|---------|
+| --- | --- |
 | `mcp[cli]` | MCPServer framework and CLI |
 | `owlbear-memory` | Shared memory engine, models, and error types (workspace package) |
 | `pydantic` | Model validation at the MCP tool layer |

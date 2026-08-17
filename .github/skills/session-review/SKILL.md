@@ -24,7 +24,7 @@ Use the store's actual SQLite columns; do not invent generic names such as `titl
 `workspace_path`, or `content`:
 
 | Table | Review columns |
-|-------|----------------|
+| --- | --- |
 | `sessions` | `id`, `cwd`, `repository`, `branch`, `summary`, `agent_name`, `created_at`, `updated_at` |
 | `turns` | `session_id`, `turn_index`, `user_message`, `assistant_response`, `timestamp` |
 | `checkpoints` | `session_id`, `checkpoint_number`, `title`, summary fields, `created_at` |

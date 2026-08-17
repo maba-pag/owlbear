@@ -36,7 +36,7 @@ The public provider models and `PublicationProvider` protocol are exported by `o
 ## Dependencies
 
 | Package | Purpose |
-|---------|---------|
+| --- | --- |
 | `owlbear-delivery` | Owns the transport-free publication models and provider protocol |
 | `pydantic` | Validates strict provider request and response models |
 

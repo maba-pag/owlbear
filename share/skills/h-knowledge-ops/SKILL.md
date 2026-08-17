@@ -15,7 +15,7 @@ Tool reference and recipes for the `owlbear-knowledge` MCP server, registered in
 Search the knowledge base for relevant context.
 
 | Param | Type | Default | Notes |
-|-------|------|---------|-------|
+| --- | --- | --- | --- |
 | `query` | str | required | Natural-language search query |
 | `limit` | int | 5 | Max results to return |
 | `scopes` | list[str] \| null | null | Scope filter (e.g. `["global", "project:myproj"]`) |
@@ -27,7 +27,7 @@ Returns: `list[dict]` — ranked results with `title`, `score`, `snippet`, `retr
 Ingest a text document into the knowledge base.
 
 | Param | Type | Default | Notes |
-|-------|------|---------|-------|
+| --- | --- | --- | --- |
 | `text` | str | required | Text content to ingest |
 | `metadata` | dict | None | Optional metadata dict |
 | `scope` | str | `global` | Knowledge scope for ingested document |
@@ -44,7 +44,7 @@ If document/chunk/vector persistence succeeds but automatic per-chunk graph extr
 List all registered knowledge sources.
 
 | Param | Type | Default | Notes |
-|-------|------|---------|-------|
+| --- | --- | --- | --- |
 | `scope` | str | None | Filter by scope; omit for all |
 
 Returns: `list[dict]` — source rows with `id`, `name`, `source_type`, `scope`, `last_refreshed_at`, `last_checked_at`, `last_error`, `enabled`, `refreshable`, `enrich`, and `fetch_method`; `[]` if no sources. Use `id` as the `source_id` for `refresh_knowledge_source` only when `refreshable` is true.
@@ -54,7 +54,7 @@ Returns: `list[dict]` — source rows with `id`, `name`, `source_type`, `scope`,
 Trigger re-ingestion of a registered knowledge source by source ID.
 
 | Param | Type | Default | Notes |
-|-------|------|---------|-------|
+| --- | --- | --- | --- |
 | `source_id` | str | required | Registered source ID to refresh |
 
 Returns: refresh result dict on success — `{"source_id": str, "refreshed": int, "partial": int, "skipped": int, "failed": int, "errors": list[str], "warnings": list[str]}` — or an `error: ...` string when refresh infrastructure is unavailable, the source is disabled, or the source is not refreshable. Raises `ToolError` when the source store is unavailable or the source ID is unknown.
@@ -64,7 +64,7 @@ Returns: refresh result dict on success — `{"source_id": str, "refreshed": int
 Register a fully configured source before it is ingested or refreshed.
 
 | Param | Type | Default | Notes |
-|-------|------|---------|-------|
+| --- | --- | --- | --- |
 | `name` | str | required | Human-readable source name |
 | `kind` | str | required | `url_list` or `file_glob` for the examples below |
 | `fetch_method` | str | required | `http` for URL lists; `filesystem` for file globs |
@@ -82,7 +82,7 @@ Returns: `{"id": str, "name": str, "state": str, "kind": str, "scope": str}`.
 Delete a registered source and cascade its documents/chunks/graph rows after vector deletion succeeds.
 
 | Param | Type | Default | Notes |
-|-------|------|---------|-------|
+| --- | --- | --- | --- |
 | `source_id` | str | required | Registered source ID to remove |
 
 Returns a purge summary with `status`, `completed_steps`, `failed_step`, `error`, `source`, `content`, `enrichment`, and `graph`. This is destructive: use only when intentionally decommissioning stale or incorrect source content. The deletion cascades after vector deletion succeeds.
@@ -98,7 +98,7 @@ Returns: `dict` with corpus counts and enrichment queue state: `documents`, `ent
 Atomically claim a batch of chunks ready for enrichment.
 
 | Param | Type | Default | Notes |
-|-------|------|---------|-------|
+| --- | --- | --- | --- |
 | `limit` | int | 10 | Maximum chunks to claim |
 
 Returns: `list[dict]` — `[{"chunk_id": str, "text": str, "doc_title": str, "section_path": str | null, "source_name": str | null, "document_id": str, "source_id": str, "scope": str, "claim_token": str, "claimed_at": str}, ...]`.
@@ -117,7 +117,7 @@ Behavior:
 Reset failed enrichment chunks back to pending so workers can retry them.
 
 | Param | Type | Default | Notes |
-|-------|------|---------|-------|
+| --- | --- | --- | --- |
 | `chunk_ids` | list[str] \| null | null | Specific failed chunks to reset; when supplied, only these IDs are considered |
 | `limit` | int | 100 | Maximum failed chunks to reset when `chunk_ids` is omitted |
 | `scopes` | list[str] \| null | null | Optional scope filter when resetting by queue order |
@@ -129,7 +129,7 @@ Returns: `{"reset": int, "remaining_failed": int}`. Use after inspecting `knowle
 Persist extraction results for a claimed chunk.
 
 | Param | Type | Default | Notes |
-|-------|------|---------|-------|
+| --- | --- | --- | --- |
 | `chunk_id` | str | required | Chunk ID from `claim_enrichment_batch` |
 | `entities` | list[dict] | None | Entities to upsert |
 | `edges` | list[dict] | None | Edges to insert |
@@ -169,7 +169,7 @@ Agent tool allowlists own callability. This handbook documents the available Kno
 ## Decision Tree
 
 | I want to... | Tool | Notes |
-|--------------|------|-------|
+| --- | --- | --- |
 | Search the knowledge base | `knowledge_search` | Natural-language query, returns ranked snippets |
 | Register a source | `register_knowledge_source` | Provide a complete source mapping with nested config |
 | Ingest a document | `knowledge_ingest` | Pass text content + optional metadata |
@@ -186,7 +186,7 @@ Sources listed by `list_knowledge_sources` can be passed to `refresh_knowledge_s
 ## Scope Conventions
 
 | Scope | Format | When to use |
-|-------|--------|-------------|
+| --- | --- | --- |
 | Global | `global` | Default. Cross-project knowledge. |
 | Project | `project:{id}` | When a project is active. Auto-set by toolset constructors. |
 

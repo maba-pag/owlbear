@@ -18,7 +18,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 ### Tools
 
 | Tool | Description |
-|------|-------------|
+| --- | --- |
 | `acquire` | Acquire one rendered page and return its structured success or failure result |
 | `navigate` | Navigate to a URL and return the page's plain-text content |
 | `click` | Click an element identified by CSS selector |
@@ -35,14 +35,14 @@ converted into a generic transport error.
 ## Configuration
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| --- | --- | --- |
 | `BROWSER_ALLOWED_DOMAINS` | _(empty)_ | Comma-separated list of permitted hostnames; navigation to any other domain is blocked. **Required** — all domains are blocked when unset. |
 | `PLAYWRIGHT_USER_DATA_DIR` | `~/.owlbear/chromium-profile` | Path to an existing browser profile directory for authenticated sessions |
 
 ## Dependencies
 
 | Package | Purpose |
-|---------|---------|
+| --- | --- |
 | `mcp[cli]` | MCPServer framework and CLI |
 | `owlbear-browser` | Playwright-based content fetcher (workspace package) |
 

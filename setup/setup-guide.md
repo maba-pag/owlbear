@@ -7,7 +7,7 @@
 Before running setup, ensure the following are installed on your machine:
 
 | Requirement | Why | How to get it |
-|-------------|-----|---------------|
+| --- | --- | --- |
 | Python 3.14+ | OwlBear runtime | [python.org](https://www.python.org/downloads/) |
 | [uv](https://docs.astral.sh/uv/) | Package manager and MCP server launcher | `pip install uv` or see uv docs |
 | VS Code | IDE | [code.visualstudio.com](https://code.visualstudio.com/) |
@@ -66,7 +66,7 @@ data:
   `chatLanguageModels.json` file:
 
   | Model | Reasoning effort |
-  |-------|------------------|
+  | --- | --- |
   | `gpt-5.6-luna` | `max` |
   | `gpt-5.6-sol` | `high` |
   | `claude-opus-5` | `medium` |
@@ -104,7 +104,7 @@ Chromium executable does not exist, run `npx playwright install chromium` again 
 Running `init.py` writes the following files into your project directory:
 
 | File / Directory | Purpose | Idempotency |
-|------------------|---------|-------------|
+| --- | --- | --- |
 | `.vscode/settings.json` | Points VS Code at owlbear agents, skills, and instructions; enables `mermaid-chat.enabled` for Mermaid diagram rendering in chat | Merged (owlbear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 5 MCP servers (4 owlbear stdio, including browser access, + markitdown) | Merged (owlbear servers as defaults; your existing servers are preserved) |
 | `.owlbear/delivery/config.json` | Declares the Git remote, pull-request target branch, and exact GitHub `owner/name` identity; host-local writer and execution capacity may be configured separately in ignored `.owlbear/delivery/runtime/host.json` | Tracked in Git; exact schema-1 policy is migrated once and schema-2 project edits are preserved on rerun |
@@ -193,7 +193,7 @@ capacity without Orchestrator scheduling judgment or conversation-derived author
 Worker transitions keep correction finite and typed:
 
 | Condition | Owner and control | Resume behavior |
-|-----------|-------------------|-----------------|
+| --- | --- | --- |
 | Local implementation defect | Builder creates a bounded follow-up commit and requests fresh exact-commit review | Continue the same Build claim only after a fresh pass |
 | Missing user decision or action | Worker returns `block` with an embedded request | Answer the request in Cockpit; fresh context carries the structured resolution |
 | Requestless condition is satisfied | User clears the block in Cockpit | Engine recomputes eligibility |
@@ -259,7 +259,7 @@ After opening the project in VS Code, use the **Diagnostics view** to confirm ev
 3. Verify each of the following appears:
 
 | What to check | How to verify |
-|---------------|---------------|
+| --- | --- |
 | OwlBear agents loaded | Chat Customizations shows agents from `../owlbear/share/agents/` |
 | OwlBear skills loaded | Chat Customizations shows skills from `../owlbear/share/skills/` |
 | Instructions loaded | Chat Customizations shows `*.instructions.md` files from `../owlbear/share/instructions/` |
@@ -294,15 +294,15 @@ so it reads this project's `.owlbear/delivery/config.json`, Delivery state, and 
    uv run --project ..\owlbear cockpit
    ```
 
-  Expected outcome: Cockpit opens `http://127.0.0.1:8420` and shows this project's
-  target workspace. Use `COCKPIT_NO_OPEN=1` to suppress browser auto-open.
+    Expected outcome: Cockpit opens `http://127.0.0.1:8420` and shows this project's
+    target workspace. Use `COCKPIT_NO_OPEN=1` to suppress browser auto-open.
 
 3. If your owlbear clone is not a sibling directory, replace `../owlbear` with the path
    to the clone.
 
-  Expected outcome: uv resolves the `cockpit` command from owlbear while Cockpit keeps
-  the current project directory as its runtime working directory. If you run the command
-  from somewhere else, add `--directory /path/to/project`.
+    Expected outcome: uv resolves the `cockpit` command from owlbear while Cockpit keeps
+    the current project directory as its runtime working directory. If you run the command
+    from somewhere else, add `--directory /path/to/project`.
 
 ---
 
@@ -369,7 +369,7 @@ override or tool-exclusion environment settings.
 ## Troubleshooting
 
 | Symptom | Likely cause | Resolution |
-|---------|-------------|------------|
+| --- | --- | --- |
 | Agents not appearing in picker | Wrong path in `chat.agentFilesLocations` | Open Diagnostics view; verify path relative to project root matches owlbear location |
 | Skills not auto-loading | `chat.agentSkillsLocations` missing or path wrong | Check `.vscode/settings.json`; re-run `init.py` if the key is absent |
 | Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |

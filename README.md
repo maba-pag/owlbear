@@ -20,7 +20,7 @@ must not be edited directly. Immutable records from the retired workflow may rem
 ## Directory Structure
 
 | Directory | Purpose |
-|-----------|---------|
+| --- | --- |
 | `serve/` | Python runtime and MCP packages; Cockpit also contains its React source and consumer bundle |
 | `share/agents/` | Copilot role definitions |
 | `share/skills/` | Reusable workflows, rules, and handbooks |

@@ -12,7 +12,7 @@ relationships; executable frontmatter and file bodies remain authoritative.
 ## Directory Layout
 
 | Directory | Contents | Naming convention |
-|-----------|----------|-------------------|
+| --- | --- | --- |
 | `agents/` | Persistent roles with identity, model, tools, hooks, dependencies, and output contracts | `{role}.agent.md` |
 | `skills/` | Reusable workflows, shared rules, and domain handbooks | `{prefix}-{domain}/SKILL.md` |
 | `instructions/` | Auto-applied universal authorities and narrow safety-net stubs | `{domain}.instructions.md` |
@@ -41,7 +41,7 @@ The model does not read every control in the same way. The effective behavior fo
 the ordered composition of the active layers below.
 
 | Layer | When it appears | Appropriate content | Authority |
-|-------|-----------------|---------------------|-----------|
+| --- | --- | --- | --- |
 | Platform and policy | Every session | Product-level safety, tool semantics, and system behavior | VS Code and GitHub Copilot |
 | `.github/copilot-instructions.md` | Every turn in the workspace | Current-project identity, topology, stack, commands, and resources | Project workspace |
 | Matching `.instructions.md` files | When `applyTo` matches the working file | Universal behavior, project-local domain rules, or a pointer to a specialist skill | Most specific matching instruction |
@@ -76,7 +76,7 @@ the expected workflow. The stub should point to the authority, not reproduce it.
 Text and enforcement serve different jobs even when both use imperative language.
 
 | Control | Kind | What it can do |
-|---------|------|----------------|
+| --- | --- | --- |
 | Personas, critical rules, workflows, handbooks, examples, and prompt instructions | Soft | Steer model decisions; they cannot mechanically prevent a violation |
 | Agent `tools:` and `agents:` frontmatter | Hard runtime boundary | Limit exposed capabilities and dispatch targets |
 | `PreToolUse`, `PostToolUse`, and `SessionStart` hooks | Hard runtime boundary | Reject operations, add context, or run checks at defined lifecycle points |
@@ -92,7 +92,7 @@ text as the explanation and point to the enforcing owner.
 Put one rule in one canonical home and give consumers at most one concise pointer or reinforcement.
 
 | Job | Canonical home |
-|-----|----------------|
+| --- | --- |
 | Current-project facts, paths, stack, and commands | `.github/copilot-instructions.md` |
 | Behavior every OwlBear agent needs on nearly every turn | Universal authority instruction |
 | File-domain safety net that routes to fuller guidance | Instruction stub |
@@ -107,7 +107,7 @@ Put one rule in one canonical home and give consumers at most one concise pointe
 Skill prefixes encode the content type:
 
 | Prefix | Meaning |
-|--------|---------|
+| --- | --- |
 | `w-` | Workflow: ordered procedure with entry, execution, and output behavior |
 | `r-` | Rules: shared behavioral convention used by multiple consumers |
 | `h-` | Handbook: domain knowledge loaded when that capability is needed |

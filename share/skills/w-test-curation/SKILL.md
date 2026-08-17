@@ -77,7 +77,7 @@ For each candidate, answer one question: **does this test provide ongoing projec
 ### Zero-value patterns (delete without mining)
 
 | Pattern | Example | Reasoning |
-|---------|---------|-----------|
+| --- | --- | --- |
 | Removal proof | Test asserts an old import raises or a deleted file is gone | The thing is gone; the test is tautological |
 | Config addition proof | Test asserts a config key exists in a manifest | Config is exercised by the system it configures |
 | Structural assertion | Test asserts a file exists or a module exports a name | The code that imports it is the real test |
@@ -96,7 +96,7 @@ when reintroducing the forbidden behavior would be a real regression.
 ### Potential-value patterns (read before deciding)
 
 | Pattern | Action |
-|---------|--------|
+| --- | --- |
 | Tests a non-obvious edge case | Mine into durable test |
 | Tests error handling / boundary validation | Mine into durable test |
 | Tests integration between two modules | Mine if not covered elsewhere |
@@ -179,7 +179,7 @@ Verify the resulting commit's path list and leave unrelated staged or unstaged w
 
 ## Output
 
-```
+```markdown
 ## Test Curation
 ### Summary
 - Candidates found: {modules} modules / {nodes} test nodes (Python: {py}, Frontend: {fe}, E2E: {e2e})
@@ -193,7 +193,7 @@ currently collected in a touched module.
 
 ### Decisions
 | File | Legacy provenance | Nodes reviewed | Verdict | Protected behavior / reason |
-|------|-------------------|----------------|---------|-----------------------------|
+|---|---|---|---|---|
 | test_core_removal_1234.py | #1234 (verified archived) | 3 | delete file | removal proof; no ongoing behavior |
 | test_engine_edge_1200.py | #1200 (verified archived) | 4 | mine in place | malformed input remains atomic |
 | Shell.tab-routing_1639.test.tsx | #1639 (verified archived) | 2 | keep | standing route contract |
@@ -209,6 +209,6 @@ currently collected in a touched module.
 ## Companion Skills
 
 | Skill | When | Purpose |
-|-------|------|---------|
+| --- | --- | --- |
 | `h-python-conventions` | Mining Python assertions | Naming and structure |
 | `h-vitest-and-linting` | Frontend/E2E curation | Frontend tooling commands |

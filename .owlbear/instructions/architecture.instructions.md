@@ -7,7 +7,7 @@ applyTo: "serve/**"
 
 OwlBear v2 has no custom Python agent runtime. Agents are `.agent.md` files executed by VS Code and GitHub Copilot. Tools are provided by MCP servers (`serve/*-mcp/`) or VS Code built-in tools.
 
-```
+```text
 agents/*.agent.md             (agent definitions — pure markdown, no Python)
     use tools from
 serve/delivery-mcp/           (MCP server: Delivery operations)
@@ -60,7 +60,7 @@ constant in that file maps each package namespace to its permitted owlbear-names
 Each task targets exactly one domain. Multi-domain work must be split into separate tasks.
 
 | Domain | Scope |
-|--------|-------|
+| --- | --- |
 | delivery | `serve/delivery/` (Change lifecycle, target contract, workspaces, publication state) |
 | delivery-github | `serve/delivery-github/` (fixed-operation GitHub publication provider) |
 | delivery-mcp | `serve/delivery-mcp/` (Delivery MCP tools and target-facing server) |

@@ -79,7 +79,7 @@ Honor explicit project or CI thresholds, but never manufacture low-value asserti
 ### Test Lifecycle and Placement
 
 | Tier | File naming | Lifespan | Authority |
-|------|------------|----------|-----------|
+| --- | --- | --- | --- |
 | **Task-scoped proof** (transient) | Project test root with task ID when executable scaffolding is necessary | Until task archive | Proves task completion; test-curator deletes it or mines behavior worth retaining. |
 | **Durable behavioral test** | Owning package or configured test root, named for behavior | While the protected contract exists | Maintained regression suite for product behavior and risk boundaries. |
 

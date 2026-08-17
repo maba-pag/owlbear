@@ -59,7 +59,7 @@ Not applicable — no Delivery integration; output is persisted via `knowledge_i
 - Delete only when the user intentionally decommissions stale or incorrect source content; it cascades source, content, enrichment, and graph cleanup.
 
 | Rationalization | Response |
-|----------------|----------|
+| --- | --- |
 | "I'll extract entities from this source while ingesting." | Out of scope. Enrichment is a separate phase. |
 | "The page looks like a login screen but I'll ingest anyway." | Reject. Present preview and ask user to confirm. |
 

@@ -27,7 +27,7 @@ Use this order to establish context without turning local instructions into univ
 When present, these committed artifacts are optional wayfinders:
 
 | Artifact | Contents | Best use |
-|----------|----------|----------|
+| --- | --- | --- |
 | `.owlbear/doc-index.md` | Documentation paths, headings, and outbound links | Find the document that owns a topic. |
 | `.owlbear/py-index.md` | Python modules, imports, classes, methods, and functions | Inspect package shape and likely interfaces. |
 | `.owlbear/ts-index.md` | TS/TSX/JS/JSX modules, imports, exports, and interfaces | Inspect frontend or script structure. |
@@ -101,6 +101,6 @@ research workflow controls clone approval, recording, and cleanup.
 ## Companion Skills
 
 | Skill | Load when |
-|-------|-----------|
+| --- | --- |
 | `h-module-design` | Source evidence requires judging module depth, locality, seams, or dependency placement rather than locating code |
 | `r-workspace-governance` | Creating or committing OwlBear-managed artifacts |

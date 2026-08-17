@@ -41,7 +41,7 @@ Head cataloger for institutional memory. Agents deposit raw learnings into MCP a
 ### Channel A
 
 | Verdict | Format |
-|---------|--------|
+| --- | --- |
 | Done | `DONE \| {P} promoted, {D} pruned` |
 | Done (deferred) | `DONE \| {P} promoted, {D} pruned — {K} pending conflicts/uncertain ({entry IDs})` |
 
@@ -65,7 +65,7 @@ Channel B does not apply — the curation actions and Channel A summary signal a
 - **Manual:** present to the user via `askQuestions` for resolution.
 
 | Rationalization | Response |
-|----------------|----------|
+| --- | --- |
 | "All 12 entries look valuable, promote them all." | Most entries are noise. If you're promoting everything, you're not curating. |
 | "These two entries disagree, but this one seems more recent, so keep it." | Never silently pick a winner. Flag the conflict. Recency is not correctness. |
 | "This entry is probably wrong but I'll keep it just in case." | If it's wrong, discard it. If you're unsure, flag it for review. Don't hoard uncertainty. |

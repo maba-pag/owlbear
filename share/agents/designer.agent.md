@@ -57,7 +57,7 @@ challenge, validation, or approval gate is incomplete. A plausible plan is not a
 <agents>
 
 | Agent | When | Example |
-|-------|------|---------|
+| --- | --- | --- |
 | conceptual-design-reviewer | Challenge a consequential product, workflow, operating-model, or interaction concept before it hardens into detailed authority | `Review Concept: proposal=unified work board, question=Can manual Design and engine-run work share one coherent board?` |
 | designer-challenger | Produce structured repository-grounded challenge evidence for a complete candidate revision | `Challenge Design: change_id=replace-cache, digest=..., entities=[...]` |
 | Explore | Gather a bounded read-only source, interface, risk, or proof fact whose independent context improves the design | `Inspect the current cache ownership and public invalidation boundary` |

@@ -47,7 +47,7 @@ delete_entry(entry_path, memory_dir=memory_dir)
 Pydantic `BaseModel` representing a single markdown-backed memory entry.
 
 | Field | Type | Notes |
-|-------|------|-------|
+| --- | --- | --- |
 | `id` | `str` | UUIDv4 string |
 | `title` | `str` | Non-blank |
 | `content` | `str` | Max 1024 characters |
@@ -68,7 +68,7 @@ Pydantic `BaseModel` representing a single markdown-backed memory entry.
 ### `MemoryCategory` (StrEnum)
 
 | Value | Meaning |
-|-------|---------|
+| --- | --- |
 | `domain-knowledge` | Facts about a domain |
 | `behaviour` | Agent behavioural norms |
 | `pitfall` | Known failure modes or anti-patterns |
@@ -82,7 +82,7 @@ Pydantic `BaseModel` representing a single markdown-backed memory entry.
 ### `MemoryState` (StrEnum)
 
 | Value | Meaning |
-|-------|---------|
+| --- | --- |
 | `pending` | Newly created, awaiting curation |
 | `curated` | Reviewed and refined |
 | `approved` | Accepted for active use |
@@ -128,7 +128,7 @@ Raises `ValueError` on containment or symlink violations.
 ## Error Types
 
 | Exception | Raised when |
-|-----------|-------------|
+| --- | --- |
 | `NotFoundError` | An entry file does not exist |
 | `ConcurrencyError` | Optimistic concurrency validation fails (caller use) |
 | `ValidationError` | User input or payload validation fails (caller use) |
@@ -151,7 +151,7 @@ engine = MemoryEngine(memory_dir)  # memory_dir created if absent
 #### Scoring Constants
 
 | Constant | Value | Meaning |
-|----------|-------|---------|
+| --- | --- | --- |
 | `OUTSTANDING_BOOST` | `0.1` | Score boost per outstanding assessment |
 | `UNREMARKABLE_PENALTY` | `0.01` | Score penalty per unremarkable assessment |
 | `STALE_THRESHOLD` | `50` | Total assessments above which an entry is considered stale |
@@ -160,7 +160,7 @@ engine = MemoryEngine(memory_dir)  # memory_dir created if absent
 
 Computes a memory entry score:
 
-```
+```text
 score = confidence + (outstanding_count × OUTSTANDING_BOOST) − (unremarkable_count × UNREMARKABLE_PENALTY)
 ```
 
@@ -170,14 +170,14 @@ Exported from the `owlbear_memory` package top-level.
 
 Returns `True` when `didnt_use` slots dominate assessed slots:
 
-```
+```text
 entry.didnt_use_count > STALE_THRESHOLD × max(entry.outstanding_count + entry.unremarkable_count, 1)
 ```
 
 Exported from the `owlbear_memory` package top-level. Used internally by `MemoryEngine.try_stale_transition`.
 
 | Method | Signature | Notes |
-|--------|-----------|-------|
+| --- | --- | --- |
 | `get_entries()` | `() → list[MemoryEntry]` | Reparsed only when directory mtime changes |
 | `get_entry(id)` | `(str) → MemoryEntry` | Raises `NotFoundError` |
 | `save(...)` | `(title, content, categories, confidence, source_agent, scope_agents) → MemoryEntry` | Creates pending entry; initializes `score = confidence`, all counters to `0`; no OCC |
@@ -193,7 +193,7 @@ Exported from the `owlbear_memory` package top-level. Used internally by `Memory
 #### State Machine
 
 | From | Action | To | Notes |
-|------|--------|----|-------|
+| --- | --- | --- | --- |
 | `pending` | `edit` (scope_agents non-empty) | `curated` | |
 | `pending` | `edit` (scope_agents absent/empty) | `pending` | Field update only |
 | `pending` | `delete` | (removed) | Hard-delete: file removed from disk |
@@ -246,6 +246,6 @@ cache.has_changed()  # False (mtime unchanged)
 ## Dependencies
 
 | Package | Purpose |
-|---------|---------|
+| --- | --- |
 | `pydantic >= 2.13.4` | Model validation |
 | `ruamel.yaml >= 0.19.1` | Safe YAML parsing for frontmatter |

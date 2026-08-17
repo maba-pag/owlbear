@@ -56,7 +56,7 @@ Not applicable — no Delivery integration; output is persisted via `store_enric
 - Do not ingest new sources — use `knowledge-ingestor` for that.
 
 | Rationalization | Response |
-|----------------|----------|
+| --- | --- |
 | "I'll fetch and ingest this new source while enriching." | Out of scope. Use knowledge-ingestor for ingestion. |
 | "The queue is empty, I'll create synthetic work items." | Stop. Queue-driven only — no work = done. |
 

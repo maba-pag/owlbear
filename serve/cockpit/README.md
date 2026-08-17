@@ -58,7 +58,7 @@ Frontend source is under `serve/cockpit/web/` and is the only Node/npm package i
 repository.
 
 | Attribute | Value |
-|-----------|-------|
+| --- | --- |
 | Node requirement | `>=24.16.0` (`web/package.json`) |
 | Stack | React `^19.2.7`, Vite `^8.1.5`, TypeScript `^6.0.3`, React Router `^8.2.0`, Porsche Design System React `^4.5.0`, React Compiler (`babel-plugin-react-compiler` `^1.0.0`), Tailwind CSS `^4.3.3` (`@tailwindcss/vite` + `tailwindcss`) |
 | Test runner | Vitest `^4.1.10` (`npm test`) |
@@ -71,7 +71,7 @@ repository.
 Cockpit projects current Delivery state and user-owned controls without becoming authority:
 
 | Surface | Authority |
-|---------|-----------|
+| --- | --- |
 | Outcome portfolio | Admitted outcomes, dependencies, Planning/Build stages, and task progress from `PortfolioApplication` |
 | Actionable attention | Typed requests, requestless blocks, long-idle claims, revision attention, publication and target-sync attention, and acceptance attention |
 | User controls | Answer requests, clear blocks, recover confirmed-dead claims or worktrees, move backward, reconcile target-sync conflicts, supersede a publication, and observe acceptance |
@@ -87,7 +87,7 @@ through compatibility surfaces.
 ## Configuration
 
 | Variable | Default | Purpose |
-|----------|---------|---------|
+| --- | --- | --- |
 | `COCKPIT_PORT` | `8420` | Override listen port (1-65535) |
 | `COCKPIT_NO_OPEN` | unset | Set to `1` to suppress browser auto-open |
 
@@ -105,7 +105,7 @@ package's bundled `dist/` directory.
 ## Dependencies
 
 | Package | Purpose |
-|---------|---------|
+| --- | --- |
 | `fastapi` | HTTP framework |
 | `uvicorn` | ASGI server |
 | `pydantic` | Request/response model validation |

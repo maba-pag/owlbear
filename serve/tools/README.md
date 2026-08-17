@@ -59,7 +59,7 @@ generate_ts_index(root)  # writes .owlbear/ts-index.md
 ```
 
 | Function | Description |
-|----------|-------------|
+| --- | --- |
 | `generate_indexes(root)` | Regenerate all fixed index artifacts concurrently |
 | `doc_index.generate_index(root)` | Regenerate the documentation index |
 | `py_index.generate_index(root)` | Regenerate the Python structure index |

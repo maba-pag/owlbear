@@ -15,7 +15,7 @@ Companion wiring: `share/instructions/doc-standards.instructions.md` applies thi
 Rules use **`{SECTION}-{N}`** IDs (for example, `STR-1`, `PLC-1`, `AUD-2`). The prefix maps to the section below:
 
 | Prefix | Section |
-|--------|---------|
+| --- | --- |
 | `STR` | Required Sections (project-defined companion instruction) |
 | `PLC` | Placement (project-defined companion instruction + shared placement rules below) |
 | `XREF` | Cross-Reference Integrity |

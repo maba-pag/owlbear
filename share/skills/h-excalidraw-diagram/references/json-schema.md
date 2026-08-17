@@ -9,7 +9,7 @@ Field reference for Excalidraw JSON elements. See `element-templates.md` for com
 ## Element Types
 
 | `type` value | Shape | Semantic use | `roundness` |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `"rectangle"` | Box | Process, component, action | Optional (`{"type": 3}`) |
 | `"diamond"` | Rotated square | Decision, conditional branch | Not supported |
 | `"ellipse"` | Oval / circle | Start/end, external system, actor | Not supported |
@@ -22,7 +22,7 @@ Field reference for Excalidraw JSON elements. See `element-templates.md` for com
 ## Common Properties (All Element Types)
 
 | Field | Type | Required | Notes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `id` | string | Yes | Must be unique across the entire document |
 | `type` | string | Yes | See element types table above |
 | `x` | number | Yes | Left edge in px. Start at ≥100 |
@@ -48,7 +48,7 @@ Field reference for Excalidraw JSON elements. See `element-templates.md` for com
 ## Text-Specific Properties
 
 | Field | Type | Required | Notes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `fontSize` | number | Yes | Pixel size. Min 16 for labels, 20 for titles |
 | `fontFamily` | number | Yes | `1` = Virgil (default), `2` = Helvetica, `3` = Cascadia |
 | `text` | string | Yes | Displayed text (may include `\n`) |
@@ -64,7 +64,7 @@ Field reference for Excalidraw JSON elements. See `element-templates.md` for com
 ## Arrow-Specific Properties
 
 | Field | Type | Required | Notes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `points` | array | Yes | `[[x1,y1],[x2,y2], ...]` — relative to element origin |
 | `lastCommittedPoint` | null | Yes | Always `null` |
 | `startBinding` | object\|null | Yes | Binding to source element. See binding format |

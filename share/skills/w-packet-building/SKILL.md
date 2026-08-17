@@ -101,7 +101,7 @@ Treat a review finding as input to a Builder decision, not as an automatic work 
 touching the reviewed head, classify the concrete finding against the admitted task:
 
 | Finding classification | Builder action |
-|---|---|
+| --- | --- |
 | Fix now: implementation defect inside the task boundary | Repair one finding at a time, preserve the rejected commit, rerun affected proof, and obtain fresh exact-commit review. |
 | Return to authority: missing, contradictory, or observably ambiguous Planning or Design | Publish nothing and return with the owning locator, clean preserved commit, and the required source boundary. |
 | Block for user-owned input: one bounded decision, action, or manual validation is required | Publish nothing and use `BlockDelivery` with a bounded request and clean resume commit. |

@@ -29,7 +29,7 @@ root, framework, browser, or script name.
 Use these placeholders:
 
 | Placeholder | Meaning |
-|-------------|---------|
+| --- | --- |
 | `{package-root}` | Directory owning the relevant frontend manifest and configuration |
 | `{package-runner}` | Package manager command: `npm`, `pnpm`, `yarn`, or `bun` |
 | `{test-script}` | Discovered unit/component test script |
@@ -40,7 +40,7 @@ Use these placeholders:
 ## Select Proof by Claim
 
 | Claim | Primary proof |
-|-------|---------------|
+| --- | --- |
 | Pure logic, state transition, serialization, hook, or supported component interaction | Vitest or the configured unit/component runner |
 | Type safety, bundling, imports, generated assets, or static validity | Typecheck, build, or relevant linter |
 | Browser API, assembled workflow, focus behavior, geometry, viewport behavior, or screenshot | Playwright or configured real-browser runner |

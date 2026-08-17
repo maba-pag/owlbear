@@ -39,7 +39,7 @@ fetcher: ContentFetcher = HttpxContentFetcher()
 ### Module groups
 
 | Group | Key exports |
-|-------|-------------|
+| --- | --- |
 | Package surface | `protocols`, `stores` |
 | Protocols | `ContentStore`, `GraphStore`, `SourceStore`, `QueryFacade`, `IngestCoordinator` |
 | Store implementations | `stores.ContentStore`, `stores.SqliteGraphStore`, `stores.SqliteSourceStore` |
@@ -57,7 +57,7 @@ No environment variables at the library level. Configuration is passed via const
 ### Qdrant storage modes
 
 | Mode | `location` value |
-|------|-----------------|
+| --- | --- |
 | In-memory | `":memory:"` |
 | Filesystem | `"/path/to/dir"` |
 | Remote HTTP | `"http://localhost:6333"` |
@@ -67,7 +67,7 @@ No environment variables at the library level. Configuration is passed via const
 ### Required
 
 | Package | Purpose |
-|---------|---------|
+| --- | --- |
 | `pydantic` | Model validation |
 | `strictyaml` | YAML parsing for source config |
 
@@ -76,7 +76,7 @@ No environment variables at the library level. Configuration is passed via const
 Install with `uv pip install -e "serve/knowledge[<extra>]"`:
 
 | Extra | Packages | Purpose |
-|-------|----------|---------|
+| --- | --- | --- |
 | `qdrant` | `qdrant-client` | Persistent vector store |
 | `embedding` | `FlagEmbedding` | BGE-M3 embedding provider (~2.3 GB model download on first use) |
 | `intake` | `httpx` | HTTP URL ingestion |

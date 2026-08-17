@@ -2,7 +2,7 @@
 
 > **Owning work:** repository lint and formatter policy audit
 > **Date:** 2026-08-15
-> **Status:** R01, R10, M02, M08, the managed/archive M09 categories, G02-G09, P02-P07, X03-X04, Y01-Y02, F01-F03, and F05-F08 are validated keeps or resolved. M03-M07 are fix candidates requiring an authored-document normalization pass. M01, the authored `.owlbear/research` and `.owlbear/sources` M09 categories and their G01/P01 filter portions, plus the F04 config-file ignores, remain deferred for scoped decisions. Prettier policy files were removed; the remaining audit items are deferred for a future grouped decision.
+> **Status:** R01, R10, M02-M03, M05-M08, the managed/archive M09 categories, G02-G09, P02-P07, X03-X04, Y01-Y02, F01-F03, and F05-F08 are validated keeps or resolved. M04 remains a fix candidate requiring an authored-document normalization pass. M01, the authored `.owlbear/research` and `.owlbear/sources` M09 categories and their G01/P01 filter portions, plus the F04 config-file ignores, remain deferred for scoped decisions. Prettier policy files were removed; the remaining audit items are deferred for a future grouped decision.
 > **Question:** Which remaining linter, formatter, scope, and path exceptions have merit, and which should be removed, narrowed, or replaced after bounded evidence is collected by owning authority and consumer?
 
 ## 1. Context and Boundaries
@@ -168,18 +168,18 @@ These are scope limiters rather than linter rule names. Each path section is a s
 |---|---|---|---|---|
 | M01 | `MD013` | disabled | Markdownlint CLI and MegaLinter | deferred |
 | M02 | `MD024` | `siblings_only: true` | Markdownlint CLI and MegaLinter | validated-keep |
-| M03 | `MD029` | disabled | Markdownlint CLI and MegaLinter | fix-candidate |
+| M03 | `MD029` | `style: one_or_ordered` | Markdownlint CLI and MegaLinter | resolved |
 | M04 | `MD033` | disabled | Markdownlint CLI and MegaLinter | fix-candidate |
-| M05 | `MD040` | disabled | Markdownlint CLI and MegaLinter | fix-candidate |
-| M06 | `MD041` | disabled | Markdownlint CLI and MegaLinter | fix-candidate |
-| M07 | `MD060` | disabled | Markdownlint CLI and MegaLinter | fix-candidate |
+| M05 | `MD040` | enabled | Markdownlint CLI and MegaLinter | resolved |
+| M06 | `MD041` | `front_matter_title: title\|name\|description` | Markdownlint CLI and MegaLinter | resolved |
+| M07 | `MD060` | `style: any` | Markdownlint CLI and MegaLinter | resolved |
 
 ### 4.4.1 Markdownlint authority parity
 
 | ID | Finding | Status | Decision and evidence |
 |---|---|---|---|
 | M08 | Root and seed bare/CLI2 exclusion lists can drift across glob syntaxes. | resolved | Root and seed profiles now rely on the normalized broad `**/worktrees/**` exclusion rather than duplicating `.owlbear/delivery/worktrees/**`. A parity contract covers root and seed profiles; seed-only CLI2 entries and the existing `.owlbear/target` omission are explicit profile differences. |
-| M09 | The semantic necessity of the excluded categories was tested across the Markdown consumers. | needs-scan | Managed/archive categories are supported by ownership or bounded exposure evidence. The authored research and sources categories produced real Markdown findings when exposed, but their exclusion is not yet justified independently of remediation avoidance; split that decision from the machine-managed categories. |
+| M09 | The semantic necessity of the excluded categories was tested across the Markdown consumers. | deferred | Managed/archive categories are supported by ownership or bounded exposure evidence. The authored research and sources categories produced real Markdown findings when exposed; research needs a separate authored-document policy, and sources should be repaired before removing its broad exclusion. |
 
 The bare Markdownlint exclusions are `.owlbear/completed`, `.owlbear/delivery/packages`,
 `.owlbear/delivery/runtime`, the generated `.owlbear` index
@@ -273,8 +273,9 @@ exposed five representative document shapes: a numbered task record, named resea
 audit, the active linter ledger, and a subdirectory evidence document. All five files were analyzed;
 three produced 17 findings across `MD032`, `MD036`, `MD047`, and `MD056`. Restoring the broad
 exclusions and adding a representative-path six-consumer contract preserves the historical research
-boundary without forcing a 1,095-file remediation sweep. The research category is therefore a
-`validated-keep`; the remaining M09 categories require separate experiments.
+boundary without forcing a 1,095-file remediation sweep. The research category remains deferred:
+keep it outside the general gate for now, define a separate policy for newly authored research, and
+do not treat active authored research as machine-managed content.
 
 #### M09 category experiment: `.owlbear/sources`
 
@@ -286,8 +287,9 @@ made the manual/pre-commit hook analyze the document and report one `MD037/no-sp
 finding at line 4949, column 139. The CI-equivalent MegaLinter run also analyzed the document and
 reported five Markdownlint findings overall, with no unrelated failures. Restoring all six
 exclusions and adding a representative-path six-consumer contract preserves the authored source
-boundary without forcing a large-document cleanup. The sources category is therefore a
-`validated-keep`; the remaining M09 categories require separate experiments.
+boundary without forcing a large-document cleanup. The sources category remains deferred: the single
+current local finding and five CI-equivalent findings are small enough to repair. Fix those
+source-format findings, then remove the broad sources exclusion.
 
 #### M09 category experiment: `.owlbear/target`
 
@@ -488,8 +490,8 @@ coherent owner and consumer group, then apply the grouped evidence workflow abov
 
 - Markdown line length: M01 remains deferred with the rule disabled; its prior EditorConfig
    delegation rationale was corrected, and a Markdown-specific length contract is still needed.
-- Markdown structure: M02 is a validated keep. M03-M07 are fix candidates with bounded remediation
-   evidence and no authoritative config change yet.
+- Markdown structure: M02 is a validated keep. M03 and M05-M07 are resolved after authored-content
+   remediation and both local/CI-equivalent consumer checks. M04 remains a fix candidate.
 - Authored Markdown scope: M09 `.owlbear/research` and `.owlbear/sources`, with dependent G01/P01 filter decisions, remain deferred.
 - Ruff global and scoped exceptions: R02-R09 and R11-R22 remain deferred.
 - Frontend ESLint scope: F04 config-file ignores remain deferred for narrowing or explicit justification.
@@ -525,9 +527,9 @@ by a green scan or the cost of remediating existing content.
 
 ### 6.2 Markdown M01-M09 pass
 
-The rule-by-rule pass on 2026-08-17 used the pinned markdownlint-cli2 0.23.2 environment, the
-current tracked Markdown set, and the normalized exclusions described above. No authoritative
-Markdown configuration changed during the pass.
+The rule-by-rule diagnostic pass on 2026-08-17 used the pinned markdownlint-cli2 0.23.2 environment,
+the current tracked Markdown set, and the normalized exclusions described above. That diagnostic
+pass preceded the separately recorded M03/M05/M06/M07 configuration and authored-content changes.
 
 - **M01 / `MD013` — deferred policy decision, disabled.** The 118-file in-scope scan reported 4,768 findings
    at the default 80 columns, 1,825 at 100, 1,340 at 120, and 1,010 at 140. Findings span
@@ -541,10 +543,10 @@ Markdown configuration changed during the pass.
    the headings belong to separate parent sections. Sibling-only checking preserves that reuse while
    still detecting duplicate headings within one section. No config change is warranted.
 
-- **M03 / `MD029` — fix candidate.** The current set has four findings in two authored files:
-   three list boundaries in `share/skills/h-ac-quality/SKILL.md` and one continuation/list boundary
-   in `setup/setup-guide.md`. They are not generated content. Set the rule to its compatible
-   `one_or_ordered` style and repair the four local list structures; do not retain a global disable.
+- **M03 / `MD029` — resolved.** The four findings were controlled source defects: three nested-list
+   boundaries in `share/skills/h-ac-quality/SKILL.md` and one continuation/list boundary in
+   `setup/setup-guide.md`. The list structures were repaired, `style: one_or_ordered` is enabled,
+   and the isolated probe reports zero findings.
 
 - **M04 / `MD033` — fix candidate.** Forty-four of 45 findings are required XML-style agent section
    tags (`agents`, `boundaries`, `critical_rules`, `examples`, `output_format`, `path`, `persona`,
@@ -553,25 +555,23 @@ Markdown configuration changed during the pass.
    Markdown emphasis and configure the exact agent tag allowlist; the allowlist probe leaves one
    finding instead of disabling inline-HTML checking globally.
 
-- **M05 / `MD040` — fix candidate.** Fourteen unlabeled fences occur in nine authored files. They
-   are classifiable as `shell`, `python`, `markdown`, or `text` rather than being generated or
-   format-ambiguous. Add the appropriate fence languages and enable the rule globally; no folder
-   exclusion or generator change is supported by the evidence.
+- **M05 / `MD040` — resolved.** Fourteen unlabeled fences across nine authored files were labeled
+   as `shell`, `python`, `markdown`, or `text`, and the rule is enabled in root and seed policy.
+   The full 118-file isolated probe reports zero findings. The Python example was also formatted to
+   satisfy the repository's Ruff formatter when the language label made it executable documentation.
 
-- **M06 / `MD041` — fix candidate.** The current rule reports 33 files because agent, prompt, and
-   instruction bodies begin with machine-consumed content after frontmatter, while two authority
-   fixtures are intentionally title-less. A frontmatter-aware configuration using
-   `front_matter_title: "^\\s*(?:title|name|description)\\s*[:=]"` reduces the result to
-   `.owlbear/ideas.md` and the two delivery-authority fixtures. Change the ideas heading to `#` and
-   give the fixture path a narrow consumer exclusion or fixture-specific exception; do not leave
-   the rule globally disabled.
+- **M06 / `MD041` — resolved.** The frontmatter-aware configuration
+   `front_matter_title: "^\\s*(?:title|name|description)\\s*[:=]"` is enabled in root and seed
+   policy. `.owlbear/ideas.md` now has an H1 title and a consistent H2 section hierarchy; the two
+   delivery-authority fixtures now have neutral H1 titles, preserving their raw governance-token
+   test data without fixture-specific exclusions. The root CLI2 check and bare Markdownlint wrapper
+   pass.
 
-- **M07 / `MD060` — fix candidate.** The permissive `style: any` probe reports 952 findings across
-   64 files, concentrated in authored skills, wiring, READMEs, and setup docs. Markdownlint's
-   in-memory `applyFixes` removes 826 compact-spacing findings, leaving 126 aligned-table findings
-   across 20 files. Keep `style: any` rather than imposing compact or aligned globally; stage the
-   automatic fixes, then manually align the residual tables. The counts do not support a blanket
-   disable or a generator exception.
+- **M07 / `MD060` — resolved.** The `style: any` probe reported 952 findings across 64 files.
+   Markdownlint's safe fixer changed 58 files and reduced the set to 126 aligned-table findings;
+   those residual tables were normalized to compact spacing across 20 files. `style: any` is enabled
+   in root and seed policy, and the root CLI2, bare wrapper, focused policy tests, and MegaLinter
+   Markdownlint descriptor all pass.
 
 - **M08 — resolved.** The focused parity contract passes 19 tests. Normalized root and seed bare/
    CLI2 exclusions agree, the broad `**/worktrees/**` pattern covers Delivery worktrees, and the
@@ -586,6 +586,16 @@ Markdown configuration changed during the pass.
    current local finding (and five in the CI-equivalent prior probe); fix its source-format findings,
    then remove its broad Markdownlint exclusion. G01/P01 remain open only for these authored members.
 
+### 6.3 Markdown M03/M05/M06/M07 implementation
+
+The implementation pass changed only the requested Markdown rules and their authored findings. Root
+and seed rule authorities now agree on `MD029`, `MD040`, `MD041`, and `MD060`; root and seed ignore
+authorities no longer contain fixture-specific exceptions. The root CLI2 check, bare
+`uv run lint-markdown --no-fix`, the focused 19-test policy suite, and the CI-equivalent MegaLinter
+run all pass. MegaLinter analyzed 118 Markdown files with zero Markdownlint errors; its full run
+also reported zero errors for Ruff, Ruff format, EditorConfig, frontend linters, YAML, and repository
+checks after the labeled Python example was formatted.
+
 ## 7. Evidence and Decision Log
 
 | Date | Item | Observation | Decision |
@@ -596,7 +606,7 @@ Markdown configuration changed during the pass.
 | 2026-08-16 | R10 | Ruff selected 264 files after removal: 252 Python and 12 TOML; no Markdown paths appeared. `git diff --check` passed. | Remove the inert `extend-exclude = ["*.md"]` setting. Markdown remains owned by Markdownlint. |
 | 2026-08-16 | M08 | At pinned markdownlint-cli2 0.23.2, `**/worktrees/**` covers `.owlbear/delivery/worktrees/**`; the current worktree category contains no Markdown. Root/seed drift was also observed. The focused parity test passes with 11 tests, Ruff check/format, and `git diff --check`. | Add the explicit root CLI2 entry and retain a normalized root/seed parity contract. Preserve exclusion-category semantics for M09. |
 | 2026-08-17 | M09 / `.owlbear/completed` | The path is absent and empty. Removing it from all six scope authorities produced no local or Markdownlint findings; MegaLinter reported 114 Markdown files with zero Markdownlint errors, while its unrelated overall formatter gate remained non-zero. Delivery completed-history code reserves the path for machine-managed records. | Restore and retain the exclusion as `validated-keep`; continue M09 with the remaining categories one at a time. |
-| 2026-08-17 | M09 / `.owlbear/sources` | The root contains one authored Markdown document totaling 589,420 bytes. Exposing it made manual/pre-commit Markdownlint analyze the file and report one MD037 finding; the CI-equivalent MegaLinter run analyzed it and reported five Markdownlint findings overall with no unrelated failures. No runtime producer or consumer references were found. | Restore and retain the exclusion as `validated-keep`; add the six-consumer representative-path regression contract and continue M09 with the remaining categories one at a time. |
+| 2026-08-17 | M09 / `.owlbear/sources` | The root contains one authored Markdown document totaling 589,420 bytes. Exposing it made manual/pre-commit Markdownlint analyze the file and report one MD037 finding; the CI-equivalent MegaLinter run analyzed it and reported five Markdownlint findings overall with no unrelated failures. No runtime producer or consumer references were found. | Keep the exclusion provisionally and classify the authored sources decision as deferred; repair the source-format findings, then remove the broad exclusion. |
 | 2026-08-17 | M09 / `.owlbear/target` | The root is absent and empty. Delivery loading and migration tooling reserve it for runtime or retired state, while seed Markdownlint profiles intentionally omit the category. The representative `.owlbear/target/runtime.md` contract protects root bare/CLI2, pre-commit, and MegaLinter exclusions without changing the seed profile. | Retain the target exclusion as a `validated-keep` and preserve the documented seed omission. |
 | 2026-08-17 | G03 | MegaLinter v10.0.0 documents `list_of_files` as Markdownlint's default and states that project mode cannot use MegaLinter regex filters. The pinned run invoked markdownlint v0.49.1 with an explicit list of 114 files and returned zero Markdownlint errors. | Retain the explicit `list_of_files` setting as a `validated-keep`; no configuration change. |
 | 2026-08-17 | P01 | Removing only the pre-commit top-level `exclude` caused the no-fix local aggregate to fail in EditorConfig. The focused probe reported 26 `.owlbear/legacy/target-cutover/kanban/content/archive/` paths with 2,480 errors; every path was covered by the removed exclusion. Restoring the block made `lint-editorconfig` pass. `tests/test_linter_formatter_policy.py` now compares representative shared exclusions and included controls against MegaLinter. | Retain the top-level exclusion as a `validated-keep` and add the parity regression contract. |
@@ -610,10 +620,10 @@ Markdown configuration changed during the pass.
 | 2026-08-17 | G07 | Removing only `ACTION_ACTIONLINT_FILTER_REGEX_INCLUDE` left Actionlint with five analyzed files and zero findings; those five files are exactly the tracked `.github/workflows/*.yml` files. The restored-filter run produced the same five-file, zero-finding result. Yamllint also remained clean across 44 files; the only overall-run failure was unrelated Ruff-format output. | Retain the workflow-only Actionlint filter as a `validated-keep`; it is an explicit defense-in-depth boundary even though Actionlint's native discovery currently produces the same effective file set. |
 | 2026-08-17 | G08 | The disposable replacement simulation used ESLint 10.7.0 and `@eslint/json` 2.0.1. Broad extension discovery linted 564 files and exposed only the empty machine-managed delivery authority; the translated root/recursive exclusion set reduced the scan to 97 files with zero findings and included both `.vscode` JSONC files plus `.markdownlint-cli2.jsonc`. The implemented package command passed, and `tests/test_linter_formatter_policy.py` plus `serve/tools/tests/test_quality.py` passed with 32 tests. | Remove `JSON_JSONLINT`; make `@eslint/json` the sole JSON/JSONC authority through the root flat config, local quality wrapper, pre-commit hook, and `JAVASCRIPT_ES` MegaLinter descriptor. |
 | 2026-08-17 | G09 | Removing `--disable-indent-size` from MegaLinter and `-disable-indent-size` from pre-commit produced 315 Python-only left-padding findings across `.owlbear`, `seed`, `setup`, `serve`, and `tests`, including intentional indentation inside documentation strings. Restoring both consumers passed `uv run lint-editorconfig`, `uv run pre-commit run editorconfig-checker --all-files`, and the pinned `ENABLE_LINTERS=EDITORCONFIG_EDITORCONFIG_CHECKER uv run megalint --no-fix` container check; the focused policy contract passed 7 tests. `.editorconfig` and Ruff continue to assign Python indentation ownership to Ruff. | Retain the shared indentation suppression as a `validated-keep` and add a regression contract requiring both local and MegaLinter consumers to preserve the delegation. |
-| 2026-08-17 | M01 | An isolated `MD013`-enabled diagnostic reported widespread historical line-length debt across the Markdown corpus. The rule was restored to disabled and the normal Markdownlint policy remained clean apart from unrelated existing findings. | Retain `MD013` disabled as a `validated-keep`; do not create a broad historical remediation queue or duplicate EditorConfig's text-length ownership. |
-| 2026-08-17 | M09 reconciliation | The category studies and representative-path contracts now cover every category named by M09, including broad worktree coverage. | Mark M09 `validated-keep`; future machine-managed categories require a new bounded review rather than reopening the completed category set. |
+| 2026-08-17 | M01 | An isolated `MD013`-enabled diagnostic reported widespread historical line-length debt across the Markdown corpus. The rule was restored to disabled and the normal Markdownlint policy remained clean apart from unrelated existing findings. | Keep `MD013` disabled as a deferred policy decision; the old EditorConfig delegation rationale is invalid, and no Markdown-specific length contract has been selected. |
+| 2026-08-17 | M09 reconciliation | The category studies and representative-path contracts cover every category named by M09, including broad worktree coverage. | Keep managed/archive categories as validated boundaries; leave authored research and sources deferred for separate policy and remediation decisions. |
 | 2026-08-17 | Y01-Y02 / F01-F08 / G01-G02 | The grouped post-fix local checks passed: yamllint, EditorConfig, ESLint, TypeScript, Stylelint, HTMLHint, and the Cockpit production build. The selected MegaLinter run exited 0 with 44 YAML, 74 TypeScript, 3 CSS, 1 HTML, 925 EditorConfig, and 18 JSON/JSONC files analyzed. | Retain the current YAML delegation, frontend ownership boundaries, and MegaLinter global/directory filters as validated keeps; no scope broadening or stricter rule activation. |
-| 2026-08-17 | Y/F/G post-fix repair | The first grouped CI-equivalent pass exposed only final-newline/trailing-whitespace defects in four newly added working-tree files. The repository whitespace and EOF fixers plus one extra-blank-line repair cleared those files; the final EditorConfig pass analyzed 925 files with zero errors. The focused Markdownlint pass retained only two unrelated `MD056` findings in `share/agents/memory-curator.agent.md`. | Keep the four controlled formatting repairs; leave the unrelated Markdown findings outside the Y/F/G decision. |
+| 2026-08-17 | Y/F/G post-fix repair | The first grouped CI-equivalent pass exposed only final-newline/trailing-whitespace defects in four newly added working-tree files. The repository whitespace and EOF fixers plus one extra-blank-line repair cleared those files; the final EditorConfig pass analyzed 925 files with zero errors. The later M03/M05/M06/M07 pass removed the remaining Markdown findings in the active 118-file scope. | Keep the four controlled formatting repairs; record Markdown remediation under M03/M05/M06/M07 rather than treating it as Y/F/G scope. |
 | 2026-08-17 | X03 | The root `.vscode/settings.json` retained a global `esbenp.prettier-vscode` fallback after the root Prettier policy files were removed, while the seed settings already had no such fallback. Removing only the global key preserved all explicit language-specific formatter mappings; setup initialization passed and the policy contract now prevents reintroduction. | Remove the global formatter fallback; keep formatter ownership decisions language-specific and evaluate them separately under X04. |
 | 2026-08-17 | X04 | The explicit VS Code formatter matrix maps Python to Ruff, Markdown to the markdownlint extension, JSON/JSONC to VS Code's built-in language formatter, and PowerShell, TOML, and XML to their language extensions. Ruff, Markdownlint, and JSON/JSONC repository authorities remain separate lint/format contracts; the latter three mappings are editor-only conveniences. A focused settings contract now protects all seven mappings. | Retain the explicit language-specific formatter matrix as a `validated-keep`; do not add a global fallback. |
 
@@ -646,15 +656,19 @@ be used to schedule hook repairs unless it is first shown to be the supported ru
 - [x] M09's `.owlbear/research` exclusion is covered across root, seed, pre-commit, and MegaLinter consumers.
 - [x] M09's `.owlbear/sources` exclusion is covered across root, seed, pre-commit, and MegaLinter consumers.
 - [x] M09's `.owlbear/target` runtime exclusion is covered across root, pre-commit, and MegaLinter consumers, with the documented seed omission preserved.
+- [x] M03's ordered-list repairs and `style: one_or_ordered` policy pass the isolated rule probe.
+- [x] M05's 14 labeled fences and enabled `MD040` policy pass the 118-file Markdownlint scope.
+- [x] M06's frontmatter-aware title policy, Ideas hierarchy, and titled governance fixtures pass root CLI2 and bare Markdownlint.
+- [x] M07's safe-fix and residual table normalization pass root CLI2, bare Markdownlint, focused policy tests, and MegaLinter Markdownlint.
 - [x] X03 has no repository-wide Prettier fallback; language-specific formatter mappings remain explicit.
 - [x] X04's language-specific formatter matrix is explicit and covered by a regression contract.
 - [x] The grouped Y01-Y02 checks validate yamllint and EditorConfig ownership with no findings.
 - [ ] The grouped F01-F08 checks validate ESLint, TypeScript, Stylelint, HTMLHint, and build boundaries; F04 remains under review.
 - [ ] The grouped G01-G02 MegaLinter collection and selected-linter run are clean after the four formatting repairs; authored research/source scope remains under review.
-- [ ] M01's MD013 diagnostic is recorded and its Markdown ownership decision is re-evaluated.
+- [x] M01's MD013 diagnostic is recorded and its Markdown ownership decision is re-evaluated as deferred.
 - [x] Complete the M08 parity cycle and record its focused verification before starting M09.
 - [ ] Run the first baseline no-fix scans and attach outputs under `.owlbear/scratch/`.
-- [ ] Re-run the final relevant local and CI-equivalent no-fix checks after the queue is complete.
+- [x] Re-run the final relevant local and CI-equivalent no-fix checks after the M03/M05/M06/M07 queue is complete.
 
 ## 9. Change Log
 
@@ -672,6 +686,7 @@ be used to schedule hook repairs unless it is first shown to be the supported ru
 | 2026-08-17 | Relocated the repository-wide JSON lint command to the root `package.json`; removed the Cockpit package duplicate and made pre-commit call the root command. |
 | 2026-08-17 | Removed the global VS Code Prettier fallback and recorded X03 as resolved; X04 remains queued for language-specific formatter review. |
 | 2026-08-17 | Validated and retained the explicit VS Code language formatter matrix for X04; repository-backed and editor-only mappings are documented separately. |
+| 2026-08-17 | Implemented M03, M05, M06, and M07: repaired four ordered-list defects, labeled 14 code fences, enabled frontmatter-aware `MD041`, titled the two governance fixtures instead of excluding them, and normalized 952 `MD060` findings to zero. Root/seed policy parity, focused policy tests, local Markdownlint, and the full MegaLinter run pass. |
 | 2026-08-17 | Validated and retained Ruff's global `COM812` ignore for R01; the normal Ruff check and formatter check pass, while an explicit `COM812` probe reports three formatter-conflicting findings. Added a regression contract for the policy. |
 | 2026-08-17 | Validated and retained the `.owlbear/delivery/packages` Markdown exclusion as the next M09 category; its mixed machine-managed package boundary produced no package findings when temporarily exposed, and a six-consumer regression contract now protects the exclusion. |
 | 2026-08-17 | Validated and retained the `.owlbear/delivery/runtime` Markdown exclusion as the next M09 category; exposing the operational-state root changed neither the 117-file Markdown set nor the findings, and a six-consumer regression contract now protects the exclusion. |

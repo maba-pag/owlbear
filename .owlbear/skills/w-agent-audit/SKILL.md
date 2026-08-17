@@ -21,7 +21,7 @@ implementation package for a normal editing turn.
 Two modes share this workflow:
 
 | Mode | Purpose |
-|------|---------|
+| --- | --- |
 | **Broad Audit** | Find ecosystem-wide conflicts, loading gaps, misplaced authority, and the highest-value deep-audit targets |
 | **Deep Audit** | Evaluate one artifact and its minimum sufficient loading cluster, then propose coherent changes |
 
@@ -71,7 +71,7 @@ decimal confidence implies precision the audit does not have.
 For every material rule, build this working map:
 
 | Rule or decision | Current authority | Consumers | Loading mechanism and time | Conflict or gap |
-|------------------|-------------------|-----------|----------------------------|-----------------|
+| --- | --- | --- | --- | --- |
 
 Map the applicable project and `applyTo` instructions, prompt, agent, required and triggered
 companion skills, hooks, and tool allowlists.
@@ -146,7 +146,7 @@ ecosystem; use sentence-level tagging only to resolve a specific ambiguity.
 When the block controls operations, extend the map with:
 
 | Condition or decision point | Tool, delegate, hook, or validator | Required arguments and ordering | Results, retries, recovery, and stop behavior | Surviving owner and loading path |
-|-----------------------------|------------------------------------|---------------------------------|---------------------------------------------|----------------------------------|
+| --- | --- | --- | --- | --- |
 
 Inventory only affected operations, including prose that changes whether, when, or how they run.
 Use separate rows when conditions change an operation or its arguments. Preserve every argument,
@@ -224,7 +224,7 @@ Return:
 ### Ranked Findings
 
 | Severity | Finding | Authority and consumers | Evidence | Impact | Recommendation |
-|----------|---------|-------------------------|----------|--------|----------------|
+| --- | --- | --- | --- | --- | --- |
 
 Use `high` only for routing, loading, safety, silent-failure, or direct-conflict defects. Use
 `medium` for structural and authority problems with credible behavioral cost. Use `low` only when a
@@ -243,7 +243,7 @@ artifact type from source; ask for clarification only when two live targets matc
 ### Build The Minimum Sufficient Cluster
 
 | Target | Load |
-|--------|------|
+| --- | --- |
 | Agent | Agent body, required skills, invoking prompts, matching instructions, and behavior-changing companions |
 | Skill | Skill body, representative direct consumers, and immediate authorities or companions needed to resolve claims |
 | Instruction | Instruction body, its `applyTo` surface, and representative affected roles or files |

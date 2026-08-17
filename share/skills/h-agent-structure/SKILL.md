@@ -65,7 +65,7 @@ outcome-specific fallback. Never shorten an executable procedure to an ambiguous
 Agent sections also steer behavior implicitly:
 
 | Section | Primary function | Implicit function |
-|---------|-----------------|-------------------|
+| --- | --- | --- |
 | `<persona>` | Identity | Behavioral rules through emotional framing |
 | `<required_reading>` | Dependency declaration | Guaranteed skill loading at session start |
 | `<output_format>` | Communication spec | Evidence forcing through required columns |
@@ -160,7 +160,7 @@ Compact transition table showing what triggers this agent and what it produces:
 
 ```markdown
 | Trigger | From → To | Condition |
-|---------|-----------|-----------|
+|---|---|---|
 | Success | Build launch → published result transition | exact-commit advisory review passes |
 | Re-entry | Build launch → Planning or Design | task authority cannot own the finding |
 ```
@@ -169,7 +169,7 @@ Compact transition table showing what triggers this agent and what it produces:
 
 ```markdown
 | Agent | When | Example |
-|-------|------|---------|
+|---|---|---|
 | planner-challenger | Task-chain review before publication | `Challenge Plan: change=cache, outcome=OUT-004, claim=claim-7` |
 ```
 
@@ -223,7 +223,7 @@ user-invocable: {true|false}
 ### Three Categories
 
 | Prefix | Category | Description starts with | Purpose |
-|--------|----------|------------------------|---------|
+| --- | --- | --- | --- |
 | `w-` | Workflow | "Workflow:" | Step-by-step procedures for any agent or user-invokable process |
 | `r-` | Rules | "Rules:" | Shared conventions governing behavior |
 | `h-` | Handbook | "Handbook:" | Domain-specific knowledge consulted situationally |
@@ -299,13 +299,13 @@ A stub is justified when there is a realistic scenario where an agent edits file
 ### Authority Files — Embedded Rules
 
 | Use authority `.instructions.md` when | Rationale |
-|---------------------------------------|-----------|
+| --- | --- |
 | Rules are universal or near-universal | No single skill boundary fits |
 | Content is always needed for the target scope | Loading a skill on every interaction would be wasteful |
 | `applyTo` scope is broad enough that no single skill owns the content | Authority files cross skill boundaries |
 
 | Rule | Value |
-|------|-------|
+| --- | --- |
 | Naming | Hyphenated lowercase; generic cross-cutting names (not domain-specific like `python.instructions.md`) |
 | `applyTo` scope | Domain-scoped: specific directory tree. Universal: `**`. Stub: file-extension pattern (`**/*.py`). |
 | `copilot-instructions.md` | Not an instruction file — separate loading mechanism, not governed by `applyTo`. See Loading Model. |

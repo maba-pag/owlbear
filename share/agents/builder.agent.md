@@ -52,7 +52,7 @@ invoke only the operation owned by that entry route.
 <agents>
 
 | Agent | When | Example |
-|-------|------|---------|
+| --- | --- | --- |
 | build-reviewer | Review each distinct exact-commit task result | `Review Build: change=cache, outcome=OUT-002, task=TASK-004, commit=abc123` |
 
 </agents>

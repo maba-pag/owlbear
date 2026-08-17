@@ -12,7 +12,7 @@ precedence. See [README.md](README.md) for composition, ownership, change proced
 ## Connection Vocabulary
 
 | Label | Meaning |
-|-------|---------|
+| --- | --- |
 | `auto` | VS Code injects the control from workspace configuration or matching instruction scope |
 | `prompt` | A prompt selects an agent or directs the current agent to a skill |
 | `required` | The agent lists the skill in `<required_reading>` and loads it at session start |
@@ -25,7 +25,7 @@ Discovery metadata is not a loaded skill body and is omitted below.
 ## Universal And Contextual Instructions
 
 | Control | Scope and timing | Job |
-|---------|------------------|-----|
+| --- | --- | --- |
 | `.github/copilot-instructions.md` | `auto`, every workspace turn | Current-project identity, topology, stack, commands, and resources |
 | `owlbear-system.instructions.md` | `auto`, `applyTo: "**"` | Universal OwlBear heuristics, memory governance, and tool bootstrap |
 | `agent-ecosystem.instructions.md` | `auto` for shared and project-local customization roots | Route customization authors to `README.md` and `h-agent-structure` |
@@ -42,7 +42,7 @@ Project-local `.owlbear/instructions/` files compose with these shared instructi
 This table snapshots agent declarations and includes runtime-relevant built-in delegates.
 
 | Agent | Model | Required reading | Delegates | Hooks |
-|-------|-------|------------------|-----------|-------|
+| --- | --- | --- | --- | --- |
 | designer | GPT-5.6 Sol | `w-design-session` | conceptual-design-reviewer, designer-challenger, Explore | `PreToolUse`: allow only scratch/research edits and read-only terminal commands; target publication uses the admission tool surface |
 | conceptual-design-reviewer | Claude Opus 5 | `r-challenger-protocol`, `h-module-design`, `h-frontend-design` | None | `PreToolUse`: deny writes except scratch |
 | designer-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
@@ -62,7 +62,7 @@ Tool allowlists remain in agent frontmatter; they are not duplicated here.
 ## Prompt Entry Map
 
 | Prompt | Entry route | Initial loading behavior |
-|--------|-------------|--------------------------|
+| --- | --- | --- |
 | `ideate` | `prompt` -> designer in discovery mode | Agent required-reading loads `w-design-session`; selects or creates one target Design session |
 | `design` | `prompt` -> designer in direct design mode | Agent required-reading loads `w-design-session`; rehydrates the same target Design session |
 | `orchestrate` | `prompt` -> orchestrator | Agent required-reading loads `w-orchestration` |
@@ -85,7 +85,7 @@ project-local skills in addition to the shared surface.
 The named caller owns each on-demand condition and timing.
 
 | Caller or trigger | Conditional skill | Load condition |
-|-------------------|-------------------|----------------|
+| --- | --- | --- |
 | Planner or Builder context | `h-decision-requests` | Fresh context contains a request, or routing identifies an authority-compatible stakeholder choice or external action |
 | native design/planning | `w-research` | Local evidence cannot resolve a material claim and the owning workflow permits research |
 | native design/planning | `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | Source ownership, architecture, packet boundaries, or acceptance drafting requires the specialist boundary |
@@ -101,7 +101,7 @@ The named caller owns each on-demand condition and timing.
 This inverse map includes only direct `<required_reading>` consumers, not conditional loading.
 
 | Skill | Required by |
-|-------|-------------|
+| --- | --- |
 | `w-design-session` | designer |
 | `w-frontier-planning` | planner |
 | `w-packet-building` | builder |
@@ -121,7 +121,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 ## Delegation And Nesting
 
 | Delegate | Caller | Runtime consequence if unavailable |
-|----------|--------|------------------------------------|
+| --- | --- | --- |
 | conceptual-design-reviewer | designer | A consequential product, workflow, or interaction concept proceeds without independent conceptual challenge |
 | designer-challenger | designer | Native admission lacks required repository-grounded entity challenge evidence |
 | planner | orchestrator | An acquired Planning launch cannot produce a published task chain and worker-owned transition |
@@ -138,7 +138,7 @@ The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignmen
 ## Hard-Control Map
 
 | Control | Attached roles | Enforcement job |
-|---------|----------------|-----------------|
+| --- | --- | --- |
 | Agent `tools:` allowlist | Every agent | Limits runtime capabilities exposed to the role |
 | `deny-writes.py` | designer, planner, conceptual-design-reviewer, designer-challenger, planner-challenger, build-reviewer, finalizer | Rejects writes outside the configured scratch/research boundary; read-only terminal mode is enabled for reviewers, planner, and finalizer inspection |
 | `deny-src-writes.py` | test-curator | Restricts recognized file-tool writes to tests and scratch; manually invoked terminal execution is trusted |

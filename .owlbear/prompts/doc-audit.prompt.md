@@ -13,7 +13,7 @@ accuracy, and audience-fitness gaps in in-scope documentation and report evidenc
 
 Before scanning any file, run:
 
-```
+```shell
 uv run doc-index
 ```
 
@@ -63,7 +63,7 @@ Collect explicit user approval before creating a remediation task.
 Dimension reference table (abbreviated; `r-doc-standards` remains canonical):
 
 | Dimension | Name | Source Rule Family |
-|-----------|------|--------------------|
+| --- | --- | --- |
 | D1 | Structural Conformance | STR-* |
 | D2 | Duplication | XREF-5 |
 | D3 | Placement Integrity | PLC-* |
