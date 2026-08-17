@@ -312,9 +312,11 @@ def test_catalog_pages_searches_and_shows_verified_sibling_history(tmp_path: Pat
         "change-a",
         "change-b",
     )
+    assert first_page.total_count == second_page.total_count == 2
     assert first_page.next_cursor is not None
     assert second_page.next_cursor is None
     assert search.records == (shown,)
+    assert search.total_count == 1
     assert isinstance(shown, LegacyCompletedChangeRecord)
     assert shown.semantic_summary == "Ship Beta search"
     assert shown.outcome_titles == ("Ship Beta search",)

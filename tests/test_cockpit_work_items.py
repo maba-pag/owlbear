@@ -485,6 +485,7 @@ class _DeliveryApplicationFake:
                     completed_at=datetime(2026, 8, 11, 13, tzinfo=UTC),
                 ),
             ),
+            total_count=2,
             next_cursor="completed-history-next",
         )
 

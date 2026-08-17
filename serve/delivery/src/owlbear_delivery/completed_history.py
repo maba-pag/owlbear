@@ -218,6 +218,7 @@ class CompletedChangePage(_CompletedHistoryModel):
     """One deterministic bounded page from an exact target snapshot."""
 
     records: tuple[CompletedChangeRecord, ...]
+    total_count: int = Field(ge=0)
     next_cursor: str | None = None
 
 
@@ -642,7 +643,11 @@ class CompletedHistoryCatalog:
                     offset=next_offset,
                 )
             )
-        return CompletedChangePage(records=selected, next_cursor=next_cursor)
+        return CompletedChangePage(
+            records=selected,
+            total_count=len(snapshot.records),
+            next_cursor=next_cursor,
+        )
 
     def _cursor_offset(
         self,
