@@ -2,7 +2,7 @@
 
 > **Owning work:** repository lint and formatter policy audit
 > **Date:** 2026-08-15
-> **Status:** R01, R10, M02-M03, M05-M08, the managed/archive M09 categories, G02-G09, P02-P07, X03-X04, Y01-Y02, F01-F03, and F05-F08 are validated keeps or resolved. M04 remains a fix candidate requiring an authored-document normalization pass. M01, the authored `.owlbear/research` and `.owlbear/sources` M09 categories and their G01/P01 filter portions, plus the F04 config-file ignores, remain deferred for scoped decisions. Prettier policy files were removed; the remaining audit items are deferred for a future grouped decision.
+> **Status:** R01, R10, M02-M03, M05-M08, the managed/archive M09 categories, G02-G09, P01-P07, X03-X04, Y01-Y02, F01-F03, and F05-F08 are validated keeps or resolved. M04 remains a fix candidate requiring an authored-document normalization pass. M01, the authored `.owlbear/research` and `.owlbear/sources` M09 categories and their G01 filter portion, plus the F04 config-file ignores, remain deferred for scoped decisions. Prettier policy files were removed; the remaining audit items are deferred for a future grouped decision.
 > **Question:** Which remaining linter, formatter, scope, and path exceptions have merit, and which should be removed, narrowed, or replaced after bounded evidence is collected by owning authority and consumer?
 
 ## 1. Context and Boundaries
@@ -110,16 +110,16 @@ Each code below is a separate scan item even when its source block is shared.
 | ID | Current setting | Current rationale | Status | Required evidence |
 |---|---|---|---|---|
 | R01 | `COM812` ignored globally | Formatter conflict | validated-keep | Normal Ruff check and format check pass; an explicit `COM812` probe reports formatter-conflicting findings at the pinned version. |
-| R02 | `CPY001` ignored globally | No per-file copyright headers | needs-scan | Scan for controlled files where a header is actually required. |
-| R03 | `D105` ignored globally | Magic methods inherit behavioral documentation | needs-scan | Scan public magic methods and compare repository documentation policy. |
-| R04 | `D107` ignored globally | Constructor docs belong on the class | needs-scan | Check constructors with behavior not explained by class docs. |
-| R05 | `ISC001` ignored globally | Formatter conflict | needs-scan | Confirm Ruff formatter/check behavior at the pinned version. |
-| R06 | `S101` ignored globally | Assertions are needed in tests | fix-candidate | Prove whether production assertions exist; narrow to test scopes if so. |
-| R07 | `SIM108` ignored globally | Explicit branches are often clearer | needs-scan | Sample findings and decide whether the preference belongs in policy. |
-| R08 | `N818` ignored globally | Existing `TestFromAC_*` API names | fix-candidate | Identify the exact public names and narrow the waiver if possible. |
-| R09 | `line-length = 120` | Shared project limit | needs-scan | Compare findings by source type and existing EditorConfig overrides. |
+| R02 | `CPY001` ignored globally | No per-file copyright headers | validated-keep | Exact probe found 257 header findings; the repository has no copyright-header policy, and the repository-wide Ruff check passes. |
+| R03 | `D105` ignored globally | Magic methods inherit behavioral documentation | validated-keep | Exact probe found 6 magic-method findings; surrounding class contracts document their behavior, and the repository-wide Ruff check passes. |
+| R04 | `D107` ignored globally | Constructor docs belong on the class | validated-keep | Exact probe found 47 constructor findings; constructor behavior is covered by class documentation, and the repository-wide Ruff check passes. |
+| R05 | `ISC001` ignored globally | Formatter conflict | validated-keep | The pinned Ruff probe found 0 `ISC001` findings under the active policy; the ignore remains an explicit formatter-compatibility guard. |
+| R06 | `S101` ignored globally | Assertions are needed in tests | resolved | Removed the global ignore, retained test-only scopes plus the exact session-review test scope, replaced the two production assertions with explicit guards, and passed repository-wide Ruff. |
+| R07 | `SIM108` ignored globally | Explicit branches are often clearer | resolved | Rewrote both production findings as equivalent conditional expressions; focused and repository-wide Ruff checks pass. |
+| R08 | `N818` ignored globally | Existing public exception names | resolved | Replaced the global ignore with exact scopes for `AuthenticationRequired` and `DeliveryStartupDiagnostic`; repository-wide Ruff passes without renaming either API. |
+| R09 | `line-length = 120` | Shared project limit | resolved | Fixed all 7 isolated `E501` findings, retained the 120-column limit, and passed Ruff plus the formatter check. |
 | R10 | `extend-exclude = ["*.md"]` | Markdown is not Ruff source | resolved | Removed after Ruff file-selection probe showed no Markdown paths. |
-| R11 | Ruff format `quote-style = "double"` | Repository formatter preference | queued | Run formatter check and compare with generated/vendor boundaries. |
+| R11 | Ruff format `quote-style = "double"` | Repository formatter preference | validated-keep | `uv run ruff format --check` passes for 3,894 files after formatting the two reported paths. |
 
 ### 4.2 Ruff per-file ignores
 
@@ -128,17 +128,17 @@ row identifies the shared scope and the first narrow command to use.
 
 | ID | Scope | Codes currently ignored | Status | First scan boundary |
 |---|---|---|---|---|
-| R12 | `.owlbear/hooks/*.py` | `C901`, `INP001`, `PLR0912`, `T201` | needs-scan | One hook script at a time under `uv run ruff check`. |
-| R13 | `seed/.owlbear/hooks/*.py` | `C901`, `INP001`, `PLR0912`, `T201` | needs-scan | Compare each scaffold hook with its source counterpart. |
-| R14 | `.owlbear/scripts/*.py` | `INP001`, `PLR2004`, `PTH201`, `T201` | needs-scan | One direct-run script at a time. |
-| R15 | `.github/scripts/*.py` | `INP001`, `T201` | needs-scan | One CI helper at a time, preserving stdout contracts. |
-| R16 | `seed/.owlbear/scripts/*.py` | `INP001`, `PLR2004`, `PTH201`, `T201` | needs-scan | Compare scaffold behavior before narrowing. |
-| R17 | `.owlbear/scratch/*.py` | `ANN401`, `INP001`, `S603`, `T201` | needs-scan | Confirm scratch files are intentionally outside product proof. |
-| R18 | `setup/*.py` | `INP001`, `T201` | needs-scan | Check direct-run setup entry points and stdout contracts. |
-| R19 | `serve/*/examples/**/*.py` | `INP001`, `T201`, `EM101` | needs-scan | Check whether examples are shipped, imported, or documentation-only. |
-| R20 | `tests/**/*.py` | `ANN`, `D`, `DTZ001`, `E402`, `E501`, `EM102`, `F811`, `I001`, `N801`, `PERF401`, `PLW1510`, `PT001`, `PT011`, `RUF100`, `S101`, `S105`, `S106`, `S603`, `S607`, `SLF001`, `ERA001`, `PLR2004`, `PLR0917`, `PLC0415`, `TCH`, `TRY003`, `PT019`, `F541` | needs-scan | One code against one test scope; preserve generated `TestFromAC_*` contracts where proven. |
-| R21 | `tests/fixtures/delivery-authority/**/*.py` | `INP001` | needs-scan | Parse fixture files as data and verify whether Ruff should see them as modules. |
-| R22 | `serve/*/tests/**/*.py` | `ANN`, `D`, `DTZ001`, `E402`, `E501`, `EM102`, `F811`, `I001`, `INP001`, `N801`, `PERF401`, `PLW1510`, `PT001`, `PT011`, `RUF100`, `S101`, `S105`, `S106`, `S603`, `S607`, `SLF001`, `ERA001`, `PLR2004`, `PLR0917`, `PLC0415`, `TCH`, `TRY003`, `PT019` | needs-scan | One code against one package test scope. |
+| R12 | `.owlbear/hooks/*.py` | `C901`, `INP001`, `PLR0912`, `T201` | validated-keep | Source and seed hook scans retain only direct-run, stdout-protocol, and path-policy exceptions; repository-wide Ruff passes. |
+| R13 | `seed/.owlbear/hooks/*.py` | `C901`, `INP001`, `PLR0912`, `T201` | validated-keep | Scaffold hook scope remains parity-preserving with R12; repository-wide Ruff passes. |
+| R14 | `.owlbear/scripts/*.py` | `INP001`, `T201` | resolved | Removed inert `PLR2004` and `PTH201` waivers after fixing both direct-run script copies; retained only package discovery and CLI stdout scopes. |
+| R15 | `.github/scripts/*.py` | `INP001`, `T201` | validated-keep | The current CI helper uses stdout as its direct-run contract; the exact scope is retained and repository-wide Ruff passes. |
+| R16 | `seed/.owlbear/scripts/*.py` | `INP001`, `T201` | resolved | Removed inert `PLR2004` and `PTH201` waivers in parity with R14; repository-wide Ruff passes. |
+| R17 | `.owlbear/scratch/*.py` | `ANN401`, `INP001`, `S603`, `T201` | validated-keep | No tracked scratch Python files produce findings; the structural direct-run boundary remains explicit for transient scripts. |
+| R18 | `setup/*.py` | `INP001`, `T201` | validated-keep | Setup entry points remain direct-run scripts with user-facing stdout; repository-wide Ruff passes. |
+| R19 | `serve/*/examples/**/*.py` | `INP001`, `T201`, `EM101` | validated-keep | No tracked example Python files produce findings; the script-style boundary remains explicit. |
+| R20 | `tests/**/*.py` | `ANN`, `D`, `INP001`, `S101`, `PLR2004`, `TCH` | resolved | Removed inert broad waivers, mechanically fixed imports/decorators, fixed ordinary diagnostics, and moved intentional `N801`, `PLC0415`, `PLR0917`, `S603`, `S607`, `SLF001`, `ERA001`, and `PLW1510` findings to code-local directives. High-volume acceptance and white-box patterns use file-local directives; isolated findings use line-local `# noqa` markers. Root and package test directories remain non-package roots for pytest importlib collection, with directory-level `INP001` handling. |
+| R21 | `tests/fixtures/delivery-authority/**/*.py` | `INP001`, `S603`, `S607` | resolved | Fixture files are parsed as inert AST/data text; exact fixture scopes preserve that contract, and repository-wide Ruff passes. |
+| R22 | `serve/*/tests/**/*.py` | `ANN`, `D`, `INP001`, `S101`, `PLR2004`, `TCH` | resolved | Removed inert broad waivers, fixed package test diagnostics, and localized intentional subprocess/private-access/import/arity cases to the relevant statements or high-volume files; repository-wide Ruff passes. |
 
 ### 4.3 EditorConfig overrides
 
@@ -333,7 +333,7 @@ therefore a `validated-keep`; the remaining M09 categories require separate expe
 |---|---|---|---|
 | Y01 | yamllint | `line-length: disable` because EditorConfig owns text length | validated-keep |
 | Y02 | yamllint | `.owlbear/legacy/**` ignored | validated-keep |
-| G01 | MegaLinter global filter | Egg-info, generated `.owlbear` records, and audit/knowledge DB files excluded | needs-scan |
+| G01 | MegaLinter global filter | Egg-info, generated/archived `.owlbear` records, and audit/knowledge DB files excluded; authored `.owlbear` control, research, and source documents overlap the same filter | needs-scan |
 | G02 | MegaLinter directory filter | `.benchmarks`, caches, virtualenvs, build/dist, reports, downloads, dependencies, scratch, worktrees, and package artifacts excluded | validated-keep |
 | G03 | MegaLinter Markdown | `list_of_files` mode selected so the global filter applies; pinned v10 documentation confirms it is the default, while the explicit setting preserves the filter contract across default changes | validated-keep |
 | G04 | MegaLinter TypeScript | Include only `serve/cockpit/web/.*\.(ts|tsx)` | validated-keep |
@@ -342,7 +342,7 @@ therefore a `validated-keep`; the remaining M09 categories require separate expe
 | G07 | MegaLinter Actionlint | Include only `.github/workflows/*.yml` and `.yaml` | validated-keep |
 | G08 | MegaLinter JSON | Replace the strict JSON-only descriptor and its `.vscode/` exclusion with one repository-wide JSON/JSONC authority | resolved |
 | G09 | MegaLinter EditorConfig | `--disable-indent-size`; indentation remains checked by Ruff for Python | validated-keep |
-| P01 | pre-commit top-level `exclude` | Preserves the shared generated, archived, vendor, cache, database, and worktree taxonomy; the authored research/source members need a separate scope decision | needs-scan |
+| P01 | pre-commit top-level `exclude` | Preserves the shared generated, archived, vendor, cache, database, and worktree taxonomy; authored research/source members remain a separate G01 scope decision | validated-keep |
 | P02 | pre-commit whitespace/EOF hooks | Retains generated PDS assets outside generic whitespace and EOF mutation hooks; the no-fix deactivation scan found no present defect, but the producer and EditorConfig define a machine-managed vendor boundary | validated-keep |
 | P03 | pre-commit EditorConfig hook | Retains the generated-PDS boundary and disables indent-size; the PDS probe was clean, while removing the shared indentation suppression produced Python-only findings | validated-keep |
 | P04 | pre-commit frontend ESLint | Retains the local `src`/`e2e` trigger while a parity contract records MegaLinter's broader Cockpit TypeScript superset and the CI-only root setup boundary | validated-keep |
@@ -493,7 +493,7 @@ coherent owner and consumer group, then apply the grouped evidence workflow abov
 - Markdown structure: M02 is a validated keep. M03 and M05-M07 are resolved after authored-content
    remediation and both local/CI-equivalent consumer checks. M04 remains a fix candidate.
 - Authored Markdown scope: M09 `.owlbear/research` and `.owlbear/sources`, with dependent G01/P01 filter decisions, remain deferred.
-- Ruff global and scoped exceptions: R02-R09 and R11-R22 remain deferred.
+- Ruff global and scoped exceptions R02-R22 are now resolved or validated keeps; no Ruff item remains in the deferred queue.
 - Frontend ESLint scope: F04 config-file ignores remain deferred for narrowing or explicit justification.
 - EditorConfig path overrides: E01-E15 remain deferred.
 
@@ -620,6 +620,22 @@ checks after the labeled Python example was formatted.
 | 2026-08-17 | G07 | Removing only `ACTION_ACTIONLINT_FILTER_REGEX_INCLUDE` left Actionlint with five analyzed files and zero findings; those five files are exactly the tracked `.github/workflows/*.yml` files. The restored-filter run produced the same five-file, zero-finding result. Yamllint also remained clean across 44 files; the only overall-run failure was unrelated Ruff-format output. | Retain the workflow-only Actionlint filter as a `validated-keep`; it is an explicit defense-in-depth boundary even though Actionlint's native discovery currently produces the same effective file set. |
 | 2026-08-17 | G08 | The disposable replacement simulation used ESLint 10.7.0 and `@eslint/json` 2.0.1. Broad extension discovery linted 564 files and exposed only the empty machine-managed delivery authority; the translated root/recursive exclusion set reduced the scan to 97 files with zero findings and included both `.vscode` JSONC files plus `.markdownlint-cli2.jsonc`. The implemented package command passed, and `tests/test_linter_formatter_policy.py` plus `serve/tools/tests/test_quality.py` passed with 32 tests. | Remove `JSON_JSONLINT`; make `@eslint/json` the sole JSON/JSONC authority through the root flat config, local quality wrapper, pre-commit hook, and `JAVASCRIPT_ES` MegaLinter descriptor. |
 | 2026-08-17 | G09 | Removing `--disable-indent-size` from MegaLinter and `-disable-indent-size` from pre-commit produced 315 Python-only left-padding findings across `.owlbear`, `seed`, `setup`, `serve`, and `tests`, including intentional indentation inside documentation strings. Restoring both consumers passed `uv run lint-editorconfig`, `uv run pre-commit run editorconfig-checker --all-files`, and the pinned `ENABLE_LINTERS=EDITORCONFIG_EDITORCONFIG_CHECKER uv run megalint --no-fix` container check; the focused policy contract passed 7 tests. `.editorconfig` and Ruff continue to assign Python indentation ownership to Ruff. | Retain the shared indentation suppression as a `validated-keep` and add a regression contract requiring both local and MegaLinter consumers to preserve the delegation. |
+| 2026-08-17 | G01 fresh re-probe | The global filter covers tracked archived/managed categories (`.owlbear/legacy`, Delivery state, Memory, sources, and knowledge records) and also tracked authored documents such as `.owlbear/ideas.md`, the active research ledger, and `.owlbear/sources/overview.md`. No source/setup consumer evidence justified treating all authored members as machine-managed. | Keep the managed/archive/database members excluded, but leave the authored research/source/control boundary as `needs-scan`; do not broaden or delete the global filter until that document class has its own policy. |
+| 2026-08-17 | G02 fresh re-probe | Every directory entry is untracked present output, cache, dependency, virtual environment, report, or managed worktree state; no authored false-positive directory was found. | Retain the global directory filter as a `validated-keep`. |
+| 2026-08-17 | G03 fresh re-probe | The actual `uv run lint-markdown --no-fix` hook passed. MegaLinter Markdownlint remains in `list_of_files` mode, which is the mode that permits the global path filter to apply. | Retain explicit `list_of_files` mode as a `validated-keep`. |
+| 2026-08-17 | G04 fresh re-probe | Cockpit TypeScript is the CI-owned surface; local hooks intentionally trigger only on `src` and `e2e`, while project-level setup TypeScript remains in the CI superset. The only tracked TypeScript outside Cockpit is an inert fixture. | Retain the Cockpit-only MegaLinter include and narrower local hook scope as `validated-keep` boundaries. |
+| 2026-08-17 | G05 fresh re-probe | Authored CSS is confined to Cockpit `src`; the package no-fix Stylelint check passed. Generated public assets and compiled `dist` CSS are outside the authored configuration. | Retain the authored-`src` CSS filter as a `validated-keep`. |
+| 2026-08-17 | G06 fresh re-probe | The package no-fix HTML check passed and only Cockpit `index.html` is owned by the Cockpit HTML policy. The OwlBear diagram-render support page is a separate surface. | Retain the Cockpit-only HTML filter as a `validated-keep`. |
+| 2026-08-17 | G07 fresh re-probe | `uv run lint-actions` passed. The explicit filter matches the five tracked GitHub workflow files and excludes unrelated YAML support files. | Retain the workflow-only Actionlint filter as defense-in-depth. |
+| 2026-08-17 | G08 fresh re-probe | `uv run lint-json` passed with the root `@eslint/json` authority covering JSON and JSONC descriptors, including `.vscode` files; generated and machine-managed paths remain excluded. | Retain the resolved single JSON/JSONC authority; no further scope change. |
+| 2026-08-17 | G09 fresh re-probe | `uv run lint-editorconfig` and the all-files pre-commit EditorConfig check passed. `disable-indent-size` delegates Python indentation to Ruff while leaving other EditorConfig checks active. | Retain the shared indentation delegation as a `validated-keep`. |
+| 2026-08-17 | P01 fresh re-probe | Removing only the pre-commit top-level exclusion admitted the archived legacy tree to generic hooks; the current exclusion preserves the same effective taxonomy as MegaLinter for shared representative paths. | Retain the top-level exclusion as a `validated-keep`; resolve only the authored G01 members separately. |
+| 2026-08-17 | P02 fresh re-probe | The PDS tree is generated, version-pinned vendor output. Raw whitespace/EOF checks and both no-fix formatter probes were clean; the hook-specific exclusions prevent mutation of that producer-owned tree. | Retain both PDS exclusions as `validated-keep` boundaries. |
+| 2026-08-17 | P03 fresh re-probe | The EditorConfig hook passed with the PDS exclusion and `-disable-indent-size`; the latter avoids duplicate Python indentation findings while preserving style checks for other file classes. | Retain the PDS exclusion and indentation delegation. |
+| 2026-08-17 | P04 fresh re-probe | Local ESLint hooks remain `src`/`e2e` triggers with `pass_filenames: false`; MegaLinter checks the broader Cockpit TypeScript superset, including `vitest.setup.ts`. The project-level difference is intentional CI authority, not a missed local source directory. | Retain the local ESLint scope as a `validated-keep`. |
+| 2026-08-17 | P05 fresh re-probe | All three Stylelint hooks, the package command, and MegaLinter use authored Cockpit `src` CSS. `uv run lint-cockpit-style --no-fix` passed; generated public/dist output is excluded. | Retain the authored-`src` Stylelint scope as a `validated-keep`. |
+| 2026-08-17 | P06 fresh re-probe | The manual typecheck hook pattern covers every `tsconfig.json` input (`src`, `vite.config.ts`, and `vitest.setup.ts`) and excludes E2E/Playwright-only files. `uv run typecheck-cockpit` passed. | Retain the manual whole-project typecheck trigger as a `validated-keep`. |
+| 2026-08-17 | P07 fresh re-probe | Configuration validation passed. The MegaLinter hook is manual-only, always-run, and passes no filenames because it invokes a project-wide pinned container scan; normal commits cannot start Docker accidentally. | Retain manual-only, always-run, and `pass_filenames: false` behavior as `validated-keep`. |
 | 2026-08-17 | M01 | An isolated `MD013`-enabled diagnostic reported widespread historical line-length debt across the Markdown corpus. The rule was restored to disabled and the normal Markdownlint policy remained clean apart from unrelated existing findings. | Keep `MD013` disabled as a deferred policy decision; the old EditorConfig delegation rationale is invalid, and no Markdown-specific length contract has been selected. |
 | 2026-08-17 | M09 reconciliation | The category studies and representative-path contracts cover every category named by M09, including broad worktree coverage. | Keep managed/archive categories as validated boundaries; leave authored research and sources deferred for separate policy and remediation decisions. |
 | 2026-08-17 | Y01-Y02 / F01-F08 / G01-G02 | The grouped post-fix local checks passed: yamllint, EditorConfig, ESLint, TypeScript, Stylelint, HTMLHint, and the Cockpit production build. The selected MegaLinter run exited 0 with 44 YAML, 74 TypeScript, 3 CSS, 1 HTML, 925 EditorConfig, and 18 JSON/JSONC files analyzed. | Retain the current YAML delegation, frontend ownership boundaries, and MegaLinter global/directory filters as validated keeps; no scope broadening or stricter rule activation. |
@@ -647,6 +663,7 @@ be used to schedule hook repairs unless it is first shown to be the supported ru
 - [x] G08 has one JSON/JSONC authority with local, pre-commit, and MegaLinter consumers.
 - [x] G09's shared Python indentation delegation is covered by a local/CI regression contract.
 - [x] R01's Ruff formatter-conflict ignore is explicit and covered by a regression contract.
+- [x] R02-R22 have evidence-backed resolved or validated-keep decisions; repository-wide Ruff and format checks pass.
 - [x] M09's `.owlbear/delivery/packages` exclusion is covered across root, seed, pre-commit, and MegaLinter consumers.
 - [x] M09's `.owlbear/delivery/runtime` exclusion is covered across root, seed, pre-commit, and MegaLinter consumers.
 - [x] M09's scoped `.owlbear/delivery/worktrees` duplicate is removed while broad worktree coverage remains protected.
@@ -664,7 +681,7 @@ be used to schedule hook repairs unless it is first shown to be the supported ru
 - [x] X04's language-specific formatter matrix is explicit and covered by a regression contract.
 - [x] The grouped Y01-Y02 checks validate yamllint and EditorConfig ownership with no findings.
 - [ ] The grouped F01-F08 checks validate ESLint, TypeScript, Stylelint, HTMLHint, and build boundaries; F04 remains under review.
-- [ ] The grouped G01-G02 MegaLinter collection and selected-linter run are clean after the four formatting repairs; authored research/source scope remains under review.
+- [x] G02-G09 and P01-P07 have fresh individual scope probes with validated-keep or resolved decisions; G01's authored control/research/source members remain explicitly under review.
 - [x] M01's MD013 diagnostic is recorded and its Markdown ownership decision is re-evaluated as deferred.
 - [x] Complete the M08 parity cycle and record its focused verification before starting M09.
 - [ ] Run the first baseline no-fix scans and attach outputs under `.owlbear/scratch/`.
@@ -686,6 +703,9 @@ be used to schedule hook repairs unless it is first shown to be the supported ru
 | 2026-08-17 | Relocated the repository-wide JSON lint command to the root `package.json`; removed the Cockpit package duplicate and made pre-commit call the root command. |
 | 2026-08-17 | Removed the global VS Code Prettier fallback and recorded X03 as resolved; X04 remains queued for language-specific formatter review. |
 | 2026-08-17 | Validated and retained the explicit VS Code language formatter matrix for X04; repository-backed and editor-only mappings are documented separately. |
+| 2026-08-17 | Implemented the Ruff R02-R22 audit: removed global `S101`/`SIM108` waivers, narrowed `N818` and test exceptions to exact scopes, fixed ordinary findings, and verified repository-wide Ruff and formatter checks. |
+| 2026-08-17 | Replaced the remaining exact test-filename Ruff ignores with code-local directives. Retained directory-wide test and inert-fixture policies; used file-local directives for high-volume acceptance/white-box patterns and line-local `# noqa` markers for isolated findings. The complete `tests` and `serve/*/tests` Ruff surface passes. |
+| 2026-08-17 | Removed empty `__init__.py` markers from root and package test directories after pytest imported multiple test trees as the shared `tests.test_*` namespace. Added a policy regression for non-package test roots and retained root `INP001` alongside the existing package-test scope. Package collection now reports 999 tests without import errors. |
 | 2026-08-17 | Implemented M03, M05, M06, and M07: repaired four ordered-list defects, labeled 14 code fences, enabled frontmatter-aware `MD041`, titled the two governance fixtures instead of excluding them, and normalized 952 `MD060` findings to zero. Root/seed policy parity, focused policy tests, local Markdownlint, and the full MegaLinter run pass. |
 | 2026-08-17 | Validated and retained Ruff's global `COM812` ignore for R01; the normal Ruff check and formatter check pass, while an explicit `COM812` probe reports three formatter-conflicting findings. Added a regression contract for the policy. |
 | 2026-08-17 | Validated and retained the `.owlbear/delivery/packages` Markdown exclusion as the next M09 category; its mixed machine-managed package boundary produced no package findings when temporarily exposed, and a six-consumer regression contract now protects the exclusion. |
@@ -700,6 +720,7 @@ be used to schedule hook repairs unless it is first shown to be the supported ru
 | 2026-08-17 | Closed the grouped Y/F/G pass with explicit local and CI-equivalent evidence; repaired four controlled whitespace/EOF defects and left unrelated Markdown findings unchanged. |
 | 2026-08-17 | Reconciled M01 and M09 in the ledger; remaining R/E/M items are deferred for future grouped decisions rather than treated as an automatic repair queue. |
 | 2026-08-17 | Re-evaluated closed findings against current authorities and consumers. Retained evidence-backed managed, formatter-conflict, parity, frontend, and editor decisions; reopened M01, authored M09 research/source exclusions and their G01/P01 portions, and F04 config-file ignores. Corrected F05 to record that `--max-warnings 0` rejects warnings. |
+| 2026-08-17 | Re-probed G01-G09 and P01-P07 individually. G02-G09 and P01-P07 remain validated keeps or resolved; G01 is narrowed conceptually to managed/archive/database members while authored control, research, and source documents remain deferred for a separate scope policy. |
 
 ## 10. MegaLinter Runtime Recovery
 
