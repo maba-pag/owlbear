@@ -120,12 +120,14 @@ def _filename_signal(path: Path, kind: str) -> bool:
 
 def _candidate_files(root: Path) -> list[tuple[Path, str]]:
     files: list[tuple[Path, str]] = []
+    seen: set[Path] = set()
     for test_root in _test_roots(root):
         for path in sorted(test_root.rglob("*")):
             if not path.is_file() or "node_modules" in path.parts:
                 continue
             kind = _kind(path)
-            if kind is not None:
+            if kind is not None and path not in seen:
+                seen.add(path)
                 files.append((path, kind))
     return files
 
