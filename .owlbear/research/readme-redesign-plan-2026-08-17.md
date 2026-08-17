@@ -91,7 +91,7 @@ safe.
 | Unit | State | Evidence |
 | --- | --- | --- |
 | R0 | Complete | Plan committed in `2b9da3c` |
-| R1 | In progress | Rolling-branch wording is corrected; root `LICENSE` is still absent and needs an explicit owner decision |
+| R1 | Complete | Rolling-branch wording is corrected and the unsupported MIT claim was removed in `8bd78f4`; no root license is declared |
 | R2 | Complete | Development front door committed in `2264598` |
 | R3 | Complete | Consumer front door committed in `b4690c1` |
 | R4 | Complete | Setup and sharing guides committed in `a52ac9d` and `e62b998` |
@@ -107,7 +107,8 @@ safe.
 | R5j | Complete | Browser MCP snapshot semantics committed in `1007cb3` |
 | R5k | Validated no-op | Tools README already documented index maintenance and configuration |
 | Index refresh | Complete | `.owlbear/doc-index.md` regenerated and committed in `72d9d84` |
-| R6-R8 | Pending | Shared ecosystem orientation, useful diagrams, and second-developer verification remain |
+| R6 | Complete | Shared ecosystem README validated against `.vscode/settings.json`, `WIRING.md`, and `h-agent-structure`; Markdownlint passed with no edit required |
+| R7-R8 | Pending | Useful diagrams and second-developer verification remain |
 
 ## Editorial contract
 
@@ -133,7 +134,7 @@ safe.
 
 - [ ] Root documentation says `main` is the rolling consumer branch and contains no product version.
 - [ ] No package version fields, tags, or release metadata were changed for this work.
-- [ ] The MIT claim is backed by a root license file, or the claim is removed after the owner decision.
+- [x] The unsupported MIT claim was removed because no root license file or declaration exists.
 - [ ] `README.md` and `README-consumer.md` remain separate and route to the setup authority.
 - [ ] Both root audiences can reach a first successful setup and verification path.
 - [ ] All 11 package READMEs use the required package shape and link to the correct parent.
