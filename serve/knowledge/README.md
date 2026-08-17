@@ -4,6 +4,9 @@ Graph-augmented vector retrieval engine for the OwlBear pipeline. Provides docum
 
 → Parent: [README.md](../../README.md)
 
+**Status:** Alpha. The engine is implemented and available to the pipeline, but it still needs
+real-world validation before it should be treated as a generally validated capability.
+
 ---
 
 ## Launch / Usage
@@ -69,7 +72,7 @@ No environment variables at the library level. Configuration is passed via const
 | Package | Purpose |
 | --- | --- |
 | `pydantic` | Model validation |
-| `strictyaml` | YAML parsing for source config |
+| `ruamel.yaml` | YAML parsing for source config |
 
 ### Optional extras
 
