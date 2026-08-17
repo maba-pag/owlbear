@@ -173,7 +173,7 @@ repos:
       - id: eslint-json
         name: ESLint (JSON/JSONC)
         language: system
-        entry: npm run lint:json
+        entry: uv run lint-json
         files: .*(\.json|\.jsonc)$
         pass_filenames: false
       # Frontend — extra (no CI equivalent, catches type errors early)

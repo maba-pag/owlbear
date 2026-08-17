@@ -534,8 +534,8 @@ def test_json_eslint_replaces_jsonlint_with_local_ci_scope_contract() -> None:
     assert isinstance(root_package, dict)
     root_scripts = root_package.get("scripts")
     assert isinstance(root_scripts, dict)
-    assert root_scripts.get("lint:json") == "node scripts/lint-json.mjs"
-    assert (_ROOT / "scripts/lint-json.mjs").is_file()
+    assert "lint:json" not in root_scripts
+    assert not (_ROOT / "scripts/lint-json.mjs").exists()
 
     package = json.loads((_ROOT / "serve/cockpit/web/package.json").read_text(encoding="utf-8"))
     assert isinstance(package, dict)
@@ -557,7 +557,7 @@ def test_json_eslint_replaces_jsonlint_with_local_ci_scope_contract() -> None:
     json_hook = precommit_hooks["eslint-json"]
     assert json_hook.get("files") == r".*(\.json|\.jsonc)$"
     assert json_hook.get("pass_filenames") is False
-    assert json_hook.get("entry") == "npm run lint:json"
+    assert json_hook.get("entry") == "uv run lint-json"
 
     for path, expected in _P08_JSON_SCOPE_SAMPLES:
         assert bool(re.search(_P08_JSON_SCOPE, path)) is expected, path

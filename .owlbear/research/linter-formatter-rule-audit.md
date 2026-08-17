@@ -399,10 +399,10 @@ G08 replaces `JSON_JSONLINT` with the official `@eslint/json` language plugin. T
 with trailing commas enabled for `.jsonc` and `.vscode/*.json`. Its global ignore object preserves
 the existing generated, archived, dependency, cache, report, and machine-managed boundaries in
 root and recursive forms so the local package command and MegaLinter's `JAVASCRIPT_ES` descriptor
-share one scope authority. The root `lint:json` script delegates path resolution to
-`scripts/lint-json.mjs`; that launcher invokes the package-local ESLint executable from the
-repository root. The `eslint-json` pre-commit hook calls the root script, while MegaLinter points at
-the same config and executable without requiring a package working-directory hop.
+share one scope authority. The native `serve/tools` `lint-json` command invokes the package-local
+ESLint executable and shared config from the repository root. The `eslint-json` pre-commit hook
+delegates to `uv run lint-json`, while MegaLinter points at the same config and executable without
+requiring a package working-directory hop.
 
 The disposable simulation with ESLint 10.7.0 and `@eslint/json` 2.0.1 linted 564 files without
 custom ignores and 97 with the translated exclusion set. It found no findings in the excluded run

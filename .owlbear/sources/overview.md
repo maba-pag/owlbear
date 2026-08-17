@@ -472,7 +472,7 @@ No external sources — analysis based entirely on codebase static analysis of `
 |--------|-----|------|------------|------|
 | MegaLinter — Markdownlint descriptor v10.0.0 | <https://megalinter.io/10.0.0/descriptors/markdown_markdownlint/> | Markdownlint defaults to `list_of_files`; pinned binary is v0.49.1 | `.owlbear/research/linter-formatter-rule-audit.md` | 2026-08-17 |
 | MegaLinter — CLI lint mode v10.0.0 | <https://megalinter.io/10.0.0/config-cli-lint-mode/> | `project` mode bypasses MegaLinter include/exclude filters | `.owlbear/research/linter-formatter-rule-audit.md` | 2026-08-17 |
-| ESLint JSON language plugin | <https://github.com/eslint/json> | Official `@eslint/json` language-plugin configuration for strict JSON and JSONC, including the `json/json`, `json/jsonc`, and duplicate-key rule surfaces | `eslint-json.config.cjs`, `package.json`, `scripts/lint-json.mjs`, `.owlbear/research/linter-formatter-rule-audit.md` | 2026-08-17 |
+| ESLint JSON language plugin | <https://github.com/eslint/json> | Official `@eslint/json` language-plugin configuration for strict JSON and JSONC, including the `json/json`, `json/jsonc`, and duplicate-key rule surfaces | `eslint-json.config.cjs`, `serve/cockpit/web/package.json`, `serve/tools/src/owlbear_tools/quality.py`, `.pre-commit-config.yaml`, `.owlbear/research/linter-formatter-rule-audit.md` | 2026-08-17 |
 | MegaLinter JavaScript ESLint descriptor | <https://megalinter.io/latest/descriptors/javascript_es/> | Configurable file extensions, include filters, flat config path, rules path, and project-local ESLint executable for the replacement descriptor | `.mega-linter.yml`, `.owlbear/research/linter-formatter-rule-audit.md` | 2026-08-17 |
 
 ## Theme Bootstrap Script Implementation Research (Task #1545)

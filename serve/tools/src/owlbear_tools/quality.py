@@ -28,6 +28,7 @@ from owlbear_tools.todo import run_todo
 
 COCKPIT_WEB = Path("serve/cockpit/web")
 _PYTHON_SUFFIXES = frozenset({".py", ".pyi"})
+_JSON_SUFFIXES = frozenset({".json", ".jsonc"})
 
 
 _PRECOMMIT_FIX_HOOKS: dict[str, tuple[str, str, str | None]] = {
@@ -40,7 +41,6 @@ _PRECOMMIT_FIX_HOOKS: dict[str, tuple[str, str, str | None]] = {
     "format-eof": ("end-of-file-fix", "", None),
 }
 _PRECOMMIT_CHECK_HOOKS = {
-    "lint-json": "eslint-json",
     "lint-yaml": "yamllint",
     "lint-shell": "shellcheck",
     "lint-actions": "actionlint",
@@ -163,6 +163,28 @@ def _run_cockpit_html(*, staged: bool) -> int:
     return _call(["npm", "run", "lint:html"], cwd=COCKPIT_WEB)
 
 
+def _run_json_lint(*, staged: bool) -> int:
+    """Run the repository-owned JSON and JSONC ESLint configuration."""
+    targets = (
+        [path for path in _git_paths(staged=True) if Path(path).suffix in _JSON_SUFFIXES]
+        if staged
+        else ["**/*.json", "**/*.jsonc"]
+    )
+    if not targets:
+        return 0
+    return _call(
+        [
+            str(COCKPIT_WEB / "node_modules/.bin/eslint"),
+            "--config",
+            "eslint-json.config.cjs",
+            "--no-config-lookup",
+            "--no-warn-ignored",
+            "--no-error-on-unmatched-pattern",
+            *targets,
+        ]
+    )
+
+
 def _run_typecheck_cockpit() -> int:
     return _call(
         [
@@ -178,7 +200,9 @@ def _run_typecheck_cockpit() -> int:
 
 
 def _run_leaf(name: str, *, staged: bool, fix_mode: FixMode) -> int:
-    if name in _PRECOMMIT_FIX_HOOKS:
+    if name == "lint-json":
+        result = _run_json_lint(staged=staged)
+    elif name in _PRECOMMIT_FIX_HOOKS:
         result = _run_precommit_fix_hook(name, staged=staged, fix_mode=fix_mode)
     elif name in _PRECOMMIT_CHECK_HOOKS:
         result = _precommit_hook(_PRECOMMIT_CHECK_HOOKS[name], staged=staged)

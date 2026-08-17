@@ -18,6 +18,7 @@ from owlbear_tools.quality import (
     format_whitespace,
     lint,
     lint_full,
+    lint_json,
     lint_python,
     quality_full,
     typecheck_cockpit,
@@ -38,7 +39,16 @@ def test_lint_runs_the_normal_local_suite() -> None:
     assert commands == [
         ["pre-commit", "run", "ruff-fix", "--all-files"],
         ["pre-commit", "run", "markdownlint-fix", "--all-files"],
-        ["pre-commit", "run", "eslint-json", "--all-files"],
+        [
+            "serve/cockpit/web/node_modules/.bin/eslint",
+            "--config",
+            "eslint-json.config.cjs",
+            "--no-config-lookup",
+            "--no-warn-ignored",
+            "--no-error-on-unmatched-pattern",
+            "**/*.json",
+            "**/*.jsonc",
+        ],
         ["pre-commit", "run", "yamllint", "--all-files"],
         ["pre-commit", "run", "shellcheck", "--all-files"],
         ["pre-commit", "run", "actionlint", "--all-files"],
@@ -84,6 +94,30 @@ def test_lint_python_exposes_safe_no_fix_and_unsafe_modes() -> None:
             assert "manual" in command
         else:
             assert "--all-files" in command
+
+
+def test_lint_json_staged_targets_only_staged_json_files() -> None:
+    with (
+        patch.object(sys, "argv", ["lint-json", "--staged"]),
+        patch(
+            "owlbear_tools.quality._git_paths",
+            return_value=["README.md", "package.json", ".vscode/settings.json", "src/App.tsx"],
+        ),
+        patch("owlbear_tools.quality._call", return_value=0) as call,
+        pytest.raises(SystemExit, match="0"),
+    ):
+        lint_json()
+
+    assert call.call_args.args[0] == [
+        "serve/cockpit/web/node_modules/.bin/eslint",
+        "--config",
+        "eslint-json.config.cjs",
+        "--no-config-lookup",
+        "--no-warn-ignored",
+        "--no-error-on-unmatched-pattern",
+        "package.json",
+        ".vscode/settings.json",
+    ]
 
 
 def test_megalint_runs_as_a_direct_workspace_engine() -> None:
