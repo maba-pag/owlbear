@@ -86,6 +86,29 @@ The package units are intentionally sequential even where some could be edited i
 that keeps each package's vocabulary and cross-links reviewable, and makes a partial handoff
 safe.
 
+## Implementation status
+
+| Unit | State | Evidence |
+| --- | --- | --- |
+| R0 | Complete | Plan committed in `2b9da3c` |
+| R1 | In progress | Rolling-branch wording is corrected; root `LICENSE` is still absent and needs an explicit owner decision |
+| R2 | Complete | Development front door committed in `2264598` |
+| R3 | Complete | Consumer front door committed in `b4690c1` |
+| R4 | Complete | Setup and sharing guides committed in `a52ac9d` and `e62b998` |
+| R5a | Validated no-op | Delivery README already matched current Change authority |
+| R5b | Complete | Delivery MCP terminology committed in `b4042c4` |
+| R5c | Validated no-op | GitHub publication adapter README already matched its provider boundary |
+| R5d | Validated no-op | Cockpit README already matched launch and `main` packaging |
+| R5e | Complete | Memory configuration committed in `0b80cba` |
+| R5f | Validated no-op | Memory MCP already documented human approval and lifecycle boundaries |
+| R5g | Complete | Knowledge alpha status and dependency correction committed in `b7c68ac` |
+| R5h | Complete | Knowledge MCP alpha status committed in `75444d3` |
+| R5i | Complete | Browser alpha status committed in `dd668dd` |
+| R5j | Complete | Browser MCP snapshot semantics committed in `1007cb3` |
+| R5k | Validated no-op | Tools README already documented index maintenance and configuration |
+| Index refresh | Complete | `.owlbear/doc-index.md` regenerated and committed in `72d9d84` |
+| R6-R8 | Pending | Shared ecosystem orientation, useful diagrams, and second-developer verification remain |
+
 ## Editorial contract
 
 - Describe `main` as the rolling supported consumer branch. Do not call OwlBear `0.1.0`,
@@ -110,6 +133,7 @@ safe.
 
 - [ ] Root documentation says `main` is the rolling consumer branch and contains no product version.
 - [ ] No package version fields, tags, or release metadata were changed for this work.
+- [ ] The MIT claim is backed by a root license file, or the claim is removed after the owner decision.
 - [ ] `README.md` and `README-consumer.md` remain separate and route to the setup authority.
 - [ ] Both root audiences can reach a first successful setup and verification path.
 - [ ] All 11 package READMEs use the required package shape and link to the correct parent.
