@@ -87,11 +87,21 @@ the end of the cycle.
 
 ## Step 5 - Run Periodic Housekeeping
 
-Count completed acquisition cycles from 1 within this orchestrator invocation. After every tenth
-completed cycle, dispatch `memory-curator` with exactly `Curate: Periodic curation`. This is
+Count completed acquisition cycles from 1 within this orchestrator invocation. A completed cycle is
+a non-empty acquisition batch whose launches have been handled and whose worker transitions or exact
+recovery results have been recorded. Do not count an empty acquisition, an acquisition failure, or
+an interrupted batch. Dispatch `memory-curator` after cycle 3, then after cycles 13, 23, and so on
+every tenth completed cycle thereafter, with exactly `Curate: Periodic curation`. This is
 non-Delivery housekeeping, not a launch package: provide no task, Change, outcome, attempt, or claim
-identity; do not call `transition_delivery` or `recover_claim` for it. Report its result separately
-and continue acquisition unless its own dispatch failure is a fail-closed tool condition.
+identity; do not call `transition_delivery` or `recover_claim` for it.
+
+The curator's successful Channel A result must use the `w-mem-curation` form
+`DONE | {P} promoted, {D} pruned`, adding reportable pending conflict or uncertainty IDs when
+present. If the dispatch binding is unavailable or the agent tool returns an error, record a
+fail-closed housekeeping failure, report it separately, and stop after the current batch; do not
+use Delivery recovery. If the dispatch returns no result or a result without the curator's Channel A
+verdict, record a malformed housekeeping result, do not retry it, and continue acquisition. A
+scheduled attempt consumes its cadence slot regardless of its result.
 
 ## Step 6 - Refresh
 

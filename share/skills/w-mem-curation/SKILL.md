@@ -119,7 +119,7 @@ The MCP operation stages only non-pending `.owlbear/memory/*.md` entries and ret
 
 Return the verdict:
 
-- Periodic mode: `DONE | {P} promoted, {D} pruned` (add `— {K} pending conflicts/uncertain` for reportable ordinary uncertainty only; exclude identity-only pending entries)
+- Periodic mode: `DONE | {P} promoted, {D} pruned` (add `— {K} pending conflicts/uncertain ({entry IDs})` for reportable ordinary uncertainty or conflicts only; exclude identity-only pending entries)
 - Manual mode: concise summary of promoted, pruned, deferred, and resolved entries
 
 ## Verification Checklist

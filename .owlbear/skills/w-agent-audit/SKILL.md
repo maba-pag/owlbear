@@ -34,11 +34,14 @@ that stored guidance conflicts with the audited definition; do not inventory mem
 
 ## Setup, Authority, And Evidence
 
-Audit only customization source in the current workspace: `.github/`,
-`share/{agents,skills,instructions,prompts}/`, and
-`.owlbear/{agents,skills,instructions,prompts}/` when present. Never inspect or compare sibling,
-installed, or otherwise externally loaded customization trees. Discover actual local files rather
-than assuming every directory exists.
+Audit only active customization source in the current workspace:
+`.github/copilot-instructions.md`, `share/{agents,skills,instructions,prompts}/`, and
+`.owlbear/{agents,skills,instructions,prompts}/` when present. The active VS Code customization
+roots are `share/` and `.owlbear/`; `.github/skills/session-review/` is auxiliary session-review
+tooling and is outside this audit unless the request names it explicitly. Inspect other `.github/`
+files only when the audit scope names them. Never inspect or compare sibling, installed, or
+otherwise externally loaded customization trees. Discover actual local files rather than assuming
+every directory exists.
 
 Load only what the selected scope needs:
 

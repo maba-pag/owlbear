@@ -48,7 +48,7 @@ This table snapshots agent declarations and includes runtime-relevant built-in d
 | designer-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design` | None | `PreToolUse`: deny writes except scratch |
 | planner | GPT-5.6 Sol | `w-frontier-planning` | planner-challenger, Explore | `PreToolUse`: deny writes except scratch and terminal mutation; publishes advisory-reviewed task chains and returns worker-owned transitions |
 | planner-challenger | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation`, `h-module-design`, `h-ac-quality` | None | `PreToolUse`: deny writes except scratch |
-| orchestrator | GPT-5.6 Luna | `w-orchestration` | planner, builder, memory-curator, Explore | Reports and acquires portfolio work, dispatches task claims, recovers exact failed claims including retained legacy repair claims, forwards task transitions, and reports typed Integration attention; no repository write tools |
+| orchestrator | GPT-5.6 Luna | `w-orchestration` | planner, builder, memory-curator, Explore | Reports and acquires portfolio work, dispatches task claims, recovers exact failed claims including retained legacy repair claims, forwards task transitions, runs memory housekeeping on cycle 3 and every tenth completed acquisition cycle thereafter, and reports typed Integration attention; no repository write tools |
 | builder | GPT-5.6 Luna | `w-packet-building`, `r-workspace-governance`, `h-codebase-orientation` | build-reviewer | Assigned change worktree only; task Build returns a lifecycle transition; `SessionStart`: repository context; `PostToolUse`: lint changed files |
 | build-reviewer | Claude Opus 5 | `r-challenger-protocol`, `h-codebase-orientation` | None | Exact-commit task-result or finalization review with read-only Git; `PreToolUse`: deny writes except scratch and terminal mutation |
 | finalizer | GPT-5.6 Sol | `w-change-finalization`, `h-codebase-orientation` | build-reviewer | User-invoked exact Change proof and finalization; `PreToolUse`: deny writes and terminal mutation |
@@ -128,7 +128,7 @@ This inverse map includes only direct `<required_reading>` consumers, not condit
 | builder | orchestrator | An acquired Build launch cannot produce its exact-commit result; a dispatch failure instead triggers the matching exact claim recovery |
 | build-reviewer | builder | An exact-commit task result cannot receive advisory pass or finding evidence |
 | build-reviewer | finalizer | An exact finalization proof cannot receive advisory pass or finding evidence |
-| memory-curator | orchestrator | Periodic memory housekeeping is skipped |
+| memory-curator | orchestrator | Scheduled memory housekeeping is unavailable; a fail-closed dispatch error stops the current batch and is reported |
 | Explore | designer, planner, orchestrator | Broad read-only orientation must be performed by the caller or omitted |
 
 The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignment; see
@@ -146,6 +146,7 @@ The agent validator enforces ND3 metadata and frontmatter-to-`<agents>` alignmen
 | MCP schemas and stores | Tool-capable roles | Validate arguments, transitions, and persisted state |
 | `validate_agents.py` | Repository validation | Checks frontmatter, required sections, tools, delegation, and nesting-depth metadata |
 | `validate_skills.py` | Repository validation | Checks skill metadata and structure |
+| `validate_prompts.py` | Repository validation | Checks prompt metadata, routing targets, and explicit skill references |
 | `test_agent_ecosystem_validation.py` | Repository regression | Exercises validators and resolves declared OwlBear MCP tools against live registries |
 | Write-guard regression tests | Repository regression | Exercise path restrictions and hook behavior |
 
@@ -158,6 +159,7 @@ Update affected rows in the same change as their executable owners, then run:
 ```shell
 uv run python .owlbear/scripts/validate_agents.py
 uv run python .owlbear/scripts/validate_skills.py
+uv run python .owlbear/scripts/validate_prompts.py
 uv run pytest -q tests/test_agent_ecosystem_validation.py
 ```
 

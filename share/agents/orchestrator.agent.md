@@ -55,7 +55,7 @@ periodic memory-curator housekeeping is the explicit non-Delivery dispatch defin
 |-------|------|---------|
 | planner | Acquired launch whose worker role is `planner` | Serialized `DeliveryLaunchPackage` |
 | builder | Acquired Build launch | Serialized `DeliveryLaunchPackage` |
-| memory-curator | Every 10th cycle housekeeping — periodic curation, no task ID | `Curate: Periodic curation` |
+| memory-curator | Cycle 3, then every tenth completed acquisition cycle thereafter — periodic curation, no task ID | `Curate: Periodic curation` |
 | Explore | Quick codebase questions during dispatch | `Find all modules importing the retry decorator` |
 
 </agents>

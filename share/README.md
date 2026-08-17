@@ -168,11 +168,12 @@ project-local `.owlbear/` roots:
 
 ## Validation
 
-Run structural validators after changing agents or skills:
+Run structural validators after changing agents, skills, or prompts:
 
 ```shell
 uv run python .owlbear/scripts/validate_agents.py
 uv run python .owlbear/scripts/validate_skills.py
+uv run python .owlbear/scripts/validate_prompts.py
 ```
 
 Run ecosystem integrity and write-boundary regressions when changing agent structure, MCP grants,
