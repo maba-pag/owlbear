@@ -5,6 +5,7 @@
 - ## `Overview`
 - ## `Prerequisites`
 - ## `Quick Start`
+- ## `macOS Copilot profile settings`
 - ## `Directory Layout`
 - ## `Cockpit (Consumer Launch)`
 - ## `Target Workflow`
@@ -18,6 +19,7 @@
 - [code.visualstudio.com](https://code.visualstudio.com/)
 - [git-scm.com](https://git-scm.com/)
 - [setup/setup-guide.md](setup/setup-guide.md)
+- [the setup guide](setup/setup-guide.md#macos-copilot-profile-settings)
 - [Target Delivery Workflow](setup/setup-guide.md#target-delivery-workflow)
 - [setup/sharing-guide.md](setup/sharing-guide.md)
 
@@ -50,6 +52,16 @@
 - ## `3. Cockpit Frontend`
 - ## `4. Cockpit Backend`
 - ## `5. Test Domain Mapping`
+
+## .github/skills/h-hook-authoring/SKILL.md
+- # `Hook Authoring`
+- ## `Authority And Boundary`
+- ## `Choose The Lifecycle Event`
+- ## `Define The Contract First`
+- ## `Place And Wire The Change`
+- ## `Implementation And Review Sequence`
+- ## `Review Checklist`
+- ## `Known Pitfalls`
 
 ## .github/skills/session-review/SKILL.md
 - # `Session Review`
@@ -110,6 +122,9 @@
 ## .owlbear/prompts/agent-audit.prompt.md
 - # `Agent Ecosystem Audit`
 
+## .owlbear/prompts/deviation-audit.prompt.md
+- # `Deviation Audit`
+
 ## .owlbear/prompts/doc-audit.prompt.md
 - # `Documentation Audit`
 - ## `1. Preamble`
@@ -122,7 +137,7 @@
 - ## `8. Verification and Closeout`
 
 ## .owlbear/prompts/knowledge-audit.prompt.md
-- ## `What This Module Does`
+- ## `Current System Boundary`
 - ## `Audit Scope`
 - ## `Known Past Issues (context, not constraints)`
 - ## `Classification Rules`
@@ -141,6 +156,7 @@
 - ### `Temporal Narration Test`
 - ### `Rewrite Conservation`
 - ## `Shared Audit Dimensions`
+- ### `Default Drift Pass`
 - ## `Broad Audit`
 - ### `Coverage`
 - ### `Ranked Findings`
@@ -150,6 +166,16 @@
 - ### `Analyze Behavioral Blocks`
 - ### `Return One Coherent Finding Set`
 - ## `Implementation Handoff - Second Pass Only`
+
+## .owlbear/skills/w-deviation-audit/SKILL.md
+- # `Deviation Audit`
+- ## `Boundary`
+- ## `Step 1 - Resolve The Scope`
+- ## `Step 2 - Reconstruct The Evidence Boundary`
+- ## `Step 3 - Classify The Owning Surface`
+- ## `Step 4 - Decide The Follow-Up`
+- ## `Output Template`
+- ## `Known Pitfalls`
 
 ## serve/browser/README.md
 - # `owlbear-browser — Browser Content Fetcher`
@@ -1020,6 +1046,7 @@
 - # `OwlBear Setup Guide`
 - ## `Prerequisites`
 - ## `Quick Start`
+- ## `macOS Copilot profile settings`
 - ## `Browser-backed tests`
 - ## `What Setup Creates`
 - ## `Shared vs Copied`
@@ -1200,7 +1227,7 @@
 ## share/prompts/legacy-audit.prompt.md
 - # `Legacy Audit`
 - ## `Interaction Protocol`
-- ## `Step 1 - Load context`
+- ## `Step 1 - Load authority and scope`
 - ## `Step 2 - Execute scan checks`
 - ## `Step 3 - Produce ranked cleanup report`
 - ## `Step 4 - Guardrails and closeout`
@@ -1239,6 +1266,7 @@
 ## share/skills/h-ac-quality/SKILL.md
 - # `AC Quality Schema`
 - ## `Meta-Rule`
+- ## `Proof Selection And Signal Quality`
 - ## `Tier 1 - Behavior AC (Code Changes)`
 - ### `B1 - Boundary-Scoped`
 - ### `B2 - Input -> Output Pairs`
@@ -1465,6 +1493,13 @@
 - ## `Dependency Classification`
 - ## `Applying the Diagnostics`
 
+## share/skills/h-process-observations/SKILL.md
+- # `Process Observations`
+- ## `Boundary`
+- ## `Triggers`
+- ## `Placement And Identity`
+- ## `Note Template`
+
 ## share/skills/h-pytest-and-linting/SKILL.md
 - # `pytest, ruff, and coverage Reference`
 - ## `Discover Project Configuration`
@@ -1555,6 +1590,7 @@
 - ## `Step 3 - Obtain Independent Exact-Commit Review`
 - ## `Step 4 - Construct Exact Evidence`
 - ## `Step 5 - Re-check And Finalize`
+- ## `Optional Process Observation`
 - ## `Output Template`
 - ## `Known Pitfalls`
 
@@ -1641,7 +1677,8 @@
 - ## `Step 2 - Dispatch Or Recover Each Launch`
 - ## `Step 3 - Forward One Worker Transition`
 - ## `Step 4 - Preserve Typed Integration Attention`
-- ## `Step 5 - Refresh`
+- ## `Step 5 - Run Periodic Housekeeping`
+- ## `Step 6 - Refresh`
 - ## `Output`
 - ## `Known Pitfalls`
 
@@ -1651,7 +1688,9 @@
 - ## `Step 1 - Fix The Task Boundary`
 - ## `Step 2 - Implement And Commit`
 - ## `Step 3 - Obtain Advisory Exact-Commit Review`
+- ### `Triage Review Findings Before Repair`
 - ## `Step 4 - Publish Pass Or Route Finding`
+- ## `Optional Process Observation`
 - ## `Known Pitfalls`
 
 ## share/skills/w-research/SKILL.md
@@ -1668,11 +1707,14 @@
 - # `Test Curation`
 - ## `Goal`
 - ## `Discovery`
+- ### `Inventory command`
 - ### `Finding transient tests`
 - ### `Filtering`
 - ## `Triage`
 - ### `Zero-value patterns (delete without mining)`
+- ### `Negative assertions`
 - ### `Potential-value patterns (read before deciding)`
+- ### `Mixed-file verdicts`
 - ## `Mining`
 - ### `Python`
 - ### `Frontend (Vitest/Jest)`

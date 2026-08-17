@@ -141,6 +141,7 @@ deny-src-writes.py — PreToolUse hook for test-only roles.
 
 - `__future__`
 - `json`
+- `pathlib`
 - `re`
 - `sys`
 
@@ -148,6 +149,7 @@ deny-src-writes.py — PreToolUse hook for test-only roles.
 
 - `def _extract_paths(tool_input: object) -> list[str]`
 - `def _is_allowed_path(path: str) -> bool`
+- `def _normalize(path: str) -> str | None`
 - `def main() -> None`
 
 ## .owlbear/hooks/deny-writes.py
@@ -158,6 +160,7 @@ deny-writes.py — PreToolUse hook for path-bounded agents.
 
 - `__future__`
 - `json`
+- `pathlib`
 - `re`
 - `shlex`
 - `sys`
@@ -165,7 +168,7 @@ deny-writes.py — PreToolUse hook for path-bounded agents.
 ### Interfaces
 
 - `def _extract_paths(tool_input: object) -> list[str]`
-- `def _normalize(path: str) -> str`
+- `def _normalize(path: str) -> str | None`
 - `def _is_scratch_path(normalized: str) -> bool`
 - `def _is_allowed_write_path(normalized: str, *, allow_research: bool) -> bool`
 - `def _git_command(arguments: str) -> str | None`
@@ -276,23 +279,52 @@ Validate OwlBear agent files against conventions.
 - `__future__`
 - `pathlib`
 - `re`
+- `shlex`
 - `sys`
 - `yaml`
 
 ### Interfaces
 
+- `def _frontmatter_data(fm_lines: list[str]) -> dict[str, object]`
 - `def _frontmatter_lines(content: str) -> list[str]`
 - `def _tools_text(fm_lines: list[str]) -> str`
 - `def _is_valid_tool(name: str) -> bool`
 - `def _fm_scalar(fm_lines: list[str], key: str) -> str | None`
 - `def _fm_agents(fm_lines: list[str]) -> list[str]`
 - `def _body_agents_table(content: str) -> list[str]`
+- `def _hook_entry_command(event: str, index: int, entry: object, agent_file: Path) -> tuple[str | None, list[str]]`
+- `def _hook_commands(fm_lines: list[str], agent_file: Path) -> tuple[dict[str, list[str]], list[str]]`
+- `def _check_hooks(fm_lines: list[str], agent_file: Path) -> list[str]`
 - `def _check_unknown_tools(fm_lines: list[str], agent_file: Path) -> list[str]`
 - `def _check_structure(content: str, fm_lines: list[str], agent_file: Path) -> list[str]`
 - `def _check_tool_policy(content: str, fm_lines: list[str], agent_file: Path) -> list[str]`
 - `def _check_delegation(content: str, fm_lines: list[str], agent_file: Path) -> list[str]`
 - `def _check_required_reading(content: str, agent_file: Path) -> list[str]`
 - `def validate_agent(agent_file: Path) -> list[str]`
+- `def _discover_agent_files() -> list[Path]`
+- `def main(argv: list[str] | None = None) -> int`
+
+## .owlbear/scripts/validate_prompts.py
+
+Validate prompt entry points against active agent and skill roots.
+
+### Imports
+
+- `__future__`
+- `pathlib`
+- `re`
+- `sys`
+- `yaml`
+
+### Interfaces
+
+- `def _frontmatter(content: str, prompt_file: Path) -> tuple[dict[str, object], list[str], str]`
+- `def _root_candidates(prompt_file: Path, roots: tuple[Path, ...], directory: str) -> tuple[Path, ...]`
+- `def _agent_names(prompt_file: Path) -> set[str]`
+- `def _skill_names(prompt_file: Path) -> set[str]`
+- `def _check_skill_references(prompt_file: Path, body: str) -> list[str]`
+- `def validate_prompt(prompt_file: Path) -> list[str]`
+- `def _discover_prompt_files() -> list[Path]`
 - `def main(argv: list[str] | None = None) -> int`
 
 ## .owlbear/scripts/validate_skills.py
@@ -389,6 +421,7 @@ deny-src-writes.py — PreToolUse hook for test-only roles.
 
 - `__future__`
 - `json`
+- `pathlib`
 - `re`
 - `sys`
 
@@ -396,6 +429,7 @@ deny-src-writes.py — PreToolUse hook for test-only roles.
 
 - `def _extract_paths(tool_input: object) -> list[str]`
 - `def _is_allowed_path(path: str) -> bool`
+- `def _normalize(path: str) -> str | None`
 - `def main() -> None`
 
 ## seed/.owlbear/hooks/deny-writes.py
@@ -406,6 +440,7 @@ deny-writes.py — PreToolUse hook for path-bounded agents.
 
 - `__future__`
 - `json`
+- `pathlib`
 - `re`
 - `shlex`
 - `sys`
@@ -413,7 +448,7 @@ deny-writes.py — PreToolUse hook for path-bounded agents.
 ### Interfaces
 
 - `def _extract_paths(tool_input: object) -> list[str]`
-- `def _normalize(path: str) -> str`
+- `def _normalize(path: str) -> str | None`
 - `def _is_scratch_path(normalized: str) -> bool`
 - `def _is_allowed_write_path(normalized: str, *, allow_research: bool) -> bool`
 - `def _git_command(arguments: str) -> str | None`
@@ -1131,7 +1166,7 @@ Receipt-backed completion authority for one merged Delivery Change.
 - `class _AcceptanceModel(BaseModel)`
 - `class CompletionPullRequestIdentity(_AcceptanceModel)`
 - `class CompletionDisplayMetadata(_AcceptanceModel)`
-  - `def create(cls, *, change_id: str, completion_id: str, title: str, outcome_titles: tuple[str, ...]) -> CompletionDisplayMetadata`
+  - `def create(cls, *, change_id: str, completion_id: str, title: str, outcome_titles: tuple[str, ...], outcome_promises: tuple[str, ...] | None = None) -> CompletionDisplayMetadata`
   - `def _validate_display(self) -> CompletionDisplayMetadata`
 - `class CompletionEvidence(_AcceptanceModel)`
   - `def _validate_evidence(self) -> CompletionEvidence`
@@ -1769,6 +1804,7 @@ Mechanical Delivery state and worker-owned transitions.
 - `class DeliveryChangeDispositionConflictError(DeliveryRuntimeConflictError)`
 - `class DeliveryAcceptanceWaitingError(DeliveryRuntimeConflictError)`
 - `class DeliveryRuntimeReferenceError(ValueError)`
+- `class DeliveryRuntimeMigrationError(ValueError)`
 - `def is_change_terminal(frontier: DeliveryFrontier) -> bool`
 - `def derive_change_stage(frontier: DeliveryFrontier) -> DeliveryChangeStage`
 - `class DeliveryRuntime`
@@ -2216,7 +2252,8 @@ Deterministic portfolio acquisition and bounded worker context.
   - `def show_finalization_context(self, change_id: str) -> DeliveryFinalizationContext`
   - `def finalize_change(self, change_id: str, request: FinalizeDeliveryChange) -> DeliveryFinalizationReceipt`
   - `def mark_change_ready(self, change_id: str, request: MarkChangePullRequestReady) -> PullRequestReadyReceipt`
-  - `def _observe_required_checks_before_ready(self, change_id: str, runtime: DeliveryRuntime, exact_head: str) -> PublicationCheckObservationReceipt`
+  - `def _observe_required_checks_for_ready(self, change_id: str, exact_head: str) -> tuple[PublicationCheckObservationReceipt, tuple[PublicationCheck, ...]]`
+  - `def _record_required_check_attention(runtime: DeliveryRuntime, observation: PublicationCheckObservationReceipt, failures: tuple[PublicationCheck, ...], ready: PullRequestReadyReceipt) -> None`
   - `def mark_current_change_ready(self, change_id: str) -> PullRequestReadyReceipt`
   - `def resolve_change_disposition(self, change_id: str, expected_disposition_id: str) -> DeliveryChangeDispositionResolution`
   - `def recover_publication_baseline(self, change_id: str, expected_change_head: str, publication_base_head: str, operation_id: str, *, confirmed_recovery: bool = False) -> PublicationBaselineRecoveryReceipt`
@@ -3986,7 +4023,6 @@ Utility functions: normalization and serialization helpers.
 - `def _normalize_scope_list(scopes: object) -> list[str] | None`
 - `def _normalize_batch_limit(limit: int) -> int`
 - `def _normalize_read_limit(limit: int) -> int`
-- `def _normalize_optional_read_limit(limit: int | None) -> int | None`
 - `def _normalize_enrichment_items(value: object, *, field_name: str) -> list[dict[str, Any]]`
 
 ## serve/knowledge-mcp/src/owlbear_knowledge_mcp/_types.py
@@ -4030,7 +4066,6 @@ MCPServer application for knowledge ingestion and search tools.
 - `mcp.server.mcpserver`
 - `mcp.server.mcpserver.exceptions`
 - `mcp.types`
-- `owlbear_knowledge.fetcher`
 - `owlbear_knowledge.ingest_coordinator`
 - `owlbear_knowledge.protocols.common`
 - `owlbear_knowledge.protocols.enrichment`
@@ -4061,7 +4096,6 @@ MCPServer application for knowledge ingestion and search tools.
 - `async def retry_enrichment(ctx: Context, chunk_ids: list[str] | None = None, limit: int = 100, scopes: list[str] | None = None) -> RetryEnrichmentResult`
 - `class AppContext`
 - `class RegisteredSourceResult(TypedDict)`
-- `async def _web_read(url: str) -> str | None`
 - `async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]`
 - `def _serialize_query_facade_results(app_ctx: AppContext, result: QueryResult) -> list[SearchResult]`
 - `async def knowledge_search(ctx: Context, query: str, limit: int = 5, scopes: list[str] | None = None) -> list[SearchResult]`
@@ -4328,6 +4362,7 @@ OwlBear MCP memory server for markdown-frontmatter memory operations.
 - `async def recall_memory(ctx: Context, *, agent: _RecallAgent = None, categories: list[MemoryCategory] | None = None, limit: _Limit | None = None) -> str`
 - `async def read_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
 - `async def curate_memory(ctx: Context, *, entry_id: str, title: _Title | None = None, content: _Content | None = None, categories: list[MemoryCategory] | None = None, confidence: _Confidence | None = None, scope_agents: list[str] | None = None) -> dict[str, Any]`
+- `async def commit_memory_batch(ctx: Context, *, session_type: _BatchSession) -> dict[str, Any]`
 - `async def delete_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
 - `async def rename_agent_memories(ctx: Context, *, old_name: _Agent, new_name: _Agent) -> dict[str, int]`
 - `async def delete_agent_memories(ctx: Context, *, agent: _Agent) -> dict[str, int]`
@@ -4341,15 +4376,20 @@ MCP tool implementations for markdown-backed memory entries.
 ### Imports
 
 - `__future__`
+- `logging`
 - `mcp.server.mcpserver.exceptions`
 - `owlbear_memory`
+- `owlbear_memory_mcp.git`
+- `pathlib`
 - `pydantic`
+- `subprocess`
 - `typing`
 
 ### Interfaces
 
 - `def _allowed_assessment_values() -> str`
 - `def _engine_from_ctx(ctx: Context) -> MemoryEngine`
+- `def _memory_dir_from_ctx(ctx: Context) -> Path`
 - `def _validate_scope(agents: list[str]) -> None`
 - `def _recognized_agent_names(engine: MemoryEngine) -> list[str]`
 - `def _recall_fallback(known_agents: list[str]) -> str`
@@ -4365,6 +4405,7 @@ MCP tool implementations for markdown-backed memory entries.
 - `def _teaching_validation_message(exc: ValidationError) -> str`
 - `def _with_hint(data: dict[str, Any], hint: str) -> dict[str, Any]`
 - `async def save_memory(ctx: Context, *, title: str, content: str, categories: list[MemoryCategory | str], confidence: float, source_agent: str) -> dict[str, Any]`
+- `async def commit_memory_batch(ctx: Context, *, session_type: str) -> dict[str, Any]`
 - `async def list_memories(ctx: Context, *, states: list[MemoryState | str] | None = None, categories: list[MemoryCategory | str] | None = None, scope_agents: list[str] | None = None) -> list[dict[str, Any]]`
 - `async def read_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]`
 - `async def recall_memory(ctx: Context, *, agent: str | int | None, categories: list[MemoryCategory | str] | None = None, limit: int | None = None) -> str`
@@ -4780,12 +4821,17 @@ MegaLinter image configuration shared by workspace commands.
 
 - `__future__`
 - `argparse`
+- `contextlib`
 - `dataclasses`
+- `os`
 - `owlbear_tools.quality_runtime`
 - `pathlib`
 - `re`
+- `shutil`
 - `subprocess`
 - `sys`
+- `time`
+- `typing`
 - `yaml`
 
 ### Interfaces
@@ -4793,8 +4839,21 @@ MegaLinter image configuration shared by workspace commands.
 - `class MegaLinterImage`
   - `def repository(self) -> str`
   - `def tag(self) -> str`
+- `class DockerRuntimeApp`
 - `def load_megalinter_image(path: Path = _CONFIG_PATH) -> MegaLinterImage`
-- `def _docker_command() -> list[str]`
+- `def _docker_command(binary: str = 'docker') -> list[str]`
+- `def _run_host(command: list[str], *, timeout: float | None = None) -> subprocess.CompletedProcess[str]`
+- `def _find_docker_binary() -> str | None`
+- `def _docker_is_ready(binary: str) -> bool`
+- `def _app_is_installed(app: DockerRuntimeApp) -> bool`
+- `def _installed_docker_apps() -> tuple[DockerRuntimeApp, ...]`
+- `def _app_is_running(app: DockerRuntimeApp) -> bool`
+- `def _start_docker_app(app: DockerRuntimeApp) -> None`
+- `def _stop_docker_app(app: DockerRuntimeApp) -> None`
+- `def _wait_for_docker() -> str | None`
+- `def _stop_runtime_requested() -> bool`
+- `def _acquire_docker_runtime() -> tuple[str, DockerRuntimeApp | None]`
+- `def _docker_runtime() -> Iterator[str]`
 - `def run_megalint(fix_mode: FixMode) -> int`
 - `def megalint() -> None`
 - `def _run(command: list[str]) -> int`
@@ -4883,6 +4942,7 @@ Workspace lint, formatting, and quality commands.
 - `def lint_cockpit() -> None`
 - `def lint_python() -> None`
 - `def lint_markdown() -> None`
+- `def lint_json() -> None`
 - `def lint_yaml() -> None`
 - `def lint_shell() -> None`
 - `def lint_actions() -> None`
@@ -5041,6 +5101,7 @@ OwlBear workspace initialiser — setup/init.py.
 - `os`
 - `pathlib`
 - `re`
+- `shlex`
 - `shutil`
 - `subprocess`
 - `sys`
@@ -5065,6 +5126,26 @@ OwlBear workspace initialiser — setup/init.py.
 - `def _write_delivery_config(target_dir: Path, remote: str, target_branch: str | None, github_repository: str | None, *, interactive: bool) -> None`
 - `def _hook_files_match(src: Path, dest: Path) -> bool`
 - `def _is_interactive_session() -> bool`
+- `class _CopilotProfileTarget`
+  - `def __init__(self, user_data_root: Path, settings_path: Path, profile_id: str | None, *, associated: bool) -> None`
+- `def _unique_paths(paths: list[Path]) -> list[Path]`
+- `def _vscode_app_from_command(command: str) -> Path | None`
+- `def _user_data_roots_for_vscode_app(app_path: Path) -> list[Path]`
+- `def _user_data_paths_from_tokens(tokens: list[str]) -> list[Path]`
+- `def _running_macos_vscode_user_data_roots() -> list[Path]`
+- `def _macos_vscode_user_data_roots() -> list[Path]`
+- `def _workspace_profile_association(user_data_root: Path, target_dir: Path) -> tuple[bool, str | None] | None`
+- `def _make_copilot_profile_target(user_data_root: Path, profile_id: str | None, *, associated: bool) -> _CopilotProfileTarget`
+- `def _find_associated_copilot_profile(roots: list[Path], target_dir: Path) -> _CopilotProfileTarget | None`
+- `def _select_default_copilot_profile(roots: list[Path], target_dir: Path) -> _CopilotProfileTarget`
+- `def _profile_display_path(path: Path) -> str`
+- `def _profile_display_name(target: _CopilotProfileTarget) -> str`
+- `def _profile_json_indent(raw: str | None) -> int | str`
+- `def _update_copilot_reasoning_settings(path: Path) -> tuple[object, bool, str | None]`
+- `def _write_copilot_profile_atomically(path: Path, data: object, *, original_text: str | None) -> None`
+- `def _confirm_copilot_profile_update(target: _CopilotProfileTarget) -> bool`
+- `def _print_profile_association_help(target_dir: Path) -> None`
+- `def _configure_copilot_profile(target_dir: Path, *, interactive: bool) -> None`
 - `def _should_replace_hook_file(dest: Path, *, src: Path, replace_hooks: bool, interactive: bool) -> bool`
 - `def _hook_diff(src: Path, dest: Path) -> str`
 - `def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None`
