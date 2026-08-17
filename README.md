@@ -14,8 +14,21 @@ that control plane plus Knowledge, Memory, and browser automation; Cockpit provi
 operating and recovery surface.
 
 The `dev` branch is the development workspace. The `main` branch is a generated consumer subset and
-must not be edited directly. Immutable records from the retired workflow may remain under
+must not be edited directly; it is the rolling supported consumer branch and there are no numbered
+OwlBear product releases. Immutable records from the retired workflow may remain under
 `.owlbear/legacy/` as hash-verified history, but they are never runtime authority.
+
+## Current Status
+
+| Surface | Status | Validation signal |
+| --- | --- | --- |
+| Delivery | Core / active | Primary workflow for reviewed Change delivery |
+| Cockpit | Core / active | Human operating and recovery surface for Delivery |
+| Memory | Available | Persistent workspace memory surface |
+| Knowledge | Alpha | Needs real-world validation |
+| Browser | Alpha | Needs real-world validation |
+
+The remaining packages support these surfaces and are documented individually under `serve/`.
 
 ## Directory Structure
 
