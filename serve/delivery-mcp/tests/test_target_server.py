@@ -39,13 +39,13 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryReviewReceipt,
     PublishDeliveryResult,
 )
+from owlbear_delivery_github import GitHubCliPublicationProvider
 from owlbear_delivery_mcp.server import (
     app_lifespan,
     load_delivery_application,
     load_delivery_config,
     mcp,
 )
-from owlbear_delivery_github import GitHubCliPublicationProvider
 from owlbear_delivery_mcp.target_models import DeliveryStartupDiagnostic
 from owlbear_delivery_mcp.target_server import TargetMCPAdapter, assemble_target_server
 
@@ -188,8 +188,8 @@ class _BlockingAcceptanceApplication(_RecordingApplication):
 
 
 def _git(repository: Path, *arguments: str) -> None:
-    subprocess.run(
-        ("git", "-C", str(repository), *arguments),
+    subprocess.run(  # noqa: S603
+        ("git", "-C", str(repository), *arguments),  # noqa: S607
         check=True,
         capture_output=True,
     )
@@ -264,8 +264,8 @@ def _write_delivery_state(runtime_root: Path, repository: Path) -> None:
     change_root.mkdir(parents=True)
     change_root.joinpath("contract.json").write_text(contract.model_dump_json(), encoding="utf-8")
     change_root.joinpath("frontier.json").write_text(frontier.model_dump_json(), encoding="utf-8")
-    target_head = subprocess.run(
-        ["git", "-C", str(repository), "rev-parse", "main"],
+    target_head = subprocess.run(  # noqa: S603
+        ["git", "-C", str(repository), "rev-parse", "main"],  # noqa: S607
         check=True,
         capture_output=True,
         text=True,
@@ -722,7 +722,7 @@ async def test_complete_config_constructs_application_before_lifespan_yield(
         assert (repository / ".owlbear/delivery/runtime/capacity.json").is_file()
 
     with pytest.raises(RuntimeError, match="outside server lifespan"):
-        live_server._live_application()
+        live_server._live_application()  # noqa: SLF001
 
 
 def test_mcp_startup_delegates_owner_construction_to_delivery(

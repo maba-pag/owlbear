@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -19,6 +19,7 @@ from owlbear_delivery import (
     PublicationBaselineRecoveryReceipt,
 )
 from owlbear_delivery.acceptance import CompletionReceiptConflictError
+from owlbear_delivery.change_publication import ChangeBranchSupersessionReceipt
 from owlbear_delivery.change_workspace import (
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
@@ -28,7 +29,6 @@ from owlbear_delivery.change_workspace import (
     CoordinationConflictError,
     PublicationBaselineUnavailableError,
 )
-from owlbear_delivery.change_publication import ChangeBranchSupersessionReceipt
 from owlbear_delivery.completed_history import (
     CompletedHistoryDiagnostic,
     CompletedHistoryDiagnosticCode,
@@ -36,9 +36,9 @@ from owlbear_delivery.completed_history import (
 )
 from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceWaitingError,
+    DeliveryChangeDispositionConflictError,
     DeliveryChangePublicationHistory,
     DeliveryChangePublicationIdentity,
-    DeliveryChangeDispositionConflictError,
     DeliveryObservation,
     DeliveryObservationReceipt,
     DeliveryPlanCandidate,
