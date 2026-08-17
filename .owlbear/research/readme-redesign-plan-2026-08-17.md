@@ -1,6 +1,6 @@
 # README and Documentation UX Plan
 
-> **Status:** Reopened for structural redesign
+> **Status:** Complete — structural redesign committed in `7ca1aa2`
 > **Decision date:** 2026-08-17
 > **Scope:** Newcomer-facing documentation and package orientation
 
@@ -176,7 +176,7 @@ safe.
 - [x] The setup authority presents one first-success path with expected results and no duplicate verification authority.
 - [x] The package map lets a reader choose by job, and every package guide links back to it with concise use context.
 - [x] Evaluator, consumer, contributor, and package-integrator dry runs each reach a useful next action.
-- [ ] The reopened structural redesign is committed in scoped units without changing versions, tags, releases, or unrelated worktree changes.
+- [x] The reopened structural redesign is committed in scoped units without changing versions, tags, releases, or unrelated worktree changes.
 
 ## Change log for this plan
 
@@ -195,3 +195,5 @@ safe.
 - **2026-08-17:** Rebased generated documentation-index links from their source documents so the
   index remains navigable from `.owlbear/`, including same-file anchors, and added a regression test
   for nested package links.
+- **2026-08-17:** Committed the structural redesign and index repair in scoped commit `7ca1aa2`;
+  unrelated workflow, research, and lint-policy changes remained outside the commit.
