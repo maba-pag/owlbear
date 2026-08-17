@@ -4,6 +4,9 @@ MCP server that exposes the `owlbear-knowledge` engine as tools for pipeline age
 
 → Parent: [README.md](../../README.md)
 
+**Status:** Alpha. The server exposes the current Knowledge tool surface, but end-to-end
+real-world validation is still pending.
+
 ---
 
 ## Launch / Usage
