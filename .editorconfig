@@ -56,17 +56,10 @@ insert_final_newline = false
 max_line_length = unset
 trim_trailing_whitespace = false
 
-# MegaLinter config — regex patterns cannot be split
-[.mega-linter.yml]
-max_line_length = unset
-
 [uv.lock]
 max_line_length = unset
 
 [package-lock.json]
-max_line_length = unset
-
-[serve/cockpit/web/package-lock.json]
 max_line_length = unset
 
 # Keep data files minified — do not reformat

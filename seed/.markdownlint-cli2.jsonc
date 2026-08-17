@@ -9,7 +9,6 @@
     ".owlbear/legacy/**",
     ".owlbear/memory/**",
     ".owlbear/research/**",
-    ".owlbear/sources/**",
     ".owlbear/ts-index.md",
     ".venv/**",
     "**/node_modules/**",

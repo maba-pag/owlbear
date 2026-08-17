@@ -14,8 +14,6 @@ export default tseslint.config(
       "playwright-report/**",
       "node_modules/**",
       "public/porsche-design-system/**",
-      "*.config.js",
-      "*.config.ts",
     ],
   },
   js.configs.recommended,

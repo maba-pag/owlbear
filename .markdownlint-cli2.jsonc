@@ -11,7 +11,6 @@
     ".owlbear/legacy/**",
     ".owlbear/memory/**",
     ".owlbear/research/**",
-    ".owlbear/sources/**",
     ".owlbear/target/**",
     ".venv/**",
     "**/node_modules/**",

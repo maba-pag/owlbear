@@ -189,18 +189,29 @@ def test_classifier_outputs_do_not_include_fix_policy() -> None:
     assert "fix_mode" not in outputs
 
 
-def test_sync_infra_carries_all_ci_helper_paths() -> None:
-    sync_sites = [line for line in SYNC_PATH.read_text(encoding="utf-8").splitlines() if ".github/workflows" in line]
+def test_sync_manifest_excludes_dev_automation_paths() -> None:
+    manifest = json.loads((ROOT / ".github/sync-manifest.json").read_text(encoding="utf-8"))
+    workflow = SYNC_PATH.read_text(encoding="utf-8")
 
-    assert sync_sites
-    assert all(".github/scripts" in line for line in sync_sites)
+    assert ".github" in manifest["consumer_excluded_paths"]
+    assert ".mega-linter.yml" in manifest["consumer_excluded_paths"]
+    assert all(not path.startswith(".github/") for paths in manifest["scopes"].values() for path in paths)
+    assert "python3 .github/scripts/sync_manifest.py paths" in workflow
+    assert "python3 .github/scripts/sync_manifest.py excluded" in workflow
+    assert "for excluded_path in $CONSUMER_EXCLUDED_PATHS" in workflow
 
 
 def test_sync_delivery_scope_carries_the_github_adapter() -> None:
+    manifest = json.loads((ROOT / ".github/sync-manifest.json").read_text(encoding="utf-8"))
     workflow = SYNC_PATH.read_text(encoding="utf-8")
 
-    assert "serve/delivery serve/delivery-mcp serve/delivery-github" in workflow
-    assert '["serve/delivery-github/"]="$SYNC_DELIVERY"' in workflow
+    assert manifest["scopes"]["delivery"] == [
+        "serve/delivery",
+        "serve/delivery-mcp",
+        "serve/delivery-github",
+    ]
+    assert "delivery_paths=$(manifest_paths delivery)" in workflow
+    assert "git rm -rf serve/delivery serve/delivery-mcp serve/delivery-github" in workflow
 
 
 def test_node_runtime_checker_accepts_the_checked_in_contract() -> None:

@@ -1,8 +1,8 @@
 # Linter and Formatter Exception Audit
 
 > **Owning work:** repository lint and formatter policy audit
-> **Date:** 2026-08-15
-> **Status:** R01, R10, M02-M03, M05-M08, the managed/archive M09 categories, G02-G09, P01-P07, X03-X04, Y01-Y02, F01-F03, and F05-F08 are validated keeps or resolved. M04 remains a fix candidate requiring an authored-document normalization pass. M01, the authored `.owlbear/research` and `.owlbear/sources` M09 categories and their G01 filter portion, plus the F04 config-file ignores, remain deferred for scoped decisions. Prettier policy files were removed; the remaining audit items are deferred for a future grouped decision.
+> **Date:** 2026-08-17
+> **Status:** R01, R10, M02-M08, the managed/archive M09 categories, G02-G09, P01-P07, X03-X04, Y01-Y02, F01-F08, and E01-E15 are validated keeps or resolved. The authored `.owlbear/sources` document is admitted with a file-local table-style suppression. M01 and authored `.owlbear/research` remain explicitly deferred pending a separate Markdown policy. Prettier policy files were removed.
 > **Question:** Which remaining linter, formatter, scope, and path exceptions have merit, and which should be removed, narrowed, or replaced after bounded evidence is collected by owning authority and consumer?
 
 ## 1. Context and Boundaries
@@ -146,21 +146,21 @@ These are scope limiters rather than linter rule names. Each path section is a s
 
 | ID | Section or override | Current exception | Status |
 |---|---|---|---|
-| E01 | `[tests/**/*.py]` | `max_line_length = unset` | needs-scan |
-| E02 | `[serve/*/tests/**/*.py]` | `max_line_length = unset` | needs-scan |
-| E03 | `[serve/cockpit/web/src/**/*.{ts,tsx}]` | `max_line_length = unset` | needs-scan |
-| E04 | `[serve/cockpit/web/e2e/**/*.ts]` | `max_line_length = unset` | needs-scan |
-| E05 | `[*.md]` | `indent_size` and `max_line_length` unset | needs-scan |
-| E06 | `[.owlbear/delivery/runtime/**]` | `max_line_length = unset` | needs-scan |
-| E07 | `[.owlbear/legacy/**]` | `max_line_length = unset` | needs-scan |
-| E08 | `[.owlbear/delivery/packages/**]` | `max_line_length = unset` | needs-scan |
-| E09 | `[*.excalidraw]` | EOL, length, and trailing-whitespace rules unset | needs-scan |
-| E10 | `[serve/cockpit/web/public/porsche-design-system/**]` | Generated vendor formatting rules unset | needs-scan |
-| E11 | `[.mega-linter.yml]` | `max_line_length = unset` | needs-scan |
-| E12 | `[uv.lock]` | `max_line_length = unset` | needs-scan |
-| E13 | `[package-lock.json]` | `max_line_length = unset` | needs-scan |
-| E14 | `[serve/cockpit/web/package-lock.json]` | `max_line_length = unset` | needs-scan |
-| E15 | `[store/**]` | Indent, length, and trailing-whitespace rules relaxed | needs-scan |
+| E01 | `[tests/**/*.py]` | `max_line_length = unset` | validated-keep |
+| E02 | `[serve/*/tests/**/*.py]` | `max_line_length = unset` | validated-keep |
+| E03 | `[serve/cockpit/web/src/**/*.{ts,tsx}]` | `max_line_length = unset` | validated-keep |
+| E04 | `[serve/cockpit/web/e2e/**/*.ts]` | `max_line_length = unset` | validated-keep |
+| E05 | `[*.md]` | `indent_size` and `max_line_length` unset | validated-keep |
+| E06 | `[.owlbear/delivery/runtime/**]` | `max_line_length = unset` | validated-keep |
+| E07 | `[.owlbear/legacy/**]` | `max_line_length = unset` | validated-keep |
+| E08 | `[.owlbear/delivery/packages/**]` | `max_line_length = unset` | validated-keep |
+| E09 | `[*.excalidraw]` | EOL, length, and trailing-whitespace rules unset | validated-keep |
+| E10 | `[serve/cockpit/web/public/porsche-design-system/**]` | Generated vendor formatting rules unset | validated-keep |
+| E11 | `[.mega-linter.yml]` | `max_line_length = unset` | resolved |
+| E12 | `[uv.lock]` | `max_line_length = unset` | validated-keep |
+| E13 | `[package-lock.json]` | `max_line_length = unset` | validated-keep |
+| E14 | `[serve/cockpit/web/package-lock.json]` | `max_line_length = unset` | resolved |
+| E15 | `[store/**]` | Indent, length, and trailing-whitespace rules relaxed | validated-keep |
 
 ### 4.4 Markdownlint rules
 
@@ -169,7 +169,7 @@ These are scope limiters rather than linter rule names. Each path section is a s
 | M01 | `MD013` | disabled | Markdownlint CLI and MegaLinter | deferred |
 | M02 | `MD024` | `siblings_only: true` | Markdownlint CLI and MegaLinter | validated-keep |
 | M03 | `MD029` | `style: one_or_ordered` | Markdownlint CLI and MegaLinter | resolved |
-| M04 | `MD033` | disabled | Markdownlint CLI and MegaLinter | fix-candidate |
+| M04 | `MD033` | exact agent-section allowlist | Markdownlint CLI and MegaLinter | resolved |
 | M05 | `MD040` | enabled | Markdownlint CLI and MegaLinter | resolved |
 | M06 | `MD041` | `front_matter_title: title\|name\|description` | Markdownlint CLI and MegaLinter | resolved |
 | M07 | `MD060` | `style: any` | Markdownlint CLI and MegaLinter | resolved |
@@ -270,26 +270,25 @@ numbered task records, named research documents, audit ledgers, and a five-file 
 The research workflow and setup guide define these files as durable or frozen comparison evidence,
 not generated runtime state. Removing only the research category from the six Markdownlint consumers
 exposed five representative document shapes: a numbered task record, named research, an environment
-audit, the active linter ledger, and a subdirectory evidence document. All five files were analyzed;
-three produced 17 findings across `MD032`, `MD036`, `MD047`, and `MD056`. Restoring the broad
-exclusions and adding a representative-path six-consumer contract preserves the historical research
-boundary without forcing a 1,095-file remediation sweep. The research category remains deferred:
-keep it outside the general gate for now, define a separate policy for newly authored research, and
-do not treat active authored research as machine-managed content.
+audit, the active linter ledger, and a subdirectory evidence document. The current pinned Markdownlint
+library reported 238 findings across the five files: 222 `MD060`, 2 `MD032`, 7 `MD036`, 1 `MD040`,
+2 `MD047`, 3 `MD056`, and 1 `MD041`. Restoring the broad exclusions and retaining the
+representative-path contract preserves the historical research boundary without forcing a 1,095-file
+remediation sweep. The research category remains deferred: keep it outside the general gate for now,
+define a separate policy for newly authored research, and do not treat active authored research as
+machine-managed content.
 
 #### M09 category experiment: `.owlbear/sources`
 
 The sources root contains one authored Markdown document, `.owlbear/sources/overview.md`, totaling
 589,420 bytes (approximately 575 KiB). The inventory found no producer or consumer references in
 `serve/`, `setup/`, `seed/`, or `tests/`; this is source documentation rather than runtime source
-metadata or fetched content. Removing only the sources category from the six Markdownlint consumers
-made the manual/pre-commit hook analyze the document and report one `MD037/no-space-in-emphasis`
-finding at line 4949, column 139. The CI-equivalent MegaLinter run also analyzed the document and
-reported five Markdownlint findings overall, with no unrelated failures. Restoring all six
-exclusions and adding a representative-path six-consumer contract preserves the authored source
-boundary without forcing a large-document cleanup. The sources category remains deferred: the single
-current local finding and five CI-equivalent findings are small enough to repair. Fix those
-source-format findings, then remove the broad sources exclusion.
+metadata or fetched content. The current pinned Markdownlint library reported one `MD037` finding
+and 7,106 `MD060` findings because the document intentionally uses padded table pipes. The `MD037`
+token was repaired and a file-local `MD060` suppression preserves that deliberate table style.
+Removing the broad sources exclusions then passed the manual Markdownlint hook, the repository no-fix
+Markdownlint wrapper, the focused policy contract, and the final MegaLinter baseline. The sources
+category is resolved and remains included in all Markdownlint consumers.
 
 #### M09 category experiment: `.owlbear/target`
 
@@ -333,7 +332,7 @@ therefore a `validated-keep`; the remaining M09 categories require separate expe
 |---|---|---|---|
 | Y01 | yamllint | `line-length: disable` because EditorConfig owns text length | validated-keep |
 | Y02 | yamllint | `.owlbear/legacy/**` ignored | validated-keep |
-| G01 | MegaLinter global filter | Egg-info, generated/archived `.owlbear` records, and audit/knowledge DB files excluded; authored `.owlbear` control, research, and source documents overlap the same filter | needs-scan |
+| G01 | MegaLinter global filter | Egg-info, generated/archived `.owlbear` records, authored research, and audit/knowledge DB files excluded; authored sources are included | deferred |
 | G02 | MegaLinter directory filter | `.benchmarks`, caches, virtualenvs, build/dist, reports, downloads, dependencies, scratch, worktrees, and package artifacts excluded | validated-keep |
 | G03 | MegaLinter Markdown | `list_of_files` mode selected so the global filter applies; pinned v10 documentation confirms it is the default, while the explicit setting preserves the filter contract across default changes | validated-keep |
 | G04 | MegaLinter TypeScript | Include only `serve/cockpit/web/.*\.(ts|tsx)` | validated-keep |
@@ -342,7 +341,7 @@ therefore a `validated-keep`; the remaining M09 categories require separate expe
 | G07 | MegaLinter Actionlint | Include only `.github/workflows/*.yml` and `.yaml` | validated-keep |
 | G08 | MegaLinter JSON | Replace the strict JSON-only descriptor and its `.vscode/` exclusion with one repository-wide JSON/JSONC authority | resolved |
 | G09 | MegaLinter EditorConfig | `--disable-indent-size`; indentation remains checked by Ruff for Python | validated-keep |
-| P01 | pre-commit top-level `exclude` | Preserves the shared generated, archived, vendor, cache, database, and worktree taxonomy; authored research/source members remain a separate G01 scope decision | validated-keep |
+| P01 | pre-commit top-level `exclude` | Preserves the shared generated, archived, vendor, cache, database, worktree, and authored-research taxonomy; authored sources are included | validated-keep |
 | P02 | pre-commit whitespace/EOF hooks | Retains generated PDS assets outside generic whitespace and EOF mutation hooks; the no-fix deactivation scan found no present defect, but the producer and EditorConfig define a machine-managed vendor boundary | validated-keep |
 | P03 | pre-commit EditorConfig hook | Retains the generated-PDS boundary and disables indent-size; the PDS probe was clean, while removing the shared indentation suppression produced Python-only findings | validated-keep |
 | P04 | pre-commit frontend ESLint | Retains the local `src`/`e2e` trigger while a parity contract records MegaLinter's broader Cockpit TypeScript superset and the CI-only root setup boundary | validated-keep |
@@ -426,7 +425,7 @@ installation and the pinned JSON descriptor path are exercised end to end.
 | F01 | TypeScript `include` | `src`, `vite.config.ts`, and `vitest.setup.ts` only | validated-keep |
 | F02 | TypeScript `exclude` | `src/**/*.test.ts`, `src/**/*.test.tsx`, `src/**/*.spec.ts`, `src/**/*.spec.tsx` | validated-keep |
 | F03 | TypeScript E2E coverage | Eleven E2E TypeScript files are linted but are not in `tsconfig.json` | validated-keep |
-| F04 | ESLint ignores | `dist`, coverage, Playwright reports, node_modules, generated PDS assets, and config files | needs-scan |
+| F04 | ESLint ignores | `dist`, coverage, Playwright reports, node_modules, and generated PDS assets | resolved |
 | F05 | ESLint unused-vars | Warning severity with underscore-prefixed args/vars ignored; local and CI consumers set `--max-warnings 0` | validated-keep |
 | F06 | ESLint raw PDS elements | Five custom elements rejected through `no-restricted-syntax` | validated-keep |
 | F07 | Stylelint Tailwind | Eight Tailwind at-rules allowed: `theme`, `utility`, `apply`, `source`, `reference`, `variant`, `custom-variant`, `plugin` | validated-keep |
@@ -484,18 +483,22 @@ only when the wrapper cannot isolate the item. Frontend commands live in
 
 ## 6. Deferred Work Queue
 
-The Y/F/G grouped pass is closed except for the reopened F04 scope question. Remaining rows are
+The Y/F/G grouped pass is closed. Remaining rows are
 intentionally deferred; they are not an automatic repair queue. Future work should select a
 coherent owner and consumer group, then apply the grouped evidence workflow above.
 
 - Markdown line length: M01 remains deferred with the rule disabled; its prior EditorConfig
    delegation rationale was corrected, and a Markdown-specific length contract is still needed.
-- Markdown structure: M02 is a validated keep. M03 and M05-M07 are resolved after authored-content
-   remediation and both local/CI-equivalent consumer checks. M04 remains a fix candidate.
-- Authored Markdown scope: M09 `.owlbear/research` and `.owlbear/sources`, with dependent G01/P01 filter decisions, remain deferred.
+- Markdown structure: M02 is a validated keep. M03-M07 are resolved after authored-content
+   remediation and both local/CI-equivalent consumer checks. M04 now uses the exact agent-section
+   allowlist in both root and seed rule authorities.
+- Authored Markdown scope: M09 `.owlbear/sources` is resolved and included; `.owlbear/research`
+   remains outside the general gate pending a separate authored-research policy. G01 remains
+   deferred only for that research member; P01 retains the shared archive and research boundary.
 - Ruff global and scoped exceptions R02-R22 are now resolved or validated keeps; no Ruff item remains in the deferred queue.
-- Frontend ESLint scope: F04 config-file ignores remain deferred for narrowing or explicit justification.
-- EditorConfig path overrides: E01-E15 remain deferred.
+- Frontend ESLint scope: F04 config-file ignores were removed after the no-ignore config probe passed.
+- EditorConfig path overrides: E01-E10, E12-E13, and E15 are validated keeps; unused E11 and E14
+   were removed.
 
 ### 6.1 Closure re-evaluation
 
@@ -516,14 +519,18 @@ by a green scan or the cost of remediating existing content.
    negative probes, or explicit consumer contracts. P04's local/CI difference is an intentional
    fast-hook versus CI boundary, and F05's warnings are not tolerated because both consumers use
    `--max-warnings 0`.
-- G01 and P01 are reopened only for the authored research/source members of their shared taxonomy;
-   their generated, archived, vendor, cache, database, and worktree members remain supported.
-- F04 is reopened only for `*.config.js` and `*.config.ts`. A no-ignore ESLint probe over the
-   current config files passed with no findings, so retaining those exclusions has no demonstrated
-   quality benefit. Generated, report, dependency, and vendor exclusions remain supported.
-- M01 remains deferred with the rule disabled. `.editorconfig` explicitly sets `max_line_length =
-   unset` for `[*.md]`; the heterogeneous authored corpus and lack of a repository-wide Markdown
-   line-length contract justify pausing the choice, not validating the old delegation rationale.
+- G01 remains deferred only for authored research; P01 retains the shared archive/research boundary
+   while authored sources are included. Their generated, archived, vendor, cache, database, and
+   worktree members remain supported.
+- F04 is resolved by removing only `*.config.js` and `*.config.ts`. A no-ignore ESLint probe over
+   the current config files passed with no findings, and the exact manual local hook plus direct
+   `src`/`e2e` and CI-only `vitest.setup.ts` probes all pass. Generated, report, dependency, and
+   vendor exclusions remain supported.
+- M01 remains deferred with the rule disabled. The current pinned library reports 1,345 findings
+   across 84 of 118 in-scope Markdown files at 120 columns, spanning package docs, skills, setup,
+   guidance, and historical fixtures. `.editorconfig` explicitly sets `max_line_length = unset`
+   for `[*.md]`; the heterogeneous corpus and lack of a repository-wide Markdown line-length
+   contract justify pausing the choice, not validating the old delegation rationale.
 
 ### 6.2 Markdown M01-M09 pass
 
@@ -531,12 +538,12 @@ The rule-by-rule diagnostic pass on 2026-08-17 used the pinned markdownlint-cli2
 the current tracked Markdown set, and the normalized exclusions described above. That diagnostic
 pass preceded the separately recorded M03/M05/M06/M07 configuration and authored-content changes.
 
-- **M01 / `MD013` — deferred policy decision, disabled.** The 118-file in-scope scan reported 4,768 findings
-   at the default 80 columns, 1,825 at 100, 1,340 at 120, and 1,010 at 140. Findings span
+- **M01 / `MD013` — deferred policy decision, disabled.** The current pinned Markdownlint library
+   reported 1,345 findings across 84 of 118 in-scope Markdown files at 120 columns. Findings span
    `serve/delivery`, `share/skills`, `share/agents`, `share/prompts`, `.owlbear` authored docs,
-   setup, and package documentation; no single generator owns the debt. Even a 120-column prose-only
-   probe reported 969 findings in 62 files. Keep the rule disabled until the project chooses a
-   Markdown-specific line-length contract; do not claim that EditorConfig currently owns this rule.
+   setup, and package documentation; no single generator owns the debt. Keep the rule disabled
+   until the project chooses a Markdown-specific line-length contract; do not claim that EditorConfig
+   currently owns this rule.
 
 - **M02 / `MD024` — validated keep, `siblings_only: true`.** A global duplicate-heading probe found
    one intentional repeated `Frontmatter (YAML)` heading in `share/skills/h-agent-structure/SKILL.md`;
@@ -671,7 +678,7 @@ be used to schedule hook repairs unless it is first shown to be the supported ru
 - [x] M09's `.owlbear/legacy` exclusion is covered across root, seed, pre-commit, and MegaLinter consumers.
 - [x] M09's `.owlbear/memory` exclusion is covered across root, seed, pre-commit, and MegaLinter consumers.
 - [x] M09's `.owlbear/research` exclusion is covered across root, seed, pre-commit, and MegaLinter consumers.
-- [x] M09's `.owlbear/sources` exclusion is covered across root, seed, pre-commit, and MegaLinter consumers.
+- [x] M09's `.owlbear/sources` document is included across root, seed, pre-commit, and MegaLinter consumers with a file-local `MD060` suppression.
 - [x] M09's `.owlbear/target` runtime exclusion is covered across root, pre-commit, and MegaLinter consumers, with the documented seed omission preserved.
 - [x] M03's ordered-list repairs and `style: one_or_ordered` policy pass the isolated rule probe.
 - [x] M05's 14 labeled fences and enabled `MD040` policy pass the 118-file Markdownlint scope.
@@ -680,11 +687,11 @@ be used to schedule hook repairs unless it is first shown to be the supported ru
 - [x] X03 has no repository-wide Prettier fallback; language-specific formatter mappings remain explicit.
 - [x] X04's language-specific formatter matrix is explicit and covered by a regression contract.
 - [x] The grouped Y01-Y02 checks validate yamllint and EditorConfig ownership with no findings.
-- [ ] The grouped F01-F08 checks validate ESLint, TypeScript, Stylelint, HTMLHint, and build boundaries; F04 remains under review.
-- [x] G02-G09 and P01-P07 have fresh individual scope probes with validated-keep or resolved decisions; G01's authored control/research/source members remain explicitly under review.
+- [x] The grouped F01-F08 checks validate ESLint, TypeScript, Stylelint, HTMLHint, and build boundaries; F04's config-file ignores were removed after a no-ignore probe.
+- [x] G01-G09 and P01-P07 have fresh individual scope probes with validated-keep, resolved, or explicitly deferred decisions; only authored research remains outside the general gate.
 - [x] M01's MD013 diagnostic is recorded and its Markdown ownership decision is re-evaluated as deferred.
 - [x] Complete the M08 parity cycle and record its focused verification before starting M09.
-- [ ] Run the first baseline no-fix scans and attach outputs under `.owlbear/scratch/`.
+- [x] Run the baseline no-fix scans and attach outputs under `.owlbear/scratch/baseline/`.
 - [x] Re-run the final relevant local and CI-equivalent no-fix checks after the M03/M05/M06/M07 queue is complete.
 
 ## 9. Change Log
@@ -721,6 +728,8 @@ be used to schedule hook repairs unless it is first shown to be the supported ru
 | 2026-08-17 | Reconciled M01 and M09 in the ledger; remaining R/E/M items are deferred for future grouped decisions rather than treated as an automatic repair queue. |
 | 2026-08-17 | Re-evaluated closed findings against current authorities and consumers. Retained evidence-backed managed, formatter-conflict, parity, frontend, and editor decisions; reopened M01, authored M09 research/source exclusions and their G01/P01 portions, and F04 config-file ignores. Corrected F05 to record that `--max-warnings 0` rejects warnings. |
 | 2026-08-17 | Re-probed G01-G09 and P01-P07 individually. G02-G09 and P01-P07 remain validated keeps or resolved; G01 is narrowed conceptually to managed/archive/database members while authored control, research, and source documents remain deferred for a separate scope policy. |
+| 2026-08-17 | Completed the remaining M04/M01, E01-E15, authored M09/G01/P01, F04, P04, and baseline evidence pass. M04 now allows only the agent markup vocabulary; M01 remains deferred after a 1,345-finding 120-column probe; E11 and E14 were removed while the other measured or owned EditorConfig boundaries remain; sources were admitted with one `MD037` repair and file-local `MD060`; research remains deferred; F04 config ignores were removed; P04 passed exact local and CI-only probes; all six no-fix baselines passed under `.owlbear/scratch/baseline/`. |
+| 2026-08-17 | Updated sync-contract tests to assert `.github/sync-manifest.json` and the manifest helper rather than obsolete workflow path literals; the focused dependency workflow suite passes 30 tests. |
 
 ## 10. MegaLinter Runtime Recovery
 

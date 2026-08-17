@@ -41,7 +41,7 @@ FILTER_REGEX_EXCLUDE: "(\
   \\.egg-info/|\
   \\.owlbear/(\
     completed/|delivery/(packages|runtime)/|(doc|py|ts)-index\\.md$|\
-    legacy/|memory/|research/|sources/|target/\
+    legacy/|memory/|research/|target/\
   )|\
   store/(audit|knowledge)/.*\\.db$\
 )"

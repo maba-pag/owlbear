@@ -24,7 +24,6 @@ _P01_SHARED_EXCLUDED_PATHS = (
     ".owlbear/legacy/old.md",
     ".owlbear/memory/entry.md",
     ".owlbear/research/notes.md",
-    ".owlbear/sources/overview.md",
     ".owlbear/target/output.json",
     "store/audit/history.db",
     "store/knowledge/entities.db",
@@ -87,6 +86,16 @@ _P08_JSON_IGNORE_MARKERS = (
     '"megalinter-reports/**"',
     '"store/audit/*.db"',
 )
+_M04_ALLOWED_ELEMENTS = [
+    "agents",
+    "boundaries",
+    "critical_rules",
+    "examples",
+    "output_format",
+    "path",
+    "persona",
+    "required_reading",
+]
 _M09_PACKAGE_MARKDOWN_PATH = ".owlbear/delivery/packages/website-to-knowledge-vertical/design.md"
 _M09_RUNTIME_MARKDOWN_PATH = ".owlbear/delivery/runtime/changes/current.md"
 _M09_WORKTREE_MARKDOWN_PATH = ".owlbear/delivery/worktrees/change.md"
@@ -236,6 +245,15 @@ def test_markdownlint_ignore_authorities_share_normalized_policy() -> None:
     assert root_bare == root_cli2
     assert seed_bare | _SEED_PROFILE_OMISSIONS == root_bare
     assert seed_cli2 | _SEED_PROFILE_OMISSIONS == root_bare | _SEED_ONLY_CLI2_IGNORES
+
+
+def test_markdownlint_inline_html_allows_only_agent_sections() -> None:
+    for path in (_ROOT / ".markdownlint.json", _ROOT / "seed/.markdownlint.json"):
+        config = json.loads(path.read_text(encoding="utf-8"))
+        assert isinstance(config, dict)
+        assert config.get("MD033") == {"allowed_elements": _M04_ALLOWED_ELEMENTS}
+
+    assert "<strong>" not in (_ROOT / "setup/sharing-guide.md").read_text(encoding="utf-8")
 
 
 def test_delivery_packages_remain_excluded_from_markdown_consumers() -> None:
@@ -405,24 +423,24 @@ def test_research_archive_remains_excluded_from_markdown_consumers() -> None:
     )
 
 
-def test_sources_document_remains_excluded_from_markdown_consumers() -> None:
+def test_sources_document_is_included_in_markdown_consumers() -> None:
     root_bare = _read_bare_ignores(_ROOT / ".markdownlintignore")
     root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
     seed_bare = _read_bare_ignores(_ROOT / "seed/.markdownlintignore")
     seed_cli2 = _read_cli2_ignores(_ROOT / "seed/.markdownlint-cli2.jsonc")
 
-    assert ".owlbear/sources" in root_bare
-    assert ".owlbear/sources" in root_cli2
-    assert ".owlbear/sources" in seed_bare
-    assert ".owlbear/sources" in seed_cli2
+    assert ".owlbear/sources" not in root_bare
+    assert ".owlbear/sources" not in root_cli2
+    assert ".owlbear/sources" not in seed_bare
+    assert ".owlbear/sources" not in seed_cli2
 
     config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
     precommit_exclude = _read_precommit_exclude(config)
     megalinter_exclude, megalinter_directories = _read_megalinter_excludes(
         _read_yaml_mapping(_ROOT / ".mega-linter.yml")
     )
-    assert precommit_exclude.search(_M09_SOURCES_MARKDOWN_PATH) is not None
-    assert _is_megalinter_excluded(_M09_SOURCES_MARKDOWN_PATH, megalinter_exclude, megalinter_directories)
+    assert precommit_exclude.search(_M09_SOURCES_MARKDOWN_PATH) is None
+    assert not _is_megalinter_excluded(_M09_SOURCES_MARKDOWN_PATH, megalinter_exclude, megalinter_directories)
 
 
 def test_target_runtime_remains_excluded_from_markdown_consumers() -> None:
@@ -559,6 +577,13 @@ def test_editorconfig_python_indentation_delegation_is_shared() -> None:
     editorconfig = (_ROOT / ".editorconfig").read_text(encoding="utf-8")
     assert "[*.py]" in editorconfig
     assert "indent_size = 4" in editorconfig
+
+
+def test_editorconfig_does_not_keep_redundant_exceptions() -> None:
+    editorconfig = (_ROOT / ".editorconfig").read_text(encoding="utf-8")
+    assert "[.mega-linter.yml]" not in editorconfig
+    assert "[package-lock.json]" in editorconfig
+    assert "[serve/cockpit/web/package-lock.json]" not in editorconfig
 
 
 def test_ruff_formatter_conflict_ignore_remains_explicit() -> None:

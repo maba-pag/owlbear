@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD060 -->
+
 # Sources
 
 External repos and resources studied during OwlBear development.
@@ -4946,7 +4948,7 @@ No external sources — analysis based entirely on codebase static analysis of `
 | PDS v4 Tailwind Introduction | <https://designsystem.porsche.com/v4/tailwindcss/introduction/> | Tailwind v4 setup, PDS theme import, color-scheme utilities | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
 | PDS v4 Tailwind Color Examples | <https://designsystem.porsche.com/v4/tailwindcss/color/examples/> | PDS color utility classes (bg-canvas, text-contrast-high, etc.) | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
 | PDS v4 Tailwind Spacing Examples | <https://designsystem.porsche.com/v4/tailwindcss/spacing/examples/> | PDS spacing utilities (gap-fluid-md, gap-static-md), NOT gap-md | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
-| PDS v4 Migration Guide (Tailwind) | <https://designsystem.porsche.com/v4/news/migration-guide/tailwindcss/> | Breaking changes: scheme-* classes, --color-* reset | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
+| PDS v4 Migration Guide (Tailwind) | <https://designsystem.porsche.com/v4/news/migration-guide/tailwindcss/> | Breaking changes: `scheme-*` classes, `--color-*` reset | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
 | PDS tailwindcss theme source | <https://github.com/porsche-design-system/porsche-design-system/blob/main/packages/styles/projects/tailwindcss/src/index.ts> | @theme variable definitions, @utility rules, light-dark() usage | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
 | Tailwind CSS v4 Vite Install | <https://tailwindcss.com/docs> | @tailwindcss/vite plugin setup, @import "tailwindcss" | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
 | stylelint-config-tailwindcss | <https://github.com/zhilidali/stylelint-config-tailwindcss> | Stylelint config extending at-rule-no-unknown for Tailwind | `.owlbear/research/1592-tailwind-v4-stylelint-tests.md` | 2026-05-16 |
