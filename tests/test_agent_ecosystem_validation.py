@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
-from pathlib import Path
 import sys
 import types
+from pathlib import Path
 
 import pytest
 import yaml
@@ -302,11 +302,11 @@ def test_agent_validator_discovers_project_local_root(tmp_path: Path, monkeypatc
     path = _write_agent(local_root, "local-agent", _agent_text("local-agent"))
     monkeypatch.setattr(_AGENT_VALIDATOR, "_AGENT_ROOTS", (local_root,))
 
-    assert _AGENT_VALIDATOR._discover_agent_files() == [path]
+    assert _AGENT_VALIDATOR._discover_agent_files() == [path]  # noqa: SLF001
 
 
 def test_prompt_validator_accepts_current_prompt_roots() -> None:
-    prompt_files = _PROMPT_VALIDATOR._discover_prompt_files()
+    prompt_files = _PROMPT_VALIDATOR._discover_prompt_files()  # noqa: SLF001
 
     assert prompt_files
     assert all(_PROMPT_VALIDATOR.validate_prompt(path) == [] for path in prompt_files)
@@ -375,11 +375,11 @@ user-invocable: false
 
 @pytest.mark.asyncio
 async def test_declared_mcp_tools_exist_in_live_registries() -> None:
-    from owlbear_browser_mcp.server import mcp as browser_mcp
-    from owlbear_delivery_mcp.server import mcp as delivery_mcp
-    from owlbear_delivery_mcp.target_server import DELIVERY_OPERATION_NAMES, assemble_target_server
-    from owlbear_knowledge_mcp.server import mcp as knowledge_mcp
-    from owlbear_memory_mcp.server import mcp as memory_mcp
+    from owlbear_browser_mcp.server import mcp as browser_mcp  # noqa: PLC0415
+    from owlbear_delivery_mcp.server import mcp as delivery_mcp  # noqa: PLC0415
+    from owlbear_delivery_mcp.target_server import DELIVERY_OPERATION_NAMES, assemble_target_server  # noqa: PLC0415
+    from owlbear_knowledge_mcp.server import mcp as knowledge_mcp  # noqa: PLC0415
+    from owlbear_memory_mcp.server import mcp as memory_mcp  # noqa: PLC0415
 
     target_mcp = assemble_target_server(_TargetApplicationDouble())  # type: ignore[arg-type]
     registries = {

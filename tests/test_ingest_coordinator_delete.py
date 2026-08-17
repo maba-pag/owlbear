@@ -42,7 +42,6 @@ from owlbear_knowledge.protocols.graph import EvidenceInvalidationResult
 from owlbear_knowledge.protocols.ingest import PurgeResult, PurgeStatus
 from owlbear_knowledge.protocols.sources import SourceDeletionInfo
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -106,21 +105,21 @@ def _make_evidence_invalidation() -> EvidenceInvalidationResult:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_sources() -> MagicMock:
     s = MagicMock(name="sources")
     s.delete_source.return_value = _make_deletion_info()
     return s
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_content() -> MagicMock:
     c = MagicMock(name="content")
     c.purge_source.return_value = _make_content_purge()
     return c
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_enrichment() -> MagicMock:
     e = MagicMock(name="enrichment")
     e.discard_chunks.return_value = _make_enrichment_discard()
@@ -128,14 +127,14 @@ def mock_enrichment() -> MagicMock:
     return e
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_graph() -> MagicMock:
     g = MagicMock(name="graph")
     g.invalidate_evidence_by_chunks.return_value = _make_evidence_invalidation()
     return g
 
 
-@pytest.fixture()
+@pytest.fixture
 def coordinator(
     mock_sources: MagicMock,
     mock_content: MagicMock,
@@ -678,7 +677,7 @@ class TestDeleteSourceCascade:
     ) -> None:
         """AC7: ValueError from Sources.delete_source propagates - not wrapped in PurgeResult."""
         mock_sources.delete_source.side_effect = ValueError("invalid source id format")
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="invalid source id format"):
             await coordinator.delete_source(_SOURCE_ID)
 
     @pytest.mark.asyncio
@@ -868,7 +867,7 @@ class TestDeleteSourceCascade:
 
     def test_protocol_delete_source_docstring_says_never_raises_lookup_error(self) -> None:
         """AC11: protocol IngestCoordinator.delete_source docstring says 'Never raises LookupError'."""
-        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC
+        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC  # noqa: PLC0415
 
         method = getattr(ProtocolIC, "delete_source", None)
         assert method is not None, "delete_source not found on protocol IngestCoordinator"
@@ -879,7 +878,7 @@ class TestDeleteSourceCascade:
 
     def test_protocol_delete_source_docstring_mentions_forward_recovery(self) -> None:
         """AC11: protocol docstring Raises clause mentions 'forward-recovery semantics'."""
-        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC
+        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC  # noqa: PLC0415
 
         method = getattr(ProtocolIC, "delete_source", None)
         assert method is not None, "delete_source not found on protocol IngestCoordinator"
@@ -888,7 +887,7 @@ class TestDeleteSourceCascade:
 
     def test_protocol_delete_source_docstring_no_lookup_error_raises_clause(self) -> None:
         """AC11: protocol docstring Raises clause no longer lists LookupError as raised."""
-        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC
+        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC  # noqa: PLC0415
 
         method = getattr(ProtocolIC, "delete_source", None)
         assert method is not None, "delete_source not found on protocol IngestCoordinator"
@@ -901,7 +900,7 @@ class TestDeleteSourceCascade:
 
     def test_protocol_delete_source_docstring_mentions_caught_internally(self) -> None:
         """AC11: protocol docstring notes LookupError is caught internally."""
-        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC
+        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC  # noqa: PLC0415
 
         method = getattr(ProtocolIC, "delete_source", None)
         assert method is not None, "delete_source not found on protocol IngestCoordinator"
@@ -1063,7 +1062,7 @@ class TestDeleteSourceCascade:
 
     def test_protocol_delete_source_guarantees_reachable_at_call_time(self) -> None:
         """AC12: protocol Guarantees clause says 'reachable at call time'."""
-        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC
+        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC  # noqa: PLC0415
 
         method = getattr(ProtocolIC, "delete_source", None)
         assert method is not None, "delete_source not found on protocol IngestCoordinator"
@@ -1074,7 +1073,7 @@ class TestDeleteSourceCascade:
 
     def test_protocol_delete_source_guarantees_old_wording_removed(self) -> None:
         """AC12: old 'All module-owned data for the source is removed' Guarantees wording replaced."""
-        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC
+        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC  # noqa: PLC0415
 
         method = getattr(ProtocolIC, "delete_source", None)
         assert method is not None, "delete_source not found on protocol IngestCoordinator"
@@ -1085,7 +1084,7 @@ class TestDeleteSourceCascade:
 
     def test_protocol_delete_source_non_guarantee_chunk_addressability(self) -> None:
         """AC12: protocol Non-guarantee mentions 'chunk addressability' loss on retry."""
-        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC
+        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC  # noqa: PLC0415
 
         method = getattr(ProtocolIC, "delete_source", None)
         assert method is not None, "delete_source not found on protocol IngestCoordinator"
@@ -1096,7 +1095,7 @@ class TestDeleteSourceCascade:
 
     def test_protocol_delete_source_non_guarantee_graph_evidence_persists(self) -> None:
         """AC12: protocol Non-guarantee mentions graph evidence persists after retry."""
-        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC
+        from owlbear_knowledge.protocols.ingest import IngestCoordinator as ProtocolIC  # noqa: PLC0415
 
         method = getattr(ProtocolIC, "delete_source", None)
         assert method is not None, "delete_source not found on protocol IngestCoordinator"

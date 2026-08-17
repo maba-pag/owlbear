@@ -27,7 +27,6 @@ from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_knowledge.protocols.common import EntityType, RelationType
 from owlbear_knowledge_mcp.server import store_enrichment as knowledge_enrichment_store
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

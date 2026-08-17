@@ -25,7 +25,7 @@ class TestEnrichmentToolRename:
 
     def test_ac1_mcp_tool_routing_has_three_enrichment_entries(self) -> None:
         """AC1: MCP_TOOL_ROUTING contains 3 new enrichment entries with correct routing values."""
-        from owlbear_knowledge.protocols.registry import MCP_TOOL_ROUTING
+        from owlbear_knowledge.protocols.registry import MCP_TOOL_ROUTING  # noqa: PLC0415
 
         assert MCP_TOOL_ROUTING.get("claim_enrichment_batch") == "EnrichmentStore.claim_batch"
         assert MCP_TOOL_ROUTING.get("store_enrichment") == "EnrichmentStore.submit_extractions"
@@ -33,7 +33,7 @@ class TestEnrichmentToolRename:
 
     def test_ac2_new_function_names_callable_and_in_all(self) -> None:
         """AC2: 3 enrichment functions renamed in server.py; new names callable and in __all__."""
-        from owlbear_knowledge_mcp import server
+        from owlbear_knowledge_mcp import server  # noqa: PLC0415
 
         assert callable(server.claim_enrichment_batch)
         assert callable(server.store_enrichment)

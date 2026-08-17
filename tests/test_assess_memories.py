@@ -24,9 +24,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState
-from owlbear_memory import storage
+from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState, storage
 from owlbear_memory.errors import ConcurrencyError, TransitionError
 
 # ---------------------------------------------------------------------------
@@ -50,7 +48,7 @@ _ID_CURATED_B = "550e8400-e29b-41d4-a716-446655441867"
 # ---------------------------------------------------------------------------
 
 
-def _make_entry(  # noqa: PLR0913
+def _make_entry(  # noqa: PLR0913, PLR0917
     entry_id: str,
     state: str,
     confidence: float = 0.8,
@@ -125,6 +123,7 @@ class TestToolRegistration:
     async def test_empty_assessments_list_raises_tool_error(self, tmp_path: Path) -> None:
         """Empty assessments list raises ToolError immediately (before any engine call)."""
         from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+
         from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -137,6 +136,7 @@ class TestToolRegistration:
     async def test_empty_task_id_raises_tool_error(self, tmp_path: Path) -> None:
         """Empty string task_id raises ToolError."""
         from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+
         from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -156,6 +156,7 @@ class TestToolRegistration:
     async def test_whitespace_only_task_id_raises_tool_error(self, tmp_path: Path) -> None:
         """Whitespace-only task_id raises ToolError."""
         from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+
         from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -175,6 +176,7 @@ class TestToolRegistration:
     async def test_invalid_bucket_raises_tool_error(self, tmp_path: Path) -> None:
         """Invalid bucket value raises ToolError, not a per-item failure."""
         from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+
         from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -191,6 +193,7 @@ class TestToolRegistration:
     async def test_invalid_bucket_error_includes_allowed_values(self, tmp_path: Path) -> None:
         """ToolError from invalid bucket includes allowed values in the message."""
         from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+
         from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -211,6 +214,7 @@ class TestToolRegistration:
     async def test_invalid_bucket_aborts_entire_batch_not_per_item(self, tmp_path: Path) -> None:
         """Invalid bucket aborts the entire batch; valid items before it are not processed."""
         from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+
         from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -239,6 +243,7 @@ class TestToolRegistration:
     async def test_non_dict_item_in_assessments_raises_tool_error(self, tmp_path: Path) -> None:
         """Non-dict item in assessments list raises ToolError (batch aborts, not per-entry failure)."""
         from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+
         from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -255,6 +260,7 @@ class TestToolRegistration:
     async def test_item_missing_bucket_key_raises_tool_error(self, tmp_path: Path) -> None:
         """Dict item missing 'bucket' key raises ToolError (batch aborts, not per-entry failure)."""
         from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+
         from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)
@@ -271,6 +277,7 @@ class TestToolRegistration:
     async def test_item_missing_entry_id_key_raises_tool_error(self, tmp_path: Path) -> None:
         """Dict item missing 'entry_id' key raises ToolError (batch aborts, not per-entry failure)."""
         from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+
         from owlbear_memory_mcp.tools import assess_memories  # noqa: PLC0415
 
         engine = MemoryEngine(memory_dir=tmp_path)

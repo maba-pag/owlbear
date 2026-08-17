@@ -56,15 +56,15 @@ def _collect_forbidden_imports(
             if isinstance(node, ast.ImportFrom):
                 module = node.module or ""
                 if module in modules:
-                    for alias in node.names:
-                        if alias.name in names:
-                            violations.append(
-                                (
-                                    str(py_file.relative_to(src_root)),
-                                    alias.name,
-                                    node.lineno,
-                                )
-                            )
+                    violations.extend(
+                        (
+                            str(py_file.relative_to(src_root)),
+                            alias.name,
+                            node.lineno,
+                        )
+                        for alias in node.names
+                        if alias.name in names
+                    )
     return violations
 
 
@@ -142,8 +142,9 @@ class TestCockpitRouteBoundary:
     @pytest.fixture
     def client(self):
         """Return a FastAPI test client for route-surface assertions."""
-        from fastapi.testclient import TestClient
-        from owlbear_cockpit.main import app
+        from fastapi.testclient import TestClient  # noqa: PLC0415
+
+        from owlbear_cockpit.main import app  # noqa: PLC0415
 
         return TestClient(app)
 
@@ -165,7 +166,7 @@ class TestCockpitRouteBoundary:
 
     def test_no_finalization_http_route_is_registered(self) -> None:
         """Finalization remains an agent-only Delivery operation, not a Cockpit HTTP route."""
-        from owlbear_cockpit.main import app
+        from owlbear_cockpit.main import app  # noqa: PLC0415
 
         paths = {route.path for route in app.routes if hasattr(route, "path")}
         assert not any("finaliz" in path.lower() for path in paths), paths

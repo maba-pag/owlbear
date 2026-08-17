@@ -12,6 +12,8 @@ Behavioral coverage:
        storage round-trip (write+read) preserves counter and score values in both packages.
 """
 
+# ruff: noqa: PLC0415
+
 from __future__ import annotations
 
 from pathlib import Path

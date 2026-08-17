@@ -49,7 +49,6 @@ from owlbear_knowledge.protocols.query import (
 )
 from owlbear_knowledge.query_facade import QueryFacade
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -145,7 +144,7 @@ def _make_entity_lookup_result(
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_content() -> MagicMock:
     """Mocked ContentStore with sync get_chunk."""
     m = MagicMock(name="content_store")
@@ -154,7 +153,7 @@ def mock_content() -> MagicMock:
     return m
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_graph() -> MagicMock:
     """Mocked GraphStore with sync entity and traversal operations."""
     g = MagicMock(name="graph_store")
@@ -165,7 +164,7 @@ def mock_graph() -> MagicMock:
     return g
 
 
-@pytest.fixture()
+@pytest.fixture
 def facade(mock_content: MagicMock, mock_graph: MagicMock) -> QueryFacade:
     """QueryFacade wired with mocked dependencies."""
     return QueryFacade(content=mock_content, graph=mock_graph)
@@ -382,7 +381,7 @@ class TestRenderContext:
     def test_render_context_raises_value_error_when_neither_result(self, facade: QueryFacade) -> None:
         """AC3: raises ValueError when neither query_result nor entity_result provided."""
         request = ContextRenderRequest(query_result=None, entity_result=None)
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Provide at least one"):
             facade.render_context(request)
 
     def test_render_context_text_within_max_chars_budget(self, facade: QueryFacade) -> None:

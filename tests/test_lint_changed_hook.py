@@ -21,7 +21,7 @@ def _load_hook() -> ModuleType:
 
 
 def _git(root: Path, *arguments: str) -> None:
-    subprocess.run(["git", *arguments], cwd=root, check=True, capture_output=True, text=True)
+    subprocess.run(["git", *arguments], cwd=root, check=True, capture_output=True, text=True)  # noqa: S603, S607
 
 
 def _repository(tmp_path: Path) -> Path:
@@ -41,7 +41,7 @@ def test_extracts_apply_patch_paths() -> None:
 *** Add File: /repo/tests/test_module.py
 *** End Patch"""
 
-    assert hook._extract_paths("apply_patch", {"input": patch}) == [
+    assert hook._extract_paths("apply_patch", {"input": patch}) == [  # noqa: SLF001
         "/repo/src/module.py",
         "/repo/tests/test_module.py",
     ]
@@ -55,7 +55,7 @@ def test_targeted_edit_has_no_minimum_change_warning(tmp_path: Path, monkeypatch
     source.write_text("\n".join(lines) + "\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
 
-    assert hook._minimum_change_warnings([str(source)], tmp_path) == []
+    assert hook._minimum_change_warnings([str(source)], tmp_path) == []  # noqa: SLF001
 
 
 def test_warns_for_new_test_and_large_replacement(tmp_path: Path, monkeypatch) -> None:
@@ -67,7 +67,7 @@ def test_warns_for_new_test_and_large_replacement(tmp_path: Path, monkeypatch) -
     test_file.write_text("\n".join(f"assert {line} == {line}" for line in range(300)) + "\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
 
-    warnings = hook._minimum_change_warnings([str(source), str(test_file)], tmp_path)
+    warnings = hook._minimum_change_warnings([str(source), str(test_file)], tmp_path)  # noqa: SLF001
 
     assert any("large replacement" in warning for warning in warnings)
     assert any("new test file" in warning for warning in warnings)

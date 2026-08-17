@@ -57,9 +57,6 @@ ignore = [
   "D105",   # magic methods usually inherit their behavioral contract from Python
   "D107",   # constructor documentation belongs on the class
   "ISC001", # implicit string concatenation — conflicts with formatter
-  "S101",   # assert used — needed in tests
-  "SIM108", # ternary suggestion — if-else is often more readable
-  "N818",   # exception naming — pre-existing API names used in TestFromAC_* tests
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -75,20 +72,25 @@ ignore = [
   "PLR0912", # guard scripts branch by path rule category
   "T201",   # print() is the stdout I/O contract for VS Code hook scripts
 ]
+"serve/browser/src/owlbear_browser/_errors.py" = [
+  "N818",   # AuthenticationRequired is an established public API name
+]
+"serve/delivery-mcp/src/owlbear_delivery_mcp/target_models.py" = [
+  "N818",   # DeliveryStartupDiagnostic is an established public API name
+]
 ".owlbear/scripts/*.py" = [
   "INP001", # .owlbear/scripts/ is not a package — direct-run files are expected here
-  "PLR2004", # small CLI scripts use argument-count sentinels inline
-  "PTH201", # scripts compare relative Path('.') for JSON output compatibility
   "T201",   # print() is intentional in CLI scripts
 ]
 ".github/scripts/*.py" = [
   "INP001", # .github/scripts/ contains direct-run CI helpers, not an importable package
   "T201",   # print() is intentional in direct-run CI helpers
 ]
+".github/skills/session-review/tests/test_extract_transcript.py" = [
+  "S101", # assert-based checks are intentional in the skill's extractor tests
+]
 "seed/.owlbear/scripts/*.py" = [
   "INP001", # seed/.owlbear/scripts/ is not a package — direct-run files are expected here
-  "PLR2004", # small CLI scripts use argument-count sentinels inline
-  "PTH201", # scripts compare relative Path('.') for JSON output compatibility
   "T201",   # print() is intentional in CLI scripts
 ]
 ".owlbear/scratch/*.py" = [
@@ -109,65 +111,23 @@ ignore = [
 "tests/**/*.py" = [
   "ANN",     # type annotations not required in tests
   "D",       # docstring rules not enforced in tests
-  "DTZ001",  # naive datetimes used intentionally in negative test cases
-  "E402",    # generated task-test blocks may include late import sections
-  "E501",    # long assertion messages in test strings are acceptable
-  "EM102",   # f-string in exception message — acceptable in test helpers
-  "F811",    # generated task-test blocks may reuse imported helper names
-  "I001",    # isort — pre-existing test-writer files may have non-standard order
-  "N801",    # TestFromAC_* class naming convention required by test-writer workflow
-  "PERF401", # list comprehension recommendation — readability preference in tests
-  "PLW1510", # subprocess.run without check — intentional in test assertions
-  "PT001",   # pytest.raises usage — test-writer style preference
-  "PT011",   # pytest.raises without match= — intentional in negative value tests
-  "RUF100",  # unused noqa — pre-existing marker suppression in test files
+  "INP001",  # tests are discovered as non-package modules under importlib mode
   "S101",    # assert is fine in tests
-  "S105",    # token/password false positives in test assertions
-  "S106",    # hardcoded password in function args — test fixtures
-  "S603",    # subprocess security — test-controlled inputs
-  "S607",    # partial executable path — test-controlled commands
-  "SLF001",  # private member access — needed for white-box testing
-  "ERA001",  # commented-out code — section header comments
   "PLR2004", # magic values are fine in tests
-  "PLR0917", # test helpers favor explicit fixture parameters over argument bundles
-  "PLC0415", # imports inside test functions are intentional
   "TCH",     # type-checking blocks impractical in tests
-  "TRY003",  # exception messages — test helper functions
-  "PT019",   # @patch-injected mocks with _ prefix are not unused fixtures
-  "F541",    # f-string without placeholder — pre-existing in TestFromAC_* assertions
 ]
 "tests/fixtures/delivery-authority/**/*.py" = [
   "INP001", # structural snippets are parsed as source fixtures, not imported modules
+  "S603",   # subprocess calls are inert AST fixture text, never executed
+  "S607",   # executable names are inert AST fixture text, never executed
 ]
 "serve/*/tests/**/*.py" = [
   "ANN",     # type annotations not required in tests
   "D",       # docstring rules not enforced in tests
-  "DTZ001",  # naive datetimes used intentionally in negative test cases
-  "E402",    # package test blocks may include late import sections
-  "E501",    # long assertion messages in test strings are acceptable
-  "EM102",   # f-string in exception message — acceptable in test helpers
-  "F811",    # package test blocks may reuse imported helper names
-  "I001",    # isort — pre-existing test-writer files may have non-standard order
   "INP001",  # serve/*/tests/ dirs without __init__.py — importlib mode handles discovery
-  "N801",    # TestFromAC_* class naming convention required by test-writer workflow
-  "PERF401", # list comprehension recommendation — readability preference in tests
-  "PLW1510", # subprocess.run without check — intentional in test assertions
-  "PT001",   # pytest.raises usage — test-writer style preference
-  "PT011",   # pytest.raises without match= — intentional in negative value tests
-  "RUF100",  # unused noqa — pre-existing marker suppression in test files
   "S101",    # assert is fine in tests
-  "S105",    # token/password false positives in test assertions
-  "S106",    # hardcoded password in function args — test fixtures
-  "S603",    # subprocess security — test-controlled inputs
-  "S607",    # partial executable path — test-controlled commands
-  "SLF001",  # private member access — needed for white-box testing
-  "ERA001",  # commented-out code — section header comments
   "PLR2004", # magic values are fine in tests
-  "PLR0917", # test helpers favor explicit fixture parameters over argument bundles
-  "PLC0415", # imports inside test functions are intentional
   "TCH",     # type-checking blocks impractical in tests
-  "TRY003",  # exception messages — test helper functions
-  "PT019",   # @patch-injected mocks with _ prefix are not unused fixtures
 ]
 
 [tool.ruff.lint.flake8-type-checking]

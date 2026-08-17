@@ -18,6 +18,8 @@ Interface strategy:
     Return: concatenated "## {title}\\nEntry ID: `{id}`\\n{content}" blocks.
 """
 
+# ruff: noqa: N801
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -25,7 +27,6 @@ from unittest.mock import MagicMock, patch
 from uuid import UUID
 
 import pytest
-
 from owlbear_memory import MemoryEngine, MemoryEntry
 
 
@@ -299,7 +300,8 @@ class TestFromAC_WildcardAgentFallback:
 
         assert result == (
             "This recall_memory caller is not a known agent. Known agents: none discovered. "
-            "This caller is read-only and must not write memories. It therefore receives only memories scoped to all agents (*)."
+            "This caller is read-only and must not write memories. "
+            "It therefore receives only memories scoped to all agents (*)."
         )
 
 

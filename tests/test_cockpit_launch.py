@@ -12,7 +12,7 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def reset_app() -> object:
-    from owlbear_cockpit import main
+    from owlbear_cockpit import main  # noqa: PLC0415
 
     routes = list(main.app.routes)
     yield
@@ -31,7 +31,7 @@ def _dist(tmp_path: Path) -> Path:
 
 
 def test_run_binds_target_context_before_uvicorn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from owlbear_cockpit import main
+    from owlbear_cockpit import main  # noqa: PLC0415
 
     workspace_root = tmp_path / "workspace"
     workspace_root.mkdir()
@@ -58,7 +58,7 @@ def test_run_binds_target_context_before_uvicorn(tmp_path: Path, monkeypatch: py
 
 
 def test_run_rejects_missing_target_receipt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from owlbear_cockpit.main import run
+    from owlbear_cockpit.main import run  # noqa: PLC0415
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("COCKPIT_NO_OPEN", "1")
@@ -77,7 +77,7 @@ def test_run_registers_instance_while_uvicorn_owns_process(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from owlbear_cockpit import main
+    from owlbear_cockpit import main  # noqa: PLC0415
 
     workspace_root = tmp_path / "workspace"
     workspace_root.mkdir()
@@ -102,8 +102,8 @@ def test_run_registers_instance_while_uvicorn_owns_process(
 
 
 def test_running_instances_removes_stale_records(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from owlbear_cockpit import main
-    from owlbear_cockpit.models import CockpitInstance
+    from owlbear_cockpit import main  # noqa: PLC0415
+    from owlbear_cockpit.models import CockpitInstance  # noqa: PLC0415
 
     registry = tmp_path / "registry"
     registry.mkdir()

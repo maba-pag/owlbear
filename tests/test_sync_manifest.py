@@ -22,7 +22,7 @@ def _load_manifest_module() -> ModuleType:
 
 def test_declared_sync_paths_exist_on_dev() -> None:
     module = _load_manifest_module()
-    manifest = module._load_manifest()
+    manifest = module._load_manifest()  # noqa: SLF001
 
     for scope, paths in manifest["scopes"].items():
         for relative_path in paths:

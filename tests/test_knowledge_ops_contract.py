@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 import yaml
 
-
 _ROOT = Path(__file__).resolve().parents[1]
 _AGENT_PATH = _ROOT / "share/agents/knowledge-ingestor.agent.md"
 _HANDBOOK_PATH = _ROOT / "share/skills/h-knowledge-ops/SKILL.md"
@@ -78,7 +77,7 @@ def test_source_contract_workflow_is_dev_only_and_canonical() -> None:
 
 @pytest.mark.asyncio
 async def test_live_mcp_registry_exposes_source_lifecycle_tools() -> None:
-    from owlbear_knowledge_mcp.server import mcp
+    from owlbear_knowledge_mcp.server import mcp  # noqa: PLC0415
 
     names = {tool.name for tool in await mcp.list_tools()}
     assert names >= {"register_knowledge_source", "delete_knowledge_source"}

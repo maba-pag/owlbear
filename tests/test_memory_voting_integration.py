@@ -18,9 +18,7 @@ from unittest.mock import MagicMock, patch
 from uuid import UUID
 
 import pytest
-
-from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState
-from owlbear_memory import storage
+from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState, storage
 from owlbear_memory.engine import compute_score
 
 # ---------------------------------------------------------------------------
@@ -59,7 +57,7 @@ _IDS_SLOT_REG_LOW = [f"550e8400-e29b-41d4-a716-4466554852{i:02d}" for i in range
 # ---------------------------------------------------------------------------
 
 
-def _make_approved_entry(  # noqa: PLR0913
+def _make_approved_entry(  # noqa: PLR0913, PLR0917
     entry_id: str,
     title: str,
     confidence: float = 0.8,

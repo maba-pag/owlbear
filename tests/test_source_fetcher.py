@@ -36,7 +36,6 @@ from owlbear_knowledge.protocols.sources import (
 )
 from owlbear_knowledge.source_fetcher import CompositeSourceFetcher
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -123,7 +122,7 @@ def _intake_result(content: str, source: str) -> IntakeResult:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_factory() -> MagicMock:
     """Content fetcher factory returning an AsyncMock ContentFetcher."""
     fetcher = AsyncMock()
@@ -131,7 +130,7 @@ def mock_factory() -> MagicMock:
     return MagicMock(return_value=fetcher)
 
 
-@pytest.fixture()
+@pytest.fixture
 def composite(tmp_path: Path, mock_factory: MagicMock) -> CompositeSourceFetcher:
     return CompositeSourceFetcher(
         workspace_root=tmp_path,

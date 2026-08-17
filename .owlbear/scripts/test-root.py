@@ -13,6 +13,8 @@ import json
 import sys
 from pathlib import Path
 
+_MIN_ARGUMENT_COUNT = 2
+
 
 def find_test_root(test_path: str) -> dict[str, str]:
     """Resolve the test root for a given test file path.
@@ -42,7 +44,7 @@ def find_test_root(test_path: str) -> dict[str, str]:
                     rel_cwd = current.relative_to(workspace_root)
                     return {
                         "test_path": test_path,
-                        "cwd": str(rel_cwd) if rel_cwd != Path(".") else ".",
+                        "cwd": str(rel_cwd) if rel_cwd != Path() else ".",
                         "toolchain": "vitest",
                         "cmd": "npm test",
                     }
@@ -60,7 +62,7 @@ def find_test_root(test_path: str) -> dict[str, str]:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
+    if len(sys.argv) < _MIN_ARGUMENT_COUNT:
         print(
             "Usage: uv run .owlbear/scripts/test-root.py <path> [<path> ...]",
             file=sys.stderr,

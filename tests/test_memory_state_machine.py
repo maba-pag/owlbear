@@ -6,9 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-
-from owlbear_memory import MemoryEngine, MemoryEntry
-from owlbear_memory import storage
+from owlbear_memory import MemoryEngine, MemoryEntry, storage
 from owlbear_memory.errors import ConcurrencyError, TransitionError
 from owlbear_memory.models import MemoryState
 

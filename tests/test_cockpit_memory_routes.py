@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
-
 from owlbear_memory.errors import ConcurrencyError, NotFoundError, TransitionError
 from owlbear_memory.models import MemoryCategory, MemoryEntry, MemoryState
 
@@ -86,6 +85,7 @@ def mock_engine() -> MagicMock:
 def client(mock_engine: MagicMock):
     """FastAPI TestClient with memory engine injected via dependency_overrides."""
     from fastapi.testclient import TestClient  # noqa: PLC0415
+
     from owlbear_cockpit.deps import get_memory_engine  # noqa: PLC0415
     from owlbear_cockpit.main import app  # noqa: PLC0415
 
@@ -97,7 +97,7 @@ def client(mock_engine: MagicMock):
 
 
 # ---------------------------------------------------------------------------
-# AC1: GET /api/memories
+# AC1: GET /api/memories  # noqa: ERA001
 # ---------------------------------------------------------------------------
 
 
@@ -214,7 +214,7 @@ class TestGetMemories:
 
 
 # ---------------------------------------------------------------------------
-# AC2: POST /api/memories/{id}/approve
+# AC2: POST /api/memories/{id}/approve  # noqa: ERA001
 # ---------------------------------------------------------------------------
 
 
@@ -349,7 +349,7 @@ class TestResolveMemory:
 
 
 # ---------------------------------------------------------------------------
-# AC3: POST /api/memories/{id}/edit
+# AC3: POST /api/memories/{id}/edit  # noqa: ERA001
 # ---------------------------------------------------------------------------
 
 
@@ -659,25 +659,25 @@ class TestEditForwardingContract:
         self, client: TestClient, mock_engine: MagicMock
     ) -> None:
         """engine.edit() receives URL entry_id as arg[0] and body expected_updated_at as arg[2]."""
-        occ_token = "2026-01-15T12:00:00+00:00"
+        occ_timestamp = "2026-01-15T12:00:00+00:00"
         updated_entry = _make_entry(_ENTRY_ID_2, MemoryState.CURATED)
         mock_engine.edit.return_value = updated_entry
         response = client.post(
             f"/api/memories/{_ENTRY_ID_2}/edit",
-            json={"expected_updated_at": occ_token, "title": "Any Title"},
+            json={"expected_updated_at": occ_timestamp, "title": "Any Title"},
         )
         assert response.status_code == 200
         positional_args = mock_engine.edit.call_args.args
         assert positional_args[0] == _ENTRY_ID_2, (
             f"engine.edit() arg[0] must be the URL entry_id {_ENTRY_ID_2!r}, got {positional_args[0]!r}"
         )
-        assert positional_args[2] == occ_token, (
-            f"engine.edit() arg[2] must be body expected_updated_at {occ_token!r}, got {positional_args[2]!r}"
+        assert positional_args[2] == occ_timestamp, (
+            f"engine.edit() arg[2] must be body expected_updated_at {occ_timestamp!r}, got {positional_args[2]!r}"
         )
 
 
 # ---------------------------------------------------------------------------
-# AC5: POST /api/memories/{id}/delete
+# AC5: POST /api/memories/{id}/delete  # noqa: ERA001
 # ---------------------------------------------------------------------------
 
 

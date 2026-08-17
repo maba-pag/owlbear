@@ -1,5 +1,7 @@
 """Integration tests for seeded VS Code settings written by setup/init.py."""
 
+# ruff: noqa: SLF001
+
 from __future__ import annotations
 
 import importlib.util
@@ -11,6 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
 from owlbear_delivery import DeliveryStartupConfig
 
 _REPO_ROOT = Path(__file__).parent.parent

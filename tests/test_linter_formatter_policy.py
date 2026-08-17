@@ -206,7 +206,8 @@ def _read_precommit_hook(config: dict[str, object], hook_id: str) -> dict[str, o
             assert isinstance(hook, dict)
             if hook.get("id") == hook_id:
                 return hook
-    raise AssertionError(f"pre-commit hook is missing: {hook_id}")
+    message = f"pre-commit hook is missing: {hook_id}"
+    raise AssertionError(message)
 
 
 def _read_megalinter_excludes(config: dict[str, object]) -> tuple[re.Pattern[str], frozenset[str]]:
@@ -571,6 +572,13 @@ def test_ruff_formatter_conflict_ignore_remains_explicit() -> None:
     ignored = lint.get("ignore")
     assert isinstance(ignored, list)
     assert "COM812" in ignored
+
+
+def test_pytest_test_roots_do_not_share_a_package_namespace() -> None:
+    test_roots = [_ROOT / "tests", *_ROOT.glob("serve/*/tests")]
+
+    assert test_roots
+    assert all(not (test_root / "__init__.py").is_file() for test_root in test_roots)
 
 
 def test_vscode_settings_have_no_global_prettier_fallback() -> None:

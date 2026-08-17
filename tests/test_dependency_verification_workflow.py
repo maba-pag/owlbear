@@ -11,7 +11,6 @@ import yaml
 
 from owlbear_tools.dependency_ci import classify_dependency_change
 
-
 ROOT = Path(__file__).parents[1]
 VERIFY_PATH = ROOT / ".github/workflows/dependency-verification.yml"
 MEGALINTER_PATH = ROOT / ".github/workflows/megalinter.yml"
@@ -36,7 +35,7 @@ def _job(workflow: dict[str, object], name: str) -> dict[str, object]:
 
 
 def _run_script(script: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    return subprocess.run(  # noqa: S603
         [sys.executable, str(script), *arguments],
         cwd=ROOT,
         capture_output=True,

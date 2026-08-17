@@ -10,7 +10,7 @@ import pytest
 
 
 def _configure_run(base: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from owlbear_cockpit import main
+    from owlbear_cockpit import main  # noqa: PLC0415
 
     dist = base / "dist"
     (dist / "assets").mkdir(parents=True)

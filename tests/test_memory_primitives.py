@@ -17,16 +17,17 @@ from tempfile import mkstemp as _real_mkstemp
 from unittest.mock import patch
 
 import pytest
-from pydantic import ValidationError as PydanticValidationError
-
+from owlbear_memory import storage
 from owlbear_memory.errors import (
     ConcurrencyError,
     NotFoundError,
     TransitionError,
+)
+from owlbear_memory.errors import (
     ValidationError as MemValidationError,
 )
 from owlbear_memory.models import MemoryCategory, MemoryEntry, MemoryState
-from owlbear_memory import storage
+from pydantic import ValidationError as PydanticValidationError
 
 # ---------------------------------------------------------------------------
 # Shared constants and helpers
@@ -452,7 +453,7 @@ class TestStorageWrite:
         outside_dir.mkdir()
         outside = outside_dir / "entry.md"
         entry = _make_valid_entry()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Path escapes memory_dir"):
             storage.write_entry(outside, entry, memory_dir=memory_dir)
 
     def test_write_entry_path_traversal_raises(self, tmp_path: Path) -> None:
@@ -462,7 +463,7 @@ class TestStorageWrite:
         # Resolved path escapes memory_dir via ..
         escape = (memory_dir / ".." / "escaped.md").resolve()
         entry = _make_valid_entry()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Path escapes memory_dir"):
             storage.write_entry(escape, entry, memory_dir=memory_dir)
 
     def test_write_entry_symlink_target_raises(self, tmp_path: Path) -> None:
@@ -474,7 +475,7 @@ class TestStorageWrite:
         link = memory_dir / "link.md"
         link.symlink_to(real_target)
         entry = _make_valid_entry()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Symlink paths are not allowed"):
             storage.write_entry(link, entry, memory_dir=memory_dir)
 
     def test_write_entry_invalid_object_raises(self, tmp_path: Path) -> None:
@@ -551,7 +552,7 @@ class TestStorageDelete:
         outside_dir.mkdir()
         outside_file = outside_dir / "entry.md"
         outside_file.write_text("placeholder", encoding="utf-8")
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Path escapes memory_dir"):
             storage.delete_entry(outside_file, memory_dir=memory_dir)
 
     def test_delete_entry_symlink_raises(self, tmp_path: Path) -> None:
@@ -562,5 +563,5 @@ class TestStorageDelete:
         real_file.write_text("placeholder", encoding="utf-8")
         link = memory_dir / "link.md"
         link.symlink_to(real_file)
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Symlink paths are not allowed"):
             storage.delete_entry(link, memory_dir=memory_dir)

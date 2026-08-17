@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 from owlbear_memory_mcp.git import commit_batch
 
 
 def _git(repository: Path, *args: str) -> str:
-    result = subprocess.run(
-        ["git", *args],
+    result = subprocess.run(  # noqa: S603
+        ["git", *args],  # noqa: S607
         cwd=repository,
         check=True,
         capture_output=True,

@@ -1,6 +1,7 @@
 import os as operating_system
 import subprocess as process
-from subprocess import Popen, check_output, run as execute
+from subprocess import Popen, check_output
+from subprocess import run as execute
 
 
 def _git(*arguments):

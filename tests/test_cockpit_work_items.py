@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
-import uuid
 
 import pytest
 from fastapi.testclient import TestClient
@@ -35,9 +35,7 @@ from owlbear_delivery.completed_history import (
     LegacyCompletedChangeRecord,
     ReceiptCompletedChangeRecord,
 )
-from owlbear_delivery_github import GitHubCliPublicationProvider
-from owlbear_delivery.delivery_application_loader import DeliveryApplicationLoadError
-from owlbear_delivery.delivery_application_loader import DeliveryStartupConfig
+from owlbear_delivery.delivery_application_loader import DeliveryApplicationLoadError, DeliveryStartupConfig
 from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceWaitingError,
     DeliveryChangeDispositionConflictError,
@@ -67,6 +65,7 @@ from owlbear_delivery.work_items import (
     WorkItemStage,
     WorkItemTargetSyncView,
 )
+from owlbear_delivery_github import GitHubCliPublicationProvider
 
 
 def _card(change_id: str, outcome_id: str, needs: WorkItemNeed) -> WorkItemCardView:
@@ -748,7 +747,7 @@ def test_publication_and_completed_history_routes_delegate_exactly_once() -> Non
     )
 
     assert [response.status_code for response in responses] == [200] * 13
-    history = _DeliveryApplicationFake._completed_history()
+    history = _DeliveryApplicationFake._completed_history()  # noqa: SLF001
     assert responses[10].json() == history.model_dump(mode="json")
     assert responses[11].json() == history.model_dump(mode="json")
     assert responses[12].json() == history.records[0].model_dump(mode="json")
@@ -940,7 +939,7 @@ def test_publication_check_response_retains_blockers_before_bounded_truncation()
 
 def test_completed_history_routes_serialize_both_record_kinds() -> None:
     client, application = _client()
-    history = _DeliveryApplicationFake._completed_history()
+    history = _DeliveryApplicationFake._completed_history()  # noqa: SLF001
 
     legacy = client.get(
         "/api/work-items/completed/change-a",

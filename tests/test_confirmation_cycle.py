@@ -5,10 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState
-from owlbear_memory import storage
+from owlbear_memory import MemoryEngine, MemoryEntry, MemoryState, storage
 from owlbear_memory.errors import ConcurrencyError, TransitionError, ValidationError
+
 from owlbear_memory_mcp.models import MemoryEntry as McpMemoryEntry
 
 # Mined from #1845: factually-wrong confirmation, disputed transitions, and OCC ordering.
@@ -149,7 +148,7 @@ class TestConfirmationCycle:
 
     def test_contested_by_task_survives_storage_roundtrip_owlbear_memory_mcp(self, tmp_path: Path) -> None:
         """AC1: contested_by_task is frontmatter-serialized in owlbear_memory_mcp engine roundtrip."""
-        from owlbear_memory_mcp.engine import MemoryEngine as McpEngine
+        from owlbear_memory_mcp.engine import MemoryEngine as McpEngine  # noqa: PLC0415
 
         entry = McpMemoryEntry(
             id=_ID_APPROVED,
@@ -337,7 +336,9 @@ class TestConfirmationCycle:
             engine.record_factually_wrong(_ID_PENDING, task_id=_TASK_A, expected_updated_at=_TS_WRONG)
 
     def test_occ_mismatch_beats_empty_task_id_validation(self, tmp_path: Path) -> None:
-        """AC3+AC4: OCC guard evaluated before task_id validation — ConcurrencyError beats ValidationError (empty task_id)."""
+        """AC3+AC4: OCC guard evaluated before task_id validation —
+        ConcurrencyError beats ValidationError (empty task_id).
+        """
         # Combines OCC mismatch with invalid task_id=""; OCC must be checked first per AC3 ordering clause.
         entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
         engine = _engine_with_entries(tmp_path, entry)
@@ -345,7 +346,9 @@ class TestConfirmationCycle:
             engine.record_factually_wrong(_ID_APPROVED, task_id="", expected_updated_at=_TS_WRONG)
 
     def test_occ_mismatch_beats_whitespace_task_id_validation(self, tmp_path: Path) -> None:
-        """AC3+AC4: OCC guard evaluated before task_id validation — ConcurrencyError beats ValidationError (whitespace task_id)."""
+        """AC3+AC4: OCC guard evaluated before task_id validation —
+        ConcurrencyError beats ValidationError (whitespace task_id).
+        """
         entry = _make_entry_base(_ID_APPROVED, MemoryState.APPROVED)
         engine = _engine_with_entries(tmp_path, entry)
         with pytest.raises(ConcurrencyError):

@@ -8,8 +8,8 @@ from unittest.mock import MagicMock
 
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
-
 from owlbear_memory import MemoryCategory, MemoryEngine
+
 from owlbear_memory_mcp.tools import (
     _recognized_agent_names,
     curate_memory,

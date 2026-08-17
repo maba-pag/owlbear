@@ -46,7 +46,6 @@ from owlbear_knowledge.protocols.graph import (
 from owlbear_knowledge.protocols.query import QueryRequest
 from owlbear_knowledge.query_facade import QueryFacade
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -152,7 +151,7 @@ def _make_document(
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_content() -> MagicMock:
     """Mocked ContentStore with async search and sync get_document."""
     m = MagicMock(name="content_store")
@@ -161,7 +160,7 @@ def mock_content() -> MagicMock:
     return m
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_graph() -> MagicMock:
     """Mocked GraphStore with sync claims_for_chunk and traverse."""
     g = MagicMock(name="graph_store")
@@ -170,7 +169,7 @@ def mock_graph() -> MagicMock:
     return g
 
 
-@pytest.fixture()
+@pytest.fixture
 def facade(mock_content: MagicMock, mock_graph: MagicMock) -> QueryFacade:
     """QueryFacade wired with mocked dependencies."""
     return QueryFacade(content=mock_content, graph=mock_graph)
@@ -245,7 +244,7 @@ class TestQueryFacadeSearch:
     @pytest.mark.asyncio
     async def test_search_raises_value_error_on_empty_text(self, facade: QueryFacade) -> None:
         """AC1: search() raises ValueError when request.text is empty."""
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"request\.text must not be empty"):
             await facade.search(QueryRequest(text=""))
 
     # --- AC2: Graph expansion with include_graph=True ---

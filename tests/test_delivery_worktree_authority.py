@@ -456,9 +456,11 @@ def _provider_rest_violations(path: Path) -> tuple[str, ...]:
             violations.append(f"unexpected REST shape in {function}: {method} {endpoint}")
         if _FORBIDDEN_PROVIDER_TERMS.search(endpoint or ""):
             violations.append(f"forbidden REST route in {function}: {endpoint}")
-    for function in _ALLOWED_PROVIDER_REST_CALLS:
-        if seen.get(function, 0) != 1:
-            violations.append(f"expected exactly one REST call in {function}")
+    violations.extend(
+        f"expected exactly one REST call in {function}"
+        for function in _ALLOWED_PROVIDER_REST_CALLS
+        if seen.get(function, 0) != 1
+    )
     return tuple(violations)
 
 
@@ -985,8 +987,8 @@ def _is_shell_assignment(token: str) -> bool:
 
 
 def _git_fetch_index(tokens: tuple[str, ...]) -> int | None:
-    for index, token in enumerate(tokens):
-        if token != "git" or any(
+    for index, shell_word in enumerate(tokens):
+        if shell_word != "git" or any(
             prefix not in _SHELL_COMMAND_PREFIXES
             and prefix not in {"command", "env", "sudo"}
             and not _is_shell_assignment(prefix)
@@ -1289,7 +1291,7 @@ def test_runtime_frontier_writers_use_the_central_mutability_policy() -> None:
     }
     normal_writers = writers - _DISPOSITION_CAPTURE_EXEMPTIONS
 
-    from owlbear_delivery.delivery_runtime import _NORMAL_CHANGE_MUTATIONS
+    from owlbear_delivery.delivery_runtime import _NORMAL_CHANGE_MUTATIONS  # noqa: PLC0415
 
     assert normal_writers == _NORMAL_CHANGE_MUTATIONS
     assert all(_has_named_call(visitor.methods[name], "_require_change_mutable") for name in normal_writers)

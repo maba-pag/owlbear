@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 _ROOT = Path(__file__).parent.parent
 _SKILL = (_ROOT / "share/skills/w-test-curation/SKILL.md").read_text(encoding="utf-8")
 _AGENT = (_ROOT / "share/agents/test-curator.agent.md").read_text(encoding="utf-8")

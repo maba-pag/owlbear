@@ -5,7 +5,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 ALLOWED_IMPORTS: dict[str, frozenset[str]] = {
     "owlbear_browser": frozenset(),
     "owlbear_browser_mcp": frozenset({"owlbear_browser"}),
@@ -55,13 +54,13 @@ def test_serve_package_imports_follow_allowlist(project_root: Path) -> None:
     for package_name, source_root in _package_sources(project_root).items():
         allowed = ALLOWED_IMPORTS[package_name]
         for source_file in sorted(source_root.rglob("*.py")):
-            for imported_namespace in _imported_namespaces(source_file):
-                if imported_namespace != package_name and imported_namespace not in allowed:
-                    violations.append(
-                        (
-                            str(source_file.relative_to(project_root)),
-                            package_name,
-                            imported_namespace,
-                        )
-                    )
+            violations.extend(
+                (
+                    str(source_file.relative_to(project_root)),
+                    package_name,
+                    imported_namespace,
+                )
+                for imported_namespace in _imported_namespaces(source_file)
+                if imported_namespace != package_name and imported_namespace not in allowed
+            )
     assert violations == []

@@ -8,6 +8,8 @@ Verifies that:
 - Markdownlint configuration files are seeded and preserved on re-initialization
 """
 
+# ruff: noqa: N801
+
 from __future__ import annotations
 
 import importlib.util
@@ -183,7 +185,7 @@ class TestFromAC_IllustrativeExamples:
         run_init_without_test_surface(module.init, tmp_path, project_root)
         content = (tmp_path / _CI_REL).read_text(encoding="utf-8").lower()
         # Extract all HTML comment bodies
-        import re
+        import re  # noqa: PLC0415
 
         html_comments = re.findall(r"<!--(.*?)-->", content, re.DOTALL)
         customization_keywords = ("replace", "customize", "your project", "your ")
@@ -263,7 +265,7 @@ class TestFromAC_SkipIfExistsPreservation:
         are not overwritten. This is a direct contract check on the module constant.
         """
         module = _load_init(project_root)
-        skip_set = module._SKIP_IF_EXISTS_REL
+        skip_set = module._SKIP_IF_EXISTS_REL  # noqa: SLF001
         assert ".github/copilot-instructions.md" in skip_set, (
             "_SKIP_IF_EXISTS_REL does not include '.github/copilot-instructions.md'. "
             "Add it to the frozenset in setup/init.py to preserve consumer customizations. "
@@ -286,7 +288,7 @@ class TestMarkdownlintConfigScaffolding:
             ".markdownlintignore": "consumer-specific-ignore\n",
             ".yamllint.yml": "rules: {}\n",
         }
-        skip_set = module._SKIP_IF_EXISTS_REL
+        skip_set = module._SKIP_IF_EXISTS_REL  # noqa: SLF001
         for relative_path, content in custom_contents.items():
             config_path = tmp_path / relative_path
             assert config_path.is_file(), f"init() did not seed {relative_path!r}"
@@ -331,7 +333,7 @@ class TestMarkdownlintConfigScaffolding:
 
         run_init_without_test_surface(module.init, tmp_path, project_root, refresh_configs=True)
 
-        for relative_path in module._REFRESHABLE_CONFIG_REL:
+        for relative_path in module._REFRESHABLE_CONFIG_REL:  # noqa: SLF001
             expected = (project_root / "seed" / relative_path).read_bytes()
             assert (tmp_path / relative_path).read_bytes() == expected, relative_path
         assert (tmp_path / ".editorconfig").read_text(encoding="utf-8") != custom_editorconfig

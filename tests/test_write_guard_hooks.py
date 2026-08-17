@@ -269,7 +269,10 @@ class TestDenySrcWrites:
         payload = {
             "tool_name": "apply_patch",
             "tool_input": {
-                "input": "*** Begin Patch\n*** Update File: serve/cockpit/web/src/App.wiring.test.tsx\n@@\n-old\n+new\n*** End Patch"
+                "input": (
+                    "*** Begin Patch\n*** Update File: serve/cockpit/web/src/App.wiring.test.tsx\n@@\n"
+                    "-old\n+new\n*** End Patch"
+                ),
             },
         }
         assert _is_allowed(_invoke(deny_src_module, payload))
@@ -285,7 +288,10 @@ class TestDenySrcWrites:
         payload = {
             "tool_name": "apply_patch",
             "tool_input": {
-                "input": "*** Begin Patch\n*** Update File: serve/cockpit/web/src/__tests__/hook.test.ts\n@@\n-old\n+new\n*** End Patch"
+                "input": (
+                    "*** Begin Patch\n*** Update File: serve/cockpit/web/src/__tests__/hook.test.ts\n@@\n"
+                    "-old\n+new\n*** End Patch"
+                ),
             },
         }
         assert _is_allowed(_invoke(deny_src_module, payload))
@@ -301,7 +307,10 @@ class TestDenySrcWrites:
         payload = {
             "tool_name": "apply_patch",
             "tool_input": {
-                "input": "*** Begin Patch\n*** Update File: serve/cockpit/web/e2e/hook.spec.ts\n@@\n-old\n+new\n*** End Patch"
+                "input": (
+                    "*** Begin Patch\n*** Update File: serve/cockpit/web/e2e/hook.spec.ts\n@@\n"
+                    "-old\n+new\n*** End Patch"
+                ),
             },
         }
         assert _is_allowed(_invoke(deny_src_module, payload))

@@ -185,7 +185,7 @@ class TestDenyCodeWrites:
         files = _target_files()
         assert files, "Expected storage tests under serve/delivery/tests/"
 
-    def test_delivery_storage_tests_write_only_to_tmp_path_derived_targets(self) -> None:  # noqa: C901
+    def test_delivery_storage_tests_write_only_to_tmp_path_derived_targets(self) -> None:
         violations: list[str] = []
 
         for path in _target_files():
@@ -219,7 +219,7 @@ class TestDenyCodeWrites:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_DenyWritesEnforcement:
+class TestFromAC_DenyWritesEnforcement:  # noqa: N801
     """AC-C46: _is_safe_path_expr must prove tmp_path containment, not just heuristics.
 
     The current implementation has two known bypass paths that allow writes

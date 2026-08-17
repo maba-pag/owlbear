@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from owlbear_knowledge.ingest_coordinator import IngestCoordinator
-from owlbear_knowledge.protocols.fetcher import FetchError, FetchedDocument, FetchResult
+from owlbear_knowledge.protocols.fetcher import FetchedDocument, FetchError, FetchResult
 from owlbear_knowledge.protocols.ingest import (
     IngestResult,
     RefreshRequest,
@@ -34,7 +34,6 @@ from owlbear_knowledge.protocols.sources import (
     SourceState,
     SourceStats,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -87,7 +86,7 @@ def _make_ingest_result(source_id: str = "src-1") -> IngestResult:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_sources() -> MagicMock:
     s = MagicMock(name="sources")
     s.get_source.return_value = _make_source()
@@ -98,33 +97,33 @@ def mock_sources() -> MagicMock:
     return s
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_content() -> MagicMock:
     c = MagicMock(name="content")
     c.ingest = AsyncMock()
     return c
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_enrichment() -> MagicMock:
     e = MagicMock(name="enrichment")
     e.enqueue_chunks.return_value = 0
     return e
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_graph() -> MagicMock:
     return MagicMock(name="graph")
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_fetcher() -> MagicMock:
     f = MagicMock(name="fetcher")
     f.fetch_source = AsyncMock(return_value=FetchResult())
     return f
 
 
-@pytest.fixture()
+@pytest.fixture
 def coordinator(
     mock_sources: MagicMock,
     mock_content: MagicMock,
