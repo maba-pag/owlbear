@@ -77,9 +77,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 _WORKSPACE_MARKER = Path(".owlbear")
 
-# Backward-compatible patch target used by legacy tests; the guard is no longer wired.
-globals()["ContentInjectionGuard"] = object
-
 
 async def claim_enrichment_batch(ctx: Context, limit: int = 10) -> list[EnrichmentChunk]:
     """Atomically claim a batch of chunks ready for enrichment.
