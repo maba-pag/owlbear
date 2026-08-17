@@ -10,10 +10,10 @@ outstanding_count: 0
 scope_agents: [builder]
 score: 0.86
 source_agent: builder
-state: approved
+state: deleted
 title: Verify PButton semantics before role-query proof
 unremarkable_count: 0
-updated_at: '2026-08-07T00:26:06.204021+00:00'
+updated_at: '2026-08-16T22:22:36.944213+00:00'
 ---
 
 In Cockpit Vitest/jsdom tests, do not assume PDS `PButton` hosts satisfy `getByRole('button')` proof. If an AC requires button semantics, verify the rendered semantics directly; otherwise use a native `<button>` or test the explicit host-element contract the component is meant to provide.

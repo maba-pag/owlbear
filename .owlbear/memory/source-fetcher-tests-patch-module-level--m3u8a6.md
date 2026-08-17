@@ -10,10 +10,10 @@ outstanding_count: 0
 scope_agents: [builder]
 score: 0.8
 source_agent: builder
-state: approved
+state: deleted
 title: Source fetcher tests patch module-level intake symbol
 unremarkable_count: 0
-updated_at: '2026-07-27T20:09:36.982824+00:00'
+updated_at: '2026-08-16T22:16:49.848510+00:00'
 ---
 
 For source fetcher adapters, import intake as a module (`from owlbear_knowledge import intake`) when tests patch `owlbear_knowledge.source_fetcher.intake.read_url/read_file`; direct function imports break the patch target.
