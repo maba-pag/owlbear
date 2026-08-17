@@ -9,6 +9,12 @@ function response(body: unknown, ok = true): Response {
 describe('useMemoryPurgeFlow', () => {
   beforeEach(() => vi.restoreAllMocks())
 
+  it('starts with a 30-day threshold', () => {
+    const { result } = renderHook(() => useMemoryPurgeFlow())
+
+    expect(result.current.threshold).toBe('30')
+  })
+
   it('keeps only the preview for the current threshold and executes it once', async () => {
     let resolveFirst!: (value: Response) => void
     const fetchMock = vi.spyOn(globalThis, 'fetch')
