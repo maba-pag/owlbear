@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-
 from owlbear_memory.engine import MemoryEngine
 from owlbear_memory.models import MemoryCategory, MemoryState
 
