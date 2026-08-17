@@ -95,6 +95,22 @@ review evidence unchanged, and a timezone-aware review time. Serialize the retur
 `model_dump(mode="json")`; never calculate, copy, or invent `review_id`. Reject a pass that echoes a
 different commit, lacks evidence, or cannot produce an independent canonical receipt.
 
+### Triage Review Findings Before Repair
+
+Treat a review finding as input to a Builder decision, not as an automatic work order. Before
+touching the reviewed head, classify the concrete finding against the admitted task:
+
+| Finding classification | Builder action |
+|---|---|
+| Fix now: implementation defect inside the task boundary | Repair one finding at a time, preserve the rejected commit, rerun affected proof, and obtain fresh exact-commit review. |
+| Return to authority: missing, contradictory, or observably ambiguous Planning or Design | Publish nothing and return with the owning locator, clean preserved commit, and the required source boundary. |
+| Block for user-owned input: one bounded decision, action, or manual validation is required | Publish nothing and use `BlockDelivery` with a bounded request and clean resume commit. |
+| No repair: style preference or unsupported concern without a concrete defect | Do not expand the task or silently alter code; the review evidence does not satisfy the challenger contract until it names a concrete boundary and evidence. |
+
+Only the first classification creates a repair commit. A deferred or out-of-scope concern is routed
+through the native return or block path when its resolution is required; it is not logged as a second
+Builder backlog or converted into an unrelated change.
+
 Repair an `implementation` finding when it remains inside the task and obtain fresh review of the new
 commit. A `planning` or `design` finding is evidence for Builder's return choice, not a reviewer-owned
 transition. Invalid review evidence publishes nothing.
@@ -170,6 +186,13 @@ required `unblock_condition` and `expected_evidence` fields. Every Build block i
 Return the selected `DeliveryTransition` or pre-execution `dispatch_failure` directly. Do not call
 `transition_delivery` or `recover_claim`; orchestration validates the launch identity and applies the
 matching route. Do not call job, receipt, request, or other lifecycle operations.
+
+## Optional Process Observation
+
+When a reviewed result exposes a trigger from `h-process-observations`, load that handbook for a
+sidecar note. Keep the note outside `DeliveryTaskResult`, receipts, and the returned transition; it
+captures process learning only and cannot change the worker-owned lifecycle result. Do not create a
+note for an ordinary successful task with no material process signal.
 
 ## Known Pitfalls
 

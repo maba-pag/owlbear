@@ -161,6 +161,31 @@ Apply the gates above across five dimensions: coherence and timing; authority an
 structure and execution; signal quality at the actual loading frequency; and completeness and
 currency.
 
+### Default Drift Pass
+
+Every Broad Audit includes a bounded drift pass. A Deep Audit applies the same pass to its minimum
+sufficient loading cluster. Drift is a cross-cutting audit concern, not a separate authority or
+lifecycle.
+
+1. Check mechanical drift across references, frontmatter, `applyTo` surfaces, loading relationships,
+   `WIRING.md`, tool and delegate declarations, validators, and representative tests.
+2. Check semantic drift in high-consumer or flagged blocks: compare repeated guidance with its
+   canonical authority and identify contradictions, stale claims, late loading, weaker wording,
+   missing enforcement, or unnecessary context cost.
+3. Distinguish materially weaker duplication from harmless reinforcement. A similar block is a
+   finding only when its authority, timing, scope, enforceability, or maintenance cost creates a
+   concrete behavioral or maintenance disadvantage.
+4. Admit only evidence-backed findings. If the bounded pass finds no material drift, record that
+   result in Coverage rather than inventing a cleanup.
+5. For each drift finding, name the canonical owner, affected copy or relationship, consumers and
+   loading path, evidence class, impact, and one action: `keep`, `strengthen`, `compress`, `move`, or
+   `delete`. Recommend a validator, hook, schema, or runtime owner only when prose cannot enforce
+   the required behavior.
+
+For Broad Audit, use metadata and targeted reads by default. Expand to full semantic comparison only
+for high-consumer, validator-implicated, or otherwise evidence-flagged surfaces. Keep the pass
+report-only; it must not rewrite guidance or create a new audit mechanism automatically.
+
 ## Broad Audit
 
 Use broad mode to identify patterns and priorities, not to deeply rewrite every file.

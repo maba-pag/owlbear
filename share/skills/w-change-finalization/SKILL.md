@@ -106,6 +106,12 @@ its returned `DeliveryFinalizationReceipt` as the only successful finalization r
 head is an adopted completed head. Do not call checkpoint reconciliation, mark-ready, acceptance
 observation, Integration, repair, or any target mutation operation from this workflow.
 
+## Optional Process Observation
+
+After exact-head review, load `h-process-observations` only when the result exposes a documented
+trigger. Preserve any sidecar outside the finalization request and receipts; it records process
+learning and has no authority over the Change head, publication, or acceptance.
+
 ## Output Template
 
 On success, return exactly:

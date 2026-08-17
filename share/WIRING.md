@@ -93,6 +93,7 @@ The named caller owns each on-demand condition and timing.
 | Python instruction | `h-python-conventions` | The active file matches the Python instruction scope |
 | frontend instruction | `h-frontend-conventions` | The active file matches the frontend instruction scope |
 | proof selection | `h-pytest-and-linting` or `h-vitest-and-linting` | The changed domain uses that test and lint toolchain |
+| Builder or Finalizer post-result context | `h-process-observations` | A reviewed result exposes retry, return, block, review-finding, material divergence, or explicit process-learning need |
 | `resolve-delivery-attention` prompt | `w-delivery-attention-resolution` | One exact operator-required Integration attention needs interactive diagnosis or a user-selected remedy |
 
 ## Required Skill Consumers

@@ -31,6 +31,12 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | addyosmani/agent-skills | <https://github.com/addyosmani/agent-skills/tree/4e8bd9fde4a38cd009053e649f4cdc7cd36b568b> | Outcome-oriented vertical task slicing, adapted to preserve OwlBear domain and proof boundaries | `share/skills/w-task-decomposition/SKILL.md` | 2026-07-11 |
 
+## coleam00/skills Reuse Assessment
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| coleam00/skills | <https://github.com/coleam00/skills/tree/ecef6ffd4caa0b23a8c79601c1215b1e2908ac72> | Comparative review of exactly 33 Claude-oriented skills; retained concepts include report-only AI-layer ablation, rules drift detection, opportunity scanning, post-result system review, positive validation markers, non-empty proof, evaluator independence, protected governance, and selective holdout or mutation checks. Direct PIV, worktree, GitHub mutation, sample-project, and dark-factory autonomy workflows were rejected or marked already stronger in native Delivery. | `.owlbear/research/coleam00-skills-reuse.md` | 2026-08-16 |
+
 ## EnrichmentStore — Extractions & Purge (Task #1876)
 
 | Source | URL | What | Where Used | Date |
@@ -457,6 +463,15 @@ No external sources — analysis based entirely on codebase static analysis of `
 | MegaLinter — Trivy descriptor | <https://megalinter.io/latest/descriptors/repository_trivy/> | Trivy uses `project` CLI lint mode; FILTER_REGEX_EXCLUDE not applicable | Task #1418 body | 2026-05-08 |
 | MegaLinter — Filtering files | <https://megalinter.io/latest/config-filtering/> | FILTER_REGEX_EXCLUDE "not applicable with linters using CLI lint mode project" | Task #1418 body | 2026-05-08 |
 | MegaLinter — editorconfig-checker descriptor | <https://megalinter.io/latest/descriptors/editorconfig_editorconfig_checker/> | Uses `list_of_files` mode; IS affected by FILTER_REGEX_EXCLUDE | Task #1418 body | 2026-05-08 |
+
+## Linter and Formatter Exception Audit (2026-08-17)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| MegaLinter — Markdownlint descriptor v10.0.0 | <https://megalinter.io/10.0.0/descriptors/markdown_markdownlint/> | Markdownlint defaults to `list_of_files`; pinned binary is v0.49.1 | `.owlbear/research/linter-formatter-rule-audit.md` | 2026-08-17 |
+| MegaLinter — CLI lint mode v10.0.0 | <https://megalinter.io/10.0.0/config-cli-lint-mode/> | `project` mode bypasses MegaLinter include/exclude filters | `.owlbear/research/linter-formatter-rule-audit.md` | 2026-08-17 |
+| ESLint JSON language plugin | <https://github.com/eslint/json> | Official `@eslint/json` language-plugin configuration for strict JSON and JSONC, including the `json/json`, `json/jsonc`, and duplicate-key rule surfaces | `eslint-json.config.cjs`, `package.json`, `scripts/lint-json.mjs`, `.owlbear/research/linter-formatter-rule-audit.md` | 2026-08-17 |
+| MegaLinter JavaScript ESLint descriptor | <https://megalinter.io/latest/descriptors/javascript_es/> | Configurable file extensions, include filters, flat config path, rules path, and project-local ESLint executable for the replacement descriptor | `.mega-linter.yml`, `.owlbear/research/linter-formatter-rule-audit.md` | 2026-08-17 |
 
 ## Theme Bootstrap Script Implementation Research (Task #1545)
 
