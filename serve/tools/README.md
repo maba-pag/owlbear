@@ -28,7 +28,10 @@ uv run migrate-delivery-state .
 uv run migrate-delivery-state . --apply
 ```
 
-Each command regenerates its complete index on every invocation. Generated indexes are advisory navigation aids; source files remain authoritative.
+Each command regenerates its complete index on every invocation. `doc-index` is also the required
+refresh step for `.owlbear/prompts/doc-audit.prompt.md`, which regenerates it before scanning and at
+closeout. `py-index` and `ts-index` are optional, on-demand orientation aids. No index is
+regenerated automatically by pre-commit or CI; source files remain authoritative.
 
 `uv run megalint` runs the pinned MegaLinter image through Docker. On macOS, if the Docker CLI or engine is unavailable, it checks for OrbStack and Docker Desktop, starts the first installed runtime that can become ready, waits for Docker, and retries the command. It stops only a runtime started by this invocation when `OWLBEAR_DOCKER_STOP_RUNTIME=1` is set; otherwise the runtime remains available for later commands. Other platforms require a ready Docker engine.
 
