@@ -4,6 +4,9 @@ MCP server that exposes browser automation tools to pipeline agents for authenti
 
 → Parent: [README.md](../../README.md)
 
+**Status:** Alpha. Authenticated browser acquisition is implemented, but the server still needs
+real-world validation across target sites, Edge profiles, and SSO environments.
+
 ---
 
 ## Launch / Usage
@@ -25,7 +28,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 | `type_input` | Type text into an input field identified by CSS selector |
 | `select` | Select an option in a `<select>` element by value |
 | `read_text` | Return the current page's plain-text content without navigating |
-| `snapshot` | Return the current page's raw HTML |
+| `snapshot` | Return the current page's Markdown accessibility snapshot |
 
 `acquire` accepts a URL, optional readiness/content selectors, timeouts, and an explicit
 diagnostic-HTML opt-in. It does not accept arbitrary browser actions, scripts, credentials, or
