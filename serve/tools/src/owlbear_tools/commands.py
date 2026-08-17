@@ -80,6 +80,7 @@ COMMANDS = (
         includes=(
             "lint-python",
             "lint-markdown",
+            "lint-json",
             "lint-yaml",
             "lint-shell",
             "lint-actions",
@@ -119,6 +120,14 @@ COMMANDS = (
         development_only=True,
         supports_staged=True,
         supports_safe_fixes=True,
+    ),
+    Command(
+        "lint-json",
+        "uv run lint-json",
+        "JSON and JSONC lint.",
+        "Quality",
+        development_only=True,
+        supports_staged=True,
     ),
     Command(
         "lint-yaml",
