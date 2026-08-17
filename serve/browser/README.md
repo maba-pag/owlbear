@@ -4,6 +4,9 @@ Authenticated web content extraction via Playwright and Edge CDP. Launches a bro
 
 → Parent: [README.md](../../README.md)
 
+**Status:** Alpha. Authenticated acquisition is implemented, but Browser still needs
+real-world validation across the target sites and session environments.
+
 ---
 
 ## Launch / Usage
