@@ -285,8 +285,8 @@ No TestFromAC tests weakened or removed.
 **AC5 implementation deviation (server.py L125-127):**
 
 ```python
-if app_ctx.page is not None:       # fetcher is None but page is active
-    await app_ctx.page.goto(url)   # silently falls through — no ToolError
+if app_ctx.page is not None:  # fetcher is None but page is active
+    await app_ctx.page.goto(url)  # silently falls through — no ToolError
     return url
 ```
 

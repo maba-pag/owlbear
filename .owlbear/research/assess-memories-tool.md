@@ -73,7 +73,9 @@ async def assess_memories(
 ```python
 # engine.py
 def record_assessment(
-    self, entry_id: str, bucket: AssessmentBucket,
+    self,
+    entry_id: str,
+    bucket: AssessmentBucket,
     expected_updated_at: str | None = None,
 ) -> MemoryEntry:
     """Increment assessment counter, recompute score, persist."""

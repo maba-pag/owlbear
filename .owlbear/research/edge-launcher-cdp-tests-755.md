@@ -78,9 +78,7 @@ From brief security voice + Chrome 136 constraint:
 ### 3f. Connection Lifecycle — Playwright CDP API
 
 ```python
-browser = await playwright.chromium.connect_over_cdp(
-    f"http://127.0.0.1:{port}", is_local=True, timeout=30000
-)
+browser = await playwright.chromium.connect_over_cdp(f"http://127.0.0.1:{port}", is_local=True, timeout=30000)
 context = browser.contexts[0]  # default context carries SSO session
 page = await context.new_page()  # or context.pages[0]
 ```

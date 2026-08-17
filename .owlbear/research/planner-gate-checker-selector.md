@@ -100,11 +100,13 @@ def check_tdd(task: Task) -> bool: ...
 def check_clarity(task: Task) -> bool: ...
 def check_gates(task: Task) -> bool: ...  # composite: all 3
 
+
 # selector.py
-PRIORITY_RANK: dict[str, int]           # critical=0 .. someday=4
-STATUS_RANK: dict[str, int]             # done=0 .. ideation=6
-STATUS_AGENT_MAP: dict[str, str]        # status -> agent name
+PRIORITY_RANK: dict[str, int]  # critical=0 .. someday=4
+STATUS_RANK: dict[str, int]  # done=0 .. ideation=6
+STATUS_AGENT_MAP: dict[str, str]  # status -> agent name
 DISPATCH_CAP: int = 20
+
 
 def select_tasks(tasks: list[Task]) -> DispatchPlan: ...
 ```

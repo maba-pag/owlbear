@@ -67,13 +67,13 @@ from FlagEmbedding import BGEM3FlagModel
 # Constructor — loads tokenizer + model immediately (NOT lazy)
 model = BGEM3FlagModel(
     "BAAI/bge-m3",
-    use_fp16=True,          # Ignored on CPU (see §3.4)
-    devices=None,           # Auto-detects: falls back to ["cpu"]
-    batch_size=256,         # Default batch size
-    query_max_length=512,   # Default query max tokens
-    passage_max_length=512, # Default passage max tokens
-    return_dense=True,      # Include dense in output
-    return_sparse=False,    # Include sparse in output
+    use_fp16=True,  # Ignored on CPU (see §3.4)
+    devices=None,  # Auto-detects: falls back to ["cpu"]
+    batch_size=256,  # Default batch size
+    query_max_length=512,  # Default query max tokens
+    passage_max_length=512,  # Default passage max tokens
+    return_dense=True,  # Include dense in output
+    return_sparse=False,  # Include sparse in output
     return_colbert_vecs=False,  # Include ColBERT in output
 )
 
@@ -100,8 +100,10 @@ output = model.encode(
 In `M3Embedder.encode_single_device()` (line 347 of `m3.py`):
 
 ```python
-if device == "cpu": self.use_fp16 = False
-if self.use_fp16: self.model.half()
+if device == "cpu":
+    self.use_fp16 = False
+if self.use_fp16:
+    self.model.half()
 ```
 
 **FP16 is automatically disabled on CPU.** Setting `use_fp16=True` has no effect — the model runs in FP32 on CPU regardless. This means:
@@ -186,7 +188,7 @@ def stop_self_pool(self):
         self.stop_multi_process_pool(self.pool)
         self.pool = None
     try:
-        self.model.to('cpu')
+        self.model.to("cpu")
         torch.cuda.empty_cache()
     except:
         pass
@@ -275,6 +277,7 @@ class BgeM3EmbeddingProvider:
     def _ensure_model(self) -> object:
         if self._model is None:
             from FlagEmbedding import BGEM3FlagModel
+
             self._model = BGEM3FlagModel(
                 self.model_name,
                 use_fp16=True,  # No-op on CPU, but correct if GPU available
@@ -296,7 +299,9 @@ class BgeM3EmbeddingProvider:
     def unload(self) -> None:
         """Release model memory."""
         self._model = None
-        import gc; gc.collect()
+        import gc
+
+        gc.collect()
 ```
 
 **Risk mitigations:**

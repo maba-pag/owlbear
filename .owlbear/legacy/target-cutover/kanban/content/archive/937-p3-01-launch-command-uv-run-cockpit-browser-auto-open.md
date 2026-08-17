@@ -225,7 +225,7 @@ __WEAK on AC #4 assertion__ (tests/test_cockpit_launch.py:311):
 
 ```python
 assert resp.status_code == 200
-assert len(resp.text) > 0   # ← WEAK: any non-empty body at 200 passes
+assert len(resp.text) > 0  # ← WEAK: any non-empty body at 200 passes
 ```
 
 The implementation returns `HTMLResponse((dist_dir / "index.html").read_text(...))`. The test does not verify: content-type is `text/html`, content contains `<html`, or content matches actual `index.html` bytes. A catch-all returning `HTMLResponse("x")` passes. This is the core correctness assertion for the SPA routing invariant — it must be strong.

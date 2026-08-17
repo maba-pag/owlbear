@@ -42,7 +42,10 @@ task = _record_to_task(record)
 try:
     status_names = [s["name"] for s in app_ctx.engine.board_config().statuses]
     task.guidance = collect_guidance(
-        "move", before=before, after=task, status_names=status_names,
+        "move",
+        before=before,
+        after=task,
+        status_names=status_names,
     )
 except Exception:  # noqa: BLE001
     pass  # Guidance failure must not break the operation

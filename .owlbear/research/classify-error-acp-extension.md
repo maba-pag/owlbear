@@ -90,13 +90,13 @@ Insert the `RequestError` branch in `classify_error` **after** `HTTPStatusError`
 
 ```python
 _ACP_ERROR_CODES: dict[int, ErrorCategory] = {
-    -32700: ErrorCategory.PERMANENT,    # Parse error
-    -32600: ErrorCategory.PERMANENT,    # Invalid Request
-    -32601: ErrorCategory.PERMANENT,    # Method not found
-    -32602: ErrorCategory.PERMANENT,    # Invalid params
-    -32603: ErrorCategory.TRANSIENT,    # Internal error
-    -32000: ErrorCategory.AUTH,         # Auth required
-    -32002: ErrorCategory.TOOL_SEMANTIC, # Resource not found
+    -32700: ErrorCategory.PERMANENT,  # Parse error
+    -32600: ErrorCategory.PERMANENT,  # Invalid Request
+    -32601: ErrorCategory.PERMANENT,  # Method not found
+    -32602: ErrorCategory.PERMANENT,  # Invalid params
+    -32603: ErrorCategory.TRANSIENT,  # Internal error
+    -32000: ErrorCategory.AUTH,  # Auth required
+    -32002: ErrorCategory.TOOL_SEMANTIC,  # Resource not found
 }
 ```
 

@@ -31,28 +31,34 @@ serve/kanban/src/owlbear_kanban/migrate.py        # kanban-migrate entry point
 
 ```python
 class Section(BaseModel):
-    heading: str | None      # None for preamble (content before first heading)
-    level: int               # 0 for preamble; 1..6 for ATX/Setext heading depth
-    content: str             # body text under the heading, verbatim except CRLF→LF
+    heading: str | None  # None for preamble (content before first heading)
+    level: int  # 0 for preamble; 1..6 for ATX/Setext heading depth
+    content: str  # body text under the heading, verbatim except CRLF→LF
+
 
 class CorruptionError(KanbanError):
-    code: str                # one of the 9 ERR_CORRUPT_* codes (§4.1)
+    code: str  # one of the 9 ERR_CORRUPT_* codes (§4.1)
     user_message: str
-    file_path: str | None    # absolute path; None if pre-parse failure with no file context
+    file_path: str | None  # absolute path; None if pre-parse failure with no file context
+
 
 class RepairOutcome(BaseModel):
-    task_id: int | None              # None if file unparseable enough to extract id
+    task_id: int | None  # None if file unparseable enough to extract id
     file_path: str
-    code: str                        # ERR_CORRUPT_* code
-    action: Literal["fixed", "quarantined", "failed"]  # failed = repair pass incomplete, including AR-creation failure after quarantine
-    detail: str | None               # human-readable note
+    code: str  # ERR_CORRUPT_* code
+    action: Literal[
+        "fixed", "quarantined", "failed"
+    ]  # failed = repair pass incomplete, including AR-creation failure after quarantine
+    detail: str | None  # human-readable note
+
 
 class ActivityEvent(BaseModel):
-    timestamp: str                   # ISO-8601 UTC
-    task_id: int | None              # None allowed for board-level maintenance events (e.g. sweep)
-    action: str                      # structured event verb, e.g. claim/edit/move/end_work/sweep
-    source: str                      # "agent" | "cockpit" | "engine"
-    detail: str                      # human-readable structured detail payload
+    timestamp: str  # ISO-8601 UTC
+    task_id: int | None  # None allowed for board-level maintenance events (e.g. sweep)
+    action: str  # structured event verb, e.g. claim/edit/move/end_work/sweep
+    source: str  # "agent" | "cockpit" | "engine"
+    detail: str  # human-readable structured detail payload
+
 
 class ActivityCompactionResult(BaseModel):
     before_bytes: int
@@ -378,18 +384,18 @@ The quarantined file is **always** moved before AR creation is attempted. AR cre
 
 ```python
 def sweep(self) -> list[int]:
-     """Reconcile claim timeouts only.
+    """Reconcile claim timeouts only.
 
-     Behaviour (per AM-14: no body mutation):
-        1. Walk active tasks/. For each task with claimed_at expired
-            per BoardConfig.claim_timeout, remember the observed expired
-            claimed_at value and perform compare-and-clear per Brief B D36:
-            clear claimed_at and advance updated per Brief B D14 only if
-            the task still carries that same expired claim when written.
-            Append id to released only when the clear actually occurs.
-            (No body mutation; no quarantine; no AR creation.)
-        2. Return released.
-     """
+    Behaviour (per AM-14: no body mutation):
+       1. Walk active tasks/. For each task with claimed_at expired
+           per BoardConfig.claim_timeout, remember the observed expired
+           claimed_at value and perform compare-and-clear per Brief B D36:
+           clear claimed_at and advance updated per Brief B D14 only if
+           the task still carries that same expired claim when written.
+           Append id to released only when the clear actually occurs.
+           (No body mutation; no quarantine; no AR creation.)
+       2. Return released.
+    """
 ```
 
 ### 4.6 scan_and_fix() contract (storage layer)
@@ -434,6 +440,7 @@ class CorruptionError(KanbanError):
     Cockpit adapter. Always carries a code from the 9 ERR_CORRUPT_*
     set defined in §4.1.
     """
+
     def __init__(self, code: str, user_message: str, file_path: str | None = None):
         super().__init__(user_message)
         self.code = code
@@ -613,6 +620,7 @@ No cron, no scheduled task, no CLI script. The two triggers above are exhaustive
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Literal
+
 
 @dataclass
 class SessionRecord:

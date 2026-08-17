@@ -25,10 +25,10 @@ The problematic method in `agent_registry.py` L170-199:
 ```python
 def _build_agent(self, defn):
     model = defn.model or self._default_model
-    toolsets = [self._resolve_tool(t) for t in defn.tools]        # resolve
+    toolsets = [self._resolve_tool(t) for t in defn.tools]  # resolve
     if self._skill_registry and defn.skills:
         toolsets.append(self._skill_registry)
-    agent = Agent(model, instructions=..., toolsets=toolsets)      # BUILD 1
+    agent = Agent(model, instructions=..., toolsets=toolsets)  # BUILD 1
     role_str = defn.role.lower()
     if role_str != AgentRole.BUILDER:
         policy = _ROLE_POLICIES.get(AgentRole(role_str), BUILDER_POLICY)

@@ -195,10 +195,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 mock_fetcher = MagicMock()
 mock_fetcher.fetch = AsyncMock(return_value="# Page")
-ctx = _make_mcp_ctx(AppContext(
-    allowlist=DomainAllowlist(domains=["sharepoint.example.com"]),
-    fetcher=mock_fetcher,
-))
+ctx = _make_mcp_ctx(
+    AppContext(
+        allowlist=DomainAllowlist(domains=["sharepoint.example.com"]),
+        fetcher=mock_fetcher,
+    )
+)
 await navigate(ctx, url="https://sharepoint.example.com/sites/IT/page")
 ```
 
@@ -304,7 +306,7 @@ if app_ctx.fetcher is not None:
     app_ctx.last_content = content
     return content
 
-return url   # ← L84 STILL RETURNS url — builder claimed fix was applied but it was NOT
+return url  # ← L84 STILL RETURNS url — builder claimed fix was applied but it was NOT
 ```
 
 When `page=None` and `fetcher=None`, code falls through to `return url` instead of `raise ToolError(_MSG_NO_PAGE)`. Builder's notes say "replaced `return url` with `raise ToolError(_MSG_NO_PAGE)`" — actual file contradicts this claim.

@@ -73,8 +73,8 @@ The two shapes share `tool_name: str`. Use a base with `NotRequired` optional fi
 ```python
 class PostToolUseData(TypedDict):
     tool_name: str
-    result: NotRequired[object]           # from HookedToolset
-    event_type: NotRequired[str]          # from ApprovalGateToolset
+    result: NotRequired[object]  # from HookedToolset
+    event_type: NotRequired[str]  # from ApprovalGateToolset
     approval_required: NotRequired[bool]
     approval_decision: NotRequired[str]
     grant_ttl: NotRequired[int]

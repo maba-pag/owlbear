@@ -56,6 +56,7 @@ MicTranscriber                   # Convenience: Transcriber + sounddevice mic
 
 ```python
 import numpy as np
+
 audio_float = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
 ```
 
@@ -145,11 +146,11 @@ transcriber.close()          # Release model resources
 
 ```python
 class ModelArch(IntEnum):
-    TINY = 0              # 26M, non-streaming
-    BASE = 1              # 58M, non-streaming
-    TINY_STREAMING = 2    # 34M, streaming, 12.00% WER
-    BASE_STREAMING = 3    # streaming variant of Base
-    SMALL_STREAMING = 4   # 123M, streaming, 7.84% WER ← recommended
+    TINY = 0  # 26M, non-streaming
+    BASE = 1  # 58M, non-streaming
+    TINY_STREAMING = 2  # 34M, streaming, 12.00% WER
+    BASE_STREAMING = 3  # streaming variant of Base
+    SMALL_STREAMING = 4  # 123M, streaming, 7.84% WER ← recommended
     MEDIUM_STREAMING = 5  # 245M, streaming, 6.65% WER
 ```
 

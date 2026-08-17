@@ -85,7 +85,8 @@ for tool_name in defn.tools:
     except KeyError:
         logger.warning(
             "Agent '%s': skipping unavailable tool '%s'",
-            defn.name, tool_name,
+            defn.name,
+            tool_name,
         )
 ```
 

@@ -58,6 +58,7 @@ The `pyproject.toml` needs `[tool.uv.sources] owlbear-knowledge = { workspace = 
 
 ```python
 from mcp.server.fastmcp import FastMCP
+
 mcp = FastMCP("owlbear-knowledge", lifespan=app_lifespan)
 # ... tool registrations ...
 mcp.run()  # stdio by default

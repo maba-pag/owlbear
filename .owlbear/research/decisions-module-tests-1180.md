@@ -42,6 +42,7 @@ def create_dr(
 ) -> Path:
     """Create pending DR file, block task. Returns file path."""
 
+
 def resolve_pending_drs(
     decisions_dir: Path,
     engine: KanbanEngine,

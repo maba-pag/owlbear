@@ -71,6 +71,7 @@ Single table `source_registry` with nullable columns for state-specific fields:
 
 ```python
 from pydantic import TypeAdapter
+
 _CONFIG_ADAPTER = TypeAdapter(SourceConfig)
 # Store: _CONFIG_ADAPTER.dump_json(config).decode()
 # Load: _CONFIG_ADAPTER.validate_json(raw_json)

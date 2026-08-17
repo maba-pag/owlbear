@@ -57,12 +57,12 @@
   ```python
   class SessionRecord(BaseModel):
       task_id: int
-      task_status_at_start: str   # task status when start_work fired; stored in event detail
-      state: str                  # "running" | "stuck" | "completed" | "blocked" | "rejected" | "released" | "expired"
-      started_at: str             # ISO-8601 UTC timestamp of start_work event
-      ended_at: str | None        # ISO-8601 UTC of close event; None = session still claimed
-      outcome: str | None         # "success" | "block" | "reject" | "release" | "expired" | None
-      duration_s: int | None      # seconds; None when still active
+      task_status_at_start: str  # task status when start_work fired; stored in event detail
+      state: str  # "running" | "stuck" | "completed" | "blocked" | "rejected" | "released" | "expired"
+      started_at: str  # ISO-8601 UTC timestamp of start_work event
+      ended_at: str | None  # ISO-8601 UTC of close event; None = session still claimed
+      outcome: str | None  # "success" | "block" | "reject" | "release" | "expired" | None
+      duration_s: int | None  # seconds; None when still active
   ```
   `list_sessions(filter)` return type: `list[SessionRecord]`. Filter values per D31: `"active"` (`state in {"running", "stuck"}`), `"all"`, `"blocked-or-rejected"`, `"released"`. Engine derives sessions by pairing `start_work` events with their corresponding close events per task_id from the activity stream. `task_status_at_start` is stored in the `start_work` event's `detail` field by the engine at write time (e.g., `"status=in-progress"`), so derivation does not re-read task files. `state` is a session-level classifier for cockpit/history use; task claimed state remains on task projections (`claimed_at` / derived `claimed`), not here.
 

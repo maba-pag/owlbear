@@ -1407,6 +1407,7 @@ if tz:
         return f"{base}{frac}+00:00"
     # Convert non-UTC offsets to UTC per Brief C §5.3
     from datetime import datetime, timezone
+
     dt = datetime.fromisoformat(ts.strip())
     return dt.astimezone(timezone.utc).isoformat()
 return f"{base}{frac}+00:00"

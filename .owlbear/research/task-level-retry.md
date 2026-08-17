@@ -69,9 +69,9 @@ Add a `RetryEntry` dataclass to `daemon.py` alongside `RunningTask`:
 @dataclass
 class RetryEntry:
     task_id: str
-    attempt: int         # 1-indexed, starts at 1 on first failure
-    next_due: datetime   # UTC timestamp when retry becomes eligible
-    last_error: str      # truncated exception string
+    attempt: int  # 1-indexed, starts at 1 on first failure
+    next_due: datetime  # UTC timestamp when retry becomes eligible
+    last_error: str  # truncated exception string
 ```
 
 ### OrchestratorState extension

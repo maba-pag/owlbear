@@ -103,12 +103,15 @@ src/bearclaw/
 ```python
 # Sub-groups (named → nested commands)
 from bearclaw.commands.auth import app as auth_app
+
 app.add_typer(auth_app, name="auth")
 
 # Top-level commands (unnamed → promoted to root)
 from bearclaw.commands.chat import app as chat_app
+
 app.add_typer(chat_app)
 from bearclaw.commands.daemon import app as daemon_app
+
 app.add_typer(daemon_app)
 ```
 

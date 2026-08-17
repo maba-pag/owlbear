@@ -26,8 +26,9 @@ Kokoro uses a generator pipeline. Key API surface:
 
 ```python
 from kokoro import KPipeline
-pipeline = KPipeline(lang_code='a')  # downloads model from HF on first use
-generator = pipeline(text, voice='af_heart', speed=1.0)
+
+pipeline = KPipeline(lang_code="a")  # downloads model from HF on first use
+generator = pipeline(text, voice="af_heart", speed=1.0)
 for result in generator:
     audio = result.audio  # torch.FloatTensor, 24kHz mono
 ```
@@ -46,9 +47,10 @@ for result in generator:
 
 ```python
 import pyttsx3
+
 engine = pyttsx3.init()
-engine.setProperty('rate', 200)    # WPM
-engine.setProperty('volume', 1.0)  # 0.0–1.0
+engine.setProperty("rate", 200)  # WPM
+engine.setProperty("volume", 1.0)  # 0.0–1.0
 engine.say(text)
 engine.runAndWait()  # blocking
 ```

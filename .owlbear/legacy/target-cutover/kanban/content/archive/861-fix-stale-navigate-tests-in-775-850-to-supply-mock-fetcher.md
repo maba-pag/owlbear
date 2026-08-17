@@ -266,11 +266,11 @@ The reviewer's analysis concluded that `mock_page` was required because `navigat
 
 ```python
 if isinstance(app_ctx, AppContext):
-    if app_ctx.fetcher is not None:          # ← checked first
+    if app_ctx.fetcher is not None:  # ← checked first
         content = await app_ctx.fetcher.fetch(url)
         ...
         return content
-    if app_ctx.page is not None:              # ← only reached if fetcher is None
+    if app_ctx.page is not None:  # ← only reached if fetcher is None
         await app_ctx.page.goto(url)
         return url
     raise ToolError("Browser not available")
@@ -347,11 +347,11 @@ N/A — no new production code. Test-only repair task.
 
 ```python
 if isinstance(app_ctx, AppContext):
-    if app_ctx.fetcher is not None:          # checked first
+    if app_ctx.fetcher is not None:  # checked first
         content = await app_ctx.fetcher.fetch(url)
         ...
         return content
-    if app_ctx.page is not None:             # only reached if fetcher is None
+    if app_ctx.page is not None:  # only reached if fetcher is None
         await app_ctx.page.goto(url)
         return url
     return url  # dry-run — no error

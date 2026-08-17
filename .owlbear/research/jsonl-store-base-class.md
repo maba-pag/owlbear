@@ -69,11 +69,12 @@ Rationale:
 ```python
 class JsonlStore(Generic[T]):
     """Append-only JSONL persistence for Pydantic models."""
+
     def __init__(self, path: Path, record_type: type[T]) -> None: ...
     @property
     def path(self) -> Path: ...
-    def append(self, record: T) -> None: ...      # mkdir + dump_json + open("a")
-    def load(self) -> list[T]: ...                 # exists + read_text + splitlines + validate_json
+    def append(self, record: T) -> None: ...  # mkdir + dump_json + open("a")
+    def load(self) -> list[T]: ...  # exists + read_text + splitlines + validate_json
 ```
 
 Subclasses add domain-specific methods (`query`, `summary`, `rotate`). File location: `src/owlbear/core/jsonl_store.py` — it's a core infrastructure utility used by both `core/` and `memory/`.

@@ -75,11 +75,11 @@ Requires Chromium — not Firefox/WebKit. OwlBear already targets Chromium only.
 ```python
 @dataclass
 class AXNodeInfo:
-    id: int              # backendDOMNodeId from CDP
-    role: str            # "button", "link", "textbox", etc.
-    name: str            # accessible name
-    description: str     # accessible description (optional)
-    properties: dict     # focusable, editable, expanded, etc.
+    id: int  # backendDOMNodeId from CDP
+    role: str  # "button", "link", "textbox", etc.
+    name: str  # accessible name
+    description: str  # accessible description (optional)
+    properties: dict  # focusable, editable, expanded, etc.
 ```
 
 Note: PinchTab's original schema includes a `selector` field. Recovering CSS selectors from `backendDOMNodeId` requires an additional CDP call (`DOM.describeNode`) which adds latency. **Recommendation:** defer selector recovery to a separate method or future task — the `id` (backendDOMNodeId) is sufficient for element targeting via CDP.

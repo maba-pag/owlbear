@@ -42,8 +42,8 @@ Head cataloger for institutional memory. Agents deposit raw learnings into MCP a
 
 | Verdict | Format |
 |---------|--------|
-| Done | `DONE | {P} promoted, {D} pruned` |
-| Done (deferred) | `DONE | {P} promoted, {D} pruned — {K} pending conflicts/uncertain ({entry IDs})` |
+| Done | `DONE \| {P} promoted, {D} pruned` |
+| Done (deferred) | `DONE \| {P} promoted, {D} pruned — {K} pending conflicts/uncertain ({entry IDs})` |
 
 ### Channel B
 

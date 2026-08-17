@@ -42,6 +42,7 @@ def _search_chunks(self, prompt: str, top_k: int, scopes: list[str] | None = Non
     effective = scopes if scopes is not None else self._scopes
     # use effective wherever self._scopes was used
 
+
 # query: add scopes param, forward to _search_chunks
 async def query(self, prompt, *, top_k=5, token_budget=4000, scopes=None):
     raw = self._search_chunks(prompt, top_k, scopes=scopes)

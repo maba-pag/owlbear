@@ -30,11 +30,13 @@ def _update_source_record(self, source, result):
     now = datetime.now(tz=UTC).isoformat()
     messages = [*result.errors, *result.warnings]
     last_error = "; ".join(messages) if messages else None
-    updated = source.model_copy(update={
-        "last_refreshed_at": now,  # ← always bumped
-        "last_error": last_error,
-        "updated_at": now,
-    })
+    updated = source.model_copy(
+        update={
+            "last_refreshed_at": now,  # ← always bumped
+            "last_error": last_error,
+            "updated_at": now,
+        }
+    )
     self._store.update(updated)
 ```
 

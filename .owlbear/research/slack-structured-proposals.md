@@ -65,31 +65,59 @@ For the **send** side, `SlackChannel` gains a `send_approval()` / `send_proposal
 
 ```python
 # actions block with buttons per option
-{"type": "actions", "block_id": "proposal_{id}", "elements": [
-    {"type": "button", "text": {"type": "plain_text", "text": "1. OAuth flow"},
-     "action_id": "proposal_opt_1", "value": "1"},
-    {"type": "button", "text": {"type": "plain_text", "text": "2. PAT token"},
-     "action_id": "proposal_opt_2", "value": "2"},
-]}
+{
+    "type": "actions",
+    "block_id": "proposal_{id}",
+    "elements": [
+        {
+            "type": "button",
+            "text": {"type": "plain_text", "text": "1. OAuth flow"},
+            "action_id": "proposal_opt_1",
+            "value": "1",
+        },
+        {
+            "type": "button",
+            "text": {"type": "plain_text", "text": "2. PAT token"},
+            "action_id": "proposal_opt_2",
+            "value": "2",
+        },
+    ],
+}
 ```
 
 **Approval template** — action description, approve/deny buttons, reason context:
 
 ```python
-{"type": "actions", "block_id": "approval_{id}", "elements": [
-    {"type": "button", "text": {"type": "plain_text", "text": "Approve"},
-     "action_id": "approval_approve", "value": "yes", "style": "primary"},
-    {"type": "button", "text": {"type": "plain_text", "text": "Deny"},
-     "action_id": "approval_deny", "value": "no", "style": "danger"},
-]}
+{
+    "type": "actions",
+    "block_id": "approval_{id}",
+    "elements": [
+        {
+            "type": "button",
+            "text": {"type": "plain_text", "text": "Approve"},
+            "action_id": "approval_approve",
+            "value": "yes",
+            "style": "primary",
+        },
+        {
+            "type": "button",
+            "text": {"type": "plain_text", "text": "Deny"},
+            "action_id": "approval_deny",
+            "value": "no",
+            "style": "danger",
+        },
+    ],
+}
 ```
 
 **Progress template** — emoji-based progress bar, current step, ETA:
 
 ```python
 # Progress bar: ▓▓▓▓░░░░░░ 40%
-{"type": "section", "text": {"type": "mrkdwn",
-    "text": "*Task:* Deploy service\n▓▓▓▓░░░░░░ 4/10\n*Status:* running\n*ETA:* ~3 min"}}
+{
+    "type": "section",
+    "text": {"type": "mrkdwn", "text": "*Task:* Deploy service\n▓▓▓▓░░░░░░ 4/10\n*Status:* running\n*ETA:* ~3 min"},
+}
 ```
 
 ### 3.4 Threaded Conversations

@@ -716,6 +716,7 @@ Write exactly 1 new failing test in `tests/test_package_boundary_1064.py`, class
 def test_durable_suite_detects_from_owlbear_kanban_import_storage(self, tmp_path: Path) -> None:
     """Durable helper must catch `from owlbear_kanban import storage` alias form."""
     from tests.test_package_boundary import _find_kanban_storage_import_violations
+
     kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
     kanban_src.mkdir(parents=True)
     (kanban_src / "engine.py").write_text("", encoding="utf-8")
@@ -1417,13 +1418,10 @@ def test_durable_suite_detects_direct_static_storage_import(self, tmp_path: Path
     kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
     kanban_src.mkdir(parents=True)
     (kanban_src / "engine.py").write_text("", encoding="utf-8")
-    (kanban_src / "bad.py").write_text(
-        "from owlbear_kanban.storage import read_task\n", encoding="utf-8"
-    )
+    (kanban_src / "bad.py").write_text("from owlbear_kanban.storage import read_task\n", encoding="utf-8")
     violations = _find_kanban_storage_import_violations(tmp_path)
     assert violations, (
-        "Durable helper must detect direct 'from owlbear_kanban.storage import X' "
-        "in non-engine source files"
+        "Durable helper must detect direct 'from owlbear_kanban.storage import X' in non-engine source files"
     )
     assert any("bad.py" in v for v in violations)
 ```
@@ -1442,10 +1440,7 @@ def test_durable_suite_detects_dynamic_task_io_import(self, tmp_path: Path) -> N
         encoding="utf-8",
     )
     violations = _find_task_io_import_violations(tmp_path)
-    assert violations, (
-        "Durable helper must detect importlib.import_module('owlbear_kanban.task_io') "
-        "in source files"
-    )
+    assert violations, "Durable helper must detect importlib.import_module('owlbear_kanban.task_io') in source files"
     assert any("dispatch.py" in v for v in violations)
 ```
 
@@ -1859,6 +1854,7 @@ def test_is_safe_path_expr_rejects_path_multi_arg_with_absolute_segment(self) ->
     """Path(tmp_path, "/outside.txt") must be rejected — absolute 2nd arg overrides root."""
     import ast
     from tests.test_deny_code_writes import _is_safe_path_expr
+
     expr = ast.parse('Path(tmp_path, "/outside.txt")', mode="eval").body
     assert not _is_safe_path_expr(expr, {"tmp_path"}), (
         "_is_safe_path_expr must reject Path() when any argument is an absolute path"
@@ -1878,9 +1874,7 @@ One change in `tests/test_deny_code_writes.py`, line 78. Change:
 To:
 
 ```python
-            return all(
-                _is_safe_path_expr(a, safe_names, tmp_aliases) for a in node.args
-            )
+return all(_is_safe_path_expr(a, safe_names, tmp_aliases) for a in node.args)
 ```
 
 This mirrors the existing `joinpath` handler pattern at lines 81-86.

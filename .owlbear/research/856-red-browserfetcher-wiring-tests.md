@@ -53,10 +53,12 @@ Both stale tests need the same fix — add a mock fetcher to their AppContext co
 ```python
 mock_fetcher = MagicMock()
 mock_fetcher.fetch = AsyncMock(return_value="# Page")
-ctx = _make_mcp_ctx(AppContext(
-    allowlist=DomainAllowlist(domains=[...]),
-    fetcher=mock_fetcher,
-))
+ctx = _make_mcp_ctx(
+    AppContext(
+        allowlist=DomainAllowlist(domains=[...]),
+        fetcher=mock_fetcher,
+    )
+)
 ```
 
 Their intent (allowlist behavior) remains valid — they just need the fetcher prerequisite.

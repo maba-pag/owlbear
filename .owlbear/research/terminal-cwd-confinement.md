@@ -58,8 +58,7 @@ else:
         msg = f"Path outside workspace: {working_dir!r}"
         raise PermissionError(msg)
     cwd_path = Path(working_dir)
-    cwd = (cwd_path if cwd_path.is_absolute()
-           else self._workspace_root / cwd_path).resolve()
+    cwd = (cwd_path if cwd_path.is_absolute() else self._workspace_root / cwd_path).resolve()
     if not cwd.is_relative_to(self._workspace_root.resolve()):
         msg = f"Path outside workspace: {working_dir}"
         raise PermissionError(msg)

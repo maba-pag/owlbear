@@ -52,10 +52,10 @@ from owlbear_tools.indexes import generate_indexes
 from owlbear_tools.py_index import generate_index as generate_py_index
 from owlbear_tools.ts_index import generate_index as generate_ts_index
 
-generate_indexes(root)    # writes all three indexes concurrently
+generate_indexes(root)  # writes all three indexes concurrently
 generate_doc_index(root)  # writes .owlbear/doc-index.md
-generate_py_index(root)   # writes .owlbear/py-index.md
-generate_ts_index(root)   # writes .owlbear/ts-index.md
+generate_py_index(root)  # writes .owlbear/py-index.md
+generate_ts_index(root)  # writes .owlbear/ts-index.md
 ```
 
 | Function | Description |

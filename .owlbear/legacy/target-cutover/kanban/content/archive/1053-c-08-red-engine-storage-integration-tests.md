@@ -970,6 +970,7 @@ This task has been through 5 reviewer cycles. The core implementation and tests 
 **Builder action:** In `sweep()`, add a `detect_corruption(path, self._config)` check before `write_task(path, record)`. If corrupt, skip. The engine already uses this pattern in `list_tasks()` (engine.py:495, 522). Use the same deferred import pattern:
 ```python
 from owlbear_kanban.storage import detect_corruption as _detect_corruption  # noqa: PLC0415
+
 corruption = _detect_corruption(path, self._config)
 if corruption is not None:
     continue

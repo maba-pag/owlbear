@@ -488,7 +488,7 @@ Changes from v2: Added AC-5 for archive-move safety per third-cycle review Data 
   # Re-validate archive eligibility from disk before moving.
   try:
       current = read_task(path, config=self._config)
-  except (FileNotFoundError, ValueError, KeyError, CorruptionError):
+  except FileNotFoundError, ValueError, KeyError, CorruptionError:
       skipped_items.append({"path": str(path), "reason": "task changed during cleanup"})
       continue
   if current.status != "archived" or current.archival_reason is None:

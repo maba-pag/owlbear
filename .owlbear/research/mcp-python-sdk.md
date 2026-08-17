@@ -81,6 +81,7 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
     finally:
         await db.disconnect()
 
+
 mcp = FastMCP("My Server", lifespan=app_lifespan)
 ```
 

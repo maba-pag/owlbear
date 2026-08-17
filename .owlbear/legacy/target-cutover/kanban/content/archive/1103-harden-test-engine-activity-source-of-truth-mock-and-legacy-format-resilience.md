@@ -86,9 +86,7 @@ Challenger raised 4 concerns:
 Replace `test_ac_c43_sessions_derived_from_activity_not_task_files` in `TestFromAC_ListSessions` with the following (or equivalent):
 
 ```python
-def test_ac_c43_sessions_derived_from_activity_not_task_files(
-    self, tmp_path: Path
-) -> None:
+def test_ac_c43_sessions_derived_from_activity_not_task_files(self, tmp_path: Path) -> None:
     """AC-C43: list_sessions reads only activity.jsonl, NOT task frontmatter."""
     kanban_dir = _make_board(tmp_path)
     _make_task_file(kanban_dir, 1001, "todo")
@@ -118,9 +116,7 @@ Note: `patch` is already imported in the file. `Path` is already imported. No ne
 Add a new test to `TestFromAC_ListSessions` (e.g., after the empty-activity-log test):
 
 ```python
-def test_ac_c43_legacy_format_events_accepted_by_session_derivation(
-    self, tmp_path: Path
-) -> None:
+def test_ac_c43_legacy_format_events_accepted_by_session_derivation(self, tmp_path: Path) -> None:
     """AC-C43: old-format events (actor field, no source) are accepted by _read_log_entries.
 
     activity_log.py:log_activity emits actor-keyed events without a source field.
@@ -156,9 +152,7 @@ def test_ac_c43_legacy_format_events_accepted_by_session_derivation(
     engine = KanbanEngine(kanban_dir)
     sessions = engine.list_sessions(filter="all")
 
-    assert len(sessions) == 1, (
-        f"Old-format events must produce exactly 1 session, got {len(sessions)}"
-    )
+    assert len(sessions) == 1, f"Old-format events must produce exactly 1 session, got {len(sessions)}"
     assert sessions[0].task_id == 1001
     assert sessions[0].state == "completed", (
         f"Expected state='completed' from old-format success entry, got {sessions[0].state!r}"

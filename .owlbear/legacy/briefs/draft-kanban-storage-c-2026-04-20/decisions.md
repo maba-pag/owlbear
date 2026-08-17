@@ -109,12 +109,11 @@ Brief B `sweep()` remains claim-only and keeps its existing `list[int]` return t
 
 ```python
 class RepairOutcome(BaseModel):
-    task_id: int | None         # None if file unparseable enough to extract ID
+    task_id: int | None  # None if file unparseable enough to extract ID
     file_path: str
-    code: str                   # ERR_CORRUPT_* code from C6
+    code: str  # ERR_CORRUPT_* code from C6
     action: Literal["fixed", "quarantined", "failed"]
-    detail: str | None          # e.g. "renamed to match id=1034", "AR #1042 created"
-
+    detail: str | None  # e.g. "renamed to match id=1034", "AR #1042 created"
 ```
 
 No `sweep()` return-type expansion is needed. Startup-safe claim maintenance and explicit storage repair are separate surfaces by design.
@@ -206,9 +205,9 @@ Flat sibling directory `.owlbear/kanban/archive/` (fixed path; no `archive_dir` 
 
 ```python
 class CorruptionError(KanbanError):
-    code: str                  # one of the 9 C6 ERR_CORRUPT_* codes
+    code: str  # one of the 9 C6 ERR_CORRUPT_* codes
     user_message: str
-    file_path: str | None      # absolute path; None if corruption pre-parses filename
+    file_path: str | None  # absolute path; None if corruption pre-parses filename
 ```
 
 Subclass of the existing Brief B `KanbanError` hierarchy (D27/D57). Maps to HTTP 500 via Cockpit adapter per Brief B D27.
@@ -351,14 +350,15 @@ Paper-c.md §3.3 is the source of truth; C8.2 is rewritten to match.
 Paper §4.4 quarantine sequence is amended to call Brief B `create_task` with its locked signature (Brief B paper-integration.md §1.4):
 
 ```python
-ar_body_str = render_body([
-    Section(heading=None, level=0, content=""),
-    Section(heading="Quarantined file", level=2,
-            content=f"- code: {C}\n- path: {dest}\n- detail: {detail}\n"),
-])
+ar_body_str = render_body(
+    [
+        Section(heading=None, level=0, content=""),
+        Section(heading="Quarantined file", level=2, content=f"- code: {C}\n- path: {dest}\n- detail: {detail}\n"),
+    ]
+)
 response = engine.create_task(
     title=f"Quarantined task file: {F.name}",
-    body=ar_body_str,            # str, not list[Section]
+    body=ar_body_str,  # str, not list[Section]
     priority="needed",
     tags=["type:user-action"],
     # NO status arg — tasks created at BoardConfig.entry_status per Brief B D50

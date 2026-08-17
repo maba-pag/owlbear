@@ -52,6 +52,7 @@ All 3 v1 modules return `ExtractionResult`. The only difference is the system pr
 @runtime_checkable
 class StructuredExtractor(Protocol):
     """LLM-backed structured extraction — returns entities and edges from text."""
+
     async def extract(self, prompt: str) -> ExtractionResult: ...
 ```
 

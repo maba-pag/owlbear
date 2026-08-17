@@ -88,9 +88,7 @@ maximizes diagnostic control, and tests in #755 are designed against this API sh
 
 **CDP connection lifecycle:**
 ```python
-browser = await playwright.chromium.connect_over_cdp(
-    f"http://127.0.0.1:{port}", is_local=True, timeout=30000
-)
+browser = await playwright.chromium.connect_over_cdp(f"http://127.0.0.1:{port}", is_local=True, timeout=30000)
 context = browser.contexts[0]  # default context carries SSO session
 ```
 - `is_local=True` — available since Playwright v1.58 [1], enables file-system optimizations

@@ -118,6 +118,7 @@ No explicit `structured_output=True` needed.
 ```python
 from typing import TypedDict
 
+
 class KanbanTask(TypedDict, total=False):
     id: int
     title: str

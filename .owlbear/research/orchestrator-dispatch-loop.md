@@ -88,10 +88,13 @@ Agent category mapping (from S1):
 AGENT_CATEGORY = {
     "auditor": "restricted",
     "builder": "restricted",
-    "researcher": "light_flex", "writer": "light_flex",
-    "architect": "light_flex", "kanban-planner": "light_flex",
+    "researcher": "light_flex",
+    "writer": "light_flex",
+    "architect": "light_flex",
+    "kanban-planner": "light_flex",
     "curator": "light_flex",
-    "reviewer": "heavy_flex", "test-writer": "heavy_flex",
+    "reviewer": "heavy_flex",
+    "test-writer": "heavy_flex",
 }
 ```
 

@@ -107,8 +107,7 @@ async def bootstrap(
     agent_registry = build_agent_registry(settings, toolsets, mcp_registry)
 
     # 9. Build agent
-    agent = OwlBearAgent(model=model, session=session, context=context,
-                         hooks=hooks, tracker=tracker, toolsets=hooked)
+    agent = OwlBearAgent(model=model, session=session, context=context, hooks=hooks, tracker=tracker, toolsets=hooked)
     agent._deps.agent_registry = agent_registry
 
     return BootstrapResult(agent=agent, channel=channel, mcp_registry=mcp_registry, hooks=hooks)

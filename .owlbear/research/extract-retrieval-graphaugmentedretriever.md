@@ -43,7 +43,7 @@ Every type the v1 retriever depends on already exists in v2 with matching signat
 # v1 (5 lines to change)
 from owlbear.memory.knowledge.protocol import HybridEmbedding
 from owlbear.memory.knowledge.embeddings import EmbeddingProvider
-from owlbear.memory.knowledge.graph import GraphStore          # → graph_store
+from owlbear.memory.knowledge.graph import GraphStore  # → graph_store
 from owlbear.memory.knowledge.models import Entity
 from owlbear.memory.knowledge.protocol import VectorStoreProtocol
 

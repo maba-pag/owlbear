@@ -93,12 +93,12 @@ The task mentions preventing critical long-term knowledge from decaying. Three o
 
 ```python
 IMPORTANCE_BY_TYPE = {
-    "decision": 0.9,   # Decisions persist — decay very slowly
-    "pattern": 0.8,    # Patterns are reusable
-    "concept": 0.7,    # Conceptual knowledge ages slowly
-    "class_": 0.5,     # Code structures change moderately
-    "function": 0.4,   # Functions change often
-    "file": 0.3,       # Files change most frequently
+    "decision": 0.9,  # Decisions persist — decay very slowly
+    "pattern": 0.8,  # Patterns are reusable
+    "concept": 0.7,  # Conceptual knowledge ages slowly
+    "class_": 0.5,  # Code structures change moderately
+    "function": 0.4,  # Functions change often
+    "file": 0.3,  # Files change most frequently
 }
 ```
 

@@ -61,8 +61,11 @@ from owlbear_kanban.decisions import parse_dr, resolve_decision as kanban_resolv
 # ... in resolve endpoint, replace lines 191-222 with:
 try:
     kanban_resolve_decision(
-        pending_path, req.response, engine,
-        notes=req.notes, resolved_by="cockpit-api",
+        pending_path,
+        req.response,
+        engine,
+        notes=req.notes,
+        resolved_by="cockpit-api",
     )
 except (TypeError, ValueError, YAMLError) as exc:
     detail = "Invalid decision file format"

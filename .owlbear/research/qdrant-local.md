@@ -45,24 +45,47 @@ One collection stores dense+sparse+ColBERT per point. Key API patterns (from yun
 
 ```python
 # Collection: 3 named vector spaces
-client.create_collection("knowledge", vectors_config={
-    "dense": models.VectorParams(size=1024, distance=models.Distance.COSINE),
-    "colbert": models.VectorParams(size=1024, distance=models.Distance.COSINE,
-        multivector_config=models.MultiVectorConfig(comparator=models.MultiVectorComparator.MAX_SIM),
-        hnsw_config=models.HnswConfigDiff(m=0)),  # No HNSW for rerank-only vectors
-}, sparse_vectors_config={"sparse": models.SparseVectorParams()})
+client.create_collection(
+    "knowledge",
+    vectors_config={
+        "dense": models.VectorParams(size=1024, distance=models.Distance.COSINE),
+        "colbert": models.VectorParams(
+            size=1024,
+            distance=models.Distance.COSINE,
+            multivector_config=models.MultiVectorConfig(comparator=models.MultiVectorComparator.MAX_SIM),
+            hnsw_config=models.HnswConfigDiff(m=0),
+        ),  # No HNSW for rerank-only vectors
+    },
+    sparse_vectors_config={"sparse": models.SparseVectorParams()},
+)
 
 # Upsert: all 3 vector types + payload metadata (replaces bridge table)
-client.upsert("knowledge", points=[models.PointStruct(id=chunk_id,
-    payload={"entity_id": "...", "scope": "global", "type": "entity"},
-    vector={"dense": dense_vec, "colbert": colbert_vecs,
-            "sparse": models.SparseVector(indices=[...], values=[...])})])
+client.upsert(
+    "knowledge",
+    points=[
+        models.PointStruct(
+            id=chunk_id,
+            payload={"entity_id": "...", "scope": "global", "type": "entity"},
+            vector={
+                "dense": dense_vec,
+                "colbert": colbert_vecs,
+                "sparse": models.SparseVector(indices=[...], values=[...]),
+            },
+        )
+    ],
+)
 
 # Hybrid search: sparse+dense prefetch → ColBERT rerank (single API call)
-results = client.query_points("knowledge", prefetch=[
-    models.Prefetch(query=sparse_vec, using="sparse", limit=20),
-    models.Prefetch(query=dense_vec, using="dense", limit=20),
-], query=colbert_vecs, using="colbert", limit=10)
+results = client.query_points(
+    "knowledge",
+    prefetch=[
+        models.Prefetch(query=sparse_vec, using="sparse", limit=20),
+        models.Prefetch(query=dense_vec, using="dense", limit=20),
+    ],
+    query=colbert_vecs,
+    using="colbert",
+    limit=10,
+)
 ```
 
 **Fusion options:** RRF (`Fusion.RRF`), weighted RRF (`Rrf(weights=[3.0,1.0])`), DBSF, or ColBERT rerank. The ColBERT-rerank pattern (prefetch dense+sparse → rescore with max_sim) is recommended by Qdrant and the bge-m3-qdrant-sample repo.

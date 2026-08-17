@@ -21,7 +21,7 @@ from pathlib import Path
 # High-level engine (recommended for most callers)
 memory_dir = Path(".owlbear/memory")
 engine = MemoryEngine(memory_dir)
-entries = engine.get_entries()          # mtime-gated reload
+entries = engine.get_entries()  # mtime-gated reload
 entry = engine.save(
     title="My entry",
     content="...",
@@ -145,7 +145,7 @@ control (OCC), and mtime-based caching. This is the primary entry point for cons
 that need to read or mutate memory entries.
 
 ```python
-engine = MemoryEngine(memory_dir)   # memory_dir created if absent
+engine = MemoryEngine(memory_dir)  # memory_dir created if absent
 ```
 
 #### Scoring Constants
@@ -237,8 +237,8 @@ whenever the directory `mtime_ns` differs from the last recorded value.
 
 ```python
 cache = MtimeScanCache(memory_dir)
-cache.has_changed()   # True (first call)
-cache.has_changed()   # False (mtime unchanged)
+cache.has_changed()  # True (first call)
+cache.has_changed()  # False (mtime unchanged)
 ```
 
 ---

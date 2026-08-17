@@ -44,6 +44,7 @@ Dependencies (all DONE): #120 (FileToolset), #121 (TerminalToolset), #122 (bearc
 from pydantic_ai.models.function import FunctionModel, AgentInfo
 from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart, ToolCallPart
 
+
 def _model_fn(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
     if len(messages) == 1:
         # Step 1: call the tool
@@ -71,6 +72,7 @@ This exercises the full stack: hooks → session load → Agent.run (with Functi
 
 ```python
 from pydantic_ai import models
+
 models.ALLOW_MODEL_REQUESTS = False  # Global — blocks real LLM calls
 ```
 
@@ -80,6 +82,7 @@ Set globally at module level in the test file. `TestModel` and `FunctionModel` a
 
 ```python
 from pydantic_ai import capture_run_messages
+
 with capture_run_messages() as messages:
     result = await agent.turn("...")
 # messages now contains the full ModelMessage list for assertion

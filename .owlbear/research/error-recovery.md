@@ -93,14 +93,14 @@ Instead of `f"Error: {exc}"`, return a typed dict the LLM can reason about:
 ```python
 {
     "status": "error",
-    "error_type": "transient",       # from classification
+    "error_type": "transient",  # from classification
     "tool_name": "run_command",
     "message": "Process timed out after 30s",
     "attempts": 3,
     "max_attempts": 3,
     "suggestion": "Try a shorter command or increase timeout",
     "can_retry": False,
-    "escalate": True
+    "escalate": True,
 }
 ```
 

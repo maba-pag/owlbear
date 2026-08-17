@@ -61,9 +61,7 @@ Three mechanisms preserve guidance:
 
 ```python
 @pytest.mark.asyncio
-async def test_start_work_preserves_guidance_from_agent_view(
-    self, ctx: MagicMock, mock_av: MagicMock
-) -> None:
+async def test_start_work_preserves_guidance_from_agent_view(self, ctx: MagicMock, mock_av: MagicMock) -> None:
     """AC4: guidance from AgentView.start_work() passes through verbatim."""
     expected_guidance = [
         "⚠️ This task has unresolved dependencies (IDs: 99). "

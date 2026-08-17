@@ -77,21 +77,23 @@ class MemoryCategory(StrEnum):
     PREFERENCE = "preference"
     ENV_CONTEXT = "env-context"
 
+
 class MemoryState(StrEnum):
     PENDING = "pending"
     CURATED = "curated"
     APPROVED = "approved"
     DELETED = "deleted"
 
+
 class MemoryEntry(BaseModel):
-    id: str                          # UUIDv4
-    title: str                       # non-empty
-    categories: list[MemoryCategory] # ≥1
-    confidence: float                # 0.7–1.0
+    id: str  # UUIDv4
+    title: str  # non-empty
+    categories: list[MemoryCategory]  # ≥1
+    confidence: float  # 0.7–1.0
     state: MemoryState
-    content: str                     # ≤1024 chars
+    content: str  # ≤1024 chars
     scope_agents: list[str]
-    source_agent: str                # non-empty
+    source_agent: str  # non-empty
     created_at: datetime
     updated_at: datetime
     approved_at: datetime | None
@@ -121,10 +123,16 @@ Mutation methods accept `expected_updated_at`. If the on-disk `updated_at` diffe
 ### Error Types
 
 ```python
-class NotFoundError(Exception): ...      # entry ID not on disk
-class ConcurrencyError(Exception): ...   # expected_updated_at mismatch
-class ValidationError(Exception): ...    # field validation failure
-class TransitionError(Exception): ...    # invalid state transition
+class NotFoundError(Exception): ...  # entry ID not on disk
+
+
+class ConcurrencyError(Exception): ...  # expected_updated_at mismatch
+
+
+class ValidationError(Exception): ...  # field validation failure
+
+
+class TransitionError(Exception): ...  # invalid state transition
 ```
 
 ## Cockpit Backend API
@@ -146,9 +154,11 @@ class MemoriesResponse(BaseModel):
     entries: list[MemoryEntryResponse]
     parse_errors: int
 
+
 # POST /api/memories/{id}/approve request
 class ApproveRequest(BaseModel):
     expected_updated_at: str  # ISO 8601
+
 
 # POST /api/memories/{id}/edit request
 class EditRequest(BaseModel):
@@ -158,6 +168,7 @@ class EditRequest(BaseModel):
     confidence: float | None = None
     scope_agents: list[str] | None = None
     content: str | None = None
+
 
 # POST /api/memories/{id}/delete request
 class DeleteRequest(BaseModel):

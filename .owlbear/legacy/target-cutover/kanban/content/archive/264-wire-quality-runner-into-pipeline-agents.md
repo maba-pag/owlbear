@@ -132,8 +132,8 @@ FileNotFoundError: 'C:\...\owlbear\.github\agents\builder.agent.md'
 ```
 Both test files define:
 ```python
-AGENTS_DIR = ROOT / ".github" / "agents"   # ← WRONG — directory does not exist
-SKILLS_DIR = ROOT / ".github" / "skills"   # ← WRONG — directory does not exist
+AGENTS_DIR = ROOT / ".github" / "agents"  # ← WRONG — directory does not exist
+SKILLS_DIR = ROOT / ".github" / "skills"  # ← WRONG — directory does not exist
 ```
 Actual location: `ROOT / "share" / "agents"` and `ROOT / "share" / "skills"`.
 

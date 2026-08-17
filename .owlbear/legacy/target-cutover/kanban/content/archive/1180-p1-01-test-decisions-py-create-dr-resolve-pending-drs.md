@@ -537,15 +537,12 @@ One filter clause addition in `test_needs_info_append_body_payload_is_meaningful
 
 Change:
 ```python
-append_calls = [
-    c for c in engine.edit_task.call_args_list if c.kwargs.get("append_body") is not None
-]
+append_calls = [c for c in engine.edit_task.call_args_list if c.kwargs.get("append_body") is not None]
 ```
 To:
 ```python
 append_calls = [
-    c for c in engine.edit_task.call_args_list
-    if c.args and c.args[0] == 77 and c.kwargs.get("append_body") is not None
+    c for c in engine.edit_task.call_args_list if c.args and c.args[0] == 77 and c.kwargs.get("append_body") is not None
 ]
 ```
 

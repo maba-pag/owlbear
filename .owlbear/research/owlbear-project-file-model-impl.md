@@ -81,6 +81,7 @@ Use `AwareDatetime` for `created_at` (enforces the spec's timezone requirement w
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from typing import Literal
 
+
 class OwlbearProjectFile(BaseModel):
     model_config = ConfigDict(extra="allow")
     schema_version: int = Field(ge=1, le=1)

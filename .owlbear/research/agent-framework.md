@@ -91,7 +91,7 @@ PydanticAI's canonical delegation pattern is: a tool function on the outer agent
 
 ```python
 async def delegate_to_agent(ctx: RunContext[OwlBearDeps], agent_name: str, task: str) -> str:
-    depth = getattr(ctx.deps, '_delegation_depth', 0)
+    depth = getattr(ctx.deps, "_delegation_depth", 0)
     if depth >= MAX_DELEGATION_DEPTH:
         return f"Error: max delegation depth reached."
     inner = registry.get(agent_name)  # KeyError → error message

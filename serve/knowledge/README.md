@@ -24,7 +24,7 @@ conn = sqlite3.connect("path/to/knowledge.db")
 source_store: protocols.SourceStore = stores.SqliteSourceStore(conn)
 graph_store: protocols.GraphStore = stores.SqliteGraphStore(conn)
 vector_store = QdrantVectorStore(location=":memory:")
-embedding_provider = BgeM3EmbeddingProvider()   # ~2.3 GB download on first use
+embedding_provider = BgeM3EmbeddingProvider()  # ~2.3 GB download on first use
 chunker = TextChunker()
 content_store: protocols.ContentStore = ContentStore(
     db=conn,

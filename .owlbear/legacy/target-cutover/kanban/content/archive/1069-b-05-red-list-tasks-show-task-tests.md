@@ -436,9 +436,7 @@ Rationale: AC says `missing_sections=["missing"]` (exact single-item list). Impl
 **AC12 — numeric occurrence count** (`serve/kanban/tests/test_engine_reads_1069.py:745`):
 Replace:
 ```python
-assert any("occurrences" in g for g in resp.guidance), (
-    f"guidance must include occurrence count; got {resp.guidance!r}"
-)
+assert any("occurrences" in g for g in resp.guidance), f"guidance must include occurrence count; got {resp.guidance!r}"
 ```
 With:
 ```python
@@ -583,9 +581,7 @@ Add TWO new test methods:
 
 **Test 1: blocked beats redirect**
 ```python
-def test_dep_status_blocked_beats_redirect_with_mixed_deps(
-    self, tmp_path: Path
-) -> None:
+def test_dep_status_blocked_beats_redirect_with_mixed_deps(self, tmp_path: Path) -> None:
     """Task with two deps: one archived/dropped (→blocked), one archived/duplicate (→redirect).
 
     §3.3 precedence: blocked > redirect → result must be 'blocked'.
@@ -613,16 +609,13 @@ def test_dep_status_blocked_beats_redirect_with_mixed_deps(
     task_a = next((t for t in resp.tasks if t.id == 1), None)
     assert task_a is not None
     assert task_a.dep_status == "blocked", (
-        f"Mixed deps (dropped+duplicate); §3.3 blocked > redirect → "
-        f"expected 'blocked' but got {task_a.dep_status!r}"
+        f"Mixed deps (dropped+duplicate); §3.3 blocked > redirect → expected 'blocked' but got {task_a.dep_status!r}"
     )
 ```
 
 **Test 2: redirect beats ok**
 ```python
-def test_dep_status_redirect_beats_ok_with_mixed_deps(
-    self, tmp_path: Path
-) -> None:
+def test_dep_status_redirect_beats_ok_with_mixed_deps(self, tmp_path: Path) -> None:
     """Task with two deps: one archived/duplicate (→redirect), one active (→ok).
 
     §3.3 precedence: redirect > ok → result must be 'redirect'.
@@ -643,8 +636,7 @@ def test_dep_status_redirect_beats_ok_with_mixed_deps(
     task_a = next((t for t in resp.tasks if t.id == 1), None)
     assert task_a is not None
     assert task_a.dep_status == "redirect", (
-        f"Mixed deps (duplicate+active); §3.3 redirect > ok → "
-        f"expected 'redirect' but got {task_a.dep_status!r}"
+        f"Mixed deps (duplicate+active); §3.3 redirect > ok → expected 'redirect' but got {task_a.dep_status!r}"
     )
 ```
 
@@ -806,18 +798,14 @@ _write_task(
 ```
 And add after `assert "Some goal text." in resp.body`:
 ```python
-assert "Irrelevant note." not in resp.body, (
-    "Section filter must exclude unrelated headings"
-)
+assert "Irrelevant note." not in resp.body, "Section filter must exclude unrelated headings"
 ```
 Rationale: The implementation at engine.py:1753 filters by casefold heading match. Without an unrelated section in the fixture, a mutation returning the full body would still pass.
 
 **Multi-match — section exclusion proof** (`test_multiple_section_matches_body_contains_all_content` in `serve/kanban/tests/test_engine_reads_1069.py`):
 The fixture already seeds `## Notes\nUnrelated note.` — add after the existing "Second goal content." assertion:
 ```python
-assert "Unrelated note." not in resp.body, (
-    "Section filter must exclude non-matching headings from concatenated result"
-)
+assert "Unrelated note." not in resp.body, "Section filter must exclude non-matching headings from concatenated result"
 ```
 Rationale: Same mutation resistance. The fixture already has the unrelated content — just needs the negative assertion.
 

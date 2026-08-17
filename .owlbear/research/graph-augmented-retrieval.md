@@ -151,7 +151,7 @@ The critical risk of graph expansion is context explosion. Mitigation strategy:
 def expand_with_budget(
     seed_entities: list[Entity],
     graph: GraphStore,
-    max_tokens: int = 2000,   # budget for expansion text
+    max_tokens: int = 2000,  # budget for expansion text
     max_depth: int = 1,
     max_neighbors: int = 20,
 ) -> list[str]:

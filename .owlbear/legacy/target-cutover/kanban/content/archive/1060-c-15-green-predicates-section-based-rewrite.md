@@ -518,8 +518,10 @@ The previous 4 cycles fixed real CommonMark edge cases in the regex approach, bu
 3. **Expected pattern:**
    ```python
    from markdown_it import MarkdownIt
+
    _MD = MarkdownIt()
-   
+
+
    def _content_has_commonmark_list(content: str) -> bool:
        tokens = _MD.parse(content)
        return any(t.type in ("bullet_list_open", "ordered_list_open") for t in tokens)

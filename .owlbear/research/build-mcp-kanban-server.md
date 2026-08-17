@@ -108,8 +108,13 @@ The v1 `KanbanToolset._run_kanban()` (source 5) establishes the pattern:
 ```python
 async def _run_kanban(self, *args: str) -> str:
     proc = await asyncio.create_subprocess_exec(
-        str(self.kanban_bin), *args, "--no-color", "--dir", str(self.kanban_dir),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        str(self.kanban_bin),
+        *args,
+        "--no-color",
+        "--dir",
+        str(self.kanban_dir),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
     stdout, stderr = await proc.communicate()
     if proc.returncode != 0:

@@ -81,6 +81,7 @@ Pattern — lazy import with try/except:
 ```python
 try:
     from owlbear_knowledge.llm_extractor import LLMExtractor
+
     llm_extractor = LLMExtractor(model)
 except Exception:
     logger.info("LLMExtractor unavailable — vector-only mode")

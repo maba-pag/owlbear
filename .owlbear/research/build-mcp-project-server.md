@@ -113,6 +113,7 @@ class AppContext:
     project_root: Path
     owlbear_root: Path
 
+
 @asynccontextmanager
 async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
     project_root = Path.cwd()
@@ -120,9 +121,7 @@ async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
     project_path = project_root / "owlbear-project.json"
     project_file = None
     if project_path.exists():
-        project_file = OwlbearProjectFile.model_validate_json(
-            project_path.read_text(encoding="utf-8")
-        )
+        project_file = OwlbearProjectFile.model_validate_json(project_path.read_text(encoding="utf-8"))
     yield AppContext(
         project_file=project_file,
         project_root=project_root,

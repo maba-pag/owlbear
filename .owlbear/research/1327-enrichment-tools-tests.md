@@ -63,6 +63,7 @@ def db_conn():
     init_db(conn)
     return conn
 
+
 # File-backed DB fixture (WAL-capable)
 @pytest.fixture()
 def wal_db(tmp_path):

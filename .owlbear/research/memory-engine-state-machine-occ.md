@@ -35,11 +35,11 @@ Brief specifies a constrained table (not open transitions like kanban). Best enc
 
 ```python
 _TRANSITIONS: dict[tuple[MemoryState, str], MemoryState | None] = {
-    (PENDING, "edit"):    CURATED,   # only when scope_agents provided
+    (PENDING, "edit"): CURATED,  # only when scope_agents provided
     (CURATED, "approve"): APPROVED,
-    (APPROVED, "edit"):   CURATED,
-    (PENDING, "delete"):  None,      # None = hard delete
-    (CURATED, "delete"):  DELETED,
+    (APPROVED, "edit"): CURATED,
+    (PENDING, "delete"): None,  # None = hard delete
+    (CURATED, "delete"): DELETED,
     (APPROVED, "delete"): DELETED,
 }
 ```

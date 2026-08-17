@@ -80,11 +80,12 @@ _SAFE_MESSAGES: dict[type, str] = {
 }
 
 _SCRUB_PATTERNS = [
-    (re.compile(r'https?://\S+'), '[URL]'),           # URLs with potential tokens
-    (re.compile(r'Bearer\s+\S+'), '[REDACTED]'),       # Bearer tokens
-    (re.compile(r'(?i)(token|key|secret|password)=\S+'), r'\1=[REDACTED]'),
-    (re.compile(r'[A-Za-z]:\\[\w\\]+|/[\w/]+\.py'), '[PATH]'),  # file paths
+    (re.compile(r"https?://\S+"), "[URL]"),  # URLs with potential tokens
+    (re.compile(r"Bearer\s+\S+"), "[REDACTED]"),  # Bearer tokens
+    (re.compile(r"(?i)(token|key|secret|password)=\S+"), r"\1=[REDACTED]"),
+    (re.compile(r"[A-Za-z]:\\[\w\\]+|/[\w/]+\.py"), "[PATH]"),  # file paths
 ]
+
 
 def error_to_user_message(exc: Exception) -> str:
     """Return a safe, user-facing error description. Full details stay in logs."""

@@ -77,6 +77,7 @@ tasks_dir = engine.tasks_dir
 decisions_pending = kanban_dir / "decisions" / "pending"
 activity_path = kanban_dir / "activity.jsonl"
 
+
 def watch_filter(change, path: str) -> bool:
     p = Path(path)
     # Tasks: .md in tasks/ (not .tmp-)
@@ -90,6 +91,7 @@ def watch_filter(change, path: str) -> bool:
         return True
     return False
 
+
 def classify(path: str) -> str | None:
     p = Path(path)
     if p.parent == tasks_dir:
@@ -99,6 +101,7 @@ def classify(path: str) -> str | None:
     if p == activity_path:
         return "activity-changed"
     return None
+
 
 async for changes in awatch(kanban_dir, watch_filter=watch_filter, recursive=True):
     event_types: dict[str, int] = {}

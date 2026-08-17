@@ -59,12 +59,12 @@ LangSmith uses LLM-as-judge for production evals but acknowledges code evaluator
 
 ```python
 class AnalysisProposal(BaseModel, frozen=True):
-    target_agent: str           # Which agent to improve
-    category: str               # "reliability" | "performance" | "stability"
-    pattern: str                # Machine-readable pattern ID
-    rationale: str              # Human-readable explanation
-    evidence: dict[str, Any]    # Numeric evidence backing the claim
-    suggested_action: str       # What to change (review artifact only)
+    target_agent: str  # Which agent to improve
+    category: str  # "reliability" | "performance" | "stability"
+    pattern: str  # Machine-readable pattern ID
+    rationale: str  # Human-readable explanation
+    evidence: dict[str, Any]  # Numeric evidence backing the claim
+    suggested_action: str  # What to change (review artifact only)
 ```
 
 v1 used `change_category` with values like "prompt"/"tools"/"skills" — too prescriptive for v2 where the human decides what to change. v2 uses descriptive categories tied to the detected pattern.

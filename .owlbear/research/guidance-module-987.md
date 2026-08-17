@@ -36,9 +36,9 @@ The AC requires `(predicate, message_template)` tuples. Rules 1 and 3 have fixed
 
 ```python
 _RULES: list[tuple[_Predicate, str | _MessageFn]] = [
-    (_is_block_needing_dr, _BLOCK_DR_MSG),           # static str
-    (_is_forward_skip, _forward_skip_message),        # callable
-    (_is_success_outcome, _SUCCESS_COMMIT_MSG),       # static str
+    (_is_block_needing_dr, _BLOCK_DR_MSG),  # static str
+    (_is_forward_skip, _forward_skip_message),  # callable
+    (_is_success_outcome, _SUCCESS_COMMIT_MSG),  # static str
 ]
 ```
 

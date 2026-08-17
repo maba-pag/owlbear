@@ -65,6 +65,7 @@ Both should be added to `AppContext` for downstream use by #864 (refresh pipelin
 structured_extractor: StructuredExtractor | None = None
 try:
     from owlbear_knowledge.llm_extractor import LLMExtractor  # noqa: PLC0415
+
     api_key = os.environ.get("OWLBEAR_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
     if api_key:
         model = os.environ.get("OWLBEAR_LLM_MODEL", "gpt-4o-mini")
@@ -75,10 +76,7 @@ except ImportError:
 
 extractor = EntityExtractor(extractor=structured_extractor)
 intra_builder = IntraDocGraphBuilder(extractor=structured_extractor)
-inter_builder = (
-    InterDocGraphBuilder(structured_extractor, vs, gs)
-    if structured_extractor is not None else None
-)
+inter_builder = InterDocGraphBuilder(structured_extractor, vs, gs) if structured_extractor is not None else None
 ```
 
 AppContext gains 3 optional fields: `intra_doc_builder`, `inter_doc_builder`, `structured_extractor`.

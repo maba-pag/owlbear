@@ -227,7 +227,7 @@ Fix: add assertions for at least `action` and `id` (or `task_id`) fields in each
 
 ```python
 assert cockpit_entries[0]["actor"] == "cockpit"
-assert cockpit_entries[0]["task_id"] == 1   # or "id" depending on schema
+assert cockpit_entries[0]["task_id"] == 1  # or "id" depending on schema
 ```
 
 All other test quality dimensions: STRONG (names descriptive, error paths covered, test independence via tmp_path).

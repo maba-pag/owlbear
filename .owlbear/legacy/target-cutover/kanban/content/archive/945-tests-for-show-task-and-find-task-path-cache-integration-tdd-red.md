@@ -293,9 +293,7 @@ assert result.exists()
 with:
 
 ```python
-assert result.name.startswith(str(new_task.id) + "-"), (
-    f"expected path for task {new_task.id}, got: {result.name}"
-)
+assert result.name.startswith(str(new_task.id) + "-"), f"expected path for task {new_task.id}, got: {result.name}"
 ```
 
 This detects mutations that return an existing-but-wrong-ID path. Consistent with existing pattern at line 384 (`assert result.name.startswith("1-")`).

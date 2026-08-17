@@ -72,6 +72,7 @@ Key questions: (1) What shape should the protocol take? (2) How to preserve per-
 ```python
 # protocols/fetcher.py
 
+
 class FetchedDocument(BoundaryModel):
     title: str
     text: str
@@ -79,13 +80,16 @@ class FetchedDocument(BoundaryModel):
     external_id: str | None = None
     metadata: Metadata = Field(default_factory=dict)
 
+
 class FetchError(BoundaryModel):
     uri: str
     error: str
 
+
 class FetchResult(BoundaryModel):
     documents: tuple[FetchedDocument, ...] = Field(default_factory=tuple)
     errors: tuple[FetchError, ...] = Field(default_factory=tuple)
+
 
 @runtime_checkable
 class SourceFetcher(Protocol):

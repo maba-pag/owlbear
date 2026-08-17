@@ -35,9 +35,7 @@ async def events(request: Request, engine=Depends(get_engine)):
 
         async for changes in awatch(
             tasks_dir,
-            watch_filter=lambda change, path: (
-                path.endswith(".md") and not Path(path).name.startswith(".tmp-")
-            ),
+            watch_filter=lambda change, path: path.endswith(".md") and not Path(path).name.startswith(".tmp-"),
             recursive=False,
             stop_event=stop_event,  # set on shutdown
         ):

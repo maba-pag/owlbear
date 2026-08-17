@@ -1097,7 +1097,7 @@ summary_items = [line for line in result.stderr.splitlines() if line.strip().sta
 assert len(summary_items) >= 1
 assert "0001-bad.md" in summary_items[0]
 assert "invalid archival_reason" in summary_items[0]  # Fix 1 only
-assert "invalid archival_refs" in summary_items[0]    # Fix 2 only
+assert "invalid archival_refs" in summary_items[0]  # Fix 2 only
 ```
 
 ### Completeness Matrix

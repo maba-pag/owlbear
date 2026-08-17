@@ -39,6 +39,7 @@ Current PydanticAI API uses `output_type` for structured output:
 
 ```python
 from pydantic_ai import Agent
+
 agent = Agent(model, output_type=EvaluationResult, system_prompt=EVALUATION_PROMPT)
 result = await agent.run(prompt)
 evaluation = result.output  # typed as EvaluationResult
@@ -64,12 +65,17 @@ v1 used identical pattern successfully. `agent.run()` is async, matching
 ```python
 def make_pydantic_evaluate_fn(model: str) -> EvaluateFn:
     from pydantic_ai import Agent  # deferred import — optional dep
+
     agent: Agent[None, EvaluationResult] = Agent(
-        model, output_type=EvaluationResult, system_prompt=EVALUATION_PROMPT,
+        model,
+        output_type=EvaluationResult,
+        system_prompt=EVALUATION_PROMPT,
     )
+
     async def _evaluate(prompt: str) -> EvaluationResult:
         result = await agent.run(prompt)
         return result.output
+
     return _evaluate
 ```
 

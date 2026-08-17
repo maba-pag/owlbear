@@ -15,6 +15,7 @@ Three-step escape-protected normalization at the MCP kanban server ingress bound
 ```python
 _SENTINEL = "\x00ESCAPED_NEWLINE\x00"
 
+
 def _normalize_escaped_newlines(text: str) -> tuple[str, bool]:
     """Normalize literal \\n to actual newlines. Protect \\\\n escape convention."""
     protected = text.replace("\\\\n", _SENTINEL)

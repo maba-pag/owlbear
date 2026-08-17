@@ -46,8 +46,8 @@ Follow existing TypedDict conventions from `hooks.py` [S3, S7]:
 
 ```python
 class QuestionPendingData(TypedDict):
-    source: str            # "ask_user" or "approval_gate"
-    question: str          # prompt text sent to the user
+    source: str  # "ask_user" or "approval_gate"
+    question: str  # prompt text sent to the user
     tool_name: NotRequired[str]  # approval gate: tool being gated
 ```
 

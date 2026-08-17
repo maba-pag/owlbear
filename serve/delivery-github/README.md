@@ -24,9 +24,7 @@ from owlbear_delivery import PublicationRepository
 from owlbear_delivery_github import InMemoryPublicationProvider
 
 provider = InMemoryPublicationProvider()
-provider.add_repository(
-    PublicationRepository(repository="example/project", default_branch="main")
-)
+provider.add_repository(PublicationRepository(repository="example/project", default_branch="main"))
 ```
 
 The public provider models and `PublicationProvider` protocol are exported by `owlbear-delivery`.

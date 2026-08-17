@@ -41,6 +41,7 @@ Python docs (S1) recommend the idiomatic pattern:
 # __main__.py — kept minimal
 from owlbear_orchestrator.analysis._cli import main
 import sys
+
 sys.exit(main())
 ```
 

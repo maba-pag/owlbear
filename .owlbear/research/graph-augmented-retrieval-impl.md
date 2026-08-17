@@ -48,16 +48,19 @@ This is simpler than #234's proposal which required a schema migration to add `c
 @dataclass(frozen=True)
 class RetrievalResult:
     """Single result item from graph-augmented retrieval."""
+
     entity_or_doc_id: str
     score: float
     content: str
     source: Literal["vector", "graph"]  # provenance
+
 
 class GraphAugmentedRetriever:
     """Chains vector search → entity resolution → graph expansion → assembly.
 
     Composes VectorStoreProtocol + GraphStore + optional RerankerProvider.
     """
+
     def __init__(
         self,
         vector_store: VectorStoreProtocol,
@@ -118,9 +121,11 @@ When no reranker is configured, fall back to **Strategy A** (append graph result
 @dataclass(frozen=True)
 class NeighborResult:
     """One neighbor entity and the edge connecting it to the seed."""
+
     entity: Entity
     edge: Edge
     depth: int
+
 
 def get_neighbors(
     self,

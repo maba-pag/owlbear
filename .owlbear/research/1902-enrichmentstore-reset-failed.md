@@ -50,6 +50,7 @@ def reset_failed(
 ```python
 class EnrichmentResetResult(BoundaryModel):
     """Result of resetting failed enrichment chunks to pending."""
+
     reset: int = 0
     remaining_failed: int = 0
 ```

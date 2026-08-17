@@ -324,12 +324,12 @@ No issues.
 Code path traced in serve/mcp-browser/src/owlbear_mcp_browser/server.py (current disk state, builder pass-2 commit 2c7223ad):
 
 ```python
-if isinstance(app_ctx, AppContext):       # ← True when _make_mcp_ctx() is used
-    if app_ctx.page is not None:          # ← False (page=None by default)
+if isinstance(app_ctx, AppContext):  # ← True when _make_mcp_ctx() is used
+    if app_ctx.page is not None:  # ← False (page=None by default)
         ...
-    if app_ctx.fetcher is not None:       # ← False (fetcher=None by default)
+    if app_ctx.fetcher is not None:  # ← False (fetcher=None by default)
         ...
-    raise ToolError(_MSG_NO_PAGE)         # ← STILL HERE — builder claim is false
+    raise ToolError(_MSG_NO_PAGE)  # ← STILL HERE — builder claim is false
 ```
 
 `_make_mcp_ctx(DomainAllowlist([...]))` produces `AppContext(allowlist=..., page=None, fetcher=None)`.
@@ -648,10 +648,12 @@ Code scan clean. `# noqa: ARG001` removed per builder notes. AC5: PASS.
 **navigate() — line 119 (server.py):**
 
 ```python
-if isinstance(app_ctx, AppContext):      # ← True for _make_mcp_ctx()
-    if app_ctx.fetcher is not None: ...  # ← False (fetcher=None)
-    if app_ctx.page is not None: ...     # ← False (page=None)
-    raise ToolError(_MSG_NO_PAGE)        # ← STILL HERE — 4th consecutive cycle
+if isinstance(app_ctx, AppContext):  # ← True for _make_mcp_ctx()
+    if app_ctx.fetcher is not None:
+        ...  # ← False (fetcher=None)
+    if app_ctx.page is not None:
+        ...  # ← False (page=None)
+    raise ToolError(_MSG_NO_PAGE)  # ← STILL HERE — 4th consecutive cycle
 ```
 
 `_make_mcp_ctx(DomainAllowlist([...]))` produces `AppContext(page=None, fetcher=None)`. All 3 allowlist-passing navigate tests hit this raise.

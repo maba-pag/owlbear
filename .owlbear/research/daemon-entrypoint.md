@@ -64,7 +64,7 @@ def _is_process_alive(pid: int) -> bool:
     try:
         os.kill(pid, 0)  # signal 0 = existence check, no signal sent
         return True
-    except (OSError, ProcessLookupError):
+    except OSError, ProcessLookupError:
         return False
 ```
 

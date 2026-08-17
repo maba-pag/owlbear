@@ -49,7 +49,7 @@ Network errors occur at the inner transport call, *before* `validate_response`. 
 **Option A** — pass a tuple to `retry_if_exception_type`:
 
 ```python
-retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.ConnectError, httpx.TimeoutException))
+retry = retry_if_exception_type((httpx.HTTPStatusError, httpx.ConnectError, httpx.TimeoutException))
 ```
 
 Rationale: simplest change, precise targeting, no new dependencies, aligns with httpx exception hierarchy. Option B (reusing `classify_error`) would couple the transport layer to the error module unnecessarily (YAGNI). Option C is too broad — `ProtocolError` and `ProxyError` are not transient.

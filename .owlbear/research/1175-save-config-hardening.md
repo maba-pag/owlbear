@@ -107,6 +107,7 @@ Implementation outline:
 ```python
 _LEGACY_WRITE_EXCLUDE: frozenset[str] = frozenset({"board", "version"})
 
+
 def _deep_frozenset_to_list(obj):
     """Convert frozenset→sorted list recursively for YAML serialization."""
     if isinstance(obj, frozenset):
@@ -116,6 +117,7 @@ def _deep_frozenset_to_list(obj):
     if isinstance(obj, list):
         return [_deep_frozenset_to_list(v) for v in obj]
     return obj
+
 
 def save_config(config: BoardConfig, kanban_dir: Path) -> None:
     data = config.model_dump(exclude=_LEGACY_WRITE_EXCLUDE)

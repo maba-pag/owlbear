@@ -40,6 +40,7 @@ An attacker can provide `http://127.0.0.1/admin`, `http://169.254.169.254/latest
 # serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L156–169
 async def _web_read(url: str) -> str | None:
     from urllib.parse import urlparse
+
     if urlparse(url).scheme.lower() not in {"http", "https"}:
         return None
     # BUG: no IP blocklist here — SSRF possible

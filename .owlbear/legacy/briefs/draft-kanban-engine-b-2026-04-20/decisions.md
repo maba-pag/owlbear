@@ -308,10 +308,10 @@ Then processes the sorted list per D42 wave-composition rules (size + agent-comp
 **`agent_compatibility: dict[str, list[str]]`** — maps bucket name to list of compatible bucket names (mutually-parallelisable buckets within a single wave). The relation MUST be symmetric: `b1 in agent_compatibility[b2]` iff `b2 in agent_compatibility[b1]`; engine validates at init, else `ConfigError`. Default value (codifies current orchestrator skill):
 ```python
 {
-  "auditor":     ["auditor"],
-  "builder":     ["builder", "light-flex"],
-  "light-flex":  ["builder", "light-flex", "heavy-flex"],
-  "heavy-flex":  ["light-flex", "heavy-flex"],
+    "auditor": ["auditor"],
+    "builder": ["builder", "light-flex"],
+    "light-flex": ["builder", "light-flex", "heavy-flex"],
+    "heavy-flex": ["light-flex", "heavy-flex"],
 }
 ```
 A bucket is always self-compatible (allows multiple instances of the same agent type in one wave). Closes paper §7 #4.

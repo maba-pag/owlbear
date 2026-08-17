@@ -42,6 +42,7 @@ recommends async callable injection instead — more flexible and testable (.85 
 
 ```python
 from collections.abc import Awaitable, Callable
+
 TextCompletionFn = Callable[[str], Awaitable[str]]
 EvaluateFn = Callable[[str], Awaitable[EvaluationResult]]
 ```

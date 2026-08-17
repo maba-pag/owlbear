@@ -91,15 +91,16 @@ class SourceType(StrEnum):
     CRAWL = "crawl"
     FILE_GLOB = "file_glob"
 
+
 class KnowledgeSource(BaseModel, frozen=True):
-    id: str                          # UUID hex
-    name: str                        # Human label, unique per scope
+    id: str  # UUID hex
+    name: str  # Human label, unique per scope
     source_type: SourceType
-    config: dict[str, Any]           # Type-specific: urls, crawl_config, glob_pattern
-    scope: str = "global"            # "global" or "project:{id}"
+    config: dict[str, Any]  # Type-specific: urls, crawl_config, glob_pattern
+    scope: str = "global"  # "global" or "project:{id}"
     enabled: bool = True
-    priority: int = 0                # Higher = refresh first
-    last_refreshed_at: str | None    # ISO timestamp
+    priority: int = 0  # Higher = refresh first
+    last_refreshed_at: str | None  # ISO timestamp
     created_at: str
     updated_at: str
 ```

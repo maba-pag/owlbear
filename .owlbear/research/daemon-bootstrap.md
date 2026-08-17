@@ -111,8 +111,7 @@ async def run_daemon(settings: OwlBearSettings, channel: ChannelPlugin) -> None:
     session = SessionStore(settings.config_dir / "daemon.jsonl")
     context = ContextManager(Path.cwd())
 
-    agent = OwlBearAgent(model=model, session=session, context=context,
-                         hooks=hooks, channel=channel, toolsets=toolsets)
+    agent = OwlBearAgent(model=model, session=session, context=context, hooks=hooks, channel=channel, toolsets=toolsets)
 
     await hooks.emit(HookEvent.SESSION_START, {})
     shutdown = asyncio.Event()

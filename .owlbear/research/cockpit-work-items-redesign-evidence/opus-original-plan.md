@@ -230,10 +230,11 @@ New domain model:
 ```python
 class DeliveryIntegrationConflict(_DeliveryModel):
     """Structured, user-legible evidence for one merge-conflict attention."""
+
     conflicted_paths: tuple[str, ...] = Field(min_length=1)
     added_by_change: tuple[str, ...] = ()
     added_by_target: tuple[str, ...] = ()
-    raw: tuple[str, ...] = Field(min_length=1)   # unchanged merge-tree output
+    raw: tuple[str, ...] = Field(min_length=1)  # unchanged merge-tree output
 ```
 
 Exposed as:
@@ -272,7 +273,7 @@ The user reads: **Merge conflict — 3 files conflict between this change and `d
 def show_operator_context(self, change_id: str, outcome_id: str) -> DeliveryOperatorContext:
     runtime = self._runtime(change_id)
     if outcome_id == change_id:
-        return self._change_scope_context(runtime)      # integration attention lives ONLY here
+        return self._change_scope_context(runtime)  # integration attention lives ONLY here
     binding = runtime.show_binding(outcome_id)
     return DeliveryOperatorContext(
         ...,

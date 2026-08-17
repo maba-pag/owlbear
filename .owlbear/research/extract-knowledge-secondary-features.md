@@ -66,6 +66,7 @@ matches KISS — no framework, no ABC hierarchy, just typed callables:
 
 ```python
 from collections.abc import Awaitable, Callable
+
 TextCompletionFn = Callable[[str], Awaitable[str]]
 # For evaluator: Callable[[str], Awaitable[EvaluationResult]]
 ```

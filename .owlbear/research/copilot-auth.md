@@ -33,10 +33,10 @@ the real work is the OAuth dance and token management.
 ### 3.1 Constants
 
 ```python
-COPILOT_CLIENT_ID    = "Iv1.b507a08c87ecfe98"   # VS Code OAuth app (public, not secret)
-DEVICE_CODE_URL      = "https://github.com/login/device/code"
-ACCESS_TOKEN_URL     = "https://github.com/login/oauth/access_token"
-COPILOT_TOKEN_URL    = "https://api.github.com/copilot_internal/v2/token"
+COPILOT_CLIENT_ID = "Iv1.b507a08c87ecfe98"  # VS Code OAuth app (public, not secret)
+DEVICE_CODE_URL = "https://github.com/login/device/code"
+ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token"
+COPILOT_TOKEN_URL = "https://api.github.com/copilot_internal/v2/token"
 DEFAULT_COPILOT_BASE = "https://api.individual.githubcopilot.com"
 ```
 
@@ -44,8 +44,10 @@ DEFAULT_COPILOT_BASE = "https://api.individual.githubcopilot.com"
 
 ```python
 _EDITOR_HEADERS = {
-    "Editor-Version": "vscode/1.97.1", "Editor-Plugin-Version": "copilot-chat/0.27.3",
-    "User-Agent": "GitHubCopilotChat/0.27.3", "X-Github-Api-Version": "2025-04-01",
+    "Editor-Version": "vscode/1.97.1",
+    "Editor-Plugin-Version": "copilot-chat/0.27.3",
+    "User-Agent": "GitHubCopilotChat/0.27.3",
+    "X-Github-Api-Version": "2025-04-01",
 }
 ```
 
@@ -129,9 +131,11 @@ OwlBear already has `OwlBearSettings` with `copilot_token_path: Path` and `copil
 from openai import AsyncOpenAI
 from pydantic_ai.providers.openai import OpenAIProvider
 
+
 def create_copilot_provider(token: str, base_url: str) -> OpenAIProvider:
-    client = AsyncOpenAI(api_key=token, base_url=f"{base_url}/v1",
-                         default_headers={"Copilot-Integration-Id": "vscode-chat"})
+    client = AsyncOpenAI(
+        api_key=token, base_url=f"{base_url}/v1", default_headers={"Copilot-Integration-Id": "vscode-chat"}
+    )
     return OpenAIProvider(openai_client=client)
 ```
 

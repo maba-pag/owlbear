@@ -588,10 +588,9 @@ The 1 remaining reviewer gap is that `test_convention_mapping_has_src_selector` 
 Add a new test in `TestFromAC_ConventionMappingTable` that asserts at least one line in the Step 1 section contains BOTH `serve/{pkg}/src/**` AND `serve/{pkg}/README.md`:
 
 ```python
-assert any(
-    "serve/{pkg}/src/**" in line and "serve/{pkg}/README.md" in line
-    for line in step1.splitlines()
-), "Convention mapping must have a single row coupling serve/{pkg}/src/** to serve/{pkg}/README.md"
+assert any("serve/{pkg}/src/**" in line and "serve/{pkg}/README.md" in line for line in step1.splitlines()), (
+    "Convention mapping must have a single row coupling serve/{pkg}/src/** to serve/{pkg}/README.md"
+)
 ```
 
 This proves the exact first table row at `share/skills/w-doc-update/SKILL.md:30` as a coupled pair, not two independent tokens. Same line-coupling pattern as R4 gate-rule fix.
@@ -756,8 +755,7 @@ Add one assertion to the existing `test_no_impact_fast_path_advances` test to pr
 
 ```python
 assert re.search(r"no README", step1, re.IGNORECASE), (
-    "Step 1 fast-path trigger must reference 'no READMEs' — "
-    "proving the trigger condition, not just the output phrase"
+    "Step 1 fast-path trigger must reference 'no READMEs' — proving the trigger condition, not just the output phrase"
 )
 ```
 

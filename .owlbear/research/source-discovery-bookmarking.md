@@ -59,17 +59,17 @@ Inspired by Pinboard's simplicity + Karakeep's AI enrichment:
 
 ```python
 class Bookmark(BaseModel, frozen=True):
-    id: str                        # UUID hex
-    url: str                       # Source URL
-    title: str                     # Extracted or user-provided
-    description: str               # LLM-generated summary or user reason
-    tags: list[str]                # LLM-suggested + user-provided tags
-    relevance_score: float         # LLM evaluation: 0.0–1.0
-    reason: str                    # Why this was bookmarked
-    scope: str = "global"          # "global" or "project:{id}"
-    document_id: str | None = None # Link to ingested document (if ingested)
-    content_hash: str | None       # For dedup
-    created_at: str                # ISO timestamp
+    id: str  # UUID hex
+    url: str  # Source URL
+    title: str  # Extracted or user-provided
+    description: str  # LLM-generated summary or user reason
+    tags: list[str]  # LLM-suggested + user-provided tags
+    relevance_score: float  # LLM evaluation: 0.0–1.0
+    reason: str  # Why this was bookmarked
+    scope: str = "global"  # "global" or "project:{id}"
+    document_id: str | None = None  # Link to ingested document (if ingested)
+    content_hash: str | None  # For dedup
+    created_at: str  # ISO timestamp
 ```
 
 ### 3.4 Evaluation Pipeline
@@ -90,9 +90,9 @@ The `SourceEvaluator` is a thin wrapper around a PydanticAI agent with structure
 ```python
 class EvaluationResult(BaseModel, frozen=True):
     relevance_score: float  # 0.0–1.0
-    tags: list[str]         # Suggested tags
-    summary: str            # 2-3 sentence summary
-    worth_ingesting: bool   # Does it contain reusable knowledge?
+    tags: list[str]  # Suggested tags
+    summary: str  # 2-3 sentence summary
+    worth_ingesting: bool  # Does it contain reusable knowledge?
 ```
 
 **Prompt inputs:** page title, first 2000 chars of content, project name + description + goals (from `ProjectDefinition` or `Project` model). The LLM scores relevance _to the current project_.

@@ -19,7 +19,7 @@ async with PlaywrightLauncher() as launcher:
     async with launcher.new_context() as context:
         fetcher = BrowserContentFetcher(context)
         text = await fetcher.fetch("https://example.com/page")
-        print(text)   # cleaned plain-text content
+        print(text)  # cleaned plain-text content
 ```
 
 ### Public API

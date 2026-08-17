@@ -64,8 +64,8 @@ Thin, stateless query wrapper — **not** a new toolset, just a service object:
 ```python
 class KnowledgeQueryService:
     """Query the knowledge base and format results for system prompt injection."""
-    def __init__(self, vector_store, graph_store, embedding_provider, scopes=None):
-        ...
+
+    def __init__(self, vector_store, graph_store, embedding_provider, scopes=None): ...
     def query_for_context(self, prompt: str, *, max_tokens: int = 2000, top_k: int = 5) -> str:
         """Embed prompt, search KB, format + truncate to token budget."""
 ```

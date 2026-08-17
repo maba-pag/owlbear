@@ -58,9 +58,10 @@ blocks = [
     # One section per option
     {"type": "section", "text": {"type": "mrkdwn", "text": f"*1.* {option_1}"}},
     {"type": "section", "text": {"type": "mrkdwn", "text": f"*2.* {option_2}"}},
-    {"type": "context", "elements": [
-        {"type": "mrkdwn", "text": "Reply with the option number or type your feedback."}
-    ]},
+    {
+        "type": "context",
+        "elements": [{"type": "mrkdwn", "text": "Reply with the option number or type your feedback."}],
+    },
 ]
 ```
 
@@ -69,12 +70,15 @@ blocks = [
 ```python
 blocks = [
     {"type": "header", "text": {"type": "plain_text", "text": f"Status: {task_title}"}},
-    {"type": "section", "fields": [
-        {"type": "mrkdwn", "text": f"*Task:*\n{task_name}"},
-        {"type": "mrkdwn", "text": f"*Step:*\n{current_step}/{total_steps}"},
-        {"type": "mrkdwn", "text": f"*Status:*\n{status_emoji} {status}"},
-        {"type": "mrkdwn", "text": f"*ETA:*\n{eta}"},
-    ]},
+    {
+        "type": "section",
+        "fields": [
+            {"type": "mrkdwn", "text": f"*Task:*\n{task_name}"},
+            {"type": "mrkdwn", "text": f"*Step:*\n{current_step}/{total_steps}"},
+            {"type": "mrkdwn", "text": f"*Status:*\n{status_emoji} {status}"},
+            {"type": "mrkdwn", "text": f"*ETA:*\n{eta}"},
+        ],
+    },
     {"type": "section", "text": {"type": "mrkdwn", "text": f"*Last action:* {last_tool}"}},
 ]
 ```
@@ -89,11 +93,11 @@ AsyncWebClient provides `files_upload_v2` which handles the 3-step process inter
 
 ```python
 await self._web_client.files_upload_v2(
-    file=path_or_bytes,       # str path, bytes, or IOBase
+    file=path_or_bytes,  # str path, bytes, or IOBase
     channel=self._channel_id,
     title=caption or "image",
     initial_comment=caption,
-    thread_ts=thread_ts,      # optional threading
+    thread_ts=thread_ts,  # optional threading
 )
 ```
 

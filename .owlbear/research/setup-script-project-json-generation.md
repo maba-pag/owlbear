@@ -65,8 +65,11 @@ AC: "Validates output against OwlbearProjectFile model before writing". The clea
 
 ```python
 project = OwlbearProjectFile(
-    schema_version=1, name=name, type=project_type,
-    owlbear_path=owlbear_path, created_at=datetime.now(tz=UTC),
+    schema_version=1,
+    name=name,
+    type=project_type,
+    owlbear_path=owlbear_path,
+    created_at=datetime.now(tz=UTC),
 )
 path.write_text(project.model_dump_json(indent=2), encoding="utf-8")
 ```

@@ -15,6 +15,7 @@ class SourceType(StrEnum):
     FILE_GLOB = "file_glob"
     AUTHENTICATED_WEB = "authenticated_web"
 
+
 class KnowledgeSource(BaseModel):
     id: str
     name: str

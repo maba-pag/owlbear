@@ -48,6 +48,7 @@ Only 5 of 22 tests need updating. The established mock pattern from kanban tests
 def _make_app_ctx(domains: list[str]) -> AppContext:
     return AppContext(allowlist=DomainAllowlist(domains=domains))
 
+
 def _make_mcp_ctx(app_ctx: AppContext) -> MagicMock:
     ctx = MagicMock()
     ctx.request_context.lifespan_context = app_ctx

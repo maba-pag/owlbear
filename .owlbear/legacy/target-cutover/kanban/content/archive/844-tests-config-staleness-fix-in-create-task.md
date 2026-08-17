@@ -200,9 +200,9 @@ owlbear_kanban.engine: 28% overall (scoped run). Critical implementation lines 3
 `create_task()` (engine.py L325-327):
 
 ```python
-self._config = config          # L325 — full config update, covered by tests
+self._config = config  # L325 — full config update, covered by tests
 self._tasks_dir = self._kanban_dir / self._config.tasks_dir  # L327 — covered
-self._archive_dir = self._kanban_dir / _ARCHIVE_DIR_NAME     # L328
+self._archive_dir = self._kanban_dir / _ARCHIVE_DIR_NAME  # L328
 ```
 
 These lines mirror `refresh_config()` (L131-138) exactly — implementation is sound.

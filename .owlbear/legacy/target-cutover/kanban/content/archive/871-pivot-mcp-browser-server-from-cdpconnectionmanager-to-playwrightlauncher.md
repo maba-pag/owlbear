@@ -389,7 +389,8 @@ Class: `TestBuilderDiscovered` (not a TestFromAC_ class, but a legitimate AC6 su
 
 ```python
 if isinstance(app_ctx, AppContext):
-    if app_ctx.fetcher is not None: ...
+    if app_ctx.fetcher is not None:
+        ...
     if app_ctx.page is not None:
         await app_ctx.page.goto(url)
         return url

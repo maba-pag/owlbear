@@ -82,7 +82,7 @@ The summary replaces the condensed middle section as a `ModelRequest`:
 ```python
 ModelRequest(
     parts=[UserPromptPart(content="[Condensed Context]\n{summary}")],
-    metadata={"condensed_at": iso_timestamp, "forgotten_count": N}
+    metadata={"condensed_at": iso_timestamp, "forgotten_count": N},
 )
 ```
 
@@ -105,6 +105,7 @@ In `bootstrap.py` step 8 (agent construction, ~line 967):
 history_processors = None
 if settings.condenser_enabled:
     from owlbear.core.condenser import SummarizingCondenser
+
     condenser = SummarizingCondenser(max_events=settings.condenser_max_events, model=model)
     history_processors = [condenser]
 agent = OwlBearAgent(..., history_processors=history_processors)

@@ -65,6 +65,7 @@ class PendingDRItem(BaseModel):
     body: str
     body_preview: str
 
+
 class PendingDRResponse(BaseModel):
     count: int
     items: list[PendingDRItem]

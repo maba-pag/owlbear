@@ -52,7 +52,9 @@ vs = QdrantVectorStore(location=qdrant_path)
 ```python
 source_store = KnowledgeSourceStore(conn)  # move before pipeline
 pipeline = IngestPipeline(
-    doc_store, extractor, chunker,
+    doc_store,
+    extractor,
+    chunker,
     content_guard=content_guard,
     source_store=source_store,
 )
@@ -62,15 +64,20 @@ pipeline = IngestPipeline(
 
 ```python
 async def ingest_document(
-    ctx: Context, text: str, metadata: dict[str, Any] | None = None,
+    ctx: Context,
+    text: str,
+    metadata: dict[str, Any] | None = None,
     scope: str = "global",
     source_url: str | None = None,
     source_id: str | None = None,
 ) -> str:
     ...
     result = await pipeline.ingest_text(
-        text, metadata=metadata, scope=scope,
-        source_url=source_url, source_id=source_id,
+        text,
+        metadata=metadata,
+        scope=scope,
+        source_url=source_url,
+        source_id=source_id,
     )
 ```
 
