@@ -14,11 +14,11 @@ from owlbear_tools.megalinter import (
     DockerRuntimeApp,
     FixMode,
     MegaLinterImage,
+    _wait_for_docker,
     load_megalinter_image,
     megalint,
     megalint_clean,
     run_megalint,
-    _wait_for_docker,
 )
 
 _TEST_IMAGE = MegaLinterImage(reference="registry.example/megalinter-main:v-current")

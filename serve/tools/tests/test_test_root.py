@@ -13,7 +13,7 @@ import pytest
 from owlbear_tools.test_root import find_test_root
 
 
-@pytest.fixture()
+@pytest.fixture
 def frontend_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Create a mock project with a frontend package."""
     monkeypatch.chdir(tmp_path)
@@ -93,7 +93,7 @@ class TestCLIEntryPoint:
         assert "test-root" in names
 
     def test_single_path_returns_object(self, frontend_project: Path) -> None:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: PLW1510
             [sys.executable, "-m", "owlbear_tools.test_root", "tests/test_foo.py"],
             capture_output=True,
             text=True,
@@ -104,7 +104,7 @@ class TestCLIEntryPoint:
         assert data["toolchain"] == "pytest"
 
     def test_multiple_paths_returns_array(self, frontend_project: Path) -> None:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: PLW1510
             [
                 sys.executable,
                 "-m",
@@ -124,7 +124,7 @@ class TestCLIEntryPoint:
         assert data[1]["toolchain"] == "vitest"
 
     def test_no_args_prints_usage(self) -> None:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: PLW1510
             [sys.executable, "-m", "owlbear_tools.test_root"],
             capture_output=True,
             text=True,

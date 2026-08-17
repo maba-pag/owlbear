@@ -11,8 +11,8 @@ from owlbear_tools.commit_owned import CommitOwnedError, commit_owned_paths
 
 
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", *args],
+    return subprocess.run(  # noqa: S603
+        ["git", *args],  # noqa: S607
         cwd=repo,
         check=check,
         text=True,
@@ -20,7 +20,7 @@ def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProc
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def git_repo(tmp_path: Path) -> Path:
     """Create a repository with an initial commit."""
     _git(tmp_path, "init")

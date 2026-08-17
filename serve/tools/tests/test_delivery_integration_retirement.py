@@ -1,3 +1,5 @@
+# ruff: noqa: SLF001
+
 from __future__ import annotations
 
 import hashlib
@@ -13,10 +15,10 @@ import pytest
 from owlbear_delivery.change_workspace import CapacityLedger, ChangeCoordination
 from owlbear_delivery.completed_history import CompletedHistoryCatalog
 from owlbear_delivery.delivery_runtime import (
-    DeliveryObservation,
-    DeliveryObservationReceipt,
     DeliveryFinalization,
     DeliveryFinalizationReceipt,
+    DeliveryObservation,
+    DeliveryObservationReceipt,
     DeliveryRequest,
     DeliveryRequestKind,
     DeliveryReview,
@@ -47,8 +49,8 @@ from owlbear_tools.delivery_migration import (
 
 
 def _git(repository: Path, *arguments: str) -> str:
-    return subprocess.run(
-        ("git", "-C", str(repository), *arguments),
+    return subprocess.run(  # noqa: S603
+        ("git", "-C", str(repository), *arguments),  # noqa: S607
         check=True,
         capture_output=True,
         text=True,

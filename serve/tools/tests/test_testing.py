@@ -8,8 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from owlbear_tools.testing import _commands_for_paths
-from owlbear_tools.testing import _require_development_checkout
+from owlbear_tools.testing import _commands_for_paths, _require_development_checkout
 from owlbear_tools.testing import test_e2e_main as run_test_e2e
 from owlbear_tools.testing import test_main as run_test
 

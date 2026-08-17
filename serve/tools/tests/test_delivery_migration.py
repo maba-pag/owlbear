@@ -1,5 +1,7 @@
 """Behavioral tests for one-way Delivery state migration."""
 
+# ruff: noqa: SLF001
+
 from __future__ import annotations
 
 import hashlib
@@ -10,7 +12,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from owlbear_tools import delivery_migration
 
 from owlbear_delivery import (
     CapacityLedger,
@@ -30,6 +31,7 @@ from owlbear_delivery import (
     OutcomeAuthorityBinding,
     load_delivery_application,
 )
+from owlbear_tools import delivery_migration
 from owlbear_tools.delivery_migration import (
     DeliveryStateMigrationError,
     apply_delivery_state_migration,
@@ -38,8 +40,8 @@ from owlbear_tools.delivery_migration import (
 
 
 def _git(repository: Path, *arguments: str) -> str:
-    return subprocess.run(
-        ("git", "-C", str(repository), *arguments),
+    return subprocess.run(  # noqa: S603
+        ("git", "-C", str(repository), *arguments),  # noqa: S607
         check=True,
         capture_output=True,
         text=True,
