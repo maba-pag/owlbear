@@ -139,8 +139,8 @@ The canonical Specification, Delivery, Correction, publication, acceptance, and 
 work items, requests, typed attention, controls, and completed history. Any migrated records under
 `.owlbear/legacy/` are immutable history for inspection, never executable work.
 
-If Cockpit fails because `dist/` assets are missing, refresh from the latest `main`
-branch release artifacts (the sync-to-main workflow builds and stages `serve/cockpit/dist/`).
+If Cockpit fails because `dist/` assets are missing, refresh from the latest artifacts on the
+rolling `main` branch (the sync-to-main workflow builds and stages `serve/cockpit/dist/`).
 
 ## Verification
 
