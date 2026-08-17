@@ -9,7 +9,7 @@ developer's machine alongside their project directories. Each project references
 using relative paths (e.g., `../owlbear/share/agents`). There is no packaging step — clone is
 install.
 
-This means sharing owlbear with a teammate means they clone <strong>both</strong>:
+This means sharing owlbear with a teammate means they clone **both**:
 
 1. The **owlbear** repository (shared tooling)
 2. The **project** repository (their actual project)
@@ -159,4 +159,4 @@ organization agent registry as a complement to the local installation.
 | Cockpit opens the wrong workspace | Launch from the project root or pass the intended project directory to `uv --directory` |
 | Hook updates not taking effect after `git pull` | Re-run `init.py`; use `--replace-hooks` if local hook files differ and you want the seeded versions restored |
 | `uv` not found | Install uv globally: `pip install uv` or see [uv docs](https://docs.astral.sh/uv/) |
-| Different owlbear versions between teammates | Pin owlbear to a tag or commit SHA in team onboarding docs; `git pull` + re-run `init.py` to update |
+| Different owlbear checkout states between teammates | Use the same branch (`main` for consumer use or `dev` for OwlBear development), then `git pull` and rerun `init.py` to refresh copied runtime files |
