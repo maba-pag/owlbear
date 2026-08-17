@@ -74,7 +74,3 @@ guidance. Direct pytest and npm commands remain available for runner-specific de
 For consumer installation, configuration, Cockpit launch, and troubleshooting, use
 [README-consumer.md](README-consumer.md) and [setup/setup-guide.md](setup/setup-guide.md). The setup
 guide is the canonical command reference; this README intentionally does not duplicate it.
-
-## License
-
-MIT
