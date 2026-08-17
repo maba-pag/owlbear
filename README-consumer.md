@@ -177,9 +177,16 @@ If you want copied runtime files refreshed — especially `.owlbear/hooks/` or o
 seed-managed files — re-run `setup/init.py`. Existing differing hook files are skipped
 unless you pass `--replace-hooks` or choose `replace` in an interactive prompt. The
 prompt shows a unified diff (seed → existing) so you can see what changed before
-choosing. Re-running `init.py` after every owlbear update is the recommended way
-to stay current on hooks; the script is idempotent and only touches files that
-differ.
+choosing.
+
+Editor and lint configuration is preserved on ordinary reruns. From the consumer project root,
+use `--check-configs` to detect missing or customized `.editorconfig`, Markdownlint, or Yamllint
+files, and use `--refresh-configs` when you intentionally want to replace those five files from
+the current seed. The complete behavior and command examples are in the
+[setup guide](setup/setup-guide.md#refreshing-consumer-configs).
+
+Re-running `init.py` after an owlbear update is the recommended way to stay current on copied
+runtime files; the script is idempotent and only touches files that differ.
 
 ## Sharing with Teammates
 

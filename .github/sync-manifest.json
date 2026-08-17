@@ -1,0 +1,30 @@
+{
+  "scopes": {
+    "share": ["share"],
+    "browser": ["serve/browser", "serve/browser-mcp"],
+    "delivery": ["serve/delivery", "serve/delivery-mcp", "serve/delivery-github"],
+    "knowledge": ["serve/knowledge", "serve/knowledge-mcp"],
+    "cockpit": ["serve/cockpit"],
+    "tools": ["serve/tools"],
+    "memory": ["serve/memory", "serve/memory-mcp"],
+    "setup": ["setup", "seed"],
+    "infra": [
+      ".editorconfig",
+      ".gitattributes",
+      ".gitignore",
+      ".markdownlint-cli2.jsonc",
+      ".markdownlint.json",
+      ".markdownlintignore",
+      ".python-version",
+      ".yamllint.yml",
+      "README-consumer.md",
+      "SECURITY.md",
+      "pyproject.toml",
+      "uv.lock"
+    ]
+  },
+  "consumer_excluded_paths": [
+    ".github",
+    ".mega-linter.yml"
+  ]
+}

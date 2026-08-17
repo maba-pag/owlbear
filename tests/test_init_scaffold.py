@@ -284,6 +284,7 @@ class TestMarkdownlintConfigScaffolding:
             ".markdownlint-cli2.jsonc": '{"consumer": true}\n',
             ".markdownlint.json": '{"default": false}\n',
             ".markdownlintignore": "consumer-specific-ignore\n",
+            ".yamllint.yml": "rules: {}\n",
         }
         skip_set = module._SKIP_IF_EXISTS_REL
         for relative_path, content in custom_contents.items():
@@ -300,3 +301,38 @@ class TestMarkdownlintConfigScaffolding:
             assert (tmp_path / relative_path).read_text(encoding="utf-8") == content, (
                 f"init() overwrote customized {relative_path!r}"
             )
+
+    def test_config_drift_reports_customized_and_missing_files(
+        self, project_root: Path, tmp_path: Path, run_init_without_test_surface: Callable[..., None]
+    ) -> None:
+        module = _load_init(project_root)
+        run_init_without_test_surface(module.init, tmp_path, project_root)
+
+        (tmp_path / ".markdownlint.json").write_text('{"consumer": true}\n', encoding="utf-8")
+        (tmp_path / ".yamllint.yml").unlink()
+
+        assert module.config_drift(tmp_path, project_root) == {
+            ".markdownlint.json": "different",
+            ".yamllint.yml": "missing",
+        }
+
+    def test_refresh_configs_replaces_only_refreshable_configs(
+        self, project_root: Path, tmp_path: Path, run_init_without_test_surface: Callable[..., None]
+    ) -> None:
+        module = _load_init(project_root)
+        run_init_without_test_surface(module.init, tmp_path, project_root)
+
+        custom_editorconfig = "root = false\n"
+        custom_instructions = "# Keep this project-specific guidance.\n"
+        (tmp_path / ".editorconfig").write_text(custom_editorconfig, encoding="utf-8")
+        (tmp_path / ".markdownlint.json").write_text('{"consumer": true}\n', encoding="utf-8")
+        instructions = tmp_path / ".github/copilot-instructions.md"
+        instructions.write_text(custom_instructions, encoding="utf-8")
+
+        run_init_without_test_surface(module.init, tmp_path, project_root, refresh_configs=True)
+
+        for relative_path in module._REFRESHABLE_CONFIG_REL:
+            expected = (project_root / "seed" / relative_path).read_bytes()
+            assert (tmp_path / relative_path).read_bytes() == expected, relative_path
+        assert (tmp_path / ".editorconfig").read_text(encoding="utf-8") != custom_editorconfig
+        assert instructions.read_text(encoding="utf-8") == custom_instructions

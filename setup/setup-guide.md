@@ -118,13 +118,13 @@ Running `init.py` writes the following files into your project directory:
 | `.owlbear/knowledge/.gitkeep` | Knowledge store placeholder | Always written |
 | `store/knowledge/.gitkeep` | Knowledge store placeholder | Always written |
 | `.github/copilot-instructions.md` | Consumer scaffold for project-specific Copilot instructions — placeholder sections for Project Identity, Directory Structure, Tech Stack, and Resources | Skipped if file already exists |
-| `.editorconfig` | Editor formatting rules | Skipped if file already exists |
+| `.editorconfig` | Editor formatting rules | Skipped if file already exists; refreshable with `--refresh-configs` |
 | `.gitattributes` | Git line-ending and diff rules | Skipped if file already exists |
 | `.gitignore` | Project-wide Gitignore rules; OwlBear-local rules live in `.owlbear/.gitignore` | Preserves user content and removes retired root rules on rerun |
-| `.markdownlint-cli2.jsonc` | Markdown linting configuration | Skipped if file already exists |
-| `.markdownlint.json` | Markdown linting rules | Skipped if file already exists |
-| `.markdownlintignore` | Markdown lint exclusion patterns | Skipped if file already exists |
-| `.yamllint.yml` | YAML linting configuration | Always written |
+| `.markdownlint-cli2.jsonc` | Markdown linting configuration | Skipped if file already exists; refreshable with `--refresh-configs` |
+| `.markdownlint.json` | Markdown linting rules | Skipped if file already exists; refreshable with `--refresh-configs` |
+| `.markdownlintignore` | Markdown lint exclusion patterns | Skipped if file already exists; refreshable with `--refresh-configs` |
+| `.yamllint.yml` | YAML linting configuration | Skipped if file already exists; refreshable with `--refresh-configs` |
 
 For a fresh workspace, `init.py` writes tracked Delivery configuration. It does not create mutable
 Delivery runtime, worktrees, verification profiles, or retired task, decision, board, accept, or
@@ -144,6 +144,29 @@ OwlBear uses two different update models:
 
 This split is why `git pull` updates shared agents and skills immediately, while copied
 runtime files may need a later `init.py` run to refresh.
+
+## Refreshing Consumer Configs
+
+Rerunning `init.py` preserves existing editor and lint configuration so project-specific changes
+are not overwritten. The refreshable files are `.editorconfig`, `.markdownlint-cli2.jsonc`,
+`.markdownlint.json`, `.markdownlintignore`, and `.yamllint.yml`.
+
+From the consumer project root, check for missing or customized files without changing them:
+
+```shell
+uv run --project ../owlbear python ../owlbear/setup/init.py --check-configs
+```
+
+The command exits successfully when the files match the owlbear seed and exits with status 1 when
+one or more files are missing or different. To intentionally replace those five files with the
+current seed versions, run:
+
+```shell
+uv run --project ../owlbear python ../owlbear/setup/init.py --refresh-configs
+```
+
+`--refresh-configs` does not overwrite `.github/copilot-instructions.md`, hook files, or other
+project-specific files that are outside the refreshable set.
 
 MCP memory entries are stored as markdown files under `.owlbear/memory/`. The
 `owlbear-memory` server creates that directory when it starts or writes the first

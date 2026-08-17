@@ -1,7 +1,7 @@
 """OwlBear workspace initialiser — setup/init.py.
 
 Usage (CLI):
-    python ../owlbear/setup/init.py [--replace-hooks]
+    python ../owlbear/setup/init.py [--replace-hooks] [--refresh-configs | --check-configs]
 
 Run from the target project directory.  owlbear_dir is auto-detected from
 the location of this script.
@@ -59,6 +59,16 @@ _SKIP_IF_EXISTS_REL = frozenset(
         ".markdownlint-cli2.jsonc",
         ".markdownlint.json",
         ".markdownlintignore",
+        ".yamllint.yml",
+    }
+)
+_REFRESHABLE_CONFIG_REL = frozenset(
+    {
+        ".editorconfig",
+        ".markdownlint-cli2.jsonc",
+        ".markdownlint.json",
+        ".markdownlintignore",
+        ".yamllint.yml",
     }
 )
 
@@ -254,6 +264,29 @@ def _write_seed_file(src: Path, dest: Path, replacements: dict[str, str]) -> Non
         return
 
     shutil.copy2(src, dest)
+
+
+def _render_seed_file(src: Path, replacements: dict[str, str]) -> bytes:
+    """Return the bytes that *src* would write to a consumer project."""
+    if src.suffix in (".json", ".yml"):
+        content = src.read_text(encoding="utf-8")
+        return _replace_placeholders(content, replacements).encode("utf-8")
+    return src.read_bytes()
+
+
+def config_drift(target_dir: Path, owlbear_dir: Path) -> dict[str, str]:
+    """Return missing or customized refreshable consumer configs."""
+    seed_dir = owlbear_dir / "seed"
+    replacements = _build_replacements(owlbear_dir, target_dir)
+    drift: dict[str, str] = {}
+    for rel_posix in sorted(_REFRESHABLE_CONFIG_REL):
+        src = seed_dir / rel_posix
+        dest = target_dir / rel_posix
+        if not dest.exists():
+            drift[rel_posix] = "missing"
+        elif dest.read_bytes() != _render_seed_file(src, replacements):
+            drift[rel_posix] = "different"
+    return drift
 
 
 def _current_branch(target_dir: Path) -> str | None:
@@ -883,6 +916,7 @@ def init(  # noqa: C901, PLR0913
     owlbear_dir: Path,
     *,
     replace_hooks: bool = False,
+    refresh_configs: bool = False,
     interactive: bool | None = None,
     remote: str = "origin",
     target_branch: str | None = None,
@@ -893,6 +927,8 @@ def init(  # noqa: C901, PLR0913
     Walks the seed/ tree inside *owlbear_dir*, copies static files, and
     replaces ``{{placeholder}}`` tokens in ``.json`` / ``.yml`` templates.
     ``settings.json`` and ``mcp.json`` are deep-merged with existing files.
+    Existing refreshable consumer configs are preserved unless
+    ``refresh_configs`` is true.
     Also receipt-activates an empty target authority store for fresh workspaces.
     Existing legacy stores remain untouched.
 
@@ -900,6 +936,7 @@ def init(  # noqa: C901, PLR0913
         target_dir: Destination project directory.
         owlbear_dir: Root of the owlbear installation (contains ``seed/``).
         replace_hooks: Overwrite differing existing hook runtime files.
+        refresh_configs: Replace existing refreshable consumer configs from seed/.
         interactive: Whether hook conflicts may prompt. Defaults to TTY detect.
         remote: Git remote used for Delivery publication.
         target_branch: Unqualified branch targeted by Delivery pull requests.
@@ -940,7 +977,11 @@ def init(  # noqa: C901, PLR0913
             _write_gitignore(src, dest, retired_lines=frozenset())
             continue
 
-        if rel_posix in _SKIP_IF_EXISTS_REL and dest.exists():
+        if (
+            rel_posix in _SKIP_IF_EXISTS_REL
+            and dest.exists()
+            and not (refresh_configs and rel_posix in _REFRESHABLE_CONFIG_REL)
+        ):
             continue
 
         if rel_posix.startswith(_HOOKS_REL_PREFIX) and dest.exists():
@@ -979,6 +1020,17 @@ if __name__ == "__main__":  # pragma: no cover
         action="store_true",
         help="Overwrite differing existing .owlbear/hooks files instead of skipping or prompting.",
     )
+    config_mode = parser.add_mutually_exclusive_group()
+    config_mode.add_argument(
+        "--refresh-configs",
+        action="store_true",
+        help="Replace existing consumer lint/editor configs from the owlbear seed.",
+    )
+    config_mode.add_argument(
+        "--check-configs",
+        action="store_true",
+        help="Report consumer lint/editor config drift without changing files.",
+    )
     parser.add_argument(
         "--remote",
         default="origin",
@@ -999,11 +1051,21 @@ if __name__ == "__main__":  # pragma: no cover
 
     _target = Path.cwd()
     _owlbear = Path(__file__).resolve().parent.parent
+    if args.check_configs:
+        drift = config_drift(_target, _owlbear)
+        if drift:
+            print("Consumer config drift detected:")
+            for path, reason in drift.items():
+                print(f"  {reason}: {path}")
+            raise SystemExit(1)
+        print("Consumer lint/editor configs are aligned with the owlbear seed.")
+        raise SystemExit(0)
     try:
         init(
             _target,
             _owlbear,
             replace_hooks=args.replace_hooks,
+            refresh_configs=args.refresh_configs,
             remote=args.remote,
             target_branch=args.target_branch,
             github_repository=args.github_repository,
