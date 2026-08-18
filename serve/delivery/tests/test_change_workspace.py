@@ -910,7 +910,7 @@ def _publish_external_change_head(
     filename: str = "external.txt",
 ) -> tuple[Path, str]:
     remote = tmp_path / "external-remote.git"
-    _git(tmp_path, "init", "--bare", str(remote))
+    _git(tmp_path, "init", "--bare", "-b", branch, str(remote))
     _git(repository, "remote", "add", "origin", str(remote))
     _git(repository, "push", "origin", f"{base_head}:refs/heads/{branch}")
     external = tmp_path / "external-repository"

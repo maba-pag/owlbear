@@ -479,7 +479,7 @@ def _publish_external_change_head(
     base_head: str,
 ) -> str:
     remote = tmp_path / "external-change-remote.git"
-    _git(tmp_path, "init", "--bare", str(remote))
+    _git(tmp_path, "init", "--bare", "-b", branch, str(remote))
     _git(repository, "remote", "add", "origin", str(remote))
     _git(repository, "push", "origin", f"{base_head}:refs/heads/{branch}")
     external = tmp_path / "external-change-repository"
@@ -902,7 +902,7 @@ def test_application_acquires_after_real_target_sync_at_the_merged_head(tmp_path
     )
     repository = application._workspace_manager.repository
     remote = tmp_path / "remote.git"
-    subprocess.run(("git", "init", "--bare", str(remote)), check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(("git", "init", "--bare", "-b", "main", str(remote)), check=True, capture_output=True)  # noqa: S603, S607
     _git(repository, "remote", "add", "origin", str(remote))
     _git(repository, "push", "origin", "refs/heads/main:refs/heads/main")
     target_head = _advance_remote_target(tmp_path, remote)
@@ -1128,7 +1128,7 @@ def test_abandoning_preserved_target_sync_conflict_surfaces_cleanup_attention(tm
     )
     repository = application._workspace_manager.repository
     remote = tmp_path / "remote.git"
-    subprocess.run(("git", "init", "--bare", str(remote)), check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(("git", "init", "--bare", "-b", "main", str(remote)), check=True, capture_output=True)  # noqa: S603, S607
     _git(repository, "remote", "add", "origin", str(remote))
     _git(repository, "push", "origin", "refs/heads/main:refs/heads/main")
     target_head = _advance_remote_target(tmp_path, remote, product="target\n")

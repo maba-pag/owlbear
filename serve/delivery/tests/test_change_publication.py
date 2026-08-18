@@ -57,7 +57,7 @@ def _head(repository: Path, revision: str = "HEAD") -> str:
 
 def _repository(tmp_path: Path) -> tuple[Path, Path, str]:
     remote = tmp_path / "remote.git"
-    _git(tmp_path, "init", "--bare", str(remote))
+    _git(tmp_path, "init", "--bare", "-b", "main", str(remote))
     repository = tmp_path / "repository"
     repository.mkdir()
     _git(repository, "init", "-b", "main")
