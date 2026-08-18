@@ -79,4 +79,39 @@ describe('useMemoryPurgeFlow', () => {
     expect(onSuccess).not.toHaveBeenCalled()
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
+
+  it('ignores a stale preview failure after the threshold changes', async () => {
+    let rejectFirst!: (reason: unknown) => void
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => new Promise((_, reject) => { rejectFirst = reject }))
+      .mockResolvedValueOnce(response({ deleted_total: 2, eligible: 2, too_recent: 0 }))
+    const { result } = renderHook(() => useMemoryPurgeFlow())
+
+    act(() => { result.current.setThreshold('10') })
+    const firstPreview = result.current.requestPreview()
+    act(() => { result.current.setThreshold('20') })
+    await act(async () => { await result.current.requestPreview() })
+    await act(async () => { rejectFirst(new Error('stale preview failed')); await firstPreview })
+
+    expect(result.current.phase).toBe('confirming')
+    expect(result.current.error).toBeNull()
+    expect(result.current.preview?.eligible).toBe(2)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('cancels a confirmed preview and prevents a purge from using it', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValue(response({ deleted_total: 2, eligible: 2, too_recent: 0 }))
+    const { result } = renderHook(() => useMemoryPurgeFlow())
+
+    await act(async () => { await result.current.requestPreview() })
+    act(() => { result.current.cancelPurge() })
+    await act(async () => { await result.current.confirmPurge() })
+
+    expect(result.current.phase).toBe('idle')
+    expect(result.current.preview).toBeNull()
+    expect(result.current.receipt).toBeNull()
+    expect(result.current.error).toBeNull()
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
 })

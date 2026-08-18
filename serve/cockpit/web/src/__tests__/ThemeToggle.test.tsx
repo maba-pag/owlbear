@@ -138,4 +138,49 @@ describe('TestFromAC_ThemeToggle_1540', () => {
     expect(focusSpy).toHaveBeenCalledTimes(1)
     focusSpy.mockRestore()
   })
+
+  it('compact mode closes the menu on Escape and restores trigger focus', () => {
+    const { container } = renderCompactThemeToggle('auto')
+    const button = container.querySelector('[data-testid="theme-toggle"]') as HTMLElement
+    const focusSpy = vi.spyOn(button, 'focus')
+
+    fireEvent.click(button)
+    fireEvent.keyDown(screen.getByTestId('theme-mode-menu'), { key: 'Escape' })
+
+    expect(screen.queryByTestId('theme-mode-menu')).toBeNull()
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+    expect(focusSpy).toHaveBeenCalledTimes(1)
+    focusSpy.mockRestore()
+  })
+
+  it('compact mode closes the menu when a pointer starts outside it', () => {
+    const { container } = renderCompactThemeToggle('auto')
+    const button = container.querySelector('[data-testid="theme-toggle"]')!
+
+    fireEvent.click(button)
+    fireEvent.pointerDown(document.body)
+
+    expect(screen.queryByTestId('theme-mode-menu')).toBeNull()
+  })
+
+  it('compact mode keeps the menu open when a pointer starts inside it', () => {
+    const { container } = renderCompactThemeToggle('auto')
+    const button = container.querySelector('[data-testid="theme-toggle"]')!
+
+    fireEvent.click(button)
+    fireEvent.pointerDown(screen.getByTestId('theme-mode-menu'))
+
+    expect(screen.getByTestId('theme-mode-menu')).toBeInTheDocument()
+  })
+
+  it('compact mode closes an open menu when the trigger is clicked again', () => {
+    const { container } = renderCompactThemeToggle('auto')
+    const button = container.querySelector('[data-testid="theme-toggle"]')!
+
+    fireEvent.click(button)
+    fireEvent.click(button)
+
+    expect(screen.queryByTestId('theme-mode-menu')).toBeNull()
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+  })
 })
