@@ -319,6 +319,7 @@ jobs:
                 path_var="${scope_suffix}_PATHS"
                 scope_paths="${!path_var}"
                 echo "--- serve/$serve_scope"
+                # shellcheck disable=SC2086 # scope paths are intentionally split into git pathspec arguments.
                 git rm -rf --quiet $scope_paths 2>/dev/null || true
                 # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
                 git checkout dev -- $scope_paths
@@ -334,6 +335,7 @@ jobs:
 
             if [[ "$SYNC_INFRA" == "true" ]]; then
               echo "--- infra (linters, editor & consumer root configs)"
+              # shellcheck disable=SC2086 # excluded paths are intentionally split into git pathspec arguments.
               git rm -rf --quiet $CONSUMER_EXCLUDED_PATHS 2>/dev/null || true
               # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
               git checkout dev -- $INFRA_PATHS
