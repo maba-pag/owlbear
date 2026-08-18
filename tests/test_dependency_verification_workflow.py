@@ -189,17 +189,20 @@ def test_classifier_outputs_do_not_include_fix_policy() -> None:
     assert "fix_mode" not in outputs
 
 
-def test_sync_manifest_excludes_dev_automation_paths() -> None:
+def test_sync_manifest_preserves_workflow_support_paths() -> None:
     manifest = json.loads((ROOT / ".github/sync-manifest.json").read_text(encoding="utf-8"))
     workflow = SYNC_PATH.read_text(encoding="utf-8")
 
     assert ".github" not in manifest["consumer_excluded_paths"]
-    assert ".github/workflows" in manifest["scopes"]["infra"]
+    assert {
+        ".github/renovate.json",
+        ".github/scripts",
+        ".github/sync-manifest.json",
+        ".github/workflows",
+    }.issubset(manifest["scopes"]["infra"])
     assert {
         ".github/copilot-instructions.md",
-        ".github/scripts",
         ".github/skills",
-        ".github/sync-manifest.json",
     }.issubset(manifest["consumer_excluded_paths"])
     assert ".mega-linter.yml" in manifest["consumer_excluded_paths"]
     assert "python3 .github/scripts/sync_manifest.py paths" in workflow

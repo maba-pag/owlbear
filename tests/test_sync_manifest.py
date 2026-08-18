@@ -44,14 +44,14 @@ def test_all_consumer_paths_exclude_dev_only_surfaces() -> None:
     assert ".markdownlint.json" in consumer_paths
     assert ".yamllint.yml" in consumer_paths
     assert ".editorconfig" in consumer_paths
+    assert ".github/renovate.json" in consumer_paths
+    assert ".github/scripts" in consumer_paths
+    assert ".github/sync-manifest.json" in consumer_paths
     assert ".github/workflows" in consumer_paths
     assert {
         ".github/README-automation.md",
         ".github/copilot-instructions.md",
-        ".github/renovate.json",
-        ".github/scripts",
         ".github/skills",
-        ".github/sync-manifest.json",
         ".mega-linter.yml",
         ".owlbear",
         ".pre-commit-config.yaml",
