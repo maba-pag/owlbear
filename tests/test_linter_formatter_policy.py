@@ -79,6 +79,7 @@ _P08_JSON_SCOPE_SAMPLES = (
 _P08_JSON_IGNORE_MARKERS = (
     '".owlbear/delivery/packages/**"',
     '".owlbear/research/**"',
+    '".owlbear/sources/**"',
     '".venv/**"',
     '"**/.venv/**"',
     '"node_modules/**"',
@@ -254,6 +255,21 @@ def test_markdownlint_inline_html_allows_only_agent_sections() -> None:
         assert config.get("MD033") == {"allowed_elements": _M04_ALLOWED_ELEMENTS}
 
     assert "<strong>" not in (_ROOT / "setup/sharing-guide.md").read_text(encoding="utf-8")
+
+
+def test_markdownlint_rule_authorities_and_source_suppression_remain_explicit() -> None:
+    expected_front_matter_title = r"^\s*(?:title|name|description)\s*[:=]"
+    for path in (_ROOT / ".markdownlint.json", _ROOT / "seed/.markdownlint.json"):
+        config = json.loads(path.read_text(encoding="utf-8"))
+        assert isinstance(config, dict)
+        assert config.get("MD013") is False
+        assert config.get("MD024") == {"siblings_only": True}
+        assert config.get("MD029") == {"style": "ordered"}
+        assert config.get("MD041") == {"front_matter_title": expected_front_matter_title}
+        assert config.get("MD060") == {"style": "compact"}
+
+    source_lines = (_ROOT / ".owlbear/sources/overview.md").read_text(encoding="utf-8").splitlines()
+    assert source_lines[0] == "<!-- markdownlint-disable MD060 -->"
 
 
 def test_delivery_packages_remain_excluded_from_markdown_consumers() -> None:
