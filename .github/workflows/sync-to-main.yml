@@ -1,0 +1,551 @@
+---
+name: Sync dev to main
+
+"on":
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run — show diff preview and skip push"
+        type: boolean
+        default: false
+      sync_share:
+        description: "share/ (agents, skills, instructions, prompts)"
+        type: boolean
+        default: true
+      sync_browser:
+        description: "serve/browser/ + serve/browser-mcp/"
+        type: boolean
+        default: true
+      sync_delivery:
+        description: "serve/delivery/ + serve/delivery-mcp/ + serve/delivery-github/"
+        type: boolean
+        default: true
+      sync_knowledge:
+        description: "serve/knowledge/ + serve/knowledge-mcp/"
+        type: boolean
+        default: true
+      sync_memory:
+        description: "serve/memory/ + serve/memory-mcp/"
+        type: boolean
+        default: true
+      sync_cockpit:
+        description: "serve/cockpit/"
+        type: boolean
+        default: true
+      sync_tools:
+        description: "serve/tools/"
+        type: boolean
+        default: true
+      sync_setup:
+        description: "setup/ + seed/ (init script, templates)"
+        type: boolean
+        default: true
+      sync_infra:
+        description: "CI workflows, linters, editor & consumer root configs"
+        type: boolean
+        default: true
+      message:
+        description: "Optional note for the rolling-main sync commit (e.g. 'refresh consumer docs')"
+        type: string
+        required: false
+
+concurrency:
+  group: sync-to-main
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    env:
+      SYNC_SHARE: ${{ inputs.sync_share }}
+      SYNC_BROWSER: ${{ inputs.sync_browser }}
+      SYNC_DELIVERY: ${{ inputs.sync_delivery }}
+      SYNC_KNOWLEDGE: ${{ inputs.sync_knowledge }}
+      SYNC_COCKPIT: ${{ inputs.sync_cockpit }}
+      SYNC_TOOLS: ${{ inputs.sync_tools }}
+      SYNC_MEMORY: ${{ inputs.sync_memory }}
+      SYNC_SETUP: ${{ inputs.sync_setup }}
+      SYNC_INFRA: ${{ inputs.sync_infra }}
+      INPUT_DRY_RUN: ${{ inputs.dry_run }}
+      INPUT_MESSAGE: ${{ inputs.message }}
+
+    steps:
+      - name: Checkout dev branch (full history)
+        # The sync manifest is stored on dev and drives all consumer checkouts.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Resolve scopes
+        run: |
+          manifest_paths() {
+            if [[ "$1" == "excluded" ]]; then
+              python3 .github/scripts/sync_manifest.py excluded
+            else
+              python3 .github/scripts/sync_manifest.py paths "$1"
+            fi
+          }
+
+          share_paths=$(manifest_paths share)
+          browser_paths=$(manifest_paths browser)
+          delivery_paths=$(manifest_paths delivery)
+          knowledge_paths=$(manifest_paths knowledge)
+          cockpit_paths=$(manifest_paths cockpit)
+          tools_paths=$(manifest_paths tools)
+          memory_paths=$(manifest_paths memory)
+          serve_scope_names=$(python3 .github/scripts/sync_manifest.py scopes serve)
+          serve_paths=$(python3 .github/scripts/sync_manifest.py group-paths serve)
+          serve_scope_count=$(printf '%s\n' "$serve_scope_names" | wc -w | tr -d ' ')
+          for serve_scope in $serve_scope_names; do
+            case "$serve_scope" in
+              browser|delivery|knowledge|cockpit|tools|memory) ;;
+              *)
+                echo "::error::Unsupported serve scope in sync manifest: $serve_scope"
+                exit 1
+                ;;
+            esac
+          done
+          setup_paths=$(manifest_paths setup)
+          infra_paths=$(manifest_paths infra)
+          all_consumer_paths=$(manifest_paths all)
+          consumer_excluded_paths=$(manifest_paths excluded)
+
+          scopes=""
+          if [[ "$SYNC_SHARE" == "true" ]]; then scopes="${scopes:+$scopes,}share"; fi
+
+          # Collect serve sub-scopes
+          serve_scopes=""
+          selected_serve_count=0
+          for serve_scope in $serve_scope_names; do
+            scope_suffix=$(printf '%s' "$serve_scope" | tr '[:lower:]' '[:upper:]')
+            scope_env="SYNC_${scope_suffix}"
+            if [[ -z "${!scope_env+x}" ]]; then
+              echo "::error::Missing workflow input for serve scope: $serve_scope"
+              exit 1
+            fi
+            if [[ "${!scope_env}" == "true" ]]; then
+              serve_scopes="${serve_scopes:+$serve_scopes,}$serve_scope"
+              selected_serve_count=$((selected_serve_count + 1))
+            fi
+          done
+
+          # If all serve sub-scopes are selected, collapse to "serve".
+          any_serve="false"
+          all_serve="false"
+          if [[ -n "$serve_scopes" ]]; then any_serve="true"; fi
+          if [[ "$selected_serve_count" -eq "$serve_scope_count" ]]; then all_serve="true"; fi
+          if [[ "$all_serve" == "true" ]]; then
+            scopes="${scopes:+$scopes,}serve"
+          elif [[ -n "$serve_scopes" ]]; then
+            scopes="${scopes:+$scopes,}$serve_scopes"
+          fi
+
+          if [[ "$SYNC_SETUP" == "true" ]]; then scopes="${scopes:+$scopes,}setup"; fi
+          if [[ "$SYNC_INFRA" == "true" ]]; then scopes="${scopes:+$scopes,}infra"; fi
+
+          if [[ -z "$scopes" ]]; then
+            echo "::error::No sync scopes selected — enable at least one."
+            exit 1
+          fi
+
+          # Shorten label when everything is selected
+          if [[ "$scopes" == "share,serve,setup,infra" ]]; then scopes="all"; fi
+
+          {
+            echo "SCOPES=$scopes"
+            echo "ANY_SERVE=$any_serve"
+            echo "ALL_SERVE=$all_serve"
+            echo "SHARE_PATHS=$share_paths"
+            echo "BROWSER_PATHS=$browser_paths"
+            echo "DELIVERY_PATHS=$delivery_paths"
+            echo "KNOWLEDGE_PATHS=$knowledge_paths"
+            echo "COCKPIT_PATHS=$cockpit_paths"
+            echo "TOOLS_PATHS=$tools_paths"
+            echo "MEMORY_PATHS=$memory_paths"
+            echo "SERVE_PATHS=$serve_paths"
+            echo "SERVE_SCOPE_NAMES=$serve_scope_names"
+            echo "SETUP_PATHS=$setup_paths"
+            echo "INFRA_PATHS=$infra_paths"
+            echo "ALL_CONSUMER_PATHS=$all_consumer_paths"
+            echo "CONSUMER_EXCLUDED_PATHS=$consumer_excluded_paths"
+          } >> "$GITHUB_ENV"
+          echo "Syncing scopes: $scopes"
+
+      - name: Capture dev metadata
+        run: |
+          {
+            echo "SHORT_SHA=$(git rev-parse --short HEAD)"
+            echo "FULL_SHA=$(git rev-parse HEAD)"
+            echo "DATE=$(date -u +"%Y-%m-%d")"
+          } >> "$GITHUB_ENV"
+
+      - name: Warn on unresolved TODO markers
+        run: |
+          # Build path list from selected sync scopes
+          paths=""
+          if [[ "$SYNC_SHARE" == "true" ]]; then paths="$paths $SHARE_PATHS"; fi
+          for serve_scope in $SERVE_SCOPE_NAMES; do
+            scope_suffix=$(printf '%s' "$serve_scope" | tr '[:lower:]' '[:upper:]')
+            scope_env="SYNC_${scope_suffix}"
+            if [[ "${!scope_env}" == "true" ]]; then
+              path_var="${scope_suffix}_PATHS"
+              paths="$paths ${!path_var}"
+            fi
+          done
+          if [[ "$SYNC_SETUP" == "true" ]]; then paths="$paths $SETUP_PATHS"; fi
+          if [[ "$SYNC_INFRA" == "true" ]]; then paths="$paths $INFRA_PATHS"; fi
+
+          if [[ -z "$paths" ]]; then
+            echo "No paths to scan for TODO markers."
+            exit 0
+          fi
+
+          # shellcheck disable=SC2086
+          todo_hits=$(grep -rHnI '^> \*\*TODO:\*\*' $paths 2>/dev/null \
+            | grep -v -E ':> \*\*TODO:\*\* \{category\} — \{description\} \[#\{[^{}]+\}\]$' \
+            || true)
+
+          if [[ -z "$todo_hits" ]]; then
+            echo "No unresolved TODO markers in synced paths."
+            exit 0
+          fi
+
+          # Emit one ::warning per hit with file and line metadata
+          todo_count=$(printf '%s\n' "$todo_hits" | wc -l | tr -d ' ')
+          while IFS=: read -r file line content; do
+            echo "::warning file=${file},line=${line},title=Unresolved TODO marker::${content}"
+          done <<< "$todo_hits"
+
+          echo ""
+          echo "⚠️ ${todo_count} unresolved TODO marker(s) in synced scopes."
+
+      - name: Validate selected paths exist on dev
+        run: |
+          failed=0
+          paths=""
+
+          if [[ "$SYNC_SHARE" == "true" ]]; then
+            paths="$paths $SHARE_PATHS"
+          fi
+          for serve_scope in $SERVE_SCOPE_NAMES; do
+            scope_suffix=$(printf '%s' "$serve_scope" | tr '[:lower:]' '[:upper:]')
+            scope_env="SYNC_${scope_suffix}"
+            if [[ "${!scope_env}" == "true" ]]; then
+              path_var="${scope_suffix}_PATHS"
+              paths="$paths ${!path_var}"
+            fi
+          done
+          if [[ "$SYNC_SETUP" == "true" ]]; then
+            paths="$paths $SETUP_PATHS"
+          fi
+          if [[ "$SYNC_INFRA" == "true" ]]; then
+            paths="$paths $INFRA_PATHS"
+          fi
+
+          for p in $paths; do
+            if [ ! -e "$p" ]; then
+              echo "MISSING: $p"
+              failed=1
+            fi
+          done
+
+          if [ $failed -ne 0 ]; then
+            echo "Include-list validation failed — one or more required paths are absent on dev."
+            exit 1
+          fi
+          echo "All selected paths present on dev."
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Prepare consumer branch
+        # Incremental: new commit is a child of origin/main.
+        # First-ever sync: create orphan branch when main does not exist yet.
+        run: |
+          if git fetch origin main --no-tags 2>/dev/null; then
+            echo "main branch exists — creating incremental commit on top of origin/main"
+            git checkout -b consumer origin/main
+            echo "MAIN_EXISTS=true" >> "$GITHUB_ENV"
+          else
+            echo "main branch not found — creating orphan commit (first-ever sync)"
+            git checkout --orphan consumer
+            git rm -rf . --quiet || true
+            echo "MAIN_EXISTS=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Sync selected scopes from dev
+        # All scopes on → full wipe (guarantees no stale files from prior syncs).
+        # Partial → selective overlay (unselected scopes keep their state on main).
+        env:
+          ALL_SCOPES: ${{ env.SCOPES }}
+          ALL_SERVE: ${{ env.ALL_SERVE }}
+        run: |
+          if [[ "$ALL_SCOPES" == "all" ]]; then
+            echo "=== Full wipe — all scopes selected"
+            git rm -rf . --quiet || true
+            # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
+            git checkout dev -- $ALL_CONSUMER_PATHS
+            git mv -f README-consumer.md README.md
+          else
+            echo "=== Partial sync — scopes: $ALL_SCOPES"
+
+            if [[ "$SYNC_SHARE" == "true" ]]; then
+              echo "--- share/"
+              git rm -rf share --quiet 2>/dev/null || true
+              # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
+              git checkout dev -- $SHARE_PATHS
+            fi
+
+            # --- serve/ packages (granular) ---
+            if [[ "$ALL_SERVE" == "true" ]]; then
+              echo "--- serve/ (all packages)"
+              git rm -rf serve --quiet 2>/dev/null || true
+              # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
+              git checkout dev -- $SERVE_PATHS
+            else
+              for serve_scope in $SERVE_SCOPE_NAMES; do
+                scope_suffix=$(printf '%s' "$serve_scope" | tr '[:lower:]' '[:upper:]')
+                scope_env="SYNC_${scope_suffix}"
+                if [[ "${!scope_env}" != "true" ]]; then continue; fi
+                path_var="${scope_suffix}_PATHS"
+                scope_paths="${!path_var}"
+                echo "--- serve/$serve_scope"
+                git rm -rf --quiet $scope_paths 2>/dev/null || true
+                # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
+                git checkout dev -- $scope_paths
+              done
+            fi
+
+            if [[ "$SYNC_SETUP" == "true" ]]; then
+              echo "--- setup/ + seed/"
+              git rm -rf setup seed --quiet 2>/dev/null || true
+              # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
+              git checkout dev -- $SETUP_PATHS
+            fi
+
+            if [[ "$SYNC_INFRA" == "true" ]]; then
+              echo "--- infra (linters, editor & consumer root configs)"
+              git rm -rf --quiet $CONSUMER_EXCLUDED_PATHS 2>/dev/null || true
+              # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
+              git checkout dev -- $INFRA_PATHS
+              git mv -f README-consumer.md README.md
+            fi
+          fi
+
+      - name: Setup Node.js (cockpit)
+        if: ${{ env.SYNC_COCKPIT == 'true' }}
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: serve/cockpit/web/.nvmrc
+          cache: npm
+          cache-dependency-path: serve/cockpit/web/package-lock.json
+
+      - name: Build cockpit SPA
+        if: ${{ env.SYNC_COCKPIT == 'true' }}
+        working-directory: serve/cockpit/web
+        run: npm ci && npm run sync:pds && npm run build
+
+      - name: Assert SPA bundle exists
+        if: ${{ env.SYNC_COCKPIT == 'true' }}
+        run: |
+          if [ ! -f serve/cockpit/dist/index.html ]; then
+            echo "ERROR: serve/cockpit/dist/index.html not found — build may have failed or outDir is misconfigured."
+            exit 1
+          fi
+
+      - name: Stage built SPA bundle
+        if: ${{ env.SYNC_COCKPIT == 'true' }}
+        run: git add -f serve/cockpit/dist/
+
+      - name: Prune dev-only files from consumer tree
+        run: |
+          for excluded_path in $CONSUMER_EXCLUDED_PATHS; do
+            git rm -rf "$excluded_path" --quiet 2>/dev/null || true
+          done
+
+          # Package test suites validate dev; consumers only execute package sources.
+          if [ -d serve ]; then
+            find serve -mindepth 2 -maxdepth 2 -type d -name tests -print0 \
+              | xargs -0 -r git rm -rf --quiet --
+          fi
+
+      - name: Prune stale files not present on dev
+        run: |
+          # Remove tracked files on main that no longer exist on dev.
+          # Only prunes within synced scopes and truly orphaned paths.
+          # Files in unsynced scopes are left untouched.
+
+          path_in_projection() {
+            local file_path="$1"
+            local projection="$2"
+            local -a projection_paths
+            read -r -a projection_paths <<< "$projection"
+            for path in "${projection_paths[@]}"; do
+              if [[ "$file_path" == "$path" || "$file_path" == "$path/"* ]]; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          stale_count=0
+          while IFS= read -r file; do
+            # Skip build artifacts
+            case "$file" in
+              serve/cockpit/dist/*) continue ;;
+            esac
+
+            # Check if file belongs to a known manifest scope.
+            in_known_scope=false
+            scope_synced=false
+            if path_in_projection "$file" "$ALL_CONSUMER_PATHS"; then
+              in_known_scope=true
+            fi
+            if [[ "$SYNC_SHARE" == "true" ]] && path_in_projection "$file" "$SHARE_PATHS"; then
+              scope_synced=true
+            elif [[ "$SYNC_SETUP" == "true" ]] && path_in_projection "$file" "$SETUP_PATHS"; then
+              scope_synced=true
+            elif [[ "$SYNC_INFRA" == "true" ]] && path_in_projection "$file" "$INFRA_PATHS"; then
+              scope_synced=true
+            elif [[ "$ALL_SERVE" == "true" ]] && path_in_projection "$file" "$SERVE_PATHS"; then
+              scope_synced=true
+            else
+              for serve_scope in $SERVE_SCOPE_NAMES; do
+                scope_env="SYNC_${serve_scope^^}"
+                if [[ "${!scope_env}" != "true" ]]; then continue; fi
+                path_var="${serve_scope^^}_PATHS"
+                if path_in_projection "$file" "${!path_var}"; then
+                  scope_synced=true
+                  break
+                fi
+              done
+            fi
+
+            # Don't touch files in scopes that weren't synced this run
+            if [[ "$in_known_scope" == "true" && "$scope_synced" == "false" ]]; then
+              continue
+            fi
+
+            # Remove if not present on dev
+            if ! git cat-file -e "dev:$file" 2>/dev/null; then
+              git rm --quiet "$file" 2>/dev/null || true
+              echo "  Removed stale: $file"
+              stale_count=$((stale_count + 1))
+            fi
+          done < <(git ls-files)
+
+          if [ $stale_count -gt 0 ]; then
+            echo "Pruned $stale_count stale file(s) from consumer branch."
+          else
+            echo "No stale files found."
+          fi
+
+      - name: Detect changes
+        run: |
+          if [ "$MAIN_EXISTS" = "true" ] && git diff --staged --quiet HEAD 2>/dev/null; then
+            echo "NO_CHANGES=true" >> "$GITHUB_ENV"
+            echo "No changes detected — main is already up to date."
+          else
+            echo "NO_CHANGES=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Diff preview
+        run: |
+          {
+            echo "### Diff preview — scopes: ${{ env.SCOPES }}"
+            echo ""
+            if [ "$NO_CHANGES" = "true" ]; then
+              echo "No changes — selected scopes are already up to date."
+            elif [ "$MAIN_EXISTS" = "false" ]; then
+              echo "First-ever sync — files to be committed:"
+              echo ""
+              echo '```'
+              git ls-files --cached
+              echo '```'
+            else
+              echo '```'
+              git diff --staged --stat HEAD
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit
+        if: ${{ env.NO_CHANGES != 'true' }}
+        env:
+          COMMIT_SCOPES: ${{ env.SCOPES }}
+          COMMIT_SHORT_SHA: ${{ env.SHORT_SHA }}
+          COMMIT_MESSAGE: ${{ env.INPUT_MESSAGE }}
+          COMMIT_SERVER_URL: ${{ github.server_url }}
+          COMMIT_REPOSITORY: ${{ github.repository }}
+          COMMIT_RUN_ID: ${{ github.run_id }}
+          COMMIT_FULL_SHA: ${{ env.FULL_SHA }}
+        run: |
+          subject="sync($COMMIT_SCOPES): dev@$COMMIT_SHORT_SHA"
+          if [[ -n "$COMMIT_MESSAGE" ]]; then subject="$subject — $COMMIT_MESSAGE"; fi
+
+          run_url="$COMMIT_SERVER_URL/$COMMIT_REPOSITORY/actions/runs/$COMMIT_RUN_ID"
+
+          git commit -m "$subject" \
+            -m "" \
+            --trailer "Dev-Ref: $COMMIT_FULL_SHA" \
+            --trailer "Run: $run_url"
+
+      - name: Push to main
+        if: ${{ env.NO_CHANGES != 'true' && env.INPUT_DRY_RUN != 'true' }}
+        run: |
+          git push origin consumer:main
+
+      - name: Job summary — success
+        if: ${{ success() }}
+        env:
+          SUMMARY_DRY_RUN: ${{ env.INPUT_DRY_RUN }}
+          SUMMARY_SHORT_SHA: ${{ env.SHORT_SHA }}
+          SUMMARY_DATE: ${{ env.DATE }}
+          SUMMARY_ACTOR: ${{ github.actor }}
+          SUMMARY_SCOPES: ${{ env.SCOPES }}
+        run: |
+          {
+            echo ""
+            if [ "$NO_CHANGES" = "true" ]; then
+              echo "## Sync — No Changes"
+            elif [ "$SUMMARY_DRY_RUN" = "true" ]; then
+              echo "## Sync Dry Run"
+            else
+              echo "## Sync Complete"
+            fi
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **SHA** | \`$SUMMARY_SHORT_SHA\` |"
+            echo "| **Date** | $SUMMARY_DATE |"
+            echo "| **Actor** | $SUMMARY_ACTOR |"
+            echo "| **Scopes** | $SUMMARY_SCOPES |"
+            echo "| **Dry run** | $SUMMARY_DRY_RUN |"
+            if [ "$SUMMARY_DRY_RUN" = "true" ]; then
+              echo ""
+              echo "> Push skipped (dry run). Re-run without dry_run to sync."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Job summary — failure
+        if: ${{ always() && failure() }}
+        run: |
+          {
+            echo "## Sync Failed"
+            echo ""
+            echo "Failed for actor **${{ github.actor }}**"
+            echo "at SHA \`${{ env.SHORT_SHA || 'unknown' }}\` on ${{ env.DATE || 'unknown' }}."
+            echo ""
+            echo "Scopes: ${{ env.SCOPES || 'unknown' }}"
+            echo ""
+            echo "Check the step logs above for details."
+          } >> "$GITHUB_STEP_SUMMARY"
