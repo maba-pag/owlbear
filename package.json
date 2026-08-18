@@ -11,6 +11,6 @@
     "lint:html": "npm --prefix serve/cockpit/web run lint:html"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "4.1.10"
+    "@vitest/coverage-v8": "4.1.11"
   }
 }
