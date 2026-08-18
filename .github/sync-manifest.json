@@ -17,15 +17,31 @@
       ".markdownlintignore",
       ".python-version",
       ".yamllint.yml",
-      "serve/README.md",
       "README-consumer.md",
       "SECURITY.md",
       "pyproject.toml",
       "uv.lock"
     ]
   },
+  "scope_groups": {
+    "serve": {
+      "scopes": ["browser", "delivery", "knowledge", "cockpit", "tools", "memory"],
+      "paths": ["serve/README.md"]
+    }
+  },
   "consumer_excluded_paths": [
     ".github",
-    ".mega-linter.yml"
-  ]
+    ".mega-linter.yml",
+    ".owlbear",
+    ".pre-commit-config.yaml",
+    ".vscode",
+    "conftest.py",
+    "eslint-json.config.cjs",
+    "package-lock.json",
+    "package.json",
+    "store",
+    "tests",
+    "serve/cockpit/web"
+  ],
+  "source_only_paths": ["README.md"]
 }

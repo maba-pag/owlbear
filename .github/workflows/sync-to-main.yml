@@ -100,8 +100,18 @@ jobs:
           cockpit_paths=$(manifest_paths cockpit)
           tools_paths=$(manifest_paths tools)
           memory_paths=$(manifest_paths memory)
-          serve_paths="serve/README.md $browser_paths $delivery_paths"
-          serve_paths+=" $knowledge_paths $cockpit_paths $tools_paths $memory_paths"
+          serve_scope_names=$(python3 .github/scripts/sync_manifest.py scopes serve)
+          serve_paths=$(python3 .github/scripts/sync_manifest.py group-paths serve)
+          serve_scope_count=$(printf '%s\n' "$serve_scope_names" | wc -w | tr -d ' ')
+          for serve_scope in $serve_scope_names; do
+            case "$serve_scope" in
+              browser|delivery|knowledge|cockpit|tools|memory) ;;
+              *)
+                echo "::error::Unsupported serve scope in sync manifest: $serve_scope"
+                exit 1
+                ;;
+            esac
+          done
           setup_paths=$(manifest_paths setup)
           infra_paths=$(manifest_paths infra)
           all_consumer_paths=$(manifest_paths all)
@@ -112,20 +122,29 @@ jobs:
 
           # Collect serve sub-scopes
           serve_scopes=""
-          if [[ "$SYNC_BROWSER" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}browser"; fi
-          if [[ "$SYNC_DELIVERY" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}delivery"; fi
-          if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}knowledge"; fi
-          if [[ "$SYNC_COCKPIT" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}cockpit"; fi
-          if [[ "$SYNC_TOOLS" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}tools"; fi
-          if [[ "$SYNC_MEMORY" == "true" ]]; then serve_scopes="${serve_scopes:+$serve_scopes,}memory"; fi
-
-          if [[ -n "$serve_scopes" ]]; then
-            # If all serve sub-scopes are selected, collapse to "serve"
-            if [[ "$serve_scopes" == "browser,delivery,knowledge,cockpit,tools,memory" ]]; then
-              scopes="${scopes:+$scopes,}serve"
-            else
-              scopes="${scopes:+$scopes,}$serve_scopes"
+          selected_serve_count=0
+          for serve_scope in $serve_scope_names; do
+            scope_suffix=$(printf '%s' "$serve_scope" | tr '[:lower:]' '[:upper:]')
+            scope_env="SYNC_${scope_suffix}"
+            if [[ -z "${!scope_env+x}" ]]; then
+              echo "::error::Missing workflow input for serve scope: $serve_scope"
+              exit 1
             fi
+            if [[ "${!scope_env}" == "true" ]]; then
+              serve_scopes="${serve_scopes:+$serve_scopes,}$serve_scope"
+              selected_serve_count=$((selected_serve_count + 1))
+            fi
+          done
+
+          # If all serve sub-scopes are selected, collapse to "serve".
+          any_serve="false"
+          all_serve="false"
+          if [[ -n "$serve_scopes" ]]; then any_serve="true"; fi
+          if [[ "$selected_serve_count" -eq "$serve_scope_count" ]]; then all_serve="true"; fi
+          if [[ "$all_serve" == "true" ]]; then
+            scopes="${scopes:+$scopes,}serve"
+          elif [[ -n "$serve_scopes" ]]; then
+            scopes="${scopes:+$scopes,}$serve_scopes"
           fi
 
           if [[ "$SYNC_SETUP" == "true" ]]; then scopes="${scopes:+$scopes,}setup"; fi
@@ -139,12 +158,6 @@ jobs:
           # Shorten label when everything is selected
           if [[ "$scopes" == "share,serve,setup,infra" ]]; then scopes="all"; fi
 
-          # Export whether ALL serve packages are selected (for full-wipe logic)
-          any_serve="false"
-          all_serve="false"
-          if [[ -n "$serve_scopes" ]]; then any_serve="true"; fi
-          if [[ "$serve_scopes" == "browser,delivery,knowledge,cockpit,tools,memory" ]]; then all_serve="true"; fi
-
           {
             echo "SCOPES=$scopes"
             echo "ANY_SERVE=$any_serve"
@@ -157,6 +170,7 @@ jobs:
             echo "TOOLS_PATHS=$tools_paths"
             echo "MEMORY_PATHS=$memory_paths"
             echo "SERVE_PATHS=$serve_paths"
+            echo "SERVE_SCOPE_NAMES=$serve_scope_names"
             echo "SETUP_PATHS=$setup_paths"
             echo "INFRA_PATHS=$infra_paths"
             echo "ALL_CONSUMER_PATHS=$all_consumer_paths"
@@ -177,12 +191,14 @@ jobs:
           # Build path list from selected sync scopes
           paths=""
           if [[ "$SYNC_SHARE" == "true" ]]; then paths="$paths $SHARE_PATHS"; fi
-          if [[ "$SYNC_BROWSER" == "true" ]]; then paths="$paths $BROWSER_PATHS"; fi
-          if [[ "$SYNC_DELIVERY" == "true" ]]; then paths="$paths $DELIVERY_PATHS"; fi
-          if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then paths="$paths $KNOWLEDGE_PATHS"; fi
-          if [[ "$SYNC_COCKPIT" == "true" ]]; then paths="$paths $COCKPIT_PATHS"; fi
-          if [[ "$SYNC_TOOLS" == "true" ]]; then paths="$paths $TOOLS_PATHS"; fi
-          if [[ "$SYNC_MEMORY" == "true" ]]; then paths="$paths $MEMORY_PATHS"; fi
+          for serve_scope in $SERVE_SCOPE_NAMES; do
+            scope_suffix=$(printf '%s' "$serve_scope" | tr '[:lower:]' '[:upper:]')
+            scope_env="SYNC_${scope_suffix}"
+            if [[ "${!scope_env}" == "true" ]]; then
+              path_var="${scope_suffix}_PATHS"
+              paths="$paths ${!path_var}"
+            fi
+          done
           if [[ "$SYNC_SETUP" == "true" ]]; then paths="$paths $SETUP_PATHS"; fi
           if [[ "$SYNC_INFRA" == "true" ]]; then paths="$paths $INFRA_PATHS"; fi
 
@@ -218,24 +234,14 @@ jobs:
           if [[ "$SYNC_SHARE" == "true" ]]; then
             paths="$paths $SHARE_PATHS"
           fi
-          if [[ "$SYNC_BROWSER" == "true" ]]; then
-            paths="$paths $BROWSER_PATHS"
-          fi
-          if [[ "$SYNC_DELIVERY" == "true" ]]; then
-            paths="$paths $DELIVERY_PATHS"
-          fi
-          if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then
-            paths="$paths $KNOWLEDGE_PATHS"
-          fi
-          if [[ "$SYNC_COCKPIT" == "true" ]]; then
-            paths="$paths $COCKPIT_PATHS"
-          fi
-          if [[ "$SYNC_TOOLS" == "true" ]]; then
-            paths="$paths $TOOLS_PATHS"
-          fi
-          if [[ "$SYNC_MEMORY" == "true" ]]; then
-            paths="$paths $MEMORY_PATHS"
-          fi
+          for serve_scope in $SERVE_SCOPE_NAMES; do
+            scope_suffix=$(printf '%s' "$serve_scope" | tr '[:lower:]' '[:upper:]')
+            scope_env="SYNC_${scope_suffix}"
+            if [[ "${!scope_env}" == "true" ]]; then
+              path_var="${scope_suffix}_PATHS"
+              paths="$paths ${!path_var}"
+            fi
+          done
           if [[ "$SYNC_SETUP" == "true" ]]; then
             paths="$paths $SETUP_PATHS"
           fi
@@ -255,14 +261,6 @@ jobs:
             exit 1
           fi
           echo "All selected paths present on dev."
-
-      - name: Install uv for MCP dev-source gate
-        if: ${{ env.SYNC_DELIVERY == 'true' }}
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
-
-      - name: Install Python (uv managed)
-        if: ${{ env.SYNC_DELIVERY == 'true' }}
-        run: uv python install
 
       - name: Configure git identity
         run: |
@@ -314,47 +312,17 @@ jobs:
               # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
               git checkout dev -- $SERVE_PATHS
             else
-              if [[ "$SYNC_BROWSER" == "true" ]]; then
-                echo "--- serve/browser + serve/browser-mcp"
-                git rm -rf serve/browser serve/browser-mcp --quiet 2>/dev/null || true
+              for serve_scope in $SERVE_SCOPE_NAMES; do
+                scope_suffix=$(printf '%s' "$serve_scope" | tr '[:lower:]' '[:upper:]')
+                scope_env="SYNC_${scope_suffix}"
+                if [[ "${!scope_env}" != "true" ]]; then continue; fi
+                path_var="${scope_suffix}_PATHS"
+                scope_paths="${!path_var}"
+                echo "--- serve/$serve_scope"
+                git rm -rf --quiet $scope_paths 2>/dev/null || true
                 # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
-                git checkout dev -- $BROWSER_PATHS
-              fi
-
-              if [[ "$SYNC_DELIVERY" == "true" ]]; then
-                echo "--- serve/delivery + serve/delivery-mcp"
-                git rm -rf serve/delivery serve/delivery-mcp serve/delivery-github --quiet 2>/dev/null || true
-                # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
-                git checkout dev -- $DELIVERY_PATHS
-              fi
-
-              if [[ "$SYNC_KNOWLEDGE" == "true" ]]; then
-                echo "--- serve/knowledge + serve/knowledge-mcp"
-                git rm -rf serve/knowledge serve/knowledge-mcp --quiet 2>/dev/null || true
-                # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
-                git checkout dev -- $KNOWLEDGE_PATHS
-              fi
-
-              if [[ "$SYNC_COCKPIT" == "true" ]]; then
-                echo "--- serve/cockpit"
-                git rm -rf serve/cockpit --quiet 2>/dev/null || true
-                # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
-                git checkout dev -- $COCKPIT_PATHS
-              fi
-
-              if [[ "$SYNC_TOOLS" == "true" ]]; then
-                echo "--- serve/tools"
-                git rm -rf serve/tools --quiet 2>/dev/null || true
-                # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
-                git checkout dev -- $TOOLS_PATHS
-              fi
-
-              if [[ "$SYNC_MEMORY" == "true" ]]; then
-                echo "--- serve/memory + serve/memory-mcp"
-                git rm -rf serve/memory serve/memory-mcp --quiet 2>/dev/null || true
-                # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
-                git checkout dev -- $MEMORY_PATHS
-              fi
+                git checkout dev -- $scope_paths
+              done
             fi
 
             if [[ "$SYNC_SETUP" == "true" ]]; then
@@ -366,7 +334,7 @@ jobs:
 
             if [[ "$SYNC_INFRA" == "true" ]]; then
               echo "--- infra (linters, editor & consumer root configs)"
-              git rm -rf .github .vscode --quiet 2>/dev/null || true
+              git rm -rf --quiet $CONSUMER_EXCLUDED_PATHS 2>/dev/null || true
               # shellcheck disable=SC2086 # manifest paths are intentionally split into git pathspec arguments.
               git checkout dev -- $INFRA_PATHS
               git mv -f README-consumer.md README.md
@@ -381,21 +349,10 @@ jobs:
           cache: npm
           cache-dependency-path: serve/cockpit/web/package-lock.json
 
-      - name: Setup Node.js (diagrams only)
-        if: ${{ env.SYNC_COCKPIT != 'true' && env.SYNC_SHARE == 'true' }}
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
-        with:
-          node-version: lts/*
-
       - name: Build cockpit SPA
         if: ${{ env.SYNC_COCKPIT == 'true' }}
         working-directory: serve/cockpit/web
         run: npm ci && npm run sync:pds && npm run build
-
-      - name: Install Chromium for cockpit E2E
-        if: ${{ env.SYNC_COCKPIT == 'true' }}
-        working-directory: serve/cockpit/web
-        run: npx playwright install chromium --with-deps
 
       - name: Assert SPA bundle exists
         if: ${{ env.SYNC_COCKPIT == 'true' }}
@@ -409,36 +366,16 @@ jobs:
         if: ${{ env.SYNC_COCKPIT == 'true' }}
         run: git add -f serve/cockpit/dist/
 
-      - name: Export Excalidraw diagrams to PNG
-        if: ${{ env.SYNC_SHARE == 'true' }}
-        run: |
-          # The export script lives in .owlbear/ (dev-only, not synced to main).
-          # Check it out from dev, run it, then remove the working tree copy.
-          git checkout dev -- .owlbear/scripts/export-diagrams
-          cd .owlbear/scripts/export-diagrams
-          npm ci
-          npx playwright install chromium --with-deps
-          npm run export
-          cd ../../..
-          git add -f share/diagrams/*.png
-          git rm -rf .owlbear --quiet 2>/dev/null || true
-
       - name: Prune dev-only files from consumer tree
         run: |
           for excluded_path in $CONSUMER_EXCLUDED_PATHS; do
             git rm -rf "$excluded_path" --quiet 2>/dev/null || true
           done
 
-          # .vscode/ — consumers get theirs from seed/.vscode/ via init.py
-          git rm -rf .vscode --quiet 2>/dev/null || true
-
           # Package test suites validate dev; consumers only execute package sources.
-          find serve -mindepth 2 -maxdepth 2 -type d -name tests -print0 \
-            | xargs -0 -r git rm -rf --quiet --
-
-          # serve/cockpit/web/ — consumers only need the pre-built dist/
-          if [[ "$SYNC_COCKPIT" == "true" ]]; then
-            git rm -rf serve/cockpit/web --quiet 2>/dev/null || true
+          if [ -d serve ]; then
+            find serve -mindepth 2 -maxdepth 2 -type d -name tests -print0 \
+              | xargs -0 -r git rm -rf --quiet --
           fi
 
       - name: Prune stale files not present on dev
@@ -475,22 +412,22 @@ jobs:
             fi
             if [[ "$SYNC_SHARE" == "true" ]] && path_in_projection "$file" "$SHARE_PATHS"; then
               scope_synced=true
-            elif [[ "$SYNC_BROWSER" == "true" ]] && path_in_projection "$file" "$BROWSER_PATHS"; then
-              scope_synced=true
-            elif [[ "$SYNC_DELIVERY" == "true" ]] && path_in_projection "$file" "$DELIVERY_PATHS"; then
-              scope_synced=true
-            elif [[ "$SYNC_KNOWLEDGE" == "true" ]] && path_in_projection "$file" "$KNOWLEDGE_PATHS"; then
-              scope_synced=true
-            elif [[ "$SYNC_COCKPIT" == "true" ]] && path_in_projection "$file" "$COCKPIT_PATHS"; then
-              scope_synced=true
-            elif [[ "$SYNC_TOOLS" == "true" ]] && path_in_projection "$file" "$TOOLS_PATHS"; then
-              scope_synced=true
-            elif [[ "$SYNC_MEMORY" == "true" ]] && path_in_projection "$file" "$MEMORY_PATHS"; then
-              scope_synced=true
             elif [[ "$SYNC_SETUP" == "true" ]] && path_in_projection "$file" "$SETUP_PATHS"; then
               scope_synced=true
             elif [[ "$SYNC_INFRA" == "true" ]] && path_in_projection "$file" "$INFRA_PATHS"; then
               scope_synced=true
+            elif [[ "$ALL_SERVE" == "true" ]] && path_in_projection "$file" "$SERVE_PATHS"; then
+              scope_synced=true
+            else
+              for serve_scope in $SERVE_SCOPE_NAMES; do
+                scope_env="SYNC_${serve_scope^^}"
+                if [[ "${!scope_env}" != "true" ]]; then continue; fi
+                path_var="${serve_scope^^}_PATHS"
+                if path_in_projection "$file" "${!path_var}"; then
+                  scope_synced=true
+                  break
+                fi
+              done
             fi
 
             # Don't touch files in scopes that weren't synced this run

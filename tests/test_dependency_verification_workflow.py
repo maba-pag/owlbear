@@ -211,7 +211,8 @@ def test_sync_delivery_scope_carries_the_github_adapter() -> None:
         "serve/delivery-github",
     ]
     assert "delivery_paths=$(manifest_paths delivery)" in workflow
-    assert "git rm -rf serve/delivery serve/delivery-mcp serve/delivery-github" in workflow
+    assert "git rm -rf --quiet $scope_paths" in workflow
+    assert "git checkout dev -- $scope_paths" in workflow
 
 
 def test_node_runtime_checker_accepts_the_checked_in_contract() -> None:
