@@ -62,4 +62,21 @@ describe('useMemoryPurgeFlow', () => {
     expect(onSuccess).not.toHaveBeenCalled()
     expect(fetchMock).toHaveBeenCalledOnce()
   })
+
+  it('returns to the error phase when the confirmed purge fails', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(response({ deleted_total: 2, eligible: 2, too_recent: 0 }))
+      .mockResolvedValueOnce(response({ detail: 'purge unavailable' }, false))
+    const onSuccess = vi.fn()
+    const { result } = renderHook(() => useMemoryPurgeFlow({ onSuccess }))
+
+    await act(async () => { await result.current.requestPreview() })
+    await act(async () => { await result.current.confirmPurge() })
+
+    expect(result.current.phase).toBe('error')
+    expect(result.current.error).toBe('purge unavailable')
+    expect(result.current.receipt).toBeNull()
+    expect(onSuccess).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
 })
