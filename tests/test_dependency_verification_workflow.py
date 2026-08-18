@@ -193,9 +193,15 @@ def test_sync_manifest_excludes_dev_automation_paths() -> None:
     manifest = json.loads((ROOT / ".github/sync-manifest.json").read_text(encoding="utf-8"))
     workflow = SYNC_PATH.read_text(encoding="utf-8")
 
-    assert ".github" in manifest["consumer_excluded_paths"]
+    assert ".github" not in manifest["consumer_excluded_paths"]
+    assert ".github/workflows" in manifest["scopes"]["infra"]
+    assert {
+        ".github/copilot-instructions.md",
+        ".github/scripts",
+        ".github/skills",
+        ".github/sync-manifest.json",
+    }.issubset(manifest["consumer_excluded_paths"])
     assert ".mega-linter.yml" in manifest["consumer_excluded_paths"]
-    assert all(not path.startswith(".github/") for paths in manifest["scopes"].values() for path in paths)
     assert "python3 .github/scripts/sync_manifest.py paths" in workflow
     assert "python3 .github/scripts/sync_manifest.py excluded" in workflow
     assert "for excluded_path in $CONSUMER_EXCLUDED_PATHS" in workflow

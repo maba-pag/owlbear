@@ -17,6 +17,7 @@
       ".markdownlintignore",
       ".python-version",
       ".yamllint.yml",
+      ".github/workflows",
       "README-consumer.md",
       "SECURITY.md",
       "pyproject.toml",
@@ -30,7 +31,12 @@
     }
   },
   "consumer_excluded_paths": [
-    ".github",
+    ".github/README-automation.md",
+    ".github/copilot-instructions.md",
+    ".github/renovate.json",
+    ".github/scripts",
+    ".github/skills",
+    ".github/sync-manifest.json",
     ".mega-linter.yml",
     ".owlbear",
     ".pre-commit-config.yaml",

@@ -41,7 +41,7 @@ name: Sync dev to main
         type: boolean
         default: true
       sync_infra:
-        description: "Linters, editor & consumer root configs"
+        description: "CI workflows, linters, editor & consumer root configs"
         type: boolean
         default: true
       message:
