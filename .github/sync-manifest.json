@@ -1,0 +1,53 @@
+{
+  "scopes": {
+    "share": ["share"],
+    "browser": ["serve/browser", "serve/browser-mcp"],
+    "delivery": ["serve/delivery", "serve/delivery-mcp", "serve/delivery-github"],
+    "knowledge": ["serve/knowledge", "serve/knowledge-mcp"],
+    "cockpit": ["serve/cockpit"],
+    "tools": ["serve/tools"],
+    "memory": ["serve/memory", "serve/memory-mcp"],
+    "setup": ["setup", "seed"],
+    "infra": [
+      ".editorconfig",
+      ".gitattributes",
+      ".gitignore",
+      ".markdownlint-cli2.jsonc",
+      ".markdownlint.json",
+      ".markdownlintignore",
+      ".python-version",
+      ".yamllint.yml",
+      ".github/renovate.json",
+      ".github/scripts",
+      ".github/sync-manifest.json",
+      ".github/workflows",
+      "README-consumer.md",
+      "SECURITY.md",
+      "pyproject.toml",
+      "uv.lock"
+    ]
+  },
+  "scope_groups": {
+    "serve": {
+      "scopes": ["browser", "delivery", "knowledge", "cockpit", "tools", "memory"],
+      "paths": ["serve/README.md"]
+    }
+  },
+  "consumer_excluded_paths": [
+    ".github/README-automation.md",
+    ".github/copilot-instructions.md",
+    ".github/skills",
+    ".mega-linter.yml",
+    ".owlbear",
+    ".pre-commit-config.yaml",
+    ".vscode",
+    "conftest.py",
+    "eslint-json.config.cjs",
+    "package-lock.json",
+    "package.json",
+    "store",
+    "tests",
+    "serve/cockpit/web"
+  ],
+  "source_only_paths": ["README.md"]
+}

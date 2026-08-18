@@ -1,0 +1,277 @@
+---
+name: MegaLinter
+
+"on":
+  workflow_dispatch:
+    inputs:
+      skip_fixes:
+        description: "Skip applying autofixes after linting"
+        type: boolean
+        default: false
+      unsafe_fixes:
+        description: "Allow Ruff unsafe fixes and Stylelint lax fixes"
+        type: boolean
+        default: false
+      fix_mode:
+        description: "How to publish autofixes when enabled"
+        type: choice
+        options:
+          - pull_request
+          - commit
+        default: pull_request
+
+concurrency:
+  group: megalinter-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint & Static Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      APPLY_FIXES_EVENT: all
+      APPLY_FIXES_MODE: ${{ inputs.fix_mode || 'pull_request' }}
+
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+      security-events: write
+      statuses: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # PAT enables create-pull-request to trigger subsequent workflow runs.
+          # MegaLinter v9.5+ discourages PATs; keep fine-grained, single-repo,
+          # minimum permissions. Remove if fix-PR feature is not needed.
+          token: ${{ secrets.PAT || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Install Cockpit web dependencies (for ESLint config resolution)
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: serve/cockpit/web/.nvmrc
+          cache: npm
+          cache-dependency-path: serve/cockpit/web/package-lock.json
+      - run: npm ci --prefix serve/cockpit/web
+
+      - name: Validate fix policy
+        if: inputs.skip_fixes && inputs.unsafe_fixes
+        run: |
+          echo "skip_fixes and unsafe_fixes are mutually exclusive." >&2
+          exit 1
+
+      - name: Disable autofixes when requested
+        if: inputs.skip_fixes
+        run: echo "APPLY_FIXES=none" >> "$GITHUB_ENV"
+
+      - name: Enable unsafe autofixes when requested
+        if: inputs.unsafe_fixes
+        run: |
+          {
+            echo "PYTHON_RUFF_ARGUMENTS=--unsafe-fixes"
+            echo "CSS_STYLELINT_COMMAND_REMOVE_ARGUMENTS=--fix"
+            echo "CSS_STYLELINT_ARGUMENTS=--fix=lax"
+          } >> "$GITHUB_ENV"
+
+      - name: Verify MegaLinter version alignment
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          config = Path(".mega-linter.yml").read_text(encoding="utf-8")
+          workflow = Path(".github/workflows/megalinter.yml").read_text(encoding="utf-8")
+          flavor_match = re.search(
+              r"^MEGALINTER_FLAVOR:\s*(?P<flavor>[a-z0-9-]+)\s*$",
+              config,
+              re.MULTILINE,
+          )
+          config_match = re.search(
+              r"^MEGALINTER_VERSION:\s*v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)\s*$",
+              config,
+              re.MULTILINE,
+          )
+          workflow_match = re.search(
+              r"uses:\s*oxsecurity/megalinter/flavors/"
+              r"(?P<flavor>[a-z0-9-]+)@[^\s]+\s+#\s*"
+              r"v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)",
+              workflow,
+          )
+          if flavor_match is None or config_match is None or workflow_match is None:
+              raise SystemExit("MegaLinter version declarations are incomplete")
+          if flavor_match.group("flavor") != workflow_match.group("flavor"):
+              raise SystemExit("native and action MegaLinter flavors diverge")
+          if config_match.group("version") != workflow_match.group("version"):
+              raise SystemExit("native and action MegaLinter versions diverge")
+          PY
+
+      - name: MegaLinter
+        id: megalinter
+        uses: oxsecurity/megalinter/flavors/cupcake@15e5b45552097e318c93de385779ce3b1084052c  # v10.0.0
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VALIDATE_ALL_CODEBASE: true
+
+      - name: Upload MegaLinter reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: megalinter-reports
+          path: megalinter-reports
+          retention-days: 15
+
+      - name: Check GitHub Code Scanning availability
+        id: code_scanning
+        if: always()
+        shell: bash
+        env:
+          GITHUB_API_URL: ${{ github.api_url }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PULL_REQUEST_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] \
+            && [ "$PULL_REQUEST_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "reason=forked pull request" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          endpoint="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/code-scanning/alerts?per_page=1"
+          http_status="$(
+            curl --silent --show-error \
+              --output /dev/null \
+              --write-out "%{http_code}" \
+              --header "Accept: application/vnd.github+json" \
+              --header "Authorization: Bearer $GITHUB_TOKEN" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              "$endpoint" || true
+          )"
+
+          if [ "$http_status" = "200" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "reason=available" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "reason=GitHub API status $http_status" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload SARIF to GitHub Code Scanning
+        id: upload_sarif
+        if: ${{ always() && steps.code_scanning.outputs.available == 'true' }}
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3  # v4.37.6
+        with:
+          sarif_file: megalinter-reports/megalinter-report.sarif
+          category: megalinter
+
+      - name: Create pull request with applied fixes
+        id: fix_pr
+        if: >-
+          ${{ !inputs.skip_fixes &&
+              steps.megalinter.outputs.has_updated_sources == '1' &&
+              (inputs.fix_mode || 'pull_request') == 'pull_request' &&
+              (
+                github.event_name != 'pull_request' ||
+                github.event.pull_request.head.repo.full_name == github.repository
+              ) }}
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
+        with:
+          token: ${{ secrets.PAT || secrets.GITHUB_TOKEN }}
+          base: ${{ github.ref_name }}
+          branch: megalinter-fixes-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          commit-message: "[MegaLinter] Apply linters fixes"
+          title: "[MegaLinter] Apply linters fixes"
+          body: |
+            Automated fixes generated by the MegaLinter workflow.
+
+            Base branch: `${{ github.ref_name }}`
+          delete-branch: true
+
+      - name: Prepare fix commit
+        if: >-
+          ${{ !inputs.skip_fixes &&
+              steps.megalinter.outputs.has_updated_sources == '1' &&
+              inputs.fix_mode == 'commit' }}
+        run: sudo chown -Rc "$UID" .git/
+
+      - name: Commit and push applied fixes
+        id: fix_commit
+        if: >-
+          ${{ !inputs.skip_fixes &&
+              steps.megalinter.outputs.has_updated_sources == '1' &&
+              inputs.fix_mode == 'commit' }}
+        uses: stefanzweifel/git-auto-commit-action@4a55954c782fc1ea30b9056cd3e7a2b40ca8887d  # v7.2.0
+        with:
+          branch: ${{ github.ref_name }}
+          commit_message: "[MegaLinter] Apply linters fixes"
+          commit_user_name: megalinter-bot
+          commit_user_email: 129584137+megalinter-bot@users.noreply.github.com
+
+      - name: Job summary
+        if: always()
+        shell: bash
+        env:
+          INPUT_SKIP_FIXES: ${{ inputs.skip_fixes }}
+          INPUT_UNSAFE_FIXES: ${{ inputs.unsafe_fixes }}
+          INPUT_FIX_MODE: ${{ inputs.fix_mode || 'pull_request' }}
+          FIX_POLICY_DISPLAY: ${{ inputs.skip_fixes && 'disabled' || (inputs.unsafe_fixes && 'unsafe' || 'safe') }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          MEGALINTER_HAS_UPDATED_SOURCES: ${{ steps.megalinter.outputs.has_updated_sources }}
+          FIX_PR_OUTCOME: ${{ steps.fix_pr.outcome }}
+          FIX_PR_URL: ${{ steps.fix_pr.outputs.pull-request-url }}
+          FIX_COMMIT_OUTCOME: ${{ steps.fix_commit.outcome }}
+          CODE_SCANNING_AVAILABLE: ${{ steps.code_scanning.outputs.available }}
+          CODE_SCANNING_SKIP_REASON: ${{ steps.code_scanning.outputs.reason }}
+          SARIF_UPLOAD_OUTCOME: ${{ steps.upload_sarif.outcome }}
+          MEGALINTER_OUTCOME: ${{ steps.megalinter.outcome }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          {
+            echo "## MegaLinter Results"
+            echo ""
+            echo "Fix policy: $FIX_POLICY_DISPLAY"
+            echo "Fix publishing: $INPUT_FIX_MODE"
+            echo ""
+            if [ "$INPUT_SKIP_FIXES" != "true" ] && [ "$MEGALINTER_HAS_UPDATED_SOURCES" = "1" ]; then
+              if [ "$INPUT_FIX_MODE" = "pull_request" ] && [ "$FIX_PR_OUTCOME" = "success" ]; then
+                echo "Created or updated fix PR: $FIX_PR_URL"
+              elif [ "$FIX_COMMIT_OUTCOME" = "success" ]; then
+                echo "Applied fixes were committed back to branch $GITHUB_REF_NAME."
+              else
+                echo "MegaLinter updated files, but publishing those fixes did not complete."
+              fi
+              echo ""
+            elif [ "$INPUT_SKIP_FIXES" != "true" ]; then
+              echo "Auto-fix was enabled, but MegaLinter did not report updated files."
+              echo ""
+            fi
+            if [ "$CODE_SCANNING_AVAILABLE" = "true" ]; then
+              echo "SARIF upload outcome: $SARIF_UPLOAD_OUTCOME"
+            else
+              echo "SARIF upload skipped: $CODE_SCANNING_SKIP_REASON."
+            fi
+            echo ""
+            if [ "$MEGALINTER_OUTCOME" = "success" ]; then
+              echo "All linters passed."
+            else
+              ARTIFACT_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+              echo "Some linters reported issues." \
+                "See [megalinter-reports artifact](${ARTIFACT_URL})"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail if lint failed
+        if: steps.megalinter.outcome != 'success'
+        run: exit 1

@@ -1,0 +1,276 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+    "security:minimumReleaseAgeNpm",
+    "security:minimumReleaseAgePypi"
+  ],
+  "baseBranchPatterns": [
+    "dev"
+  ],
+  "timezone": "Europe/Berlin",
+  "prConcurrentLimit": 0,
+  "prHourlyLimit": 0,
+  "minimumReleaseAgeBehaviour": "timestamp-optional",
+  "updateNotScheduled": true,
+  "labels": [
+    "dependencies",
+    "renovate"
+  ],
+  "gitIgnoredAuthors": [
+    "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "groupName": "{{datasource}} security updates",
+    "schedule": [
+      "* 9-12 * * 1,5"
+    ],
+    "minimumReleaseAge": "6 hours",
+    "prCreation": "immediate",
+    "vulnerabilityFixStrategy": "highest",
+    "labels": [
+      "dependencies",
+      "renovate",
+      "security"
+    ]
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "* 9-12 * * 5"
+    ],
+    "automerge": false
+  },
+  "packageRules": [
+    {
+      "description": "Freeze Python runtime floor to 3.14.x",
+      "matchPackageNames": [
+        "python"
+      ],
+      "matchManagers": [
+        "pep621"
+      ],
+      "allowedVersions": ">=3.14.0,<3.15.0"
+    },
+    {
+      "description": "Freeze the checked-in Python runtime to 3.14.x",
+      "matchPackageNames": [
+        "python"
+      ],
+      "matchManagers": [
+        "pyenv"
+      ],
+      "matchFileNames": [
+        ".python-version"
+      ],
+      "allowedVersions": "/^3\\.14(?:\\.[0-9]+)?$/"
+    },
+    {
+      "description": "Prefer lockfile-only updates for in-range npm dependency updates",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchDepTypes": [
+        "dependencies",
+        "devDependencies",
+        "optionalDependencies",
+        "peerDependencies"
+      ],
+      "rangeStrategy": "update-lockfile"
+    },
+    {
+      "description": "Prefer lockfile-only updates for in-range uv.lock-backed Python updates",
+      "matchManagers": [
+        "pep621"
+      ],
+      "rangeStrategy": "update-lockfile"
+    },
+    {
+      "description": "Keep Ruff and its pre-commit hook version coupled",
+      "matchManagers": [
+        "pep621",
+        "pre-commit"
+      ],
+      "matchPackageNames": [
+        "ruff",
+        "astral-sh/ruff-pre-commit"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "patch"
+      ],
+      "groupName": "Ruff toolchain"
+    },
+    {
+      "description": "Keep Node runtime declarations aligned",
+      "matchDatasources": [
+        "node-version"
+      ],
+      "matchPackageNames": [
+        "node"
+      ],
+      "versioning": "node",
+      "groupName": "Node.js runtime"
+    },
+    {
+      "description": "Group routine version updates by ecosystem on Friday",
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "{{datasource}} minor/patch updates",
+      "schedule": [
+        "* 9-12 * * 5"
+      ],
+      "prCreation": "immediate",
+      "automerge": false
+    },
+    {
+      "description": "Give Docker routine updates a one-day maturity floor",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "minimumReleaseAge": "24 hours"
+    },
+    {
+      "description": "Group integrity updates by ecosystem on Friday",
+      "matchUpdateTypes": [
+        "pin",
+        "pinDigest",
+        "digest"
+      ],
+      "groupName": "{{datasource}} integrity updates",
+      "schedule": [
+        "* 9-12 * * 5"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Keep MegaLinter image and action versions coupled",
+      "matchManagers": [
+        "regex",
+        "github-actions"
+      ],
+      "matchDatasources": [
+        "docker",
+        "github-tags"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/oxsecurity/megalinter",
+        "ghcr.io/oxsecurity/megalinter-cupcake",
+        "oxsecurity/megalinter"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "patch",
+        "pin",
+        "pinDigest",
+        "digest"
+      ],
+      "groupName": "MegaLinter version alignment"
+    },
+    {
+      "description": "Disable unsupported MegaLinter Docker pin and digest updates",
+      "matchManagers": [
+        "regex"
+      ],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/oxsecurity/megalinter",
+        "ghcr.io/oxsecurity/megalinter-cupcake"
+      ],
+      "matchUpdateTypes": [
+        "pin",
+        "pinDigest",
+        "digest"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Review Porsche Design System updates with refreshed self-hosted assets",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "@porsche-design-system/components-js",
+        "@porsche-design-system/components-react"
+      ],
+      "addLabels": [
+        "cockpit",
+        "pds"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Open major version updates on Sunday",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "schedule": [
+        "* 12-15 * * 0"
+      ],
+      "minimumReleaseAge": "72 hours",
+      "prCreation": "immediate",
+      "automerge": false
+    },
+    {
+      "description": "Keep Porsche Design System major versions coupled",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "@porsche-design-system/components-js",
+        "@porsche-design-system/components-react"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": "Porsche Design System major updates"
+    },
+    {
+      "description": "Keep Vite and its build plugins coupled on major updates",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "vite",
+        "@vitejs/plugin-react",
+        "@rolldown/plugin-babel",
+        "babel-plugin-react-compiler"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": "Vite major updates"
+    }
+  ],
+  "pre-commit": {
+    "enabled": true
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "MegaLinter image version; keep version match last for combination write-back",
+      "managerFilePatterns": [
+        "/^\\.mega-linter\\.yml$/"
+      ],
+      "matchStringsStrategy": "combination",
+      "matchStrings": [
+            "MEGALINTER_FLAVOR:[ \\t]*[\\x22']?(?:all|(?<flavor>[a-z0-9_-]+))[\\x22']?[ \\t]*(?:#.*)?(?:\\r?\\n|$)",
+        "MEGALINTER_VERSION:[ \\t]*(?:\\x22|')?v(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)(?:\\x22|')?"
+      ],
+      "extractVersionTemplate": "^v(?<version>[0-9]+\\.[0-9]+\\.[0-9]+)$",
+      "depNameTemplate": "ghcr.io/oxsecurity/megalinter{{#if flavor}}-{{{flavor}}}{{/if}}",
+      "datasourceTemplate": "docker"
+    }
+  ]
+}

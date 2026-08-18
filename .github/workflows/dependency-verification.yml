@@ -1,0 +1,353 @@
+---
+name: Dependency verification
+
+"on":
+  pull_request:
+    branches:
+      - dev
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+concurrency:
+  group: dependency-verification-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  classify:
+    name: Classify dependency surfaces
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      applicable: ${{ steps.scope.outputs.applicable }}
+      compatibility: ${{ steps.scope.outputs.compatibility }}
+      diagrams: ${{ steps.scope.outputs.diagrams }}
+      frontend_runtime: ${{ steps.scope.outputs.frontend_runtime }}
+      megalinter: ${{ steps.scope.outputs.megalinter }}
+      node: ${{ steps.scope.outputs.node }}
+      pds: ${{ steps.scope.outputs.pds }}
+      precommit: ${{ steps.scope.outputs.precommit }}
+      python: ${{ steps.scope.outputs.python }}
+      renovate: ${{ steps.scope.outputs.renovate }}
+      root_node: ${{ steps.scope.outputs.root_node }}
+      shared_node_runtime: ${{ steps.scope.outputs.shared_node_runtime }}
+      workflows: ${{ steps.scope.outputs.workflows }}
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Classify changed dependency surfaces
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git diff --name-only -z "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/dependency-paths"
+          git diff --unified=0 "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/dependency.diff"
+          python3 serve/tools/src/owlbear_tools/dependency_ci.py \
+            --paths-file "$RUNNER_TEMP/dependency-paths" \
+            --diff-file "$RUNNER_TEMP/dependency.diff" \
+            --github-output "$GITHUB_OUTPUT" \
+            --summary "$GITHUB_STEP_SUMMARY"
+
+  runtime:
+    name: Prove Node runtime compatibility
+    needs: classify
+    if: needs.classify.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: serve/cockpit/web/.nvmrc
+
+      - name: Check Node runtime declaration
+        run: |
+          python3 .github/scripts/check_node_runtime.py \
+            --version-file serve/cockpit/web/.nvmrc \
+            --engines-file serve/cockpit/web/package.json
+
+  proof-python:
+    name: Prove Python dependency update
+    needs: classify
+    if: needs.classify.outputs.python == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Install locked Python workspace
+        run: uv sync --locked --all-packages --all-extras --all-groups
+
+      - name: Prove workspace lock regeneration
+        run: python3 .github/scripts/check_uv_workspace_lock.py
+
+      - name: Compile Python sources
+        run: uv run python -m compileall -q serve setup tests
+
+      - name: Check Python sources
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Run Python behavior tests
+        run: uv run pytest tests serve -m "not api and not e2e and not browser and not cockpit"
+
+  proof-cockpit:
+    name: Prove Cockpit dependency update
+    needs:
+      - classify
+      - runtime
+    if: >-
+      needs.runtime.result == 'success' &&
+      (needs.classify.outputs.node == 'true' ||
+      needs.classify.outputs.shared_node_runtime == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: serve/cockpit/web
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: serve/cockpit/web/.nvmrc
+          cache: npm
+          cache-dependency-path: serve/cockpit/web/package-lock.json
+
+      - name: Install locked Cockpit dependencies
+        run: npm ci
+
+      - name: Run Cockpit behavior tests
+        run: npm test
+
+      - name: Check Cockpit sources
+        run: |
+          npx eslint src e2e --max-warnings 0
+          npm run lint:css
+          npm run lint:html
+
+      - name: Build production Cockpit
+        run: npm run build
+
+      - name: Run maintained browser smoke tests
+        if: needs.classify.outputs.frontend_runtime == 'true'
+        run: |
+          npx playwright install chromium --with-deps
+          npm run test:e2e
+
+      - name: Verify generated PDS assets
+        if: needs.classify.outputs.pds == 'true'
+        run: |
+          npm run sync:pds
+          git status --porcelain --untracked-files=all -- public/porsche-design-system \
+            | tee "$RUNNER_TEMP/pds-status"
+          test ! -s "$RUNNER_TEMP/pds-status"
+
+  proof-root-node:
+    name: Prove root npm dependency update
+    needs:
+      - classify
+      - runtime
+    if: >-
+      needs.runtime.result == 'success' &&
+      (needs.classify.outputs.root_node == 'true' ||
+      needs.classify.outputs.shared_node_runtime == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: serve/cockpit/web/.nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install locked root dependencies
+        run: npm ci
+
+  proof-diagrams:
+    name: Prove diagram exporter dependency update
+    needs:
+      - classify
+      - runtime
+    if: >-
+      needs.runtime.result == 'success' &&
+      (needs.classify.outputs.diagrams == 'true' ||
+      needs.classify.outputs.shared_node_runtime == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: .owlbear/scripts/export-diagrams
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: serve/cockpit/web/.nvmrc
+          cache: npm
+          cache-dependency-path: .owlbear/scripts/export-diagrams/package-lock.json
+
+      - name: Install locked diagram exporter dependencies
+        run: npm ci
+
+      - name: Render one maintained diagram
+        run: |
+          npx playwright install chromium --with-deps
+          npm run export:file -- \
+            ../../../share/diagrams/mcp-topology.excalidraw \
+            "$RUNNER_TEMP/mcp-topology.png"
+          test -s "$RUNNER_TEMP/mcp-topology.png"
+
+  compatibility:
+    name: Prove dependency tooling compatibility
+    needs: classify
+    if: needs.classify.outputs.compatibility == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Install locked Python workspace
+        run: uv sync --locked --all-packages --all-extras --all-groups
+
+      - name: Validate updated GitHub Actions workflows
+        if: needs.classify.outputs.workflows == 'true'
+        run: uv run pre-commit run actionlint --all-files
+
+      - name: Exercise updated pre-commit hooks
+        if: needs.classify.outputs.precommit == 'true'
+        run: uv run lint --no-fix
+
+      - name: Exercise updated MegaLinter image
+        if: needs.classify.outputs.megalinter == 'true'
+        run: uv run megalint --no-fix
+
+      - name: Validate Renovate policy JSON
+        if: needs.classify.outputs.renovate == 'true'
+        run: python3 -m json.tool .github/renovate.json >/dev/null
+
+  gate:
+    name: Verify dependency update
+    needs:
+      - classify
+      - runtime
+      - proof-python
+      - proof-cockpit
+      - proof-root-node
+      - proof-diagrams
+      - compatibility
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Aggregate dependency proof
+        env:
+          CLASSIFY: ${{ needs.classify.result }}
+          COMPATIBILITY: ${{ needs.compatibility.result }}
+          COMPATIBILITY_EXPECTED: ${{ needs.classify.outputs.compatibility }}
+          COCKPIT: ${{ needs.proof-cockpit.result }}
+          COCKPIT_EXPECTED: >-
+            ${{ needs.classify.outputs.node == 'true' || needs.classify.outputs.shared_node_runtime == 'true' }}
+          DIAGRAMS: ${{ needs.proof-diagrams.result }}
+          DIAGRAMS_EXPECTED: >-
+            ${{ needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true' }}
+          PYTHON: ${{ needs.proof-python.result }}
+          PYTHON_EXPECTED: ${{ needs.classify.outputs.python }}
+          ROOT_NODE: ${{ needs.proof-root-node.result }}
+          ROOT_NODE_EXPECTED: >-
+            ${{ needs.classify.outputs.root_node == 'true' || needs.classify.outputs.shared_node_runtime == 'true' }}
+          RUNTIME: ${{ needs.runtime.result }}
+        run: |
+          failed=false
+          [ "$CLASSIFY" = success ] || failed=true
+
+          check_expected() {
+            expected="$1"
+            result="$2"
+            if [ "$expected" = true ]; then
+              [ "$result" = success ] || failed=true
+            else
+              [ "$result" = skipped ] || [ "$result" = success ] || failed=true
+            fi
+          }
+
+          check_expected true "$RUNTIME"
+          check_expected "$PYTHON_EXPECTED" "$PYTHON"
+          check_expected "$COCKPIT_EXPECTED" "$COCKPIT"
+          check_expected "$ROOT_NODE_EXPECTED" "$ROOT_NODE"
+          check_expected "$DIAGRAMS_EXPECTED" "$DIAGRAMS"
+          check_expected "$COMPATIBILITY_EXPECTED" "$COMPATIBILITY"
+
+          {
+            echo "## Dependency verification gate"
+            echo
+            echo "| Proof | Expected | Result |"
+            echo "|---|---|---|"
+            echo "| Python lock and behavior | $PYTHON_EXPECTED | $PYTHON |"
+            echo "| Cockpit install, tests, and build | $COCKPIT_EXPECTED | $COCKPIT |"
+            echo "| Root npm install | $ROOT_NODE_EXPECTED | $ROOT_NODE |"
+            echo "| Diagram exporter install and render | $DIAGRAMS_EXPECTED | $DIAGRAMS |"
+            echo "| Tooling compatibility | $COMPATIBILITY_EXPECTED | $COMPATIBILITY |"
+            echo "| Node runtime declaration | true | $RUNTIME |"
+            echo
+            if [ "$failed" = true ]; then
+              echo "At least one applicable dependency proof failed."
+            else
+              echo "All applicable dependency proofs passed on the pull-request head."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          [ "$failed" = false ]
