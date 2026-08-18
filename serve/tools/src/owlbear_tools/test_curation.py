@@ -165,7 +165,7 @@ def _legacy_index(root: Path) -> dict[str, tuple[LegacyMatch, ...]]:
             lifecycle = _lifecycle(manifest, relative_path)
             if lifecycle is None:
                 continue
-            preserved = manifest.parent / relative_path
+            preserved = manifest.parent / "content" / relative_path
             hash_verified = preserved.is_file() and _sha256(preserved) == expected_hash
             match = _TASK_ID_RE.search(Path(relative_path).name)
             if match:

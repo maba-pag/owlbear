@@ -14,7 +14,7 @@ def _write_manifest(root: Path, records: list[tuple[str, bytes | None, str | Non
     manifest_root.mkdir(parents=True)
     manifest_records: list[dict[str, str]] = []
     for relative_path, content, expected_hash in records:
-        path = manifest_root / relative_path
+        path = manifest_root / "content" / relative_path
         if content is not None:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(content)
@@ -44,7 +44,7 @@ def test_inventory_uses_filename_and_header_signals_but_ignores_mined_header(tmp
         '"""Mined from #1234: durable behavior."""\nfrom __future__ import annotations\n',
         encoding="utf-8",
     )
-    _write_manifest(tmp_path, [("content/archive/1234-feature.md", b"archived", None)])
+    _write_manifest(tmp_path, [("archive/1234-feature.md", b"archived", None)])
 
     document = inventory(tmp_path)
 
@@ -72,7 +72,7 @@ def test_inventory_distinguishes_unverified_and_missing_provenance(tmp_path: Pat
     _write_manifest(
         tmp_path,
         [
-            ("content/archive/1235-feature.md", b"changed", "0" * 64),
+            ("archive/1235-feature.md", b"changed", "0" * 64),
         ],
     )
 
