@@ -9,7 +9,12 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from owlbear_delivery.delivery_runtime import DeliveryFrontier, OutcomeAuthorityBinding
+from owlbear_delivery.delivery_runtime import (
+    DeliveryFrontier,
+    OutcomeAuthorityBinding,
+    invalidate_checkpoint_publication,
+    parse_delivery_frontier,
+)
 from owlbear_delivery.runtime_transaction import (
     ReplacementTransactionParticipant,
     RuntimeTransaction,
@@ -152,6 +157,7 @@ class DeliveryAdmissionRequest(_AdmissionModel):
 
     change_id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
     active_claim_ids: tuple[str, ...]
+    recovery_reviewed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
 
     @model_validator(mode="after")
     def _validate_claims(self) -> DeliveryAdmissionRequest:
@@ -248,7 +254,7 @@ class DeliveryAuthorityRegistry:
 
     def admit(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult:
         """Publish or revise authority derived from the exact active package sources."""
-        lock_root = self._target_root / "delivery-locks" / request.change_id
+        lock_root = self._target_root / "claims" / "admission" / request.change_id
         with locked_roots((lock_root,)):
             compiled = self._compile_package(request.change_id)
             current = self._read_current(request.change_id)
@@ -339,7 +345,7 @@ class DeliveryAuthorityRegistry:
         return self._package_store.checkpoint(change_id).commit
 
     def _read_current(self, change_id: str) -> _CurrentDelivery | None:
-        root = self._target_root / "delivery" / "changes" / change_id
+        root = self._target_root / "changes" / change_id
         paths = tuple(root / name for name in _DELIVERY_NAMES)
         existing = tuple(path.exists() for path in paths)
         if not any(existing):
@@ -353,7 +359,7 @@ class DeliveryAuthorityRegistry:
             return _CurrentDelivery(
                 contract=DeliveryContract.model_validate_json(contract_bytes),
                 contract_bytes=contract_bytes,
-                frontier=DeliveryFrontier.model_validate_json(frontier_bytes),
+                frontier=parse_delivery_frontier(frontier_bytes)[0],
                 frontier_bytes=frontier_bytes,
                 receipt=DeliveryAdmissionReceipt.model_validate_json(receipt_bytes),
                 receipt_bytes=receipt_bytes,
@@ -370,7 +376,7 @@ class DeliveryAuthorityRegistry:
         receipt: DeliveryAdmissionReceipt,
         current: _CurrentDelivery | None,
     ) -> tuple[tuple[TransactionParticipant | ReplacementTransactionParticipant, ...], bool]:
-        relative_root = Path("delivery") / "changes" / change_id
+        relative_root = Path("changes") / change_id
         relative_paths = tuple(relative_root / name for name in _DELIVERY_NAMES)
         replacements = (contract_bytes, _model_content(frontier), _model_content(receipt))
         if current is None or current.is_partial:
@@ -629,7 +635,15 @@ def _delivery_frontier(
         )
         if outcome_id in invalidated
     )
-    return DeliveryFrontier(bindings=bindings), RevisionCarryForward(
+    return DeliveryFrontier(
+        bindings=bindings,
+        published_head=current.frontier.published_head,
+        pending_checkpoint=invalidate_checkpoint_publication(
+            current.frontier.pending_checkpoint,
+            invalidated,
+        ),
+        operator_moves=current.frontier.operator_moves,
+    ), RevisionCarryForward(
         preserved_outcome_ids=preserved,
         invalidated_outcome_ids=tuple(dict.fromkeys(ordered_invalidated)),
     )

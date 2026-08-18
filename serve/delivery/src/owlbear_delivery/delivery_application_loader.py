@@ -2,23 +2,34 @@
 
 from __future__ import annotations
 
+import os
+import re
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from owlbear_delivery.change_workspace import ChangeWorkspaceManager, PortfolioCoordinator
+from owlbear_delivery.change_publication import ChangeBranchPublisher
+from owlbear_delivery.change_workspace import (
+    CapacityConfigurationConflictError,
+    CapacityLedgerConflictError,
+    ChangeWorkspaceManager,
+    CoordinationConflictError,
+    PortfolioCoordinator,
+)
 from owlbear_delivery.completed_history import CompletedHistoryCatalog
 from owlbear_delivery.delivery_runtime import (
+    DeliveryFrontier,
     DeliveryRuntime,
-    DeliveryRuntimeConflictError,
-    DeliveryRuntimeReferenceError,
+    DeliveryRuntimeMigrationError,
     DeliveryWorkerRole,
+    parse_delivery_frontier,
 )
 from owlbear_delivery.design_package import DesignPackageStore
+from owlbear_delivery.draft_pull_request import DraftPullRequestPublisher
 from owlbear_delivery.git_executable import resolve_git_executable
-from owlbear_delivery.integration_verification import IntegrationVerificationStore, IntegrationVerifier
 from owlbear_delivery.portfolio_application import (
     DeliveryRolePolicy,
     PortfolioApplication,
@@ -29,7 +40,7 @@ from owlbear_delivery.target_admission import DeliveryAuthorityRegistry
 from owlbear_delivery.target_contract import DeliveryContract
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from owlbear_delivery.publication_provider import PublicationProvider
 
 
 class _LoaderModel(BaseModel):
@@ -39,14 +50,24 @@ class _LoaderModel(BaseModel):
 class DeliveryStartupConfig(_LoaderModel):
     """Workspace-local Delivery policy loaded before owner construction."""
 
+    schema_version: Literal[2]
+    remote: str = Field(min_length=1)
+    target_branch: str = Field(min_length=1)
+    github_repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+
+
+class DeliveryHostConfig(_LoaderModel):
+    """Host-local limits for concurrent Delivery work."""
+
     schema_version: Literal[1]
-    integration_target: str = Field(min_length=1)
+    writer_capacity: int = Field(default=1, gt=0)
+    execution_capacity: int = Field(default=1, gt=0)
 
 
 @dataclass(frozen=True)
 class _DeliveryPaths:
     package_root: Path
-    target_root: Path
+    runtime_root: Path
     repository_root: Path
     worktree_root: Path
 
@@ -72,15 +93,42 @@ def _derive_paths(workspace_root: Path) -> _DeliveryPaths:
         field = "workspace_root"
         detail = "workspace root must be an existing directory"
         raise _load_error(field, detail)
+    state_root = repository_root / ".owlbear"
+    delivery_root = state_root / "delivery"
+    if state_root.is_symlink() or delivery_root.is_symlink():
+        field = "workspace_root"
+        detail = "Delivery state parents must not be symlinks"
+        raise _load_error(field, detail)
+    migration_journal = delivery_root / "migration.json"
+    if migration_journal.exists():
+        field = "runtime_root"
+        detail = "interrupted Delivery migration must be recovered before startup"
+        raise _load_error(field, detail)
+    retirement_journal = delivery_root / "integration-retirement.json"
+    if retirement_journal.exists():
+        field = "runtime_root"
+        detail = "interrupted Integration retirement must be recovered before startup"
+        raise _load_error(field, detail)
+    for field, legacy_root in (
+        ("runtime_root", repository_root / ".owlbear/target"),
+        ("worktree_root", repository_root / ".owlbear/worktrees"),
+    ):
+        try:
+            has_legacy_state = legacy_root.exists() and any(legacy_root.iterdir())
+        except OSError as exc:
+            error = _load_error(field, "legacy Delivery path cannot be inspected")
+            raise error from exc
+        if has_legacy_state:
+            raise _load_error(field, "legacy Delivery state must be migrated before startup")
     paths = _DeliveryPaths(
-        package_root=repository_root / ".owlbear/delivery/packages",
-        target_root=repository_root / ".owlbear/target",
+        package_root=delivery_root / "packages",
+        runtime_root=delivery_root / "runtime",
         repository_root=repository_root,
-        worktree_root=repository_root / ".owlbear/worktrees",
+        worktree_root=delivery_root / "worktrees",
     )
     for field, path in (
         ("package_root", paths.package_root),
-        ("target_root", paths.target_root),
+        ("runtime_root", paths.runtime_root),
         ("worktree_root", paths.worktree_root),
     ):
         if path.exists() and (path.is_symlink() or not path.is_dir()):
@@ -96,8 +144,12 @@ def _validate_git_config(config: DeliveryStartupConfig, paths: _DeliveryPaths) -
         raise error from exc
     checks = (
         (("rev-parse", "--git-dir"), "repository_root"),
-        (("check-ref-format", f"refs/heads/{config.integration_target}"), "integration_target"),
-        (("rev-parse", "--verify", f"refs/heads/{config.integration_target}^{{commit}}"), "integration_target"),
+        (("check-ref-format", f"refs/heads/{config.target_branch}"), "target_branch"),
+        (("remote", "get-url", config.remote), "remote"),
+        (
+            ("rev-parse", "--verify", f"refs/remotes/{config.remote}/{config.target_branch}^{{commit}}"),
+            "target_branch",
+        ),
     )
     for arguments, field in checks:
         completed = subprocess.run(  # noqa: S603 - fixed executable and argument vector.
@@ -106,33 +158,81 @@ def _validate_git_config(config: DeliveryStartupConfig, paths: _DeliveryPaths) -
             capture_output=True,
         )
         if completed.returncode != 0:
-            error = _load_error(field, "configured repository or integration target is invalid")
+            detail = {
+                "repository_root": "configured Git repository is invalid",
+                "remote": "configured Git remote is invalid",
+                "target_branch": "configured target branch or remote-tracking target is invalid",
+            }[field]
+            error = _load_error(field, detail)
             raise error
+    remote_url = subprocess.run(  # noqa: S603 - fixed executable and argument vector.
+        (git_executable, "-C", str(paths.repository_root), "remote", "get-url", config.remote),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    match = re.fullmatch(
+        r"(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)([^\s/]+/[^\s/]+?)(?:\.git)?",
+        remote_url.stdout.strip(),
+    )
+    if match is None or match.group(1) != config.github_repository:
+        field = "github_repository"
+        detail = "configured GitHub repository does not match the remote URL"
+        raise _load_error(field, detail)
+    worktrees = subprocess.run(  # noqa: S603 - fixed executable and argument vector.
+        (git_executable, "-C", str(paths.repository_root), "worktree", "list", "--porcelain", "-z"),
+        check=False,
+        capture_output=True,
+    )
+    if worktrees.returncode != 0:
+        field = "repository_root"
+        detail = "Git must support 'worktree list --porcelain -z' for safe Delivery startup"
+        raise _load_error(field, detail)
+    registered_worktrees = tuple(
+        Path(os.fsdecode(field.removeprefix(b"worktree "))).resolve()
+        for field in worktrees.stdout.split(b"\0")
+        if field.startswith(b"worktree ")
+    )
+    if not registered_worktrees:
+        field = "repository_root"
+        detail = "Git worktree registry contains no primary checkout"
+        raise _load_error(field, detail)
+    primary_worktree = registered_worktrees[0]
+    if paths.repository_root != primary_worktree:
+        field = "workspace_root"
+        detail = "Delivery must start from the primary Git worktree"
+        raise _load_error(field, detail)
+    legacy_root = primary_worktree / ".owlbear/worktrees"
+    for registered in registered_worktrees:
+        if registered == legacy_root or legacy_root in registered.parents:
+            field_name = "worktree_root"
+            detail = "legacy Git worktree registrations must be migrated before startup"
+            raise _load_error(field_name, detail)
 
 
 def _read_contract(change_root: Path) -> DeliveryContract:
     try:
         contract = DeliveryContract.model_validate_json((change_root / "contract.json").read_bytes())
     except (OSError, ValidationError) as exc:
-        error = _load_error("target_root", "Delivery state is invalid")
+        error = _load_error("runtime_root", "Delivery state is invalid")
         raise error from exc
     if contract.change_id != change_root.name:
-        error = _load_error("target_root", "Delivery state identity is invalid")
+        error = _load_error("runtime_root", "Delivery state identity is invalid")
         raise error
     return contract
 
 
-def _load_contracts(target_root: Path) -> dict[str, DeliveryContract]:
-    changes_root = target_root / "delivery" / "changes"
+def _load_contracts(runtime_root: Path) -> dict[str, DeliveryContract]:
+    changes_root = runtime_root / "changes"
     if not changes_root.exists():
         return {}
     if changes_root.is_symlink() or not changes_root.is_dir():
-        error = _load_error("target_root", "Delivery state root is invalid")
+        error = _load_error("runtime_root", "Delivery state root is invalid")
         raise error
     try:
         change_roots = tuple(sorted(changes_root.iterdir()))
     except OSError as exc:
-        error = _load_error("target_root", "Delivery state is invalid")
+        error = _load_error("runtime_root", "Delivery state is invalid")
         raise error from exc
     return {
         contract.change_id: contract
@@ -140,6 +240,30 @@ def _load_contracts(target_root: Path) -> dict[str, DeliveryContract]:
         if change_root.is_dir() and not change_root.is_symlink()
         for contract in (_read_contract(change_root),)
     }
+
+
+def _load_host_config(paths: _DeliveryPaths) -> DeliveryHostConfig:
+    path = paths.runtime_root / "host.json"
+    try:
+        if not path.exists():
+            if path.is_symlink():
+                error = _load_error("host_config", "host-local Delivery capacity configuration is unsafe")
+                raise error
+            return DeliveryHostConfig(schema_version=1)
+        if path.is_symlink() or not path.is_file():
+            error = _load_error("host_config", "host-local Delivery capacity configuration must be a regular file")
+            raise error
+        return DeliveryHostConfig.model_validate_json(path.read_bytes())
+    except DeliveryApplicationLoadError:
+        raise
+    except ValidationError as exc:
+        location = exc.errors(include_url=False, include_context=False)[0].get("loc")
+        field = location[0] if isinstance(location, tuple | list) and location else "host_config"
+        error = _load_error(str(field), f"host-local Delivery capacity configuration is invalid: {path}")
+        raise error from exc
+    except (OSError, ValueError) as exc:
+        error = _load_error("host_config", f"host-local Delivery capacity configuration cannot be read: {path}")
+        raise error from exc
 
 
 def _role_policies() -> tuple[DeliveryRolePolicy, ...]:
@@ -154,83 +278,132 @@ def _role_policies() -> tuple[DeliveryRolePolicy, ...]:
             worker_agent="builder",
             reviewer_agent="build-reviewer",
         ),
-        DeliveryRolePolicy(
-            worker_role=DeliveryWorkerRole.ASSEMBLY_REVIEWER,
-            worker_agent="build-reviewer",
-            reviewer_agent="build-reviewer",
-        ),
-        DeliveryRolePolicy(
-            worker_role=DeliveryWorkerRole.INTEGRATION_REPAIRER,
-            worker_agent="builder",
-            reviewer_agent="build-reviewer",
-        ),
     )
 
 
-def _validate_runtime_state(target_root: Path, contracts: dict[str, DeliveryContract]) -> None:
+def _validate_runtime_state(runtime_root: Path, contracts: dict[str, DeliveryContract]) -> None:
     try:
         for contract in contracts.values():
-            DeliveryRuntime(target_root, contract)
-    except (OSError, ValidationError, DeliveryRuntimeConflictError, DeliveryRuntimeReferenceError) as exc:
-        error = _load_error("target_root", "Delivery runtime state is invalid")
+            frontier_path = runtime_root / "changes" / contract.change_id / "frontier.json"
+            frontier = parse_delivery_frontier(frontier_path.read_bytes())[0]
+            _require_runtime_bindings(contract, frontier)
+    except DeliveryRuntimeMigrationError as exc:
+        error = _load_error("runtime_root", str(exc))
         raise error from exc
+    except (OSError, ValidationError, TypeError, ValueError) as exc:
+        error = _load_error("runtime_root", "Delivery runtime state is invalid")
+        raise error from exc
+
+
+def _require_runtime_bindings(contract: DeliveryContract, frontier: DeliveryFrontier) -> None:
+    expected = tuple((scope.outcome_id, scope.scope_id) for scope in contract.plan_scopes)
+    actual = tuple((binding.outcome_id, binding.plan_scope_id) for binding in frontier.bindings)
+    if actual != expected:
+        raise ValueError
 
 
 def _compose_application(
     config: DeliveryStartupConfig,
+    host_config: DeliveryHostConfig,
     paths: _DeliveryPaths,
     contracts: dict[str, DeliveryContract],
+    publication_provider: PublicationProvider | None,
 ) -> PortfolioApplication:
     package_store = DesignPackageStore(paths.package_root, paths.repository_root)
-    coordinator = PortfolioCoordinator(paths.target_root, capacity=1)
+    try:
+        coordinator = PortfolioCoordinator(paths.runtime_root, capacity=host_config.writer_capacity)
+    except CapacityConfigurationConflictError as exc:
+        error = _load_error(
+            "writer_capacity",
+            f"host-local Delivery capacity configuration in host.json cannot be lower than active writers: {exc}",
+        )
+        raise error from exc
+    except CapacityLedgerConflictError as exc:
+        error = _load_error(
+            "runtime_root",
+            f"Delivery capacity ledger changed concurrently; retry startup: {exc}",
+        )
+        raise error from exc
     workspace_manager = ChangeWorkspaceManager(
         paths.repository_root,
         paths.worktree_root,
         coordinator,
-        config.integration_target,
+        config.target_branch,
+        config.remote,
     )
-    integration_verifier = IntegrationVerifier(
-        paths.repository_root,
-        paths.worktree_root / "integration-verification",
-        IntegrationVerificationStore(paths.target_root),
-    )
-    runtimes = {
-        change_id: DeliveryRuntime(paths.target_root, contract, workspace_manager=workspace_manager)
-        for change_id, contract in contracts.items()
-    }
+    runtimes = _composed_runtimes(paths.runtime_root, contracts, workspace_manager)
     dependencies = PortfolioApplicationDependencies(
-        target_root=paths.target_root,
+        target_root=paths.runtime_root,
         package_store=package_store,
         authority_registry=DeliveryAuthorityRegistry(
-            paths.target_root,
+            paths.runtime_root,
             package_store,
-            integration_target=config.integration_target,
+            integration_target=config.target_branch,
         ),
         coordinator=coordinator,
         workspace_manager=workspace_manager,
-        integration_verifier=integration_verifier,
-        completed_history_catalog=CompletedHistoryCatalog(paths.repository_root, config.integration_target),
+        completed_history_catalog=CompletedHistoryCatalog(
+            paths.repository_root,
+            config.target_branch,
+            f"refs/remotes/{config.remote}/{config.target_branch}",
+            paths.runtime_root,
+        ),
+        change_branch_publisher=ChangeBranchPublisher(
+            paths.repository_root,
+            coordinator,
+            remote=config.remote,
+            target_branch=config.target_branch,
+            operation_root=paths.runtime_root / "publications/change-branches/operations",
+        ),
+        draft_pull_request_publisher=(
+            DraftPullRequestPublisher(
+                publication_provider,
+                repository=config.github_repository,
+                target_branch=config.target_branch,
+                state_root=paths.runtime_root / "publications/pull-requests",
+            )
+            if publication_provider is not None
+            else None
+        ),
     )
     application_config = PortfolioApplicationConfig(
         package_root=paths.package_root,
-        execution_capacity=1,
+        execution_capacity=host_config.execution_capacity,
         role_policies=_role_policies(),
     )
     return PortfolioApplication(runtimes, dependencies, application_config)
+
+
+def _composed_runtimes(
+    runtime_root: Path,
+    contracts: dict[str, DeliveryContract],
+    workspace_manager: ChangeWorkspaceManager,
+) -> dict[str, DeliveryRuntime]:
+    runtimes = {}
+    for change_id, contract in contracts.items():
+        try:
+            reviewed_head = workspace_manager.show(change_id).last_reviewed_commit
+        except CoordinationConflictError:
+            continue
+        runtimes[change_id] = DeliveryRuntime(
+            runtime_root,
+            contract,
+            workspace_manager=workspace_manager,
+            migration_reviewed_head=reviewed_head,
+        )
+    return runtimes
 
 
 def load_delivery_application(
     config: DeliveryStartupConfig,
     *,
     workspace_root: Path,
-    authorized_target_root: Path,
+    publication_provider: PublicationProvider | None = None,
 ) -> PortfolioApplication:
     """Validate external identities before constructing the Delivery state owners."""
     paths = _derive_paths(workspace_root)
-    if paths.target_root.resolve() != authorized_target_root.resolve():
-        error = _load_error("target_root", "configured target root is not authorized")
-        raise error
     _validate_git_config(config, paths)
-    contracts = _load_contracts(paths.target_root)
-    _validate_runtime_state(paths.target_root, contracts)
-    return _compose_application(config, paths, contracts)
+    host_config = _load_host_config(paths)
+    contracts = _load_contracts(paths.runtime_root)
+    _validate_runtime_state(paths.runtime_root, contracts)
+    return _compose_application(config, host_config, paths, contracts, publication_provider)

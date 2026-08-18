@@ -6,7 +6,7 @@
 
 The knowledge module is structured as 6 engine modules with strict ownership boundaries. Communication happens exclusively via Protocol interfaces and frozen boundary types.
 
-```
+```text
 ┌─────────────────────────────────────────────────────────┐
 │                    MCP Shell (zero logic)                │
 ├─────────────────────────────────────────────────────────┤
@@ -22,7 +22,7 @@ The knowledge module is structured as 6 engine modules with strict ownership bou
 ## Module Responsibilities
 
 | Module | Owns | Role |
-|--------|------|------|
+| --- | --- | --- |
 | **Sources** | `source_*` tables | Registry, lifecycle state, health tracking, wish fulfilment |
 | **Content** | `content_*` tables + Qdrant collections | Chunking, embedding, storage, hybrid search |
 | **Graph** | `graph_*` tables | Entity/edge CRUD, evidence tracking, alias resolution, traversal |
@@ -32,7 +32,7 @@ The knowledge module is structured as 6 engine modules with strict ownership bou
 
 ## Dependency Graph (acyclic)
 
-```
+```text
 Sources ─────────────────────────────── (leaf, zero deps)
 Content ─────────────────────────────── (leaf, zero deps)
 Graph ───────────────────────────────── (leaf, zero deps)
@@ -60,7 +60,7 @@ Module-specific enums and models live in their respective module files.
 Four compile-time registries serve as single source of truth for ownership:
 
 | Registry | Purpose |
-|----------|----------|
+| --- | --- |
 | `TABLE_OWNERSHIP` | Module → table-name prefixes it may write |
 | `INFRASTRUCTURE_TABLES` | Tables outside module ownership (migrations) |
 | `QDRANT_COLLECTIONS` | Module → Qdrant collection names it owns |
@@ -74,7 +74,7 @@ MCP shell uses `MCP_TOOL_ROUTING` for dispatch without transformation.
 
 ### Source Deletion Cascade
 
-```
+```text
 1. Sources.delete_source(id, reason) → SourceDeletionInfo
 2. Content.purge_source(source_id) → ContentPurgeResult (has chunk_ids)
 3. Enrichment.discard_chunks(chunk_ids) → remove pending queue items
@@ -84,7 +84,7 @@ MCP shell uses `MCP_TOOL_ROUTING` for dispatch without transformation.
 
 ### Content Replacement Cascade (re-ingest)
 
-```
+```text
 1. Content.ingest → ContentIngestResult (state=REPLACED, replaced_chunk_ids)
 2. Enrichment.discard_chunks(replaced_chunk_ids) → clean stale queue items
 3. Graph.invalidate_evidence_by_chunks(replaced_chunk_ids) → clean evidence
@@ -185,7 +185,7 @@ Graph-level identity change.
 ## Table Ownership (CI-enforced via `registry.py`)
 
 | Prefix | Owner | Rule |
-|--------|-------|------|
+| --- | --- | --- |
 | `source_*` | Sources | Only SourceStore writes |
 | `content_*` | Content | Only ContentStore writes |
 | `graph_*` | Graph | Only GraphStore writes |
@@ -212,7 +212,7 @@ Each module is tested in isolation with mocked dependencies. Tests verify:
 
 ### End-to-end scenario tests (Brief demand scenarios — R50)
 
-Linked to Brief demand scenarios in `.owlbear/briefs/draft-knowledge-modularization/brief.md`:
+Linked to Brief demand scenarios in `.owlbear/legacy/briefs/draft-knowledge-modularization/brief.md`:
 
 1. **ISMS compliance chain** — Standards → Controls → Approvals (ingest + enrich + traverse)
 2. **Access rights lookup** — User → Tool → Required permissions (search + entity lookup)

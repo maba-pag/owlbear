@@ -27,10 +27,15 @@ Use this order to establish context without turning local instructions into univ
 When present, these committed artifacts are optional wayfinders:
 
 | Artifact | Contents | Best use |
-|----------|----------|----------|
+| --- | --- | --- |
 | `.owlbear/doc-index.md` | Documentation paths, headings, and outbound links | Find the document that owns a topic. |
 | `.owlbear/py-index.md` | Python modules, imports, classes, methods, and functions | Inspect package shape and likely interfaces. |
 | `.owlbear/ts-index.md` | TS/TSX/JS/JSX modules, imports, exports, and interfaces | Inspect frontend or script structure. |
+
+`doc-index` also has a workflow-specific role: `.owlbear/prompts/doc-audit.prompt.md` requires
+regenerating it before scanning and again during closeout. The Python and ECMAScript indexes remain
+optional, on-demand orientation aids; none of these artifacts is regenerated automatically by
+pre-commit or CI.
 
 The artifacts are advisory. Source files remain authoritative. Search indexes with `rg`; do not load
 an entire index when one path, symbol, or topic query will do.
@@ -101,6 +106,6 @@ research workflow controls clone approval, recording, and cleanup.
 ## Companion Skills
 
 | Skill | Load when |
-|-------|-----------|
+| --- | --- |
 | `h-module-design` | Source evidence requires judging module depth, locality, seams, or dependency placement rather than locating code |
 | `r-workspace-governance` | Creating or committing OwlBear-managed artifacts |

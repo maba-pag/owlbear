@@ -15,11 +15,7 @@ from owlbear_delivery import (
     PortfolioApplication,
 )
 from owlbear_delivery import load_delivery_application as load_core_delivery_application
-from owlbear_delivery.target_cutover import (
-    TargetCutoverError,
-    TargetCutoverRequest,
-    authorize_target_mutation,
-)
+from owlbear_delivery_github import GitHubCliPublicationProvider
 from owlbear_delivery_mcp.target_models import (
     DeliveryStartupDiagnostic,
 )
@@ -32,16 +28,11 @@ from owlbear_delivery_mcp.target_server import (
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-_DEFAULT_CUTOVER_REQUEST = Path(".owlbear/target-cutover-request.json")
 _DELIVERY_CONFIG_PATH = Path(".owlbear/delivery/config.json")
 _UNCONFIGURED = "ERR_DELIVERY_STARTUP_UNCONFIGURED"
 _INVALID = "ERR_DELIVERY_STARTUP_INVALID"
-_REQUIRED_TOP_LEVEL_FIELDS = {"schema_version", "integration_target"}
+_REQUIRED_TOP_LEVEL_FIELDS = {"schema_version", "remote", "target_branch", "github_repository"}
 _live_context: DeliveryAppContext | None = None
-
-
-def _resolve_request_path(workspace_root: Path) -> Path:
-    return (workspace_root / _DEFAULT_CUTOVER_REQUEST).resolve()
 
 
 def _delivery_config_path(workspace_root: Path) -> Path:
@@ -93,28 +84,13 @@ def _is_missing_required(error: dict[str, object], field: str) -> bool:
     return field.split(".", maxsplit=1)[0] in _REQUIRED_TOP_LEVEL_FIELDS
 
 
-def _authorize_configured_target(workspace_root: Path) -> Path:
-    request_path = _resolve_request_path(workspace_root)
-    try:
-        request = TargetCutoverRequest.model_validate_json(request_path.read_bytes())
-        authorize_target_mutation(workspace_root, request)
-    except (OSError, ValidationError, TargetCutoverError) as exc:
-        raise DeliveryStartupDiagnostic(
-            _INVALID,
-            "target cutover authority is invalid",
-            str(_DEFAULT_CUTOVER_REQUEST),
-        ) from exc
-    return (workspace_root / request.target_path).resolve()
-
-
 def load_delivery_application(config: DeliveryStartupConfig, workspace_root: Path) -> PortfolioApplication:
-    """Authorize adapter configuration and delegate owner construction to Delivery."""
-    authorized_target = _authorize_configured_target(workspace_root)
+    """Delegate canonical workspace owner construction to Delivery."""
     try:
         return load_core_delivery_application(
             config,
             workspace_root=workspace_root,
-            authorized_target_root=authorized_target,
+            publication_provider=GitHubCliPublicationProvider(),
         )
     except DeliveryApplicationLoadError as exc:
         raise DeliveryStartupDiagnostic(_INVALID, exc.detail, exc.field) from exc

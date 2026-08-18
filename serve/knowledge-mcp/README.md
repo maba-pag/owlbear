@@ -2,7 +2,13 @@
 
 MCP server that exposes the `owlbear-knowledge` engine as tools for pipeline agents. Provides document ingestion, semantic search, source management, and enrichment batching. Registered in VS Code's MCP configuration as `owlbear-knowledge`.
 
-→ Parent: [README.md](../../README.md)
+**Use this guide when:** you need to configure the alpha `owlbear-knowledge` server or change its
+agent-facing source, search, and enrichment tools.
+
+Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
+
+**Status:** Alpha. The server exposes the current Knowledge tool surface, but end-to-end
+real-world validation is still pending.
 
 ---
 
@@ -17,7 +23,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 ### Tools
 
 | Tool | Description |
-|------|-------------|
+| --- | --- |
 | `knowledge_search` | Semantic search over the knowledge base |
 | `lookup_knowledge_entity` | Look up a graph entity and its neighbourhood by `entity_id`, `entity_name`, or `entity_type`; expands the graph by `expand_hops` hops (default 1); returns `entity`, `neighbourhood` (entities + edges), and `related_chunks` |
 | `list_knowledge_sources` | List registered knowledge sources, optionally filtered by scope |
@@ -39,6 +45,6 @@ initialized OwlBear workspace and exposes its complete tool set.
 ## Dependencies
 
 | Package | Purpose |
-|---------|---------|
+| --- | --- |
 | `mcp[cli]` | MCPServer framework and CLI |
 | `owlbear-knowledge[full]` | Knowledge engine with all optional extras (workspace package) |

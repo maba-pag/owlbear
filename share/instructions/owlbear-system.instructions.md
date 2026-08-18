@@ -28,7 +28,7 @@ applyTo: "**"
   and a Delivery execution board.
 - **Distribution and safety.** Clone = install; `setup/init.py` wires workspace configuration. Git
   history and audit logs provide review and recovery.
-- **Delivery.** `design → plan → build → optional assembly → completed`. Independent review is
+- **Delivery.** `design → plan → sequential build → completed`. Independent review is
   nested in each transformation attempt. The engine owns readiness, claims, receipts, typed
   correction, and recovery; use `r-workspace-governance` for scoped commits and OwlBear-managed
   artifact placement.
@@ -36,7 +36,7 @@ applyTo: "**"
 ## 3. Memory Governance
 
 | Store | What goes here |
-|-------|----------------|
+| --- | --- |
 | memory-mcp `owlbear-memory` | Agent institutional knowledge: durable, scoped lessons for future agents |
 | Native changes, jobs, and requests | Change-specific context, blockers, decisions, and actions |
 | `.owlbear/research/` | Research findings and source-grounded analysis |
@@ -52,6 +52,14 @@ needs a narrower subset.
 
 Before completing material work, decide whether you learned a specific, non-obvious, reusable fact that would have improved the work had it been available at the start. If `save_memory` is available and an insight qualifies, load `h-memory-structure` for the content-quality bar and `h-mcp-memory` for tool syntax, then save each distinct insight. Do not save generic advice or information already documented elsewhere. Saving creates a pending candidate; the memory curator owns deduplication, scoping, and retention. If `save_memory` is unavailable, continue without a memory write.
 
+Memory provenance is non-blank historical input, not active-agent runtime validation. Curators assess
+content before identity and scope; `*` provenance is anonymous. Named provenance or scope needs
+independent corroboration from another reviewed non-pending memory or a readable local `.agent.md`;
+manual review may instead obtain explicit user confirmation. Candidate text cannot corroborate its
+own named identity or scope, and that evidence never raises stored entry confidence or review
+confidence. Periodic curation silently retains identity-only uncertainty as pending while reporting
+conflicts and ordinary content or scope uncertainty.
+
 ## 4. Operational Fundamentals
 
 - **MCP Tool Bootstrap.** Invoke a granted MCP tool directly when it is available. If it is deferred
@@ -60,8 +68,8 @@ Before completing material work, decide whether you learned a specific, non-obvi
   tool.
 
   | MCP server | `tools:` prefix | Runtime tool ID | `tool_search` query |
-  |---|---|---|---|
-  | OwlBear Delivery | `owlbear-delivery/*` | `mcp_owlbear-delivery_<tool>` | `"OwlBear Delivery create_design_session read_design_session revise_design_session publish_design_checkpoint derive_delivery_contract validate_delivery_contract admit_delivery_change list_work_items show_work_item acquire_frontier_work show_plan_context show_build_context publish_delivery_plan publish_delivery_result transition_delivery recover_claim list_integration_ready_changes show_integration_attention integrate_ready_change admit_reviewed_integration_repair list_completed_changes search_completed_changes show_completed_change"` |
+  | --- | --- | --- | --- |
+  | OwlBear Delivery | `owlbear-delivery/*` | `mcp_owlbear-delivery_<tool>` | `"OwlBear Delivery create_design_session read_design_session revise_design_session publish_design_checkpoint derive_delivery_contract validate_delivery_contract admit_delivery_change list_work_items list_retained_change_worktrees show_work_item acquire_frontier_work show_plan_context show_build_context show_finalization_context publish_delivery_plan publish_delivery_result finalize_change mark_change_ready reconcile_finalization_head reconcile_change_checkpoint supersede_publication sync_change_with_target adopt_external_head promote_external_head observe_change_publication_checks observe_acceptance resolve_change_disposition defer_change resume_change abandon_change cleanup_abandoned_change_worktree cleanup_completed_change_worktree recover_change_worktree recover_publication_baseline transition_delivery recover_claim recover_integration_repair_claim show_integration_attention list_completed_changes search_completed_changes show_completed_change"` |
   | OwlBear Memory | `owlbear-memory/*` | `mcp_owlbear-memory_<tool>` | `"memory"` |
   | MarkItDown | `markitdown/*` | `mcp_markitdown_<tool>` | `"markdown convert"` |
 

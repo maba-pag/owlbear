@@ -96,7 +96,7 @@ Log materially used external sources in `.owlbear/sources/overview.md` per
 
 Return a compact evidence package:
 
-```
+```markdown
 ## Research
 - Question: {specific unknown}
 - Findings: {source-grounded facts}

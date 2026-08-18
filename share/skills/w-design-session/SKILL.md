@@ -18,7 +18,7 @@ or turn conversation history into a second authority.
 Load these with `read_file` immediately before the named work:
 
 | Skill | Load when |
-|-------|-----------|
+| --- | --- |
 | `w-idea-refinement` | `/ideate` input is too rough to state the intended outcome and Product Promise |
 | `h-codebase-orientation` | Locating current owners, interfaces, tests, and normal workflows |
 | `w-research` | A material external or repository claim needs durable source-grounded research |
@@ -30,7 +30,7 @@ Load these with `read_file` immediately before the named work:
 One active Design session is a manifest-bound package owned by Delivery:
 
 | Package part | Owns |
-|--------------|------|
+| --- | --- |
 | `intent.md` | Problem, actors, Product Promise, normal workflows, scope, accepted exclusions, preserved behavior, material user decisions, success, assumptions, and technically-done-but-wrong outcomes |
 | `design.md` | Current ownership, proposed architecture and interfaces, tradeoffs, weaknesses, migration, proof approach, and decision consequences |
 | `authority.json` | Generated Delivery contract bytes; authored revision clears this authority |
@@ -122,7 +122,7 @@ evidence.
 Classify every load-bearing claim in the authority:
 
 | State | Meaning |
-|-------|---------|
+| --- | --- |
 | `observed` | Verified in current source, runtime output, generated contract, or test |
 | `documented` | Stated by a named controlling repository or external authority |
 | `assumed` | Plausible but unverified, with owner and consequence recorded |
@@ -186,7 +186,6 @@ identity before admission:
   agreed paths, and implementation discretion;
 - user-facing outcomes with promises, observable acceptance, commitment links, and dependency IDs;
 - exactly one outcome task-plan scope for every active outcome;
-- a change-assembly scope only when accepted composition authority is already required;
 - persisted Design re-entry briefings, semantic updates, and completion summaries only when they
   already exist as durable authority.
 

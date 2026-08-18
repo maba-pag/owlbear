@@ -23,7 +23,7 @@ Curated and approved MCP entries are what future agents recall. Pending entries 
 ## State Machine
 
 | From | To | Trigger | Tool | Actor |
-|------|----|---------|------|-------|
+| --- | --- | --- | --- | --- |
 | `pending` | `curated` | Curator validates content and assigns scope | `curate_memory(scope_agents=[...])` | curator agent |
 | `curated` | `approved` | User signs off in review prompt | `approve_memory` | human user |
 | `approved` | `curated` | Curator edits obsolete or imprecise content | `curate_memory(...)` | curator agent |
@@ -42,10 +42,15 @@ The curator also does not resolve exceptional states. `curate_memory` is blocked
 
 **Mode detection:**
 
-- **Periodic mode** — dispatched by the orchestrator. Handle clear-cut entries only. Do not call `askQuestions`; defer conflicts and uncertain scope decisions.
+- **Periodic mode** — dispatched by the orchestrator. Handle clear-cut entries only. Do not call `askQuestions`; defer conflicts and ordinary content or scope uncertainty.
 - **Manual mode** — invoked directly by the user. Resolve conflicts and uncertain scope through `askQuestions`.
 
-Track deferred items by leaving MCP entries pending and recording their entry IDs in the return summary.
+Classify content before provenance or scope. Delete low-value content regardless of identity. For
+keep-worthy unfamiliar named provenance, require another reviewed non-pending entry or a readable
+local definition; candidate text cannot self-prove identity. `*` is anonymous provenance and needs
+no source corroboration, but it does not waive separate target-scope evidence. Identity-only
+uncertainty remains pending and is omitted from periodic defer and conflict summaries. Conflicts and
+ordinary content or scope uncertainty remain reportable.
 
 ## Step 1 — Gather Candidates
 
@@ -60,7 +65,7 @@ Track deferred items by leaving MCP entries pending and recording their entry ID
 For each MCP pending entry or file-inbox note, classify by meaning:
 
 | Rating | Meaning | Default action |
-|--------|---------|----------------|
+| --- | --- | --- |
 | PROMOTE | Specific, actionable, non-obvious, and not already covered | Curate into MCP with explicit scope |
 | DEFER | Plausible but lacks enough evidence, scope clarity, or wording quality | Leave pending and report the entry ID |
 | DELETE | Generic, empty, obvious, stale, or wrong | Delete/prune |
@@ -74,22 +79,23 @@ Deduplicate by meaning, not wording. Before deleting as duplicate, read the like
 Every promoted entry needs non-empty `scope_agents`.
 
 | Scope | Use when |
-|-------|----------|
+| --- | --- |
 | `['builder']`, `['build-reviewer']`, etc. | The learning applies to one or a few roles |
 | `['builder', 'build-reviewer']` | A shared handoff or quality pattern spans roles |
 | `['*']` | The learning applies to nearly every agent |
 
 Prefer targeted scopes. Use `['*']` only for broadly reusable process/tool guidance. Never promote with an empty scope.
-Every named scope must exactly match an active custom-agent name. When an agent is renamed or
-deleted, use `rename_agent_memories` or `delete_agent_memories`; never retain an alias in relevance
-scope. A deleted agent may remain in immutable historical provenance.
+Named scope requires another reviewed non-pending memory, a readable local `.agent.md`, or explicit
+user confirmation; candidate text cannot corroborate its own named identity or scope. When an agent
+is renamed or deleted, use `rename_agent_memories` or `delete_agent_memories`; never retain an alias
+in relevance scope. A deleted agent may remain in immutable historical provenance.
 
 ## Step 4 — Act On MCP Entries
 
 | Rating | MCP action |
-|--------|------------|
+| --- | --- |
 | PROMOTE | Call `curate_memory(entry_id=..., scope_agents=[...])`; optionally improve title/content/categories/confidence in the same call |
-| DEFER | Leave pending and, in periodic mode, include the entry ID and uncertainty in the return report |
+| DEFER | Leave pending and, in periodic mode, include ordinary content/scope uncertainty or conflict in the return report; do not report identity-only uncertainty |
 | DELETE / DUPLICATE | Call `delete_memory(entry_id=...)` |
 | CONFLICT | Periodic: leave pending and report the conflict. Manual: ask the user, then curate/delete according to the decision |
 
@@ -101,25 +107,25 @@ Do not inspect, create, migrate, or defer notes in `/memories/` paths. If old fi
 
 ## Step 6 — Batch Commit MCP Memory
 
-Before returning, commit reviewed MCP memory mutations with the state-aware helper:
+Before returning, commit reviewed MCP memory mutations with the dedicated MCP operation:
 
-```bash
-uv --project ../owlbear run python -m owlbear_memory_mcp.git curation
+```text
+owlbear-memory/commit_memory_batch(session_type="curation")
 ```
 
-The `--project` path must point to the OwlBear installation root. Find the correct value from the `owlbear-memory` server entry in `.vscode/mcp.json` (look for the `--project` argument in the `args` array). The helper stages only non-pending `.owlbear/memory/*.md` entries; do not broad-add `.owlbear/memory`.
+The MCP operation stages only non-pending `.owlbear/memory/*.md` entries and returns the commit SHA or a no-op result. Do not use a terminal or broad-add `.owlbear/memory`.
 
 ## Step 7 — Return Channel A Signal
 
 Return the verdict:
 
-- Periodic mode: `DONE | {P} promoted, {D} pruned` (add `— {K} pending conflicts/uncertain` when unresolved entries remain)
+- Periodic mode: `DONE | {P} promoted, {D} pruned` (add `— {K} pending conflicts/uncertain ({entry IDs})` for reportable ordinary uncertainty or conflicts only; exclude identity-only pending entries)
 - Manual mode: concise summary of promoted, pruned, deferred, and resolved entries
 
 ## Verification Checklist
 
 - [ ] Every promoted MCP entry has non-empty `scope_agents`
-- [ ] Every named scope resolves to an active custom-agent definition
+- [ ] Every named scope has independent corroboration or explicit manual user confirmation
 - [ ] Duplicate checks compared against existing curated/approved MCP entries
 - [ ] Noise removals are truly low-signal, not merely unfamiliar
 - [ ] Conflicts were deferred in periodic mode or resolved with user input in manual mode
@@ -132,6 +138,7 @@ Return the verdict:
 - **Using retired file memory:** `/memories/` paths are no longer an agent memory store. Promotion means MCP curation.
 - **Global scope by habit:** `['*']` floods all agents. Prefer named role scopes unless the learning is truly universal.
 - **Auto-resolving conflicts:** conflicting lessons must be deferred in periodic mode or resolved with the user in manual mode.
-- **Broad memory commits:** use the state-aware helper so pending entries stay uncommitted.
+- **Reporting identity-only uncertainty:** keep it pending silently in periodic mode; do not add its count or ID to defer/conflict summaries.
+- **Broad memory commits:** use `commit_memory_batch` so pending entries stay uncommitted.
 - **Manual lifecycle rewrites:** use the agent lifecycle tools when definitions are renamed or
  deleted so provenance and relevance cannot drift.

@@ -303,7 +303,9 @@ class AttemptStore:
             )
         return AttemptResult(event=parsed.event)
 
-    def create(self, event: AttemptEvent) -> AttemptResult:
+    def create(  # noqa: PLR0911 - each storage outcome maps to a stable result.
+        self, event: AttemptEvent
+    ) -> AttemptResult:
         """Create an immutable event or return its byte-equivalent replay."""
         try:
             attempt_id, filename, path = _event_location(event.attempt_id, event.sequence)
@@ -314,7 +316,16 @@ class AttemptStore:
         content = _event_content(event)
         try:
             with self._directory(attempt_id, create=True) as directory_fd:
-                assert directory_fd is not None
+                if directory_fd is None:
+                    return AttemptResult(
+                        diagnostics=(
+                            _diagnostic(
+                                AttemptDiagnosticCode.PATH_UNSAFE,
+                                "attempt event could not be created safely",
+                                path,
+                            ),
+                        )
+                    )
                 try:
                     file_fd = os.open(filename, _CREATE_FLAGS, 0o644, dir_fd=directory_fd)
                 except FileExistsError:

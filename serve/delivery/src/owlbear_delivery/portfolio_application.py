@@ -3,26 +3,51 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import subprocess
 import uuid
+from contextlib import suppress
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Never
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from owlbear_delivery.acceptance import (
+    CompletionEvidence,
+    CompletionPullRequestIdentity,
+    CompletionReceipt,
+)
+from owlbear_delivery.change_publication import (
+    ChangeBranchPublicationReceipt,
+    ChangeBranchPublisher,
+    ChangeBranchSupersessionReceipt,
+    PublishChangeBranch,
+    SupersedeChangeBranch,
+)
 from owlbear_delivery.change_workspace import (
-    AtomicIntegrationPreparation,
+    AdoptExternalHead,
     ChangeCoordination,
+    ChangeExternalHeadAdoptionReceipt,
+    ChangeExternalHeadPromotionReceipt,
+    ChangeTargetSyncAbortReceipt,
+    ChangeTargetSyncConflictError,
+    ChangeTargetSyncReceipt,
     ChangeWorkspaceManager,
+    ChangeWorktreeAttentionCode,
+    ChangeWorktreeAttentionError,
     ChangeWriter,
     CoordinationConflictError,
-    IntegrationContext,
-    IntegrationRepairCandidate,
     PortfolioCoordinator,
+    PromoteExternalHead,
+    PublicationBaselineRecoveryReceipt,
+    PublicationBaselineUnavailableError,
+    RetainedChangeWorktree,
+    SyncChangeWithTarget,
+    TargetSyncConflictRequest,
     WorkspaceRecoverySnapshot,
 )
 from owlbear_delivery.delivery_runtime import (
@@ -30,16 +55,25 @@ from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
     AdministrativeDeliveryMovePreview,
     AdministrativeDeliveryMoveResult,
+    DeliveryAcceptanceWaitingError,
     DeliveryActiveClaim,
     DeliveryBlock,
+    DeliveryChangeAbandonment,
+    DeliveryChangeDeferral,
+    DeliveryChangeDispositionKind,
+    DeliveryChangeDispositionResolution,
+    DeliveryChangePublicationHistory,
+    DeliveryChangePublicationIdentity,
     DeliveryChangeStage,
+    DeliveryCheckpointPublicationState,
+    DeliveryCheckpointTriggerKind,
+    DeliveryFinalizationInvalidationReceipt,
+    DeliveryFinalizationReceipt,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
-    DeliveryIntegrationCandidate,
-    DeliveryIntegrationCompletion,
-    DeliveryIntegrationRepair,
-    DeliveryIntegrationRepairAuthorityAttention,
+    DeliveryMergedPullRequestLatch,
+    DeliveryPendingCheckpoint,
     DeliveryPlanCandidate,
     DeliveryRecoveryAttention,
     DeliveryRequest,
@@ -47,22 +81,39 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryResultCandidate,
     DeliveryReturnContext,
     DeliveryRuntime,
+    DeliveryRuntimeConflictError,
     DeliveryStage,
     DeliveryTaskDefinition,
     DeliveryTaskResult,
     DeliveryTransition,
     DeliveryWorkerRole,
+    FinalizeDeliveryChange,
     OutcomeAuthorityBinding,
     PublishDeliveryPlan,
     PublishDeliveryResult,
+    derive_change_stage,
     integration_attention_disposition,
+    is_acceptance_waiting_observation,
+    is_change_terminal,
 )
-from owlbear_delivery.design_package import (
-    CompletionCapture,
-    CompletionPackageSnapshot,
-    DesignCheckpointResult,
-    DesignPackageConflictError,
-    DesignPackageResult,
+from owlbear_delivery.draft_pull_request import (
+    CreateOrReconcileDraftPullRequest,
+    DraftPullRequestPublicationHistory,
+    DraftPullRequestPublicationReceipt,
+    DraftPullRequestPublisher,
+    DraftPullRequestSupersessionReceipt,
+    GeneratedPullRequestSummaryReceipt,
+    MarkChangePullRequestReady,
+    ObserveChangePublicationChecks,
+    ObserveChangePublicationPullRequest,
+    PublicationCheckObservationReceipt,
+    PublicationPullRequestObservationReceipt,
+    PullRequestReadyReceipt,
+    ReadChangePublicationCheckObservations,
+    ReadChangePublicationHistory,
+    ReturnChangePullRequestToDraft,
+    SupersedeDraftPullRequest,
+    UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.portfolio_operating import (
     PortfolioGuidanceFacts,
@@ -71,6 +122,14 @@ from owlbear_delivery.portfolio_operating import (
     PortfolioWorkScope,
     derive_portfolio_guidance,
 )
+from owlbear_delivery.publication_provider import (
+    PublicationCheck,
+    PublicationCheckSnapshot,
+    PublicationProviderError,
+    PublicationPullRequest,
+    failed_required_publication_checks,
+)
+from owlbear_delivery.storage_io import locked_roots
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCompilationResult,
@@ -83,7 +142,11 @@ from owlbear_delivery.work_items import (
     WorkItemDetailView,
     WorkItemNeed,
     WorkItemProjector,
+    WorkItemPublicationPhase,
     WorkItemScope,
+    WorkItemTargetSyncConflictView,
+    WorkItemWorktreeCleanupView,
+    WorkItemWorktreeRecoveryView,
 )
 
 if TYPE_CHECKING:
@@ -94,8 +157,12 @@ if TYPE_CHECKING:
         CompletedChangeRecord,
         CompletedHistoryCatalog,
     )
-    from owlbear_delivery.design_package import DesignPackageStore, VerifiedDesignPackage
-    from owlbear_delivery.integration_verification import IntegrationVerificationReceipt, IntegrationVerifier
+    from owlbear_delivery.design_package import (
+        DesignCheckpointResult,
+        DesignPackageResult,
+        DesignPackageStore,
+        VerifiedDesignPackage,
+    )
     from owlbear_delivery.target_admission import (
         DeliveryAdmissionRequest,
         DeliveryAdmissionResult,
@@ -112,13 +179,146 @@ def _timestamp(value: str) -> datetime:
     return parsed.astimezone(UTC)
 
 
-_COMPLETED_ROOT = ".owlbear/completed"
+_MAX_PULL_REQUEST_TITLE_LENGTH = 256
+_MAX_ACCEPTANCE_RECONCILIATION_CHANGES = 8
+_MAX_REQUIRED_CHECK_DIAGNOSTICS = 8
+_MAX_CHECK_DIAGNOSTIC_VALUE_LENGTH = 160
+_MAX_AUTOMATION_PATHS = 32
+_MAX_AUTOMATION_PATH_LENGTH = 240
+
+
+def _failed_required_publication_checks(snapshot: PublicationCheckSnapshot) -> tuple[PublicationCheck, ...]:
+    """Return provider-marked required checks with terminal non-success evidence."""
+    return failed_required_publication_checks(snapshot)
+
+
+def _check_diagnostic_value(value: str | None) -> str:
+    """Bound provider-controlled values embedded in durable attention diagnostics."""
+    if value is None:
+        return "<missing>"
+    printable = "".join(character if character.isprintable() else " " for character in value)
+    compact = " ".join(printable.split())
+    return (compact or "<empty>")[:_MAX_CHECK_DIAGNOSTIC_VALUE_LENGTH]
+
+
+def _required_check_diagnostics(
+    snapshot: PublicationCheckSnapshot,
+    observation_id: str,
+    failures: tuple[PublicationCheck, ...],
+) -> tuple[str, ...]:
+    """Build deterministic bounded attention diagnostics for one check observation."""
+    ordered = tuple(sorted(failures, key=lambda check: (check.name.casefold(), check.check_id)))
+    diagnostics = [
+        "required-publication-check-failure",
+        f"exact-head:{snapshot.head_sha}",
+        f"check-observation:{observation_id}",
+        f"failing-required-checks:{len(ordered)}",
+    ]
+    diagnostics.extend(
+        "required-check:"
+        f"{_check_diagnostic_value(check.check_id)}:"
+        f"name={_check_diagnostic_value(check.name)}:"
+        f"status={_check_diagnostic_value(check.status)}:"
+        f"conclusion={_check_diagnostic_value(check.conclusion)}"
+        for check in ordered[:_MAX_REQUIRED_CHECK_DIAGNOSTICS]
+    )
+    if len(ordered) > _MAX_REQUIRED_CHECK_DIAGNOSTICS:
+        diagnostics.append(f"required-checks-truncated:{len(ordered) - _MAX_REQUIRED_CHECK_DIAGNOSTICS}")
+    return tuple(diagnostics)
 
 
 def _operating_scope(scope: WorkItemScope) -> PortfolioWorkScope:
-    if scope == WorkItemScope.CHANGE_INTEGRATION:
-        return PortfolioWorkScope.INTEGRATION
+    if scope == WorkItemScope.CHANGE_PUBLICATION:
+        return PortfolioWorkScope.PUBLICATION
     return PortfolioWorkScope.OUTCOME
+
+
+def _checkpoint_operation_id(kind: str, *parts: str) -> str:
+    payload = json.dumps((kind, *parts), separators=(",", ":"))
+    return f"checkpoint-{kind}-{hashlib.sha256(payload.encode()).hexdigest()}"
+
+
+def _checkpoint_summary(
+    pending: DeliveryPendingCheckpoint,
+    head: str,
+    automation_paths: tuple[str, ...],
+) -> str:
+    lines = [f"Reviewed Delivery checkpoint `{head}`.", "", "Included boundaries:"]
+    for trigger in pending.triggers:
+        if trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK:
+            lines.append("- First promoted Task result")
+        elif trigger.kind == DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME:
+            lines.append(f"- Verified Outcome `{trigger.outcome_id}`")
+        elif trigger.kind == DeliveryCheckpointTriggerKind.FINALIZATION:
+            lines.append("- Finalized Change")
+        else:
+            lines.append("- Explicit publication request")
+    lines.extend(_automation_summary(automation_paths))
+    return "\n".join(lines)
+
+
+def _automation_summary(paths: tuple[str, ...]) -> tuple[str, ...]:
+    """Render bounded repository automation paths for a generated PR summary."""
+    if not paths:
+        return ()
+    lines = ["", "### Repository automation changed"]
+    visible = paths[:_MAX_AUTOMATION_PATHS]
+    lines.extend(f"- {_automation_path_markup(path)}" for path in visible)
+    omitted = len(paths) - len(visible)
+    if omitted:
+        lines.append(f"- {omitted} additional automation path(s) omitted")
+    return tuple(lines)
+
+
+def _automation_path_markup(path: str) -> str:
+    """Escape and bound one repository-controlled path for Markdown HTML."""
+    printable = []
+    for character in path:
+        if character == "\n":
+            printable.append(r"\n")
+        elif character == "\r":
+            printable.append(r"\r")
+        elif character == "\t":
+            printable.append(r"\t")
+        elif character.isprintable():
+            printable.append(character)
+        else:
+            printable.append(f"\\u{ord(character):04x}")
+    bounded = "".join(printable)
+    if len(bounded) > _MAX_AUTOMATION_PATH_LENGTH:
+        bounded = f"{bounded[: _MAX_AUTOMATION_PATH_LENGTH - 3]}..."
+    escaped = html.escape(bounded, quote=True).replace("`", "&#96;")
+    return f"<code>{escaped}</code>"
+
+
+def _checkpoint_pull_request_title(runtime: DeliveryRuntime) -> str:
+    printable = "".join(character if character.isprintable() else " " for character in runtime.contract.title)
+    title = " ".join(printable.split()) or f"Delivery Change {runtime.contract.change_id}"
+    if len(title) <= _MAX_PULL_REQUEST_TITLE_LENGTH:
+        return title
+    return f"{title[: _MAX_PULL_REQUEST_TITLE_LENGTH - 3]}..."
+
+
+def _supersession_summary(head: str, predecessor_id: str, automation_paths: tuple[str, ...]) -> str:
+    lines = [
+        f"Superseding reviewed Delivery checkpoint `{head}`.",
+        "",
+        f"This publication supersedes provider publication `{predecessor_id}`.",
+    ]
+    lines.extend(_automation_summary(automation_paths))
+    return "\n".join(lines)
+
+
+def _publication_identity(
+    publication: DraftPullRequestPublicationReceipt,
+) -> DeliveryChangePublicationIdentity:
+    return DeliveryChangePublicationIdentity(
+        change_id=publication.change_id,
+        repository=publication.repository,
+        number=publication.number,
+        node_id=publication.node_id,
+        head_sha=publication.head_sha,
+    )
 
 
 def _operator_claim(claim: DeliveryActiveClaim | None) -> DeliveryOperatorClaim | None:
@@ -210,54 +410,11 @@ class DeliveryLaunchPackage(_ApplicationModel):
         return self
 
 
-class DeliveryIntegrationRepairLaunchPackage(_ApplicationModel):
-    """Bounded change-level launch for one claimed Integration repair."""
-
-    change_id: str = Field(min_length=1)
-    claim: DeliveryActiveClaim
-    policy: DeliveryRolePolicy
-    attention: DeliveryIntegrationAttention
-    package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    package_root: Path
-    worktree_path: Path
-    branch: str = Field(min_length=1)
-    source_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    integration_target: str = Field(min_length=1)
-    last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
-    writer: ChangeWriter
-
-    @model_validator(mode="after")
-    def _validate_repair_custody(self) -> DeliveryIntegrationRepairLaunchPackage:
-        if (
-            self.claim.worker_role != DeliveryWorkerRole.INTEGRATION_REPAIRER
-            or self.policy.worker_role != self.claim.worker_role
-            or self.writer.kind != "repair"
-            or self.writer.attempt_id != self.claim.attempt_id
-            or self.writer.claim_id != self.claim.claim_id
-            or self.writer.actor_id != self.claim.owner_id
-            or self.writer.process_id != self.claim.process_id
-        ):
-            message = "repair launch policy and writer custody must match the active claim"
-            raise ValueError(message)
-        return self
-
-
 class DeliveryAcquisitionFailure(_ApplicationModel):
     """Bounded fail-closed preparation result, optionally tied to a started claim."""
 
     change_id: str = Field(min_length=1)
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
-    attempt_id: str | None = None
-    claim_id: str | None = None
-    code: str = Field(min_length=1)
-    detail: str = Field(min_length=1)
-    retry_condition: str = Field(min_length=1)
-
-
-class DeliveryIntegrationRepairAcquisitionFailure(_ApplicationModel):
-    """Fail-closed preparation result for one change-level repair claim."""
-
-    change_id: str = Field(min_length=1)
     attempt_id: str | None = None
     claim_id: str | None = None
     code: str = Field(min_length=1)
@@ -275,23 +432,11 @@ class DeliveryIntegrationAttentionStatus(_ApplicationModel):
 
 
 class DeliveryAcquisitionResult(_ApplicationModel):
-    """Launchable claims and unclaimed Integration-ready changes from one refresh."""
+    """Launchable task claims plus typed attention from one refresh."""
 
     launch_packages: tuple[DeliveryLaunchPackage, ...]
-    repair_launch_packages: tuple[DeliveryIntegrationRepairLaunchPackage, ...] = ()
-    integration_ready_change_ids: tuple[str, ...]
     integration_attention: tuple[DeliveryIntegrationAttentionStatus, ...] = ()
     failures: tuple[DeliveryAcquisitionFailure, ...] = ()
-    repair_failures: tuple[DeliveryIntegrationRepairAcquisitionFailure, ...] = ()
-    recoveries: tuple[DeliveryClaimRecoveryResult, ...] = ()
-    repair_recoveries: tuple[DeliveryIntegrationRepairRecoveryResult, ...] = ()
-
-
-class DeliveryExpiredClaimRecoveries(_ApplicationModel):
-    """Exact recovery results for claims whose execution lease elapsed."""
-
-    recoveries: tuple[DeliveryClaimRecoveryResult, ...] = ()
-    repair_recoveries: tuple[DeliveryIntegrationRepairRecoveryResult, ...] = ()
 
 
 class DeliveryPlanContext(_ApplicationModel):
@@ -317,10 +462,73 @@ class DeliveryBuildContext(_ApplicationModel):
     recovery_attention: DeliveryRecoveryAttention | None = None
 
 
-class DeliveryIntegrationRepairContext(_ApplicationModel):
-    """Current claim-bound source and conflict authority for Integration repair."""
+class DeliveryFinalizationContext(_ApplicationModel):
+    """Engine-resolved read context for exact Change finalization."""
 
-    launch: DeliveryIntegrationRepairLaunchPackage
+    change_id: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    worktree_path: Path
+    change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    reviewed_change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    publication_phase: WorkItemPublicationPhase
+    ready_for_finalization: bool
+    readiness_diagnostics: tuple[str, ...]
+    finalization_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    finalized_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+
+
+class DeliveryRetainedWorktreeCleanupBlockReason(StrEnum):
+    """Why one retained Change worktree cannot yet be cleaned up."""
+
+    ORPHAN = "orphan"
+    COMPLETION_STATE_INCONSISTENT = "completion-state-inconsistent"
+    NONTERMINAL = "nonterminal"
+    ACTIVE_WRITER = "active-writer"
+    ACTIVE_PUBLICATION_LEASE = "active-publication-lease"
+    WORKTREE_ATTENTION = "worktree-attention"
+
+
+class DeliveryRetainedChangeWorktree(_ApplicationModel):
+    """Bounded retained-worktree inventory row for Delivery consumers."""
+
+    change_id: str = Field(min_length=1)
+    worktree_path: Path
+    branch: str = Field(min_length=1)
+    branch_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    recovery_reviewed_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    coordination_registered: bool
+    git_registered: bool
+    worktree_present: bool
+    worktree_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    worktree_branch: str | None = None
+    worktree_locked: bool = False
+    worktree_prunable: bool = False
+    worktree_bare: bool = False
+    attention: tuple[ChangeWorktreeAttentionCode, ...] = ()
+    lifecycle: DeliveryChangeStage | None = None
+    orphan: bool
+    cleanup_eligible: bool
+    cleanup_blocked_reason: DeliveryRetainedWorktreeCleanupBlockReason | None = None
+
+
+class DeliveryChangeWorktreeCleanup(_ApplicationModel):
+    """Application receipt for one exact managed Change worktree cleanup."""
+
+    cleanup_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    worktree_path: Path
+    branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class DeliveryChangeWorktreeRecovery(_ApplicationModel):
+    """Application receipt for one exact managed Change worktree recovery."""
+
+    change_id: str = Field(min_length=1)
+    branch: str = Field(min_length=1)
+    worktree_path: Path
+    branch_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    recovery_reviewed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
 
 
 class DeliveryOperatorClaim(_ApplicationModel):
@@ -403,30 +611,25 @@ class DeliveryIntegrationRepairRecoveryResult(_ApplicationModel):
     preserved_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
 
 
-class DeliveryIntegrationResult(_ApplicationModel):
-    """One committed atomic publication or retained typed Integration attention."""
-
-    change_id: str = Field(min_length=1)
-    candidate: DeliveryIntegrationCandidate | None = None
-    completion: DeliveryIntegrationCompletion | None = None
-    attention: DeliveryIntegrationAttention | None = None
-    replayed: bool = False
-
-    @model_validator(mode="after")
-    def _validate_disposition(self) -> DeliveryIntegrationResult:
-        if (self.completion is None) == (self.attention is None):
-            message = "Integration result requires completion or attention"
-            raise ValueError(message)
-        if self.attention is not None and self.replayed:
-            message = "Integration attention cannot be a completed replay"
-            raise ValueError(message)
-        return self
-
-
 class PortfolioApplicationError(RuntimeError):
     """Portfolio preparation or scoped context validation failed closed."""
 
     code = "ERR_DELIVERY_PORTFOLIO"
+
+
+class RequiredPublicationChecksFailedError(PortfolioApplicationError):
+    """A ready transition retained attention for failing provider-required checks."""
+
+    code = "ERR_DELIVERY_REQUIRED_CHECKS_FAILED"
+
+    def __init__(self, *, exact_head: str, observation_id: str, disposition_id: str) -> None:
+        self.exact_head = exact_head
+        self.observation_id = observation_id
+        self.disposition_id = disposition_id
+        super().__init__(
+            f"required publication checks failed for exact head {exact_head}; "
+            f"attention {disposition_id} retained from observation {observation_id}"
+        )
 
 
 class PortfolioReadView(_ApplicationModel):
@@ -436,19 +639,126 @@ class PortfolioReadView(_ApplicationModel):
     operating: PortfolioOperatingView
 
 
+class DeliveryCheckpointReconciliationResult(_ApplicationModel):
+    """One deterministic checkpoint reconciliation attempt and remaining queue state."""
+
+    change_id: str = Field(min_length=1)
+    attempted_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    branch_publication: ChangeBranchPublicationReceipt | None = None
+    draft_pull_request: DraftPullRequestPublicationReceipt | None = None
+    generated_summary: GeneratedPullRequestSummaryReceipt | None = None
+    state: DeliveryCheckpointPublicationState
+    reconciled: bool
+
+
+class DeliveryAcceptanceReconciliationStatus(StrEnum):
+    """Bounded outcome of one provider acceptance reconciliation attempt."""
+
+    COMPLETED = "completed"
+    WAITING = "waiting"
+    HEAD_MOVED = "head-moved"
+    ATTENTION = "attention"
+    PROVIDER_UNAVAILABLE = "provider-unavailable"
+    SKIPPED = "skipped"
+
+
+class DeliveryAcceptanceReconciliationOutcome(_ApplicationModel):
+    """Per-Change result that keeps a polling batch isolated."""
+
+    change_id: str = Field(min_length=1)
+    status: DeliveryAcceptanceReconciliationStatus
+    code: str | None = Field(default=None, min_length=1)
+    detail: str | None = Field(default=None, min_length=1)
+    completion_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+
+class DeliveryChangePublicationSupersessionReceipt(_ApplicationModel):
+    """Bind one Git successor publication to its provider and runtime evidence."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(min_length=1)
+    change_id: str = Field(min_length=1)
+    predecessor_publication_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    successor_publication_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    git_supersession: ChangeBranchSupersessionReceipt
+    provider_supersession: DraftPullRequestSupersessionReceipt
+    publication_history: DeliveryChangePublicationHistory
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        operation_id: str,
+        predecessor_publication_id: str,
+        git_supersession: ChangeBranchSupersessionReceipt,
+        provider_supersession: DraftPullRequestSupersessionReceipt,
+        publication_history: DeliveryChangePublicationHistory,
+    ) -> DeliveryChangePublicationSupersessionReceipt:
+        """Create one content-addressed application supersession receipt."""
+        change_id = provider_supersession.change_id
+        payload = {
+            "schema_version": 1,
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "predecessor_publication_id": predecessor_publication_id,
+            "successor_publication_id": provider_supersession.successor_receipt_id,
+            "git_supersession": git_supersession,
+            "provider_supersession": provider_supersession,
+            "publication_history": publication_history,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, **payload)
+        digest = hashlib.sha256(
+            json.dumps(
+                candidate.model_dump(mode="json", exclude={"receipt_id"}),
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()
+        return cls(receipt_id=digest, **payload)
+
+    @model_validator(mode="after")
+    def _validate_binding(self) -> DeliveryChangePublicationSupersessionReceipt:
+        git = self.git_supersession
+        provider = self.provider_supersession
+        if (
+            git.operation_id != self.operation_id
+            or git.change_id != self.change_id
+            or provider.operation_id != self.operation_id
+            or provider.change_id != self.change_id
+            or provider.predecessor_receipt_id != self.predecessor_publication_id
+            or provider.successor_receipt_id != self.successor_publication_id
+            or git.predecessor_branch != provider.predecessor_branch
+            or git.predecessor_head != provider.predecessor_head
+            or git.successor_branch != provider.successor_branch
+            or git.superseding_head != provider.superseding_head
+        ):
+            message = "publication supersession receipts do not share one exact successor"
+            raise ValueError(message)
+        if self.publication_history.current != _publication_identity(provider.successor_publication):
+            message = "publication supersession history does not end at the provider successor"
+            raise ValueError(message)
+        payload = self.model_dump(mode="json", exclude={"receipt_id"})
+        digest = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        if self.receipt_id != digest:
+            message = "publication supersession receipt identity is invalid"
+            raise ValueError(message)
+        return self
+
+
 class PortfolioApplicationConfig(_ApplicationModel):
     """Configured capacity, source root, and complete stage-role policy."""
 
     package_root: Path
     execution_capacity: int = Field(gt=0)
-    role_policies: tuple[DeliveryRolePolicy, ...] = Field(min_length=4, max_length=4)
-    claim_ttl_seconds: int = Field(default=30 * 60, gt=0)
+    role_policies: tuple[DeliveryRolePolicy, ...] = Field(min_length=2, max_length=2)
 
     @model_validator(mode="after")
     def _validate_roles(self) -> PortfolioApplicationConfig:
         roles = tuple(policy.worker_role for policy in self.role_policies)
-        if set(roles) != set(DeliveryWorkerRole) or len(roles) != len(set(roles)):
-            message = "role policy must define each worker role once"
+        expected = {DeliveryWorkerRole.PLANNER, DeliveryWorkerRole.BUILDER}
+        if set(roles) != expected or len(roles) != len(set(roles)):
+            message = "role policy must define each live worker role once"
             raise ValueError(message)
         return self
 
@@ -462,8 +772,9 @@ class PortfolioApplicationDependencies:
     authority_registry: DeliveryAuthorityRegistry
     coordinator: PortfolioCoordinator
     workspace_manager: ChangeWorkspaceManager
-    integration_verifier: IntegrationVerifier
     completed_history_catalog: CompletedHistoryCatalog | None = None
+    change_branch_publisher: ChangeBranchPublisher | None = None
+    draft_pull_request_publisher: DraftPullRequestPublisher | None = None
 
 
 @dataclass(frozen=True)
@@ -492,12 +803,20 @@ class _PreparedSource:
 
 
 @dataclass(frozen=True)
-class _PreparedIntegration:
-    context: IntegrationContext
-    capture: CompletionCapture
-    snapshot: CompletionPackageSnapshot
-    candidate: DeliveryIntegrationCandidate
-    preparation: AtomicIntegrationPreparation
+class _SupersessionPublishContext:
+    change_id: str
+    expected_publication_id: str
+    operation_id: str
+    predecessor: DraftPullRequestPublicationReceipt
+    superseding_head: str
+    target_branch: str
+
+
+@dataclass(frozen=True)
+class _AcceptanceReconciliationAuthority:
+    exact_head: str
+    ready: PullRequestReadyReceipt
+    target_branch: str
 
 
 class PortfolioApplication:
@@ -520,10 +839,10 @@ class PortfolioApplication:
         self._package_root = config.package_root.resolve()
         self._coordinator = dependencies.coordinator
         self._workspace_manager = dependencies.workspace_manager
-        self._integration_verifier = dependencies.integration_verifier
         self._completed_history_catalog = dependencies.completed_history_catalog
+        self._change_branch_publisher = dependencies.change_branch_publisher
+        self._draft_pull_request_publisher = dependencies.draft_pull_request_publisher
         self._execution_capacity = config.execution_capacity
-        self._claim_ttl = timedelta(seconds=config.claim_ttl_seconds)
         self._policies = {policy.worker_role: policy for policy in config.role_policies}
         self._identity_factory = hooks.identity_factory if hooks else lambda: str(uuid.uuid4())
         self._clock = (
@@ -540,6 +859,1293 @@ class PortfolioApplication:
     ) -> DesignPackageResult:
         """Create or replay one exact authored Design package."""
         return self._package_store.create(change_id, intent_bytes, design_bytes)
+
+    def observe_change_publication_checks(
+        self,
+        change_id: str,
+    ) -> PublicationCheckObservationReceipt:
+        """Observe provider checks at the exact durable published Change head."""
+        if self._draft_pull_request_publisher is None:
+            message = "draft pull-request publication is not configured"
+            raise PortfolioApplicationError(message)
+        published_head = self._runtime(change_id).checkpoint_publication_state().published_head
+        if published_head is None:
+            message = "Change has no reconciled checkpoint publication"
+            raise PortfolioApplicationError(message)
+        return self._draft_pull_request_publisher.observe_checks(
+            ObserveChangePublicationChecks(change_id=change_id, published_head=published_head)
+        )
+
+    def sync_change_with_target(
+        self,
+        change_id: str,
+        expected_target: str,
+        operation_id: str,
+    ) -> ChangeTargetSyncReceipt:
+        """Fetch and merge one exact target head through the managed Change worktree."""
+        runtime = self._runtime(change_id)
+        request = SyncChangeWithTarget(
+            change_id=change_id,
+            expected_target=expected_target,
+            operation_id=operation_id,
+        )
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            self._require_target_sync_change_mutable(runtime)
+            if runtime.change_disposition() is not None:
+                self._fail("target synchronization requires Change attention resolution first")
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                self._fail("target synchronization cannot overlap an active Delivery claim")
+            try:
+                receipt = self._workspace_manager.sync_with_target(request)
+            except ChangeTargetSyncConflictError as exc:
+                history = runtime.publication_history()
+                runtime.capture_target_sync_conflict(
+                    exc.operation_id,
+                    exc.target_head,
+                    _timestamp(self._clock()),
+                    (
+                        "target synchronization merge conflict",
+                        *tuple(f"conflict-path:{path}" for path in exc.conflict_paths),
+                    ),
+                    publication_identity=history.current if history is not None else None,
+                )
+                raise
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("target synchronization could not be completed", exc)
+            runtime.record_target_sync(receipt, _timestamp(self._clock()))
+            return receipt
+
+    def sync_change_with_current_target(
+        self,
+        change_id: str,
+        operation_id: str,
+    ) -> ChangeTargetSyncReceipt:
+        """Bind the current remote-tracking target and perform one exact sync operation."""
+        try:
+            expected_target = self._workspace_manager.integration_context(change_id).target_head
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            self._fail("target synchronization target head is unavailable", exc)
+        return self.sync_change_with_target(change_id, expected_target, operation_id)
+
+    def adopt_external_head(
+        self,
+        change_id: str,
+        expected_head: str,
+        adopted_head: str,
+        operation_id: str,
+    ) -> ChangeExternalHeadAdoptionReceipt:
+        """Adopt one exact remote Change descendant through managed workspace custody."""
+        runtime = self._runtime(change_id)
+        request = AdoptExternalHead(
+            change_id=change_id,
+            expected_head=expected_head,
+            adopted_head=adopted_head,
+            operation_id=operation_id,
+        )
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            self._require_external_head_adoption_change_mutable(runtime)
+            if runtime.change_disposition() is not None:
+                self._fail("external Change head adoption requires Change attention resolution first")
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                self._fail("external Change head adoption cannot overlap an active Delivery claim")
+            try:
+                receipt = self._workspace_manager.adopt_external_head(request)
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("external Change head could not be adopted", exc)
+            runtime.record_external_head_adoption(receipt, _timestamp(self._clock()))
+            return receipt
+
+    def promote_external_head(
+        self,
+        change_id: str,
+        expected_head: str,
+        operation_id: str,
+    ) -> ChangeExternalHeadPromotionReceipt:
+        """Promote one exact adopted head before granting Builder authority."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            self._require_external_head_promotion_change_mutable(runtime)
+            if runtime.change_disposition() is not None:
+                self._fail("external Change-head promotion requires Change attention resolution first")
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                self._fail("external Change-head promotion cannot overlap an active Delivery claim")
+            request = PromoteExternalHead(
+                change_id=change_id,
+                expected_head=expected_head,
+                operation_id=operation_id,
+            )
+            coordination = self._workspace_manager.show(change_id)
+            promotion = coordination.external_head_promotion_receipt
+            runtime_promotion = runtime.external_head_promotion_receipt()
+            if promotion != runtime_promotion and (
+                promotion is None or promotion.operation_id != operation_id or promotion.promoted_head != expected_head
+            ):
+                self._fail("external Change-head promotion requires reconciled promotion evidence")
+            adoption = coordination.external_head_adoption_receipt
+            if adoption is None or runtime.external_head_adoption_receipt() != adoption:
+                self._fail("external Change-head promotion requires reconciled adoption evidence")
+            try:
+                promoted = self._workspace_manager.promote_external_head(request)
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("external Change head could not be promoted", exc)
+            if promoted is None:
+                self._fail("external Change-head promotion has no adopted head to promote")
+            runtime.record_external_head_promotion(promoted, _timestamp(self._clock()))
+            return promoted
+
+    def abort_target_sync_conflict(
+        self,
+        change_id: str,
+        expected_disposition_id: str,
+        target_head: str,
+        operation_id: str,
+    ) -> ChangeTargetSyncAbortReceipt:
+        """Abort one exact preserved target merge and clear its attention."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            disposition = runtime.change_disposition()
+            attention_active = disposition is not None
+            if attention_active:
+                runtime.validate_target_sync_conflict(expected_disposition_id, operation_id)
+                self._require_target_sync_change_mutable(runtime)
+            else:
+                resolution = runtime.change_disposition_resolution()
+                if resolution is None or resolution.disposition_id != expected_disposition_id:
+                    runtime.validate_target_sync_conflict(expected_disposition_id, operation_id)
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                self._fail("target synchronization conflict exit cannot overlap an active Delivery claim")
+            request = TargetSyncConflictRequest(
+                change_id=change_id,
+                target_head=target_head,
+                operation_id=operation_id,
+            )
+            try:
+                receipt = self._workspace_manager.abort_target_sync_conflict(request)
+            except (OSError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("target synchronization conflict could not be aborted", exc)
+            if attention_active:
+                runtime.record_target_sync_abort(
+                    expected_disposition_id,
+                    operation_id,
+                    _timestamp(self._clock()),
+                )
+            return receipt
+
+    def resolve_target_sync_conflict(
+        self,
+        change_id: str,
+        expected_disposition_id: str,
+        target_head: str,
+        operation_id: str,
+    ) -> ChangeTargetSyncReceipt:
+        """Record one exact semantic target merge and clear its attention."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            existing = runtime.target_sync_receipt()
+            if existing is not None:
+                if existing.operation_id != operation_id or existing.target_head != target_head:
+                    self._fail("target synchronization resolution identity differs from runtime evidence")
+                if runtime.change_disposition() is not None:
+                    runtime.validate_target_sync_conflict(expected_disposition_id, operation_id)
+                else:
+                    resolution = runtime.change_disposition_resolution()
+                    if resolution is None or resolution.disposition_id != expected_disposition_id:
+                        self._fail("target synchronization resolution attention identity differs from runtime evidence")
+                try:
+                    receipt = self._workspace_manager.resolve_target_sync_conflict(
+                        TargetSyncConflictRequest(
+                            change_id=change_id,
+                            target_head=target_head,
+                            operation_id=operation_id,
+                        )
+                    )
+                except (OSError, subprocess.SubprocessError, ValueError) as exc:
+                    self._fail("target synchronization conflict could not be resolved", exc)
+                if receipt != existing:
+                    self._fail("target synchronization resolution differs from runtime evidence")
+                return receipt
+            runtime.validate_target_sync_conflict(expected_disposition_id, operation_id)
+            self._require_target_sync_change_mutable(runtime)
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                self._fail("target synchronization conflict exit cannot overlap an active Delivery claim")
+            try:
+                receipt = self._workspace_manager.resolve_target_sync_conflict(
+                    TargetSyncConflictRequest(
+                        change_id=change_id,
+                        target_head=target_head,
+                        operation_id=operation_id,
+                    )
+                )
+            except (OSError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("target synchronization conflict could not be resolved", exc)
+            return runtime.record_resolved_target_sync(
+                receipt,
+                expected_disposition_id,
+                operation_id,
+                _timestamp(self._clock()),
+            )
+
+    def supersede_publication(
+        self,
+        change_id: str,
+        expected_publication_id: str,
+        operation_id: str,
+    ) -> DeliveryChangePublicationSupersessionReceipt:
+        """Publish one successor branch and PR for an exact publication attention."""
+        if self._change_branch_publisher is None or self._draft_pull_request_publisher is None:
+            self._fail("publication supersession is not configured")
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            runtime_history, predecessor, replay_head = self._read_supersession_context(
+                runtime,
+                change_id,
+                expected_publication_id,
+                operation_id,
+            )
+
+            try:
+                superseding_head = self._workspace_manager.reviewed_source_head(change_id)
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("publication supersession requires a clean reviewed Change head", exc)
+            if replay_head is not None and superseding_head != replay_head:
+                self._fail("publication supersession replay requires the stored successor head")
+
+            git_receipt, provider_receipt = self._publish_supersession(
+                runtime,
+                _SupersessionPublishContext(
+                    change_id=change_id,
+                    expected_publication_id=expected_publication_id,
+                    operation_id=operation_id,
+                    predecessor=predecessor,
+                    superseding_head=superseding_head,
+                    target_branch=self._draft_pull_request_publisher.target_branch,
+                ),
+            )
+            finalization = runtime.finalization()
+            if finalization is not None and finalization.exact_head != superseding_head:
+                runtime.reconcile_finalization_head(superseding_head, _timestamp(self._clock()))
+            updated_history = self._bind_supersession_successor(
+                runtime,
+                runtime_history,
+                predecessor,
+                provider_receipt,
+            )
+            return DeliveryChangePublicationSupersessionReceipt.create(
+                operation_id=operation_id,
+                predecessor_publication_id=expected_publication_id,
+                git_supersession=git_receipt,
+                provider_supersession=provider_receipt,
+                publication_history=updated_history,
+            )
+
+    def supersede_current_publication(
+        self,
+        change_id: str,
+        operation_id: str,
+    ) -> DeliveryChangePublicationSupersessionReceipt:
+        """Resolve the current provider publication before starting one successor operation."""
+        publisher = self._draft_pull_request_publisher
+        if publisher is None:
+            self._fail("publication supersession is not configured")
+        try:
+            superseding_head = self._workspace_manager.reviewed_source_head(change_id)
+            self._workspace_manager.repository_automation_paths(change_id, superseding_head)
+        except PublicationBaselineUnavailableError:
+            raise
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            self._fail("publication supersession requires a clean reviewed Change head", exc)
+        provider_history = publisher.read_publication_history(ReadChangePublicationHistory(change_id=change_id))
+        if provider_history is None:
+            self._fail("publication supersession requires current provider publication history")
+        return self.supersede_publication(change_id, provider_history.current_receipt_id, operation_id)
+
+    def _read_supersession_context(
+        self,
+        runtime: DeliveryRuntime,
+        change_id: str,
+        expected_publication_id: str,
+        operation_id: str,
+    ) -> tuple[DeliveryChangePublicationHistory, DraftPullRequestPublicationReceipt, str | None]:
+        disposition = runtime.change_disposition()
+        if disposition is None or disposition.kind != DeliveryChangeDispositionKind.PUBLICATION_ATTENTION:
+            self._fail("publication supersession requires current publication attention")
+        runtime_history = runtime.publication_history()
+        if runtime_history is None:
+            self._fail("publication supersession requires current runtime publication history")
+        if runtime.change_disposition_publication() != runtime_history.current:
+            self._fail("publication attention does not retain the current runtime publication")
+        publisher = self._draft_pull_request_publisher
+        if publisher is None:
+            self._fail("publication supersession is not configured")
+        provider_history = publisher.read_publication_history(ReadChangePublicationHistory(change_id=change_id))
+        if provider_history is None:
+            self._fail("publication supersession requires current provider publication history")
+        predecessor = next(
+            (
+                publication
+                for publication in provider_history.publications
+                if publication.receipt_id == expected_publication_id
+            ),
+            None,
+        )
+        if predecessor is None:
+            self._fail("expected publication identity is not in provider publication history")
+        replay_head = self._validate_supersession_history(
+            runtime_history,
+            provider_history,
+            predecessor,
+            expected_publication_id,
+            operation_id,
+        )
+        if predecessor.base_branch != publisher.target_branch:
+            self._fail("publication predecessor targets a different integration branch")
+        return runtime_history, predecessor, replay_head
+
+    def _validate_supersession_history(
+        self,
+        runtime_history: DeliveryChangePublicationHistory,
+        provider_history: DraftPullRequestPublicationHistory,
+        predecessor: DraftPullRequestPublicationReceipt,
+        expected_publication_id: str,
+        operation_id: str,
+    ) -> str | None:
+        predecessor_identity = _publication_identity(predecessor)
+        provider_current = provider_history.publications[-1]
+        provider_current_identity = _publication_identity(provider_current)
+        if provider_current.receipt_id == expected_publication_id:
+            if runtime_history.current != predecessor_identity:
+                self._fail("runtime and provider publication predecessors differ")
+            return None
+        if (
+            provider_current.operation_id != operation_id
+            or provider_history.predecessor_receipt_ids[-1] != expected_publication_id
+            or runtime_history.current not in (predecessor_identity, provider_current_identity)
+        ):
+            self._fail("provider publication history has a different current successor")
+        return provider_current.head_sha
+
+    def _publish_supersession(
+        self,
+        runtime: DeliveryRuntime,
+        context: _SupersessionPublishContext,
+    ) -> tuple[ChangeBranchSupersessionReceipt, DraftPullRequestSupersessionReceipt]:
+        branch_publisher = self._change_branch_publisher
+        provider_publisher = self._draft_pull_request_publisher
+        if branch_publisher is None or provider_publisher is None:
+            self._fail("publication supersession is not configured")
+        automation_paths = self._workspace_manager.repository_automation_paths(
+            context.change_id,
+            context.superseding_head,
+        )
+        git_receipt = branch_publisher.supersede(
+            SupersedeChangeBranch(
+                change_id=context.change_id,
+                expected_published_branch=context.predecessor.head_branch,
+                expected_published_head=context.predecessor.head_sha,
+                superseding_head=context.superseding_head,
+                operation_id=context.operation_id,
+            )
+        )
+        self._validate_git_supersession(
+            git_receipt,
+            context,
+        )
+        provider_receipt = provider_publisher.supersede(
+            SupersedeDraftPullRequest(
+                change_id=context.change_id,
+                operation_id=context.operation_id,
+                expected_predecessor_receipt_id=context.expected_publication_id,
+                predecessor_branch=context.predecessor.head_branch,
+                predecessor_head=context.predecessor.head_sha,
+                successor_branch=git_receipt.successor_branch,
+                superseding_head=context.superseding_head,
+                title=_checkpoint_pull_request_title(runtime),
+                generated_summary=_supersession_summary(
+                    context.superseding_head,
+                    context.expected_publication_id,
+                    automation_paths,
+                ),
+            )
+        )
+        self._validate_provider_supersession(
+            provider_receipt,
+            git_receipt,
+            context,
+        )
+        return git_receipt, provider_receipt
+
+    def _bind_supersession_successor(
+        self,
+        runtime: DeliveryRuntime,
+        runtime_history: DeliveryChangePublicationHistory,
+        predecessor: DraftPullRequestPublicationReceipt,
+        provider_receipt: DraftPullRequestSupersessionReceipt,
+    ) -> DeliveryChangePublicationHistory:
+        predecessor_identity = _publication_identity(predecessor)
+        successor_identity = _publication_identity(provider_receipt.successor_publication)
+        if runtime_history.current == successor_identity:
+            return runtime_history
+        if runtime_history.current != predecessor_identity:
+            self._fail("runtime publication history cannot bind the provider successor")
+        return runtime.record_publication_successor(predecessor_identity, successor_identity)
+
+    @staticmethod
+    def _validate_git_supersession(
+        receipt: ChangeBranchSupersessionReceipt,
+        context: _SupersessionPublishContext,
+    ) -> None:
+        if (
+            receipt.change_id != context.change_id
+            or receipt.predecessor_branch != context.predecessor.head_branch
+            or receipt.predecessor_head != context.predecessor.head_sha
+            or receipt.superseding_head != context.superseding_head
+        ):
+            message = "Git supersession receipt does not match provider publication authority"
+            raise PortfolioApplicationError(message)
+
+    @staticmethod
+    def _validate_provider_supersession(
+        receipt: DraftPullRequestSupersessionReceipt,
+        git_receipt: ChangeBranchSupersessionReceipt,
+        context: _SupersessionPublishContext,
+    ) -> None:
+        if (
+            receipt.change_id != context.change_id
+            or receipt.predecessor_receipt_id != context.expected_publication_id
+            or receipt.predecessor_branch != git_receipt.predecessor_branch
+            or receipt.predecessor_head != git_receipt.predecessor_head
+            or receipt.successor_branch != git_receipt.successor_branch
+            or receipt.superseding_head != git_receipt.superseding_head
+            or receipt.base_branch != context.target_branch
+        ):
+            message = "provider supersession receipt does not match Git publication authority"
+            raise PortfolioApplicationError(message)
+
+    def show_change_checkpoint_publication(self, change_id: str) -> DeliveryCheckpointPublicationState:
+        """Return the durable checkpoint queue for one admitted Change."""
+        return self._runtime(change_id).checkpoint_publication_state()
+
+    def list_retained_change_worktrees(self) -> tuple[DeliveryRetainedChangeWorktree, ...]:
+        """List retained Change worktrees and exact cleanup eligibility facts."""
+        return tuple(self._retained_change_worktree_view(item) for item in self._workspace_manager.list_retained())
+
+    def recover_change_worktree(
+        self,
+        change_id: str,
+        recovery_reviewed_head: str,
+        *,
+        confirmed_recovery: Literal[True],
+    ) -> DeliveryChangeWorktreeRecovery:
+        """Recreate one missing Change worktree from explicit reviewed authority."""
+        if confirmed_recovery is not True:
+            self._fail("Change worktree recovery requires explicit confirmation")
+        self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            try:
+                coordination = self._workspace_manager.recover(change_id, recovery_reviewed_head)
+                branch_head = self._workspace_manager.observed_change_head(change_id)
+            except ChangeWorktreeAttentionError:
+                raise
+            except CoordinationConflictError:
+                raise
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("Change worktree recovery could not complete", exc)
+        return DeliveryChangeWorktreeRecovery(
+            change_id=coordination.change_id,
+            branch=coordination.branch,
+            worktree_path=coordination.worktree_path,
+            branch_head=branch_head,
+            recovery_reviewed_head=recovery_reviewed_head,
+        )
+
+    def cleanup_change_worktree(
+        self,
+        change_id: str,
+        expected_completion_id: str | None = None,
+    ) -> DeliveryChangeWorktreeCleanup:
+        """Clean one terminal Change worktree after exact lifecycle validation."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            lifecycle = runtime.change_stage()
+            completion = runtime.completion_receipt()
+            completed = lifecycle == DeliveryChangeStage.COMPLETED and completion is not None
+            if lifecycle != DeliveryChangeStage.ABANDONED and not completed:
+                self._fail("Change worktree cleanup requires an abandoned or completed Change")
+            if expected_completion_id is not None and (
+                not completed or completion.completion_id != expected_completion_id
+            ):
+                self._fail("completed Change worktree cleanup requires the exact completion receipt")
+            try:
+                receipt = self._workspace_manager.cleanup(change_id)
+            except ChangeWorktreeAttentionError:
+                raise
+            except CoordinationConflictError:
+                raise
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                self._fail("Change worktree cleanup could not complete", exc)
+        return DeliveryChangeWorktreeCleanup(
+            cleanup_id=receipt.cleanup_id,
+            change_id=receipt.change_id,
+            branch=receipt.branch,
+            worktree_path=receipt.worktree_path,
+            branch_head=receipt.branch_head,
+        )
+
+    def cleanup_abandoned_change_worktree(self, change_id: str) -> DeliveryChangeWorktreeCleanup:
+        """Clean one abandoned Change worktree without reopening its terminal state."""
+        runtime = self._runtime(change_id)
+        if runtime.change_stage() != DeliveryChangeStage.ABANDONED:
+            self._fail("abandoned Change worktree cleanup requires an abandoned Change")
+        return self.cleanup_change_worktree(change_id)
+
+    def cleanup_completed_change_worktree(
+        self,
+        change_id: str,
+        completion_id: str,
+    ) -> DeliveryChangeWorktreeCleanup:
+        """Clean one completed Change worktree after matching its durable receipt."""
+        return self.cleanup_change_worktree(change_id, expected_completion_id=completion_id)
+
+    def show_finalization_context(self, change_id: str) -> DeliveryFinalizationContext:
+        """Return engine-resolved finalization context without changing Delivery state."""
+        runtime = self._runtime(change_id)
+        coordination = self._workspace_manager.show(change_id)
+        try:
+            change_head = self._workspace_manager.observed_change_head(change_id)
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            self._fail("finalization context could not resolve the managed Change head", exc)
+        ready, diagnostics = runtime.finalization_readiness()
+        finalization = runtime.finalization()
+        if ready:
+            try:
+                self._workspace_manager.validate_finalization_head(
+                    change_id,
+                    change_head,
+                    tuple(result.completed_commit for binding in runtime.bindings() for result in binding.results),
+                )
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                ready = False
+                diagnostics = (str(exc),)
+        return DeliveryFinalizationContext(
+            change_id=change_id,
+            branch=coordination.branch,
+            worktree_path=coordination.worktree_path,
+            change_head=change_head,
+            reviewed_change_head=coordination.last_reviewed_commit,
+            publication_phase=self._work_item_projector(runtime).publication_phase(),
+            ready_for_finalization=ready,
+            readiness_diagnostics=diagnostics,
+            finalization_id=finalization.finalization_id if finalization is not None else None,
+            finalized_head=finalization.exact_head if finalization is not None else None,
+        )
+
+    def finalize_change(
+        self,
+        change_id: str,
+        request: FinalizeDeliveryChange,
+    ) -> DeliveryFinalizationReceipt:
+        """Finalize one exact clean reviewed Change head and queue its checkpoint."""
+        runtime = self._runtime(change_id)
+        existing = runtime.finalization()
+        if existing is not None:
+            if (
+                existing.operation_id == request.operation_id
+                and existing.exact_head == request.exact_head
+                and existing.observations == request.observations
+                and existing.review == request.review
+            ):
+                with locked_roots((self._checkpoint_lock_root(change_id),)):
+                    self._promote_finalized_external_head(change_id, existing.exact_head)
+                return existing
+            self._fail(
+                "Delivery Change is already finalized with different authority",
+                ValueError("finalization request is not an exact replay"),
+            )
+        if runtime.change_disposition() is not None:
+            self._fail("finalization requires current Change attention resolution")
+        context = self.show_finalization_context(change_id)
+        if not context.ready_for_finalization:
+            self._fail(
+                "finalization requires a ready exact Change context",
+                ValueError("; ".join(context.readiness_diagnostics)),
+            )
+        if request.exact_head != context.change_head:
+            self._fail(
+                "finalization request does not match the current Change head",
+                ValueError("Change head changed"),
+            )
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            results = tuple(result for binding in runtime.bindings() for result in binding.results)
+            self._workspace_manager.validate_finalization_head(
+                change_id,
+                request.exact_head,
+                tuple(result.completed_commit for result in results),
+            )
+            finalization = runtime.finalize_change(request, _timestamp(self._clock()))
+            self._promote_finalized_external_head(change_id, finalization.exact_head)
+            return finalization
+
+    def mark_change_ready(
+        self,
+        change_id: str,
+        request: MarkChangePullRequestReady,
+    ) -> PullRequestReadyReceipt:
+        """Mark the exact finalized and fully published Change pull request ready."""
+        if self._draft_pull_request_publisher is None:
+            message = "draft pull-request publication is not configured"
+            raise PortfolioApplicationError(message)
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            if runtime.change_disposition() is not None:
+                message = "pull-request readiness requires current Change attention resolution"
+                raise PortfolioApplicationError(message)
+            finalization = runtime.finalization()
+            publication = runtime.checkpoint_publication_state()
+            if (
+                finalization is None
+                or request.change_id != change_id
+                or request.finalization_id != finalization.finalization_id
+                or request.exact_head != finalization.exact_head
+            ):
+                message = "pull-request ready request does not match current finalization authority"
+                raise PortfolioApplicationError(message)
+            if publication.published_head != finalization.exact_head or publication.pending_checkpoint is not None:
+                message = "pull-request readiness requires the reconciled final checkpoint"
+                raise PortfolioApplicationError(message)
+            existing_ready = runtime.ready_receipt()
+            if (
+                existing_ready is not None
+                and existing_ready.finalization_id == finalization.finalization_id
+                and existing_ready.head_sha == finalization.exact_head
+            ):
+                receipt = self._draft_pull_request_publisher.mark_ready(request)
+                return runtime.mark_awaiting_merge(receipt)
+            observation, failures = self._observe_required_checks_for_ready(
+                change_id,
+                finalization.exact_head,
+            )
+            receipt = self._draft_pull_request_publisher.mark_ready(request)
+            ready = runtime.mark_awaiting_merge(receipt)
+            if failures:
+                self._record_required_check_attention(runtime, observation, failures, ready)
+            return ready
+
+    def _observe_required_checks_for_ready(
+        self,
+        change_id: str,
+        exact_head: str,
+    ) -> tuple[PublicationCheckObservationReceipt, tuple[PublicationCheck, ...]]:
+        """Observe provider-required checks without gating the pull-request ready state."""
+        publisher = self._draft_pull_request_publisher
+        if publisher is None:
+            message = "draft pull-request publication is not configured"
+            raise PortfolioApplicationError(message)
+        observation = publisher.observe_checks(
+            ObserveChangePublicationChecks(change_id=change_id, published_head=exact_head)
+        )
+        failures = _failed_required_publication_checks(observation.snapshot)
+        return observation, failures
+
+    @staticmethod
+    def _record_required_check_attention(
+        runtime: DeliveryRuntime,
+        observation: PublicationCheckObservationReceipt,
+        failures: tuple[PublicationCheck, ...],
+        ready: PullRequestReadyReceipt,
+    ) -> None:
+        """Retain failing provider-required checks after the PR is ready."""
+        runtime.capture_publication_attention(
+            observation.observed_at,
+            _required_check_diagnostics(observation.snapshot, observation.observation_id, failures),
+            publication_identity=DeliveryChangePublicationIdentity(
+                change_id=ready.change_id,
+                repository=ready.repository,
+                number=ready.number,
+                node_id=ready.node_id,
+                head_sha=ready.head_sha,
+            ),
+        )
+
+    def mark_current_change_ready(self, change_id: str) -> PullRequestReadyReceipt:
+        """Mark the current exact finalization ready without caller-supplied authority."""
+        finalization = self._runtime(change_id).finalization()
+        if finalization is None:
+            message = "pull-request readiness requires current finalization authority"
+            raise PortfolioApplicationError(message)
+        return self.mark_change_ready(
+            change_id,
+            MarkChangePullRequestReady(
+                change_id=change_id,
+                operation_id=f"ready-{finalization.finalization_id}",
+                finalization_id=finalization.finalization_id,
+                exact_head=finalization.exact_head,
+            ),
+        )
+
+    def resolve_change_disposition(
+        self,
+        change_id: str,
+        expected_disposition_id: str,
+    ) -> DeliveryChangeDispositionResolution:
+        """Resolve one exact Change attention record without recreating provider authority."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            return runtime.resolve_change_disposition(expected_disposition_id, _timestamp(self._clock()))
+
+    def recover_publication_baseline(
+        self,
+        change_id: str,
+        expected_change_head: str,
+        publication_base_head: str,
+        operation_id: str,
+        *,
+        confirmed_recovery: bool = False,
+    ) -> PublicationBaselineRecoveryReceipt:
+        """Recover one unknown publication baseline after explicit operator confirmation."""
+        if not confirmed_recovery:
+            message = "publication baseline recovery requires explicit confirmation"
+            raise PortfolioApplicationError(message)
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            if runtime.active_claims() or runtime.integration_repair_claim() is not None:
+                message = "publication baseline recovery cannot overlap an active claim"
+                raise PortfolioApplicationError(message)
+            return self._workspace_manager.recover_publication_baseline(
+                change_id,
+                expected_change_head,
+                publication_base_head,
+                operation_id,
+            )
+
+    def defer_change(self, change_id: str, reason: str) -> DeliveryChangeDeferral:
+        """Retain one nonterminal Change and pause its claimable frontier."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            return runtime.defer_change(reason, _timestamp(self._clock()))
+
+    def resume_change(self, change_id: str) -> DeliveryChangeDeferral:
+        """Resume one exact deferred Change from its retained prior state."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            return runtime.resume_change()
+
+    def reconcile_awaiting_acceptance(
+        self,
+        change_ids: tuple[str, ...] | None = None,
+        *,
+        limit: int = _MAX_ACCEPTANCE_RECONCILIATION_CHANGES,
+    ) -> tuple[DeliveryAcceptanceReconciliationOutcome, ...]:
+        """Reconcile a bounded set of observed awaiting-merge Changes."""
+        if limit < 1:
+            message = "acceptance reconciliation limit must be positive"
+            raise ValueError(message)
+        effective_limit = min(limit, _MAX_ACCEPTANCE_RECONCILIATION_CHANGES)
+        requested = None if change_ids is None else frozenset(change_ids)
+        eligible = tuple(
+            change_id
+            for change_id, runtime in sorted(self._runtimes.items())
+            if (requested is None or change_id in requested) and self._is_acceptance_reconciliation_eligible(runtime)
+        )
+        selected = eligible[:effective_limit]
+        outcomes = [self._reconcile_awaiting_acceptance_change(change_id) for change_id in selected]
+        outcomes.extend(
+            DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.SKIPPED,
+                code="ERR_DELIVERY_RECONCILIATION_LIMIT",
+                detail="Acceptance reconciliation batch limit reached.",
+            )
+            for change_id in eligible[effective_limit:]
+        )
+        return tuple(outcomes)
+
+    @staticmethod
+    def _is_acceptance_reconciliation_eligible(runtime: DeliveryRuntime) -> bool:
+        """Select only live awaiting-merge Changes without competing custody."""
+        return runtime.change_stage() == DeliveryChangeStage.AWAITING_MERGE and not runtime.active_claims()
+
+    def _reconcile_awaiting_acceptance_change(
+        self,
+        change_id: str,
+    ) -> DeliveryAcceptanceReconciliationOutcome:
+        runtime = self._runtime(change_id)
+        try:
+            with locked_roots((self._checkpoint_lock_root(change_id),), blocking=False):
+                outcome = self._reconcile_awaiting_acceptance_locked(change_id, runtime)
+        except BlockingIOError:
+            return DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.SKIPPED,
+                code="ERR_DELIVERY_RECONCILIATION_BUSY",
+                detail="Change reconciliation is already in progress.",
+            )
+        except PublicationProviderError as exc:
+            return self._provider_unavailable_outcome(change_id, exc)
+        except (DeliveryRuntimeConflictError, OSError, ValueError) as exc:
+            return DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.SKIPPED,
+                code="ERR_DELIVERY_RECONCILIATION_STATE_CHANGED",
+                detail=str(exc) or "Change state changed during reconciliation.",
+            )
+        if outcome is not None:
+            return outcome
+        return self._reconcile_merged_acceptance(change_id, runtime)
+
+    def _reconcile_awaiting_acceptance_locked(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+    ) -> DeliveryAcceptanceReconciliationOutcome | None:
+        """Read one provider snapshot while holding only the Change checkpoint lock."""
+        if not self._is_acceptance_reconciliation_eligible(runtime):
+            return self._reconciliation_skipped_outcome(change_id, "Change is no longer awaiting merge.")
+        publisher = self._draft_pull_request_publisher
+        if publisher is None:
+            return DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.PROVIDER_UNAVAILABLE,
+                code="ERR_DELIVERY_PROVIDER_NOT_CONFIGURED",
+                detail="Draft pull-request publication is not configured.",
+            )
+        finalization = runtime.finalization()
+        ready = runtime.ready_receipt()
+        if finalization is None or ready is None:
+            return self._reconciliation_skipped_outcome(change_id, "Awaiting-merge authority is incomplete.")
+        observation = publisher.observe_pull_request(ObserveChangePublicationPullRequest(change_id=change_id))
+        if observation is None:
+            return self._reconciliation_skipped_outcome(
+                change_id,
+                "No bound pull-request publication was found.",
+                code="ERR_DELIVERY_PUBLICATION_MISSING",
+            )
+        return self._classify_acceptance_observation(
+            change_id,
+            runtime,
+            observation,
+            _AcceptanceReconciliationAuthority(
+                exact_head=finalization.exact_head,
+                ready=ready,
+                target_branch=publisher.target_branch,
+            ),
+        )
+
+    @staticmethod
+    def _reconciliation_skipped_outcome(
+        change_id: str,
+        detail: str,
+        *,
+        code: str = "ERR_DELIVERY_RECONCILIATION_STATE_CHANGED",
+    ) -> DeliveryAcceptanceReconciliationOutcome:
+        return DeliveryAcceptanceReconciliationOutcome(
+            change_id=change_id,
+            status=DeliveryAcceptanceReconciliationStatus.SKIPPED,
+            code=code,
+            detail=detail,
+        )
+
+    def _classify_acceptance_observation(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        observation: PublicationPullRequestObservationReceipt,
+        authority: _AcceptanceReconciliationAuthority,
+    ) -> DeliveryAcceptanceReconciliationOutcome | None:
+        snapshot = observation.snapshot
+        if snapshot.state == "open" and not snapshot.merged:
+            status = DeliveryAcceptanceReconciliationStatus.HEAD_MOVED
+            detail = "The open pull request head differs from the finalized Change head."
+            code: str | None = "ERR_DELIVERY_ACCEPTANCE_HEAD_MOVED"
+            if snapshot.head_sha == authority.exact_head:
+                status = DeliveryAcceptanceReconciliationStatus.WAITING
+                detail = "The pull request is open and not merged."
+                code = None
+            return DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=status,
+                code=code,
+                detail=detail,
+            )
+        if snapshot.state == "closed" and not snapshot.merged:
+            runtime.capture_acceptance_attention(
+                observation,
+                ("provider pull request is closed without a merge",),
+            )
+            return DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.ATTENTION,
+                code="ERR_DELIVERY_ACCEPTANCE_ATTENTION",
+                detail="The provider pull request is closed without a merge.",
+            )
+        if not self._acceptance_reconciliation_authority_matches(
+            snapshot,
+            authority.exact_head,
+            authority.ready,
+            authority.target_branch,
+        ):
+            runtime.capture_acceptance_attention(
+                observation,
+                ("provider acceptance evidence does not match awaiting-merge authority",),
+            )
+            return DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.ATTENTION,
+                code="ERR_DELIVERY_ACCEPTANCE_ATTENTION",
+                detail="Provider acceptance evidence does not match the finalized Change.",
+            )
+        return None
+
+    @staticmethod
+    def _acceptance_reconciliation_authority_matches(
+        snapshot: PublicationPullRequest,
+        exact_head: str,
+        ready: PullRequestReadyReceipt,
+        target_branch: str,
+    ) -> bool:
+        return (
+            snapshot.repository == ready.repository
+            and snapshot.number == ready.number
+            and snapshot.node_id == ready.node_id
+            and snapshot.base_branch == target_branch
+            and snapshot.head_sha == ready.head_sha == exact_head
+        )
+
+    def _reconcile_merged_acceptance(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+    ) -> DeliveryAcceptanceReconciliationOutcome:
+        """Use the existing exact completion path after a matching merged read."""
+        try:
+            receipt = self.observe_acceptance(change_id)
+        except DeliveryAcceptanceWaitingError as exc:
+            return DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.WAITING,
+                detail=str(exc),
+            )
+        except PublicationProviderError as exc:
+            return self._provider_unavailable_outcome(change_id, exc)
+        except PortfolioApplicationError as exc:
+            if runtime.change_disposition() is not None:
+                return DeliveryAcceptanceReconciliationOutcome(
+                    change_id=change_id,
+                    status=DeliveryAcceptanceReconciliationStatus.ATTENTION,
+                    code=exc.code,
+                    detail=str(exc),
+                )
+            return DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.SKIPPED,
+                code=exc.code,
+                detail=str(exc),
+            )
+        except (DeliveryRuntimeConflictError, OSError, ValueError) as exc:
+            return DeliveryAcceptanceReconciliationOutcome(
+                change_id=change_id,
+                status=DeliveryAcceptanceReconciliationStatus.SKIPPED,
+                code="ERR_DELIVERY_RECONCILIATION_STATE_CHANGED",
+                detail=str(exc) or "Change state changed during reconciliation.",
+            )
+        return DeliveryAcceptanceReconciliationOutcome(
+            change_id=change_id,
+            status=DeliveryAcceptanceReconciliationStatus.COMPLETED,
+            completion_id=receipt.completion_id,
+        )
+
+    @staticmethod
+    def _provider_unavailable_outcome(
+        change_id: str,
+        error: PublicationProviderError,
+    ) -> DeliveryAcceptanceReconciliationOutcome:
+        return DeliveryAcceptanceReconciliationOutcome(
+            change_id=change_id,
+            status=DeliveryAcceptanceReconciliationStatus.PROVIDER_UNAVAILABLE,
+            code=error.code.value,
+            detail=str(error) or error.code.value,
+        )
+
+    def abandon_change(self, change_id: str, reason: str) -> DeliveryChangeAbandonment:
+        """Record one terminal user abandonment without mutating the user checkout."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            return runtime.abandon_change(reason, _timestamp(self._clock()))
+
+    def observe_acceptance(self, change_id: str) -> CompletionReceipt:
+        """Complete one Change from a fresh exact merged-PR observation."""
+        if self._draft_pull_request_publisher is None:
+            message = "draft pull-request publication is not configured"
+            raise PortfolioApplicationError(message)
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            existing = runtime.completion_receipt()
+            if existing is not None:
+                return existing
+            if runtime.change_disposition() is not None:
+                message = "Delivery Change requires attention resolution before acceptance observation"
+                raise PortfolioApplicationError(message)
+            finalization = runtime.finalization()
+            ready = runtime.ready_receipt()
+            publication = runtime.checkpoint_publication_state()
+            if finalization is None or ready is None:
+                message = "acceptance observation requires awaiting-merge authority"
+                raise PortfolioApplicationError(message)
+            if publication.published_head != finalization.exact_head or publication.pending_checkpoint is not None:
+                message = "acceptance observation requires the reconciled final checkpoint"
+                raise PortfolioApplicationError(message)
+            observation = self._draft_pull_request_publisher.observe_pull_request(
+                ObserveChangePublicationPullRequest(change_id=change_id)
+            )
+            if observation is None:
+                message = "acceptance observation requires a bound pull request"
+                raise PortfolioApplicationError(message)
+            snapshot = observation.snapshot
+            if (
+                snapshot.repository != self._draft_pull_request_publisher.repository
+                or snapshot.repository != ready.repository
+                or snapshot.number != ready.number
+                or snapshot.node_id != ready.node_id
+                or snapshot.base_branch != self._draft_pull_request_publisher.target_branch
+                or snapshot.head_sha != finalization.exact_head
+            ):
+                runtime.capture_acceptance_attention(
+                    observation,
+                    ("provider pull request does not satisfy acceptance authority",),
+                )
+                message = "provider pull request does not satisfy acceptance authority"
+                raise PortfolioApplicationError(message)
+            latch = self._latch_acceptance_observation(runtime, observation)
+            checks = self._draft_pull_request_publisher.read_check_observations(
+                ReadChangePublicationCheckObservations(
+                    change_id=change_id,
+                    repository=latch.repository,
+                    number=latch.number,
+                    exact_commit=finalization.exact_head,
+                )
+            )
+            receipt = CompletionReceipt.create(
+                CompletionEvidence(
+                    change_id=change_id,
+                    finalization_receipt_id=finalization.finalization_id,
+                    finalized_change_head=finalization.exact_head,
+                    repository_identity=latch.repository,
+                    pull_request_identity=CompletionPullRequestIdentity(
+                        number=latch.number,
+                        node_id=latch.node_id,
+                    ),
+                    accepted_target_ref=latch.base_branch,
+                    accepted_merge_commit=latch.accepted_merge_commit,
+                    merged_at=latch.merged_at,
+                    acceptance_observation_id=latch.acceptance_observation_id,
+                    check_observation_ids=tuple(item.observation_id for item in checks),
+                    review_receipt_ids=(finalization.review.review_id,),
+                    completed_at=_timestamp(self._clock()),
+                )
+            )
+            return runtime.complete_change(receipt)
+
+    def _latch_acceptance_observation(
+        self,
+        runtime: DeliveryRuntime,
+        observation: PublicationPullRequestObservationReceipt,
+    ) -> DeliveryMergedPullRequestLatch:
+        """Route one fresh provider observation through the immutable merge latch."""
+        if runtime.merged_pull_request_latch() is not None:
+            try:
+                return runtime.latch_merged_pull_request(observation)
+            except DeliveryRuntimeConflictError as exc:
+                message = "provider acceptance evidence regressed from the established merged observation"
+                raise PortfolioApplicationError(message) from exc
+        if is_acceptance_waiting_observation(observation):
+            message = "provider pull request is still open and unmerged"
+            raise DeliveryAcceptanceWaitingError(message)
+        snapshot = observation.snapshot
+        if (
+            snapshot.state != "closed"
+            or not snapshot.merged
+            or snapshot.merge_commit_sha is None
+            or snapshot.merged_at is None
+        ):
+            runtime.capture_acceptance_attention(
+                observation,
+                ("provider pull request does not satisfy acceptance authority",),
+            )
+            message = "provider pull request does not satisfy acceptance authority"
+            raise PortfolioApplicationError(message)
+        return runtime.latch_merged_pull_request(observation)
+
+    def reconcile_finalization_head(
+        self,
+        change_id: str,
+    ) -> DeliveryFinalizationReceipt | DeliveryFinalizationInvalidationReceipt | None:
+        """Retain or invalidate finalization from the engine-derived Change branch head."""
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            if runtime.completion_receipt() is not None:
+                finalization = runtime.finalization()
+                if finalization is not None:
+                    self._promote_finalized_external_head(change_id, finalization.exact_head)
+                return finalization
+            finalization = runtime.finalization()
+            ready = runtime.ready_receipt()
+            observation = (
+                None
+                if self._draft_pull_request_publisher is None
+                else self._draft_pull_request_publisher.observe_pull_request(
+                    ObserveChangePublicationPullRequest(change_id=change_id)
+                )
+            )
+            observed_head = (
+                self._workspace_manager.observed_change_head(change_id)
+                if observation is None
+                else observation.snapshot.head_sha
+            )
+            if (
+                finalization is not None
+                and ready is not None
+                and observation is not None
+                and observed_head != finalization.exact_head
+            ):
+                self._draft_pull_request_publisher.return_to_draft(
+                    ReturnChangePullRequestToDraft(
+                        change_id=change_id,
+                        operation_id=f"return-draft-{ready.finalization_id}",
+                        finalization_id=ready.finalization_id,
+                        exact_head=observation.snapshot.head_sha,
+                    )
+                )
+            result = runtime.reconcile_finalization_head(observed_head, _timestamp(self._clock()))
+            if isinstance(result, DeliveryFinalizationReceipt):
+                self._promote_finalized_external_head(change_id, result.exact_head)
+            if not isinstance(result, DeliveryFinalizationInvalidationReceipt) and observation is not None:
+                runtime.reconcile_pull_request_draft_state(
+                    provider_draft=observation.snapshot.draft,
+                    observed_at=observation.observed_at,
+                    observation_id=observation.observation_id,
+                )
+            return result
+
+    def reconcile_change_checkpoint(self, change_id: str) -> DeliveryCheckpointReconciliationResult:
+        """Reconcile one durable checkpoint without accepting caller-supplied external fences."""
+        if self._change_branch_publisher is None or self._draft_pull_request_publisher is None:
+            message = "checkpoint publication is not configured"
+            raise PortfolioApplicationError(message)
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            return self._reconcile_change_checkpoint(change_id, runtime)
+
+    def _reconcile_change_checkpoint(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+    ) -> DeliveryCheckpointReconciliationResult:
+        initial = runtime.checkpoint_publication_state()
+        pending = initial.pending_checkpoint
+        if pending is None:
+            return DeliveryCheckpointReconciliationResult(
+                change_id=change_id,
+                attempted_head=None,
+                state=initial,
+                reconciled=True,
+            )
+        if pending.head is None:
+            return DeliveryCheckpointReconciliationResult(
+                change_id=change_id,
+                attempted_head=None,
+                state=initial,
+                reconciled=False,
+            )
+
+        head = pending.head
+        try:
+            automation_paths = self._workspace_manager.repository_automation_paths(change_id, head)
+        except PublicationBaselineUnavailableError:
+            with suppress(DeliveryRuntimeConflictError):
+                runtime.capture_publication_attention(
+                    _timestamp(self._clock()),
+                    ("publication-baseline-unavailable", f"exact-head:{head}"),
+                )
+            raise
+        summary = _checkpoint_summary(pending, head, automation_paths)
+        pull_request_title = _checkpoint_pull_request_title(runtime)
+        branch_request = PublishChangeBranch(
+            change_id=change_id,
+            expected_remote_head=initial.published_head,
+            expected_published_head=head,
+            operation_id=_checkpoint_operation_id(
+                "branch",
+                change_id,
+                head,
+            ),
+        )
+        branch_receipt = self._change_branch_publisher.publish(branch_request)
+        if initial.published_head != head:
+            state = runtime.record_checkpoint_branch_publication(initial, branch_receipt.published_head)
+        else:
+            state = runtime.checkpoint_publication_state()
+
+        current = state.pending_checkpoint
+        if current is None or current.head is None or not set(pending.triggers) <= set(current.triggers):
+            return DeliveryCheckpointReconciliationResult(
+                change_id=change_id,
+                attempted_head=head,
+                branch_publication=branch_receipt,
+                state=state,
+                reconciled=False,
+            )
+
+        first_checkpoint = any(
+            trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK for trigger in pending.triggers
+        )
+        draft_receipt = None
+        if first_checkpoint:
+            draft_receipt = self._draft_pull_request_publisher.publish(
+                CreateOrReconcileDraftPullRequest(
+                    change_id=change_id,
+                    operation_id=_checkpoint_operation_id("pull-request", change_id, head, summary),
+                    published_head=head,
+                    title=pull_request_title,
+                    generated_summary=summary,
+                )
+            )
+            runtime.record_publication_identity(
+                DeliveryChangePublicationIdentity(
+                    change_id=draft_receipt.change_id,
+                    repository=draft_receipt.repository,
+                    number=draft_receipt.number,
+                    node_id=draft_receipt.node_id,
+                    head_sha=draft_receipt.head_sha,
+                )
+            )
+        summary_receipt = self._draft_pull_request_publisher.update_generated_summary(
+            UpdateGeneratedPullRequestSummary(
+                change_id=change_id,
+                operation_id=_checkpoint_operation_id("summary", change_id, head, summary),
+                published_head=head,
+                generated_summary=summary,
+            )
+        )
+        history = runtime.publication_history()
+        if history is not None:
+            runtime.record_publication_identity(
+                history.current.model_copy(
+                    update={
+                        "repository": summary_receipt.repository,
+                        "number": summary_receipt.number,
+                        "head_sha": summary_receipt.head_sha,
+                    }
+                )
+            )
+        state = runtime.acknowledge_checkpoint_publication(pending, head)
+        return DeliveryCheckpointReconciliationResult(
+            change_id=change_id,
+            attempted_head=head,
+            branch_publication=branch_receipt,
+            draft_pull_request=draft_receipt,
+            generated_summary=summary_receipt,
+            state=state,
+            reconciled=state.pending_checkpoint is None,
+        )
 
     def read_design_session(self, change_id: str) -> VerifiedDesignPackage:
         """Return one verified authored Design package and its current identity."""
@@ -571,12 +2177,17 @@ class PortfolioApplication:
     def admit_delivery_change(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult:
         """Admit source-bound Delivery authority through the owning registry."""
         with self._coordinator.acquisition_lock():
+            self._workspace_manager.validate_recovery(request.change_id, request.recovery_reviewed_head)
             result = self._authority_registry.admit(request)
-            self._workspace_manager.create(request.change_id)
+            coordination = self._workspace_manager.ensure(
+                request.change_id,
+                recovery_reviewed_head=request.recovery_reviewed_head,
+            )
             self._runtimes[request.change_id] = DeliveryRuntime(
                 self._target_root,
                 result.contract,
                 workspace_manager=self._workspace_manager,
+                migration_reviewed_head=coordination.last_reviewed_commit,
             )
             return result
 
@@ -602,31 +2213,9 @@ class PortfolioApplication:
         request: DeliveryTransition,
     ) -> OutcomeAuthorityBinding:
         """Apply one validated mechanical transition through its exact runtime."""
-        return self._runtime(change_id).transition(request)
-
-    def list_integration_ready_changes(self) -> tuple[str, ...]:
-        """List unclaimed Integration changes that are ready or safe to retry."""
-        return self._integration_ready_change_ids(self._portfolio_snapshots())
-
-    def _integration_ready_change_ids(
-        self,
-        snapshots: tuple[DeliveryPortfolioSnapshot, ...],
-    ) -> tuple[str, ...]:
-        ready = []
-        for snapshot in snapshots:
-            attention = snapshot.frontier.integration_attention
-            if (
-                self._snapshot_change_stage(snapshot) == DeliveryChangeStage.INTEGRATION
-                and not self._snapshot_has_active_claims(snapshot)
-                and (
-                    attention is None
-                    or snapshot.integration_attention_superseded
-                    or integration_attention_disposition(attention.code)
-                    == DeliveryIntegrationAttentionDisposition.RETRYABLE
-                )
-            ):
-                ready.append(snapshot.contract.change_id)
-        return tuple(ready)
+        runtime = self._runtime(change_id)
+        with locked_roots((self._checkpoint_lock_root(change_id),)):
+            return runtime.transition(request)
 
     def list_integration_attention(self) -> tuple[DeliveryIntegrationAttentionStatus, ...]:
         """List non-retryable Integration attention in stable identity order."""
@@ -636,7 +2225,7 @@ class PortfolioApplication:
             if (
                 attention is None
                 or snapshot.frontier.integration_repair_claim is not None
-                or snapshot.integration_attention_superseded
+                or self._integration_attention_is_superseded(snapshot.contract.change_id, attention)
             ):
                 continue
             disposition = integration_attention_disposition(attention.code)
@@ -652,6 +2241,17 @@ class PortfolioApplication:
             )
         return tuple(statuses)
 
+    def _integration_attention_is_superseded(
+        self,
+        change_id: str,
+        attention: DeliveryIntegrationAttention,
+    ) -> bool:
+        try:
+            context = self._workspace_manager.integration_context(change_id)
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            self._fail(f"current Integration target is unavailable for {change_id}", exc)
+        return attention.target_head != context.target_head
+
     def show_integration_attention(self, change_id: str) -> DeliveryIntegrationAttention | None:
         """Return current typed Integration attention without mutating runtime state."""
         return self._runtime(change_id).integration_attention()
@@ -660,7 +2260,7 @@ class PortfolioApplication:
         """List bounded work-item projections in stable portfolio order."""
         projections = []
         for snapshot in self._portfolio_snapshots():
-            if self._snapshot_change_stage(snapshot) == DeliveryChangeStage.COMPLETED:
+            if not self._is_work_portfolio_visible(snapshot):
                 continue
             projections.extend(WorkItemProjector(snapshot).list_items())
         return tuple(
@@ -679,7 +2279,7 @@ class PortfolioApplication:
         return tuple(
             WorkItemProjector(snapshot).group_view()
             for snapshot in self._portfolio_snapshots()
-            if self._snapshot_change_stage(snapshot) != DeliveryChangeStage.COMPLETED
+            if self._is_work_portfolio_visible(snapshot)
         )
 
     def portfolio_read_view(self) -> PortfolioReadView:
@@ -688,7 +2288,7 @@ class PortfolioApplication:
         groups = tuple(
             WorkItemProjector(snapshot).group_view()
             for snapshot in snapshots
-            if self._snapshot_change_stage(snapshot) != DeliveryChangeStage.COMPLETED
+            if self._is_work_portfolio_visible(snapshot)
         )
         return PortfolioReadView(
             groups=groups,
@@ -701,7 +2301,7 @@ class PortfolioApplication:
         groups = tuple(
             WorkItemProjector(snapshot).group_view()
             for snapshot in snapshots
-            if self._snapshot_change_stage(snapshot) != DeliveryChangeStage.COMPLETED
+            if self._is_work_portfolio_visible(snapshot)
         )
         return self._portfolio_operating_view(snapshots, groups)
 
@@ -741,10 +2341,9 @@ class PortfolioApplication:
             for item in group.items
             if item.needs == WorkItemNeed.DEPENDENCY
         )
-        unfinished_runtime_count = sum(
-            self._snapshot_change_stage(snapshot) != DeliveryChangeStage.COMPLETED for snapshot in snapshots
-        )
+        unfinished_runtime_count = sum(not is_change_terminal(snapshot.frontier) for snapshot in snapshots)
         unfinished_change_count = unfinished_runtime_count
+        completed_change_count = sum(snapshot.frontier.change_completion is not None for snapshot in snapshots)
         design_change_ids = tuple(dict.fromkeys((*draft_design_ids, *design_required_ids)))
         guidance = derive_portfolio_guidance(
             PortfolioGuidanceFacts(
@@ -758,7 +2357,7 @@ class PortfolioApplication:
         )
         return PortfolioOperatingView(
             unfinished_change_count=unfinished_change_count,
-            completed_change_count=len(self._runtimes) - unfinished_runtime_count,
+            completed_change_count=completed_change_count,
             draft_design_change_ids=draft_design_ids,
             design_required_change_ids=design_required_ids,
             claimed=claimed,
@@ -783,38 +2382,13 @@ class PortfolioApplication:
                 for binding in snapshot.frontier.bindings
                 if binding.active_claim is not None
             )
-            if snapshot.frontier.integration_repair_claim is not None:
-                claimed.append(
-                    PortfolioWorkReference(
-                        change_id=snapshot.contract.change_id,
-                        item_key="integration",
-                        scope=PortfolioWorkScope.INTEGRATION,
-                    )
-                )
         return tuple(claimed)
 
     def _queued_work(
         self,
         snapshots: tuple[DeliveryPortfolioSnapshot, ...],
     ) -> tuple[PortfolioWorkReference, ...]:
-        queued = list(self._queued_outcome_work(snapshots))
-        integration_ids = tuple(
-            dict.fromkeys(
-                (
-                    *self._integration_ready_change_ids(snapshots),
-                    *self._repair_candidate_ids(snapshots),
-                )
-            )
-        )
-        queued.extend(
-            PortfolioWorkReference(
-                change_id=change_id,
-                item_key="integration",
-                scope=PortfolioWorkScope.INTEGRATION,
-            )
-            for change_id in integration_ids
-        )
-        return tuple(queued)
+        return self._queued_outcome_work(snapshots)
 
     def _queued_outcome_work(
         self,
@@ -829,9 +2403,11 @@ class PortfolioApplication:
         self,
         snapshot: DeliveryPortfolioSnapshot,
     ) -> tuple[int, int, int, str, PortfolioWorkReference] | None:
-        if self._snapshot_change_stage(
-            snapshot
-        ) != DeliveryChangeStage.ACTIVE_DELIVERY or self._snapshot_has_active_claims(snapshot):
+        if (
+            self._snapshot_change_stage(snapshot) != DeliveryChangeStage.BUILDING
+            or snapshot.frontier.change_disposition is not None
+            or self._snapshot_has_active_claims(snapshot)
+        ):
             return None
         completed = {
             binding.outcome_id for binding in snapshot.frontier.bindings if binding.stage == DeliveryStage.COMPLETED
@@ -885,17 +2461,49 @@ class PortfolioApplication:
 
     def show_work_item_view(self, change_id: str, item_key: str) -> WorkItemDetailView:
         """Show semantic and operator detail from one exact snapshot."""
+        runtime = self._runtime(change_id)
         try:
-            return self._work_item_projector(self._runtime(change_id)).show_view(item_key)
+            view = self._work_item_projector(runtime).show_view(item_key)
         except (KeyError, StopIteration) as exc:
             self._fail(f"work item is absent: {item_key}", exc)
+        if view.publication is None:
+            return view
+        cleanup = self._worktree_cleanup_view(runtime)
+        conflict = self._workspace_manager.show(change_id).target_sync_conflict
+        retained = next(
+            (item for item in self._workspace_manager.list_retained() if item.change_id == change_id),
+            None,
+        )
+        recovery = self._worktree_recovery_view(retained) if retained is not None else None
+        publication = view.publication.model_copy(
+            update={
+                "worktree_cleanup": cleanup,
+                "worktree_recovery": recovery,
+                "target_sync_conflict": (
+                    WorkItemTargetSyncConflictView(
+                        conflict_id=conflict.conflict_id,
+                        operation_id=conflict.operation_id,
+                        target_head=conflict.target_head,
+                        change_head_before=conflict.change_head_before,
+                        conflict_paths=conflict.conflict_paths,
+                    )
+                    if conflict is not None
+                    else None
+                ),
+            }
+        )
+        return view.model_copy(update={"publication": publication})
 
     def show_operator_context(self, change_id: str, outcome_id: str) -> DeliveryOperatorContext:
         """Show current bounded operator state from one exact runtime binding."""
         runtime = self._runtime(change_id)
         if outcome_id == change_id:
-            if runtime.change_stage() != DeliveryChangeStage.INTEGRATION:
-                self._fail("change work item is not in Integration")
+            if (
+                runtime.change_stage() != DeliveryChangeStage.BUILDING
+                or any(binding.stage != DeliveryStage.COMPLETED for binding in runtime.bindings())
+                or runtime.finalization_invalidation() is not None
+            ):
+                self._fail("change work item is not eligible for retained legacy attention context")
             return DeliveryOperatorContext(
                 change_id=change_id,
                 outcome_id=outcome_id,
@@ -943,7 +2551,9 @@ class PortfolioApplication:
     ) -> AdministrativeDeliveryMoveResult:
         """Delegate an authorized operator backward movement to the owning runtime."""
         with self._coordinator.acquisition_lock():
-            return self._runtime(change_id).administrative_move(request)
+            runtime = self._runtime(change_id)
+            with locked_roots((self._checkpoint_lock_root(change_id),)):
+                return runtime.administrative_move(request)
 
     def preview_administrative_move(
         self,
@@ -957,42 +2567,140 @@ class PortfolioApplication:
     def _work_item_projector(self, runtime: DeliveryRuntime) -> WorkItemProjector:
         return WorkItemProjector(self._delivery_snapshot(runtime))
 
+    def _worktree_cleanup_view(self, runtime: DeliveryRuntime) -> WorkItemWorktreeCleanupView | None:
+        change_id = runtime.contract.change_id
+        retained = next(
+            (item for item in self._workspace_manager.list_retained() if item.change_id == change_id),
+            None,
+        )
+        if retained is None:
+            return None
+        projection = self._retained_change_worktree_view(retained)
+        try:
+            completion = runtime.completion_receipt()
+        except OSError, ValueError, DeliveryRuntimeConflictError:
+            completion = None
+        return WorkItemWorktreeCleanupView(
+            eligible=projection.cleanup_eligible,
+            blocked_reason=projection.cleanup_blocked_reason.value
+            if projection.cleanup_blocked_reason is not None
+            else None,
+            completion_id=completion.completion_id if completion is not None else None,
+        )
+
+    def _worktree_recovery_view(
+        self,
+        retained: RetainedChangeWorktree,
+    ) -> WorkItemWorktreeRecoveryView | None:
+        if ChangeWorktreeAttentionCode.WORKTREE_MISSING not in retained.attention:
+            return None
+        allowed_attention = {
+            ChangeWorktreeAttentionCode.COORDINATION_MISSING,
+            ChangeWorktreeAttentionCode.GIT_REGISTRATION_MISSING,
+            ChangeWorktreeAttentionCode.PRUNABLE,
+            ChangeWorktreeAttentionCode.WORKTREE_MISSING,
+        }
+        blocked_reason: str | None = None
+        if retained.writer is not None:
+            blocked_reason = DeliveryRetainedWorktreeCleanupBlockReason.ACTIVE_WRITER.value
+        elif retained.publication_expiry is not None and retained.publication_expiry > _timestamp(self._clock()):
+            blocked_reason = DeliveryRetainedWorktreeCleanupBlockReason.ACTIVE_PUBLICATION_LEASE.value
+        elif any(code not in allowed_attention for code in retained.attention):
+            blocked_reason = DeliveryRetainedWorktreeCleanupBlockReason.WORKTREE_ATTENTION.value
+        elif retained.last_reviewed_commit is None:
+            blocked_reason = "reviewed-head-unavailable"
+        return WorkItemWorktreeRecoveryView(
+            eligible=blocked_reason is None,
+            blocked_reason=blocked_reason,
+            recovery_reviewed_head=retained.last_reviewed_commit,
+        )
+
     def _portfolio_snapshots(self) -> tuple[DeliveryPortfolioSnapshot, ...]:
         return tuple(self._delivery_snapshot(runtime) for _change_id, runtime in sorted(self._runtimes.items()))
 
     def _delivery_snapshot(self, runtime: DeliveryRuntime) -> DeliveryPortfolioSnapshot:
-        change_id = runtime.contract.change_id
-        coordination = self._workspace_manager.show(change_id)
-        frontier_bytes = runtime.frontier_bytes()
-        snapshot = DeliveryPortfolioSnapshot.capture(
-            runtime.contract,
-            frontier_bytes,
-            integration_target=coordination.integration_target,
-            target_head=coordination.target_head,
-        )
-        if self._snapshot_change_stage(snapshot) != DeliveryChangeStage.INTEGRATION:
-            return snapshot
-        try:
-            context = self._workspace_manager.integration_context(change_id)
-        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
-            self._fail(f"current Integration target is unavailable for {change_id}", exc)
         return DeliveryPortfolioSnapshot.capture(
             runtime.contract,
-            frontier_bytes,
-            integration_target=context.integration_target,
-            target_head=context.target_head,
+            runtime.frontier_bytes(),
         )
+
+    def _retained_change_worktree_view(
+        self,
+        retained: RetainedChangeWorktree,
+    ) -> DeliveryRetainedChangeWorktree:
+        runtime = self._runtimes.get(retained.change_id)
+        lifecycle: DeliveryChangeStage | None = None
+        completion: CompletionReceipt | None = None
+        completion_state_inconsistent = False
+        if runtime is not None:
+            try:
+                lifecycle = runtime.change_stage()
+            except OSError, ValueError, DeliveryRuntimeConflictError:
+                completion_state_inconsistent = True
+            if not completion_state_inconsistent:
+                try:
+                    completion = runtime.completion_receipt()
+                except OSError, ValueError, DeliveryRuntimeConflictError:
+                    completion_state_inconsistent = True
+        reason = self._retained_cleanup_block_reason(
+            retained,
+            runtime,
+            lifecycle,
+            completion,
+            completion_state_inconsistent=completion_state_inconsistent,
+        )
+        return DeliveryRetainedChangeWorktree(
+            change_id=retained.change_id,
+            worktree_path=retained.worktree_path,
+            branch=retained.branch,
+            branch_head=retained.branch_head,
+            recovery_reviewed_head=retained.last_reviewed_commit,
+            coordination_registered=retained.coordination_registered,
+            git_registered=retained.git_registered,
+            worktree_present=retained.worktree_present,
+            worktree_head=retained.worktree_head,
+            worktree_branch=retained.worktree_branch,
+            worktree_locked=retained.worktree_locked,
+            worktree_prunable=retained.worktree_prunable,
+            worktree_bare=retained.worktree_bare,
+            attention=retained.attention,
+            lifecycle=lifecycle,
+            orphan=runtime is None,
+            cleanup_eligible=reason is None,
+            cleanup_blocked_reason=reason,
+        )
+
+    def _retained_cleanup_block_reason(
+        self,
+        retained: RetainedChangeWorktree,
+        runtime: DeliveryRuntime | None,
+        lifecycle: DeliveryChangeStage | None,
+        completion: CompletionReceipt | None,
+        *,
+        completion_state_inconsistent: bool,
+    ) -> DeliveryRetainedWorktreeCleanupBlockReason | None:
+        reason: DeliveryRetainedWorktreeCleanupBlockReason | None = None
+        if runtime is None:
+            reason = DeliveryRetainedWorktreeCleanupBlockReason.ORPHAN
+        elif completion_state_inconsistent:
+            reason = DeliveryRetainedWorktreeCleanupBlockReason.COMPLETION_STATE_INCONSISTENT
+        elif completion is None and lifecycle != DeliveryChangeStage.ABANDONED:
+            reason = DeliveryRetainedWorktreeCleanupBlockReason.NONTERMINAL
+        elif retained.writer is not None:
+            reason = DeliveryRetainedWorktreeCleanupBlockReason.ACTIVE_WRITER
+        elif retained.publication_expiry is not None and retained.publication_expiry > _timestamp(self._clock()):
+            reason = DeliveryRetainedWorktreeCleanupBlockReason.ACTIVE_PUBLICATION_LEASE
+        elif retained.attention:
+            reason = DeliveryRetainedWorktreeCleanupBlockReason.WORKTREE_ATTENTION
+        return reason
 
     @staticmethod
     def _snapshot_change_stage(snapshot: DeliveryPortfolioSnapshot) -> DeliveryChangeStage:
-        if snapshot.frontier.integration_result_id is not None:
-            return DeliveryChangeStage.COMPLETED
-        stages = {binding.stage for binding in snapshot.frontier.bindings}
-        if DeliveryStage.DESIGN in stages:
-            return DeliveryChangeStage.DESIGN
-        if stages == {DeliveryStage.COMPLETED}:
-            return DeliveryChangeStage.INTEGRATION
-        return DeliveryChangeStage.ACTIVE_DELIVERY
+        return derive_change_stage(snapshot.frontier)
+
+    @staticmethod
+    def _is_work_portfolio_visible(snapshot: DeliveryPortfolioSnapshot) -> bool:
+        return snapshot.frontier.change_abandonment is not None or not is_change_terminal(snapshot.frontier)
 
     @staticmethod
     def _snapshot_has_active_claims(snapshot: DeliveryPortfolioSnapshot) -> bool:
@@ -1034,31 +2742,12 @@ class PortfolioApplication:
         return self._completed_history_catalog
 
     def acquire_frontier_work(self) -> DeliveryAcquisitionResult:
-        """Recover interrupted claims, then start at most one ready claim."""
+        """Start at most one ready claim per available execution slot."""
         with self._coordinator.acquisition_lock():
-            for change_id in self._runtimes:
-                self._workspace_manager.refresh_integration_target(change_id)
-            recoveries = self._recover_active_claims()
-            repair_recoveries = self._recover_active_repair_claims()
-            integration_ready = self.list_integration_ready_changes()
-            occupied = sum(
-                len(runtime.active_claims()) + int(runtime.integration_repair_claim() is not None)
-                for runtime in self._runtimes.values()
-            )
+            occupied = sum(len(runtime.active_claims()) for runtime in self._runtimes.values())
             available = max(self._execution_capacity - occupied, 0)
             launches: list[DeliveryLaunchPackage] = []
-            repair_launches: list[DeliveryIntegrationRepairLaunchPackage] = []
             failures: list[DeliveryAcquisitionFailure] = []
-            repair_failures: list[DeliveryIntegrationRepairAcquisitionFailure] = []
-            for change_id in self._repair_candidates():
-                if available == 0 or not self._coordinator.writer_capacity_available():
-                    break
-                launch = self._activate_repair_candidate(change_id)
-                available -= 1
-                if isinstance(launch, DeliveryIntegrationRepairAcquisitionFailure):
-                    repair_failures.append(launch)
-                    continue
-                repair_launches.append(launch)
             for candidate in self._candidates():
                 if available == 0:
                     break
@@ -1068,6 +2757,7 @@ class PortfolioApplication:
                     candidate.change_id,
                     candidate.runtime,
                     candidate.binding.outcome_id,
+                    candidate.role,
                 )
                 if isinstance(source, DeliveryAcquisitionFailure):
                     failures.append(source)
@@ -1080,13 +2770,8 @@ class PortfolioApplication:
                 launches.append(launch)
             return DeliveryAcquisitionResult(
                 launch_packages=tuple(launches),
-                repair_launch_packages=tuple(repair_launches),
-                integration_ready_change_ids=integration_ready,
                 integration_attention=self.list_integration_attention(),
                 failures=tuple(failures),
-                repair_failures=tuple(repair_failures),
-                recoveries=recoveries,
-                repair_recoveries=repair_recoveries,
             )
 
     def show_plan_context(
@@ -1145,45 +2830,6 @@ class PortfolioApplication:
             recovery_attention=binding.recovery_attention,
         )
 
-    def show_integration_repair_context(
-        self,
-        change_id: str,
-        attempt_id: str,
-        claim_id: str,
-    ) -> DeliveryIntegrationRepairContext:
-        """Project exact current attention and writer custody for one repair claim."""
-        runtime = self._runtime(change_id)
-        claim = runtime.require_integration_repair_claim(attempt_id, claim_id)
-        return DeliveryIntegrationRepairContext(launch=self._current_repair_launch(change_id, runtime, claim))
-
-    def create_integration_repair_candidate(
-        self,
-        change_id: str,
-        attempt_id: str,
-        claim_id: str,
-    ) -> IntegrationRepairCandidate:
-        """Create and prove one exact candidate under active repair custody."""
-        with self._coordinator.integration_lock():
-            runtime = self._runtime(change_id)
-            claim = runtime.require_integration_repair_claim(attempt_id, claim_id)
-            attention = runtime.integration_attention()
-            coordination = self._coordinator.show(change_id)
-            writer = coordination.writer
-            if attention is None:
-                self._fail("repair claim has no current Integration attention")
-            if writer is None or (
-                writer.kind != "repair"
-                or writer.attempt_id != claim.attempt_id
-                or writer.claim_id != claim.claim_id
-                or writer.actor_id != claim.owner_id
-                or writer.process_id != claim.process_id
-            ):
-                self._fail("repair candidate requires exact active writer custody")
-            return self._workspace_manager.create_integration_repair_candidate(
-                attention,
-                writer,
-            )
-
     def recover_claim(
         self,
         change_id: str,
@@ -1195,27 +2841,6 @@ class PortfolioApplication:
         with self._coordinator.acquisition_lock():
             return self._recover_claim(change_id, outcome_id, attempt_id, claim_id)
 
-    def recover_expired_claims(self) -> DeliveryExpiredClaimRecoveries:
-        """Recover claims whose fixed execution lease has elapsed."""
-        with self._coordinator.acquisition_lock():
-            cutoff = _timestamp(self._clock()) - self._claim_ttl
-            recoveries = tuple(
-                self._recover_claim(change_id, outcome_id, claim.attempt_id, claim.claim_id)
-                for change_id, runtime in sorted(self._runtimes.items())
-                for outcome_id, claim in runtime.active_claims()
-                if _timestamp(claim.started_at) <= cutoff
-            )
-            repair_recoveries = tuple(
-                self._recover_integration_repair_claim(change_id, claim.attempt_id, claim.claim_id)
-                for change_id, runtime in sorted(self._runtimes.items())
-                for claim in (runtime.integration_repair_claim(),)
-                if claim is not None and _timestamp(claim.started_at) <= cutoff
-            )
-            return DeliveryExpiredClaimRecoveries(
-                recoveries=recoveries,
-                repair_recoveries=repair_recoveries,
-            )
-
     def recover_integration_repair_claim(
         self,
         change_id: str,
@@ -1225,21 +2850,6 @@ class PortfolioApplication:
         """Restart and remove one exact failed Integration repair claim."""
         with self._coordinator.acquisition_lock():
             return self._recover_integration_repair_claim(change_id, attempt_id, claim_id)
-
-    def _recover_active_claims(self) -> tuple[DeliveryClaimRecoveryResult, ...]:
-        return tuple(
-            self._recover_claim(change_id, outcome_id, claim.attempt_id, claim.claim_id)
-            for change_id, runtime in sorted(self._runtimes.items())
-            for outcome_id, claim in runtime.active_claims()
-        )
-
-    def _recover_active_repair_claims(self) -> tuple[DeliveryIntegrationRepairRecoveryResult, ...]:
-        return tuple(
-            self._recover_integration_repair_claim(change_id, claim.attempt_id, claim.claim_id)
-            for change_id, runtime in sorted(self._runtimes.items())
-            for claim in (runtime.integration_repair_claim(),)
-            if claim is not None
-        )
 
     def _recover_integration_repair_claim(
         self,
@@ -1305,339 +2915,10 @@ class PortfolioApplication:
             rejected_head,
         )
 
-    def integrate_ready_change(self, change_id: str) -> DeliveryIntegrationResult:
-        """Publish reviewed product and its completed package through one target CAS."""
-        with self._coordinator.integration_lock():
-            runtime = self._runtime(change_id)
-            self._workspace_manager.refresh_integration_target(change_id)
-            context = self._workspace_manager.integration_context(change_id)
-            existing = runtime.integration_completion()
-            if existing is not None:
-                self._workspace_manager.discard_stale_integration_candidate(change_id)
-                self._cleanup_integration(change_id, existing)
-                return DeliveryIntegrationResult(
-                    change_id=change_id,
-                    completion=existing,
-                    replayed=True,
-                )
-            if runtime.change_stage() != DeliveryChangeStage.INTEGRATION:
-                self._fail("change is not ready for Integration")
-            prepared = self._capture_ready_integration(change_id, runtime, context)
-            if isinstance(prepared, DeliveryIntegrationResult):
-                return prepared
-            if prepared.preparation.result is not None:
-                result = self._publish_prepared_integration(runtime, context, prepared)
-                self._workspace_manager.discard_stale_integration_candidate(change_id)
-                return result
-
-        receipt = self._integration_verifier.verify(prepared.candidate, prepared.preparation)
-
-        with self._coordinator.integration_lock():
-            runtime = self._runtime(change_id)
-            existing = runtime.integration_completion()
-            if existing is not None:
-                self._workspace_manager.discard_stale_integration_candidate(change_id)
-                self._cleanup_integration(change_id, existing)
-                return DeliveryIntegrationResult(change_id=change_id, completion=existing, replayed=True)
-            # Evidence stays bound to the heads that produced the receipt; publication revalidates current heads.
-            if not receipt.passed:
-                result = self._integration_attention(
-                    runtime,
-                    prepared.context,
-                    DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED,
-                    self._verification_diagnostics(receipt),
-                    candidate=prepared.candidate,
-                )
-            else:
-                result = self._publish_verified_integration(runtime, prepared.context, prepared)
-            self._workspace_manager.discard_integration_candidate(prepared.preparation)
-            if result.completion is not None:
-                self._cleanup_integration(change_id, result.completion)
-            return result
-
-    def admit_reviewed_integration_repair(
-        self,
-        attempt_id: str,
-        claim_id: str,
-        repair: DeliveryIntegrationRepair,
-    ) -> DeliveryIntegrationRepair:
-        """Admit one independently reviewed additive repair for current Integration attention."""
-        with self._coordinator.integration_lock():
-            runtime = self._runtime(repair.change_id)
-            claim = runtime.require_integration_repair_claim(attempt_id, claim_id)
-            if repair.owner_id != claim.owner_id:
-                self._fail("Integration repair owner does not match the active claim")
-            runtime_replacement = runtime.integration_repair_replacement(repair)
-            workspace_replacements = self._workspace_manager.integration_repair_replacement(repair, claim_id)
-            self._coordinator.admit_integration_repair(
-                repair,
-                (*workspace_replacements, runtime_replacement),
-            )
-            return repair
-
-    def publish_integration_repair_authority_attention(
-        self,
-        attempt_id: str,
-        claim_id: str,
-        request: DeliveryIntegrationRepairAuthorityAttention,
-    ) -> DeliveryIntegrationAttention:
-        """End one repair claim that cannot preserve its admitted authority."""
-        with self._coordinator.integration_lock():
-            runtime = self._runtime(request.change_id)
-            runtime.require_integration_repair_claim(attempt_id, claim_id)
-            attention, runtime_replacement = runtime.integration_repair_authority_replacement(
-                request,
-                attempt_id,
-                claim_id,
-            )
-            workspace_replacements = self._workspace_manager.integration_repair_authority_replacements(
-                request,
-                claim_id,
-            )
-            self._coordinator.admit_integration_repair(
-                request,
-                (*workspace_replacements, runtime_replacement),
-            )
-            return attention
-
-    def _capture_ready_integration(
-        self,
-        change_id: str,
-        runtime: DeliveryRuntime,
-        context: IntegrationContext,
-    ) -> DeliveryIntegrationResult | _PreparedIntegration:
-        try:
-            package = self._package_store.read_verified(change_id)
-            attention_code = self._package_attention_code(runtime, package)
-            if attention_code is not None:
-                return self._integration_attention(
-                    runtime,
-                    context,
-                    attention_code,
-                    ("active package does not match admitted completed Delivery authority",),
-                )
-            runtime_bytes, result_history_bytes = runtime.completion_capture_bytes()
-            capture = CompletionCapture(
-                change_id=change_id,
-                expected_package_id=package.package_id,
-                authority_digest=runtime.authority_digest,
-                runtime_bytes=runtime_bytes,
-                result_history_bytes=result_history_bytes,
-                reviewed_change_head=context.reviewed_change_head,
-                integration_target=context.integration_target,
-                completion_path=f"{_COMPLETED_ROOT}/{change_id}",
-            )
-            return self._package_store.capture_completion(
-                capture,
-                validation_callback=lambda snapshot: self._prepare_integration_snapshot(
-                    runtime,
-                    context,
-                    capture,
-                    snapshot,
-                ),
-                publication_callback=lambda prepared: prepared,
-            )
-        except DesignPackageConflictError as exc:
-            return self._integration_attention(
-                runtime,
-                context,
-                DeliveryIntegrationAttentionCode.PACKAGE_MUTATED,
-                (str(exc),),
-            )
-
-    def _prepare_integration_snapshot(
-        self,
-        runtime: DeliveryRuntime,
-        context: IntegrationContext,
-        capture: CompletionCapture,
-        snapshot: CompletionPackageSnapshot,
-    ) -> _PreparedIntegration:
-        candidate = self._integration_candidate(runtime, context, snapshot)
-        preparation = self._workspace_manager.prepare_integration_candidate(candidate)
-        return _PreparedIntegration(context, capture, snapshot, candidate, preparation)
-
-    def _publish_verified_integration(
-        self,
-        runtime: DeliveryRuntime,
-        context: IntegrationContext,
-        prepared: _PreparedIntegration,
-    ) -> DeliveryIntegrationResult:
-        runtime_bytes, result_history_bytes = runtime.completion_capture_bytes()
-        if (
-            runtime_bytes != prepared.capture.runtime_bytes
-            or result_history_bytes != prepared.capture.result_history_bytes
-        ):
-            return self._integration_attention(
-                runtime,
-                context,
-                DeliveryIntegrationAttentionCode.PACKAGE_MUTATED,
-                ("Delivery runtime changed during candidate verification",),
-                candidate=prepared.candidate,
-            )
-        try:
-            return self._package_store.capture_completion(
-                prepared.capture,
-                validation_callback=lambda snapshot: self._require_verified_snapshot(prepared, snapshot),
-                publication_callback=lambda verified: self._publish_prepared_integration(runtime, context, verified),
-            )
-        except DesignPackageConflictError as exc:
-            return self._integration_attention(
-                runtime,
-                context,
-                DeliveryIntegrationAttentionCode.PACKAGE_MUTATED,
-                (str(exc),),
-                candidate=prepared.candidate,
-            )
-
-    @staticmethod
-    def _require_verified_snapshot(
-        prepared: _PreparedIntegration,
-        snapshot: CompletionPackageSnapshot,
-    ) -> _PreparedIntegration:
-        if snapshot != prepared.snapshot:
-            message = "completion package identity changed during candidate verification"
-            raise DesignPackageConflictError(message)
-        return prepared
-
-    @staticmethod
-    def _verification_diagnostics(receipt: IntegrationVerificationReceipt) -> tuple[str, ...]:
-        diagnostics = [f"verification {receipt.status.value}", *receipt.diagnostics]
-        for step in receipt.steps:
-            diagnostics.append(f"step {step.step_id}: {step.status.value}")
-            if step.stderr:
-                diagnostics.append(step.stderr[:1_024])
-            elif step.stdout and step.status.value != "passed":
-                diagnostics.append(step.stdout[:1_024])
-        return tuple(diagnostics[:16])
-
-    def _publish_prepared_integration(
-        self,
-        runtime: DeliveryRuntime,
-        context: IntegrationContext,
-        prepared: _PreparedIntegration,
-    ) -> DeliveryIntegrationResult:
-        candidate = prepared.candidate
-        snapshot = prepared.snapshot
-        publication = self._workspace_manager.publish_prepared_integration(prepared.preparation)
-        if publication.code is not None:
-            return self._integration_attention(
-                runtime,
-                context,
-                publication.code,
-                publication.diagnostics,
-                candidate=candidate,
-            )
-        if publication.target_commit is None:
-            self._fail("Integration publication returned no target commit")
-        completion = DeliveryIntegrationCompletion(
-            completion_id=snapshot.completion_id,
-            candidate_id=candidate.candidate_id,
-            package_id=snapshot.package_id,
-            target_commit=publication.target_commit,
-            completion_path=snapshot.manifest.completion_path,
-        )
-        runtime.publish_integration_completion(completion)
-        return DeliveryIntegrationResult(
-            change_id=runtime.contract.change_id,
-            candidate=candidate,
-            completion=completion,
-            replayed=publication.replayed,
-        )
-
-    def _integration_candidate(
-        self,
-        runtime: DeliveryRuntime,
-        context: IntegrationContext,
-        snapshot: CompletionPackageSnapshot,
-    ) -> DeliveryIntegrationCandidate:
-        payload = {
-            "completion_id": snapshot.completion_id,
-            "package_id": snapshot.package_id,
-            "package_tree": snapshot.package_tree,
-            "reviewed_change_head": context.reviewed_change_head,
-            "integration_target": context.integration_target,
-        }
-        candidate_id = hashlib.sha256(_canonical(payload)).hexdigest()
-        return DeliveryIntegrationCandidate(
-            candidate_id=candidate_id,
-            completion_id=snapshot.completion_id,
-            change_id=runtime.contract.change_id,
-            package_id=snapshot.package_id,
-            authority_digest=runtime.authority_digest,
-            runtime_digest=snapshot.manifest.runtime_sha256,
-            result_history_digest=snapshot.manifest.result_history_sha256,
-            reviewed_change_head=context.reviewed_change_head,
-            integration_target=context.integration_target,
-            target_head=context.target_head,
-            completion_path=snapshot.manifest.completion_path,
-            package_tree=snapshot.package_tree,
-        )
-
-    def _integration_attention(
-        self,
-        runtime: DeliveryRuntime,
-        context: IntegrationContext,
-        code: DeliveryIntegrationAttentionCode,
-        diagnostics: tuple[str, ...],
-        *,
-        candidate: DeliveryIntegrationCandidate | None = None,
-    ) -> DeliveryIntegrationResult:
-        payload = {
-            "code": code.value,
-            "change_id": runtime.contract.change_id,
-            "change_head": context.change_head,
-            "target_head": context.target_head,
-            "integration_target": context.integration_target,
-            "diagnostics": diagnostics,
-        }
-        attention = DeliveryIntegrationAttention(
-            attention_id=hashlib.sha256(_canonical(payload)).hexdigest(),
-            code=code,
-            change_id=runtime.contract.change_id,
-            change_head=context.change_head,
-            target_head=context.target_head,
-            integration_target=context.integration_target,
-            diagnostics=diagnostics,
-            retry_condition=_integration_retry_condition(code),
-        )
-        runtime.publish_integration_attention(attention)
-        return DeliveryIntegrationResult(
-            change_id=runtime.contract.change_id,
-            candidate=candidate,
-            attention=attention,
-        )
-
-    def _cleanup_integration(
-        self,
-        change_id: str,
-        completion: DeliveryIntegrationCompletion,
-    ) -> None:
-        self._package_store.cleanup_completed(change_id, completion.package_id)
-        self._workspace_manager.cleanup_integrated_worktree(
-            change_id,
-            completion.completion_path,
-            completion.completion_id,
-        )
-
-    @staticmethod
-    def _package_attention_code(
-        runtime: DeliveryRuntime,
-        package: VerifiedDesignPackage,
-    ) -> DeliveryIntegrationAttentionCode | None:
-        if hashlib.sha256(package.authority_bytes).hexdigest() != runtime.authority_digest:
-            return DeliveryIntegrationAttentionCode.REVISION_PENDING
-        source_digests = {binding.source_name: binding.sha256 for binding in runtime.contract.source_bindings}
-        if source_digests != {
-            "intent.md": package.manifest.intent_sha256,
-            "design.md": package.manifest.design_sha256,
-        }:
-            return DeliveryIntegrationAttentionCode.PACKAGE_MUTATED
-        return None
-
     def _candidates(self) -> tuple[_Candidate, ...]:
         candidates = []
         for change_id, runtime in self._runtimes.items():
-            if runtime.active_claims() or runtime.change_stage() != DeliveryChangeStage.ACTIVE_DELIVERY:
+            if runtime.active_claims() or runtime.change_stage() != DeliveryChangeStage.BUILDING:
                 continue
             claimable = set(runtime.claimable_outcome_ids())
             ranked = []
@@ -1656,7 +2937,6 @@ class PortfolioApplication:
                 role = {
                     DeliveryStage.PLANNING: DeliveryWorkerRole.PLANNER,
                     DeliveryStage.IMPLEMENTATION: DeliveryWorkerRole.BUILDER,
-                    DeliveryStage.ASSEMBLY: DeliveryWorkerRole.ASSEMBLY_REVIEWER,
                 }[binding.stage]
                 ranked.append(
                     _Candidate(
@@ -1682,12 +2962,41 @@ class PortfolioApplication:
         change_id: str,
         runtime: DeliveryRuntime,
         outcome_id: str,
+        worker_role: DeliveryWorkerRole,
     ) -> _PreparedSource | DeliveryAcquisitionFailure:
         try:
             package = self._package_store.read_verified(change_id)
             self._validate_package_authority(runtime, package)
             coordination = self._workspace_manager.show(change_id)
-            source_head = self._workspace_manager.reviewed_source_head(change_id)
+            source_head = self._workspace_manager.source_head(change_id)
+            adoption = coordination.external_head_adoption_receipt
+            promotion = coordination.external_head_promotion_receipt
+            if promotion != runtime.external_head_promotion_receipt():
+                return DeliveryAcquisitionFailure(
+                    change_id=change_id,
+                    outcome_id=outcome_id,
+                    code=PortfolioApplicationError.code,
+                    detail="external Change head promotion is not reconciled to Delivery authority",
+                    retry_condition="Replay the exact external Change head promotion operation.",
+                )
+            if source_head != coordination.last_reviewed_commit and (
+                adoption is None or runtime.external_head_adoption_receipt() != adoption
+            ):
+                return DeliveryAcquisitionFailure(
+                    change_id=change_id,
+                    outcome_id=outcome_id,
+                    code=PortfolioApplicationError.code,
+                    detail="external Change head adoption is not reconciled to Delivery authority",
+                    retry_condition="Replay the exact external Change head adoption operation.",
+                )
+            if worker_role == DeliveryWorkerRole.BUILDER and source_head != coordination.last_reviewed_commit:
+                return DeliveryAcquisitionFailure(
+                    change_id=change_id,
+                    outcome_id=outcome_id,
+                    code=PortfolioApplicationError.code,
+                    detail="Builder authority requires explicit promotion of the adopted Change head",
+                    retry_condition="Promote the exact adopted Change head before acquiring Build work.",
+                )
         except (OSError, RuntimeError, ValueError) as exc:
             return DeliveryAcquisitionFailure(
                 change_id=change_id,
@@ -1698,123 +3007,28 @@ class PortfolioApplication:
             )
         return _PreparedSource(package, coordination, source_head)
 
-    def _repair_candidates(self) -> tuple[str, ...]:
-        return self._repair_candidate_ids(self._portfolio_snapshots())
-
-    def _repair_candidate_ids(
-        self,
-        snapshots: tuple[DeliveryPortfolioSnapshot, ...],
-    ) -> tuple[str, ...]:
-        candidates = []
-        for snapshot in snapshots:
-            attention = snapshot.frontier.integration_attention
-            if (
-                self._snapshot_change_stage(snapshot) != DeliveryChangeStage.INTEGRATION
-                or self._snapshot_has_active_claims(snapshot)
-                or snapshot.frontier.integration_repair_claim is not None
-                or attention is None
-                or integration_attention_disposition(attention.code)
-                != DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED
-                or snapshot.integration_attention_superseded
-            ):
-                continue
-            candidates.append(snapshot.contract.change_id)
-        return tuple(candidates)
-
-    def _prepare_repair_source(
-        self,
-        change_id: str,
-        runtime: DeliveryRuntime,
-    ) -> _PreparedSource | DeliveryIntegrationRepairAcquisitionFailure:
+    def _promote_finalized_external_head(self, change_id: str, exact_head: str) -> None:
         try:
-            package = self._package_store.read_verified(change_id)
-            self._validate_package_authority(runtime, package)
+            runtime = self._runtime(change_id)
             coordination = self._workspace_manager.show(change_id)
-            source_head = self._workspace_manager.reviewed_source_head(change_id)
-        except (OSError, RuntimeError, ValueError) as exc:
-            return DeliveryIntegrationRepairAcquisitionFailure(
-                change_id=change_id,
-                code=getattr(exc, "code", PortfolioApplicationError.code),
-                detail=str(exc),
-                retry_condition="Restore the admitted package and clean reviewed repair boundary.",
-            )
-        return _PreparedSource(package, coordination, source_head)
-
-    def _activate_repair_candidate(
-        self,
-        change_id: str,
-    ) -> DeliveryIntegrationRepairLaunchPackage | DeliveryIntegrationRepairAcquisitionFailure:
-        runtime = self._runtime(change_id)
-        source = self._prepare_repair_source(change_id, runtime)
-        if isinstance(source, DeliveryIntegrationRepairAcquisitionFailure):
-            return source
-        claim = self._new_claim(DeliveryWorkerRole.INTEGRATION_REPAIRER, None)
-        runtime.activate_integration_repair_claim(claim)
-        try:
-            coordination = self._coordinator.acquire(
-                change_id,
-                ChangeWriter(
-                    attempt_id=claim.attempt_id,
-                    claim_id=claim.claim_id,
-                    actor_id=claim.owner_id,
-                    process_id=claim.process_id,
-                    claimed_at=claim.started_at,
-                    job_id=1,
-                    kind="repair",
+            if (
+                coordination.last_reviewed_commit == exact_head
+                and coordination.external_head_promotion_receipt == runtime.external_head_promotion_receipt()
+            ):
+                return
+            operation_id = f"finalization-{exact_head}"
+            promotion = self._workspace_manager.promote_external_head(
+                PromoteExternalHead(
+                    change_id=change_id,
+                    expected_head=exact_head,
+                    operation_id=operation_id,
                 ),
+                provenance="finalization",
             )
-        except CoordinationConflictError as exc:
-            return DeliveryIntegrationRepairAcquisitionFailure(
-                change_id=change_id,
-                attempt_id=claim.attempt_id,
-                claim_id=claim.claim_id,
-                code=exc.code,
-                detail=str(exc),
-                retry_condition="Recover the exact failed repair claim after reconciling writer custody.",
-            )
-        if coordination.writer is None:
-            self._fail("repair writer acquisition did not publish custody")
-        return self._repair_launch_package(change_id, runtime, claim, source, coordination.writer)
-
-    def _current_repair_launch(
-        self,
-        change_id: str,
-        runtime: DeliveryRuntime,
-        claim: DeliveryActiveClaim,
-    ) -> DeliveryIntegrationRepairLaunchPackage:
-        source = self._prepare_repair_source(change_id, runtime)
-        if isinstance(source, DeliveryIntegrationRepairAcquisitionFailure):
-            self._fail(source.detail)
-        writer = source.coordination.writer
-        if writer is None:
-            self._fail("repair claim has no writer custody")
-        return self._repair_launch_package(change_id, runtime, claim, source, writer)
-
-    def _repair_launch_package(
-        self,
-        change_id: str,
-        runtime: DeliveryRuntime,
-        claim: DeliveryActiveClaim,
-        source: _PreparedSource,
-        writer: ChangeWriter,
-    ) -> DeliveryIntegrationRepairLaunchPackage:
-        attention = runtime.integration_attention()
-        if attention is None:
-            self._fail("repair claim has no current Integration attention")
-        return DeliveryIntegrationRepairLaunchPackage(
-            change_id=change_id,
-            claim=claim,
-            policy=self._policies[DeliveryWorkerRole.INTEGRATION_REPAIRER],
-            attention=attention,
-            package_id=source.package.package_id,
-            package_root=self._package_root / change_id,
-            worktree_path=source.coordination.worktree_path,
-            branch=source.coordination.branch,
-            source_head=source.source_head,
-            integration_target=source.coordination.integration_target,
-            last_reviewed_commit=source.coordination.last_reviewed_commit,
-            writer=writer,
-        )
+            if promotion is not None:
+                runtime.record_external_head_promotion(promotion, _timestamp(self._clock()))
+        except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+            self._fail("finalization could not promote the reviewed adopted Change head", exc)
 
     def _activate_candidate(
         self,
@@ -1857,7 +3071,7 @@ class PortfolioApplication:
         runtime: DeliveryRuntime,
         binding: OutcomeAuthorityBinding,
     ) -> DeliveryLaunchPackage:
-        source = self._prepare_source(change_id, runtime, binding.outcome_id)
+        source = self._prepare_source(change_id, runtime, binding.outcome_id, binding.active_claim.worker_role)
         if isinstance(source, DeliveryAcquisitionFailure):
             self._fail(source.detail)
         claim = binding.active_claim
@@ -2024,6 +3238,37 @@ class PortfolioApplication:
         except KeyError as exc:
             self._fail(f"Delivery runtime is absent: {change_id}", exc)
 
+    def _require_target_sync_change_mutable(self, runtime: DeliveryRuntime) -> None:
+        if runtime.change_stage() in {
+            DeliveryChangeStage.DEFERRED,
+            DeliveryChangeStage.ABANDONED,
+            DeliveryChangeStage.COMPLETED,
+        }:
+            self._fail("target synchronization requires a mutable Change")
+
+    def _require_external_head_adoption_change_mutable(self, runtime: DeliveryRuntime) -> None:
+        if runtime.change_stage() in {
+            DeliveryChangeStage.DEFERRED,
+            DeliveryChangeStage.ABANDONED,
+            DeliveryChangeStage.COMPLETED,
+        }:
+            self._fail("external Change head adoption requires a mutable Change")
+
+    def _require_external_head_promotion_change_mutable(self, runtime: DeliveryRuntime) -> None:
+        if (
+            runtime.change_stage()
+            in {
+                DeliveryChangeStage.DEFERRED,
+                DeliveryChangeStage.ABANDONED,
+                DeliveryChangeStage.COMPLETED,
+            }
+            or runtime.finalization() is not None
+        ):
+            self._fail("external Change head promotion requires a pre-finalization mutable Change")
+
+    def _checkpoint_lock_root(self, change_id: str) -> Path:
+        return self._target_root / "publications/checkpoints/locks" / change_id
+
     @staticmethod
     def _outcome(runtime: DeliveryRuntime, outcome_id: str) -> DeliveryOutcome:
         return next(item for item in runtime.contract.outcomes if item.outcome_id == outcome_id)
@@ -2038,32 +3283,17 @@ class PortfolioApplication:
         raise PortfolioApplicationError(message) from cause
 
 
-def _canonical(payload: object) -> bytes:
-    return f"{json.dumps(payload, sort_keys=True, separators=(',', ':'))}\n".encode()
-
-
-def _integration_retry_condition(code: DeliveryIntegrationAttentionCode) -> str:
-    if code == DeliveryIntegrationAttentionCode.CANDIDATE_PROOF_FAILED:
-        return (
-            "Correct the Integration profile or failing candidate verification step, "
-            "then re-run Integration through Delivery orchestration."
-        )
-    disposition = integration_attention_disposition(code)
-    if disposition == DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED:
-        return "Admit a reviewed Integration repair for this attention, then retry Integration."
-    if disposition == DeliveryIntegrationAttentionDisposition.RETRYABLE:
-        return "Retry Integration against the current target head."
-    return "Resolve the reported Integration condition, then retry this exact change."
-
-
 __all__ = [
+    "ChangeExternalHeadPromotionReceipt",
+    "DeliveryAcceptanceReconciliationOutcome",
+    "DeliveryAcceptanceReconciliationStatus",
     "DeliveryAcquisitionFailure",
     "DeliveryAcquisitionResult",
     "DeliveryBuildContext",
     "DeliveryClaimRecoveryResult",
     "DeliveryClaimRecoveryStatus",
+    "DeliveryFinalizationContext",
     "DeliveryIntegrationAttentionStatus",
-    "DeliveryIntegrationResult",
     "DeliveryLaunchPackage",
     "DeliveryPlanContext",
     "DeliveryRolePolicy",

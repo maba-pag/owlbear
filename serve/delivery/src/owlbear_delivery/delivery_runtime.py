@@ -1,14 +1,30 @@
-"""Mechanical schema-v2 Delivery state and worker-owned transitions."""
+"""Mechanical Delivery state and worker-owned transitions."""
 
 from __future__ import annotations
 
 import hashlib
 import json
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
+from owlbear_delivery.acceptance import (
+    CompletionDisplayMetadata,
+    CompletionReceipt,
+    CompletionReceiptConflictError,
+    CompletionReceiptStore,
+)
+from owlbear_delivery.change_workspace import (
+    ChangeExternalHeadAdoptionReceipt,
+    ChangeExternalHeadPromotionReceipt,
+    ChangeTargetSyncReceipt,
+)
+from owlbear_delivery.draft_pull_request import (
+    PublicationPullRequestObservationReceipt,
+    PullRequestReadyReceipt,
+)
 from owlbear_delivery.runtime_transaction import ReplacementTransactionParticipant, RuntimeTransaction
 
 if TYPE_CHECKING:
@@ -24,17 +40,28 @@ class DeliveryStage(StrEnum):
     DESIGN = "design"
     PLANNING = "planning"
     IMPLEMENTATION = "implementation"
-    ASSEMBLY = "assembly"
     COMPLETED = "completed"
 
 
 class DeliveryChangeStage(StrEnum):
-    """Change lifecycle derived from canonical outcome state."""
+    """Canonical Change lifecycle state."""
 
     DESIGN = "design"
-    ACTIVE_DELIVERY = "active-delivery"
-    INTEGRATION = "integration"
+    BUILDING = "building"
+    FINALIZED = "finalized"
+    AWAITING_MERGE = "awaiting-merge"
+    PUBLICATION_ATTENTION = "publication-attention"
+    ACCEPTANCE_ATTENTION = "acceptance-attention"
+    DEFERRED = "deferred"
+    ABANDONED = "abandoned"
     COMPLETED = "completed"
+
+
+class DeliveryChangeDispositionKind(StrEnum):
+    """Nonterminal Change-level attention requiring explicit reconciliation."""
+
+    PUBLICATION_ATTENTION = "publication-attention"
+    ACCEPTANCE_ATTENTION = "acceptance-attention"
 
 
 class DeliveryOutputKind(StrEnum):
@@ -43,7 +70,6 @@ class DeliveryOutputKind(StrEnum):
     DESIGN = "design"
     PLANNING = "planning"
     IMPLEMENTATION = "implementation"
-    ASSEMBLY = "assembly"
     COMPLETED = "completed"
 
 
@@ -59,12 +85,192 @@ class DeliveryWorkerRole(StrEnum):
 
     PLANNER = "planner"
     BUILDER = "builder"
-    ASSEMBLY_REVIEWER = "assembly-reviewer"
     INTEGRATION_REPAIRER = "integration-repairer"
+
+
+class DeliveryCheckpointTriggerKind(StrEnum):
+    """Delivery-owned reasons that require Change checkpoint publication."""
+
+    FIRST_PROMOTED_TASK = "first-promoted-task"
+    VERIFIED_OUTCOME = "verified-outcome"
+    FINALIZATION = "finalization"
+    EXPLICIT = "explicit"
 
 
 class _DeliveryModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+
+class DeliveryChangePublicationIdentity(_DeliveryModel):
+    """Provider pull-request identity retained while Change attention clears ready authority."""
+
+    schema_version: Literal[1] = 1
+    change_id: str = Field(min_length=1)
+    repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    number: int = Field(gt=0)
+    node_id: str = Field(min_length=1)
+    head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class DeliveryChangePublicationHistory(_DeliveryModel):
+    """Ordered provider pull-request identities retained across supersession."""
+
+    schema_version: Literal[1] = 1
+    change_id: str = Field(min_length=1)
+    publications: tuple[DeliveryChangePublicationIdentity, ...] = Field(min_length=1)
+
+    @property
+    def current(self) -> DeliveryChangePublicationIdentity:
+        """Return the current successor publication identity."""
+        return self.publications[-1]
+
+    @classmethod
+    def create(
+        cls,
+        publication: DeliveryChangePublicationIdentity,
+    ) -> DeliveryChangePublicationHistory:
+        """Create history from the first exact publication identity."""
+        return cls(change_id=publication.change_id, publications=(publication,))
+
+    def _replace_publications(
+        self,
+        publications: tuple[DeliveryChangePublicationIdentity, ...],
+    ) -> DeliveryChangePublicationHistory:
+        payload = self.model_dump(mode="python")
+        payload["publications"] = publications
+        return DeliveryChangePublicationHistory.model_validate(payload)
+
+    def append(
+        self,
+        predecessor: DeliveryChangePublicationIdentity,
+        successor: DeliveryChangePublicationIdentity,
+    ) -> DeliveryChangePublicationHistory:
+        """Append one exact successor after the current publication."""
+        if self.current != predecessor:
+            message = "publication successor does not match the current predecessor"
+            raise ValueError(message)
+        return self._replace_publications((*self.publications, successor))
+
+    def refresh_current(
+        self,
+        publication: DeliveryChangePublicationIdentity,
+    ) -> DeliveryChangePublicationHistory:
+        """Refresh the exact head of the current provider PR without adding a generation."""
+        current = self.current
+        if (current.repository, current.number, current.node_id) != (
+            publication.repository,
+            publication.number,
+            publication.node_id,
+        ):
+            message = "publication head refresh does not match the current publication"
+            raise ValueError(message)
+        return self._replace_publications((*self.publications[:-1], publication))
+
+    @model_validator(mode="after")
+    def _validate_history(self) -> DeliveryChangePublicationHistory:
+        identities = tuple(
+            (publication.repository, publication.number, publication.node_id) for publication in self.publications
+        )
+        if len(identities) != len(set(identities)):
+            message = "Delivery publication history identities must be unique"
+            raise ValueError(message)
+        if any(publication.change_id != self.change_id for publication in self.publications):
+            message = "Delivery publication history must bind one Change"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryChangeDeferral(_DeliveryModel):
+    """Durable user disposition that pauses one nonterminal Change."""
+
+    schema_version: Literal[1] = 1
+    deferral_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: str = Field(min_length=1)
+    prior_stage: DeliveryChangeStage
+    deferred_at: datetime
+    reason: str = Field(min_length=1)
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        change_id: str,
+        prior_stage: DeliveryChangeStage,
+        deferred_at: datetime,
+        reason: str,
+    ) -> DeliveryChangeDeferral:
+        """Create one deterministic deferral receipt."""
+        values = {
+            "change_id": change_id,
+            "prior_stage": prior_stage,
+            "deferred_at": deferred_at,
+            "reason": reason,
+        }
+        candidate = cls.model_construct(deferral_id="0" * 64, schema_version=1, **values)
+        return cls(deferral_id=_receipt_digest(candidate, "deferral_id"), **values)
+
+    @model_validator(mode="after")
+    def _validate_deferral(self) -> DeliveryChangeDeferral:
+        if self.prior_stage in {
+            DeliveryChangeStage.DEFERRED,
+            DeliveryChangeStage.ABANDONED,
+            DeliveryChangeStage.COMPLETED,
+        }:
+            message = "Change deferral must name a non-deferred prior state"
+            raise ValueError(message)
+        if self.deferred_at.tzinfo is None:
+            message = "Change deferral timestamp must include a timezone"
+            raise ValueError(message)
+        if self.deferral_id != _receipt_digest(self, "deferral_id"):
+            message = "Change deferral identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryChangeAbandonment(_DeliveryModel):
+    """Durable user disposition that terminates one uncompleted Change."""
+
+    schema_version: Literal[1] = 1
+    abandonment_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: str = Field(min_length=1)
+    prior_stage: DeliveryChangeStage
+    abandoned_at: datetime
+    reason: str = Field(min_length=1)
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        change_id: str,
+        prior_stage: DeliveryChangeStage,
+        abandoned_at: datetime,
+        reason: str,
+    ) -> DeliveryChangeAbandonment:
+        """Create one deterministic abandonment receipt."""
+        values = {
+            "change_id": change_id,
+            "prior_stage": prior_stage,
+            "abandoned_at": abandoned_at,
+            "reason": reason,
+        }
+        candidate = cls.model_construct(abandonment_id="0" * 64, schema_version=1, **values)
+        return cls(abandonment_id=_receipt_digest(candidate, "abandonment_id"), **values)
+
+    @model_validator(mode="after")
+    def _validate_abandonment(self) -> DeliveryChangeAbandonment:
+        if self.prior_stage in {
+            DeliveryChangeStage.ABANDONED,
+            DeliveryChangeStage.COMPLETED,
+        }:
+            message = "Change abandonment must name a non-abandoned prior state"
+            raise ValueError(message)
+        if self.abandoned_at.tzinfo is None:
+            message = "Change abandonment timestamp must include a timezone"
+            raise ValueError(message)
+        if self.abandonment_id != _receipt_digest(self, "abandonment_id"):
+            message = "Change abandonment identity is invalid"
+            raise ValueError(message)
+        return self
 
 
 class DeliveryOutputReference(_DeliveryModel):
@@ -108,6 +314,88 @@ class DeliveryTaskDefinition(_DeliveryModel):
         return hashlib.sha256(_model_content(self)).hexdigest()
 
 
+class DeliveryObservation(_DeliveryModel):
+    """Typed validation evidence before its immutable receipt identity is assigned."""
+
+    schema_version: Literal[1] = 1
+    change_id: str = Field(min_length=1)
+    task_or_finalization_id: str = Field(min_length=1)
+    step_id: str | None = Field(default=None, min_length=1)
+    exact_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    observation_kind: str = Field(min_length=1)
+    command_or_procedure: str = Field(min_length=1)
+    exit_status_or_artifact_locator: str = Field(min_length=1)
+    observer_or_runner_identity: str = Field(min_length=1)
+    observed_at: datetime
+
+
+class DeliveryObservationReceipt(DeliveryObservation):
+    """One exact-commit validation observation retained as lifecycle evidence."""
+
+    observation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @classmethod
+    def create(
+        cls,
+        observation: DeliveryObservation,
+    ) -> DeliveryObservationReceipt:
+        """Create one receipt using the canonical typed-content digest."""
+        values = observation.model_dump()
+        candidate = cls.model_construct(observation_id="0" * 64, **values)
+        return cls(observation_id=_receipt_digest(candidate, "observation_id"), **values)
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> DeliveryObservationReceipt:
+        if self.observed_at.tzinfo is None:
+            message = "Delivery observation timestamp must include a timezone"
+            raise ValueError(message)
+        if self.observation_id != _receipt_digest(self, "observation_id"):
+            message = "Delivery observation receipt identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryReview(_DeliveryModel):
+    """Typed independent advisory pass before receipt identity is assigned."""
+
+    schema_version: Literal[1] = 1
+    exact_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    author_id: str = Field(min_length=1)
+    reviewer_id: str = Field(min_length=1)
+    disposition: Literal["pass"] = "pass"
+    evidence: tuple[str, ...] = Field(min_length=1)
+    reviewed_at: datetime
+
+
+class DeliveryReviewReceipt(DeliveryReview):
+    """Independent advisory pass bound to one exact implementation commit."""
+
+    review_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @classmethod
+    def create(
+        cls,
+        review: DeliveryReview,
+    ) -> DeliveryReviewReceipt:
+        """Create one independent pass receipt using the canonical digest."""
+        values = review.model_dump()
+        candidate = cls.model_construct(review_id="0" * 64, **values)
+        return cls(review_id=_receipt_digest(candidate, "review_id"), **values)
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> DeliveryReviewReceipt:
+        if self.author_id == self.reviewer_id:
+            message = "Delivery review must be independent from implementation authorship"
+            raise ValueError(message)
+        if self.reviewed_at.tzinfo is None:
+            message = "Delivery review timestamp must include a timezone"
+            raise ValueError(message)
+        if self.review_id != _receipt_digest(self, "review_id"):
+            message = "Delivery review receipt identity is invalid"
+            raise ValueError(message)
+        return self
+
+
 class DeliveryPlanCandidate(_DeliveryModel):
     """One unpromoted claim-scoped canonical task chain."""
 
@@ -137,6 +425,298 @@ class DeliveryTaskResult(_DeliveryModel):
     task_id: str = Field(min_length=1)
     task_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     completed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    observations: tuple[DeliveryObservationReceipt, ...] = Field(min_length=1)
+    review: DeliveryReviewReceipt
+
+    @model_validator(mode="after")
+    def _validate_exact_commit_evidence(self) -> DeliveryTaskResult:
+        observation_ids = tuple(observation.observation_id for observation in self.observations)
+        if len(observation_ids) != len(set(observation_ids)):
+            message = "Delivery task result observations must be unique"
+            raise ValueError(message)
+        if any(
+            observation.change_id != self.change_id
+            or observation.task_or_finalization_id != self.task_id
+            or observation.exact_commit != self.completed_commit
+            for observation in self.observations
+        ):
+            message = "Delivery task result observation evidence does not match the exact task commit"
+            raise ValueError(message)
+        if self.review.exact_commit != self.completed_commit:
+            message = "Delivery task result review evidence does not match the exact task commit"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryFinalization(_DeliveryModel):
+    """Exact reviewed Change head and evidence prepared for finalization."""
+
+    schema_version: Literal[2] = 2
+    operation_id: str = Field(min_length=1)
+    change_id: str = Field(min_length=1)
+    exact_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    authority_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    result_digests: tuple[str, ...] = Field(min_length=1)
+    observations: tuple[DeliveryObservationReceipt, ...] = Field(min_length=1)
+    review: DeliveryReviewReceipt
+    finalized_at: datetime
+
+
+class DeliveryFinalizationReceipt(DeliveryFinalization):
+    """Durable finalization authority for one exact reviewed Change head."""
+
+    finalization_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @classmethod
+    def create(cls, finalization: DeliveryFinalization) -> DeliveryFinalizationReceipt:
+        """Create one finalization receipt using the canonical typed-content digest."""
+        values = {field_name: getattr(finalization, field_name) for field_name in type(finalization).model_fields}
+        candidate = cls.model_construct(finalization_id="0" * 64, **values)
+        return cls(finalization_id=_receipt_digest(candidate, "finalization_id"), **values)
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> DeliveryFinalizationReceipt:
+        if self.finalized_at.tzinfo is None:
+            message = "Delivery finalization timestamp must include a timezone"
+            raise ValueError(message)
+        if len(self.result_digests) != len(set(self.result_digests)):
+            message = "Delivery finalization result digests must be unique"
+            raise ValueError(message)
+        observation_ids = tuple(observation.observation_id for observation in self.observations)
+        if len(observation_ids) != len(set(observation_ids)):
+            message = "Delivery finalization observations must be unique"
+            raise ValueError(message)
+        if any(
+            observation.change_id != self.change_id
+            or observation.task_or_finalization_id != self.operation_id
+            or observation.exact_commit != self.exact_head
+            for observation in self.observations
+        ):
+            message = "Delivery finalization observations do not match its exact authority"
+            raise ValueError(message)
+        if self.review.exact_commit != self.exact_head:
+            message = "Delivery finalization review does not match its exact head"
+            raise ValueError(message)
+        if self.finalization_id != _receipt_digest(self, "finalization_id"):
+            message = "Delivery finalization receipt identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryFinalizationInvalidation(_DeliveryModel):
+    """Observed Change-head drift that invalidates one finalization receipt."""
+
+    schema_version: Literal[1] = 1
+    change_id: str = Field(min_length=1)
+    finalization_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    observed_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    reason: Literal["head-drift", "target-sync-conflict"] = "head-drift"
+    invalidated_at: datetime
+
+
+class DeliveryFinalizationInvalidationReceipt(DeliveryFinalizationInvalidation):
+    """Durable evidence that exact-head finalization no longer holds."""
+
+    invalidation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @classmethod
+    def create(
+        cls,
+        invalidation: DeliveryFinalizationInvalidation,
+    ) -> DeliveryFinalizationInvalidationReceipt:
+        """Create one finalization invalidation using the canonical digest."""
+        values = invalidation.model_dump()
+        candidate = cls.model_construct(invalidation_id="0" * 64, **values)
+        return cls(invalidation_id=_receipt_digest(candidate, "invalidation_id"), **values)
+
+    @model_validator(mode="after")
+    def _validate_receipt(self) -> DeliveryFinalizationInvalidationReceipt:
+        if self.expected_head == self.observed_head:
+            message = "Delivery finalization invalidation requires head drift"
+            raise ValueError(message)
+        if self.invalidated_at.tzinfo is None:
+            message = "Delivery finalization invalidation timestamp must include a timezone"
+            raise ValueError(message)
+        if self.invalidation_id != _receipt_digest(self, "invalidation_id"):
+            message = "Delivery finalization invalidation identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryMergedPullRequestLatch(_DeliveryModel):
+    """Immutable first merged evidence for one finalized pull request."""
+
+    schema_version: Literal[1] = 1
+    change_id: str = Field(min_length=1)
+    finalization_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    ready_receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    acceptance_observation_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    provider_evidence_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    number: int = Field(gt=0)
+    node_id: str = Field(min_length=1)
+    base_branch: str = Field(min_length=1)
+    head_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    accepted_merge_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    merged_at: datetime
+
+    @model_validator(mode="after")
+    def _validate_timestamp(self) -> DeliveryMergedPullRequestLatch:
+        if self.merged_at.tzinfo is None:
+            message = "merged pull-request latch timestamp must include a timezone"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryChangeCompletion(_DeliveryModel):
+    """Minimal terminal projection of one durable completion receipt."""
+
+    completion_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    completed_at: datetime
+
+    @model_validator(mode="after")
+    def _validate_timestamp(self) -> DeliveryChangeCompletion:
+        if self.completed_at.tzinfo is None:
+            message = "Delivery Change completion timestamp must include a timezone"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryChangeDisposition(_DeliveryModel):
+    """First-write-wins evidence that a Change requires explicit attention."""
+
+    schema_version: Literal[1] = 1
+    disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    kind: DeliveryChangeDispositionKind
+    change_id: str = Field(min_length=1)
+    entered_from: DeliveryChangeStage
+    recorded_at: datetime
+    diagnostics: tuple[str, ...] = Field(min_length=1)
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        kind: DeliveryChangeDispositionKind,
+        change_id: str,
+        entered_from: DeliveryChangeStage,
+        recorded_at: datetime,
+        diagnostics: tuple[str, ...],
+    ) -> DeliveryChangeDisposition:
+        """Create one deterministic attention record from typed evidence."""
+        values = {
+            "kind": kind,
+            "change_id": change_id,
+            "entered_from": entered_from,
+            "recorded_at": recorded_at,
+            "diagnostics": diagnostics,
+        }
+        candidate = cls.model_construct(disposition_id="0" * 64, schema_version=1, **values)
+        return cls(disposition_id=_receipt_digest(candidate, "disposition_id"), **values)
+
+    @model_validator(mode="after")
+    def _validate_disposition(self) -> DeliveryChangeDisposition:
+        if self.entered_from == DeliveryChangeStage.COMPLETED:
+            message = "Change attention cannot be entered from completed state"
+            raise ValueError(message)
+        if (
+            self.kind == DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION
+            and self.entered_from != DeliveryChangeStage.AWAITING_MERGE
+        ):
+            message = "acceptance attention must be entered from awaiting-merge state"
+            raise ValueError(message)
+        if self.recorded_at.tzinfo is None:
+            message = "Change disposition timestamp must include a timezone"
+            raise ValueError(message)
+        if self.disposition_id != _receipt_digest(self, "disposition_id"):
+            message = "Change disposition identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryChangeDispositionResolution(_DeliveryModel):
+    """Durable evidence that one Change attention record was explicitly cleared."""
+
+    schema_version: Literal[1] = 1
+    resolution_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    change_id: str = Field(min_length=1)
+    disposition_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    resolved_at: datetime
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        change_id: str,
+        disposition_id: str,
+        resolved_at: datetime,
+    ) -> DeliveryChangeDispositionResolution:
+        """Create one deterministic resolution receipt for exact attention authority."""
+        values = {
+            "change_id": change_id,
+            "disposition_id": disposition_id,
+            "resolved_at": resolved_at,
+        }
+        candidate = cls.model_construct(resolution_id="0" * 64, schema_version=1, **values)
+        return cls(resolution_id=_receipt_digest(candidate, "resolution_id"), **values)
+
+    @model_validator(mode="after")
+    def _validate_resolution(self) -> DeliveryChangeDispositionResolution:
+        if self.resolved_at.tzinfo is None:
+            message = "Change disposition resolution timestamp must include a timezone"
+            raise ValueError(message)
+        if self.resolution_id != _receipt_digest(self, "resolution_id"):
+            message = "Change disposition resolution identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryCheckpointTrigger(_DeliveryModel):
+    """One durable reason to publish an exact reviewed Change head."""
+
+    kind: DeliveryCheckpointTriggerKind
+    outcome_id: str | None = Field(default=None, pattern=r"^OUT-[0-9]{3}$")
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> DeliveryCheckpointTrigger:
+        if self.kind == DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME:
+            if self.outcome_id is None:
+                message = "verified Outcome checkpoint trigger requires Outcome identity"
+                raise ValueError(message)
+        elif self.outcome_id is not None:
+            message = "Change-level checkpoint trigger cannot name Outcome identity"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryPendingCheckpoint(_DeliveryModel):
+    """Undrained obligations, anchored only when an exact reviewed head remains valid."""
+
+    head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    triggers: tuple[DeliveryCheckpointTrigger, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_triggers(self) -> DeliveryPendingCheckpoint:
+        identities = tuple(
+            (
+                trigger.kind,
+                trigger.outcome_id if trigger.kind == DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME else None,
+            )
+            for trigger in self.triggers
+        )
+        if len(identities) != len(set(identities)):
+            message = "pending checkpoint trigger kinds must be unique per scope"
+            raise ValueError(message)
+        return self
+
+
+class DeliveryCheckpointPublicationState(_DeliveryModel):
+    """Change-scoped checkpoint queue and last acknowledged remote head."""
+
+    change_id: str = Field(min_length=1)
+    published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    pending_checkpoint: DeliveryPendingCheckpoint | None = None
 
 
 class DeliveryResultCandidate(_DeliveryModel):
@@ -278,6 +858,7 @@ class DeliveryIntegrationAttentionCode(StrEnum):
     REPAIR_AUTHORITY = "repair-authority"
     CANDIDATE_PROOF_FAILED = "candidate-proof-failed"
     TARGET_CAS_LOST = "target-cas-lost"
+    EXTERNAL_ACCEPTANCE_REQUIRED = "external-acceptance-required"
 
 
 def integration_attention_disposition(
@@ -289,23 +870,6 @@ def integration_attention_disposition(
     if code == DeliveryIntegrationAttentionCode.MERGE_CONFLICT:
         return DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED
     return DeliveryIntegrationAttentionDisposition.OPERATOR_REQUIRED
-
-
-class DeliveryIntegrationCandidate(_DeliveryModel):
-    """Immutable candidate for one atomic product and completion publication."""
-
-    candidate_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    completion_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    change_id: str = Field(min_length=1)
-    package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    authority_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    runtime_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    result_history_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    reviewed_change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    integration_target: str = Field(min_length=1)
-    target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    completion_path: str = Field(min_length=1)
-    package_tree: str = Field(pattern=r"^[0-9a-f]{40}$")
 
 
 class DeliveryIntegrationCompletion(_DeliveryModel):
@@ -331,46 +895,6 @@ class DeliveryIntegrationAttention(_DeliveryModel):
     retry_condition: str = Field(min_length=1)
 
 
-class DeliveryIntegrationRepairReview(_DeliveryModel):
-    """Independent review identity bound to one exact repair commit."""
-
-    review_id: str = Field(min_length=1)
-    reviewer_id: str = Field(min_length=1)
-    candidate_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
-
-
-class DeliveryIntegrationRepair(_DeliveryModel):
-    """Exact typed binding for one independently reviewed Integration repair."""
-
-    attention_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    change_id: str = Field(min_length=1)
-    integration_target: str = Field(min_length=1)
-    prior_change_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    prior_target_head: str = Field(pattern=r"^[0-9a-f]{40}$")
-    reviewed_repair_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
-    owner_id: str = Field(min_length=1)
-    review: DeliveryIntegrationRepairReview
-
-    @model_validator(mode="after")
-    def _validate_review_binding(self) -> DeliveryIntegrationRepair:
-        if self.review.candidate_commit != self.reviewed_repair_commit:
-            message = "repair review must bind the reviewed repair commit"
-            raise ValueError(message)
-        if self.review.reviewer_id == self.owner_id:
-            message = "Integration repair review must be independent"
-            raise ValueError(message)
-        return self
-
-
-class DeliveryIntegrationRepairAuthorityAttention(_DeliveryModel):
-    """Claim-bound evidence that conflict repair exceeds admitted authority."""
-
-    attention_id: str = Field(pattern=r"^[0-9a-f]{64}$")
-    change_id: str = Field(min_length=1)
-    reason: str = Field(min_length=1)
-    locators: tuple[str, ...] = Field(min_length=1)
-
-
 class DeliveryActiveClaim(_DeliveryModel):
     """Recoverable execution identity for one active outcome claim."""
 
@@ -389,7 +913,6 @@ class OutcomeAuthorityBinding(_DeliveryModel):
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     plan_scope_id: str = Field(pattern=r"^SCOPE-[0-9]{3}$")
     stage: DeliveryStage = DeliveryStage.PLANNING
-    assembly_required: bool = False
     tasks: tuple[DeliveryTaskDefinition, ...] = ()
     results: tuple[DeliveryTaskResult, ...] = ()
     active_claim: DeliveryActiveClaim | None = None
@@ -428,7 +951,6 @@ class OutcomeAuthorityBinding(_DeliveryModel):
         expected_role = {
             DeliveryStage.PLANNING: DeliveryWorkerRole.PLANNER,
             DeliveryStage.IMPLEMENTATION: DeliveryWorkerRole.BUILDER,
-            DeliveryStage.ASSEMBLY: DeliveryWorkerRole.ASSEMBLY_REVIEWER,
         }.get(self.stage)
         if self.active_claim.worker_role != expected_role:
             message = "active claim worker role does not match its Delivery stage"
@@ -474,13 +996,27 @@ class OutcomeAuthorityBinding(_DeliveryModel):
 
 
 class DeliveryFrontier(_DeliveryModel):
-    """Canonical schema-v2 outcome state persisted beside Delivery authority."""
+    """Canonical outcome and Change checkpoint state persisted beside authority."""
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[17] = 17
     bindings: tuple[OutcomeAuthorityBinding, ...]
+    published_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    pending_checkpoint: DeliveryPendingCheckpoint | None = None
     operator_moves: tuple[DeliveryOperatorMove, ...] = ()
-    integration_result_id: str | None = None
-    integration_completion: DeliveryIntegrationCompletion | None = None
+    finalization: DeliveryFinalizationReceipt | None = None
+    finalization_invalidation: DeliveryFinalizationInvalidationReceipt | None = None
+    ready: PullRequestReadyReceipt | None = None
+    change_disposition_publication: DeliveryChangePublicationIdentity | None = None
+    change_publication_history: DeliveryChangePublicationHistory | None = None
+    target_sync_receipt: ChangeTargetSyncReceipt | None = None
+    external_head_adoption_receipt: ChangeExternalHeadAdoptionReceipt | None = None
+    external_head_promotion_receipt: ChangeExternalHeadPromotionReceipt | None = None
+    merged_pull_request_latch: DeliveryMergedPullRequestLatch | None = None
+    change_completion: DeliveryChangeCompletion | None = None
+    change_deferral: DeliveryChangeDeferral | None = None
+    change_abandonment: DeliveryChangeAbandonment | None = None
+    change_disposition: DeliveryChangeDisposition | None = None
+    change_disposition_resolution: DeliveryChangeDispositionResolution | None = None
     integration_attention: DeliveryIntegrationAttention | None = None
     integration_repair_claim: DeliveryActiveClaim | None = None
 
@@ -495,17 +1031,95 @@ class DeliveryFrontier(_DeliveryModel):
         if len(move_ids) != len(set(move_ids)):
             message = "Delivery operator move identities must be unique"
             raise ValueError(message)
-        if (self.integration_result_id is None) != (self.integration_completion is None):
-            message = "Integration result identity and completion must be published together"
+        self._validate_lifecycle_dispositions()
+        self._validate_change_disposition()
+        if self.finalization is not None and self.finalization_invalidation is not None:
+            message = "Delivery finalization and invalidation cannot coexist"
+            raise ValueError(message)
+        if self.ready is not None and (
+            self.finalization is None
+            or self.ready.change_id != self.finalization.change_id
+            or self.ready.finalization_id != self.finalization.finalization_id
+            or self.ready.head_sha != self.finalization.exact_head
+        ):
+            message = "pull-request ready authority requires its exact current finalization"
+            raise ValueError(message)
+        if self.finalization is not None and (
+            any(binding.stage != DeliveryStage.COMPLETED for binding in self.bindings)
+            or any(binding.active_claim is not None for binding in self.bindings)
+            or self.integration_repair_claim is not None
+        ):
+            message = "Delivery finalization requires completed unclaimed outcome authority"
+            raise ValueError(message)
+        promotion = self.external_head_promotion_receipt
+        adoption = self.external_head_adoption_receipt
+        if promotion is not None and (
+            adoption is None
+            or promotion.adoption_receipt_id != adoption.receipt_id
+            or promotion.promoted_head != adoption.adopted_head
+        ):
+            message = "external Change head promotion must bind the current adoption receipt"
+            raise ValueError(message)
+        return self
+
+    def _validate_lifecycle_dispositions(self) -> None:
+        if self.change_deferral is not None and self.change_abandonment is not None:
+            message = "Change deferral and abandonment cannot coexist"
+            raise ValueError(message)
+        if self.change_deferral is not None and self.change_completion is not None:
+            message = "deferred Change cannot retain terminal completion authority"
+            raise ValueError(message)
+        if self.change_abandonment is not None and (
+            self.change_completion is not None
+            or self.change_disposition is not None
+            or self.change_disposition_publication is not None
+            or self.integration_attention is not None
+            or self.integration_repair_claim is not None
+            or self.ready is not None
+            or self.merged_pull_request_latch is not None
+        ):
+            message = "abandoned Change cannot retain active or terminal authority"
+            raise ValueError(message)
+        if self.change_deferral is not None and any(binding.active_claim is not None for binding in self.bindings):
+            message = "deferred Change cannot retain an active mutation claim"
+            raise ValueError(message)
+        if self.change_abandonment is not None and any(binding.active_claim is not None for binding in self.bindings):
+            message = "abandoned Change cannot retain an active mutation claim"
+            raise ValueError(message)
+
+    def _validate_change_disposition(self) -> None:
+        if self.change_disposition is None:
+            if self.change_disposition_publication is not None:
+                message = "Change publication identity requires current Change attention"
+                raise ValueError(message)
+            return
+        if self.change_completion is not None:
+            message = "Change disposition cannot coexist with terminal completion authority"
             raise ValueError(message)
         if (
-            self.integration_completion is not None
-            and self.integration_result_id != self.integration_completion.completion_id
+            any(binding.active_claim is not None for binding in self.bindings)
+            or self.integration_repair_claim is not None
         ):
-            message = "Integration result identity must match its completion"
+            message = "Change attention cannot retain an active mutation claim"
             raise ValueError(message)
-        if self.integration_completion is not None and self.integration_attention is not None:
-            message = "completed Integration cannot retain attention"
+        resolution = self.change_disposition_resolution
+        if resolution is not None and resolution.change_id != self.change_disposition.change_id:
+            message = "Change attention and its resolution must bind the same Change"
+            raise ValueError(message)
+        publication = self.change_disposition_publication
+        if publication is not None and publication.change_id != self.change_disposition.change_id:
+            message = "Change attention and its publication identity must bind the same Change"
+            raise ValueError(message)
+        if resolution is not None and resolution.disposition_id == self.change_disposition.disposition_id:
+            message = "Change attention cannot retain its own resolution receipt"
+            raise ValueError(message)
+
+    @model_validator(mode="after")
+    def _validate_change_completion(self) -> DeliveryFrontier:
+        if self.change_completion is None:
+            return self
+        if self.finalization is None or self.ready is None or self.merged_pull_request_latch is None:
+            message = "Delivery Change completion requires finalization, ready, and merged evidence"
             raise ValueError(message)
         return self
 
@@ -570,6 +1184,32 @@ class PublishDeliveryResult(_DeliveryModel):
     outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
     claim_id: str = Field(min_length=1)
     result: DeliveryTaskResult
+
+
+class FinalizeDeliveryChange(_DeliveryModel):
+    """Finalize one exact reviewed Change head with exact-commit evidence."""
+
+    operation_id: str = Field(min_length=1)
+    exact_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    observations: tuple[DeliveryObservationReceipt, ...] = Field(min_length=1)
+    review: DeliveryReviewReceipt
+
+    @model_validator(mode="after")
+    def _validate_exact_commit_evidence(self) -> FinalizeDeliveryChange:
+        observation_ids = tuple(observation.observation_id for observation in self.observations)
+        if len(observation_ids) != len(set(observation_ids)):
+            message = "Delivery finalization observations must be unique"
+            raise ValueError(message)
+        if any(
+            observation.task_or_finalization_id != self.operation_id or observation.exact_commit != self.exact_head
+            for observation in self.observations
+        ):
+            message = "Delivery finalization observations do not match the exact head"
+            raise ValueError(message)
+        if self.review.exact_commit != self.exact_head:
+            message = "Delivery finalization review does not match the exact head"
+            raise ValueError(message)
+        return self
 
 
 class AdvanceDelivery(_DeliveryModel):
@@ -659,24 +1299,107 @@ class DeliveryRuntimeConflictError(RuntimeError):
     code = "ERR_DELIVERY_RUNTIME_CONFLICT"
 
 
+class DeliveryChangeDispositionConflictError(DeliveryRuntimeConflictError):
+    """An exact Change attention identity is stale or no longer active."""
+
+    retry_safe = False
+
+
+class DeliveryAcceptanceWaitingError(DeliveryRuntimeConflictError):
+    """The bound pull request is still open and has not reached acceptance."""
+
+    code = "ERR_DELIVERY_ACCEPTANCE_WAITING"
+
+
 class DeliveryRuntimeReferenceError(ValueError):
     """A Delivery mutation references absent contract authority."""
 
     code = "ERR_DELIVERY_RUNTIME_REFERENCE"
 
 
+class DeliveryRuntimeMigrationError(ValueError):
+    """A legacy frontier requires explicit migration before startup."""
+
+
 _STAGE_ORDER = {
     DeliveryStage.DESIGN: 0,
     DeliveryStage.PLANNING: 1,
     DeliveryStage.IMPLEMENTATION: 2,
-    DeliveryStage.ASSEMBLY: 3,
-    DeliveryStage.COMPLETED: 4,
+    DeliveryStage.COMPLETED: 3,
 }
+_PREVIOUS_FRONTIER_SCHEMA_VERSIONS = frozenset({2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16})
+_FRONTIER_SCHEMA_VERSION = 17
+_FINALIZATION_SCHEMA_VERSION = 2
+_LEGACY_FINALIZATION_MESSAGE = "legacy finalization authority requires explicit re-finalization"
+_LEGACY_INTEGRATION_COMPLETION_MESSAGE = "legacy Integration completion requires retirement before frontier migration"
+_CHECKPOINT_BACKFILL_SCHEMA_VERSIONS = frozenset({1, 2})
 _RETURN_TARGETS = {
     DeliveryStage.PLANNING: {DeliveryStage.DESIGN},
     DeliveryStage.IMPLEMENTATION: {DeliveryStage.PLANNING, DeliveryStage.DESIGN},
-    DeliveryStage.ASSEMBLY: {DeliveryStage.PLANNING, DeliveryStage.DESIGN},
 }
+_NORMAL_CHANGE_MUTATIONS = frozenset(
+    {
+        "record_checkpoint_branch_publication",
+        "acknowledge_checkpoint_publication",
+        "record_publication_identity",
+        "record_publication_successor",
+        "record_target_sync",
+        "record_resolved_target_sync",
+        "record_target_sync_abort",
+        "record_external_head_adoption",
+        "record_external_head_promotion",
+        "capture_target_sync_conflict",
+        "mark_awaiting_merge",
+        "reconcile_pull_request_draft_state",
+        "latch_merged_pull_request",
+        "complete_change",
+        "finalize_change",
+        "reconcile_finalization_head",
+        "remove_integration_repair_claim",
+        "remove_active_claim",
+        "publish_recovery_attention",
+        "activate_claim",
+        "publish_output",
+        "publish_plan",
+        "publish_result",
+        "transition",
+        "resolve_request",
+        "unblock",
+        "administrative_move",
+        "defer_change",
+        "resume_change",
+        "abandon_change",
+    }
+)
+
+
+def is_change_terminal(frontier: DeliveryFrontier) -> bool:
+    """Return whether one frontier has terminal Change authority."""
+    return frontier.change_abandonment is not None or frontier.change_completion is not None
+
+
+def derive_change_stage(frontier: DeliveryFrontier) -> DeliveryChangeStage:
+    """Derive the canonical Change stage from frontier authority."""
+    if frontier.change_abandonment is not None:
+        stage = DeliveryChangeStage.ABANDONED
+    elif frontier.change_deferral is not None:
+        stage = DeliveryChangeStage.DEFERRED
+    elif frontier.change_disposition is not None:
+        stage = {
+            DeliveryChangeDispositionKind.PUBLICATION_ATTENTION: DeliveryChangeStage.PUBLICATION_ATTENTION,
+            DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION: DeliveryChangeStage.ACCEPTANCE_ATTENTION,
+        }[frontier.change_disposition.kind]
+    elif is_change_terminal(frontier):
+        stage = DeliveryChangeStage.COMPLETED
+    elif frontier.ready is not None:
+        stage = DeliveryChangeStage.AWAITING_MERGE
+    elif frontier.finalization is not None:
+        stage = DeliveryChangeStage.FINALIZED
+    elif DeliveryStage.DESIGN in {binding.stage for binding in frontier.bindings}:
+        stage = DeliveryChangeStage.DESIGN
+    else:
+        stage = DeliveryChangeStage.BUILDING
+    return stage
 
 
 class DeliveryRuntime:
@@ -684,16 +1407,18 @@ class DeliveryRuntime:
 
     def __init__(
         self,
-        target_root: Path,
+        runtime_root: Path,
         contract: DeliveryContract,
         *,
         workspace_manager: ChangeWorkspaceManager | None = None,
+        migration_reviewed_head: str | None = None,
     ) -> None:
-        self._target_root = target_root.resolve()
+        self._target_root = runtime_root.resolve()
         self._contract = contract
         self._workspace_manager = workspace_manager
+        self._migration_reviewed_head = migration_reviewed_head
         self._authority_digest = hashlib.sha256(_model_content(contract)).hexdigest()
-        self._frontier_path = self._target_root / "delivery" / "changes" / contract.change_id / "frontier.json"
+        self._frontier_path = self._target_root / "changes" / contract.change_id / "frontier.json"
         self._validate_frontier(self._read()[0])
 
     @property
@@ -710,32 +1435,1068 @@ class DeliveryRuntime:
         """Return current canonical frontier bytes for OCC and failure proof."""
         return self._read()[1]
 
-    def completion_capture_bytes(self) -> tuple[bytes, bytes]:
-        """Return stable completed-outcome runtime and compact result history bytes."""
-        frontier, _content = self._read()
-        if {binding.stage for binding in frontier.bindings} != {DeliveryStage.COMPLETED}:
-            _conflict("Integration capture requires every outcome to be completed")
-        capture = frontier.model_copy(
-            update={
-                "integration_result_id": None,
-                "integration_completion": None,
-                "integration_attention": None,
-            }
-        )
-        results = tuple(result for binding in frontier.bindings for result in binding.results)
-        return _model_content(capture), _canonical_content(results)
-
-    def integration_completion(self) -> DeliveryIntegrationCompletion | None:
-        """Return the committed Integration identity when publication completed."""
-        return self._read()[0].integration_completion
-
     def integration_attention(self) -> DeliveryIntegrationAttention | None:
         """Return current retryable Integration evidence, if any."""
         return self._read()[0].integration_attention
 
+    def change_disposition(self) -> DeliveryChangeDisposition | None:
+        """Return current Change-level attention evidence, if any."""
+        return self._read()[0].change_disposition
+
+    def change_disposition_publication(self) -> DeliveryChangePublicationIdentity | None:
+        """Return the publication identity retained by current Change attention."""
+        return self._read()[0].change_disposition_publication
+
+    def change_disposition_resolution(self) -> DeliveryChangeDispositionResolution | None:
+        """Return the most recent durable Change attention resolution receipt."""
+        return self._read()[0].change_disposition_resolution
+
+    def change_deferral(self) -> DeliveryChangeDeferral | None:
+        """Return the current user-requested Change deferral, if any."""
+        return self._read()[0].change_deferral
+
+    def change_abandonment(self) -> DeliveryChangeAbandonment | None:
+        """Return the terminal user-requested Change abandonment, if any."""
+        return self._read()[0].change_abandonment
+
+    def defer_change(self, reason: str, deferred_at: datetime) -> DeliveryChangeDeferral:
+        """Pause one nonterminal Change while retaining its exact frontier and worktree."""
+        frontier, previous = self._read()
+        if frontier.change_deferral is not None:
+            return frontier.change_deferral
+        _require_change_mutable(frontier, "defer_change")
+        if frontier.change_abandonment is not None or is_change_terminal(frontier):
+            _conflict("terminal Delivery Change cannot be deferred")
+        _require_no_active_change_claim(frontier, "Change deferral")
+        prior_stage = derive_change_stage(frontier)
+        if prior_stage in {DeliveryChangeStage.DEFERRED, DeliveryChangeStage.ABANDONED}:
+            _conflict("Change is not eligible for deferral")
+        deferral = DeliveryChangeDeferral.create(
+            change_id=self._contract.change_id,
+            prior_stage=prior_stage,
+            deferred_at=deferred_at,
+            reason=reason,
+        )
+        self._replace(previous, frontier.model_copy(update={"change_deferral": deferral}))
+        return deferral
+
+    def resume_change(self) -> DeliveryChangeDeferral:
+        """Resume one exact deferred Change and return its preserved prior-state receipt."""
+        frontier, previous = self._read()
+        if frontier.change_abandonment is not None or is_change_terminal(frontier):
+            _conflict("terminal Delivery Change cannot be resumed")
+        _require_change_mutable(frontier, "resume_change")
+        deferral = frontier.change_deferral
+        if deferral is None:
+            _conflict("Delivery Change is not deferred")
+        _require_no_active_change_claim(frontier, "Change resume")
+        self._replace(previous, frontier.model_copy(update={"change_deferral": None}))
+        return deferral
+
+    def abandon_change(self, reason: str, abandoned_at: datetime) -> DeliveryChangeAbandonment:
+        """Terminate one uncompleted Change without discarding its retained authority."""
+        frontier, previous = self._read()
+        if frontier.change_abandonment is not None:
+            return frontier.change_abandonment
+        if frontier.change_completion is not None:
+            _conflict("completed Delivery Change cannot be abandoned")
+        _require_change_mutable(frontier, "abandon_change")
+        _require_no_active_change_claim(frontier, "Change abandonment")
+        prior_stage = derive_change_stage(frontier)
+        if prior_stage == DeliveryChangeStage.ABANDONED:
+            _conflict("Change is not eligible for abandonment")
+        abandonment = DeliveryChangeAbandonment.create(
+            change_id=self._contract.change_id,
+            prior_stage=prior_stage,
+            abandoned_at=abandoned_at,
+            reason=reason,
+        )
+        self._replace(
+            previous,
+            frontier.model_copy(
+                update={
+                    "change_abandonment": abandonment,
+                    "change_deferral": None,
+                    "change_disposition": None,
+                    "change_disposition_publication": None,
+                    "pending_checkpoint": None,
+                    "ready": None,
+                    "merged_pull_request_latch": None,
+                    "integration_attention": None,
+                    "integration_repair_claim": None,
+                }
+            ),
+        )
+        return abandonment
+
+    def _capture_existing_change_disposition(
+        self,
+        frontier: DeliveryFrontier,
+        existing: DeliveryChangeDisposition,
+        disposition: DeliveryChangeDisposition,
+        publication_identity: DeliveryChangePublicationIdentity | None,
+    ) -> tuple[DeliveryChangeDisposition, DeliveryFrontier | None]:
+        if not (
+            existing.kind == disposition.kind
+            and existing.change_id == disposition.change_id
+            and existing.entered_from == disposition.entered_from
+            and existing.diagnostics == disposition.diagnostics
+        ):
+            _conflict("Delivery Change already has different attention authority")
+        if publication_identity is None:
+            return existing, None
+        if publication_identity.change_id != self._contract.change_id:
+            _conflict("Change publication identity does not match the admitted Change")
+        current = frontier.change_disposition_publication
+        if current is None:
+            return (
+                existing,
+                frontier.model_copy(update={"change_disposition_publication": publication_identity}),
+            )
+        if current != publication_identity:
+            _conflict("Delivery Change attention has different publication identity")
+        return existing, None
+
+    def capture_change_disposition(
+        self,
+        disposition: DeliveryChangeDisposition,
+        *,
+        clear_ready: bool = False,
+        publication_identity: DeliveryChangePublicationIdentity | None = None,
+    ) -> DeliveryChangeDisposition:
+        """Persist one first-write-wins Change attention record."""
+        frontier, previous = self._read()
+        existing = frontier.change_disposition
+        if existing is not None:
+            result, updated = self._capture_existing_change_disposition(
+                frontier,
+                existing,
+                disposition,
+                publication_identity,
+            )
+            if updated is not None:
+                self._replace(previous, updated)
+            return result
+        if is_change_terminal(frontier):
+            _conflict("completed Delivery Change cannot retain attention")
+        _require_no_active_change_claim(frontier, "Change attention capture")
+        if disposition.change_id != self._contract.change_id:
+            _conflict("Change disposition does not match the admitted Change")
+        if disposition.entered_from != derive_change_stage(frontier):
+            _conflict("Change disposition does not match the current lifecycle stage")
+        retained_publication = publication_identity
+        if retained_publication is None and clear_ready:
+            retained_publication = _pull_request_identity(frontier.ready)
+        if retained_publication is not None and retained_publication.change_id != self._contract.change_id:
+            _conflict("Change publication identity does not match the admitted Change")
+        updated = frontier.model_copy(
+            update={
+                "change_disposition": disposition,
+                "change_disposition_publication": retained_publication,
+                "change_disposition_resolution": None,
+                "ready": None if clear_ready else frontier.ready,
+            }
+        )
+        self._replace(previous, updated)
+        return disposition
+
+    def resolve_change_disposition(
+        self,
+        expected_disposition_id: str,
+        resolved_at: datetime,
+    ) -> DeliveryChangeDispositionResolution:
+        """Clear one exact Change attention record without restoring provider authority."""
+        frontier, previous = self._read()
+        current = frontier.change_disposition
+        existing = frontier.change_disposition_resolution
+        if current is None:
+            if existing is not None and existing.disposition_id == expected_disposition_id:
+                return existing
+            _attention_conflict("Delivery Change attention is absent or already resolved")
+        if current.disposition_id != expected_disposition_id:
+            _attention_conflict("Delivery Change attention identity is stale")
+        if _target_sync_operation_id(current) is not None:
+            _attention_conflict("target synchronization requires an explicit conflict exit")
+        _require_no_active_change_claim(frontier, "Change attention resolution")
+        resolution = DeliveryChangeDispositionResolution.create(
+            change_id=self._contract.change_id,
+            disposition_id=current.disposition_id,
+            resolved_at=resolved_at,
+        )
+        updated = frontier.model_copy(
+            update={
+                "change_disposition": None,
+                "change_disposition_publication": None,
+                "change_disposition_resolution": resolution,
+            }
+        )
+        self._replace(previous, updated)
+        return resolution
+
+    def capture_publication_attention(
+        self,
+        recorded_at: datetime,
+        diagnostics: tuple[str, ...],
+        *,
+        clear_ready: bool = False,
+        publication_identity: DeliveryChangePublicationIdentity | None = None,
+    ) -> DeliveryChangeDisposition:
+        """Capture provider publication evidence that requires operator reconciliation."""
+        return self.capture_change_disposition(
+            DeliveryChangeDisposition.create(
+                kind=DeliveryChangeDispositionKind.PUBLICATION_ATTENTION,
+                change_id=self._contract.change_id,
+                entered_from=self.change_stage(),
+                recorded_at=recorded_at,
+                diagnostics=diagnostics,
+            ),
+            clear_ready=clear_ready,
+            publication_identity=publication_identity,
+        )
+
+    def capture_acceptance_attention(
+        self,
+        observation: PublicationPullRequestObservationReceipt,
+        diagnostics: tuple[str, ...],
+    ) -> DeliveryChangeDisposition:
+        """Capture one mismatched provider acceptance observation."""
+        return self.capture_change_disposition(
+            DeliveryChangeDisposition.create(
+                kind=DeliveryChangeDispositionKind.ACCEPTANCE_ATTENTION,
+                change_id=self._contract.change_id,
+                entered_from=DeliveryChangeStage.AWAITING_MERGE,
+                recorded_at=observation.observed_at,
+                diagnostics=(*diagnostics, f"acceptance-observation:{observation.observation_id}"),
+            ),
+            clear_ready=True,
+            publication_identity=DeliveryChangePublicationIdentity(
+                change_id=self._contract.change_id,
+                repository=observation.snapshot.repository,
+                number=observation.snapshot.number,
+                node_id=observation.snapshot.node_id,
+                head_sha=observation.snapshot.head_sha,
+            ),
+        )
+
+    def record_publication_successor(
+        self,
+        predecessor: DeliveryChangePublicationIdentity,
+        successor: DeliveryChangePublicationIdentity,
+    ) -> DeliveryChangePublicationHistory:
+        """Append one exact successor publication while retaining publication attention."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_publication_successor")
+        _require_no_active_change_claim(frontier, "publication supersession")
+        disposition = frontier.change_disposition
+        if disposition is None or disposition.kind != DeliveryChangeDispositionKind.PUBLICATION_ATTENTION:
+            _conflict("publication supersession requires current publication attention")
+        if (
+            predecessor.change_id != self._contract.change_id
+            or successor.change_id != self._contract.change_id
+            or frontier.change_disposition_publication != predecessor
+        ):
+            _conflict("publication supersession predecessor does not match current attention")
+        if predecessor == successor:
+            _conflict("publication supersession requires a distinct successor identity")
+        history = frontier.change_publication_history or DeliveryChangePublicationHistory.create(predecessor)
+        try:
+            updated_history = history.append(predecessor, successor)
+        except ValueError as exc:
+            _conflict(str(exc))
+        updated = frontier.model_copy(
+            update={
+                "change_disposition_publication": successor,
+                "change_publication_history": updated_history,
+            }
+        )
+        self._replace(previous, updated)
+        return updated_history
+
+    def record_publication_identity(
+        self,
+        publication: DeliveryChangePublicationIdentity,
+    ) -> DeliveryChangePublicationHistory:
+        """Record the first publication or refresh the exact head of the current PR."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_publication_identity")
+        if publication.change_id != self._contract.change_id:
+            _conflict("Change publication identity does not match the admitted Change")
+        history = frontier.change_publication_history
+        if history is None:
+            updated_history = DeliveryChangePublicationHistory.create(publication)
+        elif history.current == publication:
+            return history
+        else:
+            try:
+                updated_history = history.refresh_current(publication)
+            except ValueError as exc:
+                _conflict(str(exc))
+        self._replace(previous, frontier.model_copy(update={"change_publication_history": updated_history}))
+        return updated_history
+
     def show_binding(self, outcome_id: str) -> OutcomeAuthorityBinding:
         """Return one current outcome binding."""
         return _find_binding(self._read()[0], outcome_id)
+
+    def bindings(self) -> tuple[OutcomeAuthorityBinding, ...]:
+        """Return current outcome bindings in admitted authority order."""
+        return self._read()[0].bindings
+
+    def finalization_readiness(self) -> tuple[bool, tuple[str, ...]]:
+        """Return the same lifecycle readiness conditions enforced by finalization mutation."""
+        frontier, _content = self._read()
+        diagnostics: list[str] = []
+        if frontier.finalization is not None:
+            diagnostics.append("Delivery Change is already finalized")
+        if frontier.change_completion is not None:
+            diagnostics.append("Delivery Change is already completed")
+        if any(binding.stage != DeliveryStage.COMPLETED for binding in frontier.bindings):
+            diagnostics.append("every Outcome must be completed")
+        if any(binding.active_claim is not None for binding in frontier.bindings):
+            diagnostics.append("finalization cannot overlap an active Outcome claim")
+        if frontier.integration_repair_claim is not None:
+            diagnostics.append("finalization cannot overlap an Integration repair claim")
+        if any(
+            tuple(result.task_id for result in binding.results) != binding.task_ids for binding in frontier.bindings
+        ):
+            diagnostics.append("every Task result must be present in authority order")
+        return not diagnostics, tuple(diagnostics)
+
+    def checkpoint_publication_state(self) -> DeliveryCheckpointPublicationState:
+        """Return the Change-level checkpoint queue without provider identity."""
+        frontier, _content = self._read()
+        return DeliveryCheckpointPublicationState(
+            change_id=self._contract.change_id,
+            published_head=frontier.published_head,
+            pending_checkpoint=frontier.pending_checkpoint,
+        )
+
+    def record_checkpoint_branch_publication(
+        self,
+        expected: DeliveryCheckpointPublicationState,
+        published_head: str,
+    ) -> DeliveryCheckpointPublicationState:
+        """Record one exact reconciled remote head without draining its obligations."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_checkpoint_branch_publication")
+        pending = expected.pending_checkpoint
+        if (
+            expected.change_id != self._contract.change_id
+            or pending is None
+            or pending.head != published_head
+            or frontier.published_head != expected.published_head
+        ):
+            _conflict("checkpoint branch publication no longer matches the durable queue")
+        updated = frontier.model_copy(update={"published_head": published_head})
+        self._replace(previous, updated)
+        return self.checkpoint_publication_state()
+
+    def acknowledge_checkpoint_publication(
+        self,
+        expected: DeliveryPendingCheckpoint,
+        published_head: str,
+    ) -> DeliveryCheckpointPublicationState:
+        """Drain reconciled obligations while retaining any newer local checkpoint."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "acknowledge_checkpoint_publication")
+        current = frontier.pending_checkpoint
+        if expected.head != published_head or frontier.published_head != published_head or current is None:
+            _conflict("checkpoint acknowledgment no longer matches the published head")
+        if current.head == published_head:
+            retained = tuple(trigger for trigger in current.triggers if trigger not in expected.triggers)
+        else:
+            retained = tuple(
+                trigger
+                for trigger in current.triggers
+                if not (
+                    trigger in expected.triggers and trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK
+                )
+            )
+        pending = current.model_copy(update={"triggers": retained}) if retained else None
+        updated = frontier.model_copy(update={"pending_checkpoint": pending})
+        self._replace(previous, updated)
+        return self.checkpoint_publication_state()
+
+    def finalization(self) -> DeliveryFinalizationReceipt | None:
+        """Return current exact-head finalization authority, if any."""
+        return self._read()[0].finalization
+
+    def finalization_invalidation(self) -> DeliveryFinalizationInvalidationReceipt | None:
+        """Return the latest durable finalization invalidation, if any."""
+        return self._read()[0].finalization_invalidation
+
+    def ready_receipt(self) -> PullRequestReadyReceipt | None:
+        """Return durable authority that the exact finalized pull request is ready."""
+        return self._read()[0].ready
+
+    def publication_history(self) -> DeliveryChangePublicationHistory | None:
+        """Return ordered provider publication identities for this Change."""
+        return self._read()[0].change_publication_history
+
+    def target_sync_receipt(self) -> ChangeTargetSyncReceipt | None:
+        """Return the latest exact target synchronization receipt, if any."""
+        return self._read()[0].target_sync_receipt
+
+    def external_head_adoption_receipt(self) -> ChangeExternalHeadAdoptionReceipt | None:
+        """Return the latest exact external Change-head adoption receipt, if any."""
+        return self._read()[0].external_head_adoption_receipt
+
+    def external_head_promotion_receipt(self) -> ChangeExternalHeadPromotionReceipt | None:
+        """Return the latest exact external Change-head promotion receipt, if any."""
+        return self._read()[0].external_head_promotion_receipt
+
+    def validate_target_sync_conflict(
+        self,
+        expected_disposition_id: str,
+        operation_id: str,
+    ) -> DeliveryChangeDisposition:
+        """Require one exact target-sync operation attention record."""
+        frontier, _content = self._read()
+        return _require_target_sync_attention(frontier, expected_disposition_id, operation_id)
+
+    def completion_receipt(self) -> CompletionReceipt | None:
+        """Return the exact terminal receipt while rejecting partial completion state."""
+        frontier, _content = self._read()
+        store = CompletionReceiptStore(self._target_root)
+        try:
+            record = store.read_bundle(self._contract.change_id)
+        except CompletionReceiptConflictError:
+            _conflict("terminal frontier state does not match its completion record")
+        if frontier.change_completion is None:
+            if record is not None:
+                _conflict("completion receipt exists without terminal frontier state")
+            return None
+        if record is None:
+            _conflict("terminal frontier state does not match its completion record")
+        stored = record.receipt
+        display = record.display
+        if (
+            stored.completion_id != frontier.change_completion.completion_id
+            or stored.completed_at != frontier.change_completion.completed_at
+            or display.completion_id != stored.completion_id
+            or display.title != self._contract.title
+            or display.outcome_titles != tuple(outcome.title for outcome in self._contract.outcomes)
+        ):
+            _conflict("terminal frontier state does not match its completion record")
+        return stored
+
+    def merged_pull_request_latch(self) -> DeliveryMergedPullRequestLatch | None:
+        """Return immutable first merged evidence for the bound pull request."""
+        return self._read()[0].merged_pull_request_latch
+
+    def mark_awaiting_merge(self, receipt: PullRequestReadyReceipt) -> PullRequestReadyReceipt:
+        """Bind provider-observed ready state to the exact current finalization."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "mark_awaiting_merge")
+        finalization = frontier.finalization
+        if finalization is None:
+            _conflict("pull-request ready state requires current finalization authority")
+        if (
+            receipt.change_id != self._contract.change_id
+            or receipt.finalization_id != finalization.finalization_id
+            or receipt.head_sha != finalization.exact_head
+        ):
+            _conflict("pull-request ready receipt does not match current finalization authority")
+        publication = _pull_request_identity(receipt)
+        history = frontier.change_publication_history
+        if history is None:
+            updated_history = DeliveryChangePublicationHistory.create(publication)
+        elif (
+            history.current.repository,
+            history.current.number,
+            history.current.node_id,
+        ) == (
+            publication.repository,
+            publication.number,
+            publication.node_id,
+        ):
+            try:
+                updated_history = history.refresh_current(publication)
+            except ValueError as exc:
+                _conflict(str(exc))
+        else:
+            _conflict("pull-request ready receipt does not match the current publication")
+        if frontier.ready is not None:
+            if frontier.ready == receipt:
+                if frontier.change_publication_history != updated_history:
+                    self._replace(
+                        previous,
+                        frontier.model_copy(update={"change_publication_history": updated_history}),
+                    )
+                return receipt
+            _conflict("Delivery Change is already awaiting merge with different authority")
+        self._replace(
+            previous,
+            frontier.model_copy(update={"ready": receipt, "change_publication_history": updated_history}),
+        )
+        return receipt
+
+    def reconcile_pull_request_draft_state(
+        self,
+        *,
+        provider_draft: bool,
+        observed_at: datetime | None = None,
+        observation_id: str | None = None,
+    ) -> PullRequestReadyReceipt | None:
+        """Retain ready authority only while the provider reports the PR ready."""
+        frontier, _previous = self._read()
+        _require_change_mutable(frontier, "reconcile_pull_request_draft_state")
+        if frontier.ready is None or not provider_draft:
+            return frontier.ready
+        diagnostics = ((f"pull-request-observation:{observation_id}",) if observation_id is not None else ()) + (
+            "provider pull request regressed to draft",
+        )
+        disposition = DeliveryChangeDisposition.create(
+            kind=DeliveryChangeDispositionKind.PUBLICATION_ATTENTION,
+            change_id=self._contract.change_id,
+            entered_from=derive_change_stage(frontier),
+            recorded_at=observed_at or datetime.now(UTC),
+            diagnostics=diagnostics,
+        )
+        self.capture_change_disposition(disposition, clear_ready=True)
+        return None
+
+    def latch_merged_pull_request(
+        self,
+        observation: PublicationPullRequestObservationReceipt,
+    ) -> DeliveryMergedPullRequestLatch:
+        """Persist the first exact merged tuple and reject later regression or drift."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "latch_merged_pull_request")
+        finalization = frontier.finalization
+        ready = frontier.ready
+        snapshot = observation.snapshot
+        if finalization is None or ready is None:
+            _conflict("merged pull-request evidence requires awaiting-merge authority")
+        if (
+            observation.change_id != self._contract.change_id
+            or ready.change_id != self._contract.change_id
+            or ready.finalization_id != finalization.finalization_id
+            or snapshot.repository != ready.repository
+            or snapshot.number != ready.number
+            or snapshot.node_id != ready.node_id
+            or snapshot.head_sha != finalization.exact_head
+            or snapshot.head_sha != ready.head_sha
+        ):
+            self.capture_acceptance_attention(
+                observation,
+                ("provider acceptance evidence does not match awaiting-merge authority",),
+            )
+            _conflict("merged pull-request evidence does not match awaiting-merge authority")
+        existing = frontier.merged_pull_request_latch
+        if existing is not None and (
+            snapshot.state != "closed"
+            or not snapshot.merged
+            or snapshot.merge_commit_sha is None
+            or snapshot.merged_at is None
+        ):
+            self.capture_acceptance_attention(
+                observation,
+                ("provider acceptance evidence regressed from the immutable merged latch",),
+            )
+            _conflict("provider acceptance evidence regressed from the immutable merged latch")
+        if is_acceptance_waiting_observation(observation):
+            message = "provider pull request is still open and unmerged"
+            raise DeliveryAcceptanceWaitingError(message)
+        if not snapshot.merged or snapshot.state != "closed":
+            self.capture_acceptance_attention(
+                observation,
+                ("provider acceptance observation is not merged and closed",),
+            )
+            _conflict("acceptance observation does not report a merged pull request")
+        if snapshot.merged_at is None or snapshot.merge_commit_sha is None:
+            self.capture_acceptance_attention(
+                observation,
+                ("provider acceptance observation is missing merge evidence",),
+            )
+            _conflict("merged pull-request evidence is incomplete")
+        candidate = DeliveryMergedPullRequestLatch(
+            change_id=self._contract.change_id,
+            finalization_id=finalization.finalization_id,
+            ready_receipt_id=ready.receipt_id,
+            acceptance_observation_id=observation.observation_id,
+            provider_evidence_digest=observation.provider_evidence_digest,
+            repository=snapshot.repository,
+            number=snapshot.number,
+            node_id=snapshot.node_id,
+            base_branch=snapshot.base_branch,
+            head_sha=snapshot.head_sha,
+            accepted_merge_commit=snapshot.merge_commit_sha,
+            merged_at=snapshot.merged_at,
+        )
+        if existing is not None:
+            if (
+                existing.repository,
+                existing.number,
+                existing.node_id,
+                existing.base_branch,
+                existing.head_sha,
+                existing.accepted_merge_commit,
+                existing.merged_at,
+            ) == (
+                candidate.repository,
+                candidate.number,
+                candidate.node_id,
+                candidate.base_branch,
+                candidate.head_sha,
+                candidate.accepted_merge_commit,
+                candidate.merged_at,
+            ):
+                return existing
+            self.capture_acceptance_attention(
+                observation,
+                ("provider acceptance evidence conflicts with the immutable merged latch",),
+            )
+            _conflict("merged pull-request evidence conflicts with the immutable latch")
+        self._replace(previous, frontier.model_copy(update={"merged_pull_request_latch": candidate}))
+        return candidate
+
+    def complete_change(self, receipt: CompletionReceipt) -> CompletionReceipt:
+        """Atomically publish one terminal receipt and its minimal frontier projection."""
+        frontier, previous = self._read()
+        store = CompletionReceiptStore(self._target_root)
+        try:
+            existing_record = store.read_bundle(self._contract.change_id)
+        except CompletionReceiptConflictError:
+            _conflict("completion record exists with malformed authority")
+        display = CompletionDisplayMetadata.create(
+            change_id=self._contract.change_id,
+            completion_id=receipt.completion_id,
+            title=self._contract.title,
+            outcome_titles=tuple(outcome.title for outcome in self._contract.outcomes),
+            outcome_promises=tuple(outcome.promise for outcome in self._contract.outcomes),
+        )
+        if frontier.change_completion is not None:
+            if (
+                existing_record is not None
+                and existing_record.receipt == receipt
+                and existing_record.display == display
+                and frontier.change_completion.completion_id == receipt.completion_id
+            ):
+                return receipt
+            _conflict("Delivery Change is already completed with different authority")
+        if existing_record is not None:
+            _conflict("completion receipt exists without terminal frontier state")
+        _require_change_mutable(frontier, "complete_change")
+        finalization = frontier.finalization
+        ready = frontier.ready
+        latch = frontier.merged_pull_request_latch
+        if finalization is None or ready is None or latch is None:
+            _conflict("Delivery Change completion requires finalized awaiting-merge evidence")
+        if (
+            receipt.change_id != self._contract.change_id
+            or receipt.finalization_receipt_id != finalization.finalization_id
+            or receipt.finalized_change_head != finalization.exact_head
+            or receipt.repository_identity != latch.repository
+            or receipt.pull_request_identity.number != latch.number
+            or receipt.pull_request_identity.node_id != latch.node_id
+            or receipt.accepted_target_ref != latch.base_branch
+            or receipt.accepted_merge_commit != latch.accepted_merge_commit
+            or receipt.merged_at != latch.merged_at
+            or receipt.acceptance_observation_id != latch.acceptance_observation_id
+            or receipt.review_receipt_ids != (finalization.review.review_id,)
+        ):
+            _conflict("completion receipt does not match finalization and merged evidence")
+        projection = DeliveryChangeCompletion(
+            completion_id=receipt.completion_id,
+            completed_at=receipt.completed_at,
+        )
+        replacement = _model_content(frontier.model_copy(update={"change_completion": projection}))
+        completion_participant = store.participant(receipt)
+        display_participant = store.display_participant(display)
+        frontier_participant = ReplacementTransactionParticipant(
+            self._target_root,
+            self._frontier_path.relative_to(self._target_root),
+            previous,
+            replacement,
+        )
+        transaction_id = hashlib.sha256(
+            completion_participant.content + display_participant.content + previous + replacement
+        ).hexdigest()
+        RuntimeTransaction(
+            self._target_root,
+            f"delivery-completion-{transaction_id}",
+            (completion_participant, display_participant, frontier_participant),
+        ).commit()
+        return receipt
+
+    def finalize_change(
+        self,
+        request: FinalizeDeliveryChange,
+        finalized_at: datetime,
+    ) -> DeliveryFinalizationReceipt:
+        """Bind completed authority and final validation to one exact Change head."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "finalize_change")
+        existing = frontier.finalization
+        if existing is not None:
+            if (
+                existing.operation_id == request.operation_id
+                and existing.exact_head == request.exact_head
+                and existing.observations == request.observations
+                and existing.review == request.review
+            ):
+                return existing
+            _conflict("Delivery Change is already finalized with different authority")
+        if any(binding.stage != DeliveryStage.COMPLETED for binding in frontier.bindings):
+            _conflict("Delivery finalization requires every Outcome completed")
+        if any(binding.active_claim is not None for binding in frontier.bindings):
+            _conflict("Delivery finalization cannot overlap an active Outcome claim")
+        if frontier.integration_repair_claim is not None:
+            _conflict("Delivery finalization cannot overlap an Integration repair claim")
+        for binding in frontier.bindings:
+            if tuple(result.task_id for result in binding.results) != binding.task_ids:
+                _conflict("Delivery finalization requires every Task result in authority order")
+        if any(observation.change_id != self._contract.change_id for observation in request.observations):
+            _conflict("Delivery finalization observations do not match the Change")
+        results = tuple(result for binding in frontier.bindings for result in binding.results)
+        finalization = DeliveryFinalization(
+            operation_id=request.operation_id,
+            change_id=self._contract.change_id,
+            exact_head=request.exact_head,
+            authority_digest=self._authority_digest,
+            result_digests=tuple(hashlib.sha256(_model_content(result)).hexdigest() for result in results),
+            observations=request.observations,
+            review=request.review,
+            finalized_at=finalized_at,
+        )
+        receipt = DeliveryFinalizationReceipt.create(finalization)
+        updated = _queue_finalization_checkpoint(
+            frontier.model_copy(
+                update={
+                    "finalization": receipt,
+                    "finalization_invalidation": None,
+                    "ready": None,
+                }
+            ),
+            request.exact_head,
+        )
+        self._replace(previous, updated)
+        return receipt
+
+    def reconcile_finalization_head(
+        self,
+        observed_head: str,
+        invalidated_at: datetime,
+    ) -> DeliveryFinalizationReceipt | DeliveryFinalizationInvalidationReceipt | None:
+        """Retain exact finalization or invalidate it after observed Change-head drift."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "reconcile_finalization_head")
+        finalization = frontier.finalization
+        if finalization is None:
+            invalidation = frontier.finalization_invalidation
+            if invalidation is not None and invalidation.observed_head == observed_head:
+                return invalidation
+            return None
+        if finalization.exact_head == observed_head:
+            return finalization
+        invalidation = DeliveryFinalizationInvalidationReceipt.create(
+            DeliveryFinalizationInvalidation(
+                change_id=self._contract.change_id,
+                finalization_id=finalization.finalization_id,
+                expected_head=finalization.exact_head,
+                observed_head=observed_head,
+                invalidated_at=invalidated_at,
+            )
+        )
+        updated = frontier.model_copy(
+            update={
+                "finalization": None,
+                "finalization_invalidation": invalidation,
+                "ready": None,
+                "pending_checkpoint": _invalidate_finalization_checkpoint(frontier.pending_checkpoint),
+            }
+        )
+        self._replace(previous, updated)
+        return invalidation
+
+    def record_target_sync(
+        self,
+        receipt: ChangeTargetSyncReceipt,
+        synced_at: datetime,
+    ) -> ChangeTargetSyncReceipt:
+        """Persist one exact target-sync result and invalidate stale finalization authority."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_target_sync")
+        _require_no_active_change_claim(frontier, "target synchronization")
+        if receipt.change_id != self._contract.change_id:
+            _conflict("target synchronization receipt does not match the admitted Change")
+        existing = frontier.target_sync_receipt
+        if existing is not None and existing.operation_id == receipt.operation_id:
+            if existing != receipt:
+                _conflict("target synchronization operation has different receipt evidence")
+            return existing
+        updated = self._target_sync_update(frontier, receipt, synced_at)
+        self._replace(previous, updated)
+        return receipt
+
+    def record_external_head_adoption(
+        self,
+        receipt: ChangeExternalHeadAdoptionReceipt,
+        adopted_at: datetime,
+    ) -> ChangeExternalHeadAdoptionReceipt:
+        """Persist one adopted external head, invalidate stale finalization, and queue publication."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_external_head_adoption")
+        _require_no_active_change_claim(frontier, "external Change head adoption")
+        if adopted_at.tzinfo is None:
+            message = "external Change head adoption timestamp must include a timezone"
+            raise ValueError(message)
+        if receipt.change_id != self._contract.change_id:
+            _conflict("external Change head adoption receipt does not match the admitted Change")
+        existing = frontier.external_head_adoption_receipt
+        if existing is not None and existing.operation_id == receipt.operation_id:
+            if existing != receipt:
+                _conflict("external Change head adoption operation has different receipt evidence")
+            return existing
+        updated = self._external_head_adoption_update(frontier, receipt, adopted_at)
+        self._replace(previous, updated)
+        return receipt
+
+    def record_external_head_promotion(
+        self,
+        receipt: ChangeExternalHeadPromotionReceipt,
+        promoted_at: datetime,
+    ) -> ChangeExternalHeadPromotionReceipt:
+        """Persist one exact external Change-head review admission."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_external_head_promotion")
+        _require_no_active_change_claim(frontier, "external Change head promotion")
+        if promoted_at.tzinfo is None:
+            message = "external Change head promotion timestamp must include a timezone"
+            raise ValueError(message)
+        if receipt.change_id != self._contract.change_id:
+            _conflict("external Change head promotion receipt does not match the admitted Change")
+        adoption = frontier.external_head_adoption_receipt
+        if adoption is None or receipt.adoption_receipt_id != adoption.receipt_id:
+            _conflict("external Change head promotion receipt does not match current adoption evidence")
+        if receipt.promoted_head != adoption.adopted_head:
+            _conflict("external Change head promotion receipt does not match the adopted head")
+        existing = frontier.external_head_promotion_receipt
+        if existing is not None and existing.operation_id == receipt.operation_id:
+            if existing != receipt:
+                _conflict("external Change head promotion operation has different receipt evidence")
+            return existing
+        updated = frontier.model_copy(update={"external_head_promotion_receipt": receipt})
+        self._replace(previous, updated)
+        return receipt
+
+    def record_resolved_target_sync(
+        self,
+        receipt: ChangeTargetSyncReceipt,
+        expected_disposition_id: str,
+        operation_id: str,
+        synced_at: datetime,
+    ) -> ChangeTargetSyncReceipt:
+        """Record one resolved merge while atomically clearing its exact attention."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_resolved_target_sync", allow_attention=True)
+        _require_no_active_change_claim(frontier, "target synchronization resolution")
+        _require_target_sync_attention(frontier, expected_disposition_id, operation_id)
+        if receipt.change_id != self._contract.change_id:
+            _conflict("target synchronization receipt does not match the admitted Change")
+        existing = frontier.target_sync_receipt
+        if existing is not None and existing.operation_id == receipt.operation_id:
+            if existing != receipt:
+                _conflict("target synchronization operation has different receipt evidence")
+            return existing
+        updated = self._target_sync_update(frontier, receipt, synced_at)
+        resolution = DeliveryChangeDispositionResolution.create(
+            change_id=self._contract.change_id,
+            disposition_id=expected_disposition_id,
+            resolved_at=synced_at,
+        )
+        updated = updated.model_copy(
+            update={
+                "change_disposition": None,
+                "change_disposition_publication": None,
+                "change_disposition_resolution": resolution,
+            }
+        )
+        self._replace(previous, updated)
+        return receipt
+
+    def record_target_sync_abort(
+        self,
+        expected_disposition_id: str,
+        operation_id: str,
+        resolved_at: datetime,
+    ) -> DeliveryChangeDispositionResolution:
+        """Clear one exact target-sync attention after its workspace abort receipt exists."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_target_sync_abort", allow_attention=True)
+        _require_target_sync_attention(frontier, expected_disposition_id, operation_id)
+        _require_no_active_change_claim(frontier, "target synchronization abort")
+        resolution = DeliveryChangeDispositionResolution.create(
+            change_id=self._contract.change_id,
+            disposition_id=expected_disposition_id,
+            resolved_at=resolved_at,
+        )
+        updated = frontier.model_copy(
+            update={
+                "change_disposition": None,
+                "change_disposition_publication": None,
+                "change_disposition_resolution": resolution,
+            }
+        )
+        self._replace(previous, updated)
+        return resolution
+
+    def _target_sync_update(
+        self,
+        frontier: DeliveryFrontier,
+        receipt: ChangeTargetSyncReceipt,
+        synced_at: datetime,
+    ) -> DeliveryFrontier:
+        if synced_at.tzinfo is None:
+            message = "target synchronization timestamp must include a timezone"
+            raise ValueError(message)
+        finalization = frontier.finalization
+        invalidation = frontier.finalization_invalidation
+        ready = frontier.ready
+        if finalization is not None and finalization.exact_head != receipt.merged_head:
+            invalidation = DeliveryFinalizationInvalidationReceipt.create(
+                DeliveryFinalizationInvalidation(
+                    change_id=self._contract.change_id,
+                    finalization_id=finalization.finalization_id,
+                    expected_head=finalization.exact_head,
+                    observed_head=receipt.merged_head,
+                    invalidated_at=synced_at,
+                )
+            )
+            finalization = None
+            ready = None
+
+        pending = frontier.pending_checkpoint
+        triggers = (
+            ()
+            if pending is None
+            else tuple(
+                trigger for trigger in pending.triggers if trigger.kind != DeliveryCheckpointTriggerKind.FINALIZATION
+            )
+        )
+        explicit = DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT)
+        if explicit not in triggers:
+            triggers = (*triggers, explicit)
+        return frontier.model_copy(
+            update={
+                "target_sync_receipt": receipt,
+                "finalization": finalization,
+                "finalization_invalidation": invalidation,
+                "ready": ready,
+                "pending_checkpoint": DeliveryPendingCheckpoint(
+                    head=receipt.merged_head,
+                    triggers=triggers,
+                ),
+            }
+        )
+
+    def _external_head_adoption_update(
+        self,
+        frontier: DeliveryFrontier,
+        receipt: ChangeExternalHeadAdoptionReceipt,
+        adopted_at: datetime,
+    ) -> DeliveryFrontier:
+        finalization = frontier.finalization
+        invalidation = frontier.finalization_invalidation
+        ready = frontier.ready
+        if finalization is not None and finalization.exact_head != receipt.adopted_head:
+            invalidation = DeliveryFinalizationInvalidationReceipt.create(
+                DeliveryFinalizationInvalidation(
+                    change_id=self._contract.change_id,
+                    finalization_id=finalization.finalization_id,
+                    expected_head=finalization.exact_head,
+                    observed_head=receipt.adopted_head,
+                    invalidated_at=adopted_at,
+                )
+            )
+            finalization = None
+            ready = None
+
+        pending = frontier.pending_checkpoint
+        triggers = (
+            ()
+            if pending is None
+            else tuple(
+                trigger for trigger in pending.triggers if trigger.kind != DeliveryCheckpointTriggerKind.FINALIZATION
+            )
+        )
+        explicit = DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.EXPLICIT)
+        if explicit not in triggers:
+            triggers = (*triggers, explicit)
+        return frontier.model_copy(
+            update={
+                "external_head_adoption_receipt": receipt,
+                "external_head_promotion_receipt": None,
+                "finalization": finalization,
+                "finalization_invalidation": invalidation,
+                "ready": ready,
+                "pending_checkpoint": DeliveryPendingCheckpoint(
+                    head=receipt.adopted_head,
+                    triggers=triggers,
+                ),
+            }
+        )
+
+    def capture_target_sync_conflict(
+        self,
+        operation_id: str,
+        target_head: str,
+        recorded_at: datetime,
+        diagnostics: tuple[str, ...],
+        *,
+        publication_identity: DeliveryChangePublicationIdentity | None = None,
+    ) -> DeliveryChangeDisposition:
+        """Retain target-merge attention and invalidate authority exposed to the conflict."""
+        frontier, previous = self._read()
+        existing = frontier.change_disposition
+        if existing is not None:
+            _require_target_sync_attention(frontier, existing.disposition_id, operation_id)
+            return existing
+        _require_change_mutable(frontier, "capture_target_sync_conflict")
+        _require_no_active_change_claim(frontier, "target synchronization attention capture")
+        if recorded_at.tzinfo is None:
+            message = "target synchronization attention timestamp must include a timezone"
+            raise ValueError(message)
+        if publication_identity is None and frontier.ready is not None:
+            publication_identity = _pull_request_identity(frontier.ready)
+        if publication_identity is not None and publication_identity.change_id != self._contract.change_id:
+            _conflict("Change publication identity does not match the admitted Change")
+
+        invalidation = frontier.finalization_invalidation
+        if frontier.finalization is not None:
+            if frontier.finalization.exact_head == target_head:
+                _conflict("target synchronization conflict head must differ from finalized Change head")
+            invalidation = DeliveryFinalizationInvalidationReceipt.create(
+                DeliveryFinalizationInvalidation(
+                    change_id=self._contract.change_id,
+                    finalization_id=frontier.finalization.finalization_id,
+                    expected_head=frontier.finalization.exact_head,
+                    observed_head=target_head,
+                    reason="target-sync-conflict",
+                    invalidated_at=recorded_at,
+                )
+            )
+        disposition = DeliveryChangeDisposition.create(
+            kind=DeliveryChangeDispositionKind.PUBLICATION_ATTENTION,
+            change_id=self._contract.change_id,
+            entered_from=self.change_stage(),
+            recorded_at=recorded_at,
+            diagnostics=(f"target-sync-operation:{operation_id}", *diagnostics),
+        )
+        updated = frontier.model_copy(
+            update={
+                "change_disposition": disposition,
+                "change_disposition_publication": publication_identity,
+                "change_disposition_resolution": None,
+                "finalization": None,
+                "finalization_invalidation": invalidation,
+                "ready": None,
+                "pending_checkpoint": _invalidate_finalization_checkpoint(frontier.pending_checkpoint),
+            }
+        )
+        self._replace(previous, updated)
+        return disposition
 
     def active_claims(self) -> tuple[tuple[str, DeliveryActiveClaim], ...]:
         """Return active claim identity keyed by outcome in authority order."""
@@ -750,27 +2511,6 @@ class DeliveryRuntime:
         """Return the current change-level Integration repair claim, if any."""
         return self._read()[0].integration_repair_claim
 
-    def activate_integration_repair_claim(self, claim: DeliveryActiveClaim) -> DeliveryActiveClaim:
-        """Bind one fresh claim to current repair-required Integration attention."""
-        frontier, previous = self._read()
-        if self.change_stage() != DeliveryChangeStage.INTEGRATION:
-            _conflict("Integration repair claim requires an Integration-ready runtime")
-        if (
-            frontier.integration_attention is None
-            or integration_attention_disposition(frontier.integration_attention.code)
-            != DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED
-        ):
-            _conflict("Integration repair claim requires current repair attention")
-        if frontier.integration_repair_claim is not None:
-            _conflict("Integration repair is already claimed")
-        if any(binding.active_claim is not None for binding in frontier.bindings):
-            _conflict("Integration repair cannot coexist with outcome claims")
-        if claim.worker_role != DeliveryWorkerRole.INTEGRATION_REPAIRER or claim.task_id is not None:
-            _conflict("claim does not describe Integration repair work")
-        updated = frontier.model_copy(update={"integration_repair_claim": claim})
-        self._replace(previous, updated)
-        return claim
-
     def require_integration_repair_claim(self, attempt_id: str, claim_id: str) -> DeliveryActiveClaim:
         """Return the repair claim only when its exact execution identity remains active."""
         claim = self.integration_repair_claim()
@@ -781,6 +2521,7 @@ class DeliveryRuntime:
     def remove_integration_repair_claim(self, attempt_id: str, claim_id: str) -> DeliveryActiveClaim:
         """Remove one exact failed Integration repair claim without clearing attention."""
         frontier, previous = self._read()
+        _require_change_mutable(frontier, "remove_integration_repair_claim")
         claim = frontier.integration_repair_claim
         if claim is None or claim.attempt_id != attempt_id or claim.claim_id != claim_id:
             _conflict("claim removal does not match the active Integration repair identity")
@@ -808,6 +2549,7 @@ class DeliveryRuntime:
     ) -> OutcomeAuthorityBinding:
         """Remove one exact failed claim without changing its canonical stage authority."""
         frontier, previous = self._read()
+        _require_change_mutable(frontier, "remove_active_claim")
         binding = _find_binding(frontier, outcome_id)
         claim = binding.active_claim
         if claim is None or claim.attempt_id != attempt_id or claim.claim_id != claim_id:
@@ -831,6 +2573,7 @@ class DeliveryRuntime:
     ) -> OutcomeAuthorityBinding:
         """Retain one exact active claim with deterministic operator repair evidence."""
         frontier, previous = self._read()
+        _require_change_mutable(frontier, "publish_recovery_attention")
         binding = _find_binding(frontier, outcome_id)
         claim = binding.active_claim
         if (
@@ -846,117 +2589,11 @@ class DeliveryRuntime:
         self._replace(previous, _replace_binding(frontier, binding, updated))
         return updated
 
-    def publish_integration_completion(
-        self,
-        completion: DeliveryIntegrationCompletion,
-    ) -> DeliveryIntegrationCompletion:
-        """Publish one committed Integration identity and clear matching attention."""
-        frontier, previous = self._read()
-        if {binding.stage for binding in frontier.bindings} != {DeliveryStage.COMPLETED}:
-            _conflict("Integration completion requires every outcome to be completed")
-        if frontier.integration_repair_claim is not None:
-            _conflict("Integration completion cannot overlap an active repair claim")
-        if frontier.integration_completion == completion:
-            return completion
-        if frontier.integration_completion is not None:
-            _conflict("Delivery runtime already names another Integration completion")
-        completed = frontier.model_copy(
-            update={
-                "integration_result_id": completion.completion_id,
-                "integration_completion": completion,
-                "integration_attention": None,
-            }
-        )
-        self._replace(previous, completed)
-        return completion
-
-    def publish_integration_attention(
-        self,
-        attention: DeliveryIntegrationAttention,
-    ) -> DeliveryIntegrationAttention:
-        """Publish replayable Integration failure evidence without moving stage."""
-        frontier, previous = self._read()
-        if frontier.integration_completion is not None:
-            _conflict("completed Integration cannot publish attention")
-        if {binding.stage for binding in frontier.bindings} != {DeliveryStage.COMPLETED}:
-            _conflict("Integration attention requires every outcome to be completed")
-        if frontier.integration_attention == attention:
-            return attention
-        updated = frontier.model_copy(update={"integration_attention": attention})
-        self._replace(previous, updated)
-        return attention
-
-    def integration_repair_replacement(
-        self,
-        repair: DeliveryIntegrationRepair,
-    ) -> ReplacementTransactionParticipant:
-        """Prepare an OCC replacement that clears one exact Integration attention."""
-        frontier, previous = self._read()
-        attention = frontier.integration_attention
-        if (
-            attention is None
-            or attention.attention_id != repair.attention_id
-            or attention.change_id != repair.change_id
-            or attention.integration_target != repair.integration_target
-            or attention.change_head != repair.prior_change_head
-            or attention.target_head != repair.prior_target_head
-        ):
-            _conflict("Integration repair does not match the current attention")
-        if self.change_stage() != DeliveryChangeStage.INTEGRATION:
-            _conflict("Integration repair requires an Integration-ready runtime")
-        replacement = frontier.model_copy(update={"integration_attention": None, "integration_repair_claim": None})
-        return ReplacementTransactionParticipant(
-            self._target_root,
-            self._frontier_path.relative_to(self._target_root),
-            previous,
-            _model_content(replacement),
-        )
-
-    def integration_repair_authority_replacement(
-        self,
-        request: DeliveryIntegrationRepairAuthorityAttention,
-        attempt_id: str,
-        claim_id: str,
-    ) -> tuple[DeliveryIntegrationAttention, ReplacementTransactionParticipant]:
-        """Replace one claimed merge conflict with non-claimable authority attention."""
-        frontier, previous = self._read()
-        attention = frontier.integration_attention
-        claim = frontier.integration_repair_claim
-        if (
-            attention is None
-            or attention.attention_id != request.attention_id
-            or attention.change_id != request.change_id
-            or integration_attention_disposition(attention.code)
-            != DeliveryIntegrationAttentionDisposition.REPAIR_REQUIRED
-        ):
-            _conflict("repair authority attention does not match current repair attention")
-        if claim is None or claim.attempt_id != attempt_id or claim.claim_id != claim_id:
-            _conflict("repair authority attention does not match the active repair claim")
-        authority_attention = DeliveryIntegrationAttention(
-            attention_id=hashlib.sha256(_model_content(request)).hexdigest(),
-            code=DeliveryIntegrationAttentionCode.REPAIR_AUTHORITY,
-            change_id=attention.change_id,
-            change_head=attention.change_head,
-            target_head=attention.target_head,
-            integration_target=attention.integration_target,
-            diagnostics=(request.reason, *request.locators),
-            retry_condition=(
-                "Revise admitted authority or move the change to an earlier stage before retrying Integration."
-            ),
-        )
-        replacement = frontier.model_copy(
-            update={"integration_attention": authority_attention, "integration_repair_claim": None}
-        )
-        return authority_attention, ReplacementTransactionParticipant(
-            self._target_root,
-            self._frontier_path.relative_to(self._target_root),
-            previous,
-            _model_content(replacement),
-        )
-
     def claimable_outcome_ids(self) -> tuple[str, ...]:
         """Return stable dependency-ready, unblocked, unclaimed outcome identities."""
         frontier, _content = self._read()
+        if derive_change_stage(frontier) != DeliveryChangeStage.BUILDING:
+            return ()
         completed = {binding.outcome_id for binding in frontier.bindings if binding.stage == DeliveryStage.COMPLETED}
         dependencies = {outcome.outcome_id: set(outcome.dependency_ids) for outcome in self._contract.outcomes}
         return tuple(
@@ -970,6 +2607,8 @@ class DeliveryRuntime:
 
     def claimable_task_ids(self, outcome_id: str) -> tuple[str, ...]:
         """Return promoted tasks whose task dependencies have compact results."""
+        if self.change_stage() != DeliveryChangeStage.BUILDING:
+            return ()
         binding = self.show_binding(outcome_id)
         if binding.stage != DeliveryStage.IMPLEMENTATION or binding.active_claim_id is not None:
             return ()
@@ -982,19 +2621,12 @@ class DeliveryRuntime:
 
     def change_stage(self) -> DeliveryChangeStage:
         """Derive change lifecycle from canonical outcome state."""
-        frontier, _content = self._read()
-        if frontier.integration_result_id is not None:
-            return DeliveryChangeStage.COMPLETED
-        stages = {binding.stage for binding in frontier.bindings}
-        if DeliveryStage.DESIGN in stages:
-            return DeliveryChangeStage.DESIGN
-        if stages == {DeliveryStage.COMPLETED}:
-            return DeliveryChangeStage.INTEGRATION
-        return DeliveryChangeStage.ACTIVE_DELIVERY
+        return derive_change_stage(self._read()[0])
 
     def activate_claim(self, request: ActivateDeliveryClaim) -> OutcomeAuthorityBinding:
         """Bind one fresh claim to a currently claimable outcome."""
         frontier, previous = self._read()
+        _require_change_mutable(frontier, "activate_claim")
         binding = _find_binding(frontier, request.outcome_id)
         if frontier.integration_repair_claim is not None:
             _conflict("outcome claims cannot overlap an active Integration repair claim")
@@ -1005,7 +2637,6 @@ class DeliveryRuntime:
         expected_role = {
             DeliveryStage.PLANNING: DeliveryWorkerRole.PLANNER,
             DeliveryStage.IMPLEMENTATION: DeliveryWorkerRole.BUILDER,
-            DeliveryStage.ASSEMBLY: DeliveryWorkerRole.ASSEMBLY_REVIEWER,
         }.get(binding.stage)
         if request.claim.worker_role != expected_role:
             _conflict("claim worker role does not match the current Delivery stage")
@@ -1028,6 +2659,7 @@ class DeliveryRuntime:
     def publish_output(self, request: PublishDeliveryOutput) -> DeliveryOutputReference:
         """Persist one exact active-claim output without changing stage."""
         frontier, previous = self._read()
+        _require_change_mutable(frontier, "publish_output")
         binding = _find_binding(frontier, request.outcome_id)
         _require_claim(binding, request.claim_id)
         if (
@@ -1043,6 +2675,7 @@ class DeliveryRuntime:
     def publish_plan(self, request: PublishDeliveryPlan) -> DeliveryPlanCandidate:
         """Validate and persist one idempotent Planning candidate without movement."""
         frontier, previous = self._read()
+        _require_change_mutable(frontier, "publish_plan")
         binding = _find_binding(frontier, request.outcome_id)
         _require_claim(binding, request.claim_id)
         if binding.stage != DeliveryStage.PLANNING:
@@ -1066,6 +2699,7 @@ class DeliveryRuntime:
     def publish_result(self, request: PublishDeliveryResult) -> DeliveryResultCandidate:
         """Validate and persist one idempotent compact result without movement."""
         frontier, previous = self._read()
+        _require_change_mutable(frontier, "publish_result")
         binding = _find_binding(frontier, request.outcome_id)
         _require_claim(binding, request.claim_id)
         if binding.stage != DeliveryStage.IMPLEMENTATION or binding.active_task_id is None:
@@ -1103,6 +2737,7 @@ class DeliveryRuntime:
     def transition(self, request: DeliveryTransition) -> OutcomeAuthorityBinding:
         """Apply one worker-owned mechanical transition instruction."""
         frontier, previous = self._read()
+        _require_change_mutable(frontier, "transition")
         binding = _find_binding(frontier, request.outcome_id)
         _require_claim(binding, request.claim_id)
         if isinstance(request, AdvanceDelivery):
@@ -1113,7 +2748,10 @@ class DeliveryRuntime:
             updated = self._return(binding, request)
         else:
             updated = self._block(binding, request)
-        self._replace(previous, _replace_binding(frontier, binding, updated))
+        replacement = _replace_binding(frontier, binding, updated)
+        if isinstance(request, AdvanceDelivery) and binding.stage == DeliveryStage.IMPLEMENTATION:
+            replacement = _queue_promoted_result_checkpoint(replacement, frontier, binding, updated)
+        self._replace(previous, replacement)
         return updated
 
     def resolve_request(
@@ -1123,6 +2761,7 @@ class DeliveryRuntime:
     ) -> DeliveryRequest:
         """Persist one user answer and clear its same-stage block."""
         frontier, previous = self._read()
+        _require_change_mutable(frontier, "resolve_request")
         binding, request = _find_request(frontier, request_id)
         if request.resolution is not None:
             _conflict("request is already resolved")
@@ -1157,6 +2796,7 @@ class DeliveryRuntime:
             message = "requestless unblock requires an operator note and locators"
             raise ValueError(message)
         frontier, previous = self._read()
+        _require_change_mutable(frontier, "unblock")
         binding = _find_binding(frontier, outcome_id)
         block = binding.block
         if block is None or block.block_id != block_id or block.request_id is not None or block.resolved:
@@ -1172,6 +2812,9 @@ class DeliveryRuntime:
     ) -> AdministrativeDeliveryMoveResult:
         """Move backward and invalidate the completed dependent closure."""
         frontier, previous = self._read()
+        _require_change_mutable(frontier, "administrative_move")
+        if frontier.finalization is not None:
+            _conflict("administrative movement cannot cross finalized Change authority")
         if hashlib.sha256(previous).hexdigest() != request.expected_version:
             _conflict("administrative movement preview is stale")
         ordered = _administrative_move_closure(self._contract, frontier, request.outcome_id, request.target)
@@ -1196,6 +2839,10 @@ class DeliveryRuntime:
                 "bindings": updated_bindings,
                 "operator_moves": (*frontier.operator_moves, move),
                 "integration_attention": None,
+                "pending_checkpoint": invalidate_checkpoint_publication(
+                    frontier.pending_checkpoint,
+                    invalidated,
+                ),
             }
         )
         self._replace(previous, updated)
@@ -1253,11 +2900,7 @@ class DeliveryRuntime:
             results = (*binding.results, candidate.result)
             completed_tasks = {result.task_id for result in results}
             complete = completed_tasks == {task.task_id for task in binding.tasks}
-            destination = (
-                (DeliveryStage.ASSEMBLY if binding.assembly_required else DeliveryStage.COMPLETED)
-                if complete
-                else DeliveryStage.IMPLEMENTATION
-            )
+            destination = DeliveryStage.COMPLETED if complete else DeliveryStage.IMPLEMENTATION
             return binding.model_copy(
                 update={
                     "stage": destination,
@@ -1271,17 +2914,7 @@ class DeliveryRuntime:
                     "requests": (),
                 }
             )
-        if binding.stage == DeliveryStage.ASSEMBLY:
-            destination = DeliveryStage.COMPLETED
-        else:
-            _conflict("current stage cannot advance")
-        return binding.model_copy(
-            update={
-                "stage": destination,
-                "active_claim": None,
-                "recovery_attention": None,
-            }
-        )
+        return _conflict("current stage cannot advance")
 
     def _retry(
         self,
@@ -1461,13 +3094,25 @@ class DeliveryRuntime:
         RuntimeTransaction.recover_all(self._target_root)
         try:
             content = self._frontier_path.read_bytes()
-            return DeliveryFrontier.model_validate_json(content), content
-        except (OSError, ValueError) as exc:
+            frontier, canonical = parse_delivery_frontier(
+                content,
+                migration_reviewed_head=self._migration_reviewed_head,
+                require_checkpoint_backfill=True,
+            )
+            self._validate_frontier(frontier)
+            if canonical != content:
+                self._replace_content(content, canonical)
+        except (OSError, TypeError, ValueError) as exc:
             message = f"Delivery frontier is missing or invalid: {self._contract.change_id}"
             raise DeliveryRuntimeReferenceError(message) from exc
+        else:
+            return frontier, canonical
 
     def _replace(self, previous: bytes, frontier: DeliveryFrontier) -> None:
-        replacement = _model_content(frontier)
+        self._replace_content(previous, _model_content(frontier))
+
+    def _replace_content(self, previous: bytes, replacement: bytes) -> None:
+        """Transactionally replace exact frontier bytes."""
         participant = ReplacementTransactionParticipant(
             self._target_root,
             self._frontier_path.relative_to(self._target_root),
@@ -1482,6 +3127,29 @@ class DeliveryRuntime:
         actual = tuple((binding.outcome_id, binding.plan_scope_id) for binding in frontier.bindings)
         if actual != expected:
             _reference("Delivery frontier does not match its admitted contract")
+        resolution = frontier.change_disposition_resolution
+        if resolution is not None and resolution.change_id != self._contract.change_id:
+            _reference("Delivery Change attention resolution does not match its admitted Change")
+        history = frontier.change_publication_history
+        if history is not None and history.change_id != self._contract.change_id:
+            _reference("Delivery publication history does not match its admitted Change")
+        target_sync = frontier.target_sync_receipt
+        if target_sync is not None and target_sync.change_id != self._contract.change_id:
+            _reference("Delivery target synchronization receipt does not match its admitted Change")
+        adoption = frontier.external_head_adoption_receipt
+        if adoption is not None and adoption.change_id != self._contract.change_id:
+            _reference("Delivery external Change-head adoption receipt does not match its admitted Change")
+        promotion = frontier.external_head_promotion_receipt
+        if promotion is not None and (
+            promotion.change_id != self._contract.change_id
+            or adoption is None
+            or promotion.adoption_receipt_id != adoption.receipt_id
+            or promotion.promoted_head != adoption.adopted_head
+        ):
+            _reference("Delivery external Change-head promotion receipt does not match its adoption evidence")
+        for receipt in (frontier.change_deferral, frontier.change_abandonment):
+            if receipt is not None and receipt.change_id != self._contract.change_id:
+                _reference("Delivery Change lifecycle receipt does not match its admitted Change")
 
 
 def _find_binding(frontier: DeliveryFrontier, outcome_id: str) -> OutcomeAuthorityBinding:
@@ -1489,6 +3157,147 @@ def _find_binding(frontier: DeliveryFrontier, outcome_id: str) -> OutcomeAuthori
         return next(binding for binding in frontier.bindings if binding.outcome_id == outcome_id)
     except StopIteration as exc:
         _reference(f"Delivery outcome is absent: {outcome_id}", exc)
+
+
+def _require_change_mutable(
+    frontier: DeliveryFrontier,
+    operation: str,
+    *,
+    allow_attention: bool = False,
+) -> None:
+    if operation not in _NORMAL_CHANGE_MUTATIONS:
+        message = f"unregistered Delivery Change mutation: {operation}"
+        raise ValueError(message)
+    if frontier.change_completion is not None:
+        _conflict("completed Delivery Change is terminal")
+    if frontier.change_abandonment is not None:
+        _conflict("abandoned Delivery Change is terminal")
+    if frontier.change_deferral is not None and operation not in {"resume_change", "abandon_change"}:
+        _conflict("deferred Delivery Change requires resumption before mutation")
+    if (
+        frontier.change_disposition is not None
+        and not allow_attention
+        and operation
+        not in {
+            "defer_change",
+            "resume_change",
+            "abandon_change",
+            "record_publication_successor",
+        }
+    ):
+        _conflict("Delivery Change requires attention resolution before mutation")
+
+
+def _require_no_active_change_claim(frontier: DeliveryFrontier, operation: str) -> None:
+    has_outcome_claim = any(binding.active_claim is not None for binding in frontier.bindings)
+    if has_outcome_claim or frontier.integration_repair_claim is not None:
+        _conflict(f"{operation} cannot overlap an active mutation claim")
+
+
+def is_acceptance_waiting_observation(
+    observation: PublicationPullRequestObservationReceipt,
+) -> bool:
+    """Return whether a bound pull request is normally waiting for a user merge."""
+    snapshot = observation.snapshot
+    return snapshot.state == "open" and not snapshot.merged
+
+
+def parse_delivery_frontier(
+    content: bytes,
+    *,
+    migration_reviewed_head: str | None = None,
+    require_checkpoint_backfill: bool = False,
+) -> tuple[DeliveryFrontier, bytes]:
+    """Parse canonical frontier bytes and reduce safe pre-Assembly-removal state."""
+    payload = json.loads(content)
+    if not isinstance(payload, dict):
+        raise TypeError
+    schema_version = _normalize_frontier_schema(payload)
+    _reject_legacy_finalization(payload)
+    frontier = DeliveryFrontier.model_validate_json(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")),
+    )
+    if schema_version in _CHECKPOINT_BACKFILL_SCHEMA_VERSIONS:
+        frontier = _backfill_checkpoint_state(
+            frontier,
+            migration_reviewed_head,
+            required=require_checkpoint_backfill,
+        )
+    return frontier, _model_content(frontier)
+
+
+def _normalize_frontier_schema(payload: dict[str, object]) -> int:
+    schema_version = payload.get("schema_version")
+    if schema_version == 1:
+        _normalize_schema_one_bindings(payload)
+    elif schema_version in _PREVIOUS_FRONTIER_SCHEMA_VERSIONS:
+        payload["schema_version"] = _FRONTIER_SCHEMA_VERSION
+    elif schema_version != _FRONTIER_SCHEMA_VERSION:
+        raise ValueError
+    _normalize_legacy_integration_completion(payload)
+    return schema_version
+
+
+def _normalize_schema_one_bindings(payload: dict[str, object]) -> None:
+    bindings = payload.get("bindings")
+    if not isinstance(bindings, list):
+        raise TypeError
+    for binding in bindings:
+        if not isinstance(binding, dict) or binding.get("stage") == "assembly":
+            raise ValueError
+        assembly_required = binding.pop("assembly_required", False)
+        if assembly_required is not False:
+            raise ValueError
+    payload["schema_version"] = _FRONTIER_SCHEMA_VERSION
+
+
+def _normalize_legacy_integration_completion(payload: dict[str, object]) -> None:
+    result_id = payload.pop("integration_result_id", None)
+    completion = payload.pop("integration_completion", None)
+    if result_id is not None or completion is not None:
+        raise DeliveryRuntimeMigrationError(_LEGACY_INTEGRATION_COMPLETION_MESSAGE)
+
+
+def _reject_legacy_finalization(payload: dict[str, object]) -> None:
+    finalization = payload.get("finalization")
+    if isinstance(finalization, dict) and finalization.get("schema_version") != _FINALIZATION_SCHEMA_VERSION:
+        raise DeliveryRuntimeMigrationError(_LEGACY_FINALIZATION_MESSAGE)
+
+
+def _backfill_checkpoint_state(
+    frontier: DeliveryFrontier,
+    reviewed_head: str | None,
+    *,
+    required: bool,
+) -> DeliveryFrontier:
+    result_bindings = tuple(binding for binding in frontier.bindings if binding.results)
+    if not result_bindings:
+        return frontier
+    if reviewed_head is None:
+        if required:
+            raise ValueError
+        return frontier
+    triggers = [
+        DeliveryCheckpointTrigger(
+            kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
+        )
+    ]
+    triggers.extend(
+        DeliveryCheckpointTrigger(
+            kind=DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
+            outcome_id=binding.outcome_id,
+        )
+        for binding in frontier.bindings
+        if binding.stage == DeliveryStage.COMPLETED
+    )
+    return frontier.model_copy(
+        update={
+            "pending_checkpoint": DeliveryPendingCheckpoint(
+                head=reviewed_head,
+                triggers=tuple(triggers),
+            )
+        }
+    )
 
 
 def _find_request(frontier: DeliveryFrontier, request_id: str) -> tuple[OutcomeAuthorityBinding, DeliveryRequest]:
@@ -1513,6 +3322,99 @@ def _replace_binding(
     )
 
 
+def _queue_promoted_result_checkpoint(
+    replacement: DeliveryFrontier,
+    previous: DeliveryFrontier,
+    binding: OutcomeAuthorityBinding,
+    updated: OutcomeAuthorityBinding,
+) -> DeliveryFrontier:
+    candidate = binding.result_candidate
+    if candidate is None:
+        _conflict("promoted Task checkpoint requires the published result candidate")
+    triggers: list[DeliveryCheckpointTrigger] = []
+    pending = previous.pending_checkpoint
+    if previous.published_head is None and not _has_checkpoint_trigger(
+        pending,
+        DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
+    ):
+        triggers.append(
+            DeliveryCheckpointTrigger(
+                kind=DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
+            )
+        )
+    if updated.stage == DeliveryStage.COMPLETED:
+        triggers.append(
+            DeliveryCheckpointTrigger(
+                kind=DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME,
+                outcome_id=binding.outcome_id,
+            )
+        )
+    if pending is None and not triggers:
+        return replacement
+    combined = (*(() if pending is None else pending.triggers), *triggers)
+    return replacement.model_copy(
+        update={
+            "pending_checkpoint": DeliveryPendingCheckpoint(
+                head=candidate.result.completed_commit,
+                triggers=tuple(dict.fromkeys(combined)),
+            )
+        }
+    )
+
+
+def _queue_finalization_checkpoint(frontier: DeliveryFrontier, exact_head: str) -> DeliveryFrontier:
+    pending = frontier.pending_checkpoint
+    trigger = DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.FINALIZATION)
+    combined = (*(() if pending is None else pending.triggers), trigger)
+    return frontier.model_copy(
+        update={
+            "pending_checkpoint": DeliveryPendingCheckpoint(
+                head=exact_head,
+                triggers=tuple(dict.fromkeys(combined)),
+            )
+        }
+    )
+
+
+def _invalidate_finalization_checkpoint(
+    pending: DeliveryPendingCheckpoint | None,
+) -> DeliveryPendingCheckpoint | None:
+    if pending is None:
+        return None
+    retained = tuple(
+        trigger for trigger in pending.triggers if trigger.kind != DeliveryCheckpointTriggerKind.FINALIZATION
+    )
+    if not retained:
+        return None
+    return pending.model_copy(update={"head": None, "triggers": retained})
+
+
+def _has_checkpoint_trigger(
+    pending: DeliveryPendingCheckpoint | None,
+    kind: DeliveryCheckpointTriggerKind,
+) -> bool:
+    return pending is not None and any(trigger.kind == kind for trigger in pending.triggers)
+
+
+def invalidate_checkpoint_publication(
+    pending: DeliveryPendingCheckpoint | None,
+    invalidated_outcome_ids: set[str],
+) -> DeliveryPendingCheckpoint | None:
+    """Retain valid obligations while removing their invalidated publication head."""
+    if pending is None:
+        return None
+    if not invalidated_outcome_ids:
+        return pending
+    retained = tuple(
+        trigger
+        for trigger in pending.triggers
+        if trigger.outcome_id is None or trigger.outcome_id not in invalidated_outcome_ids
+    )
+    if not retained:
+        return None
+    return pending.model_copy(update={"head": None, "triggers": retained})
+
+
 def _require_claim(binding: OutcomeAuthorityBinding, claim_id: str) -> None:
     if binding.active_claim_id != claim_id:
         _conflict("transition does not match the active claim")
@@ -1522,7 +3424,6 @@ def _reset_binding(binding: OutcomeAuthorityBinding, stage: DeliveryStage) -> Ou
     return binding.model_copy(
         update={
             "stage": stage,
-            "assembly_required": False,
             "tasks": (),
             "results": (),
             "active_claim": None,
@@ -1564,8 +3465,6 @@ def _administrative_move_closure(
 ) -> tuple[str, ...]:
     if frontier.integration_repair_claim is not None:
         _conflict("administrative movement cannot overlap an active Integration repair claim")
-    if frontier.integration_completion is not None:
-        _conflict("completed Integration cannot move backward")
     binding = _find_binding(frontier, outcome_id)
     if _STAGE_ORDER[target] >= _STAGE_ORDER[binding.stage]:
         _conflict("administrative movement must target an earlier stage")
@@ -1578,9 +3477,51 @@ def _model_content(model: BaseModel) -> bytes:
     return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
-def _canonical_content(models: tuple[BaseModel, ...]) -> bytes:
-    payload = tuple(model.model_dump(mode="json") for model in models)
-    return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+def _receipt_digest(receipt: BaseModel, identity_field: str) -> str:
+    payload = receipt.model_dump(mode="json", exclude={identity_field})
+    content = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(content).hexdigest()
+
+
+def _pull_request_identity(ready: PullRequestReadyReceipt | None) -> DeliveryChangePublicationIdentity | None:
+    if ready is None:
+        return None
+    return DeliveryChangePublicationIdentity(
+        change_id=ready.change_id,
+        repository=ready.repository,
+        number=ready.number,
+        node_id=ready.node_id,
+        head_sha=ready.head_sha,
+    )
+
+
+def _attention_conflict(message: str) -> None:
+    raise DeliveryChangeDispositionConflictError(message)
+
+
+def _target_sync_operation_id(disposition: DeliveryChangeDisposition) -> str | None:
+    prefix = "target-sync-operation:"
+    for diagnostic in disposition.diagnostics:
+        if diagnostic.startswith(prefix):
+            return diagnostic.removeprefix(prefix)
+    return None
+
+
+def _require_target_sync_attention(
+    frontier: DeliveryFrontier,
+    expected_disposition_id: str,
+    operation_id: str,
+) -> DeliveryChangeDisposition:
+    current = frontier.change_disposition
+    if current is None:
+        _attention_conflict("target synchronization attention is absent or already resolved")
+    if current.disposition_id != expected_disposition_id:
+        _attention_conflict("target synchronization attention identity is stale")
+    if current.kind != DeliveryChangeDispositionKind.PUBLICATION_ATTENTION:
+        _attention_conflict("target synchronization attention has the wrong disposition kind")
+    if _target_sync_operation_id(current) != operation_id:
+        _attention_conflict("target synchronization operation identity is stale")
+    return current
 
 
 def _conflict(message: str) -> None:
@@ -1600,32 +3541,60 @@ __all__ = [
     "AdministrativeDeliveryMoveResult",
     "AdvanceDelivery",
     "BlockDelivery",
+    "DeliveryAcceptanceWaitingError",
     "DeliveryBlock",
+    "DeliveryChangeAbandonment",
+    "DeliveryChangeCompletion",
+    "DeliveryChangeDeferral",
+    "DeliveryChangeDisposition",
+    "DeliveryChangeDispositionConflictError",
+    "DeliveryChangeDispositionKind",
+    "DeliveryChangeDispositionResolution",
+    "DeliveryChangePublicationHistory",
+    "DeliveryChangePublicationIdentity",
     "DeliveryChangeStage",
+    "DeliveryCheckpointPublicationState",
+    "DeliveryCheckpointTrigger",
+    "DeliveryCheckpointTriggerKind",
+    "DeliveryFinalization",
+    "DeliveryFinalizationInvalidation",
+    "DeliveryFinalizationInvalidationReceipt",
+    "DeliveryFinalizationReceipt",
     "DeliveryFrontier",
     "DeliveryIntegrationAttention",
     "DeliveryIntegrationAttentionCode",
-    "DeliveryIntegrationCandidate",
     "DeliveryIntegrationCompletion",
+    "DeliveryMergedPullRequestLatch",
+    "DeliveryObservation",
+    "DeliveryObservationReceipt",
     "DeliveryOperatorMove",
     "DeliveryOutputKind",
     "DeliveryOutputReference",
+    "DeliveryPendingCheckpoint",
     "DeliveryRequest",
     "DeliveryRequestKind",
     "DeliveryRequestOption",
     "DeliveryRequestResolution",
     "DeliveryResultCandidate",
     "DeliveryReturnContext",
+    "DeliveryReview",
+    "DeliveryReviewReceipt",
     "DeliveryRuntime",
     "DeliveryRuntimeConflictError",
+    "DeliveryRuntimeMigrationError",
     "DeliveryRuntimeReferenceError",
     "DeliveryStage",
     "DeliveryTaskDefinition",
     "DeliveryTaskResult",
+    "FinalizeDeliveryChange",
     "OutcomeAuthorityBinding",
     "PublishDeliveryOutput",
     "PublishDeliveryPlan",
     "PublishDeliveryResult",
     "RetryDelivery",
     "ReturnDelivery",
+    "derive_change_stage",
+    "invalidate_checkpoint_publication",
+    "is_acceptance_waiting_observation",
+    "is_change_terminal",
 ]

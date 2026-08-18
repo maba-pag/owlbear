@@ -15,7 +15,6 @@ EXCLUDED_PATHS: frozenset[Path] = frozenset(
         ".owlbear/scratch",
         ".owlbear/research",
         ".owlbear/kanban",
-        ".owlbear/briefs",
         ".owlbear/sources",
         ".owlbear/memory",
         ".owlbear/delivery",

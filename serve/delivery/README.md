@@ -1,12 +1,15 @@
 # owlbear-delivery
 
-`owlbear-delivery` is the transport-free control plane for target delivery. It projects semantic work
-items from admitted Specification authority, owns deterministic Planning and Build transitions,
-coordinates bounded execution and writer capacity, integrates reviewed changes, and publishes
-recoverable completed history. It also retains the public cutover and evidence contracts used to
-authorize the target store and inspect historical transformation state.
+`owlbear-delivery` is the transport-free control plane for Change delivery. It projects semantic work
+items from admitted Design authority, owns deterministic Planning and Build transitions, coordinates
+bounded execution and writer capacity, publishes reviewed Change checkpoints, observes user-owned
+pull-request acceptance, and projects recoverable completed history. It retains legacy Target cutover
+and evidence contracts for historical consumers; canonical Change delivery does not use them.
 
-Parent project: [README.md](../../README.md)
+**Use this guide when:** you need to extend or integrate the core Change authority, understand its
+worktree and publication boundaries, or call its public stores and runtimes.
+
+Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
 ## Launch / Usage
 
@@ -18,35 +21,36 @@ configuration reference.
 The main public areas are:
 
 | Area | Contracts |
-|------|-----------|
+| --- | --- |
 | Authored Specification | `DesignPackageStore` create, verified read, compare-and-swap revision, and checkpoint |
 | Compilation and admission | Deterministic contract derivation, validation, package binding, and atomic runtime admission |
-| Operational Delivery | `DeliveryRuntime` and `PortfolioApplication` outcome stages, launch acquisition, typed role contexts, publication, worker transitions, requests, and exact-claim recovery |
+| Operational Delivery | `DeliveryRuntime` and `PortfolioApplication` outcome stages, frontier acquisition, typed role contexts, publication, worker transitions, requests, and exact-claim recovery |
 | Work projection | Portfolio work items with dependency readiness, typed attention, requests, blocks, and task progress |
 | Coordination | Per-change writers, separate execution/writer capacity, warm worktrees, and reviewed source boundaries |
-| Integration and history | Atomic target publication, typed Integration attention, reviewed additive repair admission, and bounded completed lookup |
-| Cutover and retained evidence | `TargetRuntime`, `list_frontier`, target snapshots, mutation authorization, receipts, and legacy verification remain public for activation and evidence consumers |
+| Publication and acceptance | Change-branch checkpoints, draft pull-request reconciliation, finalization, acceptance observation, and publication supersession |
+| Completed history | Receipt-backed completed Change projections with bounded list, search, and exact lookup |
+| Legacy compatibility | Typed Integration attention/recovery and `TargetRuntime` evidence remain public for historical consumers |
 
-Assembly remains a live stage, projection, and required role-policy configuration type. Current
-compiled bindings leave `assembly_required` false, and the agent MCP registry exposes no Assembly
-context or result-publication operation. Operational agents therefore do not run that stage; an
-unexpected launch is recovered by exact claim identity.
+Assembly is not a live Delivery stage or public Change authority. Historical runtime captures may
+still contain reducible Assembly metadata, and legacy completed-history records retain their
+historical schema for validation. New Changes use sequential Planning and Build outcomes directly.
 
 ## Configuration
 
-The package reads no environment variables. Callers pass package, target-state, repository,
-worktree, Integration target, role policies, and capacity configuration explicitly. MCP, Cockpit,
-and setup own process-level configuration and must authorize target mutation through the published
-cutover receipt before writing runtime state.
+The package reads no environment variables. The canonical loader reads optional ignored host-local
+capacity configuration from `.owlbear/delivery/runtime/host.json` (`writer_capacity` and
+`execution_capacity`, both defaulting to `1`); it writes the derived writer ledger to
+`capacity.json`. MCP and Cockpit load tracked project policy and compose owners over canonical
+Delivery roots; setup seeds that policy but does not create host-local capacity configuration.
 
 ## Dependencies
 
 | Package | Purpose |
-|---------|---------|
+| --- | --- |
 | `pydantic` | Strict native schemas and validation |
 | `ruamel.yaml` | Canonical YAML parsing and serialization |
 | `pyyaml` | Manifest loading |
 
 Filesystem writes use contained paths, locking, immutable create/replay semantics, and transactional
-recovery. Callers should use the public target runtimes, coordinators, and cutover operations rather
-than writing authority or runtime files directly.
+recovery. Callers should use the public Delivery application, stores, and coordinators rather than
+writing authority or runtime files directly.

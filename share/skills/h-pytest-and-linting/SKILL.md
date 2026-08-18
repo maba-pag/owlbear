@@ -22,7 +22,7 @@ Before constructing a command, inspect the nearest applicable configuration and 
 Use these placeholders below:
 
 | Placeholder | Meaning |
-|-------------|---------|
+| --- | --- |
 | `{project-runner}` | Configured execution prefix, such as `uv run`, `poetry run`, or empty in an active environment |
 | `{focused-test}` | One test file, node ID, or package-local test target |
 | `{test-roots}` | Configured test directories; omit when pytest `testpaths` already provides complete discovery |
@@ -69,7 +69,7 @@ acceptable. For focused validation, pass only the changed Python files or owning
 ### Default flags
 
 | Tool | Flags |
-|------|-------|
+| --- | --- |
 | pytest | `-q --tb=short` (add `-v` only for debugging) |
 | ruff | none needed |
 
@@ -103,31 +103,41 @@ Read `.owlbear/scratch/pytest-output.txt` then delete it.
 Apply these only when the target is the OwlBear repository or matching configuration is verified:
 
 | Command | Scope |
-|---------|-------|
-| `uv run lint [FILE ...]` | Default hooks on explicit files, or staged files when omitted; safe fixes enabled |
-| `uv run lint --all` | Default hooks on all files with safe fixes |
-| `uv run typecheck` | Cockpit frontend TypeScript check |
-| `uv run megalint` | MegaLinter only, with safe fixes enabled |
-| `uv run lint-full` | Default hooks, CSS, HTML, TypeScript, and MegaLinter, with safe fixes enabled |
+| --- | --- |
+| `uv run test` or `uv run test --all` | Complete Python and Cockpit frontend unit-test suites |
+| `uv run test [PATH ...]` | Tests owning the explicit paths; routes to pytest and/or Vitest |
+| `uv run test-e2e [SPEC ...]` | Cockpit maintained fast Playwright gate |
+| `uv run lint` | Normal local lint aggregate on the workspace; `--staged` selects staged files |
+| `uv run lint-cockpit` | Cockpit frontend lint aggregate |
+| `uv run megalint` | Standalone MegaLinter on the workspace; safe fixes by default, or check-only with `--no-fix` |
+| `uv run lint-full` | `lint` plus MegaLinter |
+| `uv run format-full` | Python, whitespace, and final-newline formatters |
+| `uv run typecheck-cockpit` | Cockpit frontend TypeScript check |
+| `uv run quality-full` | Format, lint-full, typecheck-cockpit, then advisory TODO scan |
 
 Use these workspace entry points instead of invoking individual linters manually. `lint` and
-`lint --all` may auto-fix files through Ruff, markdownlint, and general file hooks; inspect the diff
-afterward. Agents should pass their changed paths explicitly to `lint`; no-argument `lint`, `lint --all`,
-`megalint`, and `lint-full` are broad user workflows rather than focused agent validation commands.
+`megalint` may auto-fix files through their configured safe fixers; inspect the diff afterward.
+MegaLinter's repository policy is `APPLY_FIXES: all` by default, while `--no-fix` explicitly selects
+a check-only run. Agents should
+scope validation to their own work with `lint --staged`; workspace-wide `lint`, `megalint`, and
+`lint-full` are broad user workflows rather than focused agent validation commands.
 
-`lint`, `megalint`, and `lint-full` accept one optional fix-policy flag. `--no-fix`
-replaces mutating hooks with check-only equivalents. `--unsafe-fixes` enables Ruff unsafe fixes and
-Stylelint lax fixes in addition to the default deterministic fixes. The two flags are mutually
-exclusive; review the resulting diff whenever unsafe fixes are enabled.
+`lint`, `lint-cockpit`, `megalint`, `lint-full`, and `quality-full` accept one optional fix-policy
+flag. `--no-fix` replaces mutating hooks with check-only equivalents. `--unsafe-fix` enables Ruff
+unsafe fixes and Stylelint lax fixes in addition to the configured safe fixes. The two flags are
+mutually exclusive; review the resulting diff whenever unsafe fixes are enabled. Full
+aggregates are listed by `uv run help quality`.
 
 | Marker | Local meaning |
-|--------|---------------|
+| --- | --- |
 | `api` | Requires live network; routine local runs exclude it with `-m "not api"` |
 | `slow` | Long-running |
 | `integration` | Requires the `kanban-md` binary |
 | `e2e` | Excluded by default through `addopts`; include explicitly with `-m e2e` |
 
 - **Runner.** Use `uv run`; bare system Python does not resolve OwlBear workspace dependencies.
+- **Direct runner debugging.** Raw `uv run pytest` and package-owned npm scripts remain valid when
+  debugging runner-specific behavior or passing options not modeled by the maintained wrappers.
 - **Coverage.** Bare `--cov` reads `source_pkgs` from `pyproject.toml`. Locally observed explicit
   module/path forms can conflict with Pydantic instrumentation or report misleading zero coverage.
 - **Timeouts.** `pytest-timeout` uses the values configured in OwlBear's `pyproject.toml`; inspect the
@@ -136,6 +146,13 @@ exclusive; review the resulting diff whenever unsafe fixes are enabled.
   `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`. This hides `pytest-xdist`, `pytest-cov`, `pytest-asyncio`, and
   `pytest-timeout`, breaking configured plugin flags. Use the workspace interpreter and explicitly
   load only the configured plugins when this environment variable is present.
+
+### MegaLinter reports
+
+When analyzing `uv run megalint` or CI results, start with the structured report at
+`megalinter-reports/mega-linter-report.json`. Use `megalinter-reports/linters_logs/` for raw
+per-linter output and `megalinter-reports/megalinter-report.sarif` for code-scanning findings;
+console output is primarily progress and diagnostic context.
 
 ### Windows-Only Notes
 

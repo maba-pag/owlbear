@@ -29,7 +29,7 @@ root, framework, browser, or script name.
 Use these placeholders:
 
 | Placeholder | Meaning |
-|-------------|---------|
+| --- | --- |
 | `{package-root}` | Directory owning the relevant frontend manifest and configuration |
 | `{package-runner}` | Package manager command: `npm`, `pnpm`, `yarn`, or `bun` |
 | `{test-script}` | Discovered unit/component test script |
@@ -40,7 +40,7 @@ Use these placeholders:
 ## Select Proof by Claim
 
 | Claim | Primary proof |
-|-------|---------------|
+| --- | --- |
 | Pure logic, state transition, serialization, hook, or supported component interaction | Vitest or the configured unit/component runner |
 | Type safety, bundling, imports, generated assets, or static validity | Typecheck, build, or relevant linter |
 | Browser API, assembled workflow, focus behavior, geometry, viewport behavior, or screenshot | Playwright or configured real-browser runner |
@@ -131,6 +131,8 @@ Apply this profile only when the target package uses Cockpit's scripts and Porsc
 
 - The package root is discovered from `serve/cockpit/web/package.json`; repository-root proxy scripts
   are also valid.
+- In the OwlBear development checkout, `uv run test` includes this frontend suite and
+  `uv run test [PATH ...]` is the preferred path-aware unit-test entry point.
 - `npm test` supplies `NODE_OPTIONS=--max-old-space-size=2048`, `vitest run`, and `--silent=true`.
   Preserve those flags for normal runs; direct `npx vitest run` is useful when debugging console
   output.
@@ -142,7 +144,8 @@ Apply this profile only when the target package uses Cockpit's scripts and Porsc
   `PSelect` commonly emits `change` with `detail.value`; `PMultiSelect` emits `update` with
   `detail.value`.
 - `npm run test:e2e` is Cockpit's maintained fast gate; `npm run test:e2e:all` is the deliberate full
-  sweep. Playwright currently uses Chromium and starts through the configured build/preview server.
+  sweep. `uv run test-e2e` and `uv run test-e2e --all` are the repository-level wrappers. Playwright
+  currently uses Chromium and starts through the configured build/preview server.
 - PDS can emit extremely large jsdom console output. Use the silent package script normally. If
   output is still truncated, capture it under `.owlbear/scratch/vitest-{task_id}.log` and inspect a
   bounded summary with `tail` or targeted `grep`; do not load the entire log into model context.

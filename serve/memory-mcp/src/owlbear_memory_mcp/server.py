@@ -5,20 +5,22 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context  # noqa: TC002 - MCPServer evaluates tool annotations at registration.
 from mcp.types import ToolAnnotations
 from owlbear_memory import MemoryCategory, MemoryEngine, MemoryState
-from pydantic import Field
+from pydantic import Field, StrictStr
 
-from owlbear_memory_mcp.agents import AgentCatalog
 from owlbear_memory_mcp.tools import (
     approve_memory as approve_memory_impl,
 )
 from owlbear_memory_mcp.tools import (
     assess_memories as assess_memories_impl,
+)
+from owlbear_memory_mcp.tools import (
+    commit_memory_batch as commit_memory_batch_impl,
 )
 from owlbear_memory_mcp.tools import (
     curate_memory as curate_memory_impl,
@@ -53,6 +55,7 @@ __all__ = [
     "app_lifespan",
     "approve_memory",
     "assess_memories",
+    "commit_memory_batch",
     "curate_memory",
     "delete_agent_memories",
     "delete_memory",
@@ -70,8 +73,10 @@ _Title = Annotated[str, Field(min_length=1)]
 _Content = Annotated[str, Field(max_length=1024)]
 _Confidence = Annotated[float, Field(ge=0.7, le=1.0)]
 _Agent = Annotated[str, Field(min_length=1)]
+_RecallAgent = Annotated[StrictStr | Literal[0] | None, Field(default=None)]
 _Limit = Annotated[int, Field(ge=0)]
 _Categories = Annotated[list[MemoryCategory], Field(min_length=1)]
+_BatchSession = Literal["curation", "review"]
 
 
 @dataclass
@@ -79,7 +84,7 @@ class AppContext:
     """Runtime context passed through MCP lifespan to all tools."""
 
     engine: MemoryEngine
-    agents: AgentCatalog
+    memory_dir: Path
 
 
 @asynccontextmanager
@@ -93,7 +98,7 @@ async def app_lifespan(
         raise RuntimeError(message)
     yield AppContext(
         engine=MemoryEngine(memory_dir=workspace_root / _DEFAULT_MEMORY_DIR),
-        agents=AgentCatalog(workspace_root),
+        memory_dir=workspace_root / _DEFAULT_MEMORY_DIR,
     )
 
 
@@ -142,7 +147,7 @@ async def list_memories(
 async def recall_memory(
     ctx: Context,
     *,
-    agent: _Agent,
+    agent: _RecallAgent = None,
     categories: list[MemoryCategory] | None = None,
     limit: _Limit | None = None,
 ) -> str:  # pragma: no cover
@@ -186,6 +191,12 @@ async def curate_memory(  # noqa: PLR0913
         confidence=confidence,
         scope_agents=scope_agents,
     )
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
+async def commit_memory_batch(ctx: Context, *, session_type: _BatchSession) -> dict[str, Any]:  # pragma: no cover
+    """Commit reviewed non-pending memory entries for one curation or review session."""
+    return await commit_memory_batch_impl(ctx, session_type=session_type)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=True))

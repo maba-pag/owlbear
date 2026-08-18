@@ -34,7 +34,7 @@ authoritative.
 Detailed reference material lives in the sections below. Load the relevant section when addressing a specific design concern — do not scan every domain by default.
 
 | Section | When to use |
-|-----------|-------------|
+| --- | --- |
 | Typography | Font choices, scale, vertical rhythm, readability |
 | Color and Contrast | Color palettes, contrast ratios, dark mode, OKLCH |
 | Spatial Design | Spacing systems, layout grid, density, touch targets |
@@ -118,7 +118,7 @@ findings. Report them only when they weaken the intended hierarchy, brand, workf
 Use these only when project evidence supports the profile:
 
 | Product type | Starting priorities |
-|--------------|---------------------|
+| --- | --- |
 | Operational or expert tool | Scanability, stable layout, efficient repeated actions, state clarity, restrained decoration |
 | Consumer workflow | Clear next action, progressive disclosure, recovery, trust, comfortable touch interaction |
 | Content or editorial surface | Reading rhythm, navigation, hierarchy, media treatment, content focus |

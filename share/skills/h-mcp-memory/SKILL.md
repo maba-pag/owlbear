@@ -15,13 +15,14 @@ For curation workflow, see `w-mem-curation`.
 ## Agent Access Matrix
 
 | Role | Agents | Available Tools |
-|------|--------|----------------|
+| --- | --- | --- |
 | Outcome owners | designer, planner, builder, orchestrator | `recall_memory`, `save_memory` (`builder` also assesses) |
 | Specialist producers | test-curator, knowledge-ingestor, knowledge-enricher | `recall_memory`, `save_memory` |
 | Read-only reviewers | build-reviewer, planner-challenger, designer-challenger, conceptual-design-reviewer | `recall_memory`; return candidates to their parent |
-| Memory curator | memory-curator | `list_memories`, `read_memory`, `curate_memory`, `delete_memory`, agent lifecycle tools |
+| Memory curator | memory-curator | `list_memories`, `read_memory`, `curate_memory`, `delete_memory`, `commit_memory_batch`, agent lifecycle tools |
 
-These profiles are intentionally asymmetric. Producers save unscoped pending candidates; the curator
+These profiles are intentionally asymmetric. Producers save unscoped pending candidates with any
+non-blank provenance label; the curator
 later deduplicates and assigns relevance scope. Reviewers remain mutation-free and return qualified
 `memory_candidate` values to their task-owning parent.
 
@@ -54,24 +55,23 @@ them to `approved`; `delete_memory` may soft-delete them when the user chooses r
 ### Batch commits
 
 Pending entries are not committed. After curation or review, use the state-aware
-helper instead of broad-adding `.owlbear/memory`:
+Memory MCP operation instead of direct Git commands or broad-adding `.owlbear/memory`:
 
 ```text
-uv --project ../owlbear run python -m owlbear_memory_mcp.git curation
-uv --project ../owlbear run python -m owlbear_memory_mcp.git review
+owlbear-memory/commit_memory_batch(session_type="curation")
+owlbear-memory/commit_memory_batch(session_type="review")
 ```
-
-The `--project` path must point to the OwlBear installation root. Find the correct value from the `owlbear-memory` server entry in `.vscode/mcp.json` (look for the `--project` argument in the `args` array).
 
 ## Tool Summary
 
 | Tool | Description | Key parameters |
-|------|-------------|----------------|
+| --- | --- | --- |
 | `save_memory` | Create a new `pending` memory entry | `title`, `content`, `categories`, `confidence`, `source_agent`, `scope_agents` |
 | `list_memories` | List metadata filtered by state/category/scope | `states`, `categories`, `scope_agents` |
 | `recall_memory` | Recall scoped identity-bearing memory blocks for agent pre-flight | `agent`, `categories`, `limit` |
 | `read_memory` | Read one full memory entry by ID | `entry_id` |
 | `assess_memories` | Record whether recalled entries were useful for a completed task | `task_id`, `assessments` |
+| `commit_memory_batch` | Commit reviewed non-pending entries for one curation or review session | `session_type` (`curation` or `review`) |
 | `curate_memory` | Curator mutation and code-managed state transition tool | `entry_id`, optional mutable fields, `scope_agents` |
 | `delete_memory` | Lifecycle-aware deletion with hard/soft semantics | `entry_id` |
 | `rename_agent_memories` | Rewrite provenance and scopes after an agent rename | `old_name`, `new_name` |
@@ -83,17 +83,16 @@ The `--project` path must point to the OwlBear installation root. Find the corre
 Creates a new `pending` entry in `.owlbear/memory/*.md`.
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --- | --- | --- | --- |
 | `title` | str | (required) | Human-readable title, used for stable filename slug at creation |
 | `content` | str | (required) | Markdown body content |
 | `categories` | list[str] | (required) | One or more category values |
 | `confidence` | float | (required) | Must be within `[0.7, 1.0]` |
-| `source_agent` | str | (required) | Exact active custom-agent name recorded as provenance |
+| `source_agent` | str | (required) | Non-blank immutable provenance label |
 | `scope_agents` | list[str] \| null | `[]` | Initial relevance scope; omit it so curation owns assignment |
 
-Agent names are discovered from active `.agent.md` locations, including enabled
-`chat.agentFilesLocations`, `.github/agents`, `.owlbear/agents`, and `share/agents`. Product labels,
-case variants, and names without an active agent definition are rejected.
+Named provenance is accepted at intake without active-agent runtime validation. A readable local
+`.agent.md` is corroboration the curator may use later; it is not an authorization boundary.
 
 Returns: the unscoped pending entry and a guidance hint indicating next-step curation.
 
@@ -105,7 +104,7 @@ Returns metadata-only entries sorted for lifecycle priority. `contested` shares 
 Default behavior (when `states` is omitted): includes every non-deleted state.
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --- | --- | --- | --- |
 | `states` | list[str] \| null | `null` | Optional explicit state filter |
 | `categories` | list[str] \| null | `null` | Optional category filter |
 | `scope_agents` | list[str] \| null | `null` | Optional agent-scope filter |
@@ -117,7 +116,7 @@ Returns: metadata entries (no `content`) with fields including `id`, `title`, `c
 Reads one full entry by `entry_id`.
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --- | --- | --- | --- |
 | `entry_id` | str | (required) | Entry identifier |
 
 Behavior:
@@ -130,7 +129,7 @@ Behavior:
 Returns identity-bearing markdown blocks scoped to one agent for pre-flight loading.
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --- | --- | --- | --- |
 | `agent` | str | (required) | Agent name requesting relevant memory |
 | `categories` | list[str] \| null | `null` | Optional category filter |
 | `limit` | int \| null | `20` | Maximum entries to return; non-negative |
@@ -143,7 +142,7 @@ Behavior:
 - formats each block as `## {title}`, `Entry ID:`{id}``, and the body on consecutive lines
 - omits all other entry metadata
 - rejects blank or wildcard agent names
-- rejects names without an active custom-agent definition
+- accepts named and universal recall guidance according to the memory service's recognition rules
 
 ## assess_memories
 
@@ -151,19 +150,19 @@ Records how useful recalled memory entries were for a completed task. Include ev
 by `recall_memory` in one assessment batch.
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --- | --- | --- | --- |
 | `task_id` | str | (required) | Non-empty identifier for the completed task |
 | `assessments` | list[dict[str, str]] | (required) | Non-empty list of per-entry assessments |
 
 Each assessment item requires these fields:
 
 | Field | Type | Description |
-|-------|------|-------------|
+| --- | --- | --- |
 | `entry_id` | str | Recalled memory entry identifier |
 | `bucket` | str | One of the accepted bucket values below |
 
 | Bucket | Meaning |
-|--------|---------|
+| --- | --- |
 | `outstanding` | The entry's guidance was genuinely great for this task |
 | `unremarkable` | The entry was applied or referenced and was adequate |
 | `didnt_use` | The entry was not applied or referenced |
@@ -183,7 +182,7 @@ Returns: `results`, containing `entry_id` and `success` for each item, plus `err
 Curator update tool for content edits and lifecycle transitions.
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --- | --- | --- | --- |
 | `entry_id` | str | (required) | Entry identifier |
 | `title` | str \| null | `null` | Replace title |
 | `content` | str \| null | `null` | Replace markdown body |
@@ -210,7 +209,9 @@ Returns: updated entry object.
 
 ## Agent Lifecycle
 
-Agent files and memory references change together; compatibility aliases are not retained.
+Agent files and memory references change together; compatibility aliases are not retained. Named
+scope is syntax-only at the tool boundary; curation requires independent corroboration before using
+it, while `*` is anonymous provenance rather than a named identity.
 
 - After renaming an agent definition, call
     `rename_agent_memories(old_name="old", new_name="new")`. The new name must already resolve from
@@ -226,7 +227,7 @@ Agent files and memory references change together; compatibility aliases are not
 Curator-only lifecycle mutation.
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --- | --- | --- | --- |
 | `entry_id` | str | (required) | Entry identifier |
 
 Behavior:
@@ -242,7 +243,7 @@ Returns: updated entry object.
 Approves a curated entry.
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| --- | --- | --- | --- |
 | `entry_id` | str | (required) | Entry identifier |
 
 Behavior:
@@ -258,7 +259,7 @@ Returns: updated entry object.
 Allowed category values:
 
 | Value | Meaning |
-|-------|---------|
+| --- | --- |
 | `domain-knowledge` | Verified technical fact |
 | `behaviour` | Repeatable process behavior |
 | `pitfall` | Failure mode and prevention |
@@ -315,7 +316,7 @@ delete_agent_memories(agent="retired-agent")
 Recommended category mapping for post-task reflection bullets:
 
 | Bullet type | Category |
-|-------------|----------|
+| --- | --- |
 | `problems_faced` | `domain-knowledge` |
 | `workarounds_applied` | `domain-knowledge` |
 | `patterns_discovered` | `behaviour` |
@@ -332,12 +333,12 @@ identities are discovered from workspace agent locations; the server has no envi
 All tools raise `ToolError` (surfaced as MCP error responses) for invalid operations:
 
 | Error | Trigger | Example |
-|-------|---------|---------|
+| --- | --- | --- |
 | Entry not found | Invalid `entry_id` | `read_memory(entry_id="nonexistent")` |
 | Invalid state transition | Wrong source state | `approve_memory` on a `pending` entry |
 | Deleted entry access | Reading a soft-deleted entry | `read_memory` on `state=deleted` |
 | Validation failure | Bad confidence, empty title, invalid category | `save_memory(confidence=0.5, ...)` |
 | Blank agent | Empty or whitespace-only agent name | `recall_memory(agent="")` |
-| Unknown agent | Name does not match an active `.agent.md` definition | `save_memory(source_agent="GitHub Copilot", ...)` |
+| Unknown agent | Recall identity has no recognized memory-derived guidance | `recall_memory(agent="unknown-role")` |
 
 Tool responses include a `hint` field with human-readable guidance about what happened and suggested next steps.

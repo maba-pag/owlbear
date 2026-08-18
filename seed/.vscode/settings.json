@@ -29,12 +29,13 @@
     "npm test": true,
     "Test-Path": true,
     "uv run coverage": true,
-    "uv run eslint-fix": true,
+    "uv run format-full": true,
     "uv run help": true,
     "uv run lint": true,
-    "uv run lint --all": true,
+    "uv run lint-cockpit": true,
     "uv run lint-full": true,
     "uv run megalint": true,
+    "uv run quality-full": true,
     "uv run pytest": true,
     "uv run python": true,
     "uv run ruff": true,
@@ -60,14 +61,14 @@
     "**/*.egg-info": true
   },
   "files.watcherExclude": {
-    ".owlbear/target/**": true
+    ".owlbear/delivery/runtime/**": true,
+    ".owlbear/delivery/worktrees/**": true
   },
   "git.autorefresh": false,
   "github.copilot.chat.additionalReadAccessPaths": [
     "{{owlbear_abs_path}}"
   ],
   "github.copilot.chat.agent.autoFix": true,
-  "github.copilot.chat.agent.currentEditorContext.enabled": false,
   "github.copilot.chat.anthropic.contextEditing.mode": "clear-tooluse",
   "github.copilot.chat.cli.sessionController.enabled": true,
   "github.copilot.chat.executionSubagent.enabled": true,

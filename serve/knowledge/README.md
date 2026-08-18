@@ -2,7 +2,13 @@
 
 Graph-augmented vector retrieval engine for the OwlBear pipeline. Provides document ingestion, entity extraction, semantic search, and per-turn context injection for agent prompts.
 
-→ Parent: [README.md](../../README.md)
+**Use this guide when:** you need to embed or extend the alpha Knowledge engine's ingestion, storage,
+retrieval, graph, or enrichment boundary.
+
+Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
+
+**Status:** Alpha. The engine is implemented and available to the pipeline, but it still needs
+real-world validation before it should be treated as a generally validated capability.
 
 ---
 
@@ -24,7 +30,7 @@ conn = sqlite3.connect("path/to/knowledge.db")
 source_store: protocols.SourceStore = stores.SqliteSourceStore(conn)
 graph_store: protocols.GraphStore = stores.SqliteGraphStore(conn)
 vector_store = QdrantVectorStore(location=":memory:")
-embedding_provider = BgeM3EmbeddingProvider()   # ~2.3 GB download on first use
+embedding_provider = BgeM3EmbeddingProvider()  # ~2.3 GB download on first use
 chunker = TextChunker()
 content_store: protocols.ContentStore = ContentStore(
     db=conn,
@@ -39,7 +45,7 @@ fetcher: ContentFetcher = HttpxContentFetcher()
 ### Module groups
 
 | Group | Key exports |
-|-------|-------------|
+| --- | --- |
 | Package surface | `protocols`, `stores` |
 | Protocols | `ContentStore`, `GraphStore`, `SourceStore`, `QueryFacade`, `IngestCoordinator` |
 | Store implementations | `stores.ContentStore`, `stores.SqliteGraphStore`, `stores.SqliteSourceStore` |
@@ -57,7 +63,7 @@ No environment variables at the library level. Configuration is passed via const
 ### Qdrant storage modes
 
 | Mode | `location` value |
-|------|-----------------|
+| --- | --- |
 | In-memory | `":memory:"` |
 | Filesystem | `"/path/to/dir"` |
 | Remote HTTP | `"http://localhost:6333"` |
@@ -67,16 +73,16 @@ No environment variables at the library level. Configuration is passed via const
 ### Required
 
 | Package | Purpose |
-|---------|---------|
+| --- | --- |
 | `pydantic` | Model validation |
-| `strictyaml` | YAML parsing for source config |
+| `ruamel.yaml` | YAML parsing for source config |
 
 ### Optional extras
 
 Install with `uv pip install -e "serve/knowledge[<extra>]"`:
 
 | Extra | Packages | Purpose |
-|-------|----------|---------|
+| --- | --- | --- |
 | `qdrant` | `qdrant-client` | Persistent vector store |
 | `embedding` | `FlagEmbedding` | BGE-M3 embedding provider (~2.3 GB model download on first use) |
 | `intake` | `httpx` | HTTP URL ingestion |

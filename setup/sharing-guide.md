@@ -9,7 +9,7 @@ developer's machine alongside their project directories. Each project references
 using relative paths (e.g., `../owlbear/share/agents`). There is no packaging step — clone is
 install.
 
-This means sharing owlbear with a teammate means they clone <strong>both</strong>:
+This means sharing owlbear with a teammate means they clone **both**:
 
 1. The **owlbear** repository (shared tooling)
 2. The **project** repository (their actual project)
@@ -18,7 +18,7 @@ Both repos must sit in a sibling layout for the relative paths to work. On Windo
 they must also be on the same drive.
 
 > **Windows limitation:** owlbear and the project must be on the **same drive**.
-Cross-drive relative paths raise a `ValueError` in `init.py` before any files are
+> Cross-drive relative paths raise a `ValueError` in `init.py` before any files are
 > written. macOS and Linux are not affected.
 
 ---
@@ -29,10 +29,10 @@ Walk the teammate through these steps:
 
 ```shell
 # 1. Clone owlbear to a convenient parent directory
-git clone https://github.com/your-org/owlbear.git ~/Dev/owlbear
+git clone -b main https://github.com/maba-pag/owlbear.git ~/Dev/owlbear
 
 # 2. Clone the project repository as a sibling
-git clone https://github.com/your-org/my-project.git ~/Dev/my-project
+git clone https://github.com/OWNER/PROJECT.git ~/Dev/my-project
 
 # 3. Bootstrap owlbear into the project workspace
 cd ~/Dev/my-project
@@ -46,12 +46,13 @@ code .
 > `uv run --project ..\owlbear python ..\owlbear\setup\init.py`.
 > owlbear and the project must be on the same drive.
 
-After VS Code opens, have the teammate verify the setup using the **Diagnostics view**
-(right-click the Chat panel → "Diagnostics") — it should show owlbear agents, skills,
-and instructions loaded from the shared installation.
+Setup infers the GitHub `owner/name` identity from the default `origin` remote. If the project uses a
+different remote or has no inferable GitHub URL, pass `--remote NAME --github-repository OWNER/NAME`.
 
-See [setup-guide.md](setup-guide.md) for the full verification checklist and
-troubleshooting reference.
+After VS Code opens, have the teammate follow the canonical
+[installation verification](setup-guide.md#verify-the-installation). It checks both the shared
+customization roots and all five seeded MCP servers. Before the first workflow, also run
+`gh auth status` and confirm an active account.
 
 To launch Cockpit for the shared project, run it from the project directory and point uv
 at the sibling owlbear clone:
@@ -85,15 +86,15 @@ No platform-specific configuration is required:
 ## What's Shared vs. Project-Local
 
 | Resource | Location | Shared? |
-|----------|----------|---------|
+| --- | --- | --- |
 | Agents (`.agent.md`) | `../owlbear/share/agents/` | Yes — all teammates get the same agents |
 | Skills (`SKILL.md`) | `../owlbear/share/skills/` | Yes — all teammates get the same skills |
 | Instructions (`*.instructions.md`) | `../owlbear/share/instructions/` | Yes — shared baseline |
 | Prompts (`*.prompt.md`) | `../owlbear/share/prompts/` | Yes — shared baseline |
 | MCP server code | `../owlbear/serve/` | Yes — started from owlbear via `uv run --project` |
 | Hook runtime files | `.owlbear/hooks/` in project | No — copied from `seed/` into each project |
-| Target authority and runtime | `.owlbear/target/changes/` in project | No — per-project |
-| Target activation request and receipt | `.owlbear/target-cutover-*.json` in project | No — per-project |
+| Delivery package authority | `.owlbear/delivery/packages/` in project | No — tracked per-project |
+| Delivery runtime and worktrees | `.owlbear/delivery/runtime/` and `.owlbear/delivery/worktrees/` in project | No — ignored and host-local |
 | Immutable legacy inventory | `.owlbear/legacy/` in project, when present | No — read-only history |
 | `.github/copilot-instructions.md` | project root | No — per-project (override layer) |
 | `.owlbear/knowledge/` | project root | No — per-project |
@@ -148,12 +149,12 @@ organization agent registry as a complement to the local installation.
 ## Troubleshooting
 
 | Symptom | Resolution |
-|---------|------------|
+| --- | --- |
 | `ValueError` during `init.py` | Ensure owlbear and project are on the same Windows drive |
 | Agents missing after setup | Run `init.py` again; check that `.vscode/settings.json` was created and contains `chat.agentFilesLocations` pointing to the owlbear installation |
 | Cockpit command not found in project | Run `uv run --project ../owlbear cockpit` from the project root instead of plain `uv run cockpit` |
-| Target MCP or Cockpit reports a missing receipt | Re-run `init.py` in a current workspace; legacy `.owlbear/kanban/` stores are preserved but not converted |
+| Delivery MCP or Cockpit reports that a legacy root requires migration | Preserve the reported state unchanged and complete the dedicated Delivery migration before restarting |
 | Cockpit opens the wrong workspace | Launch from the project root or pass the intended project directory to `uv --directory` |
 | Hook updates not taking effect after `git pull` | Re-run `init.py`; use `--replace-hooks` if local hook files differ and you want the seeded versions restored |
-| `uv` not found | Install uv globally: `pip install uv` or see [uv docs](https://docs.astral.sh/uv/) |
-| Different owlbear versions between teammates | Pin owlbear to a tag or commit SHA in team onboarding docs; `git pull` + re-run `init.py` to update |
+| `uv` not found | Install uv using the [official installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
+| Different owlbear checkout states between teammates | Use the same branch (`main` for consumer use or `dev` for OwlBear development), then `git pull` and rerun `init.py` to refresh copied runtime files |

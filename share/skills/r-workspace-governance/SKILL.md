@@ -28,9 +28,6 @@ without behavior change).
   index is not a reason to skip an owned commit.
 - Use the shared scoped helper:
   `uv --project {owlbear-root} run commit-owned -m "type: description (#task-id, agent)" -- path [path...]`.
-- Integration repair candidates are the sole exception: call Delivery's claim-bound
-  `create_integration_repair_candidate` operation. Never use `commit-owned`, `git commit`, `SKIP`,
-  or `--no-verify` to create or repair that candidate.
 - The helper preserves unrelated staged paths and unstages only its own paths if `git commit` fails.
   It rejects owned paths that were already staged because it cannot distinguish user work from agent
   work in the same path.
@@ -61,12 +58,12 @@ reverting them.
 ## OwlBear-Managed Artifact Placement
 
 | Artifact | Location | Rule |
-|----------|----------|------|
+| --- | --- | --- |
 | Temporary output, debug files, and one-off scripts | `.owlbear/scratch/{task-id}-{description}.{ext}` | Untracked; delete before task closure. |
 | Approved external repository clones | `.owlbear/scratch/research/{repo-name}/` | Inspect only; delete before task closure. |
 | Durable research findings | `.owlbear/research/{slug}.md` | Tracked; include the task reference. |
 | External source attribution | `.owlbear/sources/overview.md` | Tracked; use the Attribution schema below. |
-| Decision and action requests | `.owlbear/target/delivery/changes/{change-id}/frontier.json` | Create through Delivery request tools; requests are embedded in outcome bindings, so do not hand-author the frontier. |
+| Decision and action requests | `.owlbear/delivery/runtime/changes/{change-id}/frontier.json` | Create through Delivery request tools; requests are embedded in outcome bindings, so do not hand-author the frontier. |
 | Generated navigation indexes | `.owlbear/doc-index.md`, `.owlbear/py-index.md`, `.owlbear/ts-index.md` | Regenerate with `uv run --project {owlbear-root} indexes {project-root}`. |
 
 Project-owned source, test, documentation, and benchmark locations come from the local project map,
@@ -82,7 +79,7 @@ the corresponding `.owlbear/agents/`, `.owlbear/skills/`, `.owlbear/instructions
 External code and patterns must be logged in `.owlbear/sources/overview.md`:
 
 | Column | Description |
-|--------|-------------|
+| --- | --- |
 | Source | Project or article name |
 | URL | Link to the repository, article, or documentation |
 | What | Pattern, code snippet, architecture idea, or other material used |

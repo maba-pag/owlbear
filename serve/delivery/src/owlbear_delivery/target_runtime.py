@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 RuntimeId = Annotated[str, StringConstraints(strict=True, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")]
 CommitSha = Annotated[str, StringConstraints(strict=True, pattern=r"^[0-9a-f]{40}$")]
-TargetJobKind = Literal["plan", "build", "assembly"]
+TargetJobKind = Literal["plan", "build"]
 
 
 class TargetJobState(StrEnum):
@@ -969,24 +969,9 @@ class TargetRuntime:
             )
             for index, task in enumerate(receipt.planned_tasks)
         )
-        scope = next(item for item in self._authority.task_plan_scopes if item.scope_id == job.plan_scope_id)
-        assembly_jobs: tuple[TargetJob, ...] = ()
-        if scope.composition_claim:
-            assembly_jobs = (
-                TargetJob(
-                    job_id=next_job_id + len(build_jobs),
-                    kind="assembly",
-                    change_id=job.change_id,
-                    authority_digest=job.authority_digest,
-                    work_item_id=job.work_item_id,
-                    plan_scope_id=job.plan_scope_id,
-                    predecessor_job_ids=tuple(item.job_id for item in build_jobs) or (job.job_id,),
-                    created_at=receipt.issued_at,
-                ),
-            )
         return state.model_copy(
             update={
-                "jobs": (*state.jobs, *build_jobs, *assembly_jobs),
+                "jobs": (*state.jobs, *build_jobs),
                 "tasks": (*state.tasks, *receipt.planned_tasks),
             }
         )

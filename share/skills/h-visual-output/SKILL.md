@@ -17,7 +17,7 @@ For Excalidraw-specific diagrams, see `h-excalidraw-diagram`.
 ## Content Type Routing
 
 | Content type | Approach | When to use |
-|-------------|----------|-------------|
+| --- | --- | --- |
 | Flowchart / sequence / ER | Mermaid (`graph`, `sequenceDiagram`, `erDiagram`) | Relationships, flows, processes |
 | Architecture overview | CSS Grid cards with depth tiers | System components, layers, boundaries |
 | Data comparison / metrics | HTML `<table>` with status badges | Side-by-side data, KPIs, audit results |
@@ -28,7 +28,7 @@ For Excalidraw-specific diagrams, see `h-excalidraw-diagram`.
 ## Approved Palettes
 
 | Name | Background | Primary | Accent | Text |
-|------|-----------|---------|--------|------|
+| --- | --- | --- | --- | --- |
 | Midnight | `#0f172a` | `#3b82f6` | `#22d3ee` | `#e2e8f0` |
 | Forest | `#0c1a0c` | `#22c55e` | `#a3e635` | `#dcfce7` |
 | Ember | `#1a0a0a` | `#ef4444` | `#f97316` | `#fef2f2` |

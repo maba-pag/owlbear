@@ -11,7 +11,7 @@ Semantic color assignments for OwlBear diagrams. Every color choice must encode 
 Use matching fill + stroke pairs. Never mix fills and strokes from different semantic categories.
 
 | Semantic Role | Fill | Stroke | Use |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **Primary** | `#e7f5ff` | `#1971c2` | Hero component, main subject, focal point |
 | **Secondary** | `#f8f9fa` | `#495057` | Supporting component, adjacent service |
 | **Success / Done** | `#ebfbee` | `#2f9e44` | Completed step, passing state, green-path |
@@ -27,7 +27,7 @@ Use matching fill + stroke pairs. Never mix fills and strokes from different sem
 ## Text Hierarchy Colors
 
 | Role | Color | Font Size | Use |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `<text-primary>` | `#212529` | ≥16px | Main element labels, body content |
 | `<text-secondary>` | `#495057` | ≥16px | Sub-labels, supporting descriptions |
 | `<text-muted>` | `#868e96` | ≥14px | Captions, legends, step numbers |
@@ -41,7 +41,7 @@ Use matching fill + stroke pairs. Never mix fills and strokes from different sem
 Specific palette for knowledge graph and evidence diagrams (used in OwlBear analysis/research visuals).
 
 | Artifact Type | Fill | Stroke |
-|---|---|---|
+| --- | --- | --- |
 | Source document | `#e7f5ff` | `#1971c2` |
 | Extracted claim | `#ebfbee` | `#2f9e44` |
 | Entity node | `#fff9db` | `#e67700` |
@@ -54,7 +54,7 @@ Specific palette for knowledge graph and evidence diagrams (used in OwlBear anal
 ## Stroke Utilities
 
 | Token | Value | Use |
-|---|---|---|
+| --- | --- | --- |
 | `<stroke-muted>` | `#ced4da` | Divider lines, dashed separators |
 | `<stroke-heavy>` | `#212529` | Emphasis border, selected element |
 | `<stroke-invisible>` | `transparent` | Label-only elements with no border |

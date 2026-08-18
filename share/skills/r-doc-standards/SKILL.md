@@ -8,14 +8,15 @@ user-invocable: false
 
 Shared documentation quality rules for any project. Project-specific doc-type and placement mappings are loaded from a local companion instruction.
 
-Companion wiring: `share/instructions/doc-standards.instructions.md` applies this standard and routes audits through `.owlbear/prompts/doc-audit.prompt.md`.
+Companion wiring: the matching project instruction applies this standard and routes audits through
+the repository's documentation-audit workflow.
 
 ## Citation Format
 
 Rules use **`{SECTION}-{N}`** IDs (for example, `STR-1`, `PLC-1`, `AUD-2`). The prefix maps to the section below:
 
 | Prefix | Section |
-|--------|---------|
+| --- | --- |
 | `STR` | Required Sections (project-defined companion instruction) |
 | `PLC` | Placement (project-defined companion instruction + shared placement rules below) |
 | `XREF` | Cross-Reference Integrity |

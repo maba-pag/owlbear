@@ -2,18 +2,20 @@
 
 > From clone to working VS Code workspace.
 
+For a concise map of this folder and its ownership boundaries, see the [setup folder guide](README.md).
+
 ## Prerequisites
 
 Before running setup, ensure the following are installed on your machine:
 
 | Requirement | Why | How to get it |
-|-------------|-----|---------------|
-| Python 3.14+ | OwlBear runtime | [python.org](https://www.python.org/downloads/) |
-| [uv](https://docs.astral.sh/uv/) | Package manager and MCP server launcher | `pip install uv` or see uv docs |
+| --- | --- | --- |
+| Python 3.14.6+ | OwlBear runtime | [python.org](https://www.python.org/downloads/) |
+| [uv](https://docs.astral.sh/uv/) | Package manager and MCP server launcher | [Installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
 | VS Code | IDE | [code.visualstudio.com](https://code.visualstudio.com/) |
 | GitHub Copilot extension | Chat and agents | VS Code Extensions marketplace |
+| [GitHub CLI](https://cli.github.com/) | GitHub publication and pull-request operations | [Installation guide](https://cli.github.com/manual/installation) |
 | Git | Clone and version control | [git-scm.com](https://git-scm.com/) |
-| Chromium | Browser MCP runtime | Run `playwright install chromium` after setup |
 
 > **Windows limitation:** owlbear and your project must be on the **same drive**.
 > `init.py` uses relative paths, and `os.path.relpath` raises `ValueError` when
@@ -21,31 +23,128 @@ Before running setup, ensure the following are installed on your machine:
 
 <!-- separate blockquotes -->
 
-> **macOS and Linux:** No additional prerequisites — Python, uv, VS Code, and Git
-> work natively on all platforms.
+> **macOS and Linux:** Python, uv, VS Code, and Git work natively on both platforms. Browser-backed
+> commands still require the separate Chromium download described below.
+
+Chromium is optional for setup. Install it later only when you use the Browser MCP or run
+Cockpit's browser-backed tests; see the [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests).
 
 ---
 
 ## Quick Start
 
+This is the complete first-time path. Run it from the parent directory of both repositories.
+If your project is already checked out, skip its clone command. Replace `OWNER/PROJECT` with the
+project's GitHub identity.
+
+### 1. Put both repositories side by side
+
 ```shell
-# 1. Clone owlbear alongside your project directory
-git clone https://github.com/your-org/owlbear.git
-
-# 2. Create your project directory
-mkdir my-project
-
-# 3. Bootstrap the OwlBear workspace from inside your project directory
+# Only if the project is not already checked out.
+git clone https://github.com/OWNER/PROJECT.git my-project
+git clone -b main https://github.com/maba-pag/owlbear.git owlbear
 cd my-project
-uv run --project ../owlbear python ../owlbear/setup/init.py
+```
 
-# 4. Open the project in VS Code
+**Expected result:** the OwlBear checkout and the project are siblings, for example
+`~/work/owlbear` and `~/work/my-project`. On Windows they are on the same drive.
+
+### 2. Run setup from the project root
+
+```shell
+uv run --project ../owlbear python ../owlbear/setup/init.py \
+  --github-repository OWNER/PROJECT
+```
+
+If the project has a GitHub `origin`, setup can infer the repository and the final flag may be
+omitted. Use `--remote` or `--target-branch` only when your publication policy differs from the
+defaults `origin` and `main`.
+
+**Expected result:** setup creates or merges `.vscode/settings.json` and `.vscode/mcp.json`, writes
+tracked `.owlbear/delivery/config.json`, and copies the project-local hooks and runtime templates.
+
+### 3. Open the project in VS Code
+
+```shell
 code .
 ```
 
-> **Windows:** use backslashes:
-> `uv run --project ..\owlbear python ..\owlbear\setup\init.py`. owlbear and your project
-> must be on the same drive.
+**Expected result:** VS Code opens the project directory, not the OwlBear checkout. The shared
+agents, skills, instructions, and prompts are loaded from the sibling OwlBear path.
+
+### 4. Confirm it loaded
+
+Open **Chat: Open Customizations** and then **MCP: List Servers**. The exact checks are in
+[Verify the installation](#verify-the-installation).
+
+**Expected result:** the five seeded MCP servers are running and the shared OwlBear customization
+roots appear in Chat Customizations.
+
+## Verify the installation
+
+1. Open Copilot Chat and run **Chat: Open Customizations**.
+2. Confirm that OwlBear agents, skills, instructions, and prompts are listed.
+3. Run **MCP: List Servers** and confirm these five servers show `running`:
+   `owlbear-delivery`, `owlbear-knowledge`, `owlbear-memory`, `owlbear-browser`, and `markitdown`.
+4. Before the first workflow, run `gh auth status` and confirm the GitHub CLI reports an active
+  account.
+
+If a customization root is missing, inspect `.vscode/settings.json` and compare its relative
+OwlBear path with the location of the checkout. If a server is missing, inspect `.vscode/mcp.json`,
+run `uv sync --locked --all-packages --all-extras --all-groups` in the OwlBear checkout, and rerun
+setup from the project root.
+
+## First successful workflow
+
+After verification, prove the installation with one small outcome:
+
+1. Run `/ideate` and describe the outcome.
+2. Continue with `/design`, review the proposed work, and approve admission. When it succeeds,
+   note the returned lowercase, hyphenated Change ID, for example `improve-search`.
+3. Run `/orchestrate` after admission. It acquires currently eligible work across the portfolio;
+  Planning and Build then proceed in order.
+4. Launch Cockpit from the project root and confirm the Change is visible.
+5. Run `/finalize-change improve-search` after the Change is complete, then review and merge the
+  pull request in GitHub.
+
+```shell
+uv run --project ../owlbear cockpit
+```
+
+Expected result: Cockpit opens at `http://127.0.0.1:8420`, reads the current project, and shows one
+Change with visible work and a clear next action. Use the
+[Delivery workflow reference](#delivery-workflow) only when you need the detailed correction,
+publication, acceptance, or recovery procedure.
+
+> The remaining sections are optional setup and reference material. The first successful workflow
+> above is the shortest path to a working project.
+
+## macOS Copilot profile settings
+
+When setup runs interactively on macOS, it inspects VS Code's workspace profile association for the
+consumer project directory that `setup/init.py` is initializing before changing any Copilot profile
+data:
+
+1. If a profile is associated with the project, setup shows the target and asks for confirmation.
+2. If no profile is associated, setup explains that it will offer the default profile and asks for
+  confirmation.
+3. After confirmation, setup updates only the following model entries in that profile's
+  `chatLanguageModels.json` file:
+
+  | Model | Reasoning effort |
+  | --- | --- |
+  | `gpt-5.6-luna` | `max` |
+  | `gpt-5.6-sol` | `high` |
+  | `claude-opus-5` | `medium` |
+
+The file is written atomically, unrelated profile entries are preserved, and a missing file or
+Copilot entry is created minimally. Malformed profile JSON is left unchanged with a warning. To
+target a named profile instead of the default fallback, open
+the project in VS Code, run `Profiles: Switch Profile`, and rerun `setup/init.py`. Setup does not
+take a profile-selection command-line argument. Noninteractive setup skips this user-local profile
+mutation.
+
+For development-only browser-backed tests, use the [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests).
 
 ---
 
@@ -54,50 +153,36 @@ code .
 Running `init.py` writes the following files into your project directory:
 
 | File / Directory | Purpose | Idempotency |
-|------------------|---------|-------------|
+| --- | --- | --- |
 | `.vscode/settings.json` | Points VS Code at owlbear agents, skills, and instructions; enables `mermaid-chat.enabled` for Mermaid diagram rendering in chat | Merged (owlbear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 5 MCP servers (4 owlbear stdio, including browser access, + markitdown) | Merged (owlbear servers as defaults; your existing servers are preserved) |
-| `.owlbear/delivery/config.json` | Declares the project Delivery integration branch; roots, single-worker capacities, agent routing, and models come from workspace conventions and agent definitions | Seeded once, tracked in Git, and preserved on rerun so project policy changes remain intact |
-| `.owlbear/delivery/verification.json` | Declares ordered commands that must pass against each exact merged candidate | Detected once from root Python tests and the root npm `test` script; tracked in Git and preserved on rerun |
-| `.owlbear/target/changes/` | Admitted semantic authority and per-change runtime evidence | Fresh setup activates an empty store; reruns preserve target records |
-| `.owlbear/target-cutover-request.json` | Exact activation request loaded by target MCP and Cockpit startup | Published for a fresh workspace; preserved on rerun |
-| `.owlbear/target-cutover.json` | Immutable receipt authorizing target mutation | Published only after snapshot, staging, and smoke verification succeed |
-| `.owlbear/legacy/target-cutover/` | Hash-verified snapshot of the retired bootstrap source | Created during activation; never runtime authority |
+| `.owlbear/delivery/config.json` | Declares the Git remote, pull-request target branch, and exact GitHub `owner/name` identity; host-local writer and execution capacity may be configured separately in ignored `.owlbear/delivery/runtime/host.json` | Tracked in Git; exact schema-1 policy is migrated once and schema-2 project edits are preserved on rerun |
 | `.owlbear/hooks/allow-stances-only.py` | Restricts ideation agents to approved stance outputs | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-src-writes.py` | Constrains test-only roles to `tests/`, `__tests__/`, and scratch surfaces | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-writes.py` | Constrains read-only roles to scratch workspace writes only | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/lint-changed.py` | Builder lint feedback hook — runs `uv run ruff check` on edited `.py` files; silently no-ops if `ruff` is not in your project's deps | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/session-context.py` | Injects current git branch + recent commits into agent prompts; silently no-ops if `git` is unavailable | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/scripts/test-root.py` | Test-root resolver — discovers toolchain and CWD for a given test file | Always written |
+| `.owlbear/.gitignore` | Ignores OwlBear-local scratch, runtime, database, vector, and lock artifacts | Managed rules are merged on rerun; custom rules are preserved |
 | `.owlbear/knowledge/.gitkeep` | Knowledge store placeholder | Always written |
 | `store/knowledge/.gitkeep` | Knowledge store placeholder | Always written |
 | `.github/copilot-instructions.md` | Consumer scaffold for project-specific Copilot instructions — placeholder sections for Project Identity, Directory Structure, Tech Stack, and Resources | Skipped if file already exists |
-| `.editorconfig` | Editor formatting rules | Skipped if file already exists |
+| `.editorconfig` | Editor formatting rules | Skipped if file already exists; refreshable with `--refresh-configs` |
 | `.gitattributes` | Git line-ending and diff rules | Skipped if file already exists |
-| `.gitignore` | Gitignore rules; OwlBear section appended if marker absent | Preserves user content and removes retired rules from the OwlBear-managed section on rerun |
-| `.markdownlint-cli2.jsonc` | Markdown linting configuration | Skipped if file already exists |
-| `.markdownlint.json` | Markdown linting rules | Skipped if file already exists |
-| `.markdownlintignore` | Markdown lint exclusion patterns | Skipped if file already exists |
-| `.yamllint.yml` | YAML linting configuration | Always written |
+| `.gitignore` | Project-wide Gitignore rules; OwlBear-local rules live in `.owlbear/.gitignore` | Preserves user content and removes retired root rules on rerun |
+| `.markdownlint-cli2.jsonc` | Markdown linting configuration | Skipped if file already exists; refreshable with `--refresh-configs` |
+| `.markdownlint.json` | Markdown linting rules | Skipped if file already exists; refreshable with `--refresh-configs` |
+| `.markdownlintignore` | Markdown lint exclusion patterns | Skipped if file already exists; refreshable with `--refresh-configs` |
+| `.yamllint.yml` | YAML linting configuration | Skipped if file already exists; refreshable with `--refresh-configs` |
 
-For a fresh workspace, `init.py` activates only the empty target authority store. It does not create
-retired task, decision, board, accept, or audit stores, and reruns do not overwrite target records.
-If `.owlbear/kanban/` already exists, setup preserves it and publishes no target store or receipt.
+For a fresh workspace, `init.py` writes tracked Delivery configuration. It does not create mutable
+Delivery runtime, worktrees, verification profiles, or retired task, decision, board, accept, or
+audit stores. Existing legacy state is preserved unchanged.
 
-Commit `.owlbear/delivery/verification.json` after reviewing its generated commands. Setup adds
-`uv run --locked pytest` when a root `pyproject.toml` and `tests/` directory are present. It adds `npm ci`
-when a root lockfile exists and `npm test` when the root package declares that script. If setup
-detects neither surface, it warns and leaves the profile absent; create the file before Integration.
-Each command runs without a shell, from its declared candidate-relative directory, with only the
-listed environment variables. A change that edits its own verification profile is rejected; land
-policy changes on the Integration target before they govern later candidates.
-
-Verification is not a security sandbox. Commands run with the current user's filesystem permissions,
-so review the profile and project test code before enabling Integration for untrusted repositories.
-
-For an existing OwlBear workspace, rerun setup, review the generated profile, and commit it directly
-to the Integration target before retrying Delivery Integration. This one-time bootstrap is required
-because a candidate is never allowed to introduce or rewrite the policy that authorizes itself.
+Finalization evidence is collected for the exact reviewed Change head in its managed worktree. The
+checks and procedures may differ by Change; Delivery retains their typed observations and an
+independent exact-commit review. This evidence does not claim that GitHub can merge the Change or
+that the merged result passes.
 
 ## Shared vs Copied
 
@@ -109,13 +194,36 @@ OwlBear uses two different update models:
 This split is why `git pull` updates shared agents and skills immediately, while copied
 runtime files may need a later `init.py` run to refresh.
 
+## Refreshing Consumer Configs
+
+Rerunning `init.py` preserves existing editor and lint configuration so project-specific changes
+are not overwritten. The refreshable files are `.editorconfig`, `.markdownlint-cli2.jsonc`,
+`.markdownlint.json`, `.markdownlintignore`, and `.yamllint.yml`.
+
+From the consumer project root, check for missing or customized files without changing them:
+
+```shell
+uv run --project ../owlbear python ../owlbear/setup/init.py --check-configs
+```
+
+The command exits successfully when the files match the owlbear seed and exits with status 1 when
+one or more files are missing or different. To intentionally replace those five files with the
+current seed versions, run:
+
+```shell
+uv run --project ../owlbear python ../owlbear/setup/init.py --refresh-configs
+```
+
+`--refresh-configs` does not overwrite `.github/copilot-instructions.md`, hook files, or other
+project-specific files that are outside the refreshable set.
+
 MCP memory entries are stored as markdown files under `.owlbear/memory/`. The
 `owlbear-memory` server creates that directory when it starts or writes the first
 entry, so setup does not seed a separate memory store.
 
 ---
 
-## Target Delivery Workflow
+## Delivery Workflow
 
 This section is the canonical operator procedure. The
 [Delivery MCP reference](../serve/delivery-mcp/README.md) lists the exact public tools and startup
@@ -137,9 +245,10 @@ with deterministic outcomes, dependencies, commitments, and proof boundaries.
 
 ### Delivery
 
-After admission, invoke `/orchestrate <change-id>`. Each cycle lists current work, acquires a bounded
-ordered set of launch packages, dispatches only the worker named by each package, forwards the
-worker's transition unchanged, and invokes Integration only for engine-provided ready change IDs.
+After admission, invoke `/orchestrate`. Each cycle lists current work, acquires a bounded ordered
+set of launch packages across the portfolio, dispatches only the worker named by each package, and
+forwards the worker's transition unchanged. Tasks execute sequentially in the managed Change
+worktree and their promoted commits advance the Change branch directly.
 
 - Planning reads one typed plan context, publishes one independently reviewed task chain, and
   returns `advance`, `retry`, `return`, or `block`.
@@ -156,7 +265,7 @@ capacity without Orchestrator scheduling judgment or conversation-derived author
 Worker transitions keep correction finite and typed:
 
 | Condition | Owner and control | Resume behavior |
-|-----------|-------------------|-----------------|
+| --- | --- | --- |
 | Local implementation defect | Builder creates a bounded follow-up commit and requests fresh exact-commit review | Continue the same Build claim only after a fresh pass |
 | Missing user decision or action | Worker returns `block` with an embedded request | Answer the request in Cockpit; fresh context carries the structured resolution |
 | Requestless condition is satisfied | User clears the block in Cockpit | Engine recomputes eligibility |
@@ -166,72 +275,61 @@ Worker transitions keep correction finite and typed:
 | Earlier valid stage is required | User selects an invariant-checked backward move in Cockpit | Runtime resets only the selected outcome and its affected successors |
 
 Do not recover a live claim or infer recovery from elapsed time alone. Request answers, requestless
-unblock, confirmed-dead claim recovery, backward movement, and Integration retry remain user-owned
-Cockpit controls rather than agent MCP operations.
+unblock, confirmed-dead claim recovery, backward movement, and retained legacy Integration attention
+remain user-owned Cockpit controls rather than agent MCP operations.
 
-### Integration And Completed History
+### Publication, Acceptance, And Completed History
 
-When every outcome is complete and the reviewed source boundary is current, a normal orchestration
-cycle asks the runtime to integrate the engine-provided ready change ID. Integration validates the
-package, reviewed source, target identity, and completed-history boundary before publishing the
-product tree and recoverable package snapshot atomically to the configured target.
+When every outcome is complete and the reviewed source boundary is current, run
+`/finalize-change <change-id>` for the exact Change head. Delivery publishes or reconciles a draft
+pull request for the Change branch, observes the required checks, and marks the PR ready only when
+the finalized head is unchanged. Target synchronization, when required, merges only the configured
+remote-tracking target into the managed Change worktree; it never updates the target branch or the
+user checkout.
 
-Failure preserves completed outcomes and publishes typed Integration attention with unchanged
-heads and a retry condition. Use Cockpit to inspect the attention and retry conditions that do not
-require source repair. For `merge-conflict`, invoke `/integration-repair <change-id>`: Builder may
-create one additive repair commit limited to the original conflict paths, obtain independent review,
-and admit only a pass. Repair admission advances the reviewed source boundary; it does not update
-the target. Run normal `/orchestrate <change-id>` afterward so the runtime owns the Integration
-retry. Cockpit and the MCP completed-change tools provide bounded list, search, and exact lookup of
-published history.
+The user merges the pull request in GitHub. Delivery never merges, enables auto-merge, updates the
+target branch, or completes from local evidence. After the merge, read-only acceptance observation
+requires the exact repository, PR, base, finalized head, merged state, merge time, and provider-
+reported merge commit. Completed history preserves the finalized Change head and accepted merge
+commit as separate identities. An open or unmerged PR waits or is deferred; it cannot complete.
+
+Persisted legacy Integration attention remains visible through compatibility surfaces only. Use
+Cockpit or `/resolve-delivery-attention <change-id> <attention-id>` to inspect that exact legacy
+attention. New Integration repair claims, candidates, reviews, and admissions are retired. Treat a
+merge conflict without a current legacy claim as an authority gap; if persisted legacy claim context
+supplies exact attempt and claim identities, use the exact recovery operation and preserve its
+evidence. Do not edit the target or worktree directly. Cockpit and the MCP completed-change tools
+provide bounded list, search, and exact lookup of receipt-backed history.
 
 ### Current Manual Boundaries
 
-- Assembly remains a live stage, projection, and required startup policy type, but current compiled
-  contracts do not require it and the agent MCP surface has no Assembly context or result-publication
-  operation. An unexpected Assembly launch is recovered by exact claim identity rather than run.
+- External Change-head adoption proves provenance only. Explicit promotion is required before an
+  adopted head becomes review authority, and finalization binds the exact reviewed head.
 - Design return persists structured successor context, but reopening and revising the Specification
   currently starts with a manual `/design` invocation.
-- Merge-conflict repair is deliberately user-invoked; neither Orchestrator nor Integration edits
-  source automatically.
+- Target-sync conflict repair remains in the managed Change worktree; Delivery never mutates the
+  configured target ref, and merge-conflict repair production is retired outside that bounded path.
 - Files under `.owlbear/research/` are frozen comparison evidence, not operational or runtime
   authority. Files under `.owlbear/legacy/` are immutable historical evidence only.
 
 ```text
-/ideate -> /design -> explicit admission -> /orchestrate
+/ideate -> /design -> explicit admission -> /orchestrate -> /finalize-change <change-id>
 Specification: read/revise -> checkpoint -> derive -> validate -> approve/admit
 Delivery: acquire -> plan/build -> publish -> worker transition
 Correction: retry | return | block -> typed successor context
-Integration: ready -> publish target + completed package -> completed lookup
+Publication: finalize-change -> checkpoint -> draft PR -> finalized head -> ready PR
+Acceptance: user merges PR -> observe merged evidence -> completed lookup
 ```
 
 ---
 
-## Verify It Works
-
-After opening the project in VS Code, use the **Diagnostics view** to confirm everything loaded correctly:
-
-1. Open the Copilot Chat panel.
-2. Open the **Chat Customizations** window (from Chat settings or Command Palette).
-3. Verify each of the following appears:
-
-| What to check | How to verify |
-|---------------|---------------|
-| OwlBear agents loaded | Chat Customizations shows agents from `../owlbear/share/agents/` |
-| OwlBear skills loaded | Chat Customizations shows skills from `../owlbear/share/skills/` |
-| Instructions loaded | Chat Customizations shows `*.instructions.md` files from `../owlbear/share/instructions/` |
-| MCP servers running | Run `MCP: List Servers` from the Command Palette — `owlbear-delivery`, `owlbear-memory`, and `owlbear-knowledge` should show `running` |
-
-For runtime debugging, use **"Show Agent Debug Logs"** (Chat view ellipsis `…` menu) —
-this shows chronological tool calls, LLM requests, and prompt discovery events.
-
 ---
 
-## Launch Cockpit
+## Cockpit details
 
 Cockpit is the browser UI for target work items, requests, typed attention, recovery controls,
 completed history, Memory, Ideas, and immutable legacy inventory. Launch it from the project root
-so it reads this project's target request/receipt, `.owlbear/target/`, and `.owlbear/memory/`.
+so it reads this project's `.owlbear/delivery/config.json`, Delivery state, and `.owlbear/memory/`.
 
 1. Open a terminal in the project directory.
 
@@ -251,15 +349,15 @@ so it reads this project's target request/receipt, `.owlbear/target/`, and `.owl
    uv run --project ..\owlbear cockpit
    ```
 
-  Expected outcome: Cockpit opens `http://127.0.0.1:8420` and shows this project's
-  target workspace. Use `COCKPIT_NO_OPEN=1` to suppress browser auto-open.
+    Expected outcome: Cockpit opens `http://127.0.0.1:8420` and shows this project's
+    target workspace. Use `COCKPIT_NO_OPEN=1` to suppress browser auto-open.
 
 3. If your owlbear clone is not a sibling directory, replace `../owlbear` with the path
    to the clone.
 
-  Expected outcome: uv resolves the `cockpit` command from owlbear while Cockpit keeps
-  the current project directory as its runtime working directory. If you run the command
-  from somewhere else, add `--directory /path/to/project`.
+    Expected outcome: uv resolves the `cockpit` command from owlbear while Cockpit keeps
+    the current project directory as its runtime working directory. If you run the command
+    from somewhere else, add `--directory /path/to/project`.
 
 ---
 
@@ -326,15 +424,15 @@ override or tool-exclusion environment settings.
 ## Troubleshooting
 
 | Symptom | Likely cause | Resolution |
-|---------|-------------|------------|
-| Agents not appearing in picker | Wrong path in `chat.agentFilesLocations` | Open Diagnostics view; verify path relative to project root matches owlbear location |
+| --- | --- | --- |
+| Agents not appearing in picker | Wrong path in `chat.agentFilesLocations` | Run **Chat: Open Customizations**; verify the path relative to project root matches owlbear location |
 | Skills not auto-loading | `chat.agentSkillsLocations` missing or path wrong | Check `.vscode/settings.json`; re-run `init.py` if the key is absent |
 | Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
 | `owlbear-delivery` reports `ERR_DELIVERY_STARTUP_UNCONFIGURED` | `.owlbear/delivery/config.json` is absent from the project root | Re-run `init.py`; setup recreates the file only when it is missing |
 | `uv run cockpit` says the command is missing | Command was run from the consumer project without `--project` | Use `uv run --project ../owlbear cockpit` from the project root |
-| Existing `.owlbear/kanban/` prevents target activation | Setup preserves legacy stores but does not convert them | Start from a fresh initialized workspace and reintroduce unfinished semantic work through the current Design workflow |
-| Cockpit shows the wrong workspace or cannot find `.owlbear/target` | Cockpit was launched from the wrong working directory | Run from the project root or add `--directory /path/to/project` |
+| Delivery or Cockpit reports that `.owlbear/target` or `.owlbear/worktrees` requires migration | A retired live-state root is still nonempty | Preserve the root unchanged. From the project root, preview with `uv run --project /path/to/owlbear migrate-delivery-state .`, then apply with the same command plus `--apply`. Re-running `--apply` recovers an interrupted attempt before retrying. |
+| Cockpit shows the wrong workspace or cannot find `.owlbear/delivery/config.json` | Cockpit was launched from the wrong working directory | Run from the project root or add `--directory /path/to/project` |
 | `ValueError` on setup | Cross-drive path resolution | Place owlbear and your project on the same Windows drive |
 | Hook file not refreshed on rerun | Existing local `.owlbear/hooks/` file differs from seed | Re-run `init.py --replace-hooks` to overwrite, or choose `replace` when prompted interactively |
 | Agent name conflict | Same-name agent in both owlbear and project locations | Give project agents unique names (see Customization section above) |

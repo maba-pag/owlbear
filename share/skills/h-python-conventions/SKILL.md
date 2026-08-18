@@ -9,7 +9,7 @@ user-invocable: false
 ## Package Management
 
 - Use `uv` — never bare `pip`. Run scripts with `uv run` (e.g., `uv run pytest`, `uv run ruff check`).
-- Install deps: `uv sync --all-extras` (reads `pyproject.toml`). Never bare `uv sync` — dev dependencies (pytest, ruff, coverage) are declared as extras and get removed without `--all-extras`.
+- Install the complete development environment with `uv sync --locked --all-packages --all-extras --all-groups` (reads the workspace manifests and lockfile). Never rely on bare `uv sync` for repository checks.
 
 ## Code Style
 
@@ -79,7 +79,7 @@ Honor explicit project or CI thresholds, but never manufacture low-value asserti
 ### Test Lifecycle and Placement
 
 | Tier | File naming | Lifespan | Authority |
-|------|------------|----------|-----------|
+| --- | --- | --- | --- |
 | **Task-scoped proof** (transient) | Project test root with task ID when executable scaffolding is necessary | Until task archive | Proves task completion; test-curator deletes it or mines behavior worth retaining. |
 | **Durable behavioral test** | Owning package or configured test root, named for behavior | While the protected contract exists | Maintained regression suite for product behavior and risk boundaries. |
 

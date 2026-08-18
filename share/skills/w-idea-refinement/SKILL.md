@@ -58,7 +58,7 @@ branches whose answers could materially change the proposal. Do not display the 
 Before each question, inspect the smallest relevant source boundary. Classify load-bearing claims:
 
 | Class | Meaning | Treatment |
-|-------|---------|-----------|
+| --- | --- | --- |
 | Observed | Verified in source, runtime output, or current behavior | State the evidence briefly |
 | Documented | Stated by a controlling document or external contract | Name the authority |
 | Assumed | Plausible but not verified | Label it and expose the consequence |

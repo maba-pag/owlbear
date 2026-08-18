@@ -17,7 +17,7 @@ For tool syntax, see `h-mcp-memory`. For curation workflow, see `w-mem-curation`
 Memory entries use markdown body + YAML frontmatter. Core fields:
 
 | Field | Type | Constraint |
-|-------|------|-----------|
+| --- | --- | --- |
 | `id` | str | Stable identifier (UUID recommended) |
 | `title` | str | Required, non-empty |
 | `categories` | list[str] | One or more values from the 9-value enum |
@@ -43,7 +43,7 @@ This schema is validated by `MemoryEntry` in the `memory-mcp` package.
 Per `owlbear-system.instructions.md` § Memory Governance (single source of truth):
 
 | Content type | Tier | Store |
-|-------------|------|-------|
+| --- | --- | --- |
 | Agent institutional knowledge (queryable) | MCP canonical | `owlbear-memory` |
 | Job-specific context and working state | Native artifacts | Change/job records or `.owlbear/scratch/` |
 | Architecture decisions | Not memory | Native change decisions and requests |
@@ -57,7 +57,7 @@ The VS Code built-in `/memories/` store is retired for OwlBear agents. Do not us
 MCP memory is canonical.
 
 | Situation | Action |
-|-----------|--------|
+| --- | --- |
 | Standard post-task reflection | Write MCP via `save_memory` |
 | MCP tool unavailable or errors | Proceed without memory write; do not use `/memories/` fallback |
 | Curation pass | Read MCP pending entries and promote durable insights into MCP |
@@ -74,7 +74,7 @@ Lifecycle transitions are controlled by the memory service. MCP tools expose ord
 approval, assessment, and deletion; Cockpit is the human resolution surface for exceptional states.
 
 | From | To | Trigger | Tool |
-|------|----|---------|------|
+| --- | --- | --- | --- |
 | `pending` | `curated` | Curator assigns non-empty scope during curation | `curate_memory` |
 | `curated` | `approved` | User approval | `approve_memory` |
 | `approved` | `curated` | Any curation edit (auto-downgrade) | `curate_memory` |
@@ -91,9 +91,11 @@ Cockpit. Tool responses include hints describing the transition or deletion bran
 
 ## Candidate Production
 
-`save_memory` creates an unscoped pending candidate. At creation, `source_agent` must exactly match
-the producing custom agent's active canonical name; generic host labels such as `GitHub Copilot` are
-not accepted for new entries. Stored provenance remains historical when that agent is later retired.
+`save_memory` creates an unscoped pending candidate. At creation, `source_agent` must be non-blank;
+it is a self-reported immutable historical provenance marker, not active-agent runtime validation.
+Stored provenance remains historical when that agent is later retired. Curators classify content
+before provenance or scope. `*` is anonymous provenance and needs no source corroboration, but it
+does not establish a named scope. A candidate cannot corroborate its own named identity or scope.
 Ordinary writers do not need `list_memories` or `read_memory` authority and must not attempt
 store-wide deduplication before saving. Avoid a duplicate only when the same insight is already
 visible in the current context. The memory curator performs cross-store comparison, conflict
@@ -112,14 +114,15 @@ An entry **fails** if any of the following are true:
 
 - Generic: "always write tests", "use type hints", "be careful with async"
 - No citation: no task ID, file, or tool mentioned
-- Invalid new provenance: a candidate's `source_agent` is a product label, typo, case variant, or inactive role
-- Invalid curated scope: a promoted entry names no active role and is not universal (`['*']`)
+- Uncorroborated named identity or scope: candidate text cannot self-prove either; use another
+ reviewed non-pending entry, a readable local definition, or explicit user confirmation for manual
+ named rescoping
 - Duplicate: substantially the same as an existing approved entry
 
 **Confidence calibration:**
 
 | Confidence | When to use |
-|-----------|------------|
+| --- | --- |
 | 0.7 | Single occurrence, plausible but unverified |
 | 0.8 | Single occurrence, verified by test or observation |
 | 0.9 | Recurring pattern (2+ tasks) |

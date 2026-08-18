@@ -1,11 +1,14 @@
 # owlbear-cockpit — Steering Cockpit Package
 
 Cockpit combines a FastAPI backend (`src/owlbear_cockpit/`) with a React frontend (`web/`),
-served as built static assets from `dist/`. The backend verifies the target cutover receipt and
-projects admitted semantic work items, requests, evidence, Memory, and Ideas without becoming
-delivery authority.
+served as built static assets from `dist/`. The backend loads the canonical Delivery application
+and projects admitted semantic work items, requests, evidence, Memory, and Ideas without becoming
+Delivery authority.
 
-→ Parent: [README.md](../../README.md)
+**Use this guide when:** you need to build, launch, or package Cockpit, or trace its frontend/backend
+boundary and human operator controls.
+
+Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
 ---
 
@@ -48,9 +51,9 @@ uv run --project ../owlbear cockpit
 
 `uv run cockpit` serves `serve/cockpit/dist/`, starts on `127.0.0.1:8420` by default,
 and opens a browser unless disabled with `COCKPIT_NO_OPEN=1`. Cockpit reads
-`.owlbear/target-cutover-request.json`, its immutable receipt, and `.owlbear/memory/` relative
-to the workspace root. Consumer launches must use the target project as their working directory
-or pass it to `uv --directory`.
+`.owlbear/delivery/config.json`, canonical Delivery state, and `.owlbear/memory/` relative to the
+workspace root. Consumer launches must use the target project as their working directory or pass
+it to `uv --directory`.
 
 ## Frontend Surface
 
@@ -58,7 +61,7 @@ Frontend source is under `serve/cockpit/web/` and is the only Node/npm package i
 repository.
 
 | Attribute | Value |
-|-----------|-------|
+| --- | --- |
 | Node requirement | `>=24.16.0` (`web/package.json`) |
 | Stack | React `^19.2.7`, Vite `^8.1.5`, TypeScript `^6.0.3`, React Router `^8.2.0`, Porsche Design System React `^4.5.0`, React Compiler (`babel-plugin-react-compiler` `^1.0.0`), Tailwind CSS `^4.3.3` (`@tailwindcss/vite` + `tailwindcss`) |
 | Test runner | Vitest `^4.1.10` (`npm test`) |
@@ -66,31 +69,49 @@ repository.
 | CSS/HTML lint | Stylelint `^17.12.0` (`npm run lint:css`), HTMLHint `^1.9.2` (`npm run lint:html`) |
 | Build output | `serve/cockpit/dist/` via `npm run build` |
 
+## Browser-backed tests
+
+These tests run from the OwlBear development checkout, not from a consumer project. Install the
+web dependencies and Chromium once, then run the maintained Cockpit gate:
+
+```shell
+cd /path/to/owlbear
+npm ci --prefix serve/cockpit/web
+cd serve/cockpit/web
+npx playwright install chromium
+cd ../../..
+uv run test-e2e
+```
+
+Expected result: the Cockpit smoke tests start without an executable-missing error. Consumer
+workspaces use the prebuilt bundle and do not run this developer-only procedure.
+
 ## Delivery Evidence
 
 Cockpit projects current Delivery state and user-owned controls without becoming authority:
 
 | Surface | Authority |
-|---------|-----------|
+| --- | --- |
 | Outcome portfolio | Admitted outcomes, dependencies, Planning/Build stages, and task progress from `PortfolioApplication` |
-| Actionable attention | Typed requests, requestless blocks, long-idle claims, revision attention, and Integration attention |
-| User controls | Answer request, clear block, recover a confirmed-dead exact claim, move backward, and retry Integration |
+| Actionable attention | Typed requests, requestless blocks, long-idle claims, revision attention, publication and target-sync attention, and acceptance attention |
+| User controls | Answer requests, clear blocks, recover confirmed-dead claims or worktrees, move backward, reconcile target-sync conflicts, supersede a publication, and observe acceptance |
 | Completed history | Bounded list, semantic search, and exact completed-change lookup |
-| Cockpit activation authority | `.owlbear/target-cutover-request.json` and its immutable receipt |
+| Startup authority | Tracked `.owlbear/delivery/config.json` and validated canonical Delivery roots |
 
 Cockpit calls the same transport-free application owners used by the MCP adapter but exposes the
 answer-bearing and administrative controls reserved for users. It does not schedule work, choose
-worker transitions, interpret reviewer evidence, repair source, or update the Integration target on
-its own.
+worker transitions, interpret reviewer evidence, repair source, merge pull requests, or update the
+configured target branch on its own. Persisted legacy Integration attention remains visible only
+through compatibility surfaces.
 
 ## Configuration
 
 | Variable | Default | Purpose |
-|----------|---------|---------|
+| --- | --- | --- |
 | `COCKPIT_PORT` | `8420` | Override listen port (1-65535) |
 | `COCKPIT_NO_OPEN` | unset | Set to `1` to suppress browser auto-open |
 
-Cockpit always reads target authority and memory state from the current workspace and serves the
+Cockpit always reads Delivery authority and memory state from the current workspace and serves the
 package's bundled `dist/` directory.
 
 ## Delivery Packaging
@@ -104,9 +125,9 @@ package's bundled `dist/` directory.
 ## Dependencies
 
 | Package | Purpose |
-|---------|---------|
+| --- | --- |
 | `fastapi` | HTTP framework |
 | `uvicorn` | ASGI server |
 | `pydantic` | Request/response model validation |
-| `owlbear-delivery` | Target authority, runtime, admission, and receipt verification |
+| `owlbear-delivery` | Design authority, Delivery runtime, admission, publication, acceptance observation, and completed history |
 | `owlbear-memory` | Memory engine (workspace package) |

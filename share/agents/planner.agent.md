@@ -46,7 +46,7 @@ return the exact transition request for orchestration to forward.
 <agents>
 
 | Agent | When | Example |
-|-------|------|---------|
+| --- | --- | --- |
 | planner-challenger | Review one complete task-chain claim against its bounded Delivery context | `Challenge Plan: change=cache, outcome=OUT-002, claim=claim-4` |
 | Explore | Resolve one bounded repository ownership or proof fact | `Locate the maintained cache invalidation boundary` |
 

@@ -12,6 +12,37 @@ Single authority for writing and validating acceptance scenarios in native Speci
 
 Every AC line must be independently verifiable by a downstream agent without access to the author's intent.
 
+## Proof Selection And Signal Quality
+
+Choose the cheapest proof that can falsify the boundary named by the acceptance criterion. Escalate
+when the claim crosses an assembly or user-facing boundary:
+
+| Claimed boundary | Preferred proof |
+| --- | --- |
+| Pure logic, state transition, serialization, or supported component interaction | Focused public-function or component test |
+| Assembled command, endpoint, generated operation, or workflow | Integration test or real assembled boundary with lower dependencies replaced only below it |
+| Browser journey, layout, focus, geometry, or viewport behavior | Configured real-browser proof |
+| Startup, persistence, emitted side effect, publication, or visible status change | Command or procedure with a positive marker, artifact, or observed state transition in addition to its exit status |
+
+Use the proof stage for its purpose. Pre-commit checks shape implementation; Builder and Finalizer
+procedures bind observations to the exact reviewed commit through their owning workflows. A check
+that ran before the candidate commit, or against a later mutable workspace, cannot prove that commit.
+
+For startup and side-effect claims, a zero exit status is not a positive result by itself. Name the
+observable signal that shows the intended boundary ran: for example, a recognized startup marker, a
+non-empty emitted artifact, a persisted record, or an observed state transition. Empty output,
+skipped checks, and absence of an error are insufficient when the criterion claims that something
+started, emitted, persisted, or changed.
+
+Keep builder-visible proof distinct from independent evaluation when the implementation could be
+optimized against the visible checks. The independent reviewer or evaluator must inspect the exact
+immutable candidate and its claimed boundary rather than rely on a builder summary or mutable
+workspace. This does not require a holdout or mutation gate by default; use those only when a
+concrete high-risk proof failure justifies their maintenance cost.
+
+This section guides acceptance and proof selection. It does not add Delivery receipt fields or make
+one marker vocabulary mandatory across commands, tools, and manual procedures.
+
 ## Tier 1 - Behavior AC (Code Changes)
 
 Use Tier 1 for requirements that change runtime behavior, interfaces, or outputs.
@@ -101,7 +132,7 @@ Allowed methods:
 Run the mechanical pass before semantic review:
 
 | Pass | Rule | Check |
-|------|------|-------|
+| --- | --- | --- |
 | Mechanical | B3 | The seven banned words are absent unless exhaustively enumerated. |
 | Mechanical | P1 | Every Tier 2 line contains an agent, skill, or stage token. |
 | Mechanical | Literal authority | Enum values, transitions, design tokens, props, events, flags, commands, and fields match the strongest canonical source. |
@@ -120,7 +151,7 @@ scope, input, output, or verification method and give bad -> good rewrite guidan
 ## Bad -> Good Transformations
 
 | Rule | Bad | Good |
-|------|-----|------|
+| --- | --- | --- |
 | B1 | "System handles planning." | "Given a current Planning claim and complete tasks, `publish_delivery_plan` returns a candidate bound to that claim and task chain." |
 | B2 | "When work is stale, the API responds with an error." | "Given a stale claim ID, `publish_delivery_plan` returns `ERR_DELIVERY_RUNTIME_CONFLICT` and creates no candidate." |
 | B3 | "Reviewer checks every scenario correctly." | "Plan review returns one evidenced row for packet completeness, admitted references, impact closure, dependency order, proof boundary, and material expansion." |
@@ -137,34 +168,34 @@ Use this when AC lines cite concrete literals that must match source-of-truth to
 
 1. Enum or union literal
 
-- Bad: "The endpoint accepts every valid order status."
-- Good: "POST /orders accepts the `OrderStatus` literals declared by the project schema:
-  `pending | paid | cancelled`; any other status returns HTTP 422."
+   - Bad: "The endpoint accepts every valid order status."
+   - Good: "POST /orders accepts the `OrderStatus` literals declared by the project schema:
+     `pending | paid | cancelled`; any other status returns HTTP 422."
 
 2. Design token
 
-- Bad: "Use standard medium spacing for card gaps."
-- Good: "The result grid uses the project's canonical medium-spacing token, identified in Shape
-  authority, for its column and row gaps."
+   - Bad: "Use standard medium spacing for card gaps."
+   - Good: "The result grid uses the project's canonical medium-spacing token, identified in Shape
+     authority, for its column and row gaps."
 
 3. Command choice
 
-- Bad: "The export command supports the appropriate output formats."
-- Good: "`export --format` accepts the parser-declared literals `json | csv`; `xml` exits non-zero
-  and names the accepted values."
+   - Bad: "The export command supports the appropriate output formats."
+   - Good: "`export --format` accepts the parser-declared literals `json | csv`; `xml` exits non-zero
+     and names the accepted values."
 
 4. OwlBear native lifecycle transition
 
-- Bad: "Orchestrator moves work to the next valid phase."
-- Good: "After Planner returns `AdvanceDelivery`, Orchestrator forwards the unchanged transition to
-  `transition_delivery`, then refreshes acquisition."
+   - Bad: "Orchestrator moves work to the next valid phase."
+   - Good: "After Planner returns `AdvanceDelivery`, Orchestrator forwards the unchanged transition to
+     `transition_delivery`, then refreshes acquisition."
 
 ### Authority Discovery
 
 Locate the strongest authority available in the target project. Prefer sources in this order:
 
 | Order | Authority | Suitable claims |
-|----------|-----------|-----------------|
+| --- | --- | --- |
 | 1 | Checked-in schema, type, configuration, or public source declaration | Allowed literals, fields, transitions, tokens, defaults |
 | 2 | Generated public inventory, command tree, API schema, or compiled contract | Registered operations and assembled public surface |
 | 3 | Installed dependency types, schema, or package metadata | External component props, events, and supported values |

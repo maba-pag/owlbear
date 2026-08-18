@@ -48,7 +48,7 @@ Before reviewing entries, read these files and apply them as the source of truth
 
 1. `../skills/h-memory-structure/SKILL.md` for schema, states, quality bar, confidence calibration, and anti-patterns.
 2. `../skills/h-mcp-memory/SKILL.md` for tool contracts, allowed transitions, and batch-review helper usage.
-3. Workspace `.vscode/mcp.json` to discover the `--project` path used by the `owlbear-memory` server.
+3. The live `owlbear-memory` tool registry; batch commits use its dedicated `commit_memory_batch` operation.
 
 Boundary rules:
 
@@ -60,6 +60,11 @@ Boundary rules:
 - This prompt must not edit or approve `contested`, `disputed`, or `stale` entries. Their metadata is
    visible here, but resolution belongs to Cockpit's `/memories` page because no MCP resolution tool
    is exposed. `contested` remains recallable; `disputed` and `stale` are excluded from recall.
+
+This prompt must not promote pending entries; delegate pending work to `w-mem-curation`. For manual
+named rescoping, require another reviewed non-pending memory, a readable local `.agent.md`, or
+explicit user confirmation. Candidate text cannot corroborate its own named identity or scope.
+Identity evidence does not raise stored entry confidence or review confidence.
 
 ## 2. Session Preflight
 
@@ -306,16 +311,12 @@ When the selected queue is exhausted, when no approval-ready entries exist, or w
    `memory-curator` separately.
 - Audit approved entries for stale or obsolete guidance.
 - Review entries needing resolution and hand them to Cockpit.
-- Run the review batch helper if mutations occurred.
+- Run `owlbear-memory/commit_memory_batch` with `session_type: "review"` if mutations occurred.
 - Pause the session.
 
-If mutations occurred and the user chooses to run the helper, derive the command from the `owlbear-memory` server entry in `.vscode/mcp.json`. Use the `--project` argument configured there. The default shape is:
-
-```bash
-uv --project ../owlbear run python -m owlbear_memory_mcp.git review
-```
-
-Run only the state-aware helper. Never broad-add `.owlbear/memory`; pending entries must remain uncommitted until curation.
+If mutations occurred and the user chooses to run the helper, call
+`owlbear-memory/commit_memory_batch` with `session_type: "review"`. The operation commits only
+non-pending memory entries; pending entries remain uncommitted until curation.
 
 ## 7. Tool Failure Rules
 

@@ -2,43 +2,66 @@
 
 from __future__ import annotations
 
-import logging
-import threading
 import uuid
 from typing import TYPE_CHECKING, Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from owlbear_cockpit.deps import get_target_context
 from owlbear_cockpit.target_models import (
+    AbandonChangeBody,
+    AcceptanceReconciliationOutcomeResponse,
+    AcceptanceReconciliationRequest,
+    AcceptanceReconciliationResponse,
     ActivityCounts,
     AnswerRequestBody,
     BackwardMoveBody,
     BackwardMovePreviewBody,
+    ChangeDispositionReasonBody,
+    ChangeWorktreeCleanupResponse,
+    ChangeWorktreeRecoveryResponse,
+    CleanupCompletedChangeBody,
     ClearBlockBody,
     ConfirmLostClaimBody,
     DesignWorkDetailResponse,
     NeedsCounts,
+    PublicationChecksObservationResponse,
+    PublicationSupersessionResponse,
+    RecoverChangeWorktreeBody,
+    ResolveChangeAttentionBody,
+    SupersedePublicationBody,
+    TargetSyncAbortResponse,
+    TargetSyncBody,
+    TargetSyncConflictBody,
+    TargetSyncResponse,
     WorkItemDetailResponse,
     WorkItemPortfolioResponse,
     WorkItemPortfolioTotals,
 )
-from owlbear_delivery.change_workspace import CoordinationConflictError
-from owlbear_delivery.completed_history import CompletedHistoryError, CompletedHistoryMissingError
+from owlbear_delivery.change_workspace import (
+    ChangeTargetSyncConflictError,
+    ChangeWorktreeAttentionError,
+    CoordinationConflictError,
+)
+from owlbear_delivery.completed_history import (
+    CompletedChangePage,
+    CompletedChangeRecord,
+    CompletedHistoryError,
+    CompletedHistoryMissingError,
+)
 from owlbear_delivery.delivery_runtime import (
     AdministrativeDeliveryMove,
-    DeliveryIntegrationAttentionDisposition,
     DeliveryRequestResolution,
     DeliveryRuntimeConflictError,
     DeliveryRuntimeReferenceError,
     DeliveryStage,
-    integration_attention_disposition,
 )
 from owlbear_delivery.design_package import DesignPackageConflictError
 from owlbear_delivery.portfolio_application import PortfolioApplication, PortfolioApplicationError
+from owlbear_delivery.publication_provider import PublicationProviderError
 from owlbear_delivery.work_items import (
     ChangeGroupView,
     WorkItemActivityState,
@@ -49,40 +72,6 @@ from owlbear_delivery.work_items import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-_LOGGER = logging.getLogger(__name__)
-_REGISTRY_INITIALIZATION_LOCK = threading.Lock()
-
-
-class _IntegrationAttemptRegistry:
-    """App-scoped single-flight ownership for long Integration attempts."""
-
-    def __init__(self) -> None:
-        self._active: set[str] = set()
-        self._lock = threading.Lock()
-
-    def begin(self, change_id: str) -> bool:
-        with self._lock:
-            if change_id in self._active:
-                return False
-            self._active.add(change_id)
-            return True
-
-    def finish(self, change_id: str) -> None:
-        with self._lock:
-            self._active.discard(change_id)
-
-
-def _integration_attempts(request: Request) -> _IntegrationAttemptRegistry:
-    registry = getattr(request.app.state, "delivery_integration_attempts", None)
-    if registry is not None:
-        return registry
-    with _REGISTRY_INITIALIZATION_LOCK:
-        registry = getattr(request.app.state, "delivery_integration_attempts", None)
-        if registry is None:
-            registry = _IntegrationAttemptRegistry()
-            request.app.state.delivery_integration_attempts = registry
-    return registry
 
 
 class TargetCockpitService:
@@ -156,10 +145,6 @@ class TargetCockpitService:
             )
         )
 
-    def recover_expired_claims(self) -> object:
-        """Recover every Delivery claim whose execution lease elapsed."""
-        return self._invoke(self._application.recover_expired_claims)
-
     def move_backward(self, change_id: str, outcome_id: str, body: BackwardMoveBody) -> object:
         """Apply one server-identified administrative backward move."""
         request = AdministrativeDeliveryMove(
@@ -186,47 +171,132 @@ class TargetCockpitService:
             )
         )
 
-    def show_integration_attention(self, change_id: str) -> object:
-        """Return current typed Integration attention."""
-        return self._invoke(lambda: self._application.show_integration_attention(change_id))
+    def reconcile_checkpoint(self, change_id: str) -> object:
+        """Reconcile the current engine-derived Change checkpoint."""
+        return self._invoke(lambda: self._application.reconcile_change_checkpoint(change_id))
 
-    def authorize_integration_retry(self, change_id: str) -> None:
-        """Reject Integration attempts that require a different operator route."""
-        attention = self._invoke(lambda: self._application.show_integration_attention(change_id))
-        detail = self._invoke(lambda: self._application.show_work_item_view(change_id, "integration"))
-        if detail.integration is not None and detail.integration.repair_active:
-            _http_error(
-                409,
-                "ERR_DELIVERY_INTEGRATION_ACTION_REQUIRED",
-                "A reviewed Integration repair is already in progress.",
-                retry_safe=False,
+    def mark_ready(self, change_id: str) -> object:
+        """Mark the current exact finalized pull request ready."""
+        return self._invoke(lambda: self._application.mark_current_change_ready(change_id))
+
+    def observe_acceptance(self, change_id: str) -> object:
+        """Observe provider acceptance without merge authority."""
+        return self._invoke(lambda: self._application.observe_acceptance(change_id))
+
+    def observe_publication_checks(self, change_id: str) -> PublicationChecksObservationResponse:
+        """Observe provider checks at the current exact published Change head."""
+        receipt = self._invoke(lambda: self._application.observe_change_publication_checks(change_id))
+        return PublicationChecksObservationResponse.from_receipt(receipt)
+
+    def reconcile_acceptance(
+        self,
+        change_ids: tuple[str, ...] | None,
+    ) -> AcceptanceReconciliationResponse:
+        """Reconcile visible awaiting-merge Changes as one isolated batch."""
+        outcomes = self._invoke(lambda: self._application.reconcile_awaiting_acceptance(change_ids))
+        return AcceptanceReconciliationResponse(
+            outcomes=tuple(AcceptanceReconciliationOutcomeResponse.from_result(item) for item in outcomes),
+        )
+
+    def resolve_attention(self, change_id: str, body: ResolveChangeAttentionBody) -> object:
+        """Resolve one exact Change attention record without restoring provider authority."""
+        return self._invoke(
+            lambda: self._application.resolve_change_disposition(
+                change_id,
+                body.expected_disposition_id,
             )
-        superseded = detail.integration is not None and detail.integration.superseded
-        if (
-            attention is not None
-            and not superseded
-            and integration_attention_disposition(attention.code) != DeliveryIntegrationAttentionDisposition.RETRYABLE
-        ):
-            _http_error(
-                409,
-                "ERR_DELIVERY_INTEGRATION_ACTION_REQUIRED",
-                attention.retry_condition,
-                retry_safe=False,
+        )
+
+    def supersede_publication(
+        self,
+        change_id: str,
+        body: SupersedePublicationBody,
+    ) -> PublicationSupersessionResponse:
+        """Publish one successor using the current provider publication identity."""
+        receipt = self._invoke(lambda: self._application.supersede_current_publication(change_id, body.operation_id))
+        return PublicationSupersessionResponse.from_receipt(receipt)
+
+    def sync_target(self, change_id: str, body: TargetSyncBody) -> TargetSyncResponse:
+        """Synchronize one Change with the current remote-tracking target."""
+        receipt = self._invoke(lambda: self._application.sync_change_with_current_target(change_id, body.operation_id))
+        return TargetSyncResponse.from_receipt(receipt)
+
+    def abort_target_sync(self, change_id: str, body: TargetSyncConflictBody) -> TargetSyncAbortResponse:
+        """Abort one exact preserved target-sync conflict."""
+        receipt = self._invoke(
+            lambda: self._application.abort_target_sync_conflict(
+                change_id,
+                body.expected_disposition_id,
+                body.target_head,
+                body.operation_id,
             )
+        )
+        return TargetSyncAbortResponse.from_receipt(receipt)
 
-    def run_integration(self, change_id: str) -> object:
-        """Run one authorized Integration attempt."""
-        return self._invoke(lambda: self._application.integrate_ready_change(change_id))
+    def resolve_target_sync(self, change_id: str, body: TargetSyncConflictBody) -> TargetSyncResponse:
+        """Resolve one exact preserved target-sync conflict with a reviewed merge."""
+        receipt = self._invoke(
+            lambda: self._application.resolve_target_sync_conflict(
+                change_id,
+                body.expected_disposition_id,
+                body.target_head,
+                body.operation_id,
+            )
+        )
+        return TargetSyncResponse.from_receipt(receipt)
 
-    def list_completed(self, cursor: str | None, limit: int) -> object:
+    def defer_change(self, change_id: str, body: ChangeDispositionReasonBody) -> object:
+        """Retain one Change while pausing its claimable frontier."""
+        return self._invoke(lambda: self._application.defer_change(change_id, body.reason))
+
+    def resume_change(self, change_id: str) -> object:
+        """Resume one exact deferred Change."""
+        return self._invoke(lambda: self._application.resume_change(change_id))
+
+    def abandon_change(self, change_id: str, body: AbandonChangeBody) -> object:
+        """Terminate one uncompleted Change by explicit user disposition."""
+        return self._invoke(lambda: self._application.abandon_change(change_id, body.reason))
+
+    def cleanup_abandoned_change_worktree(self, change_id: str) -> ChangeWorktreeCleanupResponse:
+        """Clean one abandoned Change worktree without reopening its terminal state."""
+        receipt = self._invoke(lambda: self._application.cleanup_abandoned_change_worktree(change_id))
+        return ChangeWorktreeCleanupResponse.from_receipt(receipt)
+
+    def cleanup_completed_change_worktree(
+        self,
+        change_id: str,
+        body: CleanupCompletedChangeBody,
+    ) -> ChangeWorktreeCleanupResponse:
+        """Clean one completed Change worktree after exact receipt validation."""
+        receipt = self._invoke(
+            lambda: self._application.cleanup_completed_change_worktree(change_id, body.completion_id)
+        )
+        return ChangeWorktreeCleanupResponse.from_receipt(receipt)
+
+    def recover_change_worktree(
+        self,
+        change_id: str,
+        body: RecoverChangeWorktreeBody,
+    ) -> ChangeWorktreeRecoveryResponse:
+        """Recover one exact Change worktree after explicit reviewed-head confirmation."""
+        receipt = self._invoke(
+            lambda: self._application.recover_change_worktree(
+                change_id,
+                body.recovery_reviewed_head,
+                confirmed_recovery=body.confirmed_recovery,
+            )
+        )
+        return ChangeWorktreeRecoveryResponse.from_receipt(receipt)
+
+    def list_completed(self, cursor: str | None, limit: int) -> CompletedChangePage:
         """List one bounded page of completed change history."""
         return self._invoke(lambda: self._application.list_completed_changes(cursor, limit))
 
-    def search_completed(self, query: str, cursor: str | None, limit: int) -> object:
+    def search_completed(self, query: str, cursor: str | None, limit: int) -> CompletedChangePage:
         """Search completed semantic history."""
         return self._invoke(lambda: self._application.search_completed_changes(query, cursor, limit))
 
-    def show_completed(self, change_id: str, completion_id: str | None) -> object:
+    def show_completed(self, change_id: str, completion_id: str | None) -> CompletedChangeRecord:
         """Return one exact completed change record."""
         return self._invoke(lambda: self._application.show_completed_change(change_id, completion_id))
 
@@ -241,10 +311,27 @@ class TargetCockpitService:
                 exc.diagnostic.detail,
                 retry_safe=False,
             )
-        except (DeliveryRuntimeConflictError, CoordinationConflictError) as exc:
-            _http_error(409, getattr(exc, "code", "ERR_DELIVERY_CONFLICT"), str(exc), retry_safe=True)
+        except (
+            ChangeTargetSyncConflictError,
+            ChangeWorktreeAttentionError,
+            DeliveryRuntimeConflictError,
+            CoordinationConflictError,
+        ) as exc:
+            _http_error(
+                409,
+                getattr(exc, "code", "ERR_DELIVERY_CONFLICT"),
+                str(exc),
+                retry_safe=getattr(exc, "retry_safe", True),
+            )
         except (DeliveryRuntimeReferenceError, PortfolioApplicationError) as exc:
             _http_error(409, exc.code, str(exc), retry_safe=False)
+        except PublicationProviderError as exc:
+            _http_error(
+                502,
+                f"ERR_DELIVERY_PROVIDER_{exc.code.value.upper()}",
+                str(exc),
+                retry_safe=exc.retry_safe,
+            )
         except DesignPackageConflictError as exc:
             _http_error(409, exc.code, str(exc), retry_safe=False)
 
@@ -256,19 +343,6 @@ def _get_target_service(
 
 
 _TargetService = Annotated[TargetCockpitService, Depends(_get_target_service)]
-
-
-def _run_integration_attempt(
-    service: TargetCockpitService,
-    registry: _IntegrationAttemptRegistry,
-    change_id: str,
-) -> None:
-    try:
-        service.run_integration(change_id)
-    except Exception:
-        _LOGGER.exception("Cockpit Integration attempt failed for %s", change_id)
-    finally:
-        registry.finish(change_id)
 
 
 def assemble_target_app(application: PortfolioApplication) -> FastAPI:
@@ -296,29 +370,29 @@ def _register_queries(router: APIRouter) -> None:
     ) -> WorkItemPortfolioResponse:
         return service.list_items()
 
-    @router.get("/work-items/completed")
+    @router.get("/work-items/completed", response_model=CompletedChangePage)
     def list_completed_changes(
         service: _TargetService,
         cursor: str | None = None,
         limit: Annotated[int, Query(ge=1, le=100)] = 100,
-    ) -> object:
+    ) -> CompletedChangePage:
         return service.list_completed(cursor, limit)
 
-    @router.get("/work-items/completed/search")
+    @router.get("/work-items/completed/search", response_model=CompletedChangePage)
     def search_completed_changes(
         service: _TargetService,
         query: Annotated[str, Query(min_length=1)],
         cursor: str | None = None,
         limit: Annotated[int, Query(ge=1, le=100)] = 100,
-    ) -> object:
+    ) -> CompletedChangePage:
         return service.search_completed(query, cursor, limit)
 
-    @router.get("/work-items/completed/{change_id}")
+    @router.get("/work-items/completed/{change_id}", response_model=CompletedChangeRecord)
     def show_completed_change(
         change_id: str,
         service: _TargetService,
         completion_id: str | None = None,
-    ) -> object:
+    ) -> CompletedChangeRecord:
         return service.show_completed(change_id, completion_id)
 
     @router.get("/design-work/{change_id}", response_model=DesignWorkDetailResponse)
@@ -331,10 +405,14 @@ def _register_queries(router: APIRouter) -> None:
 
 
 def _register_controls(router: APIRouter) -> None:
-    @router.post("/work-items/claims/recover-expired")
-    def recover_expired_claims(service: _TargetService) -> object:
-        return service.recover_expired_claims()
+    _register_request_controls(router)
+    _register_outcome_controls(router)
+    _register_publication_controls(router)
+    _register_target_controls(router)
+    _register_worktree_controls(router)
 
+
+def _register_request_controls(router: APIRouter) -> None:
     @router.post("/changes/{change_id}/requests/{request_id}/answer")
     def answer_request(
         change_id: str,
@@ -344,6 +422,8 @@ def _register_controls(router: APIRouter) -> None:
     ) -> object:
         return service.answer_request(change_id, request_id, body)
 
+
+def _register_outcome_controls(router: APIRouter) -> None:
     @router.post("/changes/{change_id}/outcomes/{outcome_id}/blocks/{block_id}/clear")
     def clear_block(
         change_id: str,
@@ -381,23 +461,147 @@ def _register_controls(router: APIRouter) -> None:
     ) -> object:
         return service.preview_backward_move(change_id, outcome_id, body)
 
-    @router.get("/changes/{change_id}/integration-attention")
-    def show_integration_attention(change_id: str, service: _TargetService) -> object:
-        return service.show_integration_attention(change_id)
 
-    @router.post("/changes/{change_id}/integration/retry", status_code=status.HTTP_202_ACCEPTED)
-    def retry_integration(
-        change_id: str,
-        request: Request,
-        background_tasks: BackgroundTasks,
+def _register_publication_controls(router: APIRouter) -> None:
+    @router.post(
+        "/work-items/acceptance/reconcile",
+        response_model=AcceptanceReconciliationResponse,
+    )
+    def reconcile_acceptance(
+        body: AcceptanceReconciliationRequest,
         service: _TargetService,
-    ) -> dict[str, str]:
-        service.authorize_integration_retry(change_id)
-        registry = _integration_attempts(request)
-        if not registry.begin(change_id):
-            return {"status": "running"}
-        background_tasks.add_task(_run_integration_attempt, service, registry, change_id)
-        return {"status": "started"}
+    ) -> AcceptanceReconciliationResponse:
+        return service.reconcile_acceptance(tuple(body.change_ids) if body.change_ids is not None else None)
+
+    @router.post("/changes/{change_id}/publication/reconcile")
+    def reconcile_checkpoint(change_id: str, service: _TargetService) -> object:
+        return service.reconcile_checkpoint(change_id)
+
+    @router.post("/changes/{change_id}/publication/ready")
+    def mark_change_ready(change_id: str, service: _TargetService) -> object:
+        return service.mark_ready(change_id)
+
+    @router.post("/changes/{change_id}/acceptance/observe")
+    def observe_acceptance(change_id: str, service: _TargetService) -> object:
+        return service.observe_acceptance(change_id)
+
+    @router.post(
+        "/changes/{change_id}/publication/checks/observe",
+        response_model=PublicationChecksObservationResponse,
+    )
+    def observe_publication_checks(
+        change_id: str,
+        service: _TargetService,
+    ) -> PublicationChecksObservationResponse:
+        return service.observe_publication_checks(change_id)
+
+    @router.post("/changes/{change_id}/attention/resolve")
+    def resolve_attention(
+        change_id: str,
+        body: ResolveChangeAttentionBody,
+        service: _TargetService,
+    ) -> object:
+        return service.resolve_attention(change_id, body)
+
+    @router.post(
+        "/changes/{change_id}/publication/supersede",
+        response_model=PublicationSupersessionResponse,
+    )
+    def supersede_publication(
+        change_id: str,
+        body: SupersedePublicationBody,
+        service: _TargetService,
+    ) -> PublicationSupersessionResponse:
+        return service.supersede_publication(change_id, body)
+
+    @router.post("/changes/{change_id}/defer")
+    def defer_change(
+        change_id: str,
+        body: ChangeDispositionReasonBody,
+        service: _TargetService,
+    ) -> object:
+        return service.defer_change(change_id, body)
+
+    @router.post("/changes/{change_id}/resume")
+    def resume_change(change_id: str, service: _TargetService) -> object:
+        return service.resume_change(change_id)
+
+
+def _register_target_controls(router: APIRouter) -> None:
+    @router.post(
+        "/changes/{change_id}/target/sync",
+        response_model=TargetSyncResponse,
+    )
+    def sync_change_with_target(
+        change_id: str,
+        body: TargetSyncBody,
+        service: _TargetService,
+    ) -> TargetSyncResponse:
+        return service.sync_target(change_id, body)
+
+    @router.post(
+        "/changes/{change_id}/target/conflict/abort",
+        response_model=TargetSyncAbortResponse,
+    )
+    def abort_target_sync_conflict(
+        change_id: str,
+        body: TargetSyncConflictBody,
+        service: _TargetService,
+    ) -> TargetSyncAbortResponse:
+        return service.abort_target_sync(change_id, body)
+
+    @router.post(
+        "/changes/{change_id}/target/conflict/resolve",
+        response_model=TargetSyncResponse,
+    )
+    def resolve_target_sync_conflict(
+        change_id: str,
+        body: TargetSyncConflictBody,
+        service: _TargetService,
+    ) -> TargetSyncResponse:
+        return service.resolve_target_sync(change_id, body)
+
+    @router.post("/changes/{change_id}/abandon")
+    def abandon_change(
+        change_id: str,
+        body: AbandonChangeBody,
+        service: _TargetService,
+    ) -> object:
+        return service.abandon_change(change_id, body)
+
+    @router.post(
+        "/changes/{change_id}/worktree/cleanup/abandoned",
+        response_model=ChangeWorktreeCleanupResponse,
+    )
+    def cleanup_abandoned_change_worktree(
+        change_id: str,
+        service: _TargetService,
+    ) -> ChangeWorktreeCleanupResponse:
+        return service.cleanup_abandoned_change_worktree(change_id)
+
+    @router.post(
+        "/changes/{change_id}/worktree/cleanup/completed",
+        response_model=ChangeWorktreeCleanupResponse,
+    )
+    def cleanup_completed_change_worktree(
+        change_id: str,
+        body: CleanupCompletedChangeBody,
+        service: _TargetService,
+    ) -> ChangeWorktreeCleanupResponse:
+        return service.cleanup_completed_change_worktree(change_id, body)
+
+
+def _register_worktree_controls(router: APIRouter) -> None:
+    @router.post(
+        "/changes/{change_id}/worktree/recover",
+        response_model=ChangeWorktreeRecoveryResponse,
+    )
+    def recover_change_worktree(
+        change_id: str,
+        body: RecoverChangeWorktreeBody,
+        service: _TargetService,
+    ) -> ChangeWorktreeRecoveryResponse:
+        return service.recover_change_worktree(change_id, body)
 
 
 def _portfolio_totals(groups: tuple[ChangeGroupView, ...]) -> WorkItemPortfolioTotals:
@@ -410,14 +614,12 @@ def _portfolio_totals(groups: tuple[ChangeGroupView, ...]) -> WorkItemPortfolioT
         needs=NeedsCounts(
             you=needs.count(WorkItemNeed.YOU),
             dependency=needs.count(WorkItemNeed.DEPENDENCY),
-            repair=needs.count(WorkItemNeed.REPAIR),
             none=needs.count(WorkItemNeed.NONE),
         ),
         activity=ActivityCounts(
             idle=activity.count(WorkItemActivityState.IDLE),
             ready=activity.count(WorkItemActivityState.READY),
             working=activity.count(WorkItemActivityState.WORKING),
-            repairing=activity.count(WorkItemActivityState.REPAIRING),
         ),
     )
 

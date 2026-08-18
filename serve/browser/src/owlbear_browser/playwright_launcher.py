@@ -104,6 +104,8 @@ class PlaywrightLauncher:
         sso_ext_path: Path | None = None,
         user_data_dir: str = "",
         max_pending_pages: int = 1,
+        *,
+        headless: bool = False,
     ) -> None:
         self._sso_ext_path = sso_ext_path
         self._user_data_dir = user_data_dir or str(Path.home() / ".owlbear" / "browser-profile")
@@ -111,6 +113,7 @@ class PlaywrightLauncher:
             msg = "max_pending_pages must be at least 1"
             raise ValueError(msg)
         self._max_pending_pages = max_pending_pages
+        self._headless = headless
         self._context: BrowserContext | None = None
         self._fetcher: BrowserContentFetcher | None = None
         self._pw = None
@@ -139,7 +142,7 @@ class PlaywrightLauncher:
         try:
             self._context = await self._pw.chromium.launch_persistent_context(
                 self._user_data_dir,  # type: ignore[arg-type]
-                headless=False,
+                headless=self._headless,
                 args=args,
             )
         except Exception:
@@ -148,7 +151,7 @@ class PlaywrightLauncher:
             raise
         self._capabilities = AuthenticationCapabilities(
             persistent_session=True,
-            visible_manual_auth=True,
+            visible_manual_auth=not self._headless,
             microsoft_sso=sso_ext_path is not None,
         )
 

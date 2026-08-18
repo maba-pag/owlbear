@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.mcpserver.exceptions import ToolError
@@ -16,16 +19,17 @@ from owlbear_memory import (
 )
 from pydantic import ValidationError
 
+from owlbear_memory_mcp.git import commit_batch
+
 if TYPE_CHECKING:
     from mcp.server.mcpserver import Context
-
-    from owlbear_memory_mcp.agents import AgentCatalog
 
 __all__ = [
     "SLOT_CHALLENGE",
     "SLOT_EXPLORE",
     "approve_memory",
     "assess_memories",
+    "commit_memory_batch",
     "curate_memory",
     "delete_agent_memories",
     "delete_memory",
@@ -44,6 +48,7 @@ _ASSESSMENT_BUCKETS = (
     "didnt_use",
     "factually_wrong",
 )
+_LOGGER = logging.getLogger(__name__)
 
 
 def _allowed_assessment_values() -> str:
@@ -58,26 +63,46 @@ def _engine_from_ctx(ctx: Context) -> MemoryEngine:
         raise ToolError(msg) from exc
 
 
-def _agents_from_ctx(ctx: Context) -> AgentCatalog:
+def _memory_dir_from_ctx(ctx: Context) -> Path:
     try:
-        return ctx.request_context.lifespan_context.agents
+        memory_dir = ctx.request_context.lifespan_context.memory_dir
     except AttributeError as exc:
-        msg = "agent catalog is not available in MCP context"
+        msg = "memory directory is not available in MCP context"
         raise ToolError(msg) from exc
+    if not isinstance(memory_dir, Path):
+        msg = "memory directory is not available in MCP context"
+        raise ToolError(msg)
+    return memory_dir
 
 
-def _require_agent(ctx: Context, agent: str) -> None:
-    try:
-        _agents_from_ctx(ctx).require(agent)
-    except ValueError as exc:
-        raise ToolError(str(exc)) from exc
+def _validate_scope(agents: list[str]) -> None:
+    """Validate nonblank named and universal scope values."""
+    if any(not isinstance(agent, str) or not agent.strip() for agent in agents):
+        msg = "scope_agents must contain only non-empty strings."
+        raise ToolError(msg)
 
 
-def _require_scope(ctx: Context, agents: list[str]) -> None:
-    try:
-        _agents_from_ctx(ctx).require_scope(agents)
-    except ValueError as exc:
-        raise ToolError(str(exc)) from exc
+def _recognized_agent_names(engine: MemoryEngine) -> list[str]:
+    """Return sorted non-universal provenance and scope names on live memories."""
+    return sorted(
+        {
+            name
+            for entry in engine.get_entries()
+            if entry.state != MemoryState.DELETED
+            for name in [entry.source_agent, *entry.scope_agents]
+            if name and name != "*"
+        }
+    )
+
+
+def _recall_fallback(known_agents: list[str]) -> str:
+    """Render the universal-only guidance for an unrecognized caller."""
+    names = ", ".join(known_agents) or "none discovered"
+    return (
+        f"This recall_memory caller is not a known agent. Known agents: {names}. "
+        "This caller is read-only and must not write memories. It therefore receives only memories "
+        "scoped to all agents (*)."
+    )
 
 
 def _allowed_category_values() -> str:
@@ -199,7 +224,6 @@ async def save_memory(  # noqa: PLR0913
 ) -> dict[str, Any]:
     """Create a pending memory entry with explicit source_agent."""
     engine = _engine_from_ctx(ctx)
-    _require_agent(ctx, source_agent)
     coerced_categories = _coerce_categories(categories)
     try:
         entry = engine.save(
@@ -214,6 +238,33 @@ async def save_memory(  # noqa: PLR0913
         raise ToolError(_teaching_validation_message(exc)) from exc
     hint = "Saved as pending and unscoped. The memory curator assigns relevance scope before promotion."
     return _with_hint(_entry_to_dict(entry), hint)
+
+
+async def commit_memory_batch(ctx: Context, *, session_type: str) -> dict[str, Any]:
+    """Commit non-pending memory entries through the state-aware Git helper."""
+    memory_dir = _memory_dir_from_ctx(ctx)
+    try:
+        commit_sha = commit_batch(memory_dir, session_type=session_type)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+    except (OSError, subprocess.CalledProcessError) as exc:
+        _LOGGER.exception("Memory batch commit failed", exc_info=exc)
+        msg = "memory batch commit failed"
+        raise ToolError(msg) from None
+
+    if not commit_sha:
+        return {
+            "session_type": session_type,
+            "commit_sha": None,
+            "committed": False,
+            "hint": "No memory changes to commit.",
+        }
+    return {
+        "session_type": session_type,
+        "commit_sha": commit_sha,
+        "committed": True,
+        "hint": "Reviewed memory changes committed.",
+    }
 
 
 async def list_memories(
@@ -241,7 +292,7 @@ async def list_memories(
     )
     category_filter = set(coerced_categories or [])
     scope_filter = set(scope_agents or [])
-    _require_scope(ctx, list(scope_filter))
+    _validate_scope(list(scope_filter))
 
     entries = [entry for entry in engine.get_entries() if entry.state in allowed_states]
     if category_filter:
@@ -277,7 +328,7 @@ async def read_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
 async def recall_memory(
     ctx: Context,
     *,
-    agent: str,
+    agent: str | int | None,
     categories: list[MemoryCategory | str] | None = None,
     limit: int | None = None,
 ) -> str:
@@ -286,17 +337,11 @@ async def recall_memory(
     Output format: concatenated markdown blocks using "## {title}" headings,
     followed by the entry ID and body on consecutive lines.
     """
-    if agent == "*":
-        msg = 'wildcard agent "*" is not allowed for recall_memory'
-        raise ToolError(msg)
-    if not agent.strip():
-        msg = "Agent must be non-empty."
-        raise ToolError(msg)
-    _require_agent(ctx, agent)
-
     engine = _engine_from_ctx(ctx)
     category_filter = set(_coerce_categories(categories) or [])
     capped_limit = 20 if limit is None else _validate_limit(limit)
+    known_agents = _recognized_agent_names(engine)
+    recognized = isinstance(agent, str) and bool(agent.strip()) and agent != "*" and agent in known_agents
 
     state_rank = {
         MemoryState.APPROVED: 0,
@@ -308,9 +353,14 @@ async def recall_memory(
         for entry in engine.get_entries()
         if entry.state in {MemoryState.APPROVED, MemoryState.CURATED, MemoryState.CONTESTED}
     ]
-    entries = [
-        entry for entry in entries if entry.scope_agents and (agent in entry.scope_agents or "*" in entry.scope_agents)
-    ]
+    if recognized:
+        entries = [
+            entry
+            for entry in entries
+            if entry.scope_agents and (agent in entry.scope_agents or "*" in entry.scope_agents)
+        ]
+    else:
+        entries = [entry for entry in entries if "*" in entry.scope_agents]
     if category_filter:
         entries = [entry for entry in entries if bool(category_filter.intersection(set(entry.categories)))]
 
@@ -336,7 +386,11 @@ async def recall_memory(
     selected_entries = explore_pool + challenge_pool + regular_pool
     selected_entries.sort(key=lambda entry: (state_rank[entry.state], -entry.score, entry.id))
 
-    return "\n\n".join(f"## {entry.title}\nEntry ID: `{entry.id}`\n{entry.content}" for entry in selected_entries)
+    blocks = "\n\n".join(f"## {entry.title}\nEntry ID: `{entry.id}`\n{entry.content}" for entry in selected_entries)
+    if recognized:
+        return blocks
+    guidance = _recall_fallback(known_agents)
+    return f"{guidance}\n\n{blocks}" if blocks else guidance
 
 
 async def _update_entry(  # noqa: C901, PLR0912, PLR0913
@@ -366,7 +420,7 @@ async def _update_entry(  # noqa: C901, PLR0912, PLR0913
 
     next_scope_agents = current.scope_agents if scope_agents is None else scope_agents
     if scope_agents is not None:
-        _require_scope(ctx, scope_agents)
+        _validate_scope(scope_agents)
     if current.state == MemoryState.PENDING and not next_scope_agents:
         msg = "scope_agents are required when curating pending entries"
         raise ToolError(msg)
@@ -474,7 +528,9 @@ async def delete_memory(ctx: Context, *, entry_id: str) -> dict[str, Any]:
 
 async def rename_agent_memories(ctx: Context, *, old_name: str, new_name: str) -> dict[str, int]:
     """Rewrite all memory references after an agent definition is renamed."""
-    _require_agent(ctx, new_name)
+    if not old_name.strip() or not new_name.strip() or "*" in {old_name, new_name}:
+        msg = "old_name and new_name must be distinct non-empty non-wildcard agent names"
+        raise ToolError(msg)
     engine = _engine_from_ctx(ctx)
     try:
         result = engine.rename_agent(old_name, new_name)
@@ -488,6 +544,9 @@ async def rename_agent_memories(ctx: Context, *, old_name: str, new_name: str) -
 
 async def delete_agent_memories(ctx: Context, *, agent: str) -> dict[str, int]:
     """Remove a deleted agent from scopes while preserving source provenance."""
+    if not agent.strip() or agent == "*":
+        msg = "agent must be a non-empty non-wildcard name"
+        raise ToolError(msg)
     engine = _engine_from_ctx(ctx)
     try:
         result = engine.delete_agent(agent)

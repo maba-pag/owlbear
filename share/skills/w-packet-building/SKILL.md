@@ -62,10 +62,18 @@ contradictory, or observably ambiguous earlier authority; use `retry` for local 
 
 ## Step 2 - Implement And Commit
 
-Make the minimum complete change inside the admitted boundary. Run focused proof, record commands
-or observations and relevant results, then load `r-workspace-governance` and create one scoped
-commit from explicit owned paths. Require a clean owned state and exact candidate commit. Never
-rebase, squash, cherry-pick, amend a reviewed commit, or create a per-task worktree.
+Make the minimum complete change inside the admitted boundary. Run enough pre-commit proof to shape
+the implementation, then load `r-workspace-governance` and create one scoped commit from explicit
+owned paths. Require a clean owned state and exact candidate commit. Never rebase, squash,
+cherry-pick, amend a reviewed commit, or create a per-task worktree.
+
+Rerun every Task-required observation against that exact candidate commit; pre-commit proof does
+not bind a commit and cannot support publication. For each passing observation, construct
+`DeliveryObservationReceipt.create(DeliveryObservation(...))` with the launch change ID, context
+task ID, candidate commit, observation kind, exact command or procedure, exit status or artifact
+locator, runner identity, and timezone-aware observation time. Serialize the returned receipt with
+`model_dump(mode="json")`; never calculate, copy, or invent `observation_id`. Any post-commit change
+invalidates the receipts and requires a successor commit plus fresh proof.
 
 For a local review finding, retain the same launch, worktree, and configured reviewer. Preserve the
 rejected commit, create a bounded repair commit, rerun affected proof, and supply prior evidence to
@@ -81,6 +89,28 @@ the candidate and inspect its complete diff with read-only Git; a caller summary
 read does not satisfy exact-commit evidence. Require the reviewer to echo the exact commit and return
 disposition `pass | finding`, matching `finding_boundary`, and non-empty evidence.
 
+On `pass`, construct `DeliveryReviewReceipt.create(DeliveryReview(...))` with the echoed candidate
+commit, `launch.claim.owner_id` as author, `launch.policy.reviewer_agent` as reviewer, the returned
+review evidence unchanged, and a timezone-aware review time. Serialize the returned receipt with
+`model_dump(mode="json")`; never calculate, copy, or invent `review_id`. Reject a pass that echoes a
+different commit, lacks evidence, or cannot produce an independent canonical receipt.
+
+### Triage Review Findings Before Repair
+
+Treat a review finding as input to a Builder decision, not as an automatic work order. Before
+touching the reviewed head, classify the concrete finding against the admitted task:
+
+| Finding classification | Builder action |
+| --- | --- |
+| Fix now: implementation defect inside the task boundary | Repair one finding at a time, preserve the rejected commit, rerun affected proof, and obtain fresh exact-commit review. |
+| Return to authority: missing, contradictory, or observably ambiguous Planning or Design | Publish nothing and return with the owning locator, clean preserved commit, and the required source boundary. |
+| Block for user-owned input: one bounded decision, action, or manual validation is required | Publish nothing and use `BlockDelivery` with a bounded request and clean resume commit. |
+| No repair: style preference or unsupported concern without a concrete defect | Do not expand the task or silently alter code; the review evidence does not satisfy the challenger contract until it names a concrete boundary and evidence. |
+
+Only the first classification creates a repair commit. A deferred or out-of-scope concern is routed
+through the native return or block path when its resolution is required; it is not logged as a second
+Builder backlog or converted into an unrelated change.
+
 Repair an `implementation` finding when it remains inside the task and obtain fresh review of the new
 commit. A `planning` or `design` finding is evidence for Builder's return choice, not a reviewer-owned
 transition. Invalid review evidence publishes nothing.
@@ -88,10 +118,12 @@ transition. Invalid review evidence publishes nothing.
 ## Step 4 - Publish Pass Or Route Finding
 
 On `pass`, construct one `DeliveryTaskResult` with a stable result ID, launch change and authority
-digest, exact task ID, `DeliveryBuildContext.task_digest`, and reviewed commit. Require the context
-digest to be present and use it unchanged; never reconstruct `DeliveryTaskDefinition` from MCP JSON
-or reimplement its canonical hashing. Call `publish_delivery_result` with the unchanged change ID
-and a `PublishDeliveryResult` containing the outcome ID, claim ID, and result.
+digest, exact task ID, `DeliveryBuildContext.task_digest`, reviewed commit, the non-empty tuple of
+canonical observation receipts, and the canonical review receipt. Require every receipt to bind the
+same Change, Task, and exact commit represented by the result. Require the context digest to be
+present and use it unchanged; never reconstruct `DeliveryTaskDefinition` from MCP JSON or
+reimplement task or receipt hashing. Call `publish_delivery_result` with the unchanged change ID and
+a `PublishDeliveryResult` containing the outcome ID, claim ID, and result.
 
 Require the returned `DeliveryResultCandidate` to preserve the claim and exact result. Return its
 output directly in `AdvanceDelivery`:
@@ -155,11 +187,19 @@ Return the selected `DeliveryTransition` or pre-execution `dispatch_failure` dir
 `transition_delivery` or `recover_claim`; orchestration validates the launch identity and applies the
 matching route. Do not call job, receipt, request, or other lifecycle operations.
 
+## Optional Process Observation
+
+When a reviewed result exposes a trigger from `h-process-observations`, load that handbook for a
+sidecar note. Keep the note outside `DeliveryTaskResult`, receipts, and the returned transition; it
+captures process learning only and cannot change the worker-owned lifecycle result. Do not create a
+note for an ordinary successful task with no material process signal.
+
 ## Known Pitfalls
 
 - **Context reconstruction:** use `show_build_context`; do not join jobs, activity, semantic updates,
   receipts, or conversation history.
 - **Wrong checkout:** all writes belong in the launch's assigned change worktree.
 - **History rewrite:** reviewed and rejected commits are immutable evidence.
+- **Pre-commit proof:** rerun required observations after commit so every receipt binds the candidate.
 - **Reviewer action:** findings name an owning boundary; Builder selects the transition.
 - **Premature publication:** only exact-commit advisory pass permits `publish_delivery_result`.

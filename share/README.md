@@ -1,28 +1,79 @@
 # share/ - Agent Ecosystem
 
-`share/` is the portable GitHub Copilot customization layer shipped by OwlBear. It contains the
-roles, procedures, rules, domain handbooks, contextual instructions, prompts, and visual assets that
-OwlBear-enabled workspaces consume. Its primary audience is agents and contributors changing that
-ecosystem.
+`share/` is the portable GitHub Copilot customization layer that OwlBear-enabled workspaces load.
+It contains roles, reusable instructions, user-invoked prompts, and visual references. This guide
+is for contributors changing that layer and for agents that need to locate the correct authority.
 
-This guide explains how the parts compose and how to change them safely. It intentionally avoids a
-file-by-file catalog. [WIRING.md](WIRING.md) is the derived snapshot of current roles and loading
-relationships; executable frontmatter and file bodies remain authoritative.
+[Project README](../README.md) · [Package map](../serve/README.md) ·
+[Derived wiring map](WIRING.md)
+
+## Choose your next action
+
+| You need to... | Start with | Authority to change |
+| --- | --- | --- |
+| Add or change a Copilot role | [Agents](#agents) | An `.agent.md` file and its required readings |
+| Add a reusable workflow or rule | [Skills](#skills) | A `w-`, `r-`, or `h-` skill file |
+| Apply a rule automatically by file type | [Instructions](#instructions) | An `.instructions.md` file and its `applyTo` scope |
+| Add a user command | [Prompts](#prompts) | A `.prompt.md` file and its selected agent |
+| Understand why something loaded | [Effective instruction stack](#effective-instruction-stack) | The matching roots and direct dependency |
+| Check delegation, hooks, or tools | [WIRING.md](WIRING.md) | Executable frontmatter and hook/source files |
+| Validate an ecosystem change | [Validation](#validation) | The focused validator and regression test |
+
+## The one-minute model
+
+Agents are Copilot roles. Skills teach reusable procedures or domain knowledge. Instructions apply
+rules to matching files. Prompts are user-facing entry points. Hooks and MCP schemas are the hard
+controls that can reject an operation; prose can only guide a model. WIRING.md summarizes the live
+relationships, but the executable files remain authoritative.
+
+The normal path is:
+
+```text
+prompt -> agent -> required/on-demand skills -> tools and hooks -> runtime authority
+```
+
+Project-specific overrides live under `.owlbear/{agents,skills,instructions,prompts}/`. Workspace
+settings select both the shared and project-local roots, so inspect `.vscode/settings.json` before
+diagnosing a loading problem.
 
 ## Directory Layout
 
 | Directory | Contents | Naming convention |
-|-----------|----------|-------------------|
+| --- | --- | --- |
 | `agents/` | Persistent roles with identity, model, tools, hooks, dependencies, and output contracts | `{role}.agent.md` |
 | `skills/` | Reusable workflows, shared rules, and domain handbooks | `{prefix}-{domain}/SKILL.md` |
 | `instructions/` | Auto-applied universal authorities and narrow safety-net stubs | `{domain}.instructions.md` |
 | `prompts/` | User-invoked one-shot entry points | `{verb}.prompt.md` or `{scope}-{verb}.prompt.md` |
 | `diagrams/` | Shared explanatory visual assets | Descriptive filenames |
 
-Project-specific customizations use the corresponding `.owlbear/{agents,skills,instructions,prompts}/`
-directories. Workspace configuration selects the active roots. Do not assume the source tree being
-edited is the tree VS Code currently loads: inspect `.vscode/settings.json` before diagnosing a
-loading problem.
+## Agents
+
+Start with the agent file when the change concerns a role's identity, tools, hooks, delegation,
+required reading, or output contract. Its frontmatter is load-bearing; update direct dependencies
+and WIRING.md when those relationships change.
+
+## Skills
+
+Use `w-` for ordered workflows, `r-` for shared rules, and `h-` for handbooks loaded when a domain
+needs deeper knowledge. Required reading belongs in an agent only when the skill is needed in nearly
+every session; specialist material should load on demand immediately before its decision.
+
+## Instructions
+
+Instruction frontmatter controls `applyTo` matching. Keep an instruction concise and point to the
+full skill that owns the procedure. More specific rules do not automatically erase broader rules;
+resolve conflicts by identifying the job and its fit authority.
+
+## Prompts
+
+Prompts are user-facing workflow entry points. They collect the smallest input needed and route to
+the agent or workflow that owns the next decision. They should not become a second copy of a skill.
+
+## Visual Orientation
+
+The [MCP topology diagram](diagrams/mcp-topology.svg) shows the five seeded stdio servers and the
+runtime surfaces behind them. Its [editable Excalidraw source](diagrams/mcp-topology.excalidraw) is
+descriptive; `seed/.vscode/mcp.json` and the server implementations remain authoritative.
 
 ## Product Boundary
 
@@ -41,7 +92,7 @@ The model does not read every control in the same way. The effective behavior fo
 the ordered composition of the active layers below.
 
 | Layer | When it appears | Appropriate content | Authority |
-|-------|-----------------|---------------------|-----------|
+| --- | --- | --- | --- |
 | Platform and policy | Every session | Product-level safety, tool semantics, and system behavior | VS Code and GitHub Copilot |
 | `.github/copilot-instructions.md` | Every turn in the workspace | Current-project identity, topology, stack, commands, and resources | Project workspace |
 | Matching `.instructions.md` files | When `applyTo` matches the working file | Universal behavior, project-local domain rules, or a pointer to a specialist skill | Most specific matching instruction |
@@ -76,7 +127,7 @@ the expected workflow. The stub should point to the authority, not reproduce it.
 Text and enforcement serve different jobs even when both use imperative language.
 
 | Control | Kind | What it can do |
-|---------|------|----------------|
+| --- | --- | --- |
 | Personas, critical rules, workflows, handbooks, examples, and prompt instructions | Soft | Steer model decisions; they cannot mechanically prevent a violation |
 | Agent `tools:` and `agents:` frontmatter | Hard runtime boundary | Limit exposed capabilities and dispatch targets |
 | `PreToolUse`, `PostToolUse`, and `SessionStart` hooks | Hard runtime boundary | Reject operations, add context, or run checks at defined lifecycle points |
@@ -92,7 +143,7 @@ text as the explanation and point to the enforcing owner.
 Put one rule in one canonical home and give consumers at most one concise pointer or reinforcement.
 
 | Job | Canonical home |
-|-----|----------------|
+| --- | --- |
 | Current-project facts, paths, stack, and commands | `.github/copilot-instructions.md` |
 | Behavior every OwlBear agent needs on nearly every turn | Universal authority instruction |
 | File-domain safety net that routes to fuller guidance | Instruction stub |
@@ -107,7 +158,7 @@ Put one rule in one canonical home and give consumers at most one concise pointe
 Skill prefixes encode the content type:
 
 | Prefix | Meaning |
-|--------|---------|
+| --- | --- |
 | `w-` | Workflow: ordered procedure with entry, execution, and output behavior |
 | `r-` | Rules: shared behavioral convention used by multiple consumers |
 | `h-` | Handbook: domain knowledge loaded when that capability is needed |
@@ -168,11 +219,16 @@ project-local `.owlbear/` roots:
 
 ## Validation
 
-Run structural validators after changing agents or skills:
+These validator commands are for the OwlBear development checkout. The consumer `main` branch
+ships the shared customization files but not the development-only `.owlbear/` validator scripts or
+the repository test suite; contributors should run them from the `dev` checkout.
+
+Run structural validators after changing agents, skills, or prompts:
 
 ```shell
 uv run python .owlbear/scripts/validate_agents.py
 uv run python .owlbear/scripts/validate_skills.py
+uv run python .owlbear/scripts/validate_prompts.py
 ```
 
 Run ecosystem integrity and write-boundary regressions when changing agent structure, MCP grants,

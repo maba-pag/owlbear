@@ -19,7 +19,7 @@ The extraction is agent-driven: the MCP server provides batching and persistence
 All enrichment operations use the `owlbear-knowledge` MCP server tools:
 
 | Tool | Purpose |
-|------|---------|
+| --- | --- |
 | `knowledge_stats` | Check enrichment pipeline status — chunks pending, enriched, failed |
 | `claim_enrichment_batch` | Claim up to N pending chunks for enrichment (returns chunk text + metadata) |
 | `retry_enrichment` | Reset failed chunks to pending after correcting the cause |
@@ -63,7 +63,7 @@ Each chunk includes:
 Identify significant entities mentioned in the chunk text. Each entity needs:
 
 | Field | Description | Example |
-|-------|-------------|---------|
+| --- | --- | --- |
 | `id` | Stable local reference within this chunk payload | `azure-devops` |
 | `name` | Canonical name (consistent across chunks) | "Azure DevOps", "CI/CD Pipeline" |
 | `entity_type` | Category | concept, document, event, location, metric, organization, person, process, product, standard, technology, tool |
@@ -84,7 +84,7 @@ Identify significant entities mentioned in the chunk text. Each entity needs:
 Identify relationships between entities found in the same chunk:
 
 | Field | Description | Example |
-|-------|-------------|---------|
+| --- | --- | --- |
 | `source_id` | Local `id` of the source entity in this payload | `ci-cd-pipeline` |
 | `target_id` | Local `id` of the target entity in this payload | `azure-devops` |
 | `relation` | Relationship type | "belongs_to", "depends_on", "manages", "implements", "requires" |
@@ -103,7 +103,7 @@ Identify relationships between entities found in the same chunk:
 
 Call `store_enrichment` with the chunk_id, entities list, and edges list:
 
-```
+```python
 store_enrichment(
     chunk_id="<chunk_id>",
     entities=[
@@ -133,7 +133,7 @@ store_enrichment(
             "confidence": 0.9,
             "metadata": {},
         },
-    ]
+    ],
 )
 ```
 
@@ -150,7 +150,7 @@ Call `knowledge_stats` again. Confirm:
 ## Batch Size Guidance
 
 | Document count | Batch size | Reason |
-|----------------|-------------------|--------|
+| --- | --- | --- |
 | 1–5 documents | 10 chunks/batch | Small corpus, process quickly |
 | 5–20 documents | 5 chunks/batch | Balance thoroughness with progress |
 | 20+ documents | 5 chunks/batch | Prevent context overflow; many entities to track |

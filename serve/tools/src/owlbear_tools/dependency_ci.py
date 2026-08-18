@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import asdict, dataclass
-from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -13,11 +12,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 
-DEPENDENCY_LABEL = "dependencies"
-AUTOFIX_LABEL = "autofix"
-AUTOFIX_UNSAFE_LABEL = "autofix-unsafe"
-
 _PYTHON_FILES = {".pre-commit-config.yaml", ".python-version", "pyproject.toml", "uv.lock"}
+_SHARED_NODE_RUNTIME_FILES = {"serve/cockpit/web/.nvmrc"}
 _COCKPIT_NODE_FILES = {
     "serve/cockpit/web/.nvmrc",
     "serve/cockpit/web/package-lock.json",
@@ -40,16 +36,6 @@ _FRONTEND_RUNTIME_PACKAGES = (
     "react-router",
     "vite",
 )
-_PYTHON_TOOLING_PACKAGES = ('name = "pre-commit"', 'name = "ruff"')
-_NODE_TOOLING_PACKAGES = ("eslint", "htmlhint", "stylelint", "typescript")
-
-
-class FixMode(StrEnum):
-    """Requested dependency-maintenance mutation policy."""
-
-    NONE = "none"
-    SAFE = "safe"
-    UNSAFE = "unsafe"
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,12 +44,11 @@ class DependencyScope:
 
     python: bool
     node: bool
+    shared_node_runtime: bool
     root_node: bool
     diagrams: bool
     pds: bool
     frontend_runtime: bool
-    python_tooling: bool
-    node_tooling: bool
     precommit: bool
     workflows: bool
     megalinter: bool
@@ -77,14 +62,18 @@ class DependencyScope:
     @property
     def applicable(self) -> bool:
         """Return whether the diff contains a maintained dependency surface."""
-        return self.python or self.node or self.root_node or self.diagrams or self.compatibility
+        return (
+            self.python
+            or self.node
+            or self.shared_node_runtime
+            or self.root_node
+            or self.diagrams
+            or self.compatibility
+        )
 
     def github_outputs(self) -> dict[str, str]:
         """Serialize classifications as GitHub Actions boolean outputs."""
-        values = asdict(self) | {
-            "applicable": self.applicable,
-            "compatibility": self.compatibility,
-        }
+        values = asdict(self) | {"applicable": self.applicable, "compatibility": self.compatibility}
         return {key: str(value).lower() for key, value in values.items()}
 
 
@@ -95,6 +84,7 @@ def classify_dependency_change(paths: Iterable[str], diff: str) -> DependencySco
         path.startswith("serve/") and path.endswith("/pyproject.toml") for path in changed
     )
     node = bool(changed & _COCKPIT_NODE_FILES)
+    shared_node_runtime = bool(changed & _SHARED_NODE_RUNTIME_FILES)
     root_node = bool(changed & _ROOT_NODE_FILES)
     diagrams = bool(changed & _DIAGRAM_NODE_FILES)
     workflows = any(path.startswith(".github/workflows/") for path in changed)
@@ -105,28 +95,16 @@ def classify_dependency_change(paths: Iterable[str], diff: str) -> DependencySco
     return DependencyScope(
         python=python,
         node=node,
+        shared_node_runtime=shared_node_runtime,
         root_node=root_node,
         diagrams=diagrams,
         pds=node and any(package in diff for package in _PDS_PACKAGES),
         frontend_runtime=node and any(package in diff for package in _FRONTEND_RUNTIME_PACKAGES),
-        python_tooling=".pre-commit-config.yaml" in changed
-        or (python and any(package in diff for package in _PYTHON_TOOLING_PACKAGES)),
-        node_tooling=node and any(package in diff for package in _NODE_TOOLING_PACKAGES),
         precommit=precommit,
         workflows=workflows,
         megalinter=megalinter,
         renovate=renovate,
     )
-
-
-def select_fix_mode(labels: Iterable[str]) -> FixMode:
-    """Return the strongest fix mode selected by pull-request labels."""
-    selected = set(labels)
-    if AUTOFIX_UNSAFE_LABEL in selected:
-        return FixMode.UNSAFE
-    if AUTOFIX_LABEL in selected:
-        return FixMode.SAFE
-    return FixMode.NONE
 
 
 def _read_paths(path: Path) -> list[str]:
@@ -148,17 +126,13 @@ def main() -> int:
     parser.add_argument("--diff-file", type=Path, required=True)
     parser.add_argument("--github-output", type=Path, required=True)
     parser.add_argument("--summary", type=Path, required=True)
-    parser.add_argument("--labels-json", default="[]")
     args = parser.parse_args()
 
     scope = classify_dependency_change(
         _read_paths(args.paths_file),
         args.diff_file.read_text(encoding="utf-8"),
     )
-    labels = json.loads(args.labels_json)
-    if not isinstance(labels, list) or not all(isinstance(label, str) for label in labels):
-        parser.error("--labels-json must contain a JSON array of strings")
-    values = scope.github_outputs() | {"fix_mode": select_fix_mode(labels).value}
+    values = scope.github_outputs()
     _write_outputs(args.github_output, values)
     with args.summary.open("a", encoding="utf-8") as summary:
         summary.write("## Dependency classification\n\n")

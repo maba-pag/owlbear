@@ -8,13 +8,14 @@ user-invocable: false
 
 Run the portfolio until acquisition is quiescent or bounded attention requires a user/operator.
 Delivery owns readiness, capacity, claims, identities, reviewer policy, writer custody, transitions,
-and Integration. Orchestrator performs only the mechanical dispatch loop around that authority.
+provider-observed acceptance, and retained Integration attention. Orchestrator performs only the mechanical
+dispatch loop around that authority.
 
 ## Step 1 - Acquire One Current Batch
 
 If target tools are deferred, load them once with `tool_search` using:
 
-`OwlBear Delivery target portfolio list_work_items acquire_frontier_work transition_delivery recover_claim recover_integration_repair_claim publish_integration_repair_authority_attention integrate_ready_change`
+`OwlBear Delivery target portfolio list_work_items acquire_frontier_work transition_delivery recover_claim recover_integration_repair_claim`
 
 Before calling `acquire_frontier_work`, require callable bindings for `transition_delivery`,
 `recover_claim`, and `recover_integration_repair_claim`. Run one focused `tool_search` for each
@@ -24,36 +25,18 @@ are required dispatch safety authority, not optional operations to discover afte
 acquired.
 
 Call `list_work_items` only for bounded portfolio reporting. Call `acquire_frontier_work` once for the
-current cycle. Its `DeliveryAcquisitionResult` is the sole source of task and repair launch order,
-`integration_ready_change_ids`, non-retryable `integration_attention`, acquisition failures, and
-interrupted-claim recoveries. Report Integration and recovery attention unchanged. Do not filter
+current cycle. Its `DeliveryAcquisitionResult` is the sole source of task launch order,
+typed `integration_attention`, and acquisition failures. Active claims remain occupied; an
+interrupted claim is recovered only through its exact recovery operation after a failed dispatch.
+Report Integration and recovery attention unchanged. Do not filter
 for capacity, infer readiness, create identities, or reserve writer custody.
 
 ## Step 2 - Dispatch Or Recover Each Launch
-
-Process `repair_launch_packages` in returned order before `launch_packages`. Dispatch exactly
-`launch.policy.worker_agent` with only the serialized `DeliveryIntegrationRepairLaunchPackage`.
-Require either `integration_repair_admitted` bound to the launch's change, attempt, claim, and
-attention identities, `authority_attention` carrying those same outer identities and an attention
-payload bound to the launch attention and change, or a claim-bound `dispatch_failure`. Forward valid
-authority attention unchanged to `publish_integration_repair_authority_attention`. On admission,
-perform no transition and let the next acquisition cycle own Integration retry. If the authority
-attention publication operation is unavailable or rejects the valid worker result, call
-`recover_integration_repair_claim` with the launch's exact change, attempt, and claim IDs, report the
-handoff failure and recovery result, and end the session after the current acquired batch rather
-than reacquiring the same repair. On malformed output, dispatch failure, or agent failure, use that
-same exact recovery call and report its result unchanged.
 
 Process `launch_packages` in returned order. For worker role `planner` or `builder`, dispatch exactly
 `launch.policy.worker_agent` and pass only the serialized `DeliveryLaunchPackage`. The selected
 agent's frontmatter owns its model. Do not substitute a role, agent, reviewer, worktree, branch, or
 source head.
-
-The current public surface has no Assembly context or publication operation. For worker role
-`assembly-reviewer`, call `recover_claim` immediately with the launch's exact `change_id`,
-`outcome_id`, `claim.attempt_id`, and `claim.claim_id`. Report the returned recovery status or
-attention and stop processing that affected change. Do not dispatch Build Reviewer, inspect
-composition, construct a transition, or leave the unsupported claim silently active.
 
 If Builder returns `kind: dispatch_failure`, require its change, outcome, attempt, and claim IDs to
 equal the launch and require non-empty `failed_operation` and `reason`. Use that same exact
@@ -91,22 +74,40 @@ the exact Step 2 recovery route for the still-active claim. A rejected `transiti
 for worker-output schema validation is also a malformed dispatch result and requires that recovery
 before session completion.
 
-## Step 4 - Integrate Only Acquisition-Provided IDs
+## Step 4 - Preserve Typed Integration Attention
 
-For each `integration_ready_change_id` in returned order, call `integrate_ready_change(change_id)`.
-Report its completion or typed Integration attention unchanged. Never discover Integration
-candidates from work-item stages, worker prose, branch state, or cached results.
+Do not call a local Integration or completion operation from the orchestration loop. Acquisition
+returns `integration_attention` as retained evidence for the owning attention or provider-acceptance
+workflow. A legacy repair condition is visibility only: do not create a new repair claim, dispatch a
+repair worker, or synthesize a repair result. Never infer completion from work-item stages, worker
+prose, branch state, or cached results.
 
-Do not call Integration for entries in `integration_attention`. Acquisition has already classified
-those entries as requiring reviewed repair or operator action. Continue independent work and report
-the exact attention as bounded action at the end of the cycle.
+Continue independent task work when possible, then report the exact attention as bounded action at
+the end of the cycle.
 
-## Step 5 - Refresh
+## Step 5 - Run Periodic Housekeeping
+
+Count completed acquisition cycles from 1 within this orchestrator invocation. A completed cycle is
+a non-empty acquisition batch whose launches have been handled and whose worker transitions or exact
+recovery results have been recorded. Do not count an empty acquisition, an acquisition failure, or
+an interrupted batch. Dispatch `memory-curator` after cycle 3, then after cycles 13, 23, and so on
+every tenth completed cycle thereafter, with exactly `Curate: Periodic curation`. This is
+non-Delivery housekeeping, not a launch package: provide no task, Change, outcome, attempt, or claim
+identity; do not call `transition_delivery` or `recover_claim` for it.
+
+The curator's successful Channel A result must use the `w-mem-curation` form
+`DONE | {P} promoted, {D} pruned`, adding reportable pending conflict or uncertainty IDs when
+present. If the dispatch binding is unavailable or the agent tool returns an error, record a
+fail-closed housekeeping failure, report it separately, and stop after the current batch; do not
+use Delivery recovery. If the dispatch returns no result or a result without the curator's Channel A
+verdict, record a malformed housekeeping result, do not retry it, and continue acquisition. A
+scheduled attempt consumes its cadence slot regardless of its result.
+
+## Step 6 - Refresh
 
 Finish the current acquired batch, discard it, and call `acquire_frontier_work` again. Continue
-independent changes when one outcome returns or blocks. Stop when task launch packages, repair
-launch packages, and Integration-ready IDs are empty, or when a fail-closed diagnostic requires
-user/operator action.
+independent changes when one outcome returns or blocks. Stop when launch packages are empty, or when
+a fail-closed diagnostic requires user/operator action.
 Non-empty `integration_attention` is bounded action, not quiescence.
 
 Before reporting portfolio quiescence after an empty acquisition, call `list_work_items`. Quiescence
@@ -115,8 +116,9 @@ stages as bounded acquisition attention and stop; do not infer a launch or mutat
 
 ## Output
 
-Report forwarded transition identities, Integration completion or attention, exact recovery results,
-unclaimed acquisition failures, bounded acquisition attention, and cycle count. Report quiescence
+Report forwarded transition identities, typed Integration attention, periodic housekeeping results,
+exact recovery results, unclaimed acquisition failures, bounded acquisition attention, and cycle
+count. Report quiescence
 only when both acquisition and the final work-item projection are empty. Do not translate those typed
 results into invented completion or scheduling state.
 
@@ -125,6 +127,5 @@ results into invented completion or scheduling state.
 - **Local scheduling:** acquisition already owns stable readiness and capacity.
 - **Identity generation:** launch claims and role policies are runtime output, not Orchestrator input.
 - **Transition interpretation:** worker action and payload remain unchanged.
-- **Fake Assembly support:** unsupported Assembly claims are recovered exactly, never sent to Builder
-  or Build Reviewer.
-- **Integration discovery:** only acquisition-provided IDs authorize the Integration call.
+- **Completion inference:** orchestration never synthesizes local completion; provider acceptance
+ must be observed through its receipt-backed Delivery operation.

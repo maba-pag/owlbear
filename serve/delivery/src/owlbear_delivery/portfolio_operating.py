@@ -11,7 +11,7 @@ class PortfolioWorkScope(StrEnum):
     """Scopes that can participate in current Delivery operation."""
 
     OUTCOME = "outcome"
-    INTEGRATION = "integration"
+    PUBLICATION = "publication"
 
 
 class PortfolioGuidanceKind(StrEnum):

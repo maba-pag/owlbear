@@ -149,7 +149,7 @@
 Canonical encoding of real-world concepts from the Brief demand scenarios into protocol vocabulary. Ensures consistent graph structure across agents and extraction prompts.
 
 | Domain concept | Protocol encoding |
-|----------------|-------------------|
+| --- | --- |
 | ISMS control (e.g. A.8.1) | `EntityType.STANDARD` + `metadata.subtype = "control"` |
 | Compliance approval | `RelationType.COMPLIES_WITH` + `metadata.approval_state = "approved"` |
 | Access right / permission | `EntityType.PROCESS` + `metadata.subtype = "access_right"` |
