@@ -1,11 +1,14 @@
 ---
 description: "Project-specific documentation type rules for OwlBear canonical docs"
-applyTo: "README.md,README-consumer.md,SECURITY.md,serve/*/README.md,share/README.md,setup/*.md"
+applyTo: "README.md,README-consumer.md,SECURITY.md,serve/*/README.md,share/README.md,setup/README.md,setup/setup-guide.md,setup/sharing-guide.md,.github/README-automation.md,.owlbear/README.md,store/README.md,tests/README.md"
 ---
 
 # OwlBear Documentation Types
 
 Project-local rule IDs for documentation shape, placement mapping, and audience targets.
+
+These files also use `r-doc-standards` for cross-reference integrity, audience fitness, and the
+eight audit dimensions.
 
 ## Rule IDs
 
@@ -23,7 +26,9 @@ Project-local rule IDs for documentation shape, placement mapping, and audience 
 
 `STR-2` Must NOT duplicate content from `setup/setup-guide.md`. Link to it instead.
 
-`STR-3` Required headings (in order): project name / tagline, overview paragraph, directory structure table, getting started pointer.
+`STR-3` Required content order: project name / tagline, reader route, overview paragraph, current
+surfaces or status, development or consumer next step, and directory structure overview. The
+reader route comes before implementation detail so the front door remains useful to newcomers.
 
 ### 1.2 `SECURITY.md`
 
@@ -45,13 +50,19 @@ Project-local rule IDs for documentation shape, placement mapping, and audience 
 
 `STR-10` Must NOT enumerate every file by name — categories change. A table of conventions is preferred over a list of file names.
 
-### 1.5 Setup Guide (`setup/*.md`)
+### 1.5 Setup Guide (`setup/setup-guide.md`, `setup/sharing-guide.md`)
 
 `STR-11` Must contain: Prerequisites, step-by-step instructions numbered sequentially, expected outcome per step, and troubleshooting hints for the most likely failure.
 
 `STR-12` Must NOT assume the reader has prior knowledge of OwlBear internals. Write for a first-time installer.
 
 `STR-13` Must stay in sync with `setup/init.py` — any flag, path, or behavior change in the script must be reflected in the guide.
+
+### 1.6 Folder Orientation Guide (`setup/README.md`, `.github/README-automation.md`, `.owlbear/README.md`, `store/README.md`, `tests/README.md`)
+
+`STR-14` Must contain the folder's purpose, an inventory summary, ownership boundaries, and pointers to the canonical detailed sources.
+
+`STR-15` Must explain important absent or generated content when a reader could reasonably expect it in the folder, without becoming a second procedural or implementation authority.
 
 ## 2. Placement Mapping
 
@@ -64,7 +75,8 @@ Project-local rule IDs for documentation shape, placement mapping, and audience 
 | SECURITY.md | `/SECURITY.md` |
 | Package README | `serve/{package}/README.md` |
 | Share README | `share/README.md` |
-| Setup guide | `setup/{name}.md` |
+| Setup guide | `setup/setup-guide.md`, `setup/sharing-guide.md` |
+| Folder orientation guide | `setup/README.md`, `.github/README-automation.md`, `.owlbear/README.md`, `store/README.md`, `tests/README.md` |
 
 `PLC-4` Docs that do not fit an existing doc type go in `.owlbear/research/` for durable findings. Change-specific decisions belong in native Delivery authority rather than standalone documentation. They are not placed in `share/`, `serve/`, or `setup/` unless they match a canonical doc type.
 
@@ -79,3 +91,4 @@ Project-local rule IDs for documentation shape, placement mapping, and audience 
 | Package README | Developers integrating the package | Python-fluent, unfamiliar with this package |
 | Share README | Pipeline agents, contributors | OwlBear internals familiar |
 | Setup guide | First-time installers | Follows instructions; no internals assumed |
+| Folder orientation guide | Contributors and maintainers | Needs a concise map of one repository area and its boundaries |

@@ -74,7 +74,11 @@ generate_ts_index(root)  # writes .owlbear/ts-index.md
 
 ### Excluded directories
 
-The documentation index excludes workspace state, generated indexes, caches, external stores, and test fixtures. Source indexes additionally exclude tests and conventional test filenames, `vendor`, `public`, `generated`, coverage, and build output.
+The documentation index excludes workspace state, generated indexes, caches, external stores, and
+directories named `fixtures`. It keeps the root README files from otherwise-excluded `store/` and
+`tests/` trees but excludes the rest of those trees. Excalidraw entries retain top-level
+`describes` source-path globs for diagram audits. Source indexes additionally exclude tests and
+conventional test filenames, `vendor`, `public`, `generated`, coverage, and build output.
 
 ## Configuration
 

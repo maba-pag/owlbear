@@ -1,7 +1,5 @@
 ---
-# Knowledge base corpus manifest
-# Total: ~548 documents (~520 research, 23 skills, 5 instructions)
-# File counts are approximate and updated as of 2026-04-02; actual counts drift over time.
+# Reference-only knowledge corpus manifest; current sources are registered at runtime.
 sources:
   - name: "Research docs"
     type: file_glob

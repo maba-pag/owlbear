@@ -47,9 +47,15 @@
 - [uv](https://docs.astral.sh/uv/)
 - [Shared ecosystem guide](../share/README.md)
 - [Package map](../serve/README.md)
-- [Setup guide](../setup/setup-guide.md)
+- [Setup folder guide](../setup/README.md)
 - [package map](../serve/README.md)
 - [loading model](../share/README.md)
+- [setup folder guide](../setup/README.md)
+- [setup folder guide](../setup/README.md)
+- [.owlbear guide](README.md)
+- [test guide](../tests/README.md)
+- [store guide](../store/README.md)
+- [GitHub automation guide](../.github/README-automation.md)
 
 ## SECURITY.md
 - # `Security Policy`
@@ -59,6 +65,21 @@
 
 ### Outbound links
 - [private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing/privately-reporting-a-security-vulnerability)
+
+## .github/README-automation.md
+- # `GitHub Automation`
+- ## `What lives here`
+- ## `What belongs elsewhere`
+- ## `Changing the sync boundary`
+
+### Outbound links
+- [`share/`](../share/README.md)
+- [`setup/init.py`](../setup/init.py)
+- [`serve/`](../serve/README.md)
+- [`setup/`](../setup/README.md)
+- [`sync-manifest.json`](../.github/sync-manifest.json)
+- [sync workflow](../.github/workflows/sync-to-main.yml)
+- [`tests/test_sync_manifest.py`](../tests/test_sync_manifest.py)
 
 ## .github/copilot-instructions.md
 - # `OwlBear — Copilot Workspace Instructions`
@@ -89,6 +110,18 @@
 
 ### Outbound links
 - [transcript extractor](../.github/skills/session-review/scripts/extract_transcript.py)
+
+## .owlbear/README.md
+- # `OwlBear Project Operations`
+- ## `What lives here`
+- ## `What belongs elsewhere`
+
+### Outbound links
+- [`setup/init.py`](../setup/init.py)
+- [`share/`](../share/README.md)
+- [`serve/`](../serve/README.md)
+- [`.github/`](../.github/README-automation.md)
+- [`tests/`](../tests/README.md)
 
 ## .owlbear/ideas.md
 - # `Delivery implementation audit and improvement plan`
@@ -125,7 +158,8 @@
 - ### `1.2 `SECURITY.md``
 - ### `1.3 Package README (`serve/*/README.md`)`
 - ### `1.4 Share README (`share/README.md`)`
-- ### `1.5 Setup Guide (`setup/*.md`)`
+- ### `1.5 Setup Guide (`setup/setup-guide.md`, `setup/sharing-guide.md`)`
+- ### `1.6 Folder Orientation Guide (`setup/README.md`, `.github/README-automation.md`, `.owlbear/README.md`, `store/README.md`, `tests/README.md`)`
 - ## `2. Placement Mapping`
 - ## `3. Audience Targets`
 
@@ -261,678 +295,6 @@
 - [serve/README.md](../serve/README.md)
 - [README.md](../README.md)
 - [serve/delivery-mcp/README.md](../serve/delivery-mcp/README.md)
-
-## serve/delivery/tests/fixtures/historical-admission/r1-browser-corrected/design.md
-- # `Implementation Contract: Graph-Authoritative Delivery`
-- ## `1. Design Goals`
-- ## `2. System Model`
-- ### `2.1 Authority plane`
-- ### `2.2 Work plane`
-- ### `2.3 Evidence plane`
-- ### `2.4 Git plane`
-- ## `3. Native Change Package`
-- ### `3.1 `intent.md``
-- ### `3.2 `design.md``
-- ### `3.3 `decisions.yaml``
-- ### `3.4 `graph.yaml``
-- ### `3.5 Receipts`
-- ## `4. Semantic Identity and Digests`
-- ### `4.1 Delivery digest`
-- ### `4.2 Node plan digest`
-- ### `4.3 Receipt validity`
-- ## `5. Delivery Graph`
-- ### `5.1 Required entities`
-- ### `5.2 Delivery node boundary`
-- ### `5.3 Completeness rule`
-- ## `6. Node Shaping and Packet Plans`
-- ### `6.1 Legal refinement`
-- ### `6.2 Illegal expansion`
-- ### `6.3 Packet contract`
-- ## `7. Kanban Job Model`
-- ### `7.1 Job record`
-- ### `7.2 Attempts and activity`
-- ## `8. Agent Architecture`
-- ### `8.1 Designer`
-- ### `8.2 Delivery-node shaper`
-- ### `8.3 Builder`
-- ### `8.4 Acceptor`
-- ### `8.5 Auditor`
-- ### `8.6 Orchestrator`
-- ### `8.7 Retired roles`
-- ## `9. Admission`
-- ### `9.1 Deterministic validation`
-- ### `9.2 Repository-grounded challenge`
-- ### `9.3 Baselines`
-- ### `9.4 User approval`
-- ### `9.5 One-time bootstrap admission and carrier`
-- ## `10. Invalidation, Findings, and Corrective Jobs`
-- ## `11. Decision and Action Requests`
-- ## `12. Shared Worktree and Commit Contract`
-- ## `13. `owlbear-kanban` Internal Design`
-- ## `14. MCP Contract`
-- ### `Change/design tools`
-- ### `Work tools`
-- ### `Request tools`
-- ### `Health/history tools`
-- ## `15. Cockpit Product Experience`
-- ### `15.1 Board`
-- ### `15.2 Changes`
-- ### `15.3 Requests and history`
-- ### `15.4 Frontend constraints`
-- ## `16. Atomic Cutover`
-- ## `17. Test and Proof Strategy`
-- ### `17.1 Durable unit/contract coverage`
-- ### `17.2 Historical regression fixtures`
-- ### `17.3 Generic anti-overfitting coverage`
-- ### `17.4 End-to-end scenarios`
-- ## `18. Risks and Mitigations`
-- ## `19. Rejected Technical Directions`
-
-## serve/delivery/tests/fixtures/historical-admission/r1-browser-corrected/intent.md
-- # `Replace the OwlBear Delivery Pipeline`
-- ## `Problem`
-- ## `Product Promise`
-- ## `Primary Workflows`
-- ### `WF-1: Rough idea to admitted change`
-- ### `WF-2: Delivery node to shaped packets`
-- ### `WF-3: Packet implementation with warm review`
-- ### `WF-4: Node acceptance and corrective work`
-- ### `WF-5: Whole-change audit and closure`
-- ## `Success Conditions`
-- ## `Boundaries`
-- ### `In Scope`
-- ### `Out of Scope`
-- ## `Preserved Strengths`
-- ## `Technically Done but Wrong`
-- ## `Non-goals`
-
-## serve/delivery/tests/fixtures/historical-admission/r1-browser-defective/design.md
-- # `Implementation Contract: Graph-Authoritative Delivery`
-- ## `1. Design Goals`
-- ## `2. System Model`
-- ### `2.1 Authority plane`
-- ### `2.2 Work plane`
-- ### `2.3 Evidence plane`
-- ### `2.4 Git plane`
-- ## `3. Native Change Package`
-- ### `3.1 `intent.md``
-- ### `3.2 `design.md``
-- ### `3.3 `decisions.yaml``
-- ### `3.4 `graph.yaml``
-- ### `3.5 Receipts`
-- ## `4. Semantic Identity and Digests`
-- ### `4.1 Delivery digest`
-- ### `4.2 Node plan digest`
-- ### `4.3 Receipt validity`
-- ## `5. Delivery Graph`
-- ### `5.1 Required entities`
-- ### `5.2 Delivery node boundary`
-- ### `5.3 Completeness rule`
-- ## `6. Node Shaping and Packet Plans`
-- ### `6.1 Legal refinement`
-- ### `6.2 Illegal expansion`
-- ### `6.3 Packet contract`
-- ## `7. Kanban Job Model`
-- ### `7.1 Job record`
-- ### `7.2 Attempts and activity`
-- ## `8. Agent Architecture`
-- ### `8.1 Designer`
-- ### `8.2 Delivery-node shaper`
-- ### `8.3 Builder`
-- ### `8.4 Acceptor`
-- ### `8.5 Auditor`
-- ### `8.6 Orchestrator`
-- ### `8.7 Retired roles`
-- ## `9. Admission`
-- ### `9.1 Deterministic validation`
-- ### `9.2 Repository-grounded challenge`
-- ### `9.3 Baselines`
-- ### `9.4 User approval`
-- ### `9.5 One-time bootstrap admission and carrier`
-- ## `10. Invalidation, Findings, and Corrective Jobs`
-- ## `11. Decision and Action Requests`
-- ## `12. Shared Worktree and Commit Contract`
-- ## `13. `owlbear-kanban` Internal Design`
-- ## `14. MCP Contract`
-- ### `Change/design tools`
-- ### `Work tools`
-- ### `Request tools`
-- ### `Health/history tools`
-- ## `15. Cockpit Product Experience`
-- ### `15.1 Board`
-- ### `15.2 Changes`
-- ### `15.3 Requests and history`
-- ### `15.4 Frontend constraints`
-- ## `16. Atomic Cutover`
-- ## `17. Test and Proof Strategy`
-- ### `17.1 Durable unit/contract coverage`
-- ### `17.2 Historical regression fixtures`
-- ### `17.3 Generic anti-overfitting coverage`
-- ### `17.4 End-to-end scenarios`
-- ## `18. Risks and Mitigations`
-- ## `19. Rejected Technical Directions`
-
-## serve/delivery/tests/fixtures/historical-admission/r1-browser-defective/intent.md
-- # `Replace the OwlBear Delivery Pipeline`
-- ## `Problem`
-- ## `Product Promise`
-- ## `Primary Workflows`
-- ### `WF-1: Rough idea to admitted change`
-- ### `WF-2: Delivery node to shaped packets`
-- ### `WF-3: Packet implementation with warm review`
-- ### `WF-4: Node acceptance and corrective work`
-- ### `WF-5: Whole-change audit and closure`
-- ## `Success Conditions`
-- ## `Boundaries`
-- ### `In Scope`
-- ### `Out of Scope`
-- ## `Preserved Strengths`
-- ## `Technically Done but Wrong`
-- ## `Non-goals`
-
-## serve/delivery/tests/fixtures/historical-admission/r2-workspace-corrected/design.md
-- # `Implementation Contract: Graph-Authoritative Delivery`
-- ## `1. Design Goals`
-- ## `2. System Model`
-- ### `2.1 Authority plane`
-- ### `2.2 Work plane`
-- ### `2.3 Evidence plane`
-- ### `2.4 Git plane`
-- ## `3. Native Change Package`
-- ### `3.1 `intent.md``
-- ### `3.2 `design.md``
-- ### `3.3 `decisions.yaml``
-- ### `3.4 `graph.yaml``
-- ### `3.5 Receipts`
-- ## `4. Semantic Identity and Digests`
-- ### `4.1 Delivery digest`
-- ### `4.2 Node plan digest`
-- ### `4.3 Receipt validity`
-- ## `5. Delivery Graph`
-- ### `5.1 Required entities`
-- ### `5.2 Delivery node boundary`
-- ### `5.3 Completeness rule`
-- ## `6. Node Shaping and Packet Plans`
-- ### `6.1 Legal refinement`
-- ### `6.2 Illegal expansion`
-- ### `6.3 Packet contract`
-- ## `7. Kanban Job Model`
-- ### `7.1 Job record`
-- ### `7.2 Attempts and activity`
-- ## `8. Agent Architecture`
-- ### `8.1 Designer`
-- ### `8.2 Delivery-node shaper`
-- ### `8.3 Builder`
-- ### `8.4 Acceptor`
-- ### `8.5 Auditor`
-- ### `8.6 Orchestrator`
-- ### `8.7 Retired roles`
-- ## `9. Admission`
-- ### `9.1 Deterministic validation`
-- ### `9.2 Repository-grounded challenge`
-- ### `9.3 Baselines`
-- ### `9.4 User approval`
-- ### `9.5 One-time bootstrap admission and carrier`
-- ## `10. Invalidation, Findings, and Corrective Jobs`
-- ## `11. Decision and Action Requests`
-- ## `12. Shared Worktree and Commit Contract`
-- ## `13. `owlbear-kanban` Internal Design`
-- ## `14. MCP Contract`
-- ### `Change/design tools`
-- ### `Work tools`
-- ### `Request tools`
-- ### `Health/history tools`
-- ## `15. Cockpit Product Experience`
-- ### `15.1 Board`
-- ### `15.2 Changes`
-- ### `15.3 Requests and history`
-- ### `15.4 Frontend constraints`
-- ## `16. Atomic Cutover`
-- ## `17. Test and Proof Strategy`
-- ### `17.1 Durable unit/contract coverage`
-- ### `17.2 Historical regression fixtures`
-- ### `17.3 Generic anti-overfitting coverage`
-- ### `17.4 End-to-end scenarios`
-- ## `18. Risks and Mitigations`
-- ## `19. Rejected Technical Directions`
-
-## serve/delivery/tests/fixtures/historical-admission/r2-workspace-corrected/intent.md
-- # `Replace the OwlBear Delivery Pipeline`
-- ## `Problem`
-- ## `Product Promise`
-- ## `Primary Workflows`
-- ### `WF-1: Rough idea to admitted change`
-- ### `WF-2: Delivery node to shaped packets`
-- ### `WF-3: Packet implementation with warm review`
-- ### `WF-4: Node acceptance and corrective work`
-- ### `WF-5: Whole-change audit and closure`
-- ## `Success Conditions`
-- ## `Boundaries`
-- ### `In Scope`
-- ### `Out of Scope`
-- ## `Preserved Strengths`
-- ## `Technically Done but Wrong`
-- ## `Non-goals`
-
-## serve/delivery/tests/fixtures/historical-admission/r2-workspace-defective/design.md
-- # `Implementation Contract: Graph-Authoritative Delivery`
-- ## `1. Design Goals`
-- ## `2. System Model`
-- ### `2.1 Authority plane`
-- ### `2.2 Work plane`
-- ### `2.3 Evidence plane`
-- ### `2.4 Git plane`
-- ## `3. Native Change Package`
-- ### `3.1 `intent.md``
-- ### `3.2 `design.md``
-- ### `3.3 `decisions.yaml``
-- ### `3.4 `graph.yaml``
-- ### `3.5 Receipts`
-- ## `4. Semantic Identity and Digests`
-- ### `4.1 Delivery digest`
-- ### `4.2 Node plan digest`
-- ### `4.3 Receipt validity`
-- ## `5. Delivery Graph`
-- ### `5.1 Required entities`
-- ### `5.2 Delivery node boundary`
-- ### `5.3 Completeness rule`
-- ## `6. Node Shaping and Packet Plans`
-- ### `6.1 Legal refinement`
-- ### `6.2 Illegal expansion`
-- ### `6.3 Packet contract`
-- ## `7. Kanban Job Model`
-- ### `7.1 Job record`
-- ### `7.2 Attempts and activity`
-- ## `8. Agent Architecture`
-- ### `8.1 Designer`
-- ### `8.2 Delivery-node shaper`
-- ### `8.3 Builder`
-- ### `8.4 Acceptor`
-- ### `8.5 Auditor`
-- ### `8.6 Orchestrator`
-- ### `8.7 Retired roles`
-- ## `9. Admission`
-- ### `9.1 Deterministic validation`
-- ### `9.2 Repository-grounded challenge`
-- ### `9.3 Baselines`
-- ### `9.4 User approval`
-- ### `9.5 One-time bootstrap admission and carrier`
-- ## `10. Invalidation, Findings, and Corrective Jobs`
-- ## `11. Decision and Action Requests`
-- ## `12. Shared Worktree and Commit Contract`
-- ## `13. `owlbear-kanban` Internal Design`
-- ## `14. MCP Contract`
-- ### `Change/design tools`
-- ### `Work tools`
-- ### `Request tools`
-- ### `Health/history tools`
-- ## `15. Cockpit Product Experience`
-- ### `15.1 Board`
-- ### `15.2 Changes`
-- ### `15.3 Requests and history`
-- ### `15.4 Frontend constraints`
-- ## `16. Atomic Cutover`
-- ## `17. Test and Proof Strategy`
-- ### `17.1 Durable unit/contract coverage`
-- ### `17.2 Historical regression fixtures`
-- ### `17.3 Generic anti-overfitting coverage`
-- ### `17.4 End-to-end scenarios`
-- ## `18. Risks and Mitigations`
-- ## `19. Rejected Technical Directions`
-
-## serve/delivery/tests/fixtures/historical-admission/r2-workspace-defective/intent.md
-- # `Replace the OwlBear Delivery Pipeline`
-- ## `Problem`
-- ## `Product Promise`
-- ## `Primary Workflows`
-- ### `WF-1: Rough idea to admitted change`
-- ### `WF-2: Delivery node to shaped packets`
-- ### `WF-3: Packet implementation with warm review`
-- ### `WF-4: Node acceptance and corrective work`
-- ### `WF-5: Whole-change audit and closure`
-- ## `Success Conditions`
-- ## `Boundaries`
-- ### `In Scope`
-- ### `Out of Scope`
-- ## `Preserved Strengths`
-- ## `Technically Done but Wrong`
-- ## `Non-goals`
-
-## serve/delivery/tests/fixtures/historical-admission/r3-memory-purge-corrected/design.md
-- # `Implementation Contract: Graph-Authoritative Delivery`
-- ## `1. Design Goals`
-- ## `2. System Model`
-- ### `2.1 Authority plane`
-- ### `2.2 Work plane`
-- ### `2.3 Evidence plane`
-- ### `2.4 Git plane`
-- ## `3. Native Change Package`
-- ### `3.1 `intent.md``
-- ### `3.2 `design.md``
-- ### `3.3 `decisions.yaml``
-- ### `3.4 `graph.yaml``
-- ### `3.5 Receipts`
-- ## `4. Semantic Identity and Digests`
-- ### `4.1 Delivery digest`
-- ### `4.2 Node plan digest`
-- ### `4.3 Receipt validity`
-- ## `5. Delivery Graph`
-- ### `5.1 Required entities`
-- ### `5.2 Delivery node boundary`
-- ### `5.3 Completeness rule`
-- ## `6. Node Shaping and Packet Plans`
-- ### `6.1 Legal refinement`
-- ### `6.2 Illegal expansion`
-- ### `6.3 Packet contract`
-- ## `7. Kanban Job Model`
-- ### `7.1 Job record`
-- ### `7.2 Attempts and activity`
-- ## `8. Agent Architecture`
-- ### `8.1 Designer`
-- ### `8.2 Delivery-node shaper`
-- ### `8.3 Builder`
-- ### `8.4 Acceptor`
-- ### `8.5 Auditor`
-- ### `8.6 Orchestrator`
-- ### `8.7 Retired roles`
-- ## `9. Admission`
-- ### `9.1 Deterministic validation`
-- ### `9.2 Repository-grounded challenge`
-- ### `9.3 Baselines`
-- ### `9.4 User approval`
-- ### `9.5 One-time bootstrap admission and carrier`
-- ## `10. Invalidation, Findings, and Corrective Jobs`
-- ## `11. Decision and Action Requests`
-- ## `12. Shared Worktree and Commit Contract`
-- ## `13. `owlbear-kanban` Internal Design`
-- ## `14. MCP Contract`
-- ### `Change/design tools`
-- ### `Work tools`
-- ### `Request tools`
-- ### `Health/history tools`
-- ## `15. Cockpit Product Experience`
-- ### `15.1 Board`
-- ### `15.2 Changes`
-- ### `15.3 Requests and history`
-- ### `15.4 Frontend constraints`
-- ## `16. Atomic Cutover`
-- ## `17. Test and Proof Strategy`
-- ### `17.1 Durable unit/contract coverage`
-- ### `17.2 Historical regression fixtures`
-- ### `17.3 Generic anti-overfitting coverage`
-- ### `17.4 End-to-end scenarios`
-- ## `18. Risks and Mitigations`
-- ## `19. Rejected Technical Directions`
-
-## serve/delivery/tests/fixtures/historical-admission/r3-memory-purge-corrected/intent.md
-- # `Replace the OwlBear Delivery Pipeline`
-- ## `Problem`
-- ## `Product Promise`
-- ## `Primary Workflows`
-- ### `WF-1: Rough idea to admitted change`
-- ### `WF-2: Delivery node to shaped packets`
-- ### `WF-3: Packet implementation with warm review`
-- ### `WF-4: Node acceptance and corrective work`
-- ### `WF-5: Whole-change audit and closure`
-- ## `Success Conditions`
-- ## `Boundaries`
-- ### `In Scope`
-- ### `Out of Scope`
-- ## `Preserved Strengths`
-- ## `Technically Done but Wrong`
-- ## `Non-goals`
-
-## serve/delivery/tests/fixtures/historical-admission/r3-memory-purge-defective/design.md
-- # `Implementation Contract: Graph-Authoritative Delivery`
-- ## `1. Design Goals`
-- ## `2. System Model`
-- ### `2.1 Authority plane`
-- ### `2.2 Work plane`
-- ### `2.3 Evidence plane`
-- ### `2.4 Git plane`
-- ## `3. Native Change Package`
-- ### `3.1 `intent.md``
-- ### `3.2 `design.md``
-- ### `3.3 `decisions.yaml``
-- ### `3.4 `graph.yaml``
-- ### `3.5 Receipts`
-- ## `4. Semantic Identity and Digests`
-- ### `4.1 Delivery digest`
-- ### `4.2 Node plan digest`
-- ### `4.3 Receipt validity`
-- ## `5. Delivery Graph`
-- ### `5.1 Required entities`
-- ### `5.2 Delivery node boundary`
-- ### `5.3 Completeness rule`
-- ## `6. Node Shaping and Packet Plans`
-- ### `6.1 Legal refinement`
-- ### `6.2 Illegal expansion`
-- ### `6.3 Packet contract`
-- ## `7. Kanban Job Model`
-- ### `7.1 Job record`
-- ### `7.2 Attempts and activity`
-- ## `8. Agent Architecture`
-- ### `8.1 Designer`
-- ### `8.2 Delivery-node shaper`
-- ### `8.3 Builder`
-- ### `8.4 Acceptor`
-- ### `8.5 Auditor`
-- ### `8.6 Orchestrator`
-- ### `8.7 Retired roles`
-- ## `9. Admission`
-- ### `9.1 Deterministic validation`
-- ### `9.2 Repository-grounded challenge`
-- ### `9.3 Baselines`
-- ### `9.4 User approval`
-- ### `9.5 One-time bootstrap admission and carrier`
-- ## `10. Invalidation, Findings, and Corrective Jobs`
-- ## `11. Decision and Action Requests`
-- ## `12. Shared Worktree and Commit Contract`
-- ## `13. `owlbear-kanban` Internal Design`
-- ## `14. MCP Contract`
-- ### `Change/design tools`
-- ### `Work tools`
-- ### `Request tools`
-- ### `Health/history tools`
-- ## `15. Cockpit Product Experience`
-- ### `15.1 Board`
-- ### `15.2 Changes`
-- ### `15.3 Requests and history`
-- ### `15.4 Frontend constraints`
-- ## `16. Atomic Cutover`
-- ## `17. Test and Proof Strategy`
-- ### `17.1 Durable unit/contract coverage`
-- ### `17.2 Historical regression fixtures`
-- ### `17.3 Generic anti-overfitting coverage`
-- ### `17.4 End-to-end scenarios`
-- ## `18. Risks and Mitigations`
-- ## `19. Rejected Technical Directions`
-
-## serve/delivery/tests/fixtures/historical-admission/r3-memory-purge-defective/intent.md
-- # `Replace the OwlBear Delivery Pipeline`
-- ## `Problem`
-- ## `Product Promise`
-- ## `Primary Workflows`
-- ### `WF-1: Rough idea to admitted change`
-- ### `WF-2: Delivery node to shaped packets`
-- ### `WF-3: Packet implementation with warm review`
-- ### `WF-4: Node acceptance and corrective work`
-- ### `WF-5: Whole-change audit and closure`
-- ## `Success Conditions`
-- ## `Boundaries`
-- ### `In Scope`
-- ### `Out of Scope`
-- ## `Preserved Strengths`
-- ## `Technically Done but Wrong`
-- ## `Non-goals`
-
-## serve/delivery/tests/fixtures/historical-admission/r4-memory-lifecycle-corrected/design.md
-- # `Implementation Contract: Graph-Authoritative Delivery`
-- ## `1. Design Goals`
-- ## `2. System Model`
-- ### `2.1 Authority plane`
-- ### `2.2 Work plane`
-- ### `2.3 Evidence plane`
-- ### `2.4 Git plane`
-- ## `3. Native Change Package`
-- ### `3.1 `intent.md``
-- ### `3.2 `design.md``
-- ### `3.3 `decisions.yaml``
-- ### `3.4 `graph.yaml``
-- ### `3.5 Receipts`
-- ## `4. Semantic Identity and Digests`
-- ### `4.1 Delivery digest`
-- ### `4.2 Node plan digest`
-- ### `4.3 Receipt validity`
-- ## `5. Delivery Graph`
-- ### `5.1 Required entities`
-- ### `5.2 Delivery node boundary`
-- ### `5.3 Completeness rule`
-- ## `6. Node Shaping and Packet Plans`
-- ### `6.1 Legal refinement`
-- ### `6.2 Illegal expansion`
-- ### `6.3 Packet contract`
-- ## `7. Kanban Job Model`
-- ### `7.1 Job record`
-- ### `7.2 Attempts and activity`
-- ## `8. Agent Architecture`
-- ### `8.1 Designer`
-- ### `8.2 Delivery-node shaper`
-- ### `8.3 Builder`
-- ### `8.4 Acceptor`
-- ### `8.5 Auditor`
-- ### `8.6 Orchestrator`
-- ### `8.7 Retired roles`
-- ## `9. Admission`
-- ### `9.1 Deterministic validation`
-- ### `9.2 Repository-grounded challenge`
-- ### `9.3 Baselines`
-- ### `9.4 User approval`
-- ### `9.5 One-time bootstrap admission and carrier`
-- ## `10. Invalidation, Findings, and Corrective Jobs`
-- ## `11. Decision and Action Requests`
-- ## `12. Shared Worktree and Commit Contract`
-- ## `13. `owlbear-kanban` Internal Design`
-- ## `14. MCP Contract`
-- ### `Change/design tools`
-- ### `Work tools`
-- ### `Request tools`
-- ### `Health/history tools`
-- ## `15. Cockpit Product Experience`
-- ### `15.1 Board`
-- ### `15.2 Changes`
-- ### `15.3 Requests and history`
-- ### `15.4 Frontend constraints`
-- ## `16. Atomic Cutover`
-- ## `17. Test and Proof Strategy`
-- ### `17.1 Durable unit/contract coverage`
-- ### `17.2 Historical regression fixtures`
-- ### `17.3 Generic anti-overfitting coverage`
-- ### `17.4 End-to-end scenarios`
-- ## `18. Risks and Mitigations`
-- ## `19. Rejected Technical Directions`
-
-## serve/delivery/tests/fixtures/historical-admission/r4-memory-lifecycle-corrected/intent.md
-- # `Replace the OwlBear Delivery Pipeline`
-- ## `Problem`
-- ## `Product Promise`
-- ## `Primary Workflows`
-- ### `WF-1: Rough idea to admitted change`
-- ### `WF-2: Delivery node to shaped packets`
-- ### `WF-3: Packet implementation with warm review`
-- ### `WF-4: Node acceptance and corrective work`
-- ### `WF-5: Whole-change audit and closure`
-- ## `Success Conditions`
-- ## `Boundaries`
-- ### `In Scope`
-- ### `Out of Scope`
-- ## `Preserved Strengths`
-- ## `Technically Done but Wrong`
-- ## `Non-goals`
-
-## serve/delivery/tests/fixtures/historical-admission/r4-memory-lifecycle-defective/design.md
-- # `Implementation Contract: Graph-Authoritative Delivery`
-- ## `1. Design Goals`
-- ## `2. System Model`
-- ### `2.1 Authority plane`
-- ### `2.2 Work plane`
-- ### `2.3 Evidence plane`
-- ### `2.4 Git plane`
-- ## `3. Native Change Package`
-- ### `3.1 `intent.md``
-- ### `3.2 `design.md``
-- ### `3.3 `decisions.yaml``
-- ### `3.4 `graph.yaml``
-- ### `3.5 Receipts`
-- ## `4. Semantic Identity and Digests`
-- ### `4.1 Delivery digest`
-- ### `4.2 Node plan digest`
-- ### `4.3 Receipt validity`
-- ## `5. Delivery Graph`
-- ### `5.1 Required entities`
-- ### `5.2 Delivery node boundary`
-- ### `5.3 Completeness rule`
-- ## `6. Node Shaping and Packet Plans`
-- ### `6.1 Legal refinement`
-- ### `6.2 Illegal expansion`
-- ### `6.3 Packet contract`
-- ## `7. Kanban Job Model`
-- ### `7.1 Job record`
-- ### `7.2 Attempts and activity`
-- ## `8. Agent Architecture`
-- ### `8.1 Designer`
-- ### `8.2 Delivery-node shaper`
-- ### `8.3 Builder`
-- ### `8.4 Acceptor`
-- ### `8.5 Auditor`
-- ### `8.6 Orchestrator`
-- ### `8.7 Retired roles`
-- ## `9. Admission`
-- ### `9.1 Deterministic validation`
-- ### `9.2 Repository-grounded challenge`
-- ### `9.3 Baselines`
-- ### `9.4 User approval`
-- ### `9.5 One-time bootstrap admission and carrier`
-- ## `10. Invalidation, Findings, and Corrective Jobs`
-- ## `11. Decision and Action Requests`
-- ## `12. Shared Worktree and Commit Contract`
-- ## `13. `owlbear-kanban` Internal Design`
-- ## `14. MCP Contract`
-- ### `Change/design tools`
-- ### `Work tools`
-- ### `Request tools`
-- ### `Health/history tools`
-- ## `15. Cockpit Product Experience`
-- ### `15.1 Board`
-- ### `15.2 Changes`
-- ### `15.3 Requests and history`
-- ### `15.4 Frontend constraints`
-- ## `16. Atomic Cutover`
-- ## `17. Test and Proof Strategy`
-- ### `17.1 Durable unit/contract coverage`
-- ### `17.2 Historical regression fixtures`
-- ### `17.3 Generic anti-overfitting coverage`
-- ### `17.4 End-to-end scenarios`
-- ## `18. Risks and Mitigations`
-- ## `19. Rejected Technical Directions`
-
-## serve/delivery/tests/fixtures/historical-admission/r4-memory-lifecycle-defective/intent.md
-- # `Replace the OwlBear Delivery Pipeline`
-- ## `Problem`
-- ## `Product Promise`
-- ## `Primary Workflows`
-- ### `WF-1: Rough idea to admitted change`
-- ### `WF-2: Delivery node to shaped packets`
-- ### `WF-3: Packet implementation with warm review`
-- ### `WF-4: Node acceptance and corrective work`
-- ### `WF-5: Whole-change audit and closure`
-- ## `Success Conditions`
-- ## `Boundaries`
-- ### `In Scope`
-- ### `Out of Scope`
-- ## `Preserved Strengths`
-- ## `Technically Done but Wrong`
-- ## `Non-goals`
 
 ## serve/delivery-github/README.md
 - # `owlbear-delivery-github — GitHub Publication Adapter`
@@ -1092,6 +454,26 @@
 - [serve/README.md](../serve/README.md)
 - [README.md](../README.md)
 
+## setup/README.md
+- # `Setup`
+- ## `Choose a route`
+- ## `First-success checklist`
+- ## `What belongs elsewhere`
+
+### Outbound links
+- [setup guide](../setup/setup-guide.md)
+- [sharing guide](../setup/sharing-guide.md)
+- [Setup guide](../setup/setup-guide.md)
+- [Sharing guide](../setup/sharing-guide.md)
+- [`init.py`](../setup/init.py)
+- [setup guide](../setup/setup-guide.md#prerequisites)
+- [setup guide](../setup/setup-guide.md#quick-start)
+- [setup guide](../setup/setup-guide.md#verify-the-installation)
+- [setup guide](../setup/setup-guide.md)
+- [`seed/`](../seed)
+- [`share/`](../share/README.md)
+- [`serve/`](../serve/README.md)
+
 ## setup/setup-guide.md
 - # `OwlBear Setup Guide`
 - ## `Prerequisites`
@@ -1121,6 +503,7 @@
 - ## `Troubleshooting`
 
 ### Outbound links
+- [setup folder guide](../setup/README.md)
 - [python.org](https://www.python.org/downloads/)
 - [uv](https://docs.astral.sh/uv/)
 - [Installation guide](https://docs.astral.sh/uv/getting-started/installation/)
@@ -1247,6 +630,7 @@
 - ### `Channel B`
 
 ## share/diagrams/mcp-topology.excalidraw
+describes: seed/.vscode/mcp.json, setup/init.py, serve/*-mcp/src/**, serve/delivery/src/**, serve/knowledge/src/**, serve/memory/src/**, serve/browser/src/**
 
 ## share/instructions/agent-ecosystem.instructions.md
 
@@ -1803,3 +1187,17 @@
 - ## `Output`
 - ## `Known Pitfalls`
 - ## `Companion Skills`
+
+## store/README.md
+- # `Store`
+- ## `What lives here`
+- ## `What belongs elsewhere`
+
+## tests/README.md
+- # `Tests`
+- ## `What lives here`
+- ## `Run the suite`
+- ## `What is not here`
+
+### Outbound links
+- [development README](../README.md)

@@ -27,11 +27,15 @@ For styled HTML visuals (tables, CSS Grid, Mermaid), see `h-visual-output`.
   "type": "excalidraw",
   "version": 2,
   "source": "owlbear",
+  "describes": ["serve/**", "share/**"],
   "elements": [ /* element objects */ ],
   "appState": { "gridSize": 20, "viewBackgroundColor": "#ffffff" },
   "files": {}
 }
 ```
+
+`describes` is a top-level list of source-path globs covered by the diagram. Keep it current so
+the documentation audit can match changed files to the diagrams that may need review.
 
 ## Element Placement Rules
 
@@ -181,6 +185,7 @@ Before delivering any diagram:
 - [ ] **Arrows** — All bound to elements via IDs, no floating arrows
 - [ ] **IDs** — All unique, all cross-references valid
 - [ ] **JSON** — Valid, parseable, matches schema
+- [ ] **Coverage** — `describes` lists the source-path globs this diagram explains
 
 ## Known Gotchas
 

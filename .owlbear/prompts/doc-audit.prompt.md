@@ -31,8 +31,13 @@ Scan:
 
 - `README.md`, `README-consumer.md`, `SECURITY.md`
 - `serve/*/README.md`
-- `share/*/README.md`
-- `setup/*.md`
+- `share/README.md`
+- `setup/setup-guide.md`, `setup/sharing-guide.md`
+- `setup/README.md`
+- `.github/README-automation.md`
+- `.owlbear/README.md`
+- `store/README.md`
+- `tests/README.md`
 
 Do not edit agent-executable files during this prompt loop.
 
@@ -102,7 +107,9 @@ Use doc-index `describes` metadata to verify diagram coverage.
 
 - Match changed files against `describes` globs.
 - If a match exists, verify the corresponding diagram is still accurate.
-- If no match exists, report the gap and propose remediation.
+- If no match exists, treat the check as not applicable unless the changed file or local
+  documentation establishes that a diagram is expected; do not report a gap solely because no
+  diagram matches.
 
 This describes-based verification must explicitly reference the linked `.excalidraw`
 artifact and the source file(s) it describes.

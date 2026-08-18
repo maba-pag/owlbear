@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import textwrap
 from pathlib import Path
@@ -45,6 +46,7 @@ _EXCLUDED_NAMES = [
     ".pytest_cache",
     "dist",
     "build",
+    "fixtures",
 ]
 
 _EXCLUDED_DIRS = _EXCLUDED_PATHS + _EXCLUDED_NAMES
@@ -120,6 +122,20 @@ class TestDocIndexCollection:
         result = collect_docs(tmp_path)
         assert nested not in result
 
+    def test_collects_orientation_readmes_from_excluded_roots(self, tmp_path: Path) -> None:
+        """Boundary: root orientation guides survive store/ and tests/ exclusions."""
+        store_readme = _make_md(tmp_path, "store/README.md")
+        tests_readme = _make_md(tmp_path, "tests/README.md")
+        _make_md(tmp_path, "store/knowledge/ignored.md")
+        _make_md(tmp_path, "tests/fixtures/ignored.md")
+
+        result = collect_docs(tmp_path)
+
+        assert store_readme in result
+        assert tests_readme in result
+        assert tmp_path / "store/knowledge/ignored.md" not in result
+        assert tmp_path / "tests/fixtures/ignored.md" not in result
+
     def test_dir_name_prefix_match_is_not_excluded(self, tmp_path: Path) -> None:
         """Boundary: 'store-backup/' shares a prefix with 'store/' but must NOT be excluded."""
         similar = tmp_path / "store-backup" / "README.md"
@@ -174,6 +190,19 @@ class TestDocIndexMarkdownOutput:
         generate_index(tmp_path)
         text = index_path.read_text()
         assert "## share/agents/README.md" in text
+
+    def test_excalidraw_describes_metadata_is_rendered(self, tmp_path: Path) -> None:
+        """Happy: Excalidraw source globs are retained in the generated index."""
+        _make_excalidraw(
+            tmp_path,
+            "share/diagrams/overview.excalidraw",
+            json.dumps({"type": "excalidraw", "describes": ["serve/**", "share/**"]}),
+        )
+        index_path = tmp_path / ".owlbear" / "doc-index.md"
+
+        generate_index(tmp_path)
+
+        assert "describes: serve/**, share/**" in index_path.read_text()
 
     def test_headings_are_bullet_backtick_wrapped(self, tmp_path: Path) -> None:
         """Happy: headings in a file are emitted as backtick-wrapped bullets."""
@@ -284,6 +313,15 @@ class TestDocIndexOutboundLinks:
         entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
         assert "https://example.com" not in entry_text
 
+    def test_inline_code_in_link_label_is_preserved(self, tmp_path: Path) -> None:
+        """Happy: inline-code formatting in a prose link label reaches the index."""
+        content = "# Page\n\nSee [`the repo`](https://github.com/org/repo).\n"
+        _make_md(tmp_path, "page.md", content)
+        index_path = tmp_path / ".owlbear/doc-index.md"
+        generate_index(tmp_path)
+        text = index_path.read_text()
+        assert "[`the repo`](https://github.com/org/repo)" in text
+
     def test_link_in_indented_code_block_not_extracted(self, tmp_path: Path) -> None:
         """Boundary: link inside a 4-space-indented code block is not extracted."""
         content = textwrap.dedent(
@@ -375,6 +413,12 @@ class TestDocIndexParser:
         assert "README.md" in paths
         assert "docs/guide.md" in paths
         assert "share/diagrams/overview.excalidraw" in paths
+
+    def test_parser_extracts_diagram_describes(self) -> None:
+        """Happy: parser retains Excalidraw source globs from an index entry."""
+        entries = parse_index(_WELL_FORMED_INDEX)
+        diagram = next(e for e in entries if e["path"] == "share/diagrams/overview.excalidraw")
+        assert diagram["describes"] == ["serve/**", "share/**"]
 
     def test_parser_extracts_headings_from_entry(self) -> None:
         """Happy: each entry's 'headings' list matches the backtick-wrapped bullets."""

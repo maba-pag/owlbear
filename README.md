@@ -85,7 +85,7 @@ uv run lint --no-fix
 | --- | --- |
 | Agents, skills, instructions, prompts, or hooks | [Shared ecosystem guide](share/README.md) |
 | A runtime package or MCP server | [Package map](serve/README.md) |
-| Consumer setup, refresh, or recovery | [Setup guide](setup/setup-guide.md) |
+| Consumer setup, refresh, or recovery | [Setup folder guide](setup/README.md) |
 
 For package or shared-ecosystem changes, use the focused guide first, then run the scoped checks
 for the paths you changed. `uv run test --all` and `uv run lint --no-fix` are the full development
@@ -100,7 +100,9 @@ checkout and the next decision visible.
 | --- | --- |
 | `serve/` | Runtime packages and the [package map](serve/README.md) |
 | `share/` | Agents, skills, instructions, prompts, and their [loading model](share/README.md) |
-| `seed/` | Files copied into a consumer project by `setup/init.py` |
-| `setup/` | Installation, sharing, and operational procedures |
-| `.owlbear/` | Tracked project authority plus host-local runtime state |
-| `tests/` | Workspace regression and integration tests |
+| `seed/` | Files copied into a consumer project by `setup/init.py`; see the [setup folder guide](setup/README.md) for why this tree has no README |
+| `setup/` | Installation, sharing, and operational procedures in the [setup folder guide](setup/README.md) |
+| `.owlbear/` | Tracked project authority plus host-local runtime state in the [.owlbear guide](.owlbear/README.md) |
+| `tests/` | Workspace regression and integration tests described in the [test guide](tests/README.md) |
+| `store/` | Reference-only knowledge corpus manifest described in the [store guide](store/README.md) |
+| `.github/` | Development-only automation described in the [GitHub automation guide](.github/README-automation.md) |

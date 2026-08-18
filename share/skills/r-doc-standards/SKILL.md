@@ -8,7 +8,8 @@ user-invocable: false
 
 Shared documentation quality rules for any project. Project-specific doc-type and placement mappings are loaded from a local companion instruction.
 
-Companion wiring: `share/instructions/doc-standards.instructions.md` applies this standard and routes audits through `.owlbear/prompts/doc-audit.prompt.md`.
+Companion wiring: the matching project instruction applies this standard and routes audits through
+the repository's documentation-audit workflow.
 
 ## Citation Format
 

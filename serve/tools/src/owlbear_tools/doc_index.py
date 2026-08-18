@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 from pathlib import Path
@@ -38,8 +39,11 @@ _EXCLUDED_NAMES: frozenset[str] = frozenset(
         ".pytest_cache",
         "dist",
         "build",
+        "fixtures",
     }
 )
+_EXCLUDED_ROOT_READMES: frozenset[Path] = frozenset({Path("store/README.md"), Path("tests/README.md")})
+_EXCLUDED_ROOTS_WITH_READMES: frozenset[Path] = frozenset({Path("store"), Path("tests")})
 
 _DOC_SUFFIXES: frozenset[str] = frozenset({".md", ".excalidraw"})
 _GENERATED_INDEX_PATHS: frozenset[Path] = frozenset(
@@ -48,7 +52,7 @@ _GENERATED_INDEX_PATHS: frozenset[Path] = frozenset(
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)")
 _LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
-_INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
+_INLINE_CODE_SPAN_RE = re.compile(r"`+[^`\n]+`+")
 
 
 class LinkEntry(TypedDict):
@@ -64,6 +68,7 @@ class DocEntry(TypedDict):
     path: str
     headings: list[str]
     outbound_links: list[LinkEntry]
+    describes: list[str]
 
 
 def _is_excluded_dir(dirpath: Path, root: Path) -> bool:
@@ -82,7 +87,18 @@ def collect_docs(root: Path) -> list[Path]:
     results: list[Path] = []
     for dirpath_str, dirnames, filenames in os.walk(root, topdown=True):
         dirpath = Path(dirpath_str)
-        dirnames[:] = sorted(d for d in dirnames if not _is_excluded_dir(dirpath / d, root))
+        rel_dir = dirpath.relative_to(root)
+        if rel_dir in _EXCLUDED_ROOTS_WITH_READMES:
+            dirnames[:] = []
+            results.extend(
+                dirpath / filename for filename in sorted(filenames) if (rel_dir / filename) in _EXCLUDED_ROOT_READMES
+            )
+            continue
+        dirnames[:] = sorted(
+            d
+            for d in dirnames
+            if (rel_dir / d) in _EXCLUDED_ROOTS_WITH_READMES or not _is_excluded_dir(dirpath / d, root)
+        )
         for filename in sorted(filenames):
             path = dirpath / filename
             if path.suffix in _DOC_SUFFIXES:
@@ -119,8 +135,12 @@ def _parse_markdown(content: str) -> tuple[list[str], list[tuple[str, str]]]:
             text = heading_m.group(2).strip()
             headings.append(f"{level} {text}")
 
-        prose = _INLINE_CODE_RE.sub("", stripped)
-        links.extend((m.group(1), m.group(2)) for m in _LINK_RE.finditer(prose))
+        inline_code_spans = [(match.start(), match.end()) for match in _INLINE_CODE_SPAN_RE.finditer(stripped)]
+        links.extend(
+            (match.group(1), match.group(2))
+            for match in _LINK_RE.finditer(stripped)
+            if not any(start <= match.start() < end for start, end in inline_code_spans)
+        )
 
     return headings, links
 
@@ -138,11 +158,28 @@ def _rebase_link_target(rel_path: Path, target: str, root: Path) -> str:
     return urlunsplit(("", "", rebased_path, parsed.query, parsed.fragment))
 
 
+def _read_diagram_describes(doc_path: Path) -> list[str]:
+    """Read source globs from an Excalidraw document's describes metadata."""
+    try:
+        payload = json.loads(doc_path.read_text())
+    except OSError, json.JSONDecodeError:
+        return []
+    describes = payload.get("describes") if isinstance(payload, dict) else None
+    if isinstance(describes, str):
+        return [describes]
+    if not isinstance(describes, list):
+        return []
+    return [value for value in describes if isinstance(value, str) and value]
+
+
 def _render_entry(rel_path: Path, doc_path: Path, root: Path) -> str:
     """Render a single index entry section for *doc_path*."""
     lines: list[str] = [f"## {rel_path.as_posix()}"]
 
     if doc_path.suffix == ".excalidraw":
+        describes = _read_diagram_describes(doc_path)
+        if describes:
+            lines.append(f"describes: {', '.join(describes)}")
         return "\n".join(lines)
 
     content = doc_path.read_text()
@@ -186,6 +223,11 @@ def _update_entry(line: str, entry: DocEntry, *, in_outbound: bool) -> bool:
         return True
     if line.startswith("### "):
         return False
+    if line.startswith("describes:"):
+        values = line.removeprefix("describes:").strip()
+        if values:
+            entry["describes"].extend(value.strip() for value in values.split(",") if value.strip())
+        return in_outbound
     if in_outbound and line.startswith("- ["):
         link_m = _LINK_RE.match(line[2:])
         if link_m:
@@ -208,7 +250,7 @@ def parse_index(text: str) -> list[DocEntry]:
         if line.startswith("## "):
             if current is not None:
                 entries.append(current)
-            current = DocEntry(path=line[3:].strip(), headings=[], outbound_links=[])
+            current = DocEntry(path=line[3:].strip(), headings=[], outbound_links=[], describes=[])
             in_outbound = False
         elif current is not None:
             in_outbound = _update_entry(line, current, in_outbound=in_outbound)

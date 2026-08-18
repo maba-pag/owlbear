@@ -2,6 +2,8 @@
 
 > From clone to working VS Code workspace.
 
+For a concise map of this folder and its ownership boundaries, see the [setup folder guide](README.md).
+
 ## Prerequisites
 
 Before running setup, ensure the following are installed on your machine:

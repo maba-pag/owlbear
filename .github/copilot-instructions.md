@@ -30,7 +30,7 @@ The consumer branch intentionally excludes the dev-only `.github/` automation tr
 | `share/instructions/` | Instruction stubs (`.instructions.md` — pointers to skills) |
 | `share/prompts/` | Prompt files (`.prompt.md` — user-facing one-shot commands) |
 | `.owlbear/` | Project ops data: Delivery authority, research, sources, scratch, scripts, hooks |
-| `store/` | Knowledge and memory data |
+| `store/` | Reference-only knowledge corpus manifest and placeholder directories |
 | `seed/` | Template files copied to new projects by `setup/init.py` |
 | `setup/` | Workspace initialiser (`init.py`), setup guide, sharing guide |
 | `tests/` | Workspace regression and integration tests |
