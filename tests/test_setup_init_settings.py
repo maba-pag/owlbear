@@ -107,6 +107,26 @@ def test_settings_template_escapes_windows_paths(tmp_path: Path, init_module: ty
     assert settings["github.copilot.chat.additionalReadAccessPaths"] == [r"C:\Dev\owlbear"]
 
 
+def test_init_warns_when_existing_mcp_json_is_malformed(tmp_path: Path, init_module: types.ModuleType) -> None:
+    mcp_path = tmp_path / ".vscode" / "mcp.json"
+    mcp_path.parent.mkdir()
+    mcp_path.write_text("{not valid json\n", encoding="utf-8")
+
+    with pytest.warns(UserWarning, match=r"Could not parse existing .*mcp\.json"):
+        init_module._write_mcp(
+            _REPO_ROOT / "seed/.vscode/mcp.json",
+            mcp_path,
+            {
+                "owlbear_rel_path": "../owlbear",
+                "owlbear_abs_path": str(_REPO_ROOT),
+                "target_abs_path": str(tmp_path),
+            },
+        )
+
+    mcp = json.loads(mcp_path.read_text(encoding="utf-8"))
+    assert "owlbear-delivery" in mcp["servers"]
+
+
 def test_init_creates_delivery_policy_without_runtime_selection_artifacts(
     tmp_path: Path,
     init_module: types.ModuleType,

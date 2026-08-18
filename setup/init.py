@@ -242,8 +242,13 @@ def _write_mcp(src: Path, dest: Path, replacements: dict[str, str]) -> None:
     existing: dict = {}
     if dest.exists():
         raw = dest.read_text(encoding="utf-8")
-        with suppress(json.JSONDecodeError):
+        try:
             existing = json.loads(_strip_jsonc_comments(raw))
+        except json.JSONDecodeError:
+            warnings.warn(
+                f"Could not parse existing {dest} as JSON(C); owlbear MCP servers will be written without merging.",
+                stacklevel=2,
+            )
 
     # Merge servers: owlbear defaults first, user entries override on conflict
     owlbear_servers = owlbear_mcp.get("servers", {})
