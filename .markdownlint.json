@@ -3,9 +3,25 @@
   "MD024": {
     "siblings_only": true
   },
-  "MD029": false,
-  "MD033": false,
-  "MD040": false,
-  "MD041": false,
-  "MD060": false
+  "MD029": {
+    "style": "ordered"
+  },
+  "MD033": {
+    "allowed_elements": [
+      "agents",
+      "boundaries",
+      "critical_rules",
+      "examples",
+      "output_format",
+      "path",
+      "persona",
+      "required_reading"
+    ]
+  },
+  "MD041": {
+    "front_matter_title": "^\\s*(?:title|name|description)\\s*[:=]"
+  },
+  "MD060": {
+    "style": "compact"
+  }
 }

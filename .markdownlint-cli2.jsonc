@@ -1,17 +1,22 @@
 {
-  // For local markdownlint runs. Keep aligned with FILTER_REGEX_EXCLUDE in .mega-linter.yml.
+  // Authority for markdownlint-cli2 consumers: the pre-commit hook and VS Code extension.
+  // MegaLinter uses markdownlint-cli with .markdownlint.json and .markdownlintignore.
   "ignores": [
-    ".owlbear/briefs/**",
+    ".owlbear/completed/**",
     ".owlbear/delivery/packages/**",
+    ".owlbear/delivery/runtime/**",
     ".owlbear/doc-index.md",
-    ".owlbear/kanban/archive/**",
+    ".owlbear/py-index.md",
+    ".owlbear/ts-index.md",
     ".owlbear/legacy/**",
-    ".owlbear/research/**",
     ".owlbear/memory/**",
-    ".owlbear/sources/**",
+    ".owlbear/research/**",
+    ".owlbear/target/**",
     ".venv/**",
     "**/node_modules/**",
+    "**/scratch/**",
     "**/test-results/**",
+    "**/worktrees/**",
     "megalinter-reports/**"
   ]
 }

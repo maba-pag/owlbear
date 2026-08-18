@@ -1,4 +1,4 @@
-# Node.js (first Node code lives at serve/cockpit/web/)
+# Node.js dependencies
 node_modules/
 
 # Python bytecode and cache
@@ -17,7 +17,7 @@ var/
 
 # Build artifacts
 build/
-_cache
+_cache/
 dist/
 sdist/
 wheels/
@@ -37,8 +37,8 @@ artifacts/
 .coverage.*
 coverage.json
 coverage.xml
+coverage/
 htmlcov/
-.hypothesis/
 .benchmarks/
 megalinter-reports/
 test-results/
@@ -48,8 +48,6 @@ playwright-report/
 .vscode/*
 !.vscode/mcp.json
 !.vscode/settings.json
-.claude/
-.serena/
 
 # OS artifacts
 .DS_Store
@@ -64,18 +62,8 @@ playwright-report/
 # Logs
 *.log
 
-# Scratch / ad-hoc workspace (under .owlbear/)
-.owlbear/scratch/*
-!.owlbear/scratch/.gitkeep
-!.owlbear/scratch/.instructions.md
-
-# Briefs — transient template directory (renamed to draft-{name}/ at M1)
-.owlbear/briefs/draft-new/
-
-# Agent scratch/tmp output (quality-runner, coverage runs)
-serve/.tmp-*
-serve/cockpit/web/.owlbear-scratch-*
-serve/cockpit/web/.owlbear/
+# Lock files
+.storage.lock
 
 # Temp test/debug output
 *_output.txt
@@ -90,9 +78,6 @@ serve/cockpit/web/.owlbear/
 /task-list*.json
 /builder-notes-*.md
 
-# v2 package artifacts
-serve/*/dist/
-
 # Knowledge data
 store/knowledge/*.db
 
@@ -100,25 +85,4 @@ store/knowledge/*.db
 store/audit/
 
 # --- OwlBear managed paths ---
-
-# Scratch / ad-hoc workspace
-.owlbear/scratch/*
-!.owlbear/scratch/.gitkeep
-!.owlbear/scratch/.instructions.md
-
-# Brief drafts (transient template directory)
-.owlbear/briefs/draft-new/
-
-# Knowledge and memory databases
-.owlbear/knowledge/*.db
-.owlbear/knowledge/vectors/
-.owlbear/memory/*.db
-
-# Host-local Delivery worktrees and mutable capacity ledger
-/.owlbear/worktrees/
-/.owlbear/target/target-runtime/capacity.json
-/.owlbear/target/target-runtime/integration-verification/
-
-# Lock files (transient runtime artifacts)
-**/.storage.lock
-.owlbear/kanban/activity.jsonl
+# OwlBear-specific rules live in .owlbear/.gitignore.

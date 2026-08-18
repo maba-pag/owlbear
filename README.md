@@ -1,166 +1,89 @@
-# OwlBear
+# Use OwlBear in a project
 
-On-demand AI development system built on GitHub Copilot.
+OwlBear adds GitHub Copilot agents and tools to an existing project. Setup writes the project-local
+VS Code and Delivery configuration; the agents, skills, instructions, and prompts stay shared in
+your OwlBear checkout and update when that checkout is pulled.
 
-## Overview
+The supported consumer surface is the rolling `main` branch. OwlBear has no numbered product
+releases. Browser and Knowledge are available but remain Alpha until field use validates them.
 
-OwlBear supercharges your VS Code workflow with a curated set of Copilot agents, skills,
-and MCP servers that work together out of the box. Clone once, run one setup command, and
-every project on your machine gains access to a consistent set of AI-powered development
-tools without any per-project configuration overhead.
+## Choose your next step
 
-Agents design and admit durable semantic authority, then execute bounded Planning and Build work
-selected by the Delivery engine. Workers choose state transitions, reviewers provide independent
-advisory evidence, and the runtime owns recovery, Integration, and completed history. Skills carry
-domain knowledge that loads automatically by relevance, and MCP servers give agents access to
-target changes and work, the knowledge base, persistent Memory, and browser automation, all scoped
-to your project directory and shared through the filesystem.
+| You want to... | Go to |
+| --- | --- |
+| Install OwlBear now | [Fast path](#fast-path) |
+| Check that setup worked | [Verify the installation](setup/setup-guide.md#verify-the-installation) |
+| Run one small change | [First successful workflow](setup/setup-guide.md#first-successful-workflow) |
+| Launch the human work view | [Cockpit details](setup/setup-guide.md#cockpit-details) |
+| Share the setup with a teammate | [Sharing guide](setup/sharing-guide.md) |
+| Find a package or server | [Package map](serve/README.md) |
+| Read every setup option and recovery path | [Setup guide](setup/setup-guide.md) |
 
-## Prerequisites
+## What you get
 
-| Requirement | Why | How to get it |
-|-------------|-----|---------------|
-| Python 3.14+ | OwlBear runtime | [python.org](https://www.python.org/downloads/) |
-| [uv](https://docs.astral.sh/uv/) | Package manager and MCP server launcher | `pip install uv` or see uv docs |
-| VS Code | IDE | [code.visualstudio.com](https://code.visualstudio.com/) |
-| GitHub Copilot extension | Chat and agents | VS Code Extensions marketplace |
-| Git | Clone and version control | [git-scm.com](https://git-scm.com/) |
+| Part | What it does |
+| --- | --- |
+| Agents | Copilot roles for refining ideas, designing work, planning, building, and reviewing |
+| Skills | Reusable instructions that give those roles domain knowledge |
+| MCP servers | Tool connections for Delivery, Knowledge, Memory, Browser, and document conversion |
+| Delivery | Keeps one approved change ordered, reviewed, publishable, and recoverable |
+| Cockpit | Shows work, requests, attention, recovery controls, and completed history |
 
-> **Windows:** owlbear and your project must be on the **same drive**. The setup script
-> uses relative paths; cross-drive paths are not supported.
+## Before you start
 
-## Quick Start
+Install Python 3.14.6+, [uv](https://docs.astral.sh/uv/), VS Code with the GitHub Copilot
+extension, [GitHub CLI](https://cli.github.com/), and Git. Your project and OwlBear checkout must
+be on the same drive on Windows. Authenticate the CLI with `gh auth login`; publication requires
+`gh auth status` to report an active account.
 
-```powershell
-# 1. Clone owlbear to a convenient parent directory
-git clone https://github.com/OWNER/owlbear.git C:\Dev\owlbear
+The project should already be a Git checkout with a GitHub `origin`. If it has no GitHub remote,
+pass its `OWNER/NAME` explicitly to `setup/init.py` as shown below.
 
-# 2. Create (or navigate to) your project directory — must be on the same drive
-mkdir C:\Dev\my-project
-cd C:\Dev\my-project
+## Fast path
 
-# 3. Bootstrap the OwlBear workspace
-uv run --project ..\owlbear python ..\owlbear\setup\init.py
+Use sibling directories so the setup and Cockpit commands stay the same throughout the guide. Run
+these commands from a parent directory such as `~/work`. If your project already exists, skip its
+clone command.
 
-# 4. Open the project in VS Code
+```shell
+# Clone the rolling consumer branch once.
+git clone -b main https://github.com/maba-pag/owlbear.git owlbear
+
+# Only if the project is not already checked out.
+git clone https://github.com/OWNER/PROJECT.git my-project
+
+# Run setup from the project root.
+cd my-project
+uv run --project ../owlbear python ../owlbear/setup/init.py \
+  --github-repository OWNER/PROJECT
+
+# Open the configured project.
 code .
 ```
 
-Setup creates merged VS Code settings/MCP config, copied runtime files such as `.owlbear/hooks/`,
-and a receipt-authorized empty target store under `.owlbear/target/`. Agents, skills, instructions,
-and prompts still load live from the owlbear clone via relative paths, so the same owlbear repo can
-be shared across multiple projects on your machine.
+Expected result: `.vscode/settings.json`, `.vscode/mcp.json`, and tracked
+`.owlbear/delivery/config.json` exist in the project. Existing project settings are merged, not
+replaced. If the project already has a GitHub `origin`, omit `--github-repository OWNER/PROJECT`.
 
-For more detail on what each file does and how to customise see
-[setup/setup-guide.md](setup/setup-guide.md).
+Windows PowerShell uses the same steps with PowerShell paths. The [setup guide](setup/setup-guide.md)
+has a copy-paste example and the same-drive limitation in full.
 
-## Directory Layout
+## After setup
 
-| Directory | Purpose |
-|-----------|---------|
-| `share/agents/` | Agent definitions (`.agent.md`) — loaded into VS Code automatically |
-| `share/skills/` | Agent skills (`SKILL.md`) — domain knowledge loaded by relevance |
-| `share/instructions/` | Shared instruction files (`*.instructions.md`) |
-| `serve/delivery-mcp/` | MCP server for target authority, reviewed transformations, and recovery |
-| `serve/memory-mcp/` | MCP server for persistent agent memory (markdown-file backed) |
-| `serve/knowledge-mcp/` | MCP server exposing the knowledge base |
-| `serve/cockpit/` | Cockpit backend package and prebuilt frontend bundle (`dist/`) used by consumers |
-| `seed/` | Template files copied to new projects during `setup/init.py` |
-| `setup/` | Workspace initialiser (`init.py`), setup guide, and sharing guide |
+The setup guide owns the exact checks and recovery steps. Continue there when you are ready to:
 
-## Cockpit (Consumer Launch)
+| Next action | Canonical procedure |
+| --- | --- |
+| Confirm agents and MCP servers loaded | [Verify the installation](setup/setup-guide.md#verify-the-installation) |
+| Run the first admitted Change | [First successful workflow](setup/setup-guide.md#first-successful-workflow) |
+| Launch Cockpit or understand its workspace | [Cockpit details](setup/setup-guide.md#cockpit-details) |
+| Diagnose a missing server, customization, or workspace | [Troubleshooting](setup/setup-guide.md#troubleshooting) |
 
-Consumer installs launch Cockpit from the prebuilt SPA bundle in `serve/cockpit/dist/`.
-The consumer tree does not need `serve/cockpit/web/` and does not require Node/npm to
-run Cockpit.
+## Keep it current
 
-Run Cockpit from the consumer project root, not from the owlbear clone. `--project`
-points uv at the shared owlbear installation; the current directory keeps Cockpit scoped
-to the project so `.owlbear/target/` and `.owlbear/memory/` resolve correctly.
+Pull the shared OwlBear checkout and rerun setup when you want newer agents, skills, instructions,
+prompts, runtime fixes, or refreshed copied hooks. Use the [refresh procedures](setup/setup-guide.md#refreshing-consumer-configs)
+when you intentionally want to replace seeded configuration files.
 
-macOS / Linux:
-
-```shell
-cd ~/Dev/my-project
-uv run --project ../owlbear cockpit
-```
-
-Windows PowerShell:
-
-```powershell
-cd C:\Dev\my-project
-uv run --project ..\owlbear cockpit
-```
-
-Cockpit starts on `http://127.0.0.1:8420` by default and serves static assets from the
-bundled `dist/` directory in the owlbear clone.
-
-`uv run cockpit` without `--project` is only for running from inside the owlbear
-repository itself. If you launch Cockpit from outside the consumer project directory,
-use `uv run --project ../owlbear --directory /path/to/project cockpit`.
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `COCKPIT_PORT` | `8420` | Override listen port (1-65535) |
-| `COCKPIT_NO_OPEN` | unset | Set to `1` to suppress browser auto-open |
-
-## Target Workflow
-
-Use `/ideate` to refine a rough idea, then `/design` to create or resume one durable change under
-the target design session. The designer validates the exact semantic revision and asks for explicit
-approval before admission to `.owlbear/target/changes/`. Run `/orchestrate <change-id>` only after
-admission. The engine then acquires bounded Planning and Build work, workers select typed
-transitions, and independent reviewers return advisory evidence.
-
-The canonical Specification, Delivery, Correction, Integration, and recovery procedure is
-[Target Delivery Workflow](setup/setup-guide.md#target-delivery-workflow). Cockpit exposes current
-work items, requests, typed attention, controls, and completed history. Any migrated records under
-`.owlbear/legacy/` are immutable history for inspection, never executable work.
-
-If Cockpit fails because `dist/` assets are missing, refresh from the latest `main`
-branch release artifacts (the sync-to-main workflow builds and stages `serve/cockpit/dist/`).
-
-## Verification
-
-After VS Code opens, verify the installation loaded correctly:
-
-1. Open the Copilot Chat panel.
-2. Open **Chat Customizations** (Chat settings or Command Palette → `Chat: Open Customizations`).
-3. Confirm the following appear:
-
-| What to check | How to verify |
-|---------------|---------------|
-| OwlBear agents loaded | Chat Customizations lists agents from the owlbear `agents/` directory |
-| OwlBear skills loaded | Chat Customizations lists skills from the owlbear `skills/` directory |
-| Instructions loaded | Chat Customizations includes `*.instructions.md` files from owlbear |
-| MCP servers running | Command Palette → `MCP: List Servers` — `owlbear-delivery`, `owlbear-memory`, and `owlbear-knowledge` show `running` |
-
-> If agents or skills do not appear, check that `chat.agentFilesLocations` and
-> `chat.agentSkillsLocations` in `.vscode/settings.json` point to the correct relative
-> path to your owlbear clone.
-
-## Updates
-
-To pull the latest agents, skills, and fixes:
-
-```powershell
-cd C:\Dev\owlbear
-git pull
-```
-
-Shared live surfaces update immediately after a pull because VS Code reads agents,
-skills, instructions, and prompts directly from the owlbear directory at runtime.
-
-If you want copied runtime files refreshed — especially `.owlbear/hooks/` or other
-seed-managed files — re-run `setup/init.py`. Existing differing hook files are skipped
-unless you pass `--replace-hooks` or choose `replace` in an interactive prompt. The
-prompt shows a unified diff (seed → existing) so you can see what changed before
-choosing. Re-running `init.py` after every owlbear update is the recommended way
-to stay current on hooks; the script is idempotent and only touches files that
-differ.
-
-## Sharing with Teammates
-
-To give a teammate access on their machine, they need to clone both the owlbear repository
-and your project, then run `setup/init.py` through the shared uv project from their project directory. See
-[setup/sharing-guide.md](setup/sharing-guide.md) for the step-by-step walkthrough.
+For optional profile settings, sharing, and complete recovery procedures, continue to the
+[setup guide](setup/setup-guide.md).
