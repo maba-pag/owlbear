@@ -9,7 +9,7 @@
 
 ### Interfaces
 
-- `export default tseslint.config( { ignores: [ "dist/**", "coverage/**", "playwright-report/**", "node_modules/**", "public/porsche-design-system/**", "*.config.js", "*.config.ts", ], }, js.configs.recommended, ...tseslint.configs.recommended, { languageOptions: { ecmaVersion: 2022, sourceType: "module", parserOptions: { ecmaFeatures: { jsx: true }, }, globals: { window: "readonly", document: "readonly", console: "readonly", fetch: "readonly", setTimeout: "readonly", clearTimeout: "readonly", setInterval: "readonly", clearInterval: "readonly", }, }, rules: { // Project-wide overrides intentionally minimal. // Add React/Hook rules in a follow-up if/when needed. "@typescript-eslint/no-unused-vars": [ "warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }, ], // Ban raw PDS custom elements — use React wrappers from // @porsche-design-system/components-react instead. // Raw custom elements + React 19 SyntheticEvent = broken event.detail. "no-restricted-syntax": [ "error", { selector: "JSXOpeningElement[name.name='p-select']", message: "Use <PSelect> from @porsche-design-system/components-react instead of raw <p-select>.", }, { selector: "JSXOpeningElement[name.name='p-button']", message: "Use <PButton> from @porsche-design-system/components-react instead of raw <p-button>.", }, { selector: "JSXOpeningElement[name.name='p-input-search']", message: "Use <PInputSearch> from @porsche-design-system/components-react instead of raw <p-input-search>.", }, { selector: "JSXOpeningElement[name.name='p-input-text']", message: "Use <PInputText> from @porsche-design-system/components-react instead of raw <p-input-text>.", }, { selector: "JSXOpeningElement[name.name='p-tag']", message: "Use <PTag> from @porsche-design-system/components-react instead of raw <p-tag>.", }, ], }, }, { files: ["scripts/**/*.mjs", "e2e/support/**/*.mjs"], languageOptions: { globals: { process: "readonly", Buffer: "readonly", console: "readonly", }, }, }, )`
+- `export default tseslint.config( { ignores: [ "dist/**", "coverage/**", "playwright-report/**", "node_modules/**", "public/porsche-design-system/**", ], }, js.configs.recommended, ...tseslint.configs.recommended, { languageOptions: { ecmaVersion: 2022, sourceType: "module", parserOptions: { ecmaFeatures: { jsx: true }, }, globals: { window: "readonly", document: "readonly", console: "readonly", fetch: "readonly", setTimeout: "readonly", clearTimeout: "readonly", setInterval: "readonly", clearInterval: "readonly", }, }, rules: { // Project-wide overrides intentionally minimal. // Add React/Hook rules in a follow-up if/when needed. "@typescript-eslint/no-unused-vars": [ "warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }, ], // Ban raw PDS custom elements — use React wrappers from // @porsche-design-system/components-react instead. // Raw custom elements + React 19 SyntheticEvent = broken event.detail. "no-restricted-syntax": [ "error", { selector: "JSXOpeningElement[name.name='p-select']", message: "Use <PSelect> from @porsche-design-system/components-react instead of raw <p-select>.", }, { selector: "JSXOpeningElement[name.name='p-button']", message: "Use <PButton> from @porsche-design-system/components-react instead of raw <p-button>.", }, { selector: "JSXOpeningElement[name.name='p-input-search']", message: "Use <PInputSearch> from @porsche-design-system/components-react instead of raw <p-input-search>.", }, { selector: "JSXOpeningElement[name.name='p-input-text']", message: "Use <PInputText> from @porsche-design-system/components-react instead of raw <p-input-text>.", }, { selector: "JSXOpeningElement[name.name='p-tag']", message: "Use <PTag> from @porsche-design-system/components-react instead of raw <p-tag>.", }, ], }, }, { files: ["scripts/**/*.mjs", "e2e/support/**/*.mjs"], languageOptions: { globals: { process: "readonly", Buffer: "readonly", console: "readonly", }, }, }, )`
 
 ## serve/cockpit/web/playwright.config.ts
 
@@ -339,7 +339,8 @@
 
 - `import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'`
 - `import { PButton, PHeading, PIcon, PInputSearch, PFlyout, PTag } from '@porsche-design-system/components-react'`
-- `import type { CompletedChangeRecord, ReceiptCompletedChangeRecord } from '../api/workItems'`
+- `import { useLocation, useNavigate } from 'react-router'`
+- `import { WorkItemApiError, type CompletedChangeRecord, type ReceiptCompletedChangeRecord } from '../api/workItems'`
 - `import { useCopyToClipboard } from './CopyCommand'`
 - `import { useCompletedChange, useCompletedHistory } from '../hooks/useWorkItems'`
 - `import WorkspaceViewHeader, { WorkspaceViewCount } from './WorkspaceViewHeader'`
@@ -347,6 +348,9 @@
 ### Interfaces
 
 - `type FieldValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }`
+- `interface CompletedHistorySelection`
+- `function parseSelection(pathname: string): CompletedHistorySelection | null`
+- `function historyDetailPath(record: CompletedChangeRecord): string`
 - `function fieldValue(event: FieldValueEvent): string`
 - `function useDebouncedValue<T>(value: T, delayMs: number): T`
 - `function isReceipt(record: CompletedChangeRecord): record is ReceiptCompletedChangeRecord`
@@ -841,6 +845,7 @@
 - `function PortfolioFilterTools(props: FilterProps)`
 - `function PortfolioFilterPanel(props: FilterProps)`
 - `function parseSelection(pathname: string): WorkItemIdentity | null`
+- `function isHistoryRoute(pathname: string): boolean`
 - `function SelectedDesignDetail({ changeId, onClose }: { changeId: string; onClose: () => void })`
 - `function SelectedWorkItemDetail({ identity, onChanged, onClose, }: { identity: WorkItemIdentity onChanged: () => void onClose: () => void })`
 - `function SelectedDetail(props: { identity: WorkItemIdentity; onChanged: () => void; onClose: () => void })`

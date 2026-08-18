@@ -59,6 +59,30 @@ Prove that uv lock regeneration observes workspace-member changes.
 - `def _run_uv(root: Path, *arguments: str, check: bool = True) -> subprocess.CompletedProcess[str]`
 - `def main() -> int`
 
+## .github/scripts/sync_manifest.py
+
+Read the dev-to-main consumer sync manifest.
+
+### Imports
+
+- `__future__`
+- `argparse`
+- `json`
+- `pathlib`
+- `typing`
+
+### Interfaces
+
+- `def _load_manifest(path: Path = _MANIFEST_PATH) -> dict[str, Any]`
+- `def _validate_scope_groups(scope_groups: object, scopes: dict[str, Any]) -> None`
+- `def _validate_source_only_paths(source_only_paths: object) -> None`
+- `def paths_for_scope(scope: str, manifest: dict[str, Any] | None = None) -> list[str]`
+- `def consumer_excluded_paths(manifest: dict[str, Any] | None = None) -> list[str]`
+- `def scope_names_for_group(group: str, manifest: dict[str, Any] | None = None) -> list[str]`
+- `def paths_for_group(group: str, manifest: dict[str, Any] | None = None) -> list[str]`
+- `def source_only_paths(manifest: dict[str, Any] | None = None) -> list[str]`
+- `def main() -> int`
+
 ## .github/skills/session-review/scripts/__init__.py
 
 Session-review executable helpers.
@@ -4776,10 +4800,12 @@ Doc-index generator and parser for the OwlBear workspace.
 
 - `__future__`
 - `argparse`
+- `json`
 - `os`
 - `pathlib`
 - `re`
 - `typing`
+- `urllib.parse`
 
 ### Interfaces
 
@@ -4788,7 +4814,9 @@ Doc-index generator and parser for the OwlBear workspace.
 - `def _is_excluded_dir(dirpath: Path, root: Path) -> bool`
 - `def collect_docs(root: Path) -> list[Path]`
 - `def _parse_markdown(content: str) -> tuple[list[str], list[tuple[str, str]]]`
-- `def _render_entry(rel_path: Path, doc_path: Path) -> str`
+- `def _rebase_link_target(rel_path: Path, target: str, root: Path) -> str`
+- `def _read_diagram_describes(doc_path: Path) -> list[str]`
+- `def _render_entry(rel_path: Path, doc_path: Path, root: Path) -> str`
 - `def generate_index(root: Path) -> None`
 - `def _update_entry(line: str, entry: DocEntry, *, in_outbound: bool) -> bool`
 - `def parse_index(text: str) -> list[DocEntry]`
@@ -4930,6 +4958,7 @@ Workspace lint, formatting, and quality commands.
 - `def _precommit_excludes(hook: str) -> tuple[re.Pattern[str], ...]`
 - `def _check_text_files(name: str, *, staged: bool) -> int`
 - `def _run_cockpit_html(*, staged: bool) -> int`
+- `def _run_json_lint(*, staged: bool) -> int`
 - `def _run_typecheck_cockpit() -> int`
 - `def _run_leaf(name: str, *, staged: bool, fix_mode: FixMode) -> int`
 - `def _run_named(name: str, *, staged: bool, fix_mode: FixMode) -> int`
@@ -5118,6 +5147,8 @@ OwlBear workspace initialiser — setup/init.py.
 - `def _write_settings(src: Path, dest: Path, replacements: dict[str, str]) -> None`
 - `def _write_mcp(src: Path, dest: Path, replacements: dict[str, str]) -> None`
 - `def _write_seed_file(src: Path, dest: Path, replacements: dict[str, str]) -> None`
+- `def _render_seed_file(src: Path, replacements: dict[str, str]) -> bytes`
+- `def config_drift(target_dir: Path, owlbear_dir: Path) -> dict[str, str]`
 - `def _current_branch(target_dir: Path) -> str | None`
 - `def _valid_branch_name(target_dir: Path, branch: str) -> bool`
 - `def _select_target_branch(target_dir: Path, requested: str | None, *, interactive: bool) -> str`
@@ -5149,4 +5180,4 @@ OwlBear workspace initialiser — setup/init.py.
 - `def _should_replace_hook_file(dest: Path, *, src: Path, replace_hooks: bool, interactive: bool) -> bool`
 - `def _hook_diff(src: Path, dest: Path) -> str`
 - `def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None`
-- `def init(target_dir: Path, owlbear_dir: Path, *, replace_hooks: bool = False, interactive: bool | None = None, remote: str = 'origin', target_branch: str | None = None, github_repository: str | None = None) -> None`
+- `def init(target_dir: Path, owlbear_dir: Path, *, replace_hooks: bool = False, refresh_configs: bool = False, interactive: bool | None = None, remote: str = 'origin', target_branch: str | None = None, github_repository: str | None = None) -> None`
