@@ -96,7 +96,8 @@ class TestFromAC_CommentedPathMappingSection:
         """Generated copilot-instructions.md contains HTML comments (<!-- ... -->).
 
         The 'commented' path-mapping section requires inline HTML comments to
-        guide consumers on what to fill in. The current seed has no such comments.
+        guide consumers on what to fill in. The seed carries these instructions as
+        HTML comments so they stay out of rendered guidance.
         """
         module = _load_init(project_root)
         run_init_without_test_surface(module.init, tmp_path, project_root)
@@ -130,8 +131,8 @@ class TestFromAC_CommentedPathMappingSection:
     ) -> None:
         """Directory section references the frontend root (e.g. 'frontend' or 'web/').
 
-        AC2 requires a 'frontend root' dimension. The current OwlBear-dev seed
-        does not include a generic frontend entry in the Directory Structure table.
+        AC2 requires a 'frontend root' dimension. The seed includes a generic
+        frontend entry in the Directory Structure table.
         """
         module = _load_init(project_root)
         run_init_without_test_surface(module.init, tmp_path, project_root)
