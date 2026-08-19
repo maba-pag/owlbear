@@ -1,7 +1,8 @@
 """OwlBear workspace initialiser — setup/init.py.
 
 Usage (CLI):
-    python ../owlbear/setup/init.py [--replace-hooks] [--refresh-configs | --check-configs]
+    python ../owlbear/setup/init.py [--replace-hooks] [--refresh-configs | --check-configs | --uninstall]
+        [--yes] [--dry-run]
 
 Run from the target project directory.  owlbear_dir is auto-detected from
 the location of this script.
@@ -10,6 +11,7 @@ the location of this script.
 from __future__ import annotations
 
 import difflib
+import hashlib
 import json
 import os
 import re
@@ -19,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 import warnings
+from collections import Counter
 from contextlib import suppress
 from pathlib import Path
 
@@ -105,6 +108,8 @@ _RETIRED_OWLBEAR_GITIGNORE_LINES = frozenset(
 _HOOKS_REL_PREFIX = ".owlbear/hooks/"
 _DELIVERY_CONFIG_PATH = Path(".owlbear/delivery/config.json")
 _DELIVERY_CONFIG_SCHEMA_VERSION = 2
+_INSTALL_MANIFEST_PATH = Path(".owlbear/install-manifest.json")
+_INSTALL_MANIFEST_SCHEMA_VERSION = 1
 _DEFAULT_PROFILE_ASSOCIATION = "__default__profile__"
 _COPILOT_REASONING_SETTINGS = {
     "gpt-5.6-luna": "max",
@@ -134,14 +139,35 @@ def _merge_settings(owlbear: dict, existing: dict) -> dict:
     all_keys = set(owlbear) | set(existing)
     merged: dict = {}
     for key in all_keys:
-        is_dict_key = key in _DICT_MERGE_KEYS or (key.startswith("[") and key.endswith("]"))
-        if is_dict_key:
+        if _is_mergeable_settings_key(key):
             owlbear_inner = owlbear.get(key, {})
             user_inner = existing.get(key, {})
             merged[key] = {**owlbear_inner, **user_inner}
         else:
             merged[key] = existing[key] if key in existing else owlbear[key]
     return merged
+
+
+def _settings_claims(seed: dict, existing: dict) -> dict:
+    """Return the settings values that installation added to *existing*."""
+    claims: dict = {"keys": {}, "nested": {}}
+    for key, seed_value in seed.items():
+        if _is_mergeable_settings_key(key) and isinstance(seed_value, dict):
+            existing_value = existing.get(key)
+            existing_inner = existing_value if isinstance(existing_value, dict) else {}
+            added_values = {
+                nested_key: _json_value_digest(nested_value)
+                for nested_key, nested_value in seed_value.items()
+                if nested_key not in existing_inner
+            }
+            if added_values:
+                claims["nested"][key] = {
+                    "parent_created": key not in existing,
+                    "values": added_values,
+                }
+        elif key not in existing:
+            claims["keys"][key] = _json_value_digest(seed_value)
+    return claims
 
 
 def _replace_placeholders(content: str, replacements: dict[str, str]) -> str:
@@ -158,6 +184,137 @@ def _build_replacements(owlbear_dir: Path, target_dir: Path) -> dict[str, str]:
         "owlbear_abs_path": str(owlbear_dir.resolve()),
         "target_abs_path": str(target_dir.resolve()),
     }
+
+
+def _is_mergeable_settings_key(key: str) -> bool:
+    """Return whether settings installation merges values below *key*."""
+    return key in _DICT_MERGE_KEYS or (key.startswith("[") and key.endswith("]"))
+
+
+def _sha256_bytes(value: bytes) -> str:
+    """Return the SHA-256 digest for one byte sequence."""
+    return hashlib.sha256(value).hexdigest()
+
+
+def _json_value_digest(value: object) -> str:
+    """Return a stable digest for one JSON value."""
+    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return _sha256_bytes(encoded)
+
+
+def _new_install_manifest() -> dict[str, object]:
+    """Return an empty install receipt."""
+    return {
+        "schema_version": _INSTALL_MANIFEST_SCHEMA_VERSION,
+        "files": {},
+        "created_directories": [],
+    }
+
+
+def _load_install_manifest(path: Path) -> tuple[dict[str, object] | None, bytes | None]:
+    """Read a valid install receipt and its original bytes."""
+    try:
+        raw = path.read_bytes()
+        manifest = json.loads(raw)
+    except OSError, UnicodeDecodeError, json.JSONDecodeError:
+        return None, None
+    if (
+        not isinstance(manifest, dict)
+        or manifest.get("schema_version") != _INSTALL_MANIFEST_SCHEMA_VERSION
+        or not isinstance(manifest.get("files"), dict)
+        or not isinstance(manifest.get("created_directories"), list)
+    ):
+        return None, None
+    return manifest, raw
+
+
+def _write_install_manifest(path: Path, manifest: dict[str, object]) -> None:
+    """Write an install receipt atomically."""
+    content = json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            delete=False,
+        ) as temporary:
+            temporary.write(content)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+            temporary_path = Path(temporary.name)
+        temporary_path.replace(path)
+    finally:
+        if temporary_path is not None:
+            with suppress(FileNotFoundError):
+                temporary_path.unlink()
+
+
+def _ensure_parent_dirs(path: Path, target_dir: Path, manifest: dict[str, object]) -> None:
+    """Create missing destination parents and retain exactly those directories."""
+    missing: list[Path] = []
+    current = path
+    while current != target_dir and not current.exists():
+        missing.append(current)
+        current = current.parent
+    for directory in reversed(missing):
+        directory.mkdir()
+        relative = directory.relative_to(target_dir).as_posix()
+        created = manifest.setdefault("created_directories", [])
+        if isinstance(created, list) and relative not in created:
+            created.append(relative)
+
+
+def _merge_manifest_record(
+    manifest: dict[str, object],
+    relative: str,
+    record: dict[str, object],
+) -> None:
+    """Merge one install action into the durable receipt."""
+    files = manifest.setdefault("files", {})
+    if not isinstance(files, dict):
+        files = {}
+        manifest["files"] = files
+    previous = files.get(relative)
+    if isinstance(previous, dict):
+        record["created"] = bool(previous.get("created", False))
+        for key in ("claims", "added_lines"):
+            old_value = previous.get(key)
+            new_value = record.get(key)
+            if isinstance(old_value, dict) and isinstance(new_value, dict):
+                merged = {**old_value, **new_value}
+                if key == "claims":
+                    merged = _merge_claims(old_value, new_value)
+                record[key] = merged
+            elif isinstance(old_value, list) and isinstance(new_value, list):
+                record[key] = [*old_value, *new_value]
+    files[relative] = record
+
+
+def _merge_claims(old: dict, new: dict) -> dict:
+    """Merge settings or MCP ownership claims without losing prior claims."""
+    merged: dict = {**old, **new}
+    old_keys = old.get("keys")
+    new_keys = new.get("keys")
+    if isinstance(old_keys, dict) and isinstance(new_keys, dict):
+        merged["keys"] = {**old_keys, **new_keys}
+    old_nested = old.get("nested")
+    new_nested = new.get("nested")
+    if isinstance(old_nested, dict) and isinstance(new_nested, dict):
+        nested = {**old_nested}
+        for key, value in new_nested.items():
+            if isinstance(nested.get(key), dict) and isinstance(value, dict):
+                existing = nested[key]
+                combined = {**existing, **value}
+                if isinstance(existing.get("values"), dict) and isinstance(value.get("values"), dict):
+                    combined["values"] = {**existing["values"], **value["values"]}
+                nested[key] = combined
+            else:
+                nested[key] = value
+        merged["nested"] = nested
+    return merged
 
 
 def _write_gitignore(src: Path, dest: Path, *, retired_lines: frozenset[str] | None = None) -> None:
@@ -204,13 +361,20 @@ def _write_gitignore(src: Path, dest: Path, *, retired_lines: frozenset[str] | N
     dest.write_text(existing + separator + "\n" + owlbear_section, encoding="utf-8")
 
 
-def _write_settings(src: Path, dest: Path, replacements: dict[str, str]) -> None:
+def _write_settings(
+    src: Path,
+    dest: Path,
+    replacements: dict[str, str],
+    *,
+    manifest: dict[str, object] | None = None,
+) -> None:
     """Write .vscode/settings.json, merging with existing file if present (AC12)."""
     template = src.read_text(encoding="utf-8")
     json_replacements = {key: json.dumps(value)[1:-1] for key, value in replacements.items()}
     template = _replace_placeholders(template, json_replacements)
     owlbear_settings: dict = json.loads(template)
 
+    existed_before = dest.exists()
     existing: dict = {}
     if dest.exists():
         raw = dest.read_text(encoding="utf-8")
@@ -226,9 +390,26 @@ def _write_settings(src: Path, dest: Path, replacements: dict[str, str]) -> None
 
     merged = _merge_settings(owlbear_settings, existing)
     dest.write_text(json.dumps(merged, indent=2), encoding="utf-8")
+    if manifest is not None:
+        _merge_manifest_record(
+            manifest,
+            ".vscode/settings.json",
+            {
+                "kind": "settings",
+                "created": not existed_before,
+                "installed_sha256": _sha256_bytes(dest.read_bytes()),
+                "claims": _settings_claims(owlbear_settings, existing),
+            },
+        )
 
 
-def _write_mcp(src: Path, dest: Path, replacements: dict[str, str]) -> None:
+def _write_mcp(
+    src: Path,
+    dest: Path,
+    replacements: dict[str, str],
+    *,
+    manifest: dict[str, object] | None = None,
+) -> None:
     """Write .vscode/mcp.json, merging with existing file if present.
 
     Owlbear servers are added as defaults; existing user entries are preserved
@@ -239,6 +420,7 @@ def _write_mcp(src: Path, dest: Path, replacements: dict[str, str]) -> None:
     template = _replace_placeholders(template, replacements)
     owlbear_mcp: dict = json.loads(template)
 
+    existed_before = dest.exists()
     existing: dict = {}
     if dest.exists():
         raw = dest.read_text(encoding="utf-8")
@@ -258,6 +440,22 @@ def _write_mcp(src: Path, dest: Path, replacements: dict[str, str]) -> None:
     result = {**owlbear_mcp, **existing, "servers": merged_servers}
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    if manifest is not None:
+        _merge_manifest_record(
+            manifest,
+            ".vscode/mcp.json",
+            {
+                "kind": "mcp",
+                "created": not existed_before,
+                "installed_sha256": _sha256_bytes(dest.read_bytes()),
+                "claims": {
+                    name: _json_value_digest(server)
+                    for name, server in owlbear_servers.items()
+                    if name not in user_servers
+                },
+                "servers_created": "servers" not in existing,
+            },
+        )
 
 
 def _write_seed_file(src: Path, dest: Path, replacements: dict[str, str]) -> None:
@@ -277,6 +475,461 @@ def _render_seed_file(src: Path, replacements: dict[str, str]) -> bytes:
         content = src.read_text(encoding="utf-8")
         return _replace_placeholders(content, replacements).encode("utf-8")
     return src.read_bytes()
+
+
+def _record_seed_install(
+    manifest: dict[str, object],
+    relative: str,
+    dest: Path,
+    *,
+    created: bool,
+    kind: str = "file",
+    **extra: object,
+) -> None:
+    """Record one copied seed surface after installation."""
+    record: dict[str, object] = {
+        "kind": kind,
+        "created": created,
+        "installed_sha256": _sha256_bytes(dest.read_bytes()),
+        **extra,
+    }
+    _merge_manifest_record(manifest, relative, record)
+
+
+def _gitignore_section_lines(content: str) -> list[str]:
+    """Return non-empty managed-section lines from one gitignore document."""
+    if _OWLBEAR_GITIGNORE_MARKER not in content:
+        return []
+    return [line.strip() for line in content.partition(_OWLBEAR_GITIGNORE_MARKER)[2].splitlines() if line.strip()]
+
+
+def _gitignore_added_lines(before: str, after: str) -> list[str]:
+    """Return the managed lines added by one installation pass."""
+    before_counts = Counter(_gitignore_section_lines(before))
+    after_counts = Counter(_gitignore_section_lines(after))
+    return list((after_counts - before_counts).elements())
+
+
+class UninstallResult:
+    """Describe one completed or cancelled uninstall operation."""
+
+    __slots__ = ("actions", "completed")
+
+    def __init__(self, *, completed: bool, actions: tuple[str, ...]) -> None:
+        self.completed = completed
+        self.actions = actions
+
+    def __bool__(self) -> bool:
+        """Retain natural truthiness for callers checking completion."""
+        return self.completed
+
+
+class UninstallError(RuntimeError):
+    """Report an uninstall failure together with actions already performed."""
+
+    def __init__(self, message: str, actions: tuple[str, ...]) -> None:
+        super().__init__(message)
+        self.actions = actions
+
+
+class _UninstallOptions:
+    """Carry uninstall reporting and mutation options through helper calls."""
+
+    __slots__ = ("actions", "created_directories", "dry_run", "manifest", "target_dir", "target_root")
+
+    def __init__(
+        self,
+        target_dir: Path,
+        *,
+        target_root: Path,
+        dry_run: bool = False,
+        manifest: dict[str, object] | None = None,
+    ) -> None:
+        self.target_dir = target_dir
+        self.target_root = target_root
+        self.dry_run = dry_run
+        self.manifest = manifest
+        created = manifest.get("created_directories", []) if manifest is not None else []
+        self.created_directories = {value for value in created if isinstance(value, str)}
+        self.actions: list[str] = []
+
+
+def _safe_uninstall_destination(path: Path, options: _UninstallOptions) -> bool:
+    """Return whether a destination resolves below the consumer root."""
+    try:
+        resolved = path.resolve(strict=False)
+    except OSError:
+        _record_uninstall_action(options, "preserve (unresolvable path)", path)
+        return False
+    if not resolved.is_relative_to(options.target_root):
+        _record_uninstall_action(options, "preserve (outside target)", path)
+        return False
+    return True
+
+
+def _remove_created_parent_dirs(path: Path, options: _UninstallOptions) -> None:
+    """Remove only empty directories recorded as created during installation."""
+    parent = path.parent
+    while parent != options.target_dir:
+        try:
+            relative = parent.relative_to(options.target_dir).as_posix()
+        except ValueError:
+            return
+        if relative not in options.created_directories:
+            return
+        if parent.is_symlink() or not parent.is_dir():
+            return
+        try:
+            if not parent.resolve().is_relative_to(options.target_root):
+                return
+            parent.rmdir()
+        except OSError:
+            return
+        _record_uninstall_action(options, "removed directory", parent)
+        parent = parent.parent
+
+
+def _record_uninstall_action(
+    options: _UninstallOptions,
+    action: str,
+    path: Path,
+) -> None:
+    """Append one relative uninstall action to the result."""
+    options.actions.append(f"{action}: {path.relative_to(options.target_dir).as_posix()}")
+
+
+def _manifest_record(manifest: dict[str, object] | None, relative: str) -> dict | None:
+    """Return one validated file record from an optional install receipt."""
+    if manifest is None:
+        return None
+    files = manifest.get("files")
+    if not isinstance(files, dict):
+        return None
+    record = files.get(relative)
+    return record if isinstance(record, dict) else None
+
+
+def _manifest_file_is_unchanged(dest: Path, record: dict) -> bool:
+    """Return whether a recorded file still has its installed bytes."""
+    expected = record.get("installed_sha256")
+    if not isinstance(expected, str) or not dest.is_file() or dest.is_symlink():
+        return False
+    try:
+        return _sha256_bytes(dest.read_bytes()) == expected
+    except OSError:
+        return False
+
+
+def _read_json_mapping(path: Path, description: str) -> dict | None:
+    """Read one JSON or JSONC object, warning instead of mutating malformed input."""
+    try:
+        raw = path.read_text(encoding="utf-8")
+        value = json.loads(_strip_jsonc_comments(raw))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        warnings.warn(f"Could not inspect existing {description} during uninstall: {path}: {exc}", stacklevel=2)
+        return None
+    if not isinstance(value, dict):
+        warnings.warn(f"Existing {description} must contain a JSON object; left unchanged: {path}", stacklevel=2)
+        return None
+    return value
+
+
+def _remove_manifest_file(dest: Path, record: dict | None, options: _UninstallOptions) -> None:
+    """Remove one receipt-owned file when its installed bytes are unchanged."""
+    if not dest.exists():
+        return
+    if not _safe_uninstall_destination(dest, options):
+        return
+    if record is None or record.get("created") is not True:
+        _record_uninstall_action(options, "preserve", dest)
+        return
+    if not _manifest_file_is_unchanged(dest, record):
+        _record_uninstall_action(options, "preserve", dest)
+        return
+    if dest.is_symlink() or not dest.is_file():
+        _record_uninstall_action(options, "preserve", dest)
+        return
+    if options.dry_run:
+        _record_uninstall_action(options, "would remove", dest)
+        return
+    try:
+        dest.unlink()
+    except OSError as exc:
+        message = f"Could not remove seeded file during uninstall: {dest}"
+        raise RuntimeError(message) from exc
+    _remove_created_parent_dirs(dest, options)
+    _record_uninstall_action(options, "removed", dest)
+
+
+def _remove_settings_key_claims(current: dict, claims: dict) -> bool:
+    """Remove top-level receipt-claimed settings whose values still match."""
+    changed = False
+    keys = claims.get("keys", {})
+    if not isinstance(keys, dict):
+        return False
+    for key, digest in keys.items():
+        if key in current and _json_value_digest(current[key]) == digest:
+            del current[key]
+            changed = True
+    return changed
+
+
+def _remove_settings_nested_claims(current: dict, claims: dict) -> bool:
+    """Remove nested receipt-claimed settings whose values still match."""
+    changed = False
+    nested = claims.get("nested", {})
+    if not isinstance(nested, dict):
+        return False
+    for key, claim in nested.items():
+        if not isinstance(claim, dict) or not isinstance(current.get(key), dict):
+            continue
+        current_inner = current[key]
+        values = claim.get("values", {})
+        if not isinstance(values, dict):
+            continue
+        for nested_key, digest in values.items():
+            if nested_key in current_inner and _json_value_digest(current_inner[nested_key]) == digest:
+                del current_inner[nested_key]
+                changed = True
+        if not current_inner and claim.get("parent_created") is True:
+            del current[key]
+    return changed
+
+
+def _remove_settings_claims(current: dict, claims: dict) -> bool:
+    """Remove receipt-claimed settings whose values still match."""
+    changed = _remove_settings_key_claims(current, claims)
+    return _remove_settings_nested_claims(current, claims) or changed
+
+
+def _json_text_with_newline(value: dict, original: str) -> str:
+    """Serialize JSON using the installed file's trailing-newline convention."""
+    content = json.dumps(value, ensure_ascii=False, indent=2)
+    if original.endswith("\n"):
+        content += "\n"
+    return content
+
+
+def _write_uninstalled_json(
+    path: Path,
+    value: dict,
+    options: _UninstallOptions,
+    *,
+    remove_when_empty: bool,
+    original: str,
+) -> None:
+    """Write a changed merged JSON object or remove it when no values remain."""
+    if options.dry_run:
+        action = "would remove" if not value and remove_when_empty else "would update"
+        _record_uninstall_action(options, action, path)
+        return
+    try:
+        if not value and remove_when_empty:
+            path.unlink()
+        else:
+            path.write_text(_json_text_with_newline(value, original), encoding="utf-8")
+    except OSError as exc:
+        message = f"Could not update {path} during uninstall"
+        raise RuntimeError(message) from exc
+    if not value and remove_when_empty:
+        _remove_created_parent_dirs(path, options)
+    _record_uninstall_action(options, "removed" if not value and remove_when_empty else "updated", path)
+
+
+def _remove_settings_seed_values(
+    dest: Path,
+    record: dict | None,
+    options: _UninstallOptions,
+) -> None:
+    """Remove receipt-claimed settings without touching later file edits."""
+    if not dest.exists():
+        return
+    if not _safe_uninstall_destination(dest, options):
+        return
+    if record is None or not _manifest_file_is_unchanged(dest, record):
+        _record_uninstall_action(options, "preserve", dest)
+        return
+    if dest.is_symlink() or not dest.is_file():
+        _record_uninstall_action(options, "preserve", dest)
+        return
+    original = dest.read_text(encoding="utf-8")
+    current = _read_json_mapping(dest, "VS Code settings")
+    if current is None:
+        return
+    claims = record.get("claims")
+    if not isinstance(claims, dict) or not _remove_settings_claims(current, claims):
+        _record_uninstall_action(options, "preserve", dest)
+        return
+    _write_uninstalled_json(
+        dest,
+        current,
+        options,
+        remove_when_empty=record.get("created") is True,
+        original=original,
+    )
+
+
+def _remove_mcp_seed_servers(
+    dest: Path,
+    record: dict | None,
+    options: _UninstallOptions,
+) -> None:
+    """Remove receipt-claimed MCP servers without touching later file edits."""
+    if not dest.exists():
+        return
+    if not _safe_uninstall_destination(dest, options):
+        return
+    if record is None or not _manifest_file_is_unchanged(dest, record) or dest.is_symlink() or not dest.is_file():
+        _record_uninstall_action(options, "preserve", dest)
+        return
+    original = dest.read_text(encoding="utf-8")
+    current = _read_json_mapping(dest, "MCP configuration")
+    if current is None:
+        return
+    current_servers = current.get("servers")
+    claims = record.get("claims")
+    if not isinstance(current_servers, dict) or not isinstance(claims, dict):
+        _record_uninstall_action(options, "preserve", dest)
+        return
+
+    if not _remove_mcp_claimed_servers(current_servers, claims):
+        _record_uninstall_action(options, "preserve", dest)
+        return
+    if not current_servers and record.get("servers_created") is True:
+        del current["servers"]
+    _write_uninstalled_json(
+        dest,
+        current,
+        options,
+        remove_when_empty=record.get("created") is True,
+        original=original,
+    )
+
+
+def _remove_mcp_claimed_servers(current_servers: dict, claims: dict) -> bool:
+    """Remove MCP servers whose receipt digests still match."""
+    changed = False
+    for name, digest in claims.items():
+        if name in current_servers and _json_value_digest(current_servers[name]) == digest:
+            del current_servers[name]
+            changed = True
+    return changed
+
+
+def _remove_created_gitignore(dest: Path, record: dict, options: _UninstallOptions) -> bool:
+    """Remove a newly created unchanged gitignore and report whether handled."""
+    if record.get("created") is not True or not _manifest_file_is_unchanged(dest, record):
+        return False
+    if options.dry_run:
+        _record_uninstall_action(options, "would remove", dest)
+        return True
+    try:
+        dest.unlink()
+    except OSError as exc:
+        message = f"Could not remove gitignore during uninstall: {dest}"
+        raise RuntimeError(message) from exc
+    _remove_created_parent_dirs(dest, options)
+    _record_uninstall_action(options, "removed", dest)
+    return True
+
+
+def _recorded_gitignore_update(current: str, record: dict) -> str | None:
+    """Return a gitignore with recorded additions removed, if it changed."""
+    added_lines = record.get("added_lines")
+    if _OWLBEAR_GITIGNORE_MARKER not in current or not isinstance(added_lines, list) or not added_lines:
+        return None
+    prefix, _, suffix = current.partition(_OWLBEAR_GITIGNORE_MARKER)
+    counts = Counter(line for line in added_lines if isinstance(line, str))
+    remaining: list[str] = []
+    for line in suffix.splitlines(keepends=True):
+        stripped = line.strip()
+        if stripped and counts[stripped]:
+            counts[stripped] -= 1
+            continue
+        remaining.append(line)
+    if record.get("marker_added") is True:
+        prefix_text = prefix.rstrip("\r\n")
+        remaining_text = "".join(remaining).lstrip("\r\n")
+        if prefix_text and remaining_text:
+            updated = f"{prefix_text}\n{remaining_text}"
+        elif prefix_text:
+            updated = f"{prefix_text}\n"
+        else:
+            updated = remaining_text
+    else:
+        updated = prefix + _OWLBEAR_GITIGNORE_MARKER + "".join(remaining)
+    return None if updated == current else updated
+
+
+def _write_gitignore_update(
+    dest: Path,
+    updated: str,
+    record: dict,
+    options: _UninstallOptions,
+) -> None:
+    """Apply or preview one recorded gitignore cleanup."""
+    if record.get("created") is True and not updated.strip():
+        if options.dry_run:
+            _record_uninstall_action(options, "would remove", dest)
+            return
+        try:
+            dest.unlink()
+        except OSError as exc:
+            message = f"Could not remove gitignore during uninstall: {dest}"
+            raise RuntimeError(message) from exc
+        _remove_created_parent_dirs(dest, options)
+        _record_uninstall_action(options, "removed", dest)
+        return
+    if options.dry_run:
+        _record_uninstall_action(options, "would update", dest)
+        return
+    try:
+        dest.write_text(updated, encoding="utf-8")
+    except OSError as exc:
+        message = f"Could not update gitignore during uninstall: {dest}"
+        raise RuntimeError(message) from exc
+    _record_uninstall_action(options, "updated", dest)
+
+
+def _remove_managed_gitignore(
+    dest: Path,
+    record: dict | None,
+    options: _UninstallOptions,
+) -> None:
+    """Remove only gitignore lines recorded as installation additions."""
+    if not dest.exists():
+        return
+    if not _safe_uninstall_destination(dest, options):
+        return
+    if record is None or dest.is_symlink() or not dest.is_file():
+        _record_uninstall_action(options, "preserve", dest)
+        return
+    try:
+        current = dest.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        warnings.warn(f"Could not inspect gitignore during uninstall: {dest}: {exc}", stacklevel=2)
+        return
+
+    if _remove_created_gitignore(dest, record, options):
+        return
+
+    updated = _recorded_gitignore_update(current, record)
+    if updated is None:
+        _record_uninstall_action(options, "preserve", dest)
+        return
+    _write_gitignore_update(dest, updated, record, options)
+
+
+def _confirm_uninstall(target_dir: Path) -> bool:
+    """Ask for confirmation before an interactive uninstall."""
+    print(f"This will remove unchanged receipt-owned OwlBear files from '{target_dir.resolve()}'.")
+    print("Pre-existing consumer editor and lint configuration files will be preserved.")
+    print("Customized files, project Delivery state, and other user files will be preserved.")
+    try:
+        answer = input("Continue with OwlBear uninstall? [y/N] ").strip().lower()
+    except EOFError:
+        return False
+    return answer in {"y", "yes"}
 
 
 def config_drift(target_dir: Path, owlbear_dir: Path) -> dict[str, str]:
@@ -934,6 +1587,8 @@ def init(  # noqa: C901, PLR0913
     ``settings.json`` and ``mcp.json`` are deep-merged with existing files.
     Existing refreshable consumer configs are preserved unless
     ``refresh_configs`` is true.
+    A successful run records its copied and merged surfaces in
+    ``.owlbear/install-manifest.json`` for conservative uninstall.
     Also receipt-activates an empty target authority store for fresh workspaces.
     Existing legacy stores remain untouched.
 
@@ -950,6 +1605,10 @@ def init(  # noqa: C901, PLR0913
     seed_dir = owlbear_dir / "seed"
     replacements = _build_replacements(owlbear_dir, target_dir)
     interactive_mode = _is_interactive_session() if interactive is None else interactive
+    manifest_path = target_dir / _INSTALL_MANIFEST_PATH
+    manifest, _ = _load_install_manifest(manifest_path)
+    if manifest is None:
+        manifest = _new_install_manifest()
 
     for src in sorted(seed_dir.rglob("*")):
         if src.is_dir():
@@ -962,24 +1621,48 @@ def init(  # noqa: C901, PLR0913
             continue
 
         dest = target_dir / rel
-        dest.parent.mkdir(parents=True, exist_ok=True)
+        _ensure_parent_dirs(dest.parent, target_dir, manifest)
 
         # --- per-file dispatch ---
 
         if rel_posix == ".vscode/settings.json":
-            _write_settings(src, dest, replacements)
+            _write_settings(src, dest, replacements, manifest=manifest)
             continue
 
         if rel_posix == ".vscode/mcp.json":
-            _write_mcp(src, dest, replacements)
+            _write_mcp(src, dest, replacements, manifest=manifest)
             continue
 
         if rel_posix == ".gitignore":
+            before = dest.read_text(encoding="utf-8") if dest.exists() else ""
+            created = not dest.exists()
             _write_gitignore(src, dest)
+            _record_seed_install(
+                manifest,
+                rel_posix,
+                dest,
+                created=created,
+                kind="gitignore",
+                added_lines=_gitignore_added_lines(before, dest.read_text(encoding="utf-8")),
+                marker_added=_OWLBEAR_GITIGNORE_MARKER not in before
+                and _OWLBEAR_GITIGNORE_MARKER in dest.read_text(encoding="utf-8"),
+            )
             continue
 
         if rel_posix == ".owlbear/.gitignore":
+            before = dest.read_text(encoding="utf-8") if dest.exists() else ""
+            created = not dest.exists()
             _write_gitignore(src, dest, retired_lines=frozenset())
+            _record_seed_install(
+                manifest,
+                rel_posix,
+                dest,
+                created=created,
+                kind="gitignore",
+                added_lines=_gitignore_added_lines(before, dest.read_text(encoding="utf-8")),
+                marker_added=_OWLBEAR_GITIGNORE_MARKER not in before
+                and _OWLBEAR_GITIGNORE_MARKER in dest.read_text(encoding="utf-8"),
+            )
             continue
 
         if (
@@ -1000,7 +1683,9 @@ def init(  # noqa: C901, PLR0913
             ):
                 continue
 
+        created = not dest.exists()
         _write_seed_file(src, dest, replacements)
+        _record_seed_install(manifest, rel_posix, dest, created=created)
 
     _write_delivery_config(
         target_dir,
@@ -1010,6 +1695,144 @@ def init(  # noqa: C901, PLR0913
         interactive=interactive_mode,
     )
     _configure_copilot_profile(target_dir, interactive=interactive_mode)
+    _write_install_manifest(manifest_path, manifest)
+
+
+def _has_owlbear_surface(target_dir: Path) -> bool:
+    """Return whether a target has a receipt or recognizable OwlBear surface."""
+    if (target_dir / _INSTALL_MANIFEST_PATH).is_file():
+        return True
+    return any(
+        (target_dir / relative).exists()
+        for relative in (
+            ".owlbear/delivery/config.json",
+            ".owlbear/hooks/deny-writes.py",
+            ".owlbear/.gitignore",
+            ".vscode/mcp.json",
+        )
+    )
+
+
+def _remove_install_manifest(
+    path: Path,
+    original: bytes | None,
+    options: _UninstallOptions,
+) -> None:
+    """Remove the unchanged receipt after uninstalling its owned surfaces."""
+    if original is None or not path.exists():
+        return
+    if not _safe_uninstall_destination(path, options):
+        return
+    if path.is_symlink() or not path.is_file():
+        _record_uninstall_action(options, "preserve", path)
+        return
+    try:
+        unchanged = path.read_bytes() == original
+    except OSError:
+        unchanged = False
+    if not unchanged:
+        _record_uninstall_action(options, "preserve", path)
+        return
+    if options.dry_run:
+        _record_uninstall_action(options, "would remove", path)
+        return
+    try:
+        path.unlink()
+    except OSError as exc:
+        message = f"Could not remove install receipt during uninstall: {path}"
+        raise RuntimeError(message) from exc
+    _remove_created_parent_dirs(path, options)
+    _record_uninstall_action(options, "removed", path)
+
+
+def _remove_seed_surfaces(seed_dir: Path, options: _UninstallOptions) -> None:
+    """Remove each receipt-backed seed surface from one consumer project."""
+    relative_paths = {
+        src.relative_to(seed_dir).as_posix()
+        for src in seed_dir.rglob("*")
+        if not src.is_dir() and src.name not in _SKIP_NAMES
+    }
+    manifest_files = options.manifest.get("files") if isinstance(options.manifest, dict) else None
+    if isinstance(manifest_files, dict):
+        relative_paths.update(relative for relative in manifest_files if isinstance(relative, str))
+
+    for relative in sorted(relative_paths):
+        dest = options.target_dir / relative
+        record = _manifest_record(options.manifest, relative)
+
+        if relative == ".vscode/settings.json":
+            _remove_settings_seed_values(dest, record, options)
+        elif relative == ".vscode/mcp.json":
+            _remove_mcp_seed_servers(dest, record, options)
+        elif relative in {".gitignore", ".owlbear/.gitignore"}:
+            _remove_managed_gitignore(dest, record, options)
+        else:
+            _remove_manifest_file(dest, record, options)
+
+
+def uninstall(
+    target_dir: Path,
+    owlbear_dir: Path,
+    *,
+    confirm: bool | None = None,
+    dry_run: bool = False,
+) -> UninstallResult:
+    """Remove unchanged OwlBear-managed seed surfaces from *target_dir*.
+
+    The install receipt records what this setup run actually created or merged.
+    Only receipt-owned surfaces whose post-install bytes remain unchanged are
+    removed. Customized files, project Delivery state, and user-local profile
+    settings are preserved.
+
+    Args:
+        target_dir: Destination project directory.
+        owlbear_dir: Root of the owlbear installation (contains ``seed/``).
+        confirm: Whether to skip confirmation (``False``), require it (``True``),
+            or infer it from the current TTY (``None``).
+        dry_run: Report planned changes without modifying files.
+
+    Returns:
+        A structured result containing completion state and all recorded actions.
+    """
+    target_root = target_dir.resolve()
+    owlbear_root = owlbear_dir.resolve()
+    if target_root == owlbear_root or target_root.is_relative_to(owlbear_root):
+        message = (
+            "Refusing to uninstall the OwlBear checkout itself or one of its descendants; "
+            "run this from a consumer project."
+        )
+        raise RuntimeError(message)
+
+    seed_dir = owlbear_dir / "seed"
+    if not seed_dir.is_dir():
+        message = f"OwlBear seed directory does not exist: {seed_dir}"
+        raise RuntimeError(message)
+
+    if not _has_owlbear_surface(target_dir):
+        message = "No OwlBear install receipt or recognizable managed surface was found in the target project."
+        raise RuntimeError(message)
+
+    if not dry_run and confirm is not False and not _is_interactive_session():
+        message = "Refusing non-interactive uninstall; rerun with --yes or use --dry-run."
+        raise RuntimeError(message)
+    if not dry_run and confirm is not False and not _confirm_uninstall(target_dir):
+        print("OwlBear uninstall cancelled.")
+        return UninstallResult(completed=False, actions=())
+
+    manifest_path = target_dir / _INSTALL_MANIFEST_PATH
+    manifest, manifest_bytes = _load_install_manifest(manifest_path)
+    options = _UninstallOptions(
+        target_dir,
+        target_root=target_root,
+        dry_run=dry_run,
+        manifest=manifest,
+    )
+    try:
+        _remove_seed_surfaces(seed_dir, options)
+        _remove_install_manifest(manifest_path, manifest_bytes, options)
+    except RuntimeError as exc:
+        raise UninstallError(str(exc), tuple(options.actions)) from exc
+    return UninstallResult(completed=True, actions=tuple(options.actions))
 
 
 # ---------------------------------------------------------------------------
@@ -1026,6 +1849,11 @@ if __name__ == "__main__":  # pragma: no cover
         help="Overwrite differing existing .owlbear/hooks files instead of skipping or prompting.",
     )
     config_mode = parser.add_mutually_exclusive_group()
+    config_mode.add_argument(
+        "--uninstall",
+        action="store_true",
+        help="Remove receipt-owned OwlBear files and configuration from the current project.",
+    )
     config_mode.add_argument(
         "--refresh-configs",
         action="store_true",
@@ -1052,10 +1880,53 @@ if __name__ == "__main__":  # pragma: no cover
         metavar="OWNER/NAME",
         help="Use this GitHub repository identity, or infer it from the configured remote.",
     )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Confirm an uninstall without prompting.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show uninstall changes without modifying files.",
+    )
     args = parser.parse_args()
 
     _target = Path.cwd()
     _owlbear = Path(__file__).resolve().parent.parent
+    if args.yes and not args.uninstall:
+        parser.error("--yes requires --uninstall")
+    if args.dry_run and not args.uninstall:
+        parser.error("--dry-run requires --uninstall")
+    if args.replace_hooks and args.uninstall:
+        parser.error("--replace-hooks cannot be combined with --uninstall")
+    if args.uninstall:
+        try:
+            result = uninstall(
+                _target,
+                _owlbear,
+                confirm=False if args.yes else None,
+                dry_run=args.dry_run,
+            )
+        except UninstallError as exc:
+            print(f"OwlBear uninstall failed: {exc}", file=sys.stderr)
+            for action in exc.actions:
+                print(f"  {action}", file=sys.stderr)
+            raise SystemExit(1) from exc
+        except RuntimeError as exc:
+            raise SystemExit(str(exc)) from exc
+        if result.completed:
+            if args.dry_run:
+                print(f"OwlBear uninstall dry-run for '{_target.name}'; no files changed.")
+            else:
+                print(f"OwlBear workspace uninstalled from '{_target.name}'.")
+            if result.actions:
+                for action in result.actions:
+                    print(f"  {action}")
+            else:
+                print("  No unchanged OwlBear-managed files found.")
+            print("  Preserved by design: Delivery state and user-local VS Code profile settings.")
+        raise SystemExit(0)
     if args.check_configs:
         drift = config_drift(_target, _owlbear)
         if drift:
