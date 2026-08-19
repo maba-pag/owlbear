@@ -164,7 +164,6 @@ jobs:
       - name: Run maintained browser smoke tests
         if: needs.classify.outputs.frontend_runtime == 'true'
         run: |
-          sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
           npx playwright install chromium --with-deps
           npm run test:e2e
 
@@ -237,7 +236,6 @@ jobs:
 
       - name: Render one maintained diagram
         run: |
-          sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
           npx playwright install chromium --with-deps
           npm run export:file -- \
             ../../../share/diagrams/mcp-topology.excalidraw \

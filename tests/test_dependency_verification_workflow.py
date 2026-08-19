@@ -96,13 +96,6 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert "needs.classify.outputs.shared_node_runtime == 'true'" in proof_cockpit["if"]
 
 
-def test_playwright_jobs_skip_the_unreliable_azure_apt_mirror() -> None:
-    text = VERIFY_PATH.read_text(encoding="utf-8")
-    workaround = r"sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt"
-
-    assert text.count(workaround) == 2
-
-
 def test_shared_node_runtime_fans_out_to_all_node_proofs() -> None:
     workflow = _workflow(VERIFY_PATH)
 
