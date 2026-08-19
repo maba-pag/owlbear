@@ -1949,3 +1949,5 @@ if __name__ == "__main__":  # pragma: no cover
     except RuntimeError as exc:
         raise SystemExit(str(exc)) from exc
     print(f"OwlBear workspace initialised in '{_target.name}'.")
+
+# CI probe 2: does any workflow run tests for a setup/ source-only change?

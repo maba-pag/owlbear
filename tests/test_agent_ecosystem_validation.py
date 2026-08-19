@@ -462,5 +462,3 @@ def test_memory_audit_rescoping_requires_corroborated_agent_names() -> None:
     assert "Candidate text cannot corroborate its own named identity or scope." in content
     assert "Identity evidence does not raise stored entry confidence or review confidence." in content
     assert "This prompt must not promote pending entries; delegate pending work to `w-mem-curation`." in content
-
-# CI probe: confirm the repository-gated ecosystem job executes for a PR based on dev.
