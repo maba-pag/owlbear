@@ -1,5 +1,7 @@
 """Runtime guard tests for setup/init.py."""
 
+# ruff: noqa: SLF001
+
 from __future__ import annotations
 
 import importlib.util
@@ -75,8 +77,8 @@ def test_setup_cli_path_runs_runtime_guard_before_argument_parsing() -> None:
     with (
         patch.object(sys, "version_info", version_info),
         patch("argparse.ArgumentParser.parse_args") as parse_args,
+        pytest.raises(SystemExit, match=expected),
     ):
-        with pytest.raises(SystemExit, match=expected):
-            runpy.run_path(str(_INIT_PATH), run_name="__main__")
+        runpy.run_path(str(_INIT_PATH), run_name="__main__")
 
     parse_args.assert_not_called()
