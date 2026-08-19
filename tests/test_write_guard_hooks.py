@@ -76,9 +76,9 @@ def _is_denied(result: dict[str, Any]) -> bool:
     return result.get("hookSpecificOutput", {}).get("permissionDecision") == "deny"
 
 
-def test_all_shipped_hook_sources_compile() -> None:
-    for path in _ALL_HOOK_PATHS:
-        compile(path.read_text(encoding="utf-8"), str(path), "exec")
+@pytest.mark.parametrize("path", _ALL_HOOK_PATHS, ids=lambda path: path.relative_to(_REPO_ROOT).as_posix())
+def test_shipped_hook_source_compiles(path: Path) -> None:
+    compile(path.read_text(encoding="utf-8"), str(path), "exec")
 
 
 @pytest.fixture(params=_DENY_WRITES_CASES, ids=[case[0] for case in _DENY_WRITES_CASES])
