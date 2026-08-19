@@ -27,9 +27,7 @@ from contextlib import suppress
 from pathlib import Path
 
 _PYPROJECT_PATH = Path(__file__).resolve().parent.parent / "pyproject.toml"
-_PYTHON_REQUIREMENT_PATTERN = re.compile(
-    r"(?:^|,)\s*>=\s*(\d+)(?:\.(\d+))?(?:\.(\d+))?(?=\s*(?:,|$))"
-)
+_PYTHON_REQUIREMENT_PATTERN = re.compile(r">=\s*(\d+)(?:\.(\d+))?(?:\.(\d+))?(?=\s*(?:,|$))")
 
 
 def _minimum_python_from_pyproject() -> tuple[int, ...]:
@@ -43,11 +41,14 @@ def _minimum_python_from_pyproject() -> tuple[int, ...]:
     if not isinstance(requires_python, str):
         message = f"requires-python in {_PYPROJECT_PATH} must be a string"
         raise TypeError(message)
-    match = _PYTHON_REQUIREMENT_PATTERN.search(requires_python.strip())
-    if match is None:
+    minimums = [
+        tuple(int(part) if part is not None else 0 for part in match.groups())
+        for match in _PYTHON_REQUIREMENT_PATTERN.finditer(requires_python)
+    ]
+    if not minimums:
         message = f"Unsupported requires-python value in {_PYPROJECT_PATH}: {requires_python!r}"
         raise ValueError(message)
-    return tuple(int(part) if part is not None else 0 for part in match.groups())
+    return max(minimums)
 
 
 def _check_python_version(version_info: tuple[int, ...] | None = None) -> None:
@@ -61,7 +62,8 @@ def _check_python_version(version_info: tuple[int, ...] | None = None) -> None:
     except (RuntimeError, TypeError, ValueError) as exc:
         raise SystemExit(str(exc)) from exc
     raw_version = sys.version_info if version_info is None else version_info
-    current = tuple(raw_version[:3]) + (0,) * max(0, 3 - len(raw_version))
+    current = tuple(raw_version[:3])
+    current += (0,) * (3 - len(current))
     if current < minimum_python:
         required = ".".join(str(part) for part in minimum_python)
         found = ".".join(str(part) for part in current)
