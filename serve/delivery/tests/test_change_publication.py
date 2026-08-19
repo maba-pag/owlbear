@@ -113,9 +113,9 @@ def test_bare_repository_operations_are_isolated_from_host_git_configuration(tmp
     remote = tmp_path / "remote.git"
     _git(tmp_path, "init", "--bare", str(remote))
 
-    result = _git(remote, "show-ref", check=False)
+    result = _git(remote, "rev-parse", "--git-dir", check=False)
 
-    assert result.returncode == 1, result.stderr
+    assert result.returncode == 0, result.stderr
 
 
 _USER_CHECKOUT_STATES = (
