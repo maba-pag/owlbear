@@ -110,8 +110,22 @@ def _advance_remote_target(tmp_path: Path, remote: Path, *, product: str | None 
 
 
 def test_bare_repository_operations_are_isolated_from_host_git_configuration(tmp_path: Path) -> None:
+    import os
+
     remote = tmp_path / "remote.git"
     _git(tmp_path, "init", "--bare", str(remote))
+
+    hardened_config = tmp_path / "hardened.gitconfig"
+    hardened_config.write_text("[safe]\n\tbareRepository = explicit\n", encoding="utf-8")
+
+    hardened = subprocess.run(  # noqa: S603
+        (resolve_git_executable(), "-C", str(remote), "rev-parse", "--git-dir"),
+        check=False,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "GIT_CONFIG_GLOBAL": str(hardened_config)},
+    )
+    assert hardened.returncode == 128, hardened.stderr
 
     result = _git(remote, "rev-parse", "--git-dir", check=False)
 
