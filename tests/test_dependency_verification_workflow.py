@@ -96,6 +96,37 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert "needs.classify.outputs.shared_node_runtime == 'true'" in proof_cockpit["if"]
 
 
+def _playwright_install_steps(workflow: dict[str, object]) -> list[dict[str, object]]:
+    jobs = workflow["jobs"]
+    assert isinstance(jobs, dict)
+    steps = []
+    for job in jobs.values():
+        for step in job.get("steps", []):
+            if "playwright install" in str(step.get("run", "")):
+                steps.append(step)
+    return steps
+
+
+def test_playwright_browser_install_never_provisions_system_packages() -> None:
+    """`--with-deps` shells out to apt, which stalls the runner when a mirror is
+    unreachable. The runner image already ships Chromium's shared libraries."""
+    steps = _playwright_install_steps(_workflow(VERIFY_PATH))
+
+    assert steps
+    for step in steps:
+        assert "--with-deps" not in str(step["run"])
+
+
+def test_browser_install_steps_cannot_burn_a_whole_job_timeout() -> None:
+    steps = _playwright_install_steps(_workflow(VERIFY_PATH))
+
+    assert steps
+    for step in steps:
+        timeout = step.get("timeout-minutes")
+        assert timeout is not None
+        assert 0 < timeout <= 10
+
+
 def test_shared_node_runtime_fans_out_to_all_node_proofs() -> None:
     workflow = _workflow(VERIFY_PATH)
 
