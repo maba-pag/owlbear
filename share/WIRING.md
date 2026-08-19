@@ -164,4 +164,8 @@ uv run python .owlbear/scripts/validate_prompts.py
 uv run pytest -q tests/test_agent_ecosystem_validation.py
 ```
 
+These validator scripts and the regression test are development-checkout maintenance commands;
+they are not part of the generated consumer `main` surface. Consumer projects should follow the
+[setup guide](../setup/setup-guide.md) for installation and verification.
+
 If a validator disagrees, repair its executable owner before this map.

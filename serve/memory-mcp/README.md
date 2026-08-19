@@ -134,7 +134,7 @@ The operation stages only non-pending `.owlbear/memory/*.md` files and returns t
 
 | Package | Purpose |
 | --- | --- |
-| `mcp[cli]` | MCPServer framework and CLI |
+| `mcp` | MCPServer framework |
 | `owlbear-memory` | Shared memory engine, models, and error types (workspace package) |
 | `pydantic` | Model validation at the MCP tool layer |
 | `pyyaml` | YAML frontmatter serialisation for memory files |

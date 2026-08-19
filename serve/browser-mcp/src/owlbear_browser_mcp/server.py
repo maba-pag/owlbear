@@ -170,6 +170,11 @@ async def acquire(  # noqa: PLR0913
     app_ctx = ctx.request_context.lifespan_context
     if not isinstance(app_ctx, AppContext) or app_ctx.launcher is None:
         raise ToolError(_MSG_BROWSER_UNAVAILABLE)
+    await _check_ssrf(url)
+    try:
+        app_ctx.allowlist.check(url)
+    except PermissionError as exc:
+        raise ToolError(str(exc)) from exc
     try:
         request = AcquisitionRequest(
             url=url,

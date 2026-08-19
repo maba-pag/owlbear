@@ -154,7 +154,7 @@
     {
       "description": "Keep MegaLinter image and action versions coupled",
       "matchManagers": [
-        "regex",
+        "custom.regex",
         "github-actions"
       ],
       "matchDatasources": [
@@ -179,7 +179,7 @@
     {
       "description": "Disable unsupported MegaLinter Docker pin and digest updates",
       "matchManagers": [
-        "regex"
+        "custom.regex"
       ],
       "matchDatasources": [
         "docker"

@@ -12,10 +12,11 @@ class DomainAllowlist:
 
     Args:
         domains: Approved hostname strings (e.g. ``["sharepoint.example.com"]``).
+            ``"*"`` permits every hostname and is intended only for local testing.
     """
 
     def __init__(self, domains: list[str]) -> None:
-        self._domains: frozenset[str] = frozenset(domains)
+        self._domains: frozenset[str] = frozenset(domain.casefold() for domain in domains)
 
     def check(self, url: str) -> None:
         """Raise if *url*'s hostname is not in the allowlist.
@@ -26,7 +27,7 @@ class DomainAllowlist:
         Raises:
             PermissionError: When the URL's hostname is not in the allowlist.
         """
-        hostname = urlparse(url).hostname or ""
-        if hostname not in self._domains:
+        hostname = (urlparse(url).hostname or "").casefold()
+        if "*" not in self._domains and hostname not in self._domains:
             msg = f"Domain not in allowlist: {hostname!r}"
             raise PermissionError(msg)
