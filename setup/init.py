@@ -10,20 +10,54 @@ the location of this script.
 
 from __future__ import annotations
 
-import difflib
-import hashlib
-import json
-import os
-import re
-import shlex
-import shutil
-import subprocess
 import sys
-import tempfile
-import warnings
-from collections import Counter
-from contextlib import suppress
-from pathlib import Path
+
+# Runtime floor shared with every serve/* requires-python declaration and with
+# .python-version; kept aligned by .github/scripts/check_python_runtime.py.
+#
+# This module is the one entry point documented to run before a managed
+# environment exists, so it must stay parseable by older interpreters in order
+# to report the floor instead of failing with a SyntaxError. `ruff`'s
+# per-file-target-version setting pins that constraint for both linter and
+# formatter; do not introduce newer-only syntax here.
+_MINIMUM_PYTHON = (3, 14, 6)
+
+
+def _check_python_version(version_info: tuple[int, ...] | None = None) -> None:
+    """Abort setup when the active interpreter is below the supported minimum.
+
+    Missing components in an injected ``version_info`` are treated as zero so
+    callers and tests may supply only the major and minor versions.
+    """
+    raw_version = sys.version_info if version_info is None else version_info
+    current = tuple(raw_version[:3])
+    current += (0,) * (3 - len(current))
+    if current < _MINIMUM_PYTHON:
+        required = ".".join(str(part) for part in _MINIMUM_PYTHON)
+        found = ".".join(str(part) for part in current)
+        message = (
+            f"OwlBear requires Python {required} or newer; found Python {found}. "
+            "Run setup through uv so the pinned runtime is used, for example: "
+            "uv run --project ../owlbear python ../owlbear/setup/init.py"
+        )
+        raise SystemExit(message)
+
+
+_check_python_version()
+
+import difflib  # noqa: E402
+import hashlib  # noqa: E402
+import json  # noqa: E402
+import os  # noqa: E402
+import re  # noqa: E402
+import shlex  # noqa: E402
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+import tempfile  # noqa: E402
+import warnings  # noqa: E402
+from collections import Counter  # noqa: E402
+from contextlib import suppress  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -216,7 +250,7 @@ def _load_install_manifest(path: Path) -> tuple[dict[str, object] | None, bytes 
     try:
         raw = path.read_bytes()
         manifest = json.loads(raw)
-    except OSError, UnicodeDecodeError, json.JSONDecodeError:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return None, None
     if (
         not isinstance(manifest, dict)
@@ -1222,7 +1256,7 @@ def _workspace_profile_association(
         return None
     try:
         state = json.loads(state_path.read_text(encoding="utf-8"))
-    except OSError, json.JSONDecodeError:
+    except (OSError, json.JSONDecodeError):
         return None
     association: tuple[bool, str | None] | None = None
     if isinstance(state, dict):
@@ -1525,7 +1559,7 @@ def _hook_diff(src: Path, dest: Path) -> str:
     try:
         seed_lines = src.read_text(encoding="utf-8").splitlines(keepends=True)
         existing_lines = dest.read_text(encoding="utf-8").splitlines(keepends=True)
-    except OSError, UnicodeDecodeError:
+    except (OSError, UnicodeDecodeError):
         return ""
     diff_lines = list(
         difflib.unified_diff(

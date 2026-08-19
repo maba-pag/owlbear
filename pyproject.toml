@@ -35,6 +35,11 @@ markers = [
 
 [tool.ruff]
 target-version = "py314"
+# setup/init.py bootstraps a workspace before any managed runtime exists, so it
+# must stay parseable by older interpreters to report the Python floor instead
+# of failing with a SyntaxError. Pinning an older target keeps both the linter
+# and the formatter from introducing newer-only syntax there.
+per-file-target-version = { "setup/init.py" = "py39" }
 line-length = 120
 src = [
   "serve/delivery/src",
