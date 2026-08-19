@@ -75,7 +75,6 @@ No environment variables at the library level. Configuration is passed via const
 | Package | Purpose |
 | --- | --- |
 | `pydantic` | Model validation |
-| `ruamel.yaml` | YAML parsing for source config |
 
 ### Optional extras
 
@@ -86,5 +85,4 @@ Install with `uv pip install -e "serve/knowledge[<extra>]"`:
 | `qdrant` | `qdrant-client` | Persistent vector store |
 | `embedding` | `FlagEmbedding` | BGE-M3 embedding provider (~2.3 GB model download on first use) |
 | `intake` | `httpx` | HTTP URL ingestion |
-| `llm` | `openai` | LLM-based entity extraction |
-| `full` | all of the above | All features |
+| `full` | `qdrant-client`, `FlagEmbedding`, `httpx` | All supported optional features |

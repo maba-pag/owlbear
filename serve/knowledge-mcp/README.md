@@ -46,5 +46,5 @@ initialized OwlBear workspace and exposes its complete tool set.
 
 | Package | Purpose |
 | --- | --- |
-| `mcp[cli]` | MCPServer framework and CLI |
-| `owlbear-knowledge[full]` | Knowledge engine with all optional extras (workspace package) |
+| `mcp` | MCPServer framework |
+| `owlbear-knowledge[full]` | Knowledge engine with Qdrant, BGE-M3 embeddings, and HTTP intake (workspace package) |

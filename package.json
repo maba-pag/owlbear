@@ -9,8 +9,5 @@
     "build": "npm --prefix serve/cockpit/web run build",
     "lint:css": "npm --prefix serve/cockpit/web run lint:css",
     "lint:html": "npm --prefix serve/cockpit/web run lint:html"
-  },
-  "devDependencies": {
-    "@vitest/coverage-v8": "4.1.11"
   }
 }

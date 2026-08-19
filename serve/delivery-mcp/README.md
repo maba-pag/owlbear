@@ -90,6 +90,6 @@ as its current directory. Startup fails closed when nonempty retired `.owlbear/t
 
 | Package | Purpose |
 | --- | --- |
-| `mcp[cli]` | MCPServer framework and CLI |
+| `mcp` | MCPServer framework |
 | `owlbear-delivery` | Design authority, sequential execution, publication, acceptance observation, legacy compatibility, and completed history |
 | `owlbear-delivery-github` | Fixed GitHub API adapter for draft pull-request publication |

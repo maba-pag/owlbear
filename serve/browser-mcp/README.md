@@ -52,7 +52,7 @@ converted into a generic transport error.
 
 | Package | Purpose |
 | --- | --- |
-| `mcp[cli]` | MCPServer framework and CLI |
+| `mcp` | MCPServer framework |
 | `owlbear-browser` | Playwright-based content fetcher (workspace package) |
 
 > **First-time setup:** From a consumer project using a sibling OwlBear checkout, install Chromium
