@@ -21,9 +21,8 @@ _DENY_SRC_CASES = [
     ("dev", _REPO_ROOT / ".owlbear" / "hooks" / "deny-src-writes.py"),
     ("seed", _REPO_ROOT / "seed" / ".owlbear" / "hooks" / "deny-src-writes.py"),
 ]
-_ALL_HOOK_PATHS = sorted(
-    (*(_REPO_ROOT / ".owlbear" / "hooks").glob("*.py"), *(_REPO_ROOT / "seed" / ".owlbear" / "hooks").glob("*.py"))
-)
+_HOOK_DIRS = [_REPO_ROOT / ".owlbear" / "hooks", _REPO_ROOT / "seed" / ".owlbear" / "hooks"]
+_ALL_HOOK_PATHS = sorted(path for hook_dir in _HOOK_DIRS for path in hook_dir.glob("*.py"))
 
 
 def _load_hook(path: Path, module_name: str) -> types.ModuleType:
@@ -79,6 +78,10 @@ def _is_denied(result: dict[str, Any]) -> bool:
 @pytest.mark.parametrize("path", _ALL_HOOK_PATHS, ids=lambda path: path.relative_to(_REPO_ROOT).as_posix())
 def test_shipped_hook_source_compiles(path: Path) -> None:
     compile(path.read_text(encoding="utf-8"), str(path), "exec")
+
+
+def test_both_shipped_hook_trees_are_present() -> None:
+    assert {path.parent for path in _ALL_HOOK_PATHS} == set(_HOOK_DIRS)
 
 
 @pytest.fixture(params=_DENY_WRITES_CASES, ids=[case[0] for case in _DENY_WRITES_CASES])
