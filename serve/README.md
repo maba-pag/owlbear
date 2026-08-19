@@ -37,7 +37,9 @@ VS Code agents
 
 The package guides are the next level of detail. The project README covers the current checkout and
 the consumer README covers installation into another project when both are present; on `main`, the
-consumer README becomes the project README. The setup guide owns exact commands and recovery steps.
+consumer README becomes the project README. The [setup guide](../setup/setup-guide.md) owns exact
+installation commands and [Operating OwlBear](../setup/operating-owlbear.md) owns daily operation
+and recovery.
 
 ## Package groups
 

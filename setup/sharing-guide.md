@@ -28,11 +28,11 @@ they must also be on the same drive.
 Walk the teammate through these steps:
 
 ```shell
-# 1. Clone owlbear to a convenient parent directory
-git clone -b main https://github.com/maba-pag/owlbear.git ~/Dev/owlbear
-
-# 2. Clone the project repository as a sibling
+# 1. Clone the project repository to a convenient parent directory
 git clone https://github.com/OWNER/PROJECT.git ~/Dev/my-project
+
+# 2. Clone owlbear as a sibling
+git clone https://github.com/maba-pag/owlbear.git ~/Dev/owlbear
 
 # 3. Bootstrap owlbear into the project workspace
 cd ~/Dev/my-project
@@ -105,8 +105,9 @@ No platform-specific configuration is required:
 
 Project-local resources can override or extend shared owlbear resources. Hook files are
 the exception: they are project-local runtime copies, not a live-shared customization
-surface. See the
-[Customization](setup-guide.md#adding-local-agents) section of the setup guide.
+surface. See
+[Project-Specific Customization](operating-owlbear.md#project-specific-customization) in the
+operating guide.
 
 ---
 

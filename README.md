@@ -1,15 +1,19 @@
 # OwlBear
 
-OwlBear gives GitHub Copilot a reliable path from an idea to a reviewed change inside VS Code.
-It combines reusable agent instructions with tools for planning, execution, memory, knowledge,
-browser access, and human review.
+This is the OwlBear development checkout. OwlBear gives GitHub Copilot a reliable path from an idea
+to a reviewed change inside VS Code, combining reusable agent instructions with tools for planning,
+execution, memory, knowledge, browser access, and human review.
+
+If you want to know what OwlBear is or how to install it in a project, read
+[README-consumer.md](README-consumer.md). That file becomes the front page of the `main` branch and
+owns the product story, the requirements, and the install path.
 
 ## Choose your path
 
 | You are here to... | Start here |
 | --- | --- |
-| Decide whether OwlBear fits your work | [What OwlBear does](#what-owlbear-does) |
-| Add OwlBear to another project | [Consumer setup](README-consumer.md) |
+| Decide whether OwlBear fits your work | [README-consumer.md](README-consumer.md) |
+| Add OwlBear to another project | [Setup guide](setup/setup-guide.md) |
 | Develop OwlBear itself | [Develop OwlBear](#develop-owlbear) |
 | Find a runtime package or MCP server | [Package map](serve/README.md) |
 | Change agents, skills, prompts, or instructions | [Shared ecosystem guide](share/README.md) |
@@ -39,18 +43,9 @@ The normal path is `/ideate` to refine the outcome, `/design` to approve the wor
 `/finalize-change <change-id>` to prepare one reviewed Change for publication. The Delivery engine
 keeps the work ordered and reviewed; you decide when to approve, answer, recover, publish, or merge.
 
-## Current surfaces
-
-| Surface | Status | Use it for |
-| --- | --- | --- |
-| Delivery | Core / active | Reviewed Change planning, execution, publication, and acceptance |
-| Cockpit | Core / active | Human visibility, requests, recovery, and completed history |
-| Memory | Available | Durable, scoped knowledge for future agents |
-| Knowledge | Alpha | Searchable documents and knowledge graphs; needs field validation |
-| Browser | Alpha | Authenticated web acquisition; needs field validation |
-
-See the [package map](serve/README.md) for the implementation and tool boundary behind each
-surface.
+Current surface maturity is published on the consumer front door in
+[Status and expectations](README-consumer.md#status-and-expectations). The
+[package map](serve/README.md) covers the implementation and tool boundary behind each surface.
 
 ## Develop OwlBear
 
@@ -90,7 +85,8 @@ uv run lint --no-fix
 | --- | --- |
 | Agents, skills, instructions, prompts, or hooks | [Shared ecosystem guide](share/README.md) |
 | A runtime package or MCP server | [Package map](serve/README.md) |
-| Consumer setup, refresh, or recovery | [Setup folder guide](setup/README.md) |
+| Consumer installation and verification | [Setup guide](setup/setup-guide.md) |
+| Consumer operation, refresh, recovery, or uninstall | [Operating OwlBear](setup/operating-owlbear.md) |
 
 For package or shared-ecosystem changes, use the focused guide first, then run the scoped checks
 for the paths you changed. `uv run test --all` and `uv run lint --no-fix` are the full development
@@ -105,8 +101,8 @@ checkout and the next decision visible.
 | --- | --- |
 | `serve/` | Runtime packages and the [package map](serve/README.md) |
 | `share/` | Agents, skills, instructions, prompts, and their [loading model](share/README.md) |
-| `seed/` | Files copied into a consumer project by `setup/init.py`; see the [setup folder guide](setup/README.md) for why this tree has no README |
-| `setup/` | Installation, sharing, and operational procedures in the [setup folder guide](setup/README.md) |
+| `seed/` | Files copied into a consumer project by `setup/init.py`; see [What setup creates](setup/operating-owlbear.md#what-setup-creates) for why this tree has no README |
+| `setup/` | Installation in the [setup guide](setup/setup-guide.md), daily operation in [Operating OwlBear](setup/operating-owlbear.md), and teams in the [sharing guide](setup/sharing-guide.md) |
 | `.owlbear/` | Tracked project authority plus host-local runtime state in the [.owlbear guide](.owlbear/README.md) |
 | `tests/` | Workspace regression and integration tests described in the [test guide](tests/README.md) |
 | `store/` | Reference-only knowledge corpus manifest described in the [store guide](store/README.md) |

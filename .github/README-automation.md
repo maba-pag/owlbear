@@ -25,7 +25,8 @@ its checks, or its manual sync process rather than an installed project directly
 - Consumer-project Copilot and VS Code templates live under `seed/` and are applied by
   [`setup/init.py`](../setup/init.py).
 - Runtime packages and MCP servers live under [`serve/`](../serve/README.md).
-- Installation and sharing procedures live under [`setup/`](../setup/README.md).
+- Installation and operating procedures live in the [setup guide](../setup/setup-guide.md) and
+  [Operating OwlBear](../setup/operating-owlbear.md).
 
 The development instructions in `.github/copilot-instructions.md` are not the same artifact as the
 consumer template at `seed/.github/copilot-instructions.md`. The former describes this repository;

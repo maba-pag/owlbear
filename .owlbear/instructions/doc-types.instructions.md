@@ -1,6 +1,6 @@
 ---
 description: "Project-specific documentation type rules for OwlBear canonical docs"
-applyTo: "README.md,README-consumer.md,SECURITY.md,serve/*/README.md,share/README.md,setup/README.md,setup/setup-guide.md,setup/sharing-guide.md,.github/README-automation.md,.owlbear/README.md,store/README.md,tests/README.md"
+applyTo: "README.md,README-consumer.md,SECURITY.md,serve/*/README.md,share/README.md,setup/setup-guide.md,setup/operating-owlbear.md,setup/sharing-guide.md,.github/README-automation.md,.owlbear/README.md,store/README.md,tests/README.md"
 ---
 
 # OwlBear Documentation Types
@@ -20,15 +20,22 @@ eight audit dimensions.
 
 ## 1. Doc Types and Required Sections
 
-### 1.1 Root README (`README.md`)
+### 1.1 Root READMEs (`README.md`, `README-consumer.md`)
 
-`STR-1` Must contain: Project identity (what OwlBear is), Quick start, Directory structure overview, and a pointer to where consumers should go next.
+`README-consumer.md` is renamed to `README.md` by the sync workflow and is therefore the public
+front page of the repository. `README.md` on `dev` is the development checkout's front door.
 
-`STR-2` Must NOT duplicate content from `setup/setup-guide.md`. Link to it instead.
+`STR-1` `README-consumer.md` must contain, in this order: product name and tagline, what using
+OwlBear looks like, fit and non-fit expectations, requirements, quick start, verification, first
+change, what setup changes and how to undo it, surface status, and a routing table to deeper
+authority. Value and expectations come before vocabulary, architecture, and routing.
 
-`STR-3` Required content order: project name / tagline, reader route, overview paragraph, current
-surfaces or status, development or consumer next step, and directory structure overview. The
-reader route comes before implementation detail so the front door remains useful to newcomers.
+`STR-2` Neither root README may duplicate content from `setup/setup-guide.md` or
+`setup/operating-owlbear.md` beyond the shortest usable form. Link to the authority instead.
+
+`STR-3` `README.md` on `dev` must contain: project identity, a pointer to `README-consumer.md` for
+the product story and installation, a reader route, the development checkout and its checks, and a
+directory structure overview. It must not carry consumer status tables or installation procedure.
 
 ### 1.2 `SECURITY.md`
 
@@ -50,15 +57,19 @@ reader route comes before implementation detail so the front door remains useful
 
 `STR-10` Must NOT enumerate every file by name — categories change. A table of conventions is preferred over a list of file names.
 
-### 1.5 Setup Guide (`setup/setup-guide.md`, `setup/sharing-guide.md`)
+### 1.5 Setup Guides (`setup/setup-guide.md`, `setup/operating-owlbear.md`, `setup/sharing-guide.md`)
 
-`STR-11` Must contain: Prerequisites, step-by-step instructions numbered sequentially, expected outcome per step, and troubleshooting hints for the most likely failure.
+`STR-11` `setup/setup-guide.md` and `setup/sharing-guide.md` must contain: Prerequisites,
+step-by-step instructions numbered sequentially, expected outcome per step, and troubleshooting
+hints for the most likely failure. `setup/operating-owlbear.md` must contain the installed-file
+inventory, the update and removal procedures, the operator workflow, and project-local
+customization; it starts after installation and does not repeat the install path.
 
 `STR-12` Must NOT assume the reader has prior knowledge of OwlBear internals. Write for a first-time installer.
 
 `STR-13` Must stay in sync with `setup/init.py` — any flag, path, or behavior change in the script must be reflected in the guide.
 
-### 1.6 Folder Orientation Guide (`setup/README.md`, `.github/README-automation.md`, `.owlbear/README.md`, `store/README.md`, `tests/README.md`)
+### 1.6 Folder Orientation Guide (`.github/README-automation.md`, `.owlbear/README.md`, `store/README.md`, `tests/README.md`)
 
 `STR-14` Must contain the folder's purpose, an inventory summary, ownership boundaries, and pointers to the canonical detailed sources.
 
@@ -75,8 +86,8 @@ reader route comes before implementation detail so the front door remains useful
 | SECURITY.md | `/SECURITY.md` |
 | Package README | `serve/{package}/README.md` |
 | Share README | `share/README.md` |
-| Setup guide | `setup/setup-guide.md`, `setup/sharing-guide.md` |
-| Folder orientation guide | `setup/README.md`, `.github/README-automation.md`, `.owlbear/README.md`, `store/README.md`, `tests/README.md` |
+| Setup guide | `setup/setup-guide.md`, `setup/operating-owlbear.md`, `setup/sharing-guide.md` |
+| Folder orientation guide | `.github/README-automation.md`, `.owlbear/README.md`, `store/README.md`, `tests/README.md` |
 
 `PLC-4` Docs that do not fit an existing doc type go in `.owlbear/research/` for durable findings. Change-specific decisions belong in native Delivery authority rather than standalone documentation. They are not placed in `share/`, `serve/`, or `setup/` unless they match a canonical doc type.
 
@@ -91,4 +102,5 @@ reader route comes before implementation detail so the front door remains useful
 | Package README | Developers integrating the package | Python-fluent, unfamiliar with this package |
 | Share README | Pipeline agents, contributors | OwlBear internals familiar |
 | Setup guide | First-time installers | Follows instructions; no internals assumed |
+| Operating guide | Installed users running daily work | Setup already completed; no internals assumed |
 | Folder orientation guide | Contributors and maintainers | Needs a concise map of one repository area and its boundaries |

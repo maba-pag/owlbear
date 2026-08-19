@@ -32,8 +32,7 @@ Scan:
 - `README.md`, `README-consumer.md`, `SECURITY.md`
 - `serve/*/README.md`
 - `share/README.md`
-- `setup/setup-guide.md`, `setup/sharing-guide.md`
-- `setup/README.md`
+- `setup/setup-guide.md`, `setup/operating-owlbear.md`, `setup/sharing-guide.md`
 - `.github/README-automation.md`
 - `.owlbear/README.md`
 - `store/README.md`
