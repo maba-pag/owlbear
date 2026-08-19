@@ -36,12 +36,15 @@ def _minimum_python_from_pyproject() -> tuple[int, ...]:
         with _PYPROJECT_PATH.open("rb") as stream:
             requires_python = tomllib.load(stream)["project"]["requires-python"]
     except (KeyError, OSError, TypeError, tomllib.TOMLDecodeError) as exc:
-        raise RuntimeError(f"Could not read requires-python from {_PYPROJECT_PATH}") from exc
+        message = f"Could not read requires-python from {_PYPROJECT_PATH}"
+        raise RuntimeError(message) from exc
     if not isinstance(requires_python, str):
-        raise RuntimeError(f"requires-python in {_PYPROJECT_PATH} must be a string")
+        message = f"requires-python in {_PYPROJECT_PATH} must be a string"
+        raise TypeError(message)
     match = _PYTHON_REQUIREMENT_PATTERN.fullmatch(requires_python.strip())
     if match is None:
-        raise RuntimeError(f"Unsupported requires-python value in {_PYPROJECT_PATH}: {requires_python!r}")
+        message = f"Unsupported requires-python value in {_PYPROJECT_PATH}: {requires_python!r}"
+        raise ValueError(message)
     return tuple(int(part) for part in match.groups())
 
 
@@ -52,7 +55,8 @@ def _check_python_version(version_info: tuple[int, ...] | None = None) -> None:
     if current < minimum_python:
         required = ".".join(str(part) for part in minimum_python)
         found = ".".join(str(part) for part in current)
-        raise SystemExit(f"OwlBear requires Python {required} or newer; found Python {found}.")
+        message = f"OwlBear requires Python {required} or newer; found Python {found}."
+        raise SystemExit(message)
 
 
 # ---------------------------------------------------------------------------
