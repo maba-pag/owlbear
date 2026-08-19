@@ -4,6 +4,7 @@ import json
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ import yaml
 from owlbear_tools.dependency_ci import classify_dependency_change
 
 ROOT = Path(__file__).parents[1]
+PROJECT_PATH = ROOT / "pyproject.toml"
 VERIFY_PATH = ROOT / ".github/workflows/dependency-verification.yml"
 MEGALINTER_PATH = ROOT / ".github/workflows/megalinter.yml"
 SYNC_PATH = ROOT / ".github/workflows/sync-to-main.yml"
@@ -53,6 +55,14 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
         "types": ["opened", "reopened", "synchronize"],
     }
     assert "if" not in _job(workflow, "classify")
+
+
+def test_uv_uses_native_tls_for_system_certificates() -> None:
+    document = tomllib.loads(PROJECT_PATH.read_text(encoding="utf-8"))
+    uv_config = document["tool"]["uv"]
+
+    assert uv_config["native-tls"] is True
+    assert "system-certs" not in uv_config
 
 
 def test_dependency_verification_is_read_only_and_has_no_renovate_runner() -> None:
