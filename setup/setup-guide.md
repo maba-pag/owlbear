@@ -26,8 +26,9 @@ Before running setup, ensure the following are installed on your machine:
 > **macOS and Linux:** Python, uv, VS Code, and Git work natively on both platforms. Browser-backed
 > commands still require the separate Chromium download described below.
 
-Chromium is optional for setup. Install it later only when you use the Browser MCP or run
-Cockpit's browser-backed tests; see the [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests).
+Chromium is optional for setup. Install it later when you use the Browser MCP or run Cockpit's
+browser-backed tests; see [Verify the installation](#verify-the-installation) and the
+[Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests).
 
 ---
 
@@ -52,13 +53,21 @@ cd my-project
 ### 2. Run setup from the project root
 
 ```shell
+uv run --project ../owlbear python ../owlbear/setup/init.py
+```
+
+If the project has a GitHub `origin`, setup infers the repository identity. In an interactive run,
+the target-branch prompt suggests the currently checked-out branch, or `main` when no branch is
+available; noninteractive setup uses `main`. Use `--remote`, `--target-branch`, or
+`--github-repository OWNER/PROJECT` only when you need an explicit override. Interactive setup may
+also ask about differing hook files and, on macOS, user-local Copilot profile settings.
+
+When the project has no inferable GitHub remote, rerun the command with the repository identity:
+
+```shell
 uv run --project ../owlbear python ../owlbear/setup/init.py \
   --github-repository OWNER/PROJECT
 ```
-
-If the project has a GitHub `origin`, setup can infer the repository and the final flag may be
-omitted. Use `--remote` or `--target-branch` only when your publication policy differs from the
-defaults `origin` and `main`.
 
 **Expected result:** setup creates or merges `.vscode/settings.json` and `.vscode/mcp.json`, writes
 tracked `.owlbear/delivery/config.json`, and copies the project-local hooks and runtime templates.
@@ -77,8 +86,9 @@ agents, skills, instructions, and prompts are loaded from the sibling OwlBear pa
 Open **Chat: Open Customizations** and then **MCP: List Servers**. The exact checks are in
 [Verify the installation](#verify-the-installation).
 
-**Expected result:** the five seeded MCP servers are running and the shared OwlBear customization
-roots appear in Chat Customizations.
+**Expected result:** the five seeded MCP server processes are running and the shared OwlBear
+customization roots appear in Chat Customizations. Browser capability readiness is a separate
+check below because it also depends on Chromium and its allowlist.
 
 ## Verify the installation
 
@@ -89,35 +99,43 @@ roots appear in Chat Customizations.
 4. Before the first workflow, run `gh auth status` and confirm the GitHub CLI reports an active
   account.
 
+### Browser readiness
+
+`MCP: List Servers` confirms that the stdio processes started; it does not prove that Chromium is
+installed or that Browser acquisition is ready. To enable Browser use:
+
+1. From the consumer project root, install Chromium for the sibling OwlBear checkout:
+
+   ```shell
+   uv run --project ../owlbear playwright install chromium
+   ```
+
+   **Expected result:** the Playwright Chromium executable is available to the Browser MCP server.
+2. Review the `env` member on the `owlbear-browser` entry in `.vscode/mcp.json`. Fresh setup seeds
+   wildcard testing access; replace it with exact hostnames for normal or production use:
+
+   ```json
+   {
+     "env": {
+       "BROWSER_ALLOWED_DOMAINS": "example.com,docs.example.com"
+     }
+   }
+   ```
+
+   **Expected result:** Browser requests are limited to the exact hostnames you named. For local
+   testing across public sites only, keep `"*"`; keep exact hostnames for production. SSRF checks
+   still reject private, loopback, link-local, reserved, and unspecified DNS results.
+3. Restart the `owlbear-browser` MCP server and try `acquire` or `navigate` against an allowed
+   public URL.
+
+   **Expected result:** the tool returns page content or its typed acquisition result. A running
+   server with no configured domains still denies every hostname. See the
+   [Browser MCP guide](../serve/browser-mcp/README.md) for the full boundary and limitations.
+
 If a customization root is missing, inspect `.vscode/settings.json` and compare its relative
 OwlBear path with the location of the checkout. If a server is missing, inspect `.vscode/mcp.json`,
 run `uv sync --locked --all-packages --all-extras --all-groups` in the OwlBear checkout, and rerun
 setup from the project root.
-
-## First successful workflow
-
-After verification, prove the installation with one small outcome:
-
-1. Run `/ideate` and describe the outcome.
-2. Continue with `/design`, review the proposed work, and approve admission. When it succeeds,
-   note the returned lowercase, hyphenated Change ID, for example `improve-search`.
-3. Run `/orchestrate` after admission. It acquires currently eligible work across the portfolio;
-  Planning and Build then proceed in order.
-4. Launch Cockpit from the project root and confirm the Change is visible.
-5. Run `/finalize-change improve-search` after the Change is complete, then review and merge the
-  pull request in GitHub.
-
-```shell
-uv run --project ../owlbear cockpit
-```
-
-Expected result: Cockpit opens at `http://127.0.0.1:8420`, reads the current project, and shows one
-Change with visible work and a clear next action. Use the
-[Delivery workflow reference](#delivery-workflow) only when you need the detailed correction,
-publication, acceptance, or recovery procedure.
-
-> The remaining sections are optional setup and reference material. The first successful workflow
-> above is the shortest path to a working project.
 
 ## macOS Copilot profile settings
 
@@ -146,6 +164,47 @@ mutation.
 
 For development-only browser-backed tests, use the [Cockpit package guide](../serve/cockpit/README.md#browser-backed-tests).
 
+## First successful workflow
+
+After verification, prove the installation with one small outcome:
+
+1. Run `/ideate` and describe the outcome.
+
+   **Expected result:** the Designer records a refined outcome and asks the next bounded question
+   when more detail is needed.
+2. Continue with `/design`, review the proposed work, and approve admission. When it succeeds,
+   note the returned lowercase, hyphenated Change ID, for example `improve-search`.
+
+   **Expected result:** one approved Change is admitted and its ID is available for later commands.
+3. Run `/orchestrate` after admission. It acquires currently eligible work across the portfolio;
+  Planning and Build then proceed in order.
+
+   **Expected result:** the Change advances through currently eligible Planning and Build work, or
+   Cockpit shows a typed request or block that needs your action.
+4. Launch Cockpit from the project root and confirm the Change is visible.
+
+   **Expected result:** Cockpit shows the Change, its current stage, and the next available action.
+5. Run `/finalize-change improve-search` after the Change is complete, then review and merge the
+  pull request in GitHub.
+
+   **Expected result:** Delivery prepares the exact reviewed Change for publication; GitHub remains
+   the place where a person reviews and merges the pull request.
+
+If a worker returns a request or block, answer the request or clear the requestless block in Cockpit
+and then resume the named workflow. Do not edit `.owlbear` Delivery state by hand.
+
+```shell
+uv run --project ../owlbear cockpit
+```
+
+Expected result: Cockpit opens at `http://127.0.0.1:8420`, reads the current project, and shows one
+Change with visible work and a clear next action. Use the
+[Delivery workflow reference](#delivery-workflow) only when you need the detailed correction,
+publication, acceptance, or recovery procedure.
+
+> The remaining sections are optional setup and reference material. The first successful workflow
+> above is the shortest path to a working project.
+
 ---
 
 ## What Setup Creates
@@ -154,9 +213,10 @@ Running `init.py` writes the following files into your project directory:
 
 | File / Directory | Purpose | Idempotency |
 | --- | --- | --- |
-| `.vscode/settings.json` | Points VS Code at owlbear agents, skills, and instructions; enables `mermaid-chat.enabled` for Mermaid diagram rendering in chat | Merged (owlbear keys as defaults; your existing keys are preserved) |
-| `.vscode/mcp.json` | Registers 5 MCP servers (4 owlbear stdio, including browser access, + markitdown) | Merged (owlbear servers as defaults; your existing servers are preserved) |
+| `.vscode/settings.json` | Points VS Code at OwlBear agents, skills, and instructions, and carries the seeded Copilot workspace settings | Merged (OwlBear keys as defaults; your existing keys are preserved) |
+| `.vscode/mcp.json` | Registers 5 MCP servers (4 OwlBear stdio, including Browser access seeded for wildcard testing, + markitdown) | Merged (OwlBear servers as defaults; your existing servers are preserved) |
 | `.owlbear/delivery/config.json` | Declares the Git remote, pull-request target branch, and exact GitHub `owner/name` identity; host-local writer and execution capacity may be configured separately in ignored `.owlbear/delivery/runtime/host.json` | Tracked in Git; exact schema-1 policy is migrated once and schema-2 project edits are preserved on rerun |
+| `.owlbear/install-manifest.json` | Records seed paths created or merged by setup, their installed digests, claimed settings/MCP values, and setup-created directories for conservative uninstall | Rewritten atomically on each successful setup; removed when uninstall completes unchanged |
 | `.owlbear/hooks/allow-stances-only.py` | Restricts ideation agents to approved stance outputs | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-src-writes.py` | Constrains test-only roles to `tests/`, `__tests__/`, and scratch surfaces | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-writes.py` | Constrains read-only roles to scratch workspace writes only | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
@@ -174,6 +234,18 @@ Running `init.py` writes the following files into your project directory:
 | `.markdownlint.json` | Markdown linting rules | Skipped if file already exists; refreshable with `--refresh-configs` |
 | `.markdownlintignore` | Markdown lint exclusion patterns | Skipped if file already exists; refreshable with `--refresh-configs` |
 | `.yamllint.yml` | YAML linting configuration | Skipped if file already exists; refreshable with `--refresh-configs` |
+
+Review `.vscode/settings.json` as part of trusting the workspace. The seeded settings include an
+additional read-access path for the OwlBear checkout, a list of terminal commands that VS Code may
+auto-approve, and `chat.tools.terminal.blockDetectedFileWrites: "never"`. These settings make the
+agent workflow usable but are trust-sensitive; adjust them to your project's policy after setup.
+Rerunning setup merges OwlBear defaults and preserves existing project values.
+
+Open `.github/copilot-instructions.md` after setup and replace its placeholder project identity,
+directory, technology, and resource guidance with the facts and conventions of the consumer
+project. Setup skips this file on later runs so those project-specific instructions remain yours.
+The seeded Browser MCP entry uses `BROWSER_ALLOWED_DOMAINS: "*"` for local testing; replace it with
+exact hostnames before using Browser against production or sensitive sites.
 
 For a fresh workspace, `init.py` writes tracked Delivery configuration. It does not create mutable
 Delivery runtime, worktrees, verification profiles, or retired task, decision, board, accept, or
@@ -216,6 +288,50 @@ uv run --project ../owlbear python ../owlbear/setup/init.py --refresh-configs
 
 `--refresh-configs` does not overwrite `.github/copilot-instructions.md`, hook files, or other
 project-specific files that are outside the refreshable set.
+
+## Uninstalling
+
+To remove the OwlBear setup from a consumer project, run this command from the project root:
+
+```shell
+uv run --project ../owlbear python ../owlbear/setup/init.py --uninstall
+```
+
+An interactive terminal asks for confirmation and prints the files it removes or updates. Preview
+the plan without changing files by adding `--dry-run`. A non-interactive uninstall requires
+explicit confirmation:
+
+```shell
+uv run --project ../owlbear python ../owlbear/setup/init.py --uninstall --yes
+```
+
+**Expected result:** an interactive run asks before changing anything; `--dry-run` reports the
+planned removals without mutation; `--yes` applies the receipt-backed cleanup without prompting.
+
+The command uses `.owlbear/install-manifest.json` to distinguish surfaces created by setup from
+files that existed before it ran. A receipt-owned file is removed only when its installed digest is
+unchanged. Receipt-claimed settings and MCP values are removed only when the complete merged file
+still matches the post-install digest; later edits, including JSONC comments, preserve the whole
+file. Managed ignore rules are removed by recorded line additions, so unrelated rules remain.
+Freshly created editor and lint configuration files are removed; pre-existing files remain even
+when their content happens to equal the seed. Setup-created empty directories are removed only when
+the receipt records them as created.
+
+If the receipt is absent, uninstall takes the conservative path and preserves recognized surfaces;
+it refuses to operate in a directory with no receipt or recognizable OwlBear surface. It also
+refuses the OwlBear checkout and any descendant of that checkout. A non-interactive call requires
+`--yes` or `--dry-run`, and `--yes` and `--dry-run` are valid only with `--uninstall`.
+
+Custom seed files, unrelated VS Code settings and MCP servers, custom ignore rules,
+`.owlbear/delivery/config.json`, Delivery records, runtime data, knowledge and memory data, and
+user-local VS Code profile settings are preserved. In particular, uninstall does not revert the
+global Copilot reasoning settings that interactive setup may have written; those settings are
+shared across projects and remain under the user's control. The command does not require a GitHub
+repository identity.
+
+**Expected result:** unchanged setup-owned files and claimed settings or MCP entries are removed or
+updated, while customized files, unrelated configuration, Delivery state, runtime data, knowledge,
+memory, and user-local profile settings remain in place.
 
 MCP memory entries are stored as markdown files under `.owlbear/memory/`. The
 `owlbear-memory` server creates that directory when it starts or writes the first

@@ -14,7 +14,26 @@ Package map: [serve/README.md](../README.md) · Project README: [README.md](../.
 
 ## Launch / Usage
 
-Build frontend assets (developer/source workflow):
+Launch against a consumer project that references a sibling owlbear clone:
+
+```bash
+cd ../my-project
+uv run --project ../owlbear cockpit
+```
+
+Launch from the owlbear development checkout:
+
+```bash
+uv run cockpit
+```
+
+`uv run cockpit` serves `serve/cockpit/dist/`, starts on `127.0.0.1:8420` by default,
+and opens a browser unless disabled with `COCKPIT_NO_OPEN=1`. Cockpit reads
+`.owlbear/delivery/config.json`, canonical Delivery state, and `.owlbear/memory/` relative to the
+workspace root. Consumer launches must use the target project as their working directory or pass
+it to `uv --directory`.
+
+Build frontend assets for the developer/source workflow:
 
 ```bash
 cd serve/cockpit/web
@@ -35,25 +54,6 @@ This downloads the core chunk, 60 component chunks, and 290 icon SVGs from
 use. Assets are version-pinned to the installed `@porsche-design-system/components-js`.
 CI and sync-to-main run this automatically; developers only need to run it locally when
 preparing or debugging PDS upgrades.
-
-Launch from the owlbear development checkout:
-
-```bash
-uv run cockpit
-```
-
-Launch against a consumer project that references a sibling owlbear clone:
-
-```bash
-cd ../my-project
-uv run --project ../owlbear cockpit
-```
-
-`uv run cockpit` serves `serve/cockpit/dist/`, starts on `127.0.0.1:8420` by default,
-and opens a browser unless disabled with `COCKPIT_NO_OPEN=1`. Cockpit reads
-`.owlbear/delivery/config.json`, canonical Delivery state, and `.owlbear/memory/` relative to the
-workspace root. Consumer launches must use the target project as their working directory or pass
-it to `uv --directory`.
 
 ## Frontend Surface
 

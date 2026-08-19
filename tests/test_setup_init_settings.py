@@ -179,6 +179,7 @@ def test_init_creates_delivery_policy_without_runtime_selection_artifacts(
         "owlbear-browser",
         "markitdown",
     }
+    assert mcp["servers"]["owlbear-browser"]["env"] == {"BROWSER_ALLOWED_DOMAINS": "*"}
     delivery_config_path = target_dir / ".owlbear/delivery/config.json"
     assert "env" not in mcp["servers"]["owlbear-delivery"]
     delivery_config = DeliveryStartupConfig.model_validate_json(delivery_config_path.read_bytes())

@@ -58,15 +58,20 @@ The `dev` branch is the development checkout. The `main` branch is generated fro
 rolling supported consumer branch; do not edit `main` directly. OwlBear has no numbered product
 releases.
 
-Requirements: Python 3.14.6+, [uv](https://docs.astral.sh/uv/), VS Code with GitHub Copilot, and
-Git. Cockpit frontend development also needs the Node version pinned in
+Requirements: Python 3.14.6+, [uv](https://docs.astral.sh/uv/), VS Code with GitHub Copilot,
+[GitHub CLI](https://cli.github.com/), and Git. Cockpit frontend development also needs the Node
+version pinned in
 `serve/cockpit/web/.nvmrc`.
 
 ```shell
 git clone -b dev https://github.com/maba-pag/owlbear.git
 cd owlbear
 uv sync --locked --all-packages --all-extras --all-groups
+uv run dep-sync
 ```
+
+`uv run dep-sync` reconciles the local Cockpit npm environment with the checked-out manifests;
+use `uv run dep-sync --all` when you also need optional workspace assets or browsers.
 
 Open this checkout directly in VS Code. Its repository settings already load the shared
 `share/` and project-local `.owlbear/` agent, skill, instruction, and prompt roots; do not run

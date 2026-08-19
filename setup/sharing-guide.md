@@ -49,6 +49,10 @@ code .
 Setup infers the GitHub `owner/name` identity from the default `origin` remote. If the project uses a
 different remote or has no inferable GitHub URL, pass `--remote NAME --github-repository OWNER/NAME`.
 
+If an existing project reports that retired Delivery state needs migration, preserve the reported
+files and follow the [Delivery state migration procedure](../serve/tools/README.md) before
+restarting setup or Cockpit.
+
 After VS Code opens, have the teammate follow the canonical
 [installation verification](setup-guide.md#verify-the-installation). It checks both the shared
 customization roots and all five seeded MCP servers. Before the first workflow, also run

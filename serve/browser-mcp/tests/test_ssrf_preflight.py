@@ -100,6 +100,14 @@ class TestFromAC_NavigateSchemeCheck:
         with pytest.raises(ToolError):
             await navigate(ctx, f"ftp://{_ALLOWED_HOST}/pub/file.txt")
 
+    @pytest.mark.asyncio
+    async def test_wildcard_allowlist_allows_a_public_hostname(self) -> None:
+        """Wildcard testing mode permits public hosts after SSRF validation."""
+        url = "https://another.example.com/"
+        ctx = _make_ctx(["*"])
+        with patch("socket.getaddrinfo", return_value=_addr4("93.184.216.34")):
+            assert await navigate(ctx, url) == url
+
 
 # ---------------------------------------------------------------------------
 # AC1 — IP blocklist

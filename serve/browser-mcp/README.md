@@ -2,8 +2,8 @@
 
 MCP server that exposes browser automation tools to pipeline agents for authenticated web content
 fetching. Uses Playwright with a persistent Chromium profile; a dedicated profile is created by
-default, while `PLAYWRIGHT_USER_DATA_DIR` can point to an existing profile. The `navigate` tool is
-restricted to an explicit domain allowlist and applies SSRF checks.
+default, while `PLAYWRIGHT_USER_DATA_DIR` can point to an existing profile. Both `navigate` and
+`acquire` apply the explicit domain allowlist and SSRF checks.
 
 **Use this guide when:** you need to configure the alpha browser server or change its allowlisted
 Edge/CDP actions and accessibility-snapshot boundary.
@@ -23,6 +23,14 @@ BROWSER_ALLOWED_DOMAINS="sharepoint.example.com,wiki.example.com" \
 ```
 
 Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json`.
+
+For local testing across multiple public sites, set `BROWSER_ALLOWED_DOMAINS="*"` in the Browser
+server's `env` object. This is a testing convenience, not a production policy: exact hostnames
+remain the recommended configuration. The wildcard does not disable SSRF protection; DNS results
+for private, loopback, link-local, reserved, or unspecified addresses are still rejected.
+
+Fresh consumer setup seeds this wildcard so the Browser can be exercised immediately. Replace it
+with exact hostnames before using the project against production or sensitive sites.
 
 ### Tools
 
@@ -45,7 +53,7 @@ converted into a generic transport error.
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `BROWSER_ALLOWED_DOMAINS` | _(empty)_ | Comma-separated list of permitted hostnames; navigation to any other domain is blocked. **Required** — all domains are blocked when unset. |
+| `BROWSER_ALLOWED_DOMAINS` | _(empty; consumer seed uses `*`)_ | Comma-separated list of permitted hostnames; navigation and acquisition to any other domain are blocked. **Required** — all domains are blocked when unset. Use `*` only for local testing. |
 | `PLAYWRIGHT_USER_DATA_DIR` | `~/.owlbear/chromium-profile` | Path to an existing browser profile directory for authenticated sessions |
 
 ## Dependencies
@@ -58,6 +66,6 @@ converted into a generic transport error.
 > **First-time setup:** From a consumer project using a sibling OwlBear checkout, install Chromium
 > with `uv run --project ../owlbear playwright install chromium` before starting the server.
 
-`acquire` currently does not apply the same MCP-side allowlist and SSRF preflight as `navigate`.
-Treat it as a separate capability and do not use it for untrusted URLs until those boundaries are
-unified.
+Both tools now apply the same MCP-side policy before delegating to Playwright. The preflight checks
+cannot fully prevent DNS rebinding or an allowlisted server redirecting to a private address;
+keep the allowlist narrow for production use.

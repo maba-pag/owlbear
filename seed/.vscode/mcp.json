@@ -46,7 +46,10 @@
         "python",
         "-m",
         "owlbear_browser_mcp"
-      ]
+      ],
+      "env": {
+        "BROWSER_ALLOWED_DOMAINS": "*"
+      }
     },
     "markitdown": {
       "type": "stdio",
