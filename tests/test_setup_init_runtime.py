@@ -16,7 +16,7 @@ _INIT_PATH = _REPO_ROOT / "setup" / "init.py"
 
 
 def _version_info(major: int, minor: int, micro: int) -> tuple[int, int, int, str, int]:
-    return type(sys.version_info)(major, minor, micro, "final", 0)
+    return type(sys.version_info)((major, minor, micro, "final", 0))
 
 
 def _one_patch_below(version: tuple[int, int, int]) -> tuple[int, int, int]:
