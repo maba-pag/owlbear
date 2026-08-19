@@ -134,6 +134,7 @@
     "source.unusedImports"
   ],
   "python.analysis.typeCheckingMode": "standard",
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
   "python.terminal.useEnvFile": true,
   "python.testing.pytestEnabled": true,
   "redhat.telemetry.enabled": false,

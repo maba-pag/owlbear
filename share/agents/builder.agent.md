@@ -10,10 +10,10 @@ agents: [build-reviewer]
 hooks:
   SessionStart:
     - type: command
-      command: uv run python .owlbear/hooks/session-context.py
+      command: uv run --no-project --python 3.14 python .owlbear/hooks/session-context.py
   PostToolUse:
     - type: command
-      command: uv run python .owlbear/hooks/lint-changed.py
+      command: uv run --no-project --python 3.14 python .owlbear/hooks/lint-changed.py
 ---
 
 <persona>

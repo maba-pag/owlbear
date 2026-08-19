@@ -60,7 +60,7 @@ jobs:
             --summary "$GITHUB_STEP_SUMMARY"
 
   runtime:
-    name: Prove Node runtime compatibility
+    name: Prove runtime compatibility
     needs: classify
     if: needs.classify.result == 'success'
     runs-on: ubuntu-latest
@@ -82,6 +82,13 @@ jobs:
           python3 .github/scripts/check_node_runtime.py \
             --version-file serve/cockpit/web/.nvmrc \
             --engines-file serve/cockpit/web/package.json
+
+      - name: Check Python runtime declaration
+        run: |
+          python3 .github/scripts/check_python_runtime.py \
+            --version-file .python-version \
+            --members-root serve \
+            --guard-file setup/init.py
 
   proof-python:
     name: Prove Python dependency update

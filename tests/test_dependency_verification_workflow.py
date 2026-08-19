@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import ast
 import json
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -16,6 +18,7 @@ VERIFY_PATH = ROOT / ".github/workflows/dependency-verification.yml"
 MEGALINTER_PATH = ROOT / ".github/workflows/megalinter.yml"
 SYNC_PATH = ROOT / ".github/workflows/sync-to-main.yml"
 RUNTIME_SCRIPT = ROOT / ".github/scripts/check_node_runtime.py"
+PYTHON_RUNTIME_SCRIPT = ROOT / ".github/scripts/check_python_runtime.py"
 WORKSPACE_LOCK_SCRIPT = ROOT / ".github/scripts/check_uv_workspace_lock.py"
 
 
@@ -252,6 +255,123 @@ def test_node_runtime_checker_rejects_a_lower_runtime(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert "below" in result.stderr
+
+
+def _write_python_runtime_fixture(
+    root: Path,
+    *,
+    pinned: str = "3.14.7",
+    bounds: tuple[str, ...] = (">=3.14.6",),
+    guard: str = "(3, 14, 6)",
+) -> tuple[Path, Path, Path]:
+    """Build one standalone Python runtime declaration set for the checker."""
+    version_file = root / ".python-version"
+    version_file.write_text(f"{pinned}\n", encoding="utf-8")
+    members_root = root / "members"
+    for index, bound in enumerate(bounds):
+        manifest = members_root / f"pkg{index}"
+        manifest.mkdir(parents=True)
+        (manifest / "pyproject.toml").write_text(
+            f'[project]\nname = "pkg{index}"\nversion = "0.1.0"\nrequires-python = "{bound}"\n',
+            encoding="utf-8",
+        )
+    guard_file = root / "guard.py"
+    guard_file.write_text(f"_MINIMUM_PYTHON = {guard}\n", encoding="utf-8")
+    return version_file, members_root, guard_file
+
+
+def _run_python_runtime_checker(
+    version_file: Path,
+    members_root: Path,
+    guard_file: Path,
+) -> subprocess.CompletedProcess[str]:
+    """Run the Python runtime checker against one declaration set."""
+    return _run_script(
+        PYTHON_RUNTIME_SCRIPT,
+        "--version-file",
+        str(version_file),
+        "--members-root",
+        str(members_root),
+        "--guard-file",
+        str(guard_file),
+    )
+
+
+def test_python_runtime_checker_accepts_the_checked_in_contract() -> None:
+    result = _run_script(
+        PYTHON_RUNTIME_SCRIPT,
+        "--version-file",
+        ".python-version",
+        "--members-root",
+        "serve",
+        "--guard-file",
+        "setup/init.py",
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_python_runtime_checker_rejects_a_lower_pinned_runtime(tmp_path: Path) -> None:
+    fixture = _write_python_runtime_fixture(tmp_path, pinned="3.13.0")
+
+    result = _run_python_runtime_checker(*fixture)
+
+    assert result.returncode != 0
+    assert "below" in result.stderr
+
+
+def test_python_runtime_checker_rejects_conflicting_member_bounds(tmp_path: Path) -> None:
+    fixture = _write_python_runtime_fixture(tmp_path, bounds=(">=3.14.6", ">=3.12.0"))
+
+    result = _run_python_runtime_checker(*fixture)
+
+    assert result.returncode != 0
+    assert "conflicting requires-python" in result.stderr
+
+
+def test_python_runtime_checker_rejects_a_drifted_bootstrap_guard(tmp_path: Path) -> None:
+    fixture = _write_python_runtime_fixture(tmp_path, guard="(3, 12, 0)")
+
+    result = _run_python_runtime_checker(*fixture)
+
+    assert result.returncode != 0
+    assert "_MINIMUM_PYTHON" in result.stderr
+
+
+def test_runtime_job_proves_both_node_and_python_declarations() -> None:
+    steps = _job(_workflow(VERIFY_PATH), "runtime")["steps"]
+    commands = " ".join(str(step.get("run", "")) for step in steps)
+
+    assert ".github/scripts/check_node_runtime.py" in commands
+    assert ".github/scripts/check_python_runtime.py" in commands
+
+
+def test_setup_bootstrap_parses_on_older_interpreters_to_report_the_floor() -> None:
+    """The bootstrap entry point runs before a managed runtime exists.
+
+    It must therefore stay parseable by older interpreters, otherwise the guard
+    is unreachable and users see a bare SyntaxError instead of the floor.
+    """
+    init_path = ROOT / "setup" / "init.py"
+    source = init_path.read_text(encoding="utf-8")
+    pinned = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["tool"]["ruff"][
+        "per-file-target-version"
+    ]["setup/init.py"]
+    feature_version = (int(pinned.removeprefix("py")[0]), int(pinned.removeprefix("py")[1:]))
+
+    ast.parse(source, str(init_path), feature_version=feature_version)
+    assert "\n_check_python_version()\n" in source
+
+
+def test_copilot_setup_steps_provision_the_pinned_python_runtime() -> None:
+    workflow = _workflow(ROOT / ".github/workflows/copilot-setup-steps.yml")
+    job = _job(workflow, "copilot-setup-steps")
+    commands = " ".join(str(step.get("run", "")) for step in job["steps"])
+    actions = [str(step["uses"]) for step in job["steps"] if "uses" in step]
+
+    assert "uv python install" in commands
+    assert any(action.startswith("astral-sh/setup-uv@") for action in actions)
+    assert all("@" in action and len(action.split("@")[1]) == 40 for action in actions)
 
 
 def test_uv_workspace_lock_regeneration_tracks_member_changes() -> None:

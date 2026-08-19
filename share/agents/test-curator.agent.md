@@ -11,7 +11,7 @@ agents: []
 hooks:
   PreToolUse:
     - type: command
-      command: uv run python .owlbear/hooks/deny-src-writes.py
+      command: uv run --no-project --python 3.14 python .owlbear/hooks/deny-src-writes.py
 ---
 
 <persona>

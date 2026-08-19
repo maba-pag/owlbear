@@ -11,7 +11,7 @@ agents: [conceptual-design-reviewer, designer-challenger, Explore]
 hooks:
   PreToolUse:
     - type: command
-      command: uv run python .owlbear/hooks/deny-writes.py --allow-research --terminal-read-only
+      command: uv run --no-project --python 3.14 python .owlbear/hooks/deny-writes.py --allow-research --terminal-read-only
 ---
 
 <persona>

@@ -187,6 +187,14 @@ repos:
         pass_filenames: false
         stages: [manual]
       # Project-specific validators
+      - id: check-python-runtime
+        name: Validate Python runtime declarations
+        language: system
+        entry: >-
+          uv run --frozen python .github/scripts/check_python_runtime.py
+          --version-file .python-version --members-root serve --guard-file setup/init.py
+        files: '^(?:\.python-version|setup/init\.py|serve/[^/]+/pyproject\.toml|\.github/scripts/check_python_runtime\.py)$'
+        pass_filenames: false
       - id: validate-skills
         name: Validate Agent Skills
         language: system

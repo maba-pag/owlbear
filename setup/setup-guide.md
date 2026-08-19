@@ -223,9 +223,33 @@ detailed correction, publication, acceptance, or recovery procedure.
 | `ValueError` on setup | Cross-drive path resolution | Place owlbear and your project on the same Windows drive |
 | Hook file not refreshed on rerun | Existing local `.owlbear/hooks/` file differs from seed | Re-run `init.py --replace-hooks` to overwrite, or choose `replace` when prompted interactively |
 | Agent name conflict | Same-name agent in both owlbear and project locations | Give project agents unique names; see [Adding local agents](operating-owlbear.md#adding-local-agents) |
+| `SyntaxError: multiple exception types must be parenthesized` | A Python older than 3.14 ran OwlBear code | See [Confirm the Python runtime](#confirm-the-python-runtime) below |
+| `OwlBear requires Python 3.14.6 or newer` from `init.py` | Setup was run with a system Python | Re-run through uv: `uv run --project ../owlbear python ../owlbear/setup/init.py` |
 
 For deeper debugging, use **"Show Chat Debug View"** (Chat view ellipsis `…` menu) to inspect
 raw LLM request/response payloads.
+
+### Confirm the Python runtime
+
+OwlBear requires Python 3.14.6+ and uses syntax that older interpreters cannot parse, so a wrong
+interpreter surfaces as a `SyntaxError` rather than a clear version message.
+
+The pin in `.python-version` is honoured by **uv and pyenv only**. A bare `python3`, an
+IDE-selected interpreter, or a CI job without uv ignores it entirely and silently falls back to
+the system Python. Always drive OwlBear through `uv run`, and check what you actually get:
+
+```shell
+uv run --project ../owlbear python -V   # from a consumer project
+uv run python -V                        # from the owlbear clone
+```
+
+**Expected result:** `Python 3.14.x`. If uv reports a lower version, run `uv python install` to
+materialise the pinned runtime.
+
+If a plain `python -V` shows an older version, that is fine — it only matters that OwlBear's own
+commands go through uv. VS Code is pointed at the uv-managed `.venv` by
+`python.defaultInterpreterPath`; if the wrong interpreter is still selected, run
+**Python: Select Interpreter** and choose that environment.
 
 ## Next
 

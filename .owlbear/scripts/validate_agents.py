@@ -66,34 +66,45 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _AGENT_ROOTS = (_REPO_ROOT / "share" / "agents", _REPO_ROOT / ".owlbear" / "agents")
 _SKILL_ROOTS = (_REPO_ROOT / "share" / "skills", _REPO_ROOT / ".owlbear" / "skills")
 _HOOK_EVENTS = frozenset({"SessionStart", "PreToolUse", "PostToolUse"})
+# Hooks are stdlib-only guard scripts that use Python 3.14 syntax. Pinning the
+# interpreter keeps them off a consumer project's environment, which `uv run`
+# would otherwise resolve to and which may be older than the OwlBear floor.
+_HOOK_PREFIX = "uv run --no-project --python 3.14 python .owlbear/hooks/"
+
+
+def _hook(script: str) -> frozenset[str]:
+    """Build the exact required command for one hook invocation."""
+    return frozenset({_HOOK_PREFIX + script})
+
+
 _REQUIRED_HOOKS: dict[str, dict[str, frozenset[str]]] = {
     "build-reviewer": {
-        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py --terminal-read-only"}),
+        "PreToolUse": _hook("deny-writes.py --terminal-read-only"),
     },
     "builder": {
-        "SessionStart": frozenset({"uv run python .owlbear/hooks/session-context.py"}),
-        "PostToolUse": frozenset({"uv run python .owlbear/hooks/lint-changed.py"}),
+        "SessionStart": _hook("session-context.py"),
+        "PostToolUse": _hook("lint-changed.py"),
     },
     "conceptual-design-reviewer": {
-        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py"}),
+        "PreToolUse": _hook("deny-writes.py"),
     },
     "designer": {
-        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py --allow-research --terminal-read-only"}),
+        "PreToolUse": _hook("deny-writes.py --allow-research --terminal-read-only"),
     },
     "designer-challenger": {
-        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py"}),
+        "PreToolUse": _hook("deny-writes.py"),
     },
     "finalizer": {
-        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py --terminal-read-only"}),
+        "PreToolUse": _hook("deny-writes.py --terminal-read-only"),
     },
     "planner": {
-        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py --terminal-read-only"}),
+        "PreToolUse": _hook("deny-writes.py --terminal-read-only"),
     },
     "planner-challenger": {
-        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-writes.py"}),
+        "PreToolUse": _hook("deny-writes.py"),
     },
     "test-curator": {
-        "PreToolUse": frozenset({"uv run python .owlbear/hooks/deny-src-writes.py"}),
+        "PreToolUse": _hook("deny-src-writes.py"),
     },
 }
 
