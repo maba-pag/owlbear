@@ -265,6 +265,18 @@ jobs:
       - name: Install locked Python workspace
         run: uv sync --locked --all-packages --all-extras --all-groups
 
+      - name: Setup Node.js for frontend lint hooks
+        if: needs.classify.outputs.precommit == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: serve/cockpit/web/.nvmrc
+          cache: npm
+          cache-dependency-path: serve/cockpit/web/package-lock.json
+
+      - name: Install locked Cockpit dependencies
+        if: needs.classify.outputs.precommit == 'true'
+        run: npm ci --prefix serve/cockpit/web
+        
       - name: Validate updated GitHub Actions workflows
         if: needs.classify.outputs.workflows == 'true'
         run: uv run pre-commit run actionlint --all-files
