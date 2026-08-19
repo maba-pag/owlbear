@@ -51,7 +51,11 @@ def _minimum_python_from_pyproject() -> tuple[int, ...]:
 
 
 def _check_python_version(version_info: tuple[int, ...] | None = None) -> None:
-    """Abort setup when the active interpreter is below the supported minimum."""
+    """Abort setup when the active interpreter is below the supported minimum.
+
+    Missing version components in an injected ``version_info`` are treated as
+    zero so tests and callers can provide only major and minor versions.
+    """
     try:
         minimum_python = _minimum_python_from_pyproject()
     except (RuntimeError, TypeError, ValueError) as exc:
