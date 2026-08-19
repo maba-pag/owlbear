@@ -21,6 +21,9 @@ _DENY_SRC_CASES = [
     ("dev", _REPO_ROOT / ".owlbear" / "hooks" / "deny-src-writes.py"),
     ("seed", _REPO_ROOT / "seed" / ".owlbear" / "hooks" / "deny-src-writes.py"),
 ]
+_ALL_HOOK_PATHS = sorted(
+    (*(_REPO_ROOT / ".owlbear" / "hooks").glob("*.py"), *(_REPO_ROOT / "seed" / ".owlbear" / "hooks").glob("*.py"))
+)
 
 
 def _load_hook(path: Path, module_name: str) -> types.ModuleType:
@@ -71,6 +74,11 @@ def _is_allowed(result: dict[str, Any]) -> bool:
 
 def _is_denied(result: dict[str, Any]) -> bool:
     return result.get("hookSpecificOutput", {}).get("permissionDecision") == "deny"
+
+
+def test_all_shipped_hook_sources_compile() -> None:
+    for path in _ALL_HOOK_PATHS:
+        compile(path.read_text(encoding="utf-8"), str(path), "exec")
 
 
 @pytest.fixture(params=_DENY_WRITES_CASES, ids=[case[0] for case in _DENY_WRITES_CASES])

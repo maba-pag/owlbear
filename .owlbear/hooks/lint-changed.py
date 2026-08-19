@@ -173,7 +173,7 @@ def main() -> None:
 
     try:
         payload = json.loads(raw.decode("utf-8", errors="replace"))
-    except json.JSONDecodeError, ValueError:
+    except (json.JSONDecodeError, ValueError):
         print("{}")
         return
 

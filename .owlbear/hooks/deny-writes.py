@@ -119,7 +119,7 @@ def _normalize(path: str) -> str | None:
         candidate = root / candidate
     try:
         return candidate.resolve(strict=False).relative_to(root).as_posix()
-    except OSError, RuntimeError, ValueError:
+    except (OSError, RuntimeError, ValueError):
         return None
 
 
@@ -198,7 +198,7 @@ def main() -> None:
     raw = sys.stdin.buffer.read()
     try:
         payload = json.loads(raw.decode("utf-8", errors="replace"))
-    except json.JSONDecodeError, ValueError:
+    except (json.JSONDecodeError, ValueError):
         print("{}")
         return
     if not isinstance(payload, dict):
