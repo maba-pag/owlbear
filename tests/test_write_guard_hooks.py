@@ -81,6 +81,7 @@ def test_shipped_hook_source_compiles(path: Path) -> None:
 
 
 def test_both_shipped_hook_trees_are_present() -> None:
+    assert all(hook_dir.is_dir() for hook_dir in _HOOK_DIRS)
     assert {path.parent for path in _ALL_HOOK_PATHS} == set(_HOOK_DIRS)
 
 
