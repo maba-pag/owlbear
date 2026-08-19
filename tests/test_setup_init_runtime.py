@@ -1,5 +1,7 @@
 """Runtime guard tests for setup/init.py."""
 
+# ruff: noqa: SLF001
+
 from __future__ import annotations
 
 import importlib.util
