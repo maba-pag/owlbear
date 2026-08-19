@@ -109,6 +109,15 @@ def _advance_remote_target(tmp_path: Path, remote: Path, *, product: str | None 
     return _head(target_repository)
 
 
+def test_bare_repository_operations_are_isolated_from_host_git_configuration(tmp_path: Path) -> None:
+    remote = tmp_path / "remote.git"
+    _git(tmp_path, "init", "--bare", str(remote))
+
+    result = _git(remote, "show-ref", check=False)
+
+    assert result.returncode == 1, result.stderr
+
+
 _USER_CHECKOUT_STATES = (
     "clean",
     "modified",
