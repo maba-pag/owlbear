@@ -27,7 +27,9 @@ from contextlib import suppress
 from pathlib import Path
 
 _PYPROJECT_PATH = Path(__file__).resolve().parent.parent / "pyproject.toml"
-_PYTHON_REQUIREMENT_PATTERN = re.compile(r"(?:^|,)\s*>=\s*(\d+)\.(\d+)\.(\d+)(?=\s*(?:,|$))")
+_PYTHON_REQUIREMENT_PATTERN = re.compile(
+    r"(?:^|,)\s*>=\s*(\d+)(?:\.(\d+))?(?:\.(\d+))?(?=\s*(?:,|$))"
+)
 
 
 def _minimum_python_from_pyproject() -> tuple[int, ...]:
@@ -45,7 +47,7 @@ def _minimum_python_from_pyproject() -> tuple[int, ...]:
     if match is None:
         message = f"Unsupported requires-python value in {_PYPROJECT_PATH}: {requires_python!r}"
         raise ValueError(message)
-    return tuple(int(part) for part in match.groups())
+    return tuple(int(part or 0) for part in match.groups())
 
 
 def _check_python_version(version_info: tuple[int, ...] | None = None) -> None:
