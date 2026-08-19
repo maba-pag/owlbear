@@ -20,56 +20,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import tomllib
 import warnings
 from collections import Counter
 from contextlib import suppress
 from pathlib import Path
-
-_PYPROJECT_PATH = Path(__file__).resolve().parent.parent / "pyproject.toml"
-_PYTHON_REQUIREMENT_PATTERN = re.compile(r">=\s*(\d+)(?:\.(\d+))?(?:\.(\d+))?(?=\s*(?:,|$))")
-
-
-def _minimum_python_from_pyproject() -> tuple[int, ...]:
-    """Read the ``>=`` Python floor used by the workspace metadata."""
-    try:
-        with _PYPROJECT_PATH.open("rb") as stream:
-            requires_python = tomllib.load(stream)["project"]["requires-python"]
-    except (KeyError, OSError, TypeError, tomllib.TOMLDecodeError) as exc:
-        message = f"Could not read requires-python from {_PYPROJECT_PATH}"
-        raise RuntimeError(message) from exc
-    if not isinstance(requires_python, str):
-        message = f"requires-python in {_PYPROJECT_PATH} must be a string"
-        raise TypeError(message)
-    minimums = [
-        tuple(int(part) if part is not None else 0 for part in match.groups())
-        for match in _PYTHON_REQUIREMENT_PATTERN.finditer(requires_python)
-    ]
-    if not minimums:
-        message = f"Unsupported requires-python value in {_PYPROJECT_PATH}: {requires_python!r}"
-        raise ValueError(message)
-    return max(minimums)
-
-
-def _check_python_version(version_info: tuple[int, ...] | None = None) -> None:
-    """Abort setup when the active interpreter is below the supported minimum.
-
-    Missing version components in an injected ``version_info`` are treated as
-    zero so tests and callers can provide only major and minor versions.
-    """
-    try:
-        minimum_python = _minimum_python_from_pyproject()
-    except (RuntimeError, TypeError, ValueError) as exc:
-        raise SystemExit(str(exc)) from exc
-    raw_version = sys.version_info if version_info is None else version_info
-    current = tuple(raw_version[:3])
-    current += (0,) * (3 - len(current))
-    if current < minimum_python:
-        required = ".".join(str(part) for part in minimum_python)
-        found = ".".join(str(part) for part in current)
-        message = f"OwlBear requires Python {required} or newer; found Python {found}."
-        raise SystemExit(message)
-
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -262,7 +216,7 @@ def _load_install_manifest(path: Path) -> tuple[dict[str, object] | None, bytes 
     try:
         raw = path.read_bytes()
         manifest = json.loads(raw)
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+    except OSError, UnicodeDecodeError, json.JSONDecodeError:
         return None, None
     if (
         not isinstance(manifest, dict)
@@ -1268,7 +1222,7 @@ def _workspace_profile_association(
         return None
     try:
         state = json.loads(state_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except OSError, json.JSONDecodeError:
         return None
     association: tuple[bool, str | None] | None = None
     if isinstance(state, dict):
@@ -1571,7 +1525,7 @@ def _hook_diff(src: Path, dest: Path) -> str:
     try:
         seed_lines = src.read_text(encoding="utf-8").splitlines(keepends=True)
         existing_lines = dest.read_text(encoding="utf-8").splitlines(keepends=True)
-    except (OSError, UnicodeDecodeError):
+    except OSError, UnicodeDecodeError:
         return ""
     diff_lines = list(
         difflib.unified_diff(
@@ -1886,7 +1840,6 @@ def uninstall(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":  # pragma: no cover
-    _check_python_version()
     import argparse
 
     parser = argparse.ArgumentParser(description="Initialise an OwlBear workspace in the current directory.")
