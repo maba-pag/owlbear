@@ -47,12 +47,15 @@ def _minimum_python_from_pyproject() -> tuple[int, ...]:
     if match is None:
         message = f"Unsupported requires-python value in {_PYPROJECT_PATH}: {requires_python!r}"
         raise ValueError(message)
-    return tuple(int(part or 0) for part in match.groups())
+    return tuple(int(part) if part is not None else 0 for part in match.groups())
 
 
 def _check_python_version(version_info: tuple[int, ...] | None = None) -> None:
     """Abort setup when the active interpreter is below the supported minimum."""
-    minimum_python = _minimum_python_from_pyproject()
+    try:
+        minimum_python = _minimum_python_from_pyproject()
+    except (RuntimeError, TypeError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
     current = tuple(sys.version_info[:3] if version_info is None else version_info[:3])
     if current < minimum_python:
         required = ".".join(str(part) for part in minimum_python)
