@@ -283,6 +283,15 @@ def user_checkout_snapshot() -> Callable[..., UserCheckoutSnapshot]:
     return UserCheckoutSnapshot.capture
 
 
+@pytest.fixture(autouse=True)
+def isolate_git_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prevent Delivery tests from inheriting the host Git configuration."""
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_SYSTEM", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "0")
+
+
 @pytest.fixture
 def prepare_user_checkout_state() -> Callable[[Path, str], None]:
     return _prepare_user_checkout_state
