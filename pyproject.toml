@@ -1,3 +1,10 @@
+# This root is an intentionally virtual (unnamed) uv workspace. Adding a
+# [project] table here — even with package = false — promotes the root to a
+# locked workspace member and rewrites uv.lock, without changing the resolved
+# Python floor. The >=3.14.6 floor is declared by every serve/* member and
+# propagates to uv.lock; .github/scripts/check_python_runtime.py keeps those
+# declarations, .python-version, and the setup/init.py guard aligned.
+
 [tool.uv]
 system-certs = true
 
