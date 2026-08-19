@@ -27,7 +27,7 @@ from contextlib import suppress
 from pathlib import Path
 
 _PYPROJECT_PATH = Path(__file__).resolve().parent.parent / "pyproject.toml"
-_PYTHON_REQUIREMENT_PATTERN = re.compile(r">=\s*(\d+)\.(\d+)\.(\d+)")
+_PYTHON_REQUIREMENT_PATTERN = re.compile(r"(?:^|,)\s*>=\s*(\d+)\.(\d+)\.(\d+)(?=\s*(?:,|$))")
 
 
 def _minimum_python_from_pyproject() -> tuple[int, ...]:
@@ -41,7 +41,7 @@ def _minimum_python_from_pyproject() -> tuple[int, ...]:
     if not isinstance(requires_python, str):
         message = f"requires-python in {_PYPROJECT_PATH} must be a string"
         raise TypeError(message)
-    match = _PYTHON_REQUIREMENT_PATTERN.fullmatch(requires_python.strip())
+    match = _PYTHON_REQUIREMENT_PATTERN.search(requires_python.strip())
     if match is None:
         message = f"Unsupported requires-python value in {_PYPROJECT_PATH}: {requires_python!r}"
         raise ValueError(message)
