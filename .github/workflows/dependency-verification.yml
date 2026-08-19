@@ -163,8 +163,9 @@ jobs:
 
       - name: Run maintained browser smoke tests
         if: needs.classify.outputs.frontend_runtime == 'true'
+        timeout-minutes: 10
         run: |
-          npx playwright install chromium --with-deps
+          npx playwright install chromium
           npm run test:e2e
 
       - name: Verify generated PDS assets
@@ -235,8 +236,9 @@ jobs:
         run: npm ci
 
       - name: Render one maintained diagram
+        timeout-minutes: 10
         run: |
-          npx playwright install chromium --with-deps
+          npx playwright install chromium
           npm run export:file -- \
             ../../../share/diagrams/mcp-topology.excalidraw \
             "$RUNNER_TEMP/mcp-topology.png"
@@ -274,7 +276,7 @@ jobs:
       - name: Install locked Cockpit dependencies
         if: needs.classify.outputs.precommit == 'true'
         run: npm ci --prefix serve/cockpit/web
-
+        
       - name: Validate updated GitHub Actions workflows
         if: needs.classify.outputs.workflows == 'true'
         run: uv run pre-commit run actionlint --all-files

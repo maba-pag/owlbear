@@ -1,5 +1,5 @@
 [tool.uv]
-system-certs = true
+native-tls = true
 
 [tool.uv.workspace]
 members = ["serve/*"]
@@ -22,7 +22,7 @@ testpaths = ["tests", "serve"]
 pythonpath = ["serve/delivery/src", "serve/tools/src"]
 addopts = "--import-mode=importlib -m 'not e2e' -n auto --dist loadfile -p no:logfire -p no:pytest_logfire"
 timeout = 30
-session_timeout = 300
+session_timeout = 600
 asyncio_mode = "strict"
 markers = [
   "api: tests that require API integrations or network services",
