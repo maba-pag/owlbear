@@ -33,7 +33,7 @@ _PYTHON_REQUIREMENT_PATTERN = re.compile(
 
 
 def _minimum_python_from_pyproject() -> tuple[int, ...]:
-    """Read the minimum supported Python version from the workspace metadata."""
+    """Read the ``>=`` Python floor used by the workspace metadata."""
     try:
         with _PYPROJECT_PATH.open("rb") as stream:
             requires_python = tomllib.load(stream)["project"]["requires-python"]
@@ -56,7 +56,8 @@ def _check_python_version(version_info: tuple[int, ...] | None = None) -> None:
         minimum_python = _minimum_python_from_pyproject()
     except (RuntimeError, TypeError, ValueError) as exc:
         raise SystemExit(str(exc)) from exc
-    current = tuple(sys.version_info[:3] if version_info is None else version_info[:3])
+    raw_version = sys.version_info if version_info is None else version_info
+    current = tuple(raw_version[:3]) + (0,) * max(0, 3 - len(raw_version))
     if current < minimum_python:
         required = ".".join(str(part) for part in minimum_python)
         found = ".".join(str(part) for part in current)
