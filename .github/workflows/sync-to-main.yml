@@ -11,39 +11,39 @@ name: Sync dev to main
       sync_share:
         description: "share/ (agents, skills, instructions, prompts)"
         type: boolean
-        default: true
+        default: false
       sync_browser:
         description: "serve/browser/ + serve/browser-mcp/"
         type: boolean
-        default: true
+        default: false
       sync_delivery:
         description: "serve/delivery/ + serve/delivery-mcp/ + serve/delivery-github/"
         type: boolean
-        default: true
+        default: false
       sync_knowledge:
         description: "serve/knowledge/ + serve/knowledge-mcp/"
         type: boolean
-        default: true
+        default: false
       sync_memory:
         description: "serve/memory/ + serve/memory-mcp/"
         type: boolean
-        default: true
+        default: false
       sync_cockpit:
-        description: "serve/cockpit/"
+        description: "serve/cockpit/ + generated SPA (opt in for Cockpit changes)"
         type: boolean
-        default: true
+        default: false
       sync_tools:
         description: "serve/tools/"
         type: boolean
-        default: true
+        default: false
       sync_setup:
         description: "setup/ + seed/ (init script, templates)"
         type: boolean
-        default: true
+        default: false
       sync_infra:
         description: "CI workflows, support files, linters, editor & consumer root configs"
         type: boolean
-        default: true
+        default: false
       message:
         description: "Optional note for the rolling-main sync commit (e.g. 'refresh consumer docs')"
         type: string
