@@ -2578,7 +2578,7 @@ class PortfolioApplication:
         projection = self._retained_change_worktree_view(retained)
         try:
             completion = runtime.completion_receipt()
-        except OSError, ValueError, DeliveryRuntimeConflictError:
+        except (OSError, ValueError, DeliveryRuntimeConflictError):
             completion = None
         return WorkItemWorktreeCleanupView(
             eligible=projection.cleanup_eligible,
@@ -2635,12 +2635,12 @@ class PortfolioApplication:
         if runtime is not None:
             try:
                 lifecycle = runtime.change_stage()
-            except OSError, ValueError, DeliveryRuntimeConflictError:
+            except (OSError, ValueError, DeliveryRuntimeConflictError):
                 completion_state_inconsistent = True
             if not completion_state_inconsistent:
                 try:
                     completion = runtime.completion_receipt()
-                except OSError, ValueError, DeliveryRuntimeConflictError:
+                except (OSError, ValueError, DeliveryRuntimeConflictError):
                     completion_state_inconsistent = True
         reason = self._retained_cleanup_block_reason(
             retained,

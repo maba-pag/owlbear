@@ -6,6 +6,7 @@ name: Agent ecosystem validation
     branches: [dev]
     paths:
       - .github/workflows/agent-ecosystem.yml
+      - .github/workflows/dependency-verification.yml
       - .owlbear/hooks/**
       - .owlbear/agents/**
       - .owlbear/prompts/**
@@ -13,44 +14,41 @@ name: Agent ecosystem validation
       - .owlbear/scripts/validate_prompts.py
       - .owlbear/scripts/validate_skills.py
       - .owlbear/skills/**
+      - .github/scripts/check_uv_version.py
+      - serve/tools/src/owlbear_tools/dependency_ci.py
       - .pre-commit-config.yaml
       - share/agents/**
       - share/prompts/**
       - share/skills/**
       - tests/test_agent_ecosystem_validation.py
       - tests/test_write_guard_hooks.py
+      - tests/test_dependency_verification_workflow.py
+      - .python-version
+      - conftest.py
+      - pyproject.toml
+      - serve/knowledge/**
+      - serve/knowledge-mcp/**
+      - share/agents/knowledge-ingestor.agent.md
+      - share/prompts/kb-ingest.prompt.md
+      - share/skills/h-knowledge-ops/SKILL.md
+      - tests/test_knowledge_ops_contract.py
       - uv.lock
-  push:
-    branches: [dev]
-    paths:
-      - .github/workflows/agent-ecosystem.yml
-      - .owlbear/hooks/**
-      - .owlbear/agents/**
-      - .owlbear/prompts/**
-      - .owlbear/scripts/validate_agents.py
-      - .owlbear/scripts/validate_prompts.py
-      - .owlbear/scripts/validate_skills.py
-      - .owlbear/skills/**
-      - .pre-commit-config.yaml
-      - share/agents/**
-      - share/prompts/**
-      - share/skills/**
-      - tests/test_agent_ecosystem_validation.py
-      - tests/test_write_guard_hooks.py
-      - uv.lock
+
+concurrency:
+  group: agent-ecosystem-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 permissions: {}
 
 jobs:
   validate-agent-ecosystem:
-    if: github.repository == 'maba-pag/owlbear'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d  # v10.0.1
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
@@ -59,4 +57,4 @@ jobs:
       - run: uv run --frozen python .owlbear/scripts/validate_agents.py
       - run: uv run --frozen python .owlbear/scripts/validate_skills.py
       - run: uv run --frozen python .owlbear/scripts/validate_prompts.py
-      - run: uv run --frozen pytest -q tests/test_agent_ecosystem_validation.py tests/test_write_guard_hooks.py
+      - run: uv run --frozen pytest -q tests/test_agent_ecosystem_validation.py tests/test_write_guard_hooks.py tests/test_knowledge_ops_contract.py tests/test_dependency_verification_workflow.py

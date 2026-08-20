@@ -113,7 +113,7 @@ def _delivery_blockers(root: Path) -> list[str]:
     for path in sorted(root.glob(_FRONTIER_GLOB)):
         try:
             frontier = _load_json(path)
-        except OSError, TypeError, json.JSONDecodeError:
+        except (OSError, TypeError, json.JSONDecodeError):
             blockers.append(f"unreadable Delivery frontier: {path.relative_to(root)}")
             continue
         active_claims = [
@@ -126,7 +126,7 @@ def _delivery_blockers(root: Path) -> list[str]:
     for path in sorted(root.glob(_COORDINATION_GLOB)):
         try:
             _load_json(path)
-        except OSError, TypeError, json.JSONDecodeError:
+        except (OSError, TypeError, json.JSONDecodeError):
             blockers.append(f"unreadable Delivery coordination: {path.relative_to(root)}")
             continue
         blockers.append(f"unfinished Delivery coordination: {path.stem}")

@@ -12,7 +12,7 @@ Before running setup, ensure the following are installed on your machine:
 
 | Requirement | Why | How to get it |
 | --- | --- | --- |
-| Python 3.14.6+ | OwlBear runtime | [python.org](https://www.python.org/downloads/) |
+| Python 3.12.14+ | OwlBear runtime; the checkout defaults to Python 3.14.7 | [python.org](https://www.python.org/downloads/) |
 | [uv](https://docs.astral.sh/uv/) | Package manager and MCP server launcher | [Installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
 | VS Code | IDE | [code.visualstudio.com](https://code.visualstudio.com/) |
 | GitHub Copilot extension | Chat and agents | VS Code Extensions marketplace |

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 from pathlib import Path
 from typing import NoReturn
 
@@ -44,8 +45,8 @@ def _read_node_lower_bound(path: Path) -> tuple[int, int, int]:
     return tuple(int(match.group(name)) for name in ("major", "minor", "patch"))
 
 
-def check_node_runtime(version_file: Path, engines_file: Path) -> None:
-    """Raise when the checked-in Node version is below the declared lower bound."""
+def check_node_declaration(version_file: Path, engines_file: Path) -> None:
+    """Raise when the development Node version is below the declared lower bound."""
     actual = _parse_version(version_file.read_text(encoding="utf-8"), str(version_file))
     minimum = _read_node_lower_bound(engines_file)
     if actual < minimum:
@@ -55,14 +56,56 @@ def check_node_runtime(version_file: Path, engines_file: Path) -> None:
         )
 
 
+def check_installed_node(expected_version: str, node_executable: str = "node") -> None:
+    """Raise when the installed Node executable does not match the expected version."""
+    completed = subprocess.run(  # noqa: S603
+        [node_executable, "--version"],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    if completed.returncode != 0:
+        _raise_value_error(
+            f"{node_executable} --version exited with status {completed.returncode}: {completed.stderr.strip()}"
+        )
+
+    actual = _parse_version(completed.stdout, f"{node_executable} --version")
+    expected = _parse_version(expected_version, "expected Node version")
+    if actual != expected:
+        _raise_value_error(
+            f"installed Node version {actual[0]}.{actual[1]}.{actual[2]} does not match "
+            f"expected version {expected[0]}.{expected[1]}.{expected[2]}"
+        )
+
+
+def check_node_runtime(
+    version_file: Path,
+    engines_file: Path,
+    *,
+    expected_version: str | None = None,
+    node_executable: str = "node",
+) -> None:
+    """Validate the declaration and, when requested, the installed Node executable."""
+    check_node_declaration(version_file, engines_file)
+    if expected_version is not None:
+        check_installed_node(expected_version, node_executable)
+
+
 def main() -> int:
-    """Run the Node runtime compatibility check."""
+    """Run Node declaration and installed-runtime compatibility checks."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--version-file", type=Path, required=True)
     parser.add_argument("--engines-file", type=Path, required=True)
+    parser.add_argument("--expected-version")
+    parser.add_argument("--node-executable", default="node")
     args = parser.parse_args()
     try:
-        check_node_runtime(args.version_file, args.engines_file)
+        check_node_runtime(
+            args.version_file,
+            args.engines_file,
+            expected_version=args.expected_version,
+            node_executable=args.node_executable,
+        )
     except (OSError, TypeError, ValueError) as error:
         parser.error(str(error))
     return 0
