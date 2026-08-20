@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -13,9 +14,12 @@ from owlbear_tools.dependency_ci import classify_dependency_change
 
 ROOT = Path(__file__).parents[1]
 VERIFY_PATH = ROOT / ".github/workflows/dependency-verification.yml"
+AGENT_WORKFLOW_PATH = ROOT / ".github/workflows/agent-ecosystem.yml"
+KNOWLEDGE_WORKFLOW_PATH = ROOT / ".github/workflows/knowledge-source-contracts.yml"
 MEGALINTER_PATH = ROOT / ".github/workflows/megalinter.yml"
 SYNC_PATH = ROOT / ".github/workflows/sync-to-main.yml"
 RUNTIME_SCRIPT = ROOT / ".github/scripts/check_node_runtime.py"
+UV_VERSION_SCRIPT = ROOT / ".github/scripts/check_uv_version.py"
 WORKSPACE_LOCK_SCRIPT = ROOT / ".github/scripts/check_uv_workspace_lock.py"
 
 
@@ -37,6 +41,23 @@ def _job(workflow: dict[str, object], name: str) -> dict[str, object]:
 def _run_script(script: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603
         [sys.executable, str(script), *arguments],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _fake_uv(tmp_path: Path, version: str) -> Path:
+    executable = tmp_path / "uv"
+    executable.write_text(f"#!/bin/sh\nprintf 'uv {version}\\n'\n", encoding="utf-8")
+    executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
+    return executable
+
+
+def _run_uv_version_check(executable: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603
+        [sys.executable, str(UV_VERSION_SCRIPT), "--uv-executable", str(executable)],
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -96,14 +117,52 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert "needs.classify.outputs.shared_node_runtime == 'true'" in proof_cockpit["if"]
 
 
+def test_uv_runtime_check_precedes_uv_commands() -> None:
+    for path in (VERIFY_PATH, AGENT_WORKFLOW_PATH, KNOWLEDGE_WORKFLOW_PATH):
+        workflow = _workflow(path)
+        jobs = workflow["jobs"]
+        assert isinstance(jobs, dict)
+        for job in jobs.values():
+            assert isinstance(job, dict)
+            steps = job.get("steps", [])
+            if not isinstance(steps, list):
+                continue
+            setup_indices = [
+                index for index, step in enumerate(steps) if "astral-sh/setup-uv@" in str(step.get("uses", ""))
+            ]
+            if not setup_indices:
+                continue
+            setup_index = setup_indices[0]
+            check_index = next(
+                index for index, step in enumerate(steps) if "check_uv_version.py" in str(step.get("run", ""))
+            )
+            first_uv_command = next(
+                index
+                for index, step in enumerate(steps)
+                if re.search(r"\buv\s+(?:python|run|sync|lock)", str(step.get("run", "")))
+            )
+            assert setup_index < check_index < first_uv_command
+
+
+def test_uv_runtime_checker_accepts_the_declared_boundary(tmp_path: Path) -> None:
+    result = _run_uv_version_check(_fake_uv(tmp_path, "0.11.0"))
+
+    assert result.returncode == 0
+
+
+def test_uv_runtime_checker_rejects_an_older_executable(tmp_path: Path) -> None:
+    result = _run_uv_version_check(_fake_uv(tmp_path, "0.10.9"))
+
+    assert result.returncode != 0
+    assert "below" in result.stderr
+
+
 def _playwright_install_steps(workflow: dict[str, object]) -> list[dict[str, object]]:
     jobs = workflow["jobs"]
     assert isinstance(jobs, dict)
     steps = []
     for job in jobs.values():
-        for step in job.get("steps", []):
-            if "playwright install" in str(step.get("run", "")):
-                steps.append(step)
+        steps.extend(step for step in job.get("steps", []) if "playwright install" in str(step.get("run", "")))
     return steps
 
 

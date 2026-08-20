@@ -101,6 +101,9 @@ jobs:
         with:
           enable-cache: true
 
+      - name: Check uv runtime
+        run: python3 .github/scripts/check_uv_version.py
+
       - name: Install locked Python workspace
         run: uv sync --locked --all-packages --all-extras --all-groups
 
@@ -262,6 +265,9 @@ jobs:
         with:
           enable-cache: true
 
+      - name: Check uv runtime
+        run: python3 .github/scripts/check_uv_version.py
+
       - name: Install locked Python workspace
         run: uv sync --locked --all-packages --all-extras --all-groups
 
@@ -276,7 +282,7 @@ jobs:
       - name: Install locked Cockpit dependencies
         if: needs.classify.outputs.precommit == 'true'
         run: npm ci --prefix serve/cockpit/web
-        
+
       - name: Validate updated GitHub Actions workflows
         if: needs.classify.outputs.workflows == 'true'
         run: uv run pre-commit run actionlint --all-files

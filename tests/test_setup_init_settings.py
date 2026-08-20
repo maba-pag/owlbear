@@ -172,6 +172,7 @@ def test_init_creates_delivery_policy_without_runtime_selection_artifacts(
     seed_hooks = {path.name for path in (_REPO_ROOT / "seed/.owlbear/hooks").glob("*.py")}
     assert installed_hooks == seed_hooks
     mcp = json.loads((target_dir / ".vscode/mcp.json").read_text(encoding="utf-8"))
+    owlbear_rel_path = Path(os.path.relpath(_REPO_ROOT, target_dir)).as_posix()
     assert set(mcp["servers"]) == {
         "owlbear-delivery",
         "owlbear-knowledge",
@@ -180,6 +181,15 @@ def test_init_creates_delivery_policy_without_runtime_selection_artifacts(
         "markitdown",
     }
     assert mcp["servers"]["owlbear-browser"]["env"] == {"BROWSER_ALLOWED_DOMAINS": "*"}
+    for server_name in (
+        "owlbear-delivery",
+        "owlbear-knowledge",
+        "owlbear-memory",
+        "owlbear-browser",
+    ):
+        server = mcp["servers"][server_name]
+        assert server["command"] == "uv"
+        assert server["args"][:2] == ["--project", owlbear_rel_path]
     delivery_config_path = target_dir / ".owlbear/delivery/config.json"
     assert "env" not in mcp["servers"]["owlbear-delivery"]
     delivery_config = DeliveryStartupConfig.model_validate_json(delivery_config_path.read_bytes())

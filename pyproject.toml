@@ -1,5 +1,6 @@
 [tool.uv]
 system-certs = true
+required-version = ">=0.11.0"
 
 [tool.uv.workspace]
 members = ["serve/*"]

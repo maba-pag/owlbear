@@ -48,6 +48,7 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
+      - run: python3 .github/scripts/check_uv_version.py
       - run: uv python install
       - run: uv run python .owlbear/scripts/validate_agents.py
       - run: uv run --frozen pytest -q tests/test_knowledge_ops_contract.py

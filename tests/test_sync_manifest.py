@@ -48,6 +48,7 @@ def test_all_consumer_paths_exclude_dev_only_surfaces() -> None:
     assert ".github/scripts" in consumer_paths
     assert ".github/sync-manifest.json" in consumer_paths
     assert ".github/workflows" in consumer_paths
+    assert {"pyproject.toml", "uv.lock"}.issubset(consumer_paths)
     assert {
         ".github/README-automation.md",
         ".github/copilot-instructions.md",
