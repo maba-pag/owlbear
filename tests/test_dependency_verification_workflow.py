@@ -16,7 +16,6 @@ ROOT = Path(__file__).parents[1]
 VERIFY_PATH = ROOT / ".github/workflows/dependency-verification.yml"
 COCKPIT_VERIFY_PATH = ROOT / ".github/workflows/cockpit-verification.yml"
 AGENT_WORKFLOW_PATH = ROOT / ".github/workflows/agent-ecosystem.yml"
-KNOWLEDGE_WORKFLOW_PATH = ROOT / ".github/workflows/knowledge-source-contracts.yml"
 MEGALINTER_PATH = ROOT / ".github/workflows/megalinter.yml"
 SYNC_PATH = ROOT / ".github/workflows/sync-to-main.yml"
 RUNTIME_SCRIPT = ROOT / ".github/scripts/check_node_runtime.py"
@@ -77,9 +76,29 @@ def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
     workflow = _workflow(VERIFY_PATH)
     pull_request = workflow["on"]["pull_request"]
 
-    assert pull_request == {
-        "branches": ["dev"],
-        "types": ["opened", "reopened", "synchronize"],
+    assert pull_request["branches"] == ["dev"]
+    assert pull_request["types"] == ["opened", "reopened", "synchronize"]
+    assert set(pull_request["paths"]) == {
+        ".github/renovate.json",
+        ".github/scripts/check_node_runtime.py",
+        ".github/scripts/check_uv_version.py",
+        ".github/scripts/check_uv_workspace_lock.py",
+        ".github/workflows/**",
+        ".mega-linter.yml",
+        ".owlbear/scripts/export-diagrams/package.json",
+        ".owlbear/scripts/export-diagrams/package-lock.json",
+        ".pre-commit-config.yaml",
+        ".python-version",
+        "package.json",
+        "package-lock.json",
+        "pyproject.toml",
+        "serve/*/pyproject.toml",
+        "serve/cockpit/web/.nvmrc",
+        "serve/cockpit/web/package.json",
+        "serve/cockpit/web/package-lock.json",
+        "serve/tools/src/owlbear_tools/dependency_ci.py",
+        "tests/test_dependency_verification_workflow.py",
+        "uv.lock",
     }
     assert "if" not in _job(workflow, "classify")
 
@@ -111,7 +130,7 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     workflow = _workflow(VERIFY_PATH)
     text = VERIFY_PATH.read_text(encoding="utf-8")
     proof_python = _job(workflow, "proof-python")
-    proof_pds = _job(workflow, "proof-pds")
+    proof_node = _job(workflow, "proof-node")
 
     assert proof_python["strategy"] == {
         "fail-fast": False,
@@ -125,11 +144,19 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert "npm run sync:pds" in text
     assert "git apply" not in text
     assert proof_python["if"] == "needs.classify.outputs.python == 'true'"
-    assert proof_pds["if"] == ("needs.runtime.result == 'success' && needs.classify.outputs.pds == 'true'")
+    assert "runtime" not in workflow["jobs"]
+    assert "proof-pds" not in workflow["jobs"]
+    assert "proof-root-node" not in workflow["jobs"]
+    assert "proof-diagrams" not in workflow["jobs"]
+    assert "Check Node runtime declaration" in text
+    assert "needs.classify.outputs.pds == 'true'" in proof_node["if"]
+    assert "needs.classify.outputs.root_node == 'true'" in proof_node["if"]
+    assert "needs.classify.outputs.diagrams == 'true'" in proof_node["if"]
+    assert "needs.classify.outputs.shared_node_runtime == 'true'" in proof_node["if"]
 
 
 def test_uv_runtime_check_precedes_uv_commands() -> None:
-    for path in (VERIFY_PATH, AGENT_WORKFLOW_PATH, KNOWLEDGE_WORKFLOW_PATH):
+    for path in (VERIFY_PATH, AGENT_WORKFLOW_PATH):
         workflow = _workflow(path)
         jobs = workflow["jobs"]
         assert isinstance(jobs, dict)
@@ -171,10 +198,12 @@ def test_uv_runtime_checker_rejects_an_older_executable(tmp_path: Path) -> None:
 def _playwright_install_steps(workflow: dict[str, object]) -> list[dict[str, object]]:
     jobs = workflow["jobs"]
     assert isinstance(jobs, dict)
-    steps = []
-    for job in jobs.values():
-        steps.extend(step for step in job.get("steps", []) if "playwright install" in str(step.get("run", "")))
-    return steps
+    return [
+        step
+        for job in jobs.values()
+        for step in job.get("steps", [])
+        if "playwright install" in str(step.get("run", ""))
+    ]
 
 
 def test_playwright_browser_install_never_provisions_system_packages() -> None:
@@ -197,21 +226,20 @@ def test_browser_install_steps_cannot_burn_a_whole_job_timeout() -> None:
         assert 0 < timeout <= 10
 
 
-def test_shared_node_runtime_fans_out_to_all_node_proofs() -> None:
+def test_shared_node_runtime_uses_one_node_proof() -> None:
     workflow = _workflow(VERIFY_PATH)
 
-    for job_name in ("proof-root-node", "proof-diagrams"):
-        condition = _job(workflow, job_name)["if"]
-        assert "needs.classify.outputs.shared_node_runtime == 'true'" in condition
+    condition = _job(workflow, "proof-node")["if"]
+    assert "needs.classify.outputs.shared_node_runtime == 'true'" in condition
+    assert "needs.classify.outputs.root_node == 'true'" in condition
+    assert "needs.classify.outputs.diagrams == 'true'" in condition
 
     gate_env = _job(workflow, "gate")["steps"][0]["env"]
-    assert (
-        gate_env["ROOT_NODE_EXPECTED"]
-        == "${{ needs.classify.outputs.root_node == 'true' || needs.classify.outputs.shared_node_runtime == 'true' }}"
-    )
-    assert (
-        gate_env["DIAGRAMS_EXPECTED"]
-        == "${{ needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true' }}"
+    assert gate_env["NODE_EXPECTED"] == (
+        "${{ needs.classify.outputs.pds == 'true' || "
+        "needs.classify.outputs.root_node == 'true' || "
+        "needs.classify.outputs.diagrams == 'true' || "
+        "needs.classify.outputs.shared_node_runtime == 'true' }}"
     )
 
 
@@ -222,11 +250,8 @@ def test_gate_requires_only_current_read_only_proofs() -> None:
     assert gate["if"] == "always()"
     assert gate["needs"] == [
         "classify",
-        "runtime",
         "proof-python",
-        "proof-pds",
-        "proof-root-node",
-        "proof-diagrams",
+        "proof-node",
         "compatibility",
     ]
     assert "extraction" not in gate["needs"]
@@ -279,6 +304,14 @@ def test_classifier_derives_pds_asset_proof_from_lock_diff() -> None:
     assert frontend.node
     assert frontend.pds
     assert "frontend_runtime" not in frontend.github_outputs()
+
+
+def test_precommit_changes_use_compatibility_proof_without_python_suite() -> None:
+    scope = classify_dependency_change([".pre-commit-config.yaml"], "")
+
+    assert scope.precommit
+    assert scope.compatibility
+    assert not scope.python
 
 
 def test_classifier_outputs_do_not_include_fix_policy() -> None:

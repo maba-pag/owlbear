@@ -18,6 +18,7 @@ _INSTRUCTIONS_ROOT = _REPO_ROOT / "share/instructions"
 _AGENT_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_agents.py"
 _SKILL_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_skills.py"
 _PROMPT_VALIDATOR_PATH = _REPO_ROOT / ".owlbear/scripts/validate_prompts.py"
+_AGENT_WORKFLOW_PATH = _REPO_ROOT / ".github/workflows/agent-ecosystem.yml"
 
 _EXPECTED_AGENTS = {
     "build-reviewer",
@@ -184,6 +185,34 @@ def _frontmatter(path: Path) -> dict[str, object]:
     parsed = yaml.safe_load(raw)
     assert isinstance(parsed, dict)
     return parsed
+
+
+def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> None:
+    document = yaml.safe_load(_AGENT_WORKFLOW_PATH.read_text(encoding="utf-8"))
+    trigger = document.get("on", document.get(True))
+    pull_request = trigger["pull_request"]
+    job = document["jobs"]["validate-agent-ecosystem"]
+    pytest_run = next(str(step["run"]) for step in job["steps"] if "pytest" in str(step.get("run", "")))
+
+    assert set(trigger) == {"pull_request"}
+    assert pull_request["branches"] == ["dev"]
+    assert len(pull_request["paths"]) == len(set(pull_request["paths"]))
+    assert {
+        ".github/workflows/dependency-verification.yml",
+        "serve/tools/src/owlbear_tools/dependency_ci.py",
+        "tests/test_dependency_verification_workflow.py",
+    } <= set(pull_request["paths"])
+    assert job["timeout-minutes"] == 5
+    assert "if" not in job
+    assert all(
+        path in pytest_run
+        for path in (
+            "tests/test_agent_ecosystem_validation.py",
+            "tests/test_write_guard_hooks.py",
+            "tests/test_knowledge_ops_contract.py",
+            "tests/test_dependency_verification_workflow.py",
+        )
+    )
 
 
 class _TargetApplicationDouble:

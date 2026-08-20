@@ -9,6 +9,27 @@ name: Dependency verification
       - opened
       - reopened
       - synchronize
+    paths:
+      - .github/renovate.json
+      - .github/scripts/check_node_runtime.py
+      - .github/scripts/check_uv_version.py
+      - .github/scripts/check_uv_workspace_lock.py
+      - .github/workflows/**
+      - .mega-linter.yml
+      - .pre-commit-config.yaml
+      - .python-version
+      - .owlbear/scripts/export-diagrams/package.json
+      - .owlbear/scripts/export-diagrams/package-lock.json
+      - package.json
+      - package-lock.json
+      - pyproject.toml
+      - serve/*/pyproject.toml
+      - serve/cockpit/web/.nvmrc
+      - serve/cockpit/web/package.json
+      - serve/cockpit/web/package-lock.json
+      - serve/tools/src/owlbear_tools/dependency_ci.py
+      - tests/test_dependency_verification_workflow.py
+      - uv.lock
 
 concurrency:
   group: dependency-verification-${{ github.event.pull_request.number }}
@@ -58,25 +79,14 @@ jobs:
             --github-output "$GITHUB_OUTPUT" \
             --summary "$GITHUB_STEP_SUMMARY"
 
-  runtime:
-    name: Prove Node runtime compatibility
-    needs: classify
-    if: needs.classify.result == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Checkout pull request head
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          persist-credentials: false
-
-      - name: Setup Node.js
+      - name: Setup Node.js for runtime declaration
+        if: steps.scope.outputs.node == 'true' || steps.scope.outputs.shared_node_runtime == 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           node-version-file: serve/cockpit/web/.nvmrc
 
       - name: Check Node runtime declaration
+        if: steps.scope.outputs.node == 'true' || steps.scope.outputs.shared_node_runtime == 'true'
         run: |
           python3 .github/scripts/check_node_runtime.py \
             --version-file serve/cockpit/web/.nvmrc \
@@ -136,54 +146,18 @@ jobs:
           uv run --python "${{ matrix.python }}" pytest tests serve \
             -m "not api and not e2e and not browser and not cockpit"
 
-  proof-pds:
-    name: Prove PDS asset synchronization
+  proof-node:
+    name: Prove Node dependency surfaces
     needs:
       - classify
-      - runtime
     if: >-
-      needs.runtime.result == 'success' &&
-      needs.classify.outputs.pds == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: serve/cockpit/web
-    steps:
-      - name: Checkout pull request head
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          persist-credentials: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
-        with:
-          node-version-file: serve/cockpit/web/.nvmrc
-          cache: npm
-          cache-dependency-path: serve/cockpit/web/package-lock.json
-
-      - name: Install locked Cockpit dependencies
-        run: npm ci --engine-strict
-
-      - name: Verify generated PDS assets
-        run: |
-          npm run sync:pds
-          git status --porcelain --untracked-files=all -- public/porsche-design-system \
-            | tee "$RUNNER_TEMP/pds-status"
-          test ! -s "$RUNNER_TEMP/pds-status"
-
-  proof-root-node:
-    name: Prove root npm dependency update
-    needs:
-      - classify
-      - runtime
-    if: >-
-      needs.runtime.result == 'success' &&
-      (needs.classify.outputs.root_node == 'true' ||
+      needs.classify.result == 'success' &&
+      (needs.classify.outputs.pds == 'true' ||
+      needs.classify.outputs.root_node == 'true' ||
+      needs.classify.outputs.diagrams == 'true' ||
       needs.classify.outputs.shared_node_runtime == 'true')
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 40
     steps:
       - name: Checkout pull request head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -196,43 +170,23 @@ jobs:
         with:
           node-version-file: serve/cockpit/web/.nvmrc
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            serve/cockpit/web/package-lock.json
+            .owlbear/scripts/export-diagrams/package-lock.json
 
       - name: Install locked root dependencies
+        if: needs.classify.outputs.root_node == 'true' || needs.classify.outputs.shared_node_runtime == 'true'
         run: npm ci
 
-  proof-diagrams:
-    name: Prove diagram exporter dependency update
-    needs:
-      - classify
-      - runtime
-    if: >-
-      needs.runtime.result == 'success' &&
-      (needs.classify.outputs.diagrams == 'true' ||
-      needs.classify.outputs.shared_node_runtime == 'true')
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: .owlbear/scripts/export-diagrams
-    steps:
-      - name: Checkout pull request head
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          persist-credentials: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
-        with:
-          node-version-file: serve/cockpit/web/.nvmrc
-          cache: npm
-          cache-dependency-path: .owlbear/scripts/export-diagrams/package-lock.json
-
       - name: Install locked diagram exporter dependencies
+        if: needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true'
+        working-directory: .owlbear/scripts/export-diagrams
         run: npm ci
 
       - name: Render one maintained diagram
+        if: needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true'
+        working-directory: .owlbear/scripts/export-diagrams
         timeout-minutes: 10
         run: |
           npx playwright install chromium
@@ -240,6 +194,20 @@ jobs:
             ../../../share/diagrams/mcp-topology.excalidraw \
             "$RUNNER_TEMP/mcp-topology.png"
           test -s "$RUNNER_TEMP/mcp-topology.png"
+
+      - name: Install locked Cockpit dependencies
+        if: needs.classify.outputs.pds == 'true'
+        working-directory: serve/cockpit/web
+        run: npm ci --engine-strict
+
+      - name: Verify generated PDS assets
+        if: needs.classify.outputs.pds == 'true'
+        working-directory: serve/cockpit/web
+        run: |
+          npm run sync:pds
+          git status --porcelain --untracked-files=all -- public/porsche-design-system \
+            | tee "$RUNNER_TEMP/pds-status"
+          test ! -s "$RUNNER_TEMP/pds-status"
 
   compatibility:
     name: Prove dependency tooling compatibility
@@ -297,11 +265,8 @@ jobs:
     name: Verify dependency update
     needs:
       - classify
-      - runtime
       - proof-python
-      - proof-pds
-      - proof-root-node
-      - proof-diagrams
+      - proof-node
       - compatibility
     if: always()
     runs-on: ubuntu-latest
@@ -312,17 +277,14 @@ jobs:
           CLASSIFY: ${{ needs.classify.result }}
           COMPATIBILITY: ${{ needs.compatibility.result }}
           COMPATIBILITY_EXPECTED: ${{ needs.classify.outputs.compatibility }}
-          DIAGRAMS: ${{ needs.proof-diagrams.result }}
-          DIAGRAMS_EXPECTED: >-
-            ${{ needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true' }}
+          NODE: ${{ needs.proof-node.result }}
+          NODE_EXPECTED: >-
+            ${{ needs.classify.outputs.pds == 'true' ||
+            needs.classify.outputs.root_node == 'true' ||
+            needs.classify.outputs.diagrams == 'true' ||
+            needs.classify.outputs.shared_node_runtime == 'true' }}
           PYTHON: ${{ needs.proof-python.result }}
           PYTHON_EXPECTED: ${{ needs.classify.outputs.python }}
-          ROOT_NODE: ${{ needs.proof-root-node.result }}
-          ROOT_NODE_EXPECTED: >-
-            ${{ needs.classify.outputs.root_node == 'true' || needs.classify.outputs.shared_node_runtime == 'true' }}
-          RUNTIME: ${{ needs.runtime.result }}
-          PDS: ${{ needs.proof-pds.result }}
-          PDS_EXPECTED: ${{ needs.classify.outputs.pds }}
         run: |
           failed=false
           [ "$CLASSIFY" = success ] || failed=true
@@ -337,11 +299,8 @@ jobs:
             fi
           }
 
-          check_expected true "$RUNTIME"
           check_expected "$PYTHON_EXPECTED" "$PYTHON"
-          check_expected "$PDS_EXPECTED" "$PDS"
-          check_expected "$ROOT_NODE_EXPECTED" "$ROOT_NODE"
-          check_expected "$DIAGRAMS_EXPECTED" "$DIAGRAMS"
+          check_expected "$NODE_EXPECTED" "$NODE"
           check_expected "$COMPATIBILITY_EXPECTED" "$COMPATIBILITY"
 
           {
@@ -350,11 +309,8 @@ jobs:
             echo "| Proof | Expected | Result |"
             echo "|---|---|---|"
             echo "| Python lock and behavior | $PYTHON_EXPECTED | $PYTHON |"
-            echo "| PDS asset synchronization | $PDS_EXPECTED | $PDS |"
-            echo "| Root npm install | $ROOT_NODE_EXPECTED | $ROOT_NODE |"
-            echo "| Diagram exporter install and render | $DIAGRAMS_EXPECTED | $DIAGRAMS |"
+            echo "| Node dependency surfaces | $NODE_EXPECTED | $NODE |"
             echo "| Tooling compatibility | $COMPATIBILITY_EXPECTED | $COMPATIBILITY |"
-            echo "| Node runtime declaration | true | $RUNTIME |"
             echo
             if [ "$failed" = true ]; then
               echo "At least one applicable dependency proof failed."

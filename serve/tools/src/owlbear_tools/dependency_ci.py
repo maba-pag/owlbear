@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 
-_PYTHON_FILES = {".pre-commit-config.yaml", ".python-version", "pyproject.toml", "uv.lock"}
+_PYTHON_FILES = {".python-version", "pyproject.toml", "uv.lock"}
 _SHARED_NODE_RUNTIME_FILES = {"serve/cockpit/web/.nvmrc"}
 _COCKPIT_NODE_FILES = {
     "serve/cockpit/web/.nvmrc",
