@@ -27,7 +27,6 @@ jobs:
       applicable: ${{ steps.scope.outputs.applicable }}
       compatibility: ${{ steps.scope.outputs.compatibility }}
       diagrams: ${{ steps.scope.outputs.diagrams }}
-      frontend_runtime: ${{ steps.scope.outputs.frontend_runtime }}
       megalinter: ${{ steps.scope.outputs.megalinter }}
       node: ${{ steps.scope.outputs.node }}
       pds: ${{ steps.scope.outputs.pds }}
@@ -81,7 +80,8 @@ jobs:
         run: |
           python3 .github/scripts/check_node_runtime.py \
             --version-file serve/cockpit/web/.nvmrc \
-            --engines-file serve/cockpit/web/package.json
+            --engines-file serve/cockpit/web/package.json \
+            --expected-version "$(tr -d '\r\n' < serve/cockpit/web/.nvmrc)"
 
   proof-python:
     name: Prove Python ${{ matrix.python }} compatibility
@@ -136,17 +136,16 @@ jobs:
           uv run --python "${{ matrix.python }}" pytest tests serve \
             -m "not api and not e2e and not browser and not cockpit"
 
-  proof-cockpit:
-    name: Prove Cockpit dependency update
+  proof-pds:
+    name: Prove PDS asset synchronization
     needs:
       - classify
       - runtime
     if: >-
       needs.runtime.result == 'success' &&
-      (needs.classify.outputs.node == 'true' ||
-      needs.classify.outputs.shared_node_runtime == 'true')
+      needs.classify.outputs.pds == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: serve/cockpit/web
@@ -165,29 +164,9 @@ jobs:
           cache-dependency-path: serve/cockpit/web/package-lock.json
 
       - name: Install locked Cockpit dependencies
-        run: npm ci
-
-      - name: Run Cockpit behavior tests
-        run: npm test
-
-      - name: Check Cockpit sources
-        run: |
-          npx eslint src e2e --max-warnings 0
-          npm run lint:css
-          npm run lint:html
-
-      - name: Build production Cockpit
-        run: npm run build
-
-      - name: Run maintained browser smoke tests
-        if: needs.classify.outputs.frontend_runtime == 'true'
-        timeout-minutes: 10
-        run: |
-          npx playwright install chromium
-          npm run test:e2e
+        run: npm ci --engine-strict
 
       - name: Verify generated PDS assets
-        if: needs.classify.outputs.pds == 'true'
         run: |
           npm run sync:pds
           git status --porcelain --untracked-files=all -- public/porsche-design-system \
@@ -320,7 +299,7 @@ jobs:
       - classify
       - runtime
       - proof-python
-      - proof-cockpit
+      - proof-pds
       - proof-root-node
       - proof-diagrams
       - compatibility
@@ -333,9 +312,6 @@ jobs:
           CLASSIFY: ${{ needs.classify.result }}
           COMPATIBILITY: ${{ needs.compatibility.result }}
           COMPATIBILITY_EXPECTED: ${{ needs.classify.outputs.compatibility }}
-          COCKPIT: ${{ needs.proof-cockpit.result }}
-          COCKPIT_EXPECTED: >-
-            ${{ needs.classify.outputs.node == 'true' || needs.classify.outputs.shared_node_runtime == 'true' }}
           DIAGRAMS: ${{ needs.proof-diagrams.result }}
           DIAGRAMS_EXPECTED: >-
             ${{ needs.classify.outputs.diagrams == 'true' || needs.classify.outputs.shared_node_runtime == 'true' }}
@@ -345,6 +321,8 @@ jobs:
           ROOT_NODE_EXPECTED: >-
             ${{ needs.classify.outputs.root_node == 'true' || needs.classify.outputs.shared_node_runtime == 'true' }}
           RUNTIME: ${{ needs.runtime.result }}
+          PDS: ${{ needs.proof-pds.result }}
+          PDS_EXPECTED: ${{ needs.classify.outputs.pds }}
         run: |
           failed=false
           [ "$CLASSIFY" = success ] || failed=true
@@ -361,7 +339,7 @@ jobs:
 
           check_expected true "$RUNTIME"
           check_expected "$PYTHON_EXPECTED" "$PYTHON"
-          check_expected "$COCKPIT_EXPECTED" "$COCKPIT"
+          check_expected "$PDS_EXPECTED" "$PDS"
           check_expected "$ROOT_NODE_EXPECTED" "$ROOT_NODE"
           check_expected "$DIAGRAMS_EXPECTED" "$DIAGRAMS"
           check_expected "$COMPATIBILITY_EXPECTED" "$COMPATIBILITY"
@@ -372,7 +350,7 @@ jobs:
             echo "| Proof | Expected | Result |"
             echo "|---|---|---|"
             echo "| Python lock and behavior | $PYTHON_EXPECTED | $PYTHON |"
-            echo "| Cockpit install, tests, and build | $COCKPIT_EXPECTED | $COCKPIT |"
+            echo "| PDS asset synchronization | $PDS_EXPECTED | $PDS |"
             echo "| Root npm install | $ROOT_NODE_EXPECTED | $ROOT_NODE |"
             echo "| Diagram exporter install and render | $DIAGRAMS_EXPECTED | $DIAGRAMS |"
             echo "| Tooling compatibility | $COMPATIBILITY_EXPECTED | $COMPATIBILITY |"

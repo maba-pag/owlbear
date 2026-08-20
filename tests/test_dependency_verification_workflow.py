@@ -14,6 +14,7 @@ from owlbear_tools.dependency_ci import classify_dependency_change
 
 ROOT = Path(__file__).parents[1]
 VERIFY_PATH = ROOT / ".github/workflows/dependency-verification.yml"
+COCKPIT_VERIFY_PATH = ROOT / ".github/workflows/cockpit-verification.yml"
 AGENT_WORKFLOW_PATH = ROOT / ".github/workflows/agent-ecosystem.yml"
 KNOWLEDGE_WORKFLOW_PATH = ROOT / ".github/workflows/knowledge-source-contracts.yml"
 MEGALINTER_PATH = ROOT / ".github/workflows/megalinter.yml"
@@ -51,6 +52,13 @@ def _run_script(script: Path, *arguments: str) -> subprocess.CompletedProcess[st
 def _fake_uv(tmp_path: Path, version: str) -> Path:
     executable = tmp_path / "uv"
     executable.write_text(f"#!/bin/sh\nprintf 'uv {version}\\n'\n", encoding="utf-8")
+    executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
+    return executable
+
+
+def _fake_node(tmp_path: Path, version: str) -> Path:
+    executable = tmp_path / "node"
+    executable.write_text(f"#!/bin/sh\nprintf 'v{version}\\n'\n", encoding="utf-8")
     executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
     return executable
 
@@ -103,7 +111,7 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     workflow = _workflow(VERIFY_PATH)
     text = VERIFY_PATH.read_text(encoding="utf-8")
     proof_python = _job(workflow, "proof-python")
-    proof_cockpit = _job(workflow, "proof-cockpit")
+    proof_pds = _job(workflow, "proof-pds")
 
     assert proof_python["strategy"] == {
         "fail-fast": False,
@@ -113,14 +121,11 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert 'uv sync --locked --python "${{ matrix.python }}" --all-packages --all-extras --all-groups' in text
     assert 'uv run --python "${{ matrix.python }}" pytest tests serve \\' in text
     assert '            -m "not api and not e2e and not browser and not cockpit"' in text
-    assert "npm ci" in text
-    assert "npm test" in text
-    assert "npm run build" in text
+    assert "npm ci --engine-strict" in text
     assert "npm run sync:pds" in text
     assert "git apply" not in text
     assert proof_python["if"] == "needs.classify.outputs.python == 'true'"
-    assert "needs.classify.outputs.node == 'true'" in proof_cockpit["if"]
-    assert "needs.classify.outputs.shared_node_runtime == 'true'" in proof_cockpit["if"]
+    assert proof_pds["if"] == ("needs.runtime.result == 'success' && needs.classify.outputs.pds == 'true'")
 
 
 def test_uv_runtime_check_precedes_uv_commands() -> None:
@@ -195,7 +200,7 @@ def test_browser_install_steps_cannot_burn_a_whole_job_timeout() -> None:
 def test_shared_node_runtime_fans_out_to_all_node_proofs() -> None:
     workflow = _workflow(VERIFY_PATH)
 
-    for job_name in ("proof-cockpit", "proof-root-node", "proof-diagrams"):
+    for job_name in ("proof-root-node", "proof-diagrams"):
         condition = _job(workflow, job_name)["if"]
         assert "needs.classify.outputs.shared_node_runtime == 'true'" in condition
 
@@ -219,7 +224,7 @@ def test_gate_requires_only_current_read_only_proofs() -> None:
         "classify",
         "runtime",
         "proof-python",
-        "proof-cockpit",
+        "proof-pds",
         "proof-root-node",
         "proof-diagrams",
         "compatibility",
@@ -265,7 +270,7 @@ def test_classifier_maps_every_dependency_surface(path: str, surface: str) -> No
     assert scope.applicable
 
 
-def test_classifier_derives_runtime_specific_proofs_from_lock_diff() -> None:
+def test_classifier_derives_pds_asset_proof_from_lock_diff() -> None:
     frontend = classify_dependency_change(
         ["serve/cockpit/web/package-lock.json"],
         '+    "node_modules/@porsche-design-system/components-react": {\n',
@@ -273,7 +278,7 @@ def test_classifier_derives_runtime_specific_proofs_from_lock_diff() -> None:
 
     assert frontend.node
     assert frontend.pds
-    assert frontend.frontend_runtime
+    assert "frontend_runtime" not in frontend.github_outputs()
 
 
 def test_classifier_outputs_do_not_include_fix_policy() -> None:
@@ -348,6 +353,86 @@ def test_node_runtime_checker_rejects_a_lower_runtime(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert "below" in result.stderr
+
+
+def test_node_runtime_checker_accepts_the_expected_installed_runtime(tmp_path: Path) -> None:
+    node = _fake_node(tmp_path, "24.16.0")
+    version_file = tmp_path / ".nvmrc"
+    engines_file = tmp_path / "package.json"
+    version_file.write_text("24.19.0\n", encoding="utf-8")
+    engines_file.write_text(json.dumps({"engines": {"node": ">=24.16.0"}}), encoding="utf-8")
+
+    result = _run_script(
+        RUNTIME_SCRIPT,
+        "--version-file",
+        str(version_file),
+        "--engines-file",
+        str(engines_file),
+        "--expected-version",
+        "24.16.0",
+        "--node-executable",
+        str(node),
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_node_runtime_checker_rejects_an_unexpected_installed_runtime(tmp_path: Path) -> None:
+    node = _fake_node(tmp_path, "24.15.0")
+    version_file = tmp_path / ".nvmrc"
+    engines_file = tmp_path / "package.json"
+    version_file.write_text("24.19.0\n", encoding="utf-8")
+    engines_file.write_text(json.dumps({"engines": {"node": ">=24.16.0"}}), encoding="utf-8")
+
+    result = _run_script(
+        RUNTIME_SCRIPT,
+        "--version-file",
+        str(version_file),
+        "--engines-file",
+        str(engines_file),
+        "--expected-version",
+        "24.16.0",
+        "--node-executable",
+        str(node),
+    )
+
+    assert result.returncode != 0
+    assert "does not match" in result.stderr
+
+
+def test_cockpit_workflow_proves_node_floor_and_browser_engines() -> None:
+    workflow = _workflow(COCKPIT_VERIFY_PATH)
+    proof = _job(workflow, "proof")
+    browser = _job(workflow, "browser_compatibility")
+    text = COCKPIT_VERIFY_PATH.read_text(encoding="utf-8")
+
+    assert workflow["on"]["pull_request"]["paths"] == [
+        "serve/cockpit/web/**",
+        "serve/cockpit/README.md",
+        ".github/scripts/check_node_runtime.py",
+        ".github/workflows/cockpit-verification.yml",
+    ]
+    assert proof["strategy"] == {
+        "fail-fast": False,
+        "matrix": {"node": ["24.16.0", "24.19.0"]},
+    }
+    assert "npm ci --engine-strict" in text
+    assert "npm run build" in text
+    assert browser["needs"] == "proof"
+    assert browser["if"] == "needs.proof.result == 'success'"
+    assert "npx playwright install chromium firefox webkit" in text
+    assert "npm run test:e2e:compat" in text
+
+
+def test_cockpit_workflow_actions_are_pinned() -> None:
+    for line in COCKPIT_VERIFY_PATH.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("uses:"):
+            continue
+        action = stripped.split("#", maxsplit=1)[0].removeprefix("uses:").strip()
+        revision = action.rsplit("@", maxsplit=1)[1]
+        assert len(revision) == 40
+        assert all(character in "0123456789abcdef" for character in revision)
 
 
 def test_uv_workspace_lock_regeneration_tracks_member_changes() -> None:

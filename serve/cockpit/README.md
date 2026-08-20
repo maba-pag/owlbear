@@ -62,12 +62,20 @@ repository.
 
 | Attribute | Value |
 | --- | --- |
-| Node requirement | `>=24.16.0` (`web/package.json`) |
+| Node development pin | `24.19.0` (`web/.nvmrc`) |
+| Node support/build floor | `>=24.16.0` (`web/package.json`) |
 | Stack | React `^19.2.7`, Vite `^8.1.5`, TypeScript `^6.0.3`, React Router `^8.2.0`, Porsche Design System React `^4.5.0`, React Compiler (`babel-plugin-react-compiler` `^1.0.0`), Tailwind CSS `^4.3.3` (`@tailwindcss/vite` + `tailwindcss`) |
 | Test runner | Vitest `^4.1.10` (`npm test`) |
 | E2E runner | Playwright `^1.61.1` (`npm run test:e2e`) |
+| Browser output target | Chrome/Edge `123`, Firefox `120`, Safari/iOS `17.5` (native `light-dark()` floor) |
 | CSS/HTML lint | Stylelint `^17.12.0` (`npm run lint:css`), HTMLHint `^1.9.2` (`npm run lint:html`) |
 | Build output | `serve/cockpit/dist/` via `npm run build` |
+
+The Node development pin is the reproducible local toolchain; the support/build floor is the
+oldest Cockpit runtime exercised in CI. Vite compiles JavaScript and CSS for the listed browser
+target but does not polyfill missing Web APIs. The browser floor includes native `light-dark()`
+support; TypeScript's `ES2020` target is a type-checking configuration here because the project
+uses `noEmit`.
 
 ## Browser-backed tests
 
@@ -85,6 +93,19 @@ uv run test-e2e
 
 Expected result: the Cockpit smoke tests start without an executable-missing error. Consumer
 workspaces use the prebuilt bundle and do not run this developer-only procedure.
+
+Run the explicit cross-engine compatibility smoke gate when validating browser support:
+
+```shell
+cd /path/to/owlbear/serve/cockpit/web
+npx playwright install chromium firefox webkit
+npm run test:e2e:compat
+```
+
+The compatibility gate uses a separate Playwright configuration and runs only the shell and PDS
+smoke scenarios against the Playwright-pinned current Chromium, Firefox, and WebKit engines. It
+does not execute the exact minimum browser versions in the output-target table. The maintained
+fast and assembled suites remain Chromium-only.
 
 ## Delivery Evidence
 

@@ -28,14 +28,6 @@ _PDS_PACKAGES = (
     "@porsche-design-system/components-js",
     "@porsche-design-system/components-react",
 )
-_FRONTEND_RUNTIME_PACKAGES = (
-    "@porsche-design-system/components-js",
-    "@porsche-design-system/components-react",
-    "react",
-    "react-dom",
-    "react-router",
-    "vite",
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,7 +40,6 @@ class DependencyScope:
     root_node: bool
     diagrams: bool
     pds: bool
-    frontend_runtime: bool
     precommit: bool
     workflows: bool
     megalinter: bool
@@ -99,7 +90,6 @@ def classify_dependency_change(paths: Iterable[str], diff: str) -> DependencySco
         root_node=root_node,
         diagrams=diagrams,
         pds=node and any(package in diff for package in _PDS_PACKAGES),
-        frontend_runtime=node and any(package in diff for package in _FRONTEND_RUNTIME_PACKAGES),
         precommit=precommit,
         workflows=workflows,
         megalinter=megalinter,

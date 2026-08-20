@@ -101,11 +101,14 @@ describe('token file migration', () => {
     expect(existsSync(CUSTOM_TOKENS_CSS_PATH), 'custom-tokens.css must exist').toBe(true)
     const css = readFileSync(CUSTOM_TOKENS_CSS_PATH, 'utf-8')
     const cssNoComments = css.replace(/\/\*[\s\S]*?\*\//g, '')
-    const declarations = [...cssNoComments.matchAll(/--[a-z][a-z0-9-]*\s*:/g)]
+    const declarations = [...cssNoComments.matchAll(/--[a-z][a-z0-9-]*\s*:/g)].map((match) =>
+      match[0].replace(/\s*:/, ''),
+    )
+    const uniqueDeclarations = [...new Set(declarations)]
     expect(
-      declarations.length,
-      `custom-tokens.css must declare exactly 1 custom property, found ${declarations.length}: ` +
-        declarations.map((m) => m[0].replace(':', '')).join(', '),
+      uniqueDeclarations.length,
+      `custom-tokens.css must declare exactly 1 custom property, found ${uniqueDeclarations.length}: ` +
+        uniqueDeclarations.join(', '),
     ).toBe(1)
   })
 

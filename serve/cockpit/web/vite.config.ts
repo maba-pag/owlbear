@@ -2,9 +2,10 @@ import { defineConfig } from 'vitest/config'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import babel from '@rolldown/plugin-babel'
-import { Features } from 'lightningcss'
 import * as fs from 'node:fs'
 import { join } from 'node:path'
+
+const BROWSER_TARGET = ['chrome123', 'edge123', 'firefox120', 'safari17.5', 'ios17.5']
 
 function cspPlugin() {
   const policy = [
@@ -74,12 +75,11 @@ export default defineConfig({
   build: {
     outDir: '../dist',
     emptyOutDir: true,
+    target: BROWSER_TARGET,
+    cssTarget: BROWSER_TARGET,
   },
   css: {
     transformer: 'lightningcss',
-    lightningcss: {
-      exclude: Features.LightDark,
-    },
   },
   test: {
     environment: 'jsdom',
