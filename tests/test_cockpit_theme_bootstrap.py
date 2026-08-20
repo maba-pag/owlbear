@@ -62,6 +62,7 @@ class TestThemeBootstrapServing:
             "Bug: /theme-bootstrap.js falls through to SPA catch-all → index.html."
         )
         assert "<html" not in resp.text.lower()
+        assert resp.headers["cache-control"] == "no-cache, must-revalidate"
 
     def test_theme_bootstrap_js_content_type_is_not_html(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Content-type for /theme-bootstrap.js must not be text/html."""
@@ -103,3 +104,22 @@ class TestThemeBootstrapServing:
             "Response body must not be an HTML document. Bug: /theme-bootstrap.js falls through to SPA catch-all."
         )
         assert "<!doctype" not in body
+
+    def test_spa_shell_is_revalidated_after_frontend_builds(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """GET /delivery must revalidate the un-hashed SPA shell."""
+        from fastapi.testclient import TestClient  # noqa: PLC0415
+
+        _configure_run(tmp_path, monkeypatch)
+
+        with patch("owlbear_cockpit.main.load_target_context", return_value=object()), patch("uvicorn.run"):
+            from owlbear_cockpit.main import app, run  # noqa: PLC0415
+
+            run()
+
+        with TestClient(app, raise_server_exceptions=True) as client:
+            resp = client.get("/delivery")
+
+        assert resp.status_code == 200
+        assert resp.headers["cache-control"] == "no-cache, must-revalidate"

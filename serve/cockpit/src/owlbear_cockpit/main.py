@@ -51,6 +51,7 @@ _MEMORY_DIR = Path(".owlbear/memory")
 _NO_OPEN_ENV = "COCKPIT_NO_OPEN"
 _PORT_ENV = "COCKPIT_PORT"
 _REGISTRY_ENV = "OWLBEAR_COCKPIT_REGISTRY"
+_REVALIDATE_HEADERS = {"Cache-Control": "no-cache, must-revalidate"}
 
 app = FastAPI(title="OwlBear Cockpit")
 app.add_exception_handler(HTTPException, handle_target_http_error)
@@ -336,11 +337,15 @@ def run(*, port_override: int | None = None, no_open: bool = False) -> None:
         return FileResponse(
             dist_dir / "theme-bootstrap.js",
             media_type="application/javascript",
+            headers=_REVALIDATE_HEADERS,
         )
 
     @app.get("/{path:path}")
     def _spa_catchall(path: str) -> HTMLResponse:  # noqa: ARG001
-        return HTMLResponse((dist_dir / "index.html").read_text(encoding="utf-8"))
+        return HTMLResponse(
+            (dist_dir / "index.html").read_text(encoding="utf-8"),
+            headers=_REVALIDATE_HEADERS,
+        )
 
     # --- browser auto-open ---
     if not no_open and not os.environ.get(_NO_OPEN_ENV):
