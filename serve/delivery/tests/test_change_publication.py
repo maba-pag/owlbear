@@ -13,6 +13,7 @@ response-unknown outcome rather than a retry-safe incident.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -110,8 +111,6 @@ def _advance_remote_target(tmp_path: Path, remote: Path, *, product: str | None 
 
 
 def test_bare_repository_operations_are_isolated_from_host_git_configuration(tmp_path: Path) -> None:
-    import os
-
     remote = tmp_path / "remote.git"
     _git(tmp_path, "init", "--bare", str(remote))
 
