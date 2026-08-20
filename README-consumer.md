@@ -59,7 +59,7 @@ Probably not a fit when:
 
 | Requirement | Why |
 | --- | --- |
-| **Python 3.14.6+** | Runs the OwlBear tool servers. Older 3.x will not work. |
+| **Python 3.12.14+** | Runs the OwlBear tool servers. The checkout defaults to Python 3.14.7. |
 | [uv](https://docs.astral.sh/uv/) | Installs dependencies and launches the tool servers |
 | VS Code + GitHub Copilot extension | The editor and the agents |
 | [GitHub CLI](https://cli.github.com/) | Opens and updates pull requests |

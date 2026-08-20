@@ -276,7 +276,7 @@ class IngestCoordinator:
                 )
             else:
                 outcome = (content_result.state, content_result, 0, 0, 0)
-        except RuntimeError, ValueError, LookupError, TypeError, AttributeError, KeyError:
+        except (RuntimeError, ValueError, LookupError, TypeError, AttributeError, KeyError):
             logger.exception("Failed to process document during ingest")
             return None
         else:

@@ -125,7 +125,7 @@ def _find_docker_binary() -> str | None:
 def _docker_is_ready(binary: str) -> bool:
     try:
         return _run_host([binary, "info"], timeout=5.0).returncode == 0
-    except OSError, subprocess.TimeoutExpired:
+    except (OSError, subprocess.TimeoutExpired):
         return False
 
 

@@ -84,11 +84,20 @@ jobs:
             --engines-file serve/cockpit/web/package.json
 
   proof-python:
-    name: Prove Python dependency update
+    name: Prove Python ${{ matrix.python }} compatibility
     needs: classify
     if: needs.classify.outputs.python == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python:
+          - "3.12.14"
+          - "3.13.15"
+          - "3.14.7"
+    env:
+      UV_PROJECT_ENVIRONMENT: .venv-${{ matrix.python }}
     steps:
       - name: Checkout pull request head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -104,22 +113,28 @@ jobs:
       - name: Check uv runtime
         run: python3 .github/scripts/check_uv_version.py
 
+      - name: Install requested Python
+        run: uv python install "${{ matrix.python }}"
+
       - name: Install locked Python workspace
-        run: uv sync --locked --all-packages --all-extras --all-groups
+        run: uv sync --locked --python "${{ matrix.python }}" --all-packages --all-extras --all-groups
 
       - name: Prove workspace lock regeneration
-        run: python3 .github/scripts/check_uv_workspace_lock.py
+        run: uv run --python "${{ matrix.python }}" python .github/scripts/check_uv_workspace_lock.py
 
       - name: Compile Python sources
-        run: uv run python -m compileall -q serve setup tests
+        run: |
+          uv run --python "${{ matrix.python }}" python -m compileall -q serve setup tests .owlbear/hooks seed
 
       - name: Check Python sources
         run: |
-          uv run ruff check .
-          uv run ruff format --check .
+          uv run --python "${{ matrix.python }}" ruff check .
+          uv run --python "${{ matrix.python }}" ruff format --check .
 
       - name: Run Python behavior tests
-        run: uv run pytest tests serve -m "not api and not e2e and not browser and not cockpit"
+        run: |
+          uv run --python "${{ matrix.python }}" pytest tests serve \
+            -m "not api and not e2e and not browser and not cockpit"
 
   proof-cockpit:
     name: Prove Cockpit dependency update

@@ -162,7 +162,7 @@ def _read_diagram_describes(doc_path: Path) -> list[str]:
     """Read source globs from an Excalidraw document's describes metadata."""
     try:
         payload = json.loads(doc_path.read_text())
-    except OSError, json.JSONDecodeError:
+    except (OSError, json.JSONDecodeError):
         return []
     describes = payload.get("describes") if isinstance(payload, dict) else None
     if isinstance(describes, str):

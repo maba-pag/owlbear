@@ -105,8 +105,14 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     proof_python = _job(workflow, "proof-python")
     proof_cockpit = _job(workflow, "proof-cockpit")
 
-    assert "uv sync --locked --all-packages --all-extras --all-groups" in text
-    assert 'uv run pytest tests serve -m "not api and not e2e and not browser and not cockpit"' in text
+    assert proof_python["strategy"] == {
+        "fail-fast": False,
+        "matrix": {"python": ["3.12.14", "3.13.15", "3.14.7"]},
+    }
+    assert proof_python["env"] == {"UV_PROJECT_ENVIRONMENT": ".venv-${{ matrix.python }}"}
+    assert 'uv sync --locked --python "${{ matrix.python }}" --all-packages --all-extras --all-groups' in text
+    assert 'uv run --python "${{ matrix.python }}" pytest tests serve \\' in text
+    assert '            -m "not api and not e2e and not browser and not cockpit"' in text
     assert "npm ci" in text
     assert "npm test" in text
     assert "npm run build" in text

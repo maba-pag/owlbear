@@ -246,7 +246,7 @@ def _probe_instance(instance: CockpitInstance) -> bool:
         if response.status != _HTTP_OK:
             return False
         body = json.loads(response.read())
-    except OSError, json.JSONDecodeError:
+    except (OSError, json.JSONDecodeError):
         return False
     finally:
         connection.close()
@@ -266,7 +266,7 @@ def _running_instances() -> list[CockpitInstance]:
     for path in sorted(registry.glob("*.json")):
         try:
             instance = CockpitInstance.model_validate_json(path.read_bytes())
-        except OSError, ValueError:
+        except (OSError, ValueError):
             path.unlink(missing_ok=True)
             continue
         if _probe_instance(instance):

@@ -54,7 +54,7 @@ def read_entry(path: Path) -> MemoryEntry | None:
             if isinstance(data, dict):
                 data["content"] = body.strip()
                 return MemoryEntry(**data)
-    except OSError, UnicodeDecodeError, YAMLError, PydanticValidationError:
+    except (OSError, UnicodeDecodeError, YAMLError, PydanticValidationError):
         return None
     else:
         return None

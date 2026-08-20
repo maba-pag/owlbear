@@ -150,7 +150,7 @@ def _legacy_index(root: Path) -> dict[str, tuple[LegacyMatch, ...]]:
     for manifest in sorted(legacy_root.rglob("manifest.json")):
         try:
             payload: Any = json.loads(manifest.read_text(encoding="utf-8"))
-        except OSError, json.JSONDecodeError:
+        except (OSError, json.JSONDecodeError):
             continue
         records = payload.get("files", []) if isinstance(payload, dict) else []
         if not isinstance(records, list):
