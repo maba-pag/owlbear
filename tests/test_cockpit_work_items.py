@@ -39,8 +39,11 @@ from owlbear_delivery.delivery_application_loader import DeliveryApplicationLoad
 from owlbear_delivery.delivery_runtime import (
     DeliveryAcceptanceWaitingError,
     DeliveryChangeDispositionConflictError,
+    DeliveryChangeStage,
 )
 from owlbear_delivery.portfolio_operating import (
+    PortfolioChangeAdmission,
+    PortfolioChangeLifecycleStatus,
     PortfolioGuidance,
     PortfolioGuidanceKind,
     PortfolioOperatingView,
@@ -160,6 +163,34 @@ class _DeliveryApplicationFake:
         return PortfolioOperatingView(
             unfinished_change_count=2,
             completed_change_count=0,
+            statuses=(
+                PortfolioChangeLifecycleStatus(
+                    change_id="draft-change",
+                    admission=PortfolioChangeAdmission.UNADMITTED,
+                    stage=DeliveryChangeStage.DESIGN,
+                    actionable_runtime=False,
+                ),
+                PortfolioChangeLifecycleStatus(
+                    change_id="admitted-planning",
+                    admission=PortfolioChangeAdmission.ADMITTED,
+                    stage=DeliveryChangeStage.BUILDING,
+                    actionable_runtime=True,
+                ),
+                PortfolioChangeLifecycleStatus(
+                    change_id="design-reentry",
+                    admission=PortfolioChangeAdmission.ADMITTED,
+                    stage=DeliveryChangeStage.DESIGN,
+                    actionable_runtime=True,
+                ),
+                PortfolioChangeLifecycleStatus(
+                    change_id="unavailable-change",
+                    admission=PortfolioChangeAdmission.ADMITTED,
+                    stage=DeliveryChangeStage.BUILDING,
+                    actionable_runtime=False,
+                    diagnostic_code="runtime_unavailable",
+                    diagnostic_detail="Delivery runtime is unavailable.",
+                ),
+            ),
             interventions=(
                 PortfolioWorkReference(
                     change_id="change-a",
@@ -603,6 +634,40 @@ def test_list_and_detail_expose_current_bounded_delivery_state() -> None:
     assert portfolio.json()["operating"] == {
         "unfinished_change_count": 2,
         "completed_change_count": 0,
+        "statuses": [
+            {
+                "change_id": "draft-change",
+                "admission": "unadmitted",
+                "stage": "design",
+                "actionable_runtime": False,
+                "diagnostic_code": None,
+                "diagnostic_detail": None,
+            },
+            {
+                "change_id": "admitted-planning",
+                "admission": "admitted",
+                "stage": "building",
+                "actionable_runtime": True,
+                "diagnostic_code": None,
+                "diagnostic_detail": None,
+            },
+            {
+                "change_id": "design-reentry",
+                "admission": "admitted",
+                "stage": "design",
+                "actionable_runtime": True,
+                "diagnostic_code": None,
+                "diagnostic_detail": None,
+            },
+            {
+                "change_id": "unavailable-change",
+                "admission": "admitted",
+                "stage": "building",
+                "actionable_runtime": False,
+                "diagnostic_code": "runtime_unavailable",
+                "diagnostic_detail": "Delivery runtime is unavailable.",
+            },
+        ],
         "draft_design_change_ids": [],
         "design_required_change_ids": [],
         "claimed": [],

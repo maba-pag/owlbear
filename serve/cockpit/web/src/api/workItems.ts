@@ -94,6 +94,27 @@ export interface WorkItemPortfolioTotals {
   activity: ActivityCounts
 }
 
+export type PortfolioChangeAdmission = 'admitted' | 'unadmitted'
+export type PortfolioChangeStage =
+  | 'design'
+  | 'building'
+  | 'finalized'
+  | 'awaiting-merge'
+  | 'publication-attention'
+  | 'acceptance-attention'
+  | 'deferred'
+  | 'abandoned'
+  | 'completed'
+
+export interface PortfolioChangeLifecycleStatus {
+  change_id: string
+  admission: PortfolioChangeAdmission
+  stage: PortfolioChangeStage | null
+  actionable_runtime: boolean
+  diagnostic_code: string | null
+  diagnostic_detail: string | null
+}
+
 export type PortfolioWorkScope = 'outcome' | 'publication'
 export type PortfolioGuidanceKind =
   | 'resume-design'
@@ -118,6 +139,7 @@ export interface PortfolioGuidance {
 export interface PortfolioOperatingView {
   unfinished_change_count: number
   completed_change_count: number
+  statuses: PortfolioChangeLifecycleStatus[]
   draft_design_change_ids: string[]
   design_required_change_ids: string[]
   claimed: PortfolioWorkReference[]

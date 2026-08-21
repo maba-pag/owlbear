@@ -28,6 +28,7 @@ from owlbear_cockpit.target_models import (
     ConfirmLostClaimBody,
     DesignWorkDetailResponse,
     NeedsCounts,
+    PortfolioOperatingResponse,
     PublicationChecksObservationResponse,
     PublicationSupersessionResponse,
     RecoverChangeWorktreeBody,
@@ -88,7 +89,7 @@ class TargetCockpitService:
         return WorkItemPortfolioResponse(
             groups=view.groups,
             totals=_portfolio_totals(view.groups),
-            operating=view.operating,
+            operating=PortfolioOperatingResponse.from_view(view.operating),
         )
 
     def show_item(self, change_id: str, item_key: str) -> WorkItemDetailResponse:
