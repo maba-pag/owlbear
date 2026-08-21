@@ -42,7 +42,6 @@ from owlbear_delivery import (
     CreateOrReconcileDraftPullRequest,
     DeliveryAcceptanceWaitingError,
     DeliveryAdmissionConflictError,
-    DeliveryAdmissionReceipt,
     DeliveryAdmissionRequest,
     DeliveryApplicationLoadError,
     DeliveryAuthorityRegistry,
@@ -3609,23 +3608,34 @@ def test_delivery_loader_isolates_contract_without_workspace_coordination(tmp_pa
     change_root.mkdir(parents=True)
     (change_root / "contract.json").write_bytes(_canonical(contract))
     (change_root / "frontier.json").write_bytes(_canonical(frontier))
-    admission_payload = {
-        "schema_version": 1,
-        "change_id": contract.change_id,
-        "contract_digest": hashlib.sha256(_canonical(contract)).hexdigest(),
-        "source_bindings_digest": hashlib.sha256(
-            json.dumps(
-                [binding.model_dump(mode="json") for binding in contract.source_bindings],
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode()
-        ).hexdigest(),
-        "integration_target": "main",
-        "checkpoint_commit": _git(repository, "rev-parse", "HEAD"),
-        "frontier_ids": tuple(binding.plan_scope_id for binding in frontier.bindings),
-    }
-    admission = DeliveryAdmissionReceipt(receipt_id=_receipt_id(admission_payload), **admission_payload)
-    (change_root / "admission.json").write_bytes(_canonical(admission))
+
+    application = load_delivery_application(_startup_config(), workspace_root=repository)
+
+    assert application.list_work_items() == ()
+
+
+@pytest.mark.parametrize("admission_content", [None, b"{}\n"])
+def test_delivery_loader_allows_recoverable_admission_partial_state(
+    tmp_path: Path,
+    admission_content: bytes | None,
+) -> None:
+    repository = _repository(tmp_path)
+    runtime_root = repository / ".owlbear/delivery/runtime"
+    contract = _contract("change-a", b"intent", b"design")
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(
+                outcome_id="OUT-001",
+                plan_scope_id="SCOPE-001",
+            ),
+        )
+    )
+    change_root = runtime_root / "changes/change-a"
+    change_root.mkdir(parents=True)
+    (change_root / "contract.json").write_bytes(_canonical(contract))
+    (change_root / "frontier.json").write_bytes(_canonical(frontier))
+    if admission_content is not None:
+        (change_root / "admission.json").write_bytes(admission_content)
 
     application = load_delivery_application(_startup_config(), workspace_root=repository)
 
@@ -3872,23 +3882,7 @@ def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_pa
         json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
         encoding="utf-8",
     )
-    admission_payload = {
-        "schema_version": 1,
-        "change_id": contract.change_id,
-        "contract_digest": hashlib.sha256(_canonical(contract)).hexdigest(),
-        "source_bindings_digest": hashlib.sha256(
-            json.dumps(
-                [binding.model_dump(mode="json") for binding in contract.source_bindings],
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode()
-        ).hexdigest(),
-        "integration_target": "main",
-        "checkpoint_commit": coordination.last_reviewed_commit,
-        "frontier_ids": tuple(binding.plan_scope_id for binding in frontier.bindings),
-    }
-    admission = DeliveryAdmissionReceipt(receipt_id=_receipt_id(admission_payload), **admission_payload)
-    (change_root / "admission.json").write_bytes(_canonical(admission))
+    (change_root / "admission.json").write_text("{}\n", encoding="utf-8")
 
     application = load_delivery_application(_startup_config(), workspace_root=repository)
     state = application.show_change_checkpoint_publication("change-a")

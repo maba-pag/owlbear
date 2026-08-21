@@ -130,6 +130,15 @@ _FILE_ERROR_CODES = {
     "frontier.json": DeliveryDiscoveryErrorCode.FRONTIER_UNAVAILABLE,
     "admission.json": DeliveryDiscoveryErrorCode.ADMISSION_UNAVAILABLE,
 }
+_ADMISSION_ONLY_ERRORS = frozenset(
+    {
+        DeliveryDiscoveryErrorCode.ADMISSION_UNAVAILABLE,
+        DeliveryDiscoveryErrorCode.ADMISSION_INVALID,
+        DeliveryDiscoveryErrorCode.ADMISSION_IDENTITY_INVALID,
+        DeliveryDiscoveryErrorCode.ADMISSION_CONTRACT_MISMATCH,
+        DeliveryDiscoveryErrorCode.ADMISSION_FRONTIER_MISMATCH,
+    }
+)
 
 
 def contract_fingerprint(contract: DeliveryContract) -> str:
@@ -363,10 +372,10 @@ def discover_persisted_changes(runtime_root: Path) -> tuple[DeliveryChangeObserv
 def require_startup_contracts(
     observations: tuple[DeliveryChangeObservation, ...],
 ) -> dict[str, DeliveryContract]:
-    """Reject any persisted observation error before composing startup owners."""
+    """Reject contract or frontier errors while preserving recoverable admission partials."""
     contracts: dict[str, DeliveryContract] = {}
     for observation in observations:
-        if observation.error is not None:
+        if observation.error is not None and observation.error.code not in _ADMISSION_ONLY_ERRORS:
             raise DeliveryDiscoveryStartupError(observation)
         if observation.contract is None:
             error = _error(
