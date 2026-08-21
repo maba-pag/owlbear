@@ -16,7 +16,11 @@ from owlbear_delivery.delivery_runtime import (
     derive_change_stage,
     parse_delivery_frontier,
 )
-from owlbear_delivery.target_admission import DeliveryAdmissionReceipt, _validate_delivery_frontier
+from owlbear_delivery.target_admission import (
+    DeliveryAdmissionConflictError,
+    DeliveryAdmissionReceipt,
+    _validate_delivery_frontier,
+)
 from owlbear_delivery.target_contract import DeliveryContract
 
 if TYPE_CHECKING:
@@ -286,7 +290,7 @@ def _cross_validate(
     if contract is not None and frontier is not None:
         try:
             _validate_delivery_frontier(contract, frontier)
-        except (TypeError, ValueError):
+        except (DeliveryAdmissionConflictError, TypeError, ValueError):
             errors.append(
                 _error(
                     DeliveryDiscoveryErrorCode.FRONTIER_BINDING_INVALID,

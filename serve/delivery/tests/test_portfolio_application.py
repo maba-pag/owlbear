@@ -3707,6 +3707,27 @@ def test_delivery_discovery_contains_one_bad_entry_and_preserves_unrelated_entri
     assert observations["good-change"].admitted
 
 
+def test_delivery_discovery_contains_frontier_binding_mismatch(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(tmp_path, {})
+    _admit_discovery_change(application, "bad-bindings")
+    _admit_discovery_change(application, "good-change")
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(
+                outcome_id="OUT-999",
+                plan_scope_id="SCOPE-999",
+            ),
+        )
+    )
+    (state_root / "changes/bad-bindings/frontier.json").write_bytes(_canonical(frontier))
+
+    observations = {observation.change_id: observation for observation in discover_persisted_changes(state_root)}
+
+    assert observations["bad-bindings"].error is not None
+    assert observations["bad-bindings"].error.code == DeliveryDiscoveryErrorCode.FRONTIER_BINDING_INVALID
+    assert observations["good-change"].error is None
+
+
 def test_delivery_discovery_detects_in_place_contract_replacement(tmp_path: Path) -> None:
     application, _runtimes, _coordinator, state_root = _portfolio(tmp_path, {})
     admitted = _admit_discovery_change(application, "replaced-change")
