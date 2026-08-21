@@ -20,12 +20,17 @@ from owlbear_delivery.change_workspace import (
     PortfolioCoordinator,
 )
 from owlbear_delivery.completed_history import CompletedHistoryCatalog
+from owlbear_delivery.delivery_contract_discovery import (
+    DeliveryDiscoveryErrorCode,
+    DeliveryDiscoveryRootError,
+    DeliveryDiscoveryStartupError,
+    discover_persisted_changes,
+    require_startup_contracts,
+)
 from owlbear_delivery.delivery_runtime import (
-    DeliveryFrontier,
     DeliveryRuntime,
     DeliveryRuntimeMigrationError,
     DeliveryWorkerRole,
-    parse_delivery_frontier,
 )
 from owlbear_delivery.design_package import DesignPackageStore
 from owlbear_delivery.draft_pull_request import DraftPullRequestPublisher
@@ -37,10 +42,10 @@ from owlbear_delivery.portfolio_application import (
     PortfolioApplicationDependencies,
 )
 from owlbear_delivery.target_admission import DeliveryAuthorityRegistry
-from owlbear_delivery.target_contract import DeliveryContract
 
 if TYPE_CHECKING:
     from owlbear_delivery.publication_provider import PublicationProvider
+    from owlbear_delivery.target_contract import DeliveryContract
 
 
 class _LoaderModel(BaseModel):
@@ -210,36 +215,34 @@ def _validate_git_config(config: DeliveryStartupConfig, paths: _DeliveryPaths) -
             raise _load_error(field_name, detail)
 
 
-def _read_contract(change_root: Path) -> DeliveryContract:
-    try:
-        contract = DeliveryContract.model_validate_json((change_root / "contract.json").read_bytes())
-    except (OSError, ValidationError) as exc:
-        error = _load_error("runtime_root", "Delivery state is invalid")
-        raise error from exc
-    if contract.change_id != change_root.name:
-        error = _load_error("runtime_root", "Delivery state identity is invalid")
-        raise error
-    return contract
-
-
 def _load_contracts(runtime_root: Path) -> dict[str, DeliveryContract]:
-    changes_root = runtime_root / "changes"
-    if not changes_root.exists():
-        return {}
-    if changes_root.is_symlink() or not changes_root.is_dir():
-        error = _load_error("runtime_root", "Delivery state root is invalid")
-        raise error
     try:
-        change_roots = tuple(sorted(changes_root.iterdir()))
-    except OSError as exc:
-        error = _load_error("runtime_root", "Delivery state is invalid")
+        observations = discover_persisted_changes(runtime_root)
+    except DeliveryDiscoveryRootError as exc:
+        error = _load_error("runtime_root", exc.detail)
         raise error from exc
-    return {
-        contract.change_id: contract
-        for change_root in change_roots
-        if change_root.is_dir() and not change_root.is_symlink()
-        for contract in (_read_contract(change_root),)
-    }
+    try:
+        return require_startup_contracts(observations)
+    except DeliveryDiscoveryStartupError as exc:
+        discovery_error = exc.observation.error
+        code = discovery_error.code if discovery_error is not None else None
+        if code is DeliveryDiscoveryErrorCode.FRONTIER_MIGRATION_REQUIRED:
+            detail = discovery_error.detail
+            error = _load_error("runtime_root", detail)
+            raise error from DeliveryRuntimeMigrationError(detail)
+        if code is DeliveryDiscoveryErrorCode.CONTRACT_IDENTITY_INVALID:
+            detail = "Delivery state identity is invalid"
+        elif code in {
+            DeliveryDiscoveryErrorCode.FRONTIER_UNAVAILABLE,
+            DeliveryDiscoveryErrorCode.FRONTIER_INVALID,
+            DeliveryDiscoveryErrorCode.FRONTIER_BINDING_INVALID,
+            DeliveryDiscoveryErrorCode.ADMISSION_FRONTIER_MISMATCH,
+        }:
+            detail = "Delivery runtime state is invalid"
+        else:
+            detail = "Delivery state is invalid"
+        error = _load_error("runtime_root", detail)
+        raise error from exc
 
 
 def _load_host_config(paths: _DeliveryPaths) -> DeliveryHostConfig:
@@ -279,27 +282,6 @@ def _role_policies() -> tuple[DeliveryRolePolicy, ...]:
             reviewer_agent="build-reviewer",
         ),
     )
-
-
-def _validate_runtime_state(runtime_root: Path, contracts: dict[str, DeliveryContract]) -> None:
-    try:
-        for contract in contracts.values():
-            frontier_path = runtime_root / "changes" / contract.change_id / "frontier.json"
-            frontier = parse_delivery_frontier(frontier_path.read_bytes())[0]
-            _require_runtime_bindings(contract, frontier)
-    except DeliveryRuntimeMigrationError as exc:
-        error = _load_error("runtime_root", str(exc))
-        raise error from exc
-    except (OSError, ValidationError, TypeError, ValueError) as exc:
-        error = _load_error("runtime_root", "Delivery runtime state is invalid")
-        raise error from exc
-
-
-def _require_runtime_bindings(contract: DeliveryContract, frontier: DeliveryFrontier) -> None:
-    expected = tuple((scope.outcome_id, scope.scope_id) for scope in contract.plan_scopes)
-    actual = tuple((binding.outcome_id, binding.plan_scope_id) for binding in frontier.bindings)
-    if actual != expected:
-        raise ValueError
 
 
 def _compose_application(
@@ -405,5 +387,4 @@ def load_delivery_application(
     _validate_git_config(config, paths)
     host_config = _load_host_config(paths)
     contracts = _load_contracts(paths.runtime_root)
-    _validate_runtime_state(paths.runtime_root, contracts)
     return _compose_application(config, host_config, paths, contracts, publication_provider)

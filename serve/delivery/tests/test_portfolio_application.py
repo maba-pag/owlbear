@@ -42,6 +42,7 @@ from owlbear_delivery import (
     CreateOrReconcileDraftPullRequest,
     DeliveryAcceptanceWaitingError,
     DeliveryAdmissionConflictError,
+    DeliveryAdmissionReceipt,
     DeliveryAdmissionRequest,
     DeliveryApplicationLoadError,
     DeliveryAuthorityRegistry,
@@ -115,6 +116,11 @@ from owlbear_delivery import (
     RetryDelivery,
     classify_publication_check,
     load_delivery_application,
+)
+from owlbear_delivery.delivery_contract_discovery import (
+    DeliveryDiscoveryErrorCode,
+    contract_fingerprint,
+    discover_persisted_changes,
 )
 from owlbear_delivery.portfolio_application import _required_check_diagnostics
 from owlbear_delivery.publication_provider import (
@@ -3603,10 +3609,136 @@ def test_delivery_loader_isolates_contract_without_workspace_coordination(tmp_pa
     change_root.mkdir(parents=True)
     (change_root / "contract.json").write_bytes(_canonical(contract))
     (change_root / "frontier.json").write_bytes(_canonical(frontier))
+    admission_payload = {
+        "schema_version": 1,
+        "change_id": contract.change_id,
+        "contract_digest": hashlib.sha256(_canonical(contract)).hexdigest(),
+        "source_bindings_digest": hashlib.sha256(
+            json.dumps(
+                [binding.model_dump(mode="json") for binding in contract.source_bindings],
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest(),
+        "integration_target": "main",
+        "checkpoint_commit": _git(repository, "rev-parse", "HEAD"),
+        "frontier_ids": tuple(binding.plan_scope_id for binding in frontier.bindings),
+    }
+    admission = DeliveryAdmissionReceipt(receipt_id=_receipt_id(admission_payload), **admission_payload)
+    (change_root / "admission.json").write_bytes(_canonical(admission))
 
     application = load_delivery_application(_startup_config(), workspace_root=repository)
 
     assert application.list_work_items() == ()
+
+
+def _admit_discovery_change(application: PortfolioApplication, change_id: str):
+    intent = f"""# {change_id}
+
+```yaml target-contract
+kind: commitment
+id: COM-001
+class: agreed-path
+provenance: discovery test
+statement: Preserve persisted admission evidence.
+```
+
+```yaml target-contract
+kind: outcome
+id: OUT-001
+title: Discover persisted authority
+promise: Make persisted authority observable.
+acceptance: [Admission is observable.]
+commitments: [COM-001]
+dependencies: []
+```
+""".encode()
+    application.create_design_session(change_id, intent, b"# Architecture\n")
+    return application.admit_delivery_change(DeliveryAdmissionRequest(change_id=change_id, active_claim_ids=()))
+
+
+def test_delivery_discovery_returns_valid_admission_and_stable_fingerprint(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(tmp_path, {})
+    admitted = _admit_discovery_change(application, "discovered-change")
+
+    observations = discover_persisted_changes(state_root)
+
+    assert len(observations) == 1
+    observation = observations[0]
+    assert observation.change_id == "discovered-change"
+    assert observation.admitted
+    assert observation.admission == admitted.receipt
+    assert observation.contract == admitted.contract
+    assert observation.contract_fingerprint == contract_fingerprint(admitted.contract)
+    assert observation.frontier == admitted.frontier
+    assert observation.stage is DeliveryChangeStage.BUILDING
+    assert observation.error is None
+    assert observation.actionable_runtime
+    assert observation.diagnostic_code is None
+
+
+@pytest.mark.parametrize(
+    ("mutation", "error_code"),
+    [
+        ("malformed", DeliveryDiscoveryErrorCode.FRONTIER_INVALID),
+        ("mid-write", DeliveryDiscoveryErrorCode.FRONTIER_UNAVAILABLE),
+    ],
+)
+def test_delivery_discovery_contains_one_bad_entry_and_preserves_unrelated_entries(
+    tmp_path: Path,
+    mutation: str,
+    error_code: DeliveryDiscoveryErrorCode,
+) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(tmp_path, {})
+    _admit_discovery_change(application, "bad-change")
+    _admit_discovery_change(application, "good-change")
+    frontier_path = state_root / "changes/bad-change/frontier.json"
+    if mutation == "malformed":
+        frontier_path.write_bytes(b"not-json\n")
+    else:
+        frontier_path.unlink()
+
+    observations = {observation.change_id: observation for observation in discover_persisted_changes(state_root)}
+
+    assert set(observations) == {"bad-change", "good-change"}
+    assert observations["bad-change"].error is not None
+    assert observations["bad-change"].error.code == error_code
+    assert observations["good-change"].error is None
+    assert observations["good-change"].admitted
+
+
+def test_delivery_discovery_detects_in_place_contract_replacement(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(tmp_path, {})
+    admitted = _admit_discovery_change(application, "replaced-change")
+    before = discover_persisted_changes(state_root)[0]
+    replacement = admitted.contract.model_copy(update={"title": "Replacement authority"})
+    (state_root / "changes/replaced-change/contract.json").write_bytes(_canonical(replacement))
+
+    after = discover_persisted_changes(state_root)[0]
+
+    assert before.contract_fingerprint is not None
+    assert after.contract_fingerprint == contract_fingerprint(replacement)
+    assert after.contract_fingerprint != before.contract_fingerprint
+    assert after.admitted
+    assert after.stage is DeliveryChangeStage.BUILDING
+    assert after.diagnostic_code == "runtime_unavailable"
+    assert not after.actionable_runtime
+
+
+def test_delivery_discovery_retains_admission_for_unavailable_runtime(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(tmp_path, {})
+    admitted = _admit_discovery_change(application, "unavailable-change")
+    (state_root / "changes/unavailable-change/contract.json").unlink()
+
+    observation = discover_persisted_changes(state_root)[0]
+
+    assert observation.admission == admitted.receipt
+    assert observation.frontier == admitted.frontier
+    assert observation.stage is DeliveryChangeStage.BUILDING
+    assert observation.diagnostic_code == "runtime_unavailable"
+    assert observation.diagnostic_detail is not None
+    assert len(observation.diagnostic_detail) <= 240
+    assert not observation.actionable_runtime
 
 
 def test_admission_replay_recovers_isolated_legacy_change_at_exact_reviewed_head(tmp_path: Path) -> None:
@@ -3719,6 +3851,23 @@ def test_delivery_loader_migrates_result_history_with_exact_reviewed_head(tmp_pa
         json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n",
         encoding="utf-8",
     )
+    admission_payload = {
+        "schema_version": 1,
+        "change_id": contract.change_id,
+        "contract_digest": hashlib.sha256(_canonical(contract)).hexdigest(),
+        "source_bindings_digest": hashlib.sha256(
+            json.dumps(
+                [binding.model_dump(mode="json") for binding in contract.source_bindings],
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest(),
+        "integration_target": "main",
+        "checkpoint_commit": coordination.last_reviewed_commit,
+        "frontier_ids": tuple(binding.plan_scope_id for binding in frontier.bindings),
+    }
+    admission = DeliveryAdmissionReceipt(receipt_id=_receipt_id(admission_payload), **admission_payload)
+    (change_root / "admission.json").write_bytes(_canonical(admission))
 
     application = load_delivery_application(_startup_config(), workspace_root=repository)
     state = application.show_change_checkpoint_publication("change-a")
