@@ -42,6 +42,7 @@ from owlbear_delivery import (
     CreateOrReconcileDraftPullRequest,
     DeliveryAcceptanceWaitingError,
     DeliveryAdmissionConflictError,
+    DeliveryAdmissionReceipt,
     DeliveryAdmissionRequest,
     DeliveryApplicationLoadError,
     DeliveryAuthorityRegistry,
@@ -121,7 +122,10 @@ from owlbear_delivery.delivery_contract_discovery import (
     contract_fingerprint,
     discover_persisted_changes,
 )
-from owlbear_delivery.portfolio_application import _required_check_diagnostics
+from owlbear_delivery.portfolio_application import (
+    DeliveryRuntimeReconciliationError,
+    _required_check_diagnostics,
+)
 from owlbear_delivery.publication_provider import (
     PublicationProviderError,
     PublicationProviderFailureCode,
@@ -277,6 +281,26 @@ def _contract(change_id: str, intent: bytes, design: bytes) -> DeliveryContract:
             {"source_name": "design.md", "sha256": hashlib.sha256(design).hexdigest()},
         ),
     )
+
+
+def _admission_receipt(
+    contract: DeliveryContract,
+    frontier: DeliveryFrontier,
+    checkpoint_commit: str,
+) -> DeliveryAdmissionReceipt:
+    source_bindings = [item.model_dump(mode="json") for item in contract.source_bindings]
+    payload = {
+        "schema_version": 1,
+        "change_id": contract.change_id,
+        "contract_digest": contract_fingerprint(contract),
+        "source_bindings_digest": hashlib.sha256(
+            json.dumps(source_bindings, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
+        "integration_target": "main",
+        "checkpoint_commit": checkpoint_commit,
+        "frontier_ids": tuple(binding.plan_scope_id for binding in frontier.bindings),
+    }
+    return DeliveryAdmissionReceipt(receipt_id=_receipt_id(payload), **payload)
 
 
 def _task() -> DeliveryTaskDefinition:
@@ -531,7 +555,13 @@ def _portfolio(
         package = store.create(change_id, intent, design)
         store.publish_contract(change_id, package.package_id, _canonical(contract), lambda *_content: None)
         coordination = manager.ensure(change_id)
-        runtimes[change_id] = _runtime(state_root, contract, manager, stage, coordination.last_reviewed_commit)
+        runtime = _runtime(state_root, contract, manager, stage, coordination.last_reviewed_commit)
+        runtimes[change_id] = runtime
+        frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+        (state_root / "changes" / change_id / "contract.json").write_bytes(_canonical(contract))
+        (state_root / "changes" / change_id / "admission.json").write_bytes(
+            _canonical(_admission_receipt(contract, frontier, coordination.last_reviewed_commit))
+        )
     identities = (f"identity-{index:03}" for index in itertools.count(1))
 
     application = PortfolioApplication(
@@ -2308,7 +2338,7 @@ def test_retained_inventory_blocks_active_writer_and_publication_lease(tmp_path:
 
 
 def test_retained_inventory_reports_orphans_nonterminal_and_worktree_attention(tmp_path: Path) -> None:
-    application, runtimes, _coordinator, _state_root = _portfolio(
+    application, runtimes, _coordinator, state_root = _portfolio(
         tmp_path,
         {
             "change-a": DeliveryStage.PLANNING,
@@ -2316,7 +2346,7 @@ def test_retained_inventory_reports_orphans_nonterminal_and_worktree_attention(t
             "change-c": DeliveryStage.PLANNING,
         },
     )
-    del application._runtimes["change-a"]
+    shutil.rmtree(state_root / "changes/change-a")
     attention_coordination = application._workspace_manager.show("change-b")
     _git(
         application._workspace_manager.repository,
@@ -2361,7 +2391,7 @@ def test_portfolio_operating_view_recommends_resuming_unadmitted_design(tmp_path
     assert tuple(item.kind.value for item in view.guidance) == ("resume-design",)
 
 
-def test_portfolio_reader_characterizes_admission_staleness(tmp_path: Path) -> None:
+def test_portfolio_reader_reconciles_admitted_change_after_warm_start(tmp_path: Path) -> None:
     reader, _reader_runtimes, _reader_coordinator, state_root = _portfolio(tmp_path, {})
     writer, _writer_coordinator, _writer_manager = _reopen_portfolio(tmp_path, state_root, {})
     intent = b"""# Admitted Delivery
@@ -2395,9 +2425,103 @@ dependencies: []
 
     view = reader.portfolio_read_view()
 
-    assert view.groups == ()
-    assert view.operating.draft_design_change_ids == ("admitted-change",)
-    assert view.operating.unfinished_change_count == 0
+    assert tuple(group.change_id for group in view.groups) == ("admitted-change",)
+    assert tuple(item.work_item_id for item in view.groups[0].items) == tuple(
+        outcome.outcome_id for outcome in admitted.contract.outcomes
+    )
+    assert view.groups[0].outcome_total == len(admitted.contract.outcomes)
+    assert view.groups[0].outcome_completed == 0
+    assert view.operating.unfinished_change_count == 1
+    assert view.operating.draft_design_change_ids == ()
+    assert view.operating.design_required_change_ids == ()
+    assert tuple(item.kind.value for item in view.operating.guidance) == ("start-orchestration",)
+
+
+def test_portfolio_reader_replaces_changed_runtime_without_active_claim(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    application.portfolio_read_view()
+    previous_runtime = application._runtimes["change-a"]
+    contract_path = state_root / "changes/change-a/contract.json"
+    frontier_path = state_root / "changes/change-a/frontier.json"
+    current_frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+    replacement = previous_runtime.contract.model_copy(update={"title": "Replacement authority \u00e9"})
+    contract_path.write_bytes(_canonical(replacement))
+    (state_root / "changes/change-a/admission.json").write_bytes(
+        _canonical(
+            _admission_receipt(
+                replacement,
+                current_frontier,
+                _coordinator.show("change-a").last_reviewed_commit,
+            )
+        )
+    )
+    before = _file_bytes(state_root)
+
+    view = application.portfolio_read_view()
+
+    assert application._runtimes["change-a"] is not previous_runtime
+    assert view.groups[0].title == "Replacement authority \u00e9"
+    assert _file_bytes(state_root) == before
+
+
+def test_portfolio_reader_defers_active_runtime_replacement_and_blocks_mutation(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    application.acquire_frontier_work()
+    previous_runtime = application._runtimes["change-a"]
+    contract_path = state_root / "changes/change-a/contract.json"
+    frontier_path = state_root / "changes/change-a/frontier.json"
+    current_frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+    replacement = previous_runtime.contract.model_copy(update={"title": "Active replacement"})
+    contract_path.write_bytes(_canonical(replacement))
+    (state_root / "changes/change-a/admission.json").write_bytes(
+        _canonical(_admission_receipt(replacement, current_frontier, coordinator.show("change-a").last_reviewed_commit))
+    )
+
+    view = application.portfolio_read_view()
+
+    assert application._runtimes["change-a"] is previous_runtime
+    assert view.groups[0].title == previous_runtime.contract.title
+    with pytest.raises(DeliveryRuntimeReconciliationError) as exc_info:
+        application.defer_change("change-a", "runtime replacement requires reconciliation")
+    assert exc_info.value.code == "ERR_DELIVERY_RUNTIME_RECONCILIATION"
+    assert exc_info.value.retry_safe is True
+
+
+@pytest.mark.parametrize("mutation", ["malformed", "mid-write"])
+def test_portfolio_reader_retains_prior_runtime_and_blocks_mutation_for_unavailable_entry(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    application, _runtimes, _coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    application.portfolio_read_view()
+    previous_runtime = application._runtimes["change-a"]
+    frontier_path = state_root / "changes/change-a/frontier.json"
+    if mutation == "malformed":
+        frontier_path.write_bytes(b"not-json\n")
+    else:
+        frontier_path.unlink()
+    before = _file_bytes(state_root)
+
+    view = application.portfolio_read_view()
+
+    assert application._runtimes["change-a"] is previous_runtime
+    assert view.groups[0].title == previous_runtime.contract.title
+    assert view.operating.unfinished_change_count == 1
+    assert view.operating.draft_design_change_ids == ()
+    assert application._discovered_changes["change-a"].diagnostic_code == "runtime_unavailable"
+    with pytest.raises(DeliveryRuntimeReconciliationError) as exc_info:
+        application.defer_change("change-a", "runtime entry requires retry")
+    assert exc_info.value.retry_safe is True
+    assert _file_bytes(state_root) == before
 
 
 def test_portfolio_operating_view_counts_design_reentry_as_intervention(tmp_path: Path) -> None:
@@ -3040,6 +3164,14 @@ def test_reconcile_derives_bounded_provider_text_from_authored_titles(tmp_path: 
         ),
     )
     _set_checkpoint(runtime, state_root, pending)
+    contract_path = state_root / "changes/change-a/contract.json"
+    contract_path.write_bytes(_canonical(runtime.contract))
+    current_frontier = DeliveryFrontier.model_validate_json(
+        (state_root / "changes/change-a/frontier.json").read_bytes()
+    )
+    (state_root / "changes/change-a/admission.json").write_bytes(
+        _canonical(_admission_receipt(runtime.contract, current_frontier, head))
+    )
     branch_publisher = Mock()
     branch_publisher.publish.return_value = _branch_receipt(head)
     pull_request_publisher = Mock()
