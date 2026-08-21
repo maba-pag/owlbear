@@ -111,9 +111,9 @@ function ActivityMetric({ count, icon, label }: { count: number; icon: 'play' | 
 }
 
 export function PortfolioHeaderSummary({ operating, totals, needsFilter, onNeedsFilter }: PortfolioHeaderSummaryProps) {
-  const designCount = operating.draft_design_change_ids.length + operating.design_required_change_ids.length
-  const deliveryCount = Math.max(0, operating.unfinished_change_count - operating.design_required_change_ids.length)
-  const currentChangeCount = operating.unfinished_change_count + operating.draft_design_change_ids.length
+  const designCount = operating.statuses.filter((status) => status.stage === 'design').length
+  const deliveryCount = operating.statuses.filter((status) => status.admission === 'admitted' && status.stage !== 'design').length
+  const currentChangeCount = operating.statuses.length
   const runningCount = totals.activity.working
 
   return (

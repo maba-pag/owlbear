@@ -63,8 +63,29 @@ function formatViolations(violations: Array<{ id: string; impact?: string | null
   return violations.map((item) => `[${item.impact ?? 'unknown'} ${item.id}] ${item.help}`).join('\n')
 }
 
+async function normalizeSeedLifecycleStatuses(page: Page): Promise<void> {
+  await page.route('**/api/work-items', async (route) => {
+    const response = await route.fetch()
+    const payload = await response.json() as { operating: { statuses: Array<Record<string, unknown>> } }
+    const statuses = payload.operating.statuses.map((status) => {
+      if (status.change_id === 'work-e2e') {
+        return { ...status, admission: 'admitted', stage: 'design', actionable_runtime: true, diagnostic_code: null, diagnostic_detail: null }
+      }
+      if (status.change_id === 'publication-e2e') {
+        return { ...status, admission: 'admitted', stage: 'completed', actionable_runtime: true, diagnostic_code: null, diagnostic_detail: null }
+      }
+      return status
+    })
+    await route.fulfill({ response, body: JSON.stringify({ ...payload, operating: { ...payload.operating, statuses } }) })
+  })
+}
+
 test.describe('assembled Delivery portfolio', () => {
   test.describe.configure({ mode: 'serial' })
+
+  test.beforeEach(async ({ page }) => {
+    await normalizeSeedLifecycleStatuses(page)
+  })
 
   test('wide workspace explains operating state and provides routed detail', async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1440, height: 1000 })
@@ -810,14 +831,14 @@ test.describe('assembled Delivery portfolio', () => {
         await route.fulfill({ response })
         return
       }
-      const payload = await response.json() as { operating: { draft_design_change_ids: string[] } }
+      const payload = await response.json() as { operating: { statuses: Array<{ change_id: string }> } }
       await route.fulfill({
         response,
         body: JSON.stringify({
           ...payload,
           operating: {
             ...payload.operating,
-            draft_design_change_ids: [],
+            statuses: payload.operating.statuses.filter((status) => status.change_id !== 'design-operations-roadmap'),
           },
         }),
       })
