@@ -54,10 +54,22 @@ directory, so no Delivery environment variable is required.
 
 The workspace root determines the repository and the canonical `.owlbear/delivery/packages`,
 `.owlbear/delivery/runtime`, and `.owlbear/delivery/worktrees` locations. Delivery admits one active
-claim and one Build writer at a time. Agent frontmatter owns model selection; Delivery owns the fixed
-Planner, Builder, and reviewer routing. Startup validates the configured remote, the exact
+claim and one Build writer at a time by default. Set the optional host-local capacity file described
+in the [core Delivery configuration reference](../delivery/README.md#configuration) to raise either
+limit. `execution_capacity` counts all active Planner and Builder claims; `writer_capacity` counts
+concurrent Builder worktrees and is reflected in the generated `capacity.json` ledger. Agent
+frontmatter owns model selection; Delivery owns the fixed Planner, Builder, and reviewer routing.
+Startup validates the configured remote, the exact
 `refs/remotes/<remote>/<target_branch>` commit, and the GitHub `owner/name` identity parsed from that
 remote URL. It does not require or inspect a local target branch.
+
+The tracked `.owlbear/delivery/config.json` is required for canonical startup and contains schema
+version `2` plus `remote`, `target_branch`, and `github_repository`; setup defaults the remote to
+`origin`, uses `main` for non-interactive target selection, and infers the GitHub repository from the
+remote. The ignored `.owlbear/delivery/runtime/host.json` is optional: its schema version is `1`, and
+both `writer_capacity` and `execution_capacity` default to `1` when the file or either field is
+absent. The generated `.owlbear/delivery/runtime/capacity.json` is runtime state, not a configuration
+file, and must not be edited manually. The Delivery server reads no environment variables.
 
 `sync_change_with_target` is an allowed Change-worktree operation. It fetches the configured
 remote-tracking target and merges the exact target head into the managed Change worktree, preserving

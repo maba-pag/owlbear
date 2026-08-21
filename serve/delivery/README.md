@@ -37,11 +37,27 @@ historical schema for validation. New Changes use sequential Planning and Build 
 
 ## Configuration
 
-The package reads no environment variables. The canonical loader reads optional ignored host-local
-capacity configuration from `.owlbear/delivery/runtime/host.json` (`writer_capacity` and
-`execution_capacity`, both defaulting to `1`); it writes the derived writer ledger to
-`capacity.json`. MCP and Cockpit load tracked project policy and compose owners over canonical
-Delivery roots; setup seeds that policy but does not create host-local capacity configuration.
+The package reads no environment variables. Canonical MCP and Cockpit startup uses the tracked
+project policy and optional host-local runtime settings below. Embedded callers may provide the
+same typed configuration directly.
+
+| File | Optional? | Fields and defaults | Ownership |
+| --- | --- | --- | --- |
+| `.owlbear/delivery/config.json` | Required for canonical MCP/Cockpit startup | `schema_version` must be `2`; `remote`, `target_branch`, and `github_repository` are required and have no loader defaults. `setup/init.py` defaults `remote` to `origin`, uses `main` as the non-interactive target-branch fallback, suggests the current branch interactively, and infers `github_repository` from the configured remote. | Tracked project policy |
+| `.owlbear/delivery/runtime/host.json` | Optional and ignored | When absent, `writer_capacity` and `execution_capacity` both default to `1`. When present, `schema_version` must be `1`; both capacities must be positive integers. Unknown keys and non-integer values are rejected at startup. | Host-local configuration |
+| `.owlbear/delivery/runtime/capacity.json` | Generated; do not edit | `schema_version` is `1`; `capacity` is the effective `writer_capacity`; `change_ids` lists active writer holders and defaults to an empty list. | Derived writer ledger |
+
+The two host capacities control different limits. `execution_capacity` is the maximum number of
+active Planner or Builder claims across the portfolio. `writer_capacity` is the maximum number of
+concurrent Builder worktrees; a Builder needs both an execution slot and a writer slot. For example,
+the optional host file can allow two writers and three total claims:
+
+```json
+{"schema_version": 1, "writer_capacity": 2, "execution_capacity": 3}
+```
+
+`setup/init.py` creates the tracked project policy but does not create `host.json`; the absence of
+that file therefore preserves the defaults above.
 
 ## Dependencies
 
