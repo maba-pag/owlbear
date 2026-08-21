@@ -2356,6 +2356,45 @@ def test_portfolio_operating_view_recommends_resuming_unadmitted_design(tmp_path
     assert tuple(item.kind.value for item in view.guidance) == ("resume-design",)
 
 
+def test_portfolio_reader_characterizes_admission_staleness(tmp_path: Path) -> None:
+    reader, _reader_runtimes, _reader_coordinator, state_root = _portfolio(tmp_path, {})
+    writer, _writer_coordinator, _writer_manager = _reopen_portfolio(tmp_path, state_root, {})
+    intent = b"""# Admitted Delivery
+
+```yaml target-contract
+kind: commitment
+id: COM-001
+class: agreed-path
+provenance: characterization
+statement: Preserve source-bound admission.
+```
+
+```yaml target-contract
+kind: outcome
+id: OUT-001
+title: Observe admission
+promise: Make persisted admission observable.
+acceptance: [Admission is observable.]
+commitments: [COM-001]
+dependencies: []
+```
+"""
+    writer.create_design_session("admitted-change", intent, b"# Architecture\n")
+    admitted = writer.admit_delivery_change(DeliveryAdmissionRequest(change_id="admitted-change", active_claim_ids=()))
+
+    delivery_root = state_root / "changes" / "admitted-change"
+    persisted_frontier = DeliveryFrontier.model_validate_json((delivery_root / "frontier.json").read_bytes())
+    persisted_receipt = json.loads((delivery_root / "admission.json").read_bytes())
+    assert persisted_frontier == admitted.frontier
+    assert persisted_receipt["receipt_id"] == admitted.receipt.receipt_id
+
+    view = reader.portfolio_read_view()
+
+    assert view.groups == ()
+    assert view.operating.draft_design_change_ids == ("admitted-change",)
+    assert view.operating.unfinished_change_count == 0
+
+
 def test_portfolio_operating_view_counts_design_reentry_as_intervention(tmp_path: Path) -> None:
     application, _runtimes, _coordinator, _state_root = _portfolio(
         tmp_path,
