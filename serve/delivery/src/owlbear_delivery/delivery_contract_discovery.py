@@ -375,6 +375,3 @@ def require_startup_contracts(
             raise DeliveryDiscoveryStartupError(observation.model_copy(update={"error": error}))
         contracts[observation.change_id] = observation.contract
     return contracts
-
-
-discover_delivery_changes = discover_persisted_changes
