@@ -122,6 +122,8 @@ from owlbear_delivery.draft_pull_request import (
     UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.portfolio_operating import (
+    PortfolioChangeAdmission,
+    PortfolioChangeLifecycleStatus,
     PortfolioGuidanceFacts,
     PortfolioOperatingView,
     PortfolioWorkReference,
@@ -2336,18 +2338,17 @@ class PortfolioApplication:
         snapshots: tuple[DeliveryPortfolioSnapshot, ...],
         groups: tuple[ChangeGroupView, ...],
     ) -> PortfolioOperatingView:
-        admitted_ids = {
-            change_id for change_id, observation in self._discovered_changes.items() if observation.admitted
-        }
-        draft_design_ids = tuple(
-            package.change_id
-            for package in self._package_store.list_verified()
-            if package.change_id not in admitted_ids
+        verified_package_ids = {package.change_id for package in self._package_store.list_verified()}
+        status_ids = sorted((*verified_package_ids, *self._discovered_changes))
+        change_statuses = tuple(
+            self._change_lifecycle_status(change_id, self._discovered_changes.get(change_id))
+            for change_id in dict.fromkeys(status_ids)
         )
+        draft_design_ids = tuple(status.change_id for status in change_statuses if not status.admitted)
         design_required_ids = tuple(
-            change_id
-            for change_id, observation in sorted(self._discovered_changes.items())
-            if observation.admitted and observation.stage == DeliveryChangeStage.DESIGN
+            status.change_id
+            for status in change_statuses
+            if status.admitted and status.stage == DeliveryChangeStage.DESIGN
         )
         claimed = self._claimed_work(snapshots)
         queued = self._queued_work(snapshots)
@@ -2398,6 +2399,7 @@ class PortfolioApplication:
         return PortfolioOperatingView(
             unfinished_change_count=unfinished_change_count,
             completed_change_count=completed_change_count,
+            statuses=change_statuses,
             draft_design_change_ids=draft_design_ids,
             design_required_change_ids=design_required_ids,
             claimed=claimed,
@@ -2405,6 +2407,27 @@ class PortfolioApplication:
             interventions=interventions,
             dependency_waits=dependency_waits,
             guidance=guidance,
+        )
+
+    @staticmethod
+    def _change_lifecycle_status(
+        change_id: str,
+        observation: DeliveryChangeObservation | None,
+    ) -> PortfolioChangeLifecycleStatus:
+        if observation is None or not observation.admitted:
+            return PortfolioChangeLifecycleStatus(
+                change_id=change_id,
+                admission=PortfolioChangeAdmission.UNADMITTED,
+                stage=DeliveryChangeStage.DESIGN,
+                actionable_runtime=False,
+            )
+        return PortfolioChangeLifecycleStatus(
+            change_id=change_id,
+            admission=PortfolioChangeAdmission.ADMITTED,
+            stage=observation.stage,
+            actionable_runtime=observation.actionable_runtime,
+            diagnostic_code=observation.diagnostic_code,
+            diagnostic_detail=observation.diagnostic_detail,
         )
 
     def _claimed_work(

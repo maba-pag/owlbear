@@ -111,6 +111,7 @@ from owlbear_delivery import (
     PublicationLease,
     PublishDeliveryPlan,
     PublishDeliveryResult,
+    PullRequestReadyReceipt,
     ReadChangePublicationCheckObservations,
     ReadChangePublicationHistory,
     RetryDelivery,
@@ -429,7 +430,7 @@ def _runtime(
         )
     )
     path = state_root / "changes" / contract.change_id / "frontier.json"
-    path.parent.mkdir(parents=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(_canonical(frontier))
     return DeliveryRuntime(state_root, contract, workspace_manager=manager)
 
@@ -2387,6 +2388,12 @@ def test_portfolio_operating_view_recommends_resuming_unadmitted_design(tmp_path
     view = application.portfolio_operating_view()
 
     assert view.unfinished_change_count == 0
+    assert view.statuses[0].change_id == "draft-change"
+    assert view.statuses[0].admission.value == "unadmitted"
+    assert view.statuses[0].stage == DeliveryChangeStage.DESIGN
+    assert view.statuses[0].actionable_runtime is False
+    assert view.statuses[0].diagnostic_code is None
+    assert view.statuses[0].diagnostic_detail is None
     assert view.draft_design_change_ids == ("draft-change",)
     assert tuple(item.kind.value for item in view.guidance) == ("resume-design",)
 
@@ -2432,9 +2439,81 @@ dependencies: []
     assert view.groups[0].outcome_total == len(admitted.contract.outcomes)
     assert view.groups[0].outcome_completed == 0
     assert view.operating.unfinished_change_count == 1
+    assert view.operating.statuses[0].change_id == "admitted-change"
+    assert view.operating.statuses[0].admission.value == "admitted"
+    assert view.operating.statuses[0].stage == DeliveryChangeStage.BUILDING
+    assert view.operating.statuses[0].actionable_runtime is True
+    assert view.operating.statuses[0].diagnostic_code is None
+    assert view.groups[0].items[0].progress.label == "Task plan not published"
     assert view.operating.draft_design_change_ids == ()
     assert view.operating.design_required_change_ids == ()
     assert tuple(item.kind.value for item in view.operating.guidance) == ("start-orchestration",)
+
+
+def test_warm_reader_reconciles_change_admitted_by_second_application(tmp_path: Path) -> None:
+    reader, _reader_runtimes, _reader_coordinator, state_root = _portfolio(tmp_path, {})
+    reader.portfolio_read_view()
+    writer, writer_coordinator, writer_manager = _reopen_portfolio(tmp_path, state_root, {})
+    intent = b"""# Admitted Delivery
+
+```yaml target-contract
+kind: commitment
+id: COM-001
+class: agreed-path
+provenance: characterization
+statement: Preserve source-bound admission.
+```
+
+```yaml target-contract
+kind: outcome
+id: OUT-001
+title: Observe admission
+promise: Make persisted admission observable.
+acceptance: [Admission is observable.]
+commitments: [COM-001]
+dependencies: []
+```
+"""
+    writer.create_design_session("late-change", intent, b"# Architecture\n")
+    admitted = writer.admit_delivery_change(DeliveryAdmissionRequest(change_id="late-change", active_claim_ids=()))
+    exact_head = writer_coordinator.show("late-change").last_reviewed_commit
+    _runtime(state_root, admitted.contract, writer_manager, DeliveryStage.COMPLETED, exact_head)
+    finalization = writer.finalize_change("late-change", _finalization_request("late-change", exact_head))
+    writer_runtime = writer._runtimes["late-change"]
+    writer_runtime.record_publication_identity(
+        DeliveryChangePublicationIdentity(
+            change_id="late-change",
+            repository="example/project",
+            number=7,
+            node_id="PR_node_7",
+            head_sha=exact_head,
+        )
+    )
+    ready_payload = {
+        "schema_version": 1,
+        "operation_id": "ready-late-change",
+        "change_id": "late-change",
+        "finalization_id": finalization.finalization_id,
+        "repository": "example/project",
+        "number": 7,
+        "node_id": "PR_node_7",
+        "head_sha": exact_head,
+        "draft": False,
+        "observed_at": datetime(2026, 8, 11, 14, tzinfo=UTC),
+        "provider_evidence_digest": "5" * 64,
+    }
+    writer_runtime.mark_awaiting_merge(
+        PullRequestReadyReceipt(
+            receipt_id=_receipt_id({**ready_payload, "observed_at": "2026-08-11T14:00:00Z"}),
+            **ready_payload,
+        )
+    )
+
+    outcomes = reader.reconcile_awaiting_acceptance()
+
+    assert len(outcomes) == 1
+    assert outcomes[0].change_id == "late-change"
+    assert outcomes[0].status.value == "provider-unavailable"
 
 
 def test_portfolio_reader_replaces_changed_runtime_without_active_claim(tmp_path: Path) -> None:
@@ -2517,6 +2596,12 @@ def test_portfolio_reader_retains_prior_runtime_and_blocks_mutation_for_unavaila
     assert view.groups[0].title == previous_runtime.contract.title
     assert view.operating.unfinished_change_count == 1
     assert view.operating.draft_design_change_ids == ()
+    status = next(item for item in view.operating.statuses if item.change_id == "change-a")
+    assert status.admission.value == "admitted"
+    assert status.actionable_runtime is False
+    assert status.diagnostic_code == "runtime_unavailable"
+    assert status.diagnostic_detail is not None
+    assert len(status.diagnostic_detail) <= 240
     assert application._discovered_changes["change-a"].diagnostic_code == "runtime_unavailable"
     with pytest.raises(DeliveryRuntimeReconciliationError) as exc_info:
         application.defer_change("change-a", "runtime entry requires retry")
@@ -2533,6 +2618,11 @@ def test_portfolio_operating_view_counts_design_reentry_as_intervention(tmp_path
     view = application.portfolio_operating_view()
 
     assert tuple(item.item_key for item in view.interventions) == ("outcome:OUT-001",)
+    assert view.statuses[0].admission.value == "admitted"
+    assert view.statuses[0].stage == DeliveryChangeStage.DESIGN
+    assert view.statuses[0].actionable_runtime is True
+    assert view.design_required_change_ids == ("change-a",)
+    assert view.draft_design_change_ids == ()
     assert tuple(item.kind.value for item in view.guidance) == ("intervene", "resume-design")
 
 
