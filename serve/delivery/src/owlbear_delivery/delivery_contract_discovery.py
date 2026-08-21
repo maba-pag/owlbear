@@ -65,7 +65,6 @@ class DeliveryChangeObservation(_DiscoveryModel):
     frontier: DeliveryFrontier | None = None
     stage: DeliveryChangeStage | None = None
     error: DeliveryDiscoveryError | None = None
-    runtime_available: bool | None = None
 
     @model_validator(mode="after")
     def _validate_projection(self) -> DeliveryChangeObservation:
@@ -85,8 +84,6 @@ class DeliveryChangeObservation(_DiscoveryModel):
     @property
     def actionable_runtime(self) -> bool:
         """Return whether persisted evidence is sufficient for runtime composition."""
-        if self.runtime_available is not None:
-            return self.runtime_available
         return self.error is None and self.contract is not None and self.frontier is not None
 
     @property
