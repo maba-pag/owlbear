@@ -7,8 +7,14 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from owlbear_delivery.delivery_runtime import DeliveryStage
-from owlbear_delivery.portfolio_operating import PortfolioOperatingView
+from owlbear_delivery.delivery_runtime import DeliveryChangeStage, DeliveryStage
+from owlbear_delivery.portfolio_operating import (
+    PortfolioChangeAdmission,
+    PortfolioChangeLifecycleStatus,
+    PortfolioGuidance,
+    PortfolioOperatingView,
+    PortfolioWorkReference,
+)
 from owlbear_delivery.publication_provider import (
     PublicationCheckBlockingState,
     PublicationCheckKind,
@@ -56,12 +62,69 @@ class WorkItemPortfolioTotals(_TargetHTTPModel):
     activity: ActivityCounts
 
 
+class PortfolioChangeLifecycleStatusResponse(_TargetHTTPModel):
+    """Expose independent lifecycle facts for one current Change."""
+
+    change_id: str = Field(min_length=1)
+    admission: PortfolioChangeAdmission
+    stage: DeliveryChangeStage | None = None
+    actionable_runtime: bool
+    diagnostic_code: str | None = Field(default=None, min_length=1)
+    diagnostic_detail: str | None = Field(default=None, min_length=1, max_length=240)
+
+    @classmethod
+    def from_status(
+        cls,
+        status: PortfolioChangeLifecycleStatus,
+    ) -> PortfolioChangeLifecycleStatusResponse:
+        """Adapt one Delivery status without deriving transport state."""
+        return cls(
+            change_id=status.change_id,
+            admission=status.admission,
+            stage=status.stage,
+            actionable_runtime=status.actionable_runtime,
+            diagnostic_code=status.diagnostic_code,
+            diagnostic_detail=status.diagnostic_detail,
+        )
+
+
+class PortfolioOperatingResponse(_TargetHTTPModel):
+    """Expose strict HTTP facts for the current Delivery portfolio."""
+
+    unfinished_change_count: int = Field(ge=0)
+    completed_change_count: int = Field(ge=0)
+    statuses: tuple[PortfolioChangeLifecycleStatusResponse, ...]
+    draft_design_change_ids: tuple[str, ...] = ()
+    design_required_change_ids: tuple[str, ...] = ()
+    claimed: tuple[PortfolioWorkReference, ...] = ()
+    queued_for_orchestration: tuple[PortfolioWorkReference, ...] = ()
+    interventions: tuple[PortfolioWorkReference, ...] = ()
+    dependency_waits: tuple[PortfolioWorkReference, ...] = ()
+    guidance: tuple[PortfolioGuidance, ...] = ()
+
+    @classmethod
+    def from_view(cls, view: PortfolioOperatingView) -> PortfolioOperatingResponse:
+        """Adapt the Delivery operating projection at the Cockpit boundary."""
+        return cls(
+            unfinished_change_count=view.unfinished_change_count,
+            completed_change_count=view.completed_change_count,
+            statuses=tuple(PortfolioChangeLifecycleStatusResponse.from_status(status) for status in view.statuses),
+            draft_design_change_ids=view.draft_design_change_ids,
+            design_required_change_ids=view.design_required_change_ids,
+            claimed=view.claimed,
+            queued_for_orchestration=view.queued_for_orchestration,
+            interventions=view.interventions,
+            dependency_waits=view.dependency_waits,
+            guidance=view.guidance,
+        )
+
+
 class WorkItemPortfolioResponse(_TargetHTTPModel):
     """Return Change-grouped current Work Items and independent totals."""
 
     groups: tuple[ChangeGroupView, ...]
     totals: WorkItemPortfolioTotals
-    operating: PortfolioOperatingView
+    operating: PortfolioOperatingResponse
 
 
 class WorkItemDetailResponse(_TargetHTTPModel):
@@ -408,6 +471,8 @@ __all__ = [
     "ConfirmLostClaimBody",
     "DesignWorkDetailResponse",
     "NeedsCounts",
+    "PortfolioChangeLifecycleStatusResponse",
+    "PortfolioOperatingResponse",
     "PublicationCheckView",
     "PublicationChecksObservationResponse",
     "RecoverChangeWorktreeBody",

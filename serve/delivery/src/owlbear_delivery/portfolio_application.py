@@ -50,6 +50,12 @@ from owlbear_delivery.change_workspace import (
     TargetSyncConflictRequest,
     WorkspaceRecoverySnapshot,
 )
+from owlbear_delivery.delivery_contract_discovery import (
+    DeliveryChangeObservation,
+    DeliveryDiscoveryRootError,
+    contract_fingerprint,
+    discover_persisted_changes,
+)
 from owlbear_delivery.delivery_runtime import (
     ActivateDeliveryClaim,
     AdministrativeDeliveryMove,
@@ -116,6 +122,8 @@ from owlbear_delivery.draft_pull_request import (
     UpdateGeneratedPullRequestSummary,
 )
 from owlbear_delivery.portfolio_operating import (
+    PortfolioChangeAdmission,
+    PortfolioChangeLifecycleStatus,
     PortfolioGuidanceFacts,
     PortfolioOperatingView,
     PortfolioWorkReference,
@@ -617,6 +625,18 @@ class PortfolioApplicationError(RuntimeError):
     code = "ERR_DELIVERY_PORTFOLIO"
 
 
+class DeliveryRuntimeReconciliationError(DeliveryRuntimeConflictError):
+    """A runtime map entry changed or became unreadable during a read-side reconciliation."""
+
+    code = "ERR_DELIVERY_RUNTIME_RECONCILIATION"
+    retry_safe = True
+
+    def __init__(self, change_id: str | None, detail: str) -> None:
+        self.change_id = change_id
+        target = f" for {change_id}" if change_id is not None else ""
+        super().__init__(f"Delivery runtime reconciliation is required{target}: {detail}")
+
+
 class RequiredPublicationChecksFailedError(PortfolioApplicationError):
     """A ready transition retained attention for failing provider-required checks."""
 
@@ -833,6 +853,10 @@ class PortfolioApplication:
             message = "runtime mapping keys must match admitted change identities"
             raise ValueError(message)
         self._runtimes = dict(runtimes)
+        self._discovered_changes: dict[str, DeliveryChangeObservation] = {}
+        self._runtime_reconciliation_errors: dict[str, str] = {}
+        self._runtime_snapshots: dict[str, DeliveryPortfolioSnapshot] = {}
+        self._has_reconciled_runtimes = False
         self._target_root = dependencies.target_root.resolve()
         self._package_store = dependencies.package_store
         self._authority_registry = dependencies.authority_registry
@@ -883,7 +907,7 @@ class PortfolioApplication:
         operation_id: str,
     ) -> ChangeTargetSyncReceipt:
         """Fetch and merge one exact target head through the managed Change worktree."""
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         request = SyncChangeWithTarget(
             change_id=change_id,
             expected_target=expected_target,
@@ -935,7 +959,7 @@ class PortfolioApplication:
         operation_id: str,
     ) -> ChangeExternalHeadAdoptionReceipt:
         """Adopt one exact remote Change descendant through managed workspace custody."""
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         request = AdoptExternalHead(
             change_id=change_id,
             expected_head=expected_head,
@@ -962,7 +986,7 @@ class PortfolioApplication:
         operation_id: str,
     ) -> ChangeExternalHeadPromotionReceipt:
         """Promote one exact adopted head before granting Builder authority."""
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             self._require_external_head_promotion_change_mutable(runtime)
             if runtime.change_disposition() is not None:
@@ -1001,7 +1025,7 @@ class PortfolioApplication:
         operation_id: str,
     ) -> ChangeTargetSyncAbortReceipt:
         """Abort one exact preserved target merge and clear its attention."""
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             disposition = runtime.change_disposition()
             attention_active = disposition is not None
@@ -1039,7 +1063,7 @@ class PortfolioApplication:
         operation_id: str,
     ) -> ChangeTargetSyncReceipt:
         """Record one exact semantic target merge and clear its attention."""
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             existing = runtime.target_sync_receipt()
             if existing is not None:
@@ -1094,7 +1118,7 @@ class PortfolioApplication:
         """Publish one successor branch and PR for an exact publication attention."""
         if self._change_branch_publisher is None or self._draft_pull_request_publisher is None:
             self._fail("publication supersession is not configured")
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             runtime_history, predecessor, replay_head = self._read_supersession_context(
                 runtime,
@@ -1327,6 +1351,7 @@ class PortfolioApplication:
 
     def list_retained_change_worktrees(self) -> tuple[DeliveryRetainedChangeWorktree, ...]:
         """List retained Change worktrees and exact cleanup eligibility facts."""
+        self._reconcile_runtimes()
         return tuple(self._retained_change_worktree_view(item) for item in self._workspace_manager.list_retained())
 
     def recover_change_worktree(
@@ -1339,7 +1364,7 @@ class PortfolioApplication:
         """Recreate one missing Change worktree from explicit reviewed authority."""
         if confirmed_recovery is not True:
             self._fail("Change worktree recovery requires explicit confirmation")
-        self._runtime(change_id)
+        self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             try:
                 coordination = self._workspace_manager.recover(change_id, recovery_reviewed_head)
@@ -1364,7 +1389,7 @@ class PortfolioApplication:
         expected_completion_id: str | None = None,
     ) -> DeliveryChangeWorktreeCleanup:
         """Clean one terminal Change worktree after exact lifecycle validation."""
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             lifecycle = runtime.change_stage()
             completion = runtime.completion_receipt()
@@ -1393,7 +1418,7 @@ class PortfolioApplication:
 
     def cleanup_abandoned_change_worktree(self, change_id: str) -> DeliveryChangeWorktreeCleanup:
         """Clean one abandoned Change worktree without reopening its terminal state."""
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         if runtime.change_stage() != DeliveryChangeStage.ABANDONED:
             self._fail("abandoned Change worktree cleanup requires an abandoned Change")
         return self.cleanup_change_worktree(change_id)
@@ -1445,7 +1470,7 @@ class PortfolioApplication:
         request: FinalizeDeliveryChange,
     ) -> DeliveryFinalizationReceipt:
         """Finalize one exact clean reviewed Change head and queue its checkpoint."""
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         existing = runtime.finalization()
         if existing is not None:
             if (
@@ -1494,7 +1519,7 @@ class PortfolioApplication:
         if self._draft_pull_request_publisher is None:
             message = "draft pull-request publication is not configured"
             raise PortfolioApplicationError(message)
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             if runtime.change_disposition() is not None:
                 message = "pull-request readiness requires current Change attention resolution"
@@ -1588,7 +1613,7 @@ class PortfolioApplication:
         expected_disposition_id: str,
     ) -> DeliveryChangeDispositionResolution:
         """Resolve one exact Change attention record without recreating provider authority."""
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             return runtime.resolve_change_disposition(expected_disposition_id, _timestamp(self._clock()))
 
@@ -1605,7 +1630,7 @@ class PortfolioApplication:
         if not confirmed_recovery:
             message = "publication baseline recovery requires explicit confirmation"
             raise PortfolioApplicationError(message)
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             if runtime.active_claims() or runtime.integration_repair_claim() is not None:
                 message = "publication baseline recovery cannot overlap an active claim"
@@ -1619,13 +1644,13 @@ class PortfolioApplication:
 
     def defer_change(self, change_id: str, reason: str) -> DeliveryChangeDeferral:
         """Retain one nonterminal Change and pause its claimable frontier."""
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             return runtime.defer_change(reason, _timestamp(self._clock()))
 
     def resume_change(self, change_id: str) -> DeliveryChangeDeferral:
         """Resume one exact deferred Change from its retained prior state."""
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             return runtime.resume_change()
 
@@ -1636,6 +1661,7 @@ class PortfolioApplication:
         limit: int = _MAX_ACCEPTANCE_RECONCILIATION_CHANGES,
     ) -> tuple[DeliveryAcceptanceReconciliationOutcome, ...]:
         """Reconcile a bounded set of observed awaiting-merge Changes."""
+        self._reconcile_runtimes()
         if limit < 1:
             message = "acceptance reconciliation limit must be positive"
             raise ValueError(message)
@@ -1668,7 +1694,7 @@ class PortfolioApplication:
         self,
         change_id: str,
     ) -> DeliveryAcceptanceReconciliationOutcome:
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         try:
             with locked_roots((self._checkpoint_lock_root(change_id),), blocking=False):
                 outcome = self._reconcile_awaiting_acceptance_locked(change_id, runtime)
@@ -1867,7 +1893,7 @@ class PortfolioApplication:
 
     def abandon_change(self, change_id: str, reason: str) -> DeliveryChangeAbandonment:
         """Record one terminal user abandonment without mutating the user checkout."""
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             return runtime.abandon_change(reason, _timestamp(self._clock()))
 
@@ -1876,7 +1902,7 @@ class PortfolioApplication:
         if self._draft_pull_request_publisher is None:
             message = "draft pull-request publication is not configured"
             raise PortfolioApplicationError(message)
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             existing = runtime.completion_receipt()
             if existing is not None:
@@ -1979,7 +2005,7 @@ class PortfolioApplication:
         change_id: str,
     ) -> DeliveryFinalizationReceipt | DeliveryFinalizationInvalidationReceipt | None:
         """Retain or invalidate finalization from the engine-derived Change branch head."""
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             if runtime.completion_receipt() is not None:
                 finalization = runtime.finalization()
@@ -2030,7 +2056,7 @@ class PortfolioApplication:
         if self._change_branch_publisher is None or self._draft_pull_request_publisher is None:
             message = "checkpoint publication is not configured"
             raise PortfolioApplicationError(message)
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             return self._reconcile_change_checkpoint(change_id, runtime)
 
@@ -2176,6 +2202,7 @@ class PortfolioApplication:
 
     def admit_delivery_change(self, request: DeliveryAdmissionRequest) -> DeliveryAdmissionResult:
         """Admit source-bound Delivery authority through the owning registry."""
+        self._reconcile_runtimes()
         with self._coordinator.acquisition_lock():
             self._workspace_manager.validate_recovery(request.change_id, request.recovery_reviewed_head)
             result = self._authority_registry.admit(request)
@@ -2189,6 +2216,7 @@ class PortfolioApplication:
                 workspace_manager=self._workspace_manager,
                 migration_reviewed_head=coordination.last_reviewed_commit,
             )
+            self._reconcile_runtimes()
             return result
 
     def publish_delivery_plan(
@@ -2197,7 +2225,7 @@ class PortfolioApplication:
         request: PublishDeliveryPlan,
     ) -> DeliveryPlanCandidate:
         """Publish one validated Planning candidate through its exact runtime."""
-        return self._runtime(change_id).publish_plan(request)
+        return self._runtime(change_id, for_mutation=True).publish_plan(request)
 
     def publish_delivery_result(
         self,
@@ -2205,7 +2233,7 @@ class PortfolioApplication:
         request: PublishDeliveryResult,
     ) -> DeliveryResultCandidate:
         """Publish one validated Build result through its exact runtime."""
-        return self._runtime(change_id).publish_result(request)
+        return self._runtime(change_id, for_mutation=True).publish_result(request)
 
     def transition_delivery(
         self,
@@ -2213,7 +2241,7 @@ class PortfolioApplication:
         request: DeliveryTransition,
     ) -> OutcomeAuthorityBinding:
         """Apply one validated mechanical transition through its exact runtime."""
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             return runtime.transition(request)
 
@@ -2310,14 +2338,17 @@ class PortfolioApplication:
         snapshots: tuple[DeliveryPortfolioSnapshot, ...],
         groups: tuple[ChangeGroupView, ...],
     ) -> PortfolioOperatingView:
-        runtime_ids = set(self._runtimes)
-        draft_design_ids = tuple(
-            package.change_id for package in self._package_store.list_verified() if package.change_id not in runtime_ids
+        verified_package_ids = {package.change_id for package in self._package_store.list_verified()}
+        status_ids = sorted((*verified_package_ids, *self._discovered_changes))
+        change_statuses = tuple(
+            self._change_lifecycle_status(change_id, self._discovered_changes.get(change_id))
+            for change_id in dict.fromkeys(status_ids)
         )
+        draft_design_ids = tuple(status.change_id for status in change_statuses if not status.admitted)
         design_required_ids = tuple(
-            change_id
-            for change_id, runtime in sorted(self._runtimes.items())
-            if runtime.change_stage() == DeliveryChangeStage.DESIGN
+            status.change_id
+            for status in change_statuses
+            if status.admitted and status.stage == DeliveryChangeStage.DESIGN
         )
         claimed = self._claimed_work(snapshots)
         queued = self._queued_work(snapshots)
@@ -2341,9 +2372,19 @@ class PortfolioApplication:
             for item in group.items
             if item.needs == WorkItemNeed.DEPENDENCY
         )
-        unfinished_runtime_count = sum(not is_change_terminal(snapshot.frontier) for snapshot in snapshots)
+        snapshot_ids = {snapshot.contract.change_id for snapshot in snapshots}
+        unavailable_frontiers = tuple(
+            observation.frontier
+            for change_id, observation in sorted(self._discovered_changes.items())
+            if observation.admitted and change_id not in snapshot_ids and observation.frontier is not None
+        )
+        unfinished_runtime_count = sum(not is_change_terminal(snapshot.frontier) for snapshot in snapshots) + sum(
+            not is_change_terminal(frontier) for frontier in unavailable_frontiers
+        )
         unfinished_change_count = unfinished_runtime_count
-        completed_change_count = sum(snapshot.frontier.change_completion is not None for snapshot in snapshots)
+        completed_change_count = sum(snapshot.frontier.change_completion is not None for snapshot in snapshots) + sum(
+            frontier.change_completion is not None for frontier in unavailable_frontiers
+        )
         design_change_ids = tuple(dict.fromkeys((*draft_design_ids, *design_required_ids)))
         guidance = derive_portfolio_guidance(
             PortfolioGuidanceFacts(
@@ -2358,6 +2399,7 @@ class PortfolioApplication:
         return PortfolioOperatingView(
             unfinished_change_count=unfinished_change_count,
             completed_change_count=completed_change_count,
+            statuses=change_statuses,
             draft_design_change_ids=draft_design_ids,
             design_required_change_ids=design_required_ids,
             claimed=claimed,
@@ -2365,6 +2407,27 @@ class PortfolioApplication:
             interventions=interventions,
             dependency_waits=dependency_waits,
             guidance=guidance,
+        )
+
+    @staticmethod
+    def _change_lifecycle_status(
+        change_id: str,
+        observation: DeliveryChangeObservation | None,
+    ) -> PortfolioChangeLifecycleStatus:
+        if observation is None or not observation.admitted:
+            return PortfolioChangeLifecycleStatus(
+                change_id=change_id,
+                admission=PortfolioChangeAdmission.UNADMITTED,
+                stage=DeliveryChangeStage.DESIGN,
+                actionable_runtime=False,
+            )
+        return PortfolioChangeLifecycleStatus(
+            change_id=change_id,
+            admission=PortfolioChangeAdmission.ADMITTED,
+            stage=observation.stage,
+            actionable_runtime=observation.actionable_runtime,
+            diagnostic_code=observation.diagnostic_code,
+            diagnostic_detail=observation.diagnostic_detail,
         )
 
     def _claimed_work(
@@ -2530,7 +2593,7 @@ class PortfolioApplication:
     ) -> DeliveryRequest:
         """Persist one request resolution by delegating to the owning runtime."""
         with self._coordinator.acquisition_lock():
-            return self._runtime(change_id).resolve_request(request_id, resolution)
+            return self._runtime(change_id, for_mutation=True).resolve_request(request_id, resolution)
 
     def clear_block(
         self,
@@ -2542,7 +2605,7 @@ class PortfolioApplication:
     ) -> OutcomeAuthorityBinding:
         """Clear a requestless same-stage block with operator evidence via runtime."""
         with self._coordinator.acquisition_lock():
-            return self._runtime(change_id).unblock(outcome_id, block_id, operator_note, locators)
+            return self._runtime(change_id, for_mutation=True).unblock(outcome_id, block_id, operator_note, locators)
 
     def administrative_move(
         self,
@@ -2551,7 +2614,7 @@ class PortfolioApplication:
     ) -> AdministrativeDeliveryMoveResult:
         """Delegate an authorized operator backward movement to the owning runtime."""
         with self._coordinator.acquisition_lock():
-            runtime = self._runtime(change_id)
+            runtime = self._runtime(change_id, for_mutation=True)
             with locked_roots((self._checkpoint_lock_root(change_id),)):
                 return runtime.administrative_move(request)
 
@@ -2615,8 +2678,150 @@ class PortfolioApplication:
             recovery_reviewed_head=retained.last_reviewed_commit,
         )
 
+    def _reconcile_runtimes(self) -> None:
+        try:
+            discovered = discover_persisted_changes(self._target_root)
+        except DeliveryDiscoveryRootError as exc:
+            raise DeliveryRuntimeReconciliationError(None, exc.detail) from exc
+
+        observations = {observation.change_id: observation for observation in discovered}
+        previous_runtimes = self._runtimes
+        reconciled: dict[str, DeliveryRuntime] = {}
+        reconciliation_errors: dict[str, str] = {}
+        initial_reconciliation = not self._has_reconciled_runtimes
+
+        for change_id, runtime in previous_runtimes.items():
+            observation = observations.get(change_id)
+            if observation is None:
+                continue
+            reconciled_runtime, error = self._reconcile_existing_runtime(
+                runtime,
+                observation,
+                initial_reconciliation=initial_reconciliation,
+            )
+            if reconciled_runtime is not None:
+                reconciled[change_id] = reconciled_runtime
+            if error is not None:
+                reconciliation_errors[change_id] = error
+
+        for change_id, observation in observations.items():
+            if change_id in reconciled:
+                continue
+            runtime, error = self._reconcile_new_runtime(observation)
+            if runtime is not None:
+                reconciled[change_id] = runtime
+            if error is not None:
+                reconciliation_errors[change_id] = error
+
+        self._runtimes = reconciled
+        self._discovered_changes = observations
+        self._runtime_reconciliation_errors = reconciliation_errors
+        self._has_reconciled_runtimes = True
+
+    def _reconcile_existing_runtime(
+        self,
+        runtime: DeliveryRuntime,
+        observation: DeliveryChangeObservation,
+        *,
+        initial_reconciliation: bool,
+    ) -> tuple[DeliveryRuntime | None, str | None]:
+        active = self._runtime_has_active_work(runtime)
+        reconciled_runtime: DeliveryRuntime | None = runtime
+        error: str | None = None
+        if not observation.admitted:
+            if self._retain_unadmitted_runtime(
+                observation,
+                active=active,
+                initial_reconciliation=initial_reconciliation,
+            ):
+                error = self._observation_detail(observation)
+            else:
+                reconciled_runtime = None
+        elif not observation.actionable_runtime or observation.contract is None:
+            error = self._observation_detail(observation)
+        elif observation.contract_fingerprint != contract_fingerprint(runtime.contract):
+            if active:
+                error = "persisted contract fingerprint differs from runtime authority"
+            else:
+                try:
+                    reconciled_runtime = self._compose_runtime(observation)
+                except (OSError, RuntimeError, ValueError) as exc:
+                    error = str(exc) or "replacement runtime is unavailable"
+        return reconciled_runtime, error
+
+    @staticmethod
+    def _retain_unadmitted_runtime(
+        observation: DeliveryChangeObservation,
+        *,
+        active: bool,
+        initial_reconciliation: bool,
+    ) -> bool:
+        return (
+            active
+            or not initial_reconciliation
+            or observation.diagnostic_code == "frontier-migration-required"
+            or (
+                initial_reconciliation
+                and observation.frontier is not None
+                and any(binding.results for binding in observation.frontier.bindings)
+            )
+        )
+
+    def _reconcile_new_runtime(
+        self,
+        observation: DeliveryChangeObservation,
+    ) -> tuple[DeliveryRuntime | None, str | None]:
+        if not observation.admitted or not observation.actionable_runtime or observation.contract is None:
+            if observation.admitted and not observation.actionable_runtime:
+                return None, self._observation_detail(observation)
+            return None, None
+        try:
+            return self._compose_runtime(observation), None
+        except (OSError, RuntimeError, ValueError) as exc:
+            return None, str(exc) or "runtime is unavailable"
+
+    def _compose_runtime(self, observation: DeliveryChangeObservation) -> DeliveryRuntime:
+        if observation.contract is None:
+            self._fail("reconciled Change contract is unavailable")
+        try:
+            reviewed_head = self._workspace_manager.show(observation.change_id).last_reviewed_commit
+        except CoordinationConflictError:
+            reviewed_head = None
+        return DeliveryRuntime(
+            self._target_root,
+            observation.contract,
+            workspace_manager=self._workspace_manager,
+            migration_reviewed_head=reviewed_head,
+        )
+
+    @staticmethod
+    def _runtime_has_active_work(runtime: DeliveryRuntime) -> bool:
+        try:
+            return bool(runtime.active_claims()) or runtime.integration_repair_claim() is not None
+        except (OSError, RuntimeError, ValueError):
+            return True
+
+    @staticmethod
+    def _observation_detail(observation: DeliveryChangeObservation) -> str:
+        code = observation.diagnostic_code
+        detail = observation.diagnostic_detail or "persisted Change authority is unavailable"
+        return f"{code}: {detail}" if code is not None else detail
+
     def _portfolio_snapshots(self) -> tuple[DeliveryPortfolioSnapshot, ...]:
-        return tuple(self._delivery_snapshot(runtime) for _change_id, runtime in sorted(self._runtimes.items()))
+        self._reconcile_runtimes()
+        snapshots: list[DeliveryPortfolioSnapshot] = []
+        retained_snapshots: dict[str, DeliveryPortfolioSnapshot] = {}
+        for change_id, runtime in sorted(self._runtimes.items()):
+            try:
+                snapshot = self._delivery_snapshot(runtime)
+            except (OSError, RuntimeError, ValueError):
+                snapshot = self._runtime_snapshots.get(change_id)
+                if snapshot is None:
+                    continue
+            retained_snapshots[change_id] = snapshot
+            snapshots.append(snapshot)
+        self._runtime_snapshots = retained_snapshots
+        return tuple(snapshots)
 
     def _delivery_snapshot(self, runtime: DeliveryRuntime) -> DeliveryPortfolioSnapshot:
         return DeliveryPortfolioSnapshot.capture(
@@ -2743,6 +2948,7 @@ class PortfolioApplication:
 
     def acquire_frontier_work(self) -> DeliveryAcquisitionResult:
         """Start at most one ready claim per available execution slot."""
+        self._reconcile_runtimes()
         with self._coordinator.acquisition_lock():
             occupied = sum(len(runtime.active_claims()) for runtime in self._runtimes.values())
             available = max(self._execution_capacity - occupied, 0)
@@ -2857,7 +3063,7 @@ class PortfolioApplication:
         attempt_id: str,
         claim_id: str,
     ) -> DeliveryIntegrationRepairRecoveryResult:
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         runtime.require_integration_repair_claim(attempt_id, claim_id)
         snapshot = self._workspace_manager.recovery_snapshot(change_id, attempt_id)
         preserved_commit = snapshot.preserved_commit or snapshot.branch_head
@@ -2882,7 +3088,7 @@ class PortfolioApplication:
         attempt_id: str,
         claim_id: str,
     ) -> DeliveryClaimRecoveryResult:
-        runtime = self._runtime(change_id)
+        runtime = self._runtime(change_id, for_mutation=True)
         binding = runtime.require_active_claim(outcome_id, attempt_id, claim_id)
         claim = binding.active_claim
         if claim is None:
@@ -2918,6 +3124,8 @@ class PortfolioApplication:
     def _candidates(self) -> tuple[_Candidate, ...]:
         candidates = []
         for change_id, runtime in self._runtimes.items():
+            if change_id in self._runtime_reconciliation_errors:
+                continue
             if runtime.active_claims() or runtime.change_stage() != DeliveryChangeStage.BUILDING:
                 continue
             claimable = set(runtime.claimable_outcome_ids())
@@ -3009,7 +3217,7 @@ class PortfolioApplication:
 
     def _promote_finalized_external_head(self, change_id: str, exact_head: str) -> None:
         try:
-            runtime = self._runtime(change_id)
+            runtime = self._runtime(change_id, for_mutation=True)
             coordination = self._workspace_manager.show(change_id)
             if (
                 coordination.last_reviewed_commit == exact_head
@@ -3232,11 +3440,20 @@ class PortfolioApplication:
 
         return depth(outcome_id)
 
-    def _runtime(self, change_id: str) -> DeliveryRuntime:
+    def _runtime(self, change_id: str, *, for_mutation: bool = False) -> DeliveryRuntime:
+        self._reconcile_runtimes()
         try:
-            return self._runtimes[change_id]
+            runtime = self._runtimes[change_id]
         except KeyError as exc:
+            detail = self._runtime_reconciliation_errors.get(change_id)
+            if detail is not None:
+                raise DeliveryRuntimeReconciliationError(change_id, detail) from exc
             self._fail(f"Delivery runtime is absent: {change_id}", exc)
+        if for_mutation:
+            detail = self._runtime_reconciliation_errors.get(change_id)
+            if detail is not None:
+                raise DeliveryRuntimeReconciliationError(change_id, detail)
+        return runtime
 
     def _require_target_sync_change_mutable(self, runtime: DeliveryRuntime) -> None:
         if runtime.change_stage() in {
@@ -3297,6 +3514,7 @@ __all__ = [
     "DeliveryLaunchPackage",
     "DeliveryPlanContext",
     "DeliveryRolePolicy",
+    "DeliveryRuntimeReconciliationError",
     "PortfolioApplication",
     "PortfolioApplicationConfig",
     "PortfolioApplicationDependencies",

@@ -61,6 +61,7 @@ const EMPTY_PORTFOLIO: WorkItemPortfolioResponse = {
   operating: {
     unfinished_change_count: 0,
     completed_change_count: 0,
+    statuses: [],
     draft_design_change_ids: [],
     design_required_change_ids: [],
     claimed: [],

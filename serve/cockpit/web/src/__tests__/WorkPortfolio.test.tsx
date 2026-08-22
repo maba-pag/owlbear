@@ -6,6 +6,7 @@ import type {
   ChangeGroupView,
   CompletedChangeRecord,
   DesignWorkDetailResponse,
+  PortfolioChangeLifecycleStatus,
   PortfolioOperatingView,
   WorkItemCardView,
   WorkItemDetailResponse,
@@ -62,6 +63,18 @@ function group(overrides: Partial<ChangeGroupView> = {}): ChangeGroupView {
   }
 }
 
+function changeStatus(changeId: string, overrides: Partial<PortfolioChangeLifecycleStatus> = {}): PortfolioChangeLifecycleStatus {
+  return {
+    change_id: changeId,
+    admission: 'admitted',
+    stage: 'building',
+    actionable_runtime: true,
+    diagnostic_code: null,
+    diagnostic_detail: null,
+    ...overrides,
+  }
+}
+
 function portfolio(groups: ChangeGroupView[] = [group()]): WorkItemPortfolioResponse {
   const items = groups.flatMap((item) => item.items)
   const reference = (item: WorkItemCardView) => ({
@@ -98,6 +111,7 @@ function portfolio(groups: ChangeGroupView[] = [group()]): WorkItemPortfolioResp
     operating: {
       unfinished_change_count: groups.length,
       completed_change_count: 0,
+      statuses: groups.map((item) => changeStatus(item.change_id)),
       draft_design_change_ids: [],
       design_required_change_ids: [],
       claimed,
@@ -105,6 +119,20 @@ function portfolio(groups: ChangeGroupView[] = [group()]): WorkItemPortfolioResp
       interventions,
       dependency_waits: dependencyWaits,
       guidance,
+    },
+  }
+}
+
+function withUnadmittedDesign(data: WorkItemPortfolioResponse, changeId = 'design-draft'): WorkItemPortfolioResponse {
+  return {
+    ...data,
+    operating: {
+      ...data.operating,
+      statuses: [
+        ...data.operating.statuses,
+        changeStatus(changeId, { admission: 'unadmitted', stage: 'design', actionable_runtime: false }),
+      ],
+      draft_design_change_ids: [changeId],
     },
   }
 }
@@ -647,8 +675,14 @@ it('summarizes all current Change phases and nonzero operating states', () => {
   const operating: PortfolioOperatingView = {
     unfinished_change_count: 3,
     completed_change_count: 8,
-    draft_design_change_ids: ['draft-change'],
-    design_required_change_ids: ['design-reentry'],
+    statuses: [
+      changeStatus('draft-change', { admission: 'unadmitted', stage: 'design', actionable_runtime: false }),
+      changeStatus('delivery-change'),
+      changeStatus('design-reentry', { stage: 'design' }),
+      changeStatus('unavailable-change', { actionable_runtime: false, diagnostic_code: 'runtime_unavailable', diagnostic_detail: 'Runtime composition is unavailable.' }),
+    ],
+    draft_design_change_ids: ['legacy-draft', 'legacy-draft-2'],
+    design_required_change_ids: ['legacy-reentry', 'legacy-reentry-2', 'legacy-reentry-3'],
     claimed: [outcome],
     queued_for_orchestration: [publication],
     interventions: [outcome],
@@ -673,6 +707,68 @@ it('summarizes all current Change phases and nonzero operating states', () => {
   expect(needsYou).toHaveAttribute('aria-pressed', 'true')
   fireEvent.click(needsYou)
   expect(onNeedsFilter).toHaveBeenCalledWith('')
+})
+
+it('classifies Design and Delivery entries from explicit lifecycle statuses', async () => {
+  const planningGroup = group({
+    change_id: 'planning-change',
+    title: 'Admitted planning',
+    items: [card({
+      change_id: 'planning-change',
+      title: 'Planning without a task plan',
+      progress: { kind: 'plan', label: 'Task plan not published', done: null, total: null },
+    })],
+  })
+  const reentryGroup = group({
+    change_id: 'design-reentry',
+    title: 'Admitted Design re-entry',
+    items: [card({
+      change_id: 'design-reentry',
+      title: 'Returned to Design',
+      stage: 'design',
+      progress: { kind: 'design-return', label: 'Returned to Design', done: null, total: null },
+    })],
+  })
+  const basePortfolio = portfolio([planningGroup, reentryGroup])
+  currentPortfolio = {
+    ...basePortfolio,
+    operating: {
+      ...basePortfolio.operating,
+      statuses: [
+        changeStatus('design-draft', { admission: 'unadmitted', stage: 'design', actionable_runtime: false }),
+        changeStatus('planning-change'),
+        changeStatus('design-reentry', { stage: 'design' }),
+        changeStatus('unavailable-change', { actionable_runtime: false, diagnostic_code: 'runtime_unavailable', diagnostic_detail: 'Persisted admission is valid, but runtime composition is unavailable.' }),
+      ],
+      draft_design_change_ids: ['planning-change', 'design-reentry', 'unavailable-change'],
+      design_required_change_ids: [],
+    },
+  }
+
+  renderPage()
+
+  const designWork = await screen.findByTestId('design-work-section')
+  expect(designWork).toHaveTextContent('Design Draft')
+  expect(designWork).not.toHaveTextContent('Admitted planning')
+  expect(designWork).not.toHaveTextContent('Admitted Design re-entry')
+  expect(designWork).not.toHaveTextContent('unavailable-change')
+
+  const table = screen.getByTestId('work-portfolio-table')
+  expect(table).toHaveTextContent('Admitted planning')
+  expect(table).toHaveTextContent('Task plan not published')
+  expect(table).toHaveTextContent('Admitted Design re-entry')
+
+  const unavailable = screen.getByTestId('delivery-status-section')
+  expect(unavailable).toHaveTextContent('unavailable-change')
+  expect(unavailable).toHaveTextContent('Admitted to Delivery')
+  expect(unavailable).toHaveTextContent('Runtime unavailable')
+  expect(unavailable).toHaveTextContent('Persisted admission is valid, but runtime composition is unavailable.')
+  expect(unavailable).not.toHaveTextContent('Not admitted to Delivery')
+
+  const summary = await screen.findByLabelText('Delivery portfolio status')
+  expect(summary).toHaveTextContent('4Changes')
+  expect(summary).toHaveTextContent('2Design')
+  expect(summary).toHaveTextContent('2Delivery')
 })
 
 it('presents Change-grouped Outcomes by work, progress, and status', async () => {
@@ -715,11 +811,11 @@ it('copies empty-portfolio session commands with the shared compact control', as
 })
 
 it('shows unadmitted Design work on the board and opens its verified sources', async () => {
+  const basePortfolio = withUnadmittedDesign(portfolio())
   currentPortfolio = {
-    ...portfolio(),
+    ...basePortfolio,
     operating: {
-      ...portfolio().operating,
-      draft_design_change_ids: ['design-draft'],
+      ...basePortfolio.operating,
       guidance: [{ kind: 'resume-design', change_ids: ['design-draft'], work_count: 1 }],
     },
   }
@@ -753,11 +849,11 @@ it('shows unadmitted Design work on the board and opens its verified sources', a
 })
 
 it('uses Design-specific unavailable detail copy and retry action', async () => {
+  const basePortfolio = withUnadmittedDesign(portfolio())
   currentPortfolio = {
-    ...portfolio(),
+    ...basePortfolio,
     operating: {
-      ...portfolio().operating,
-      draft_design_change_ids: ['design-draft'],
+      ...basePortfolio.operating,
     },
   }
   designFailure = true
@@ -776,13 +872,7 @@ it('uses Design-specific unavailable detail copy and retry action', async () => 
 it('refreshes open Design detail after an authored package revision', async () => {
   vi.useFakeTimers()
   try {
-    currentPortfolio = {
-      ...portfolio(),
-      operating: {
-        ...portfolio().operating,
-        draft_design_change_ids: ['design-draft'],
-      },
-    }
+    currentPortfolio = withUnadmittedDesign(portfolio())
     renderPage('/delivery/design-draft/design')
 
     await act(async () => {
@@ -825,13 +915,7 @@ it('shows stale Design detail state and retries the refresh in place', async () 
 
 it('closes removed Design detail after a portfolio refresh', async () => {
   const initialPortfolio = portfolio()
-  currentPortfolio = {
-    ...initialPortfolio,
-    operating: {
-      ...initialPortfolio.operating,
-      draft_design_change_ids: ['design-draft'],
-    },
-  }
+  currentPortfolio = withUnadmittedDesign(initialPortfolio)
   renderPage('/delivery/design-draft/design')
   await screen.findByTestId('design-work-detail')
 
@@ -864,7 +948,7 @@ it('filters grouped rows by Change and Needs without conflating Activity', async
   const basePortfolio = portfolio([group(), secondGroup])
   currentPortfolio = {
     ...basePortfolio,
-    operating: { ...basePortfolio.operating, draft_design_change_ids: ['design-draft'] },
+    operating: withUnadmittedDesign(basePortfolio).operating,
   }
   const { container } = renderPage()
   await screen.findByTestId('work-portfolio-table')

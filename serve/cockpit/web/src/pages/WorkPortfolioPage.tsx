@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { PButton, PButtonPure, PFlyout, PHeading, PIcon, PSelect, PSelectOption, PTagDismissible } from '@porsche-design-system/components-react'
 import { useLocation, useNavigate } from 'react-router'
-import type { ChangeGroupView, WorkItemNeed } from '../api/workItems'
+import type { ChangeGroupView, PortfolioChangeLifecycleStatus, PortfolioChangeStage, WorkItemNeed } from '../api/workItems'
 import CompletedHistoryWorkspace from '../components/CompletedHistoryWorkspace'
 import DesignWorkDetail from '../components/DesignWorkDetail'
 import DesignWorkSection from '../components/DesignWorkSection'
@@ -21,6 +21,26 @@ import {
 
 type SelectValueEvent = { target?: { value?: unknown }; detail?: { value?: unknown } }
 type FocusDestination = 'trigger' | 'current-view' | 'history-view'
+
+const CHANGE_STAGE_LABELS: Record<PortfolioChangeStage, string> = {
+  design: 'Design',
+  building: 'Building',
+  finalized: 'Finalized',
+  'awaiting-merge': 'Awaiting merge',
+  'publication-attention': 'Publication attention',
+  'acceptance-attention': 'Acceptance attention',
+  deferred: 'Deferred',
+  abandoned: 'Abandoned',
+  completed: 'Completed',
+}
+
+function isUnadmittedDesign(status: PortfolioChangeLifecycleStatus): boolean {
+  return status.admission === 'unadmitted' && status.stage === 'design'
+}
+
+function isUnavailableAdmitted(status: PortfolioChangeLifecycleStatus): boolean {
+  return status.admission === 'admitted' && !status.actionable_runtime
+}
 
 function selectedValue(event: SelectValueEvent): string {
   const value = event.detail?.value ?? event.target?.value
@@ -279,6 +299,48 @@ function EmptyPortfolioState({ filtered }: { filtered: boolean }) {
   )
 }
 
+function DeliveryStatusSection({ statuses }: { statuses: PortfolioChangeLifecycleStatus[] }) {
+  if (statuses.length === 0) return null
+  return (
+    <section className="min-w-0" aria-labelledby="delivery-status-heading" data-testid="delivery-status-section">
+      <h2 id="delivery-status-heading" className="mb-static-sm border-b border-contrast-lower px-static-sm pb-static-xs text-md font-semibold text-primary">Delivery status</h2>
+      <div className="grid gap-static-sm">
+        {statuses.map((status) => (
+          <article
+            key={status.change_id}
+            className="relative min-w-0 rounded-lg border border-l-4 border-warning bg-surface px-static-sm py-static-sm text-sm"
+            data-delivery-status={status.change_id}
+          >
+            <dl className="grid gap-static-sm md:grid-cols-[minmax(0,44fr)_minmax(0,24fr)_minmax(0,32fr)] md:gap-0">
+              <div className="min-w-0 md:pr-static-sm">
+                <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high md:sr-only">Change</dt>
+                <dd>
+                  <strong className="font-semibold text-primary">Change</strong>
+                  <code className="block text-xs text-contrast-medium">{status.change_id}</code>
+                </dd>
+              </div>
+              <div className="md:px-static-sm">
+                <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high md:sr-only">Progress</dt>
+                <dd>
+                  <strong className="font-medium text-primary">{status.stage ? CHANGE_STAGE_LABELS[status.stage] : 'Delivery'}</strong>
+                  <span className="block text-xs text-contrast-medium">Admitted to Delivery</span>
+                </dd>
+              </div>
+              <div className="md:pl-static-sm">
+                <dt className="mb-1 text-2xs font-semibold uppercase text-contrast-high md:sr-only">Status</dt>
+                <dd>
+                  <span className="inline-flex items-center rounded-sm border border-warning bg-warning-low px-static-xs py-1 text-xs font-semibold leading-none text-primary">Runtime unavailable</span>
+                  {status.diagnostic_detail ? <span className="mt-1 block text-xs text-contrast-medium">{status.diagnostic_detail}</span> : null}
+                </dd>
+              </div>
+            </dl>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function EmptyDetail({
   error,
   retry,
@@ -324,10 +386,21 @@ export default function WorkPortfolioPage() {
   const previousSelectedIdentity = useRef<string | null>(null)
   const focusDestination = useRef<FocusDestination>('trigger')
   const selectedWasPresent = useRef(false)
-  const designWorkIds = portfolio.operating.draft_design_change_ids
+  const statuses = portfolio.operating.statuses
+  const designWorkStatuses = statuses.filter(isUnadmittedDesign)
+  const unavailableStatuses = statuses.filter(isUnavailableAdmitted)
+  const designWorkIds = designWorkStatuses.map((status) => status.change_id)
   const changes = [
-    ...portfolio.groups.map((group) => ({ id: group.change_id, title: group.title })),
-    ...designWorkIds.map((changeId) => ({ id: changeId, title: designWorkTitle(changeId) })),
+    ...statuses.map((status) => {
+      const group = portfolio.groups.find((candidate) => candidate.change_id === status.change_id)
+      return {
+        id: status.change_id,
+        title: group?.title ?? (isUnadmittedDesign(status) ? designWorkTitle(status.change_id) : `Change ${status.change_id}`),
+      }
+    }),
+    ...portfolio.groups
+      .filter((group) => !statuses.some((status) => status.change_id === group.change_id))
+      .map((group) => ({ id: group.change_id, title: group.title })),
   ]
   const filteredGroups = portfolio.groups
     .filter((group) => !deferredChange || group.change_id === deferredChange)
@@ -338,11 +411,14 @@ export default function WorkPortfolioPage() {
     .filter((group) => group.items.length > 0)
   const shownCount = filteredGroups.reduce((total, group) => total + group.items.length, 0)
   const designMatchesAttention = !deferredNeeds || deferredNeeds === 'you'
-  const visibleDesignWorkIds = designMatchesAttention && (!deferredChange || designWorkIds.includes(deferredChange))
-    ? designWorkIds.filter((changeId) => !deferredChange || changeId === deferredChange)
+  const visibleDesignWorkStatuses = designMatchesAttention && (!deferredChange || designWorkIds.includes(deferredChange))
+    ? designWorkStatuses.filter((status) => !deferredChange || status.change_id === deferredChange)
     : []
-  const shownEntryCount = shownCount + visibleDesignWorkIds.length
-  const totalEntryCount = portfolio.totals.total + designWorkIds.length
+  const visibleUnavailableStatuses = designMatchesAttention && (!deferredChange || unavailableStatuses.some((status) => status.change_id === deferredChange))
+    ? unavailableStatuses.filter((status) => !deferredChange || status.change_id === deferredChange)
+    : []
+  const shownEntryCount = shownCount + visibleDesignWorkStatuses.length + visibleUnavailableStatuses.length
+  const totalEntryCount = portfolio.totals.total + designWorkStatuses.length + unavailableStatuses.length
   const isFiltered = Boolean(deferredChange || deferredNeeds)
 
   const closeInspector = (destination: FocusDestination = 'trigger') => {
@@ -511,9 +587,12 @@ export default function WorkPortfolioPage() {
                     }}
                   />
                 ) : null}
-                {visibleDesignWorkIds.length > 0 ? (
+                {visibleUnavailableStatuses.length > 0 ? (
+                  <DeliveryStatusSection statuses={visibleUnavailableStatuses} />
+                ) : null}
+                {visibleDesignWorkStatuses.length > 0 ? (
                   <DesignWorkSection
-                    changeIds={visibleDesignWorkIds}
+                    statuses={visibleDesignWorkStatuses}
                     selectedChangeId={selected?.itemKey === 'design' ? selected.changeId : null}
                     onSelect={(identity, trigger) => {
                       lastTrigger.current = trigger
@@ -521,7 +600,7 @@ export default function WorkPortfolioPage() {
                     }}
                   />
                 ) : null}
-                {filteredGroups.length === 0 && visibleDesignWorkIds.length === 0 ? (
+                {filteredGroups.length === 0 && visibleUnavailableStatuses.length === 0 && visibleDesignWorkStatuses.length === 0 ? (
                   <EmptyPortfolioState filtered={isFiltered} />
                 ) : null}
                 <PortfolioOperatingSummary operating={portfolio.operating} />
