@@ -35,6 +35,35 @@ Assembly is not a live Delivery stage or public Change authority. Historical run
 still contain reducible Assembly metadata, and legacy completed-history records retain their
 historical schema for validation. New Changes use sequential Planning and Build outcomes directly.
 
+## Admission And Portfolio Freshness
+
+Persisted Delivery authority is held by the canonical `contract.json`, `admission.json`,
+`frontier.json`, and coordination records under `.owlbear/delivery/runtime/changes/`. The
+`PortfolioApplication` runtime map is process-local actionable membership, not a second authority.
+
+Before portfolio reads and direct Change runtime lookups, `PortfolioApplication` reconciles
+persisted Change discovery. It retains an unchanged runtime, composes a runtime for a newly
+discovered or replaced contract when the persisted evidence is actionable, and removes runtime
+membership when persisted authority is removed. Frontier access remains read-through. A read-side
+reconciliation does not publish authority, allocate worktrees, or rewrite a valid frontier.
+
+The operating projection exposes explicit status axes instead of inferring lifecycle from runtime
+map membership: `admission`, `stage`, `actionable_runtime`, `diagnostic_code`, and
+`diagnostic_detail`. Its active status population is built from verified package IDs plus persisted
+discovery observations, including admitted observations and the unadmitted entries needed to keep
+genuine Design packages visible. Completed history remains a separate surface.
+
+| Persisted state | Portfolio projection |
+| --- | --- |
+| Genuinely unadmitted package | `admission=unadmitted`, `stage=design`, and `actionable_runtime=false`; it is included in `draft_design_change_ids`. |
+| Admitted Planning Change, including `tasks: []` | A normal Change group with Planning progress labeled `Task plan not published`; it is not a draft Design entry. |
+| Admitted Change explicitly returned to Design | `admission=admitted` and `stage=design`; it is included in `design_required_change_ids`, not the draft list. |
+| Admitted Change without an actionable runtime | Admission remains visible with `actionable_runtime=false` and the generic `runtime_unavailable` diagnostic; it is never recast as unadmitted Design. |
+
+Cause-specific missing-coordination classification is a separate follow-up Change. The Delivery MCP
+operation inventory is also unchanged by this remediation; user-control parity remains a separate,
+explicitly user-directed follow-up.
+
 ## Configuration
 
 The package reads no environment variables. The canonical loader reads optional ignored host-local
