@@ -23,7 +23,8 @@ Before edits, enter only `launch.worktree_path` and require:
 - its current branch equals `launch.branch`;
 - `HEAD` equals `launch.source_head` and descends from `launch.last_reviewed_commit`;
 - writer custody still matches the active claim;
-- the task-owned paths are clean and no unrelated staged state is adopted;
+- the task-owned paths are clean and no unrelated staged state is adopted; the final candidate must
+  leave the entire managed worktree clean;
 - any predecessor results, resolved requests, return context, and recovery attention come only from
   this fresh Build context.
 
@@ -66,6 +67,13 @@ Make the minimum complete change inside the admitted boundary. Run enough pre-co
 the implementation, then load `r-workspace-governance` and create one scoped commit from explicit
 owned paths. Require a clean owned state and exact candidate commit. Never rebase, squash,
 cherry-pick, amend a reviewed commit, or create a per-task worktree.
+
+When the task changes an input that determines a tracked generated output, regenerate that output
+before the scoped commit and include it in the same `commit-owned` path set. Do this conditionally
+from the task's `required_outputs` and `maintained_surfaces`; do not regenerate unrelated outputs for
+every task. For Python workspace resolution changes, run `uv lock` before the commit and `uv lock
+--check` against the exact candidate afterward. Use locked or otherwise non-mutating proof commands
+after generation so post-commit checks cannot silently rewrite the candidate.
 
 Rerun every Task-required observation against that exact candidate commit; pre-commit proof does
 not bind a commit and cannot support publication. For each passing observation, construct

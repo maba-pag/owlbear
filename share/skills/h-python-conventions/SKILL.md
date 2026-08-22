@@ -8,7 +8,9 @@ user-invocable: false
 
 ## Package Management
 
-- Use `uv` — never bare `pip`. Run scripts with `uv run` (e.g., `uv run pytest`, `uv run ruff check`).
+- Use `uv` — never bare `pip`. Run repository checks with `uv run --locked` once dependency inputs
+  and their lockfile are current; a dependency-changing task generates its required lockfile before
+  locked proof. Use `uv run` for scripts that do not resolve project dependencies.
 - Install the complete development environment with `uv sync --locked --all-packages --all-extras --all-groups` (reads the workspace manifests and lockfile). Never rely on bare `uv sync` for repository checks.
 
 ## Code Style

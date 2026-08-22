@@ -31,6 +31,10 @@ without behavior change).
 - The helper preserves unrelated staged paths and unstages only its own paths if `git commit` fails.
   It rejects owned paths that were already staged because it cannot distinguish user work from agent
   work in the same path.
+- When a task changes an input that determines a tracked generated output, commit the generated
+  output with those inputs in the same scoped commit. Keep the output in the task's explicit
+  `maintained_surfaces` and `required_outputs`; do not create a later lock-only or index-only task
+  when an earlier task cannot be proved without the generated file.
 - During exact-claim recovery after a crash or unstructured worker return, treat uncommitted changes
   within the task-maintained surfaces as candidate work from the interrupted claim. Inspect the
   complete diff, validate it against the task, and explicitly adopt it before committing. Do not
