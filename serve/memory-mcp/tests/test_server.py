@@ -91,3 +91,37 @@ async def test_live_server_commits_reviewed_memory_batch(
         "committed": False,
         "hint": "No memory changes to commit.",
     }
+
+
+@pytest.mark.asyncio
+async def test_live_server_reports_git_hook_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The public batch tool reports output from a failing Git hook."""
+    (tmp_path / ".owlbear/memory").mkdir(parents=True)
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.name", "OwlBear Test")
+    _git(tmp_path, "config", "user.email", "test@example.invalid")
+    (tmp_path / ".owlbear/memory/reviewed.md").write_text(
+        "---\nstate: approved\n---\n\n# Reviewed\n",
+        encoding="utf-8",
+    )
+    hook = tmp_path / ".git/hooks/pre-commit"
+    hook.write_text(
+        "#!/bin/sh\nprintf '%s\\n' 'HOOKFAIL: review hook rejected this commit' >&2\nexit 1\n",
+        encoding="utf-8",
+    )
+    hook.chmod(0o755)
+    monkeypatch.chdir(tmp_path)
+
+    async with mcp.Client(memory_mcp) as client:
+        result = await client.call_tool("commit_memory_batch", {"session_type": "review"})
+
+    message = _text(result)
+    assert result.is_error
+    assert "Error executing tool commit_memory_batch: memory batch commit failed:" in message
+    assert "git commit" in message
+    assert "exited with status 1" in message
+    assert "HOOKFAIL: review hook rejected this commit" in message
+    assert "Memory paths may remain staged after this failure" in message

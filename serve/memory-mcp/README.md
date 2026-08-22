@@ -130,6 +130,12 @@ owlbear-memory/commit_memory_batch(session_type="review")
 
 The operation stages only non-pending `.owlbear/memory/*.md` files and returns the commit SHA, or a no-op result when there is nothing to commit. The lower-level `git.py` module remains an internal implementation detail.
 
+If Git or a commit hook fails, the MCP error begins with `memory batch commit failed` and includes
+the failed command, exit status, and captured `stderr` (falling back to `stdout`). Captured output
+is tail-bounded to 4,096 characters and marked as diagnostic text. The operation does not restore
+the Git index after a failure, so memory paths may remain staged; inspect staging before retrying.
+The command-line entry point uses the same bounded diagnostic formatter.
+
 ## Dependencies
 
 | Package | Purpose |
