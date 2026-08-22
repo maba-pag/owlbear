@@ -24,6 +24,11 @@ from owlbear_delivery_github import GitHubCliPublicationProvider
 _REPOSITORY = "example/project"
 _HEAD = "a" * 40
 _OTHER_HEAD = "b" * 40
+_MERGE_OID = "c" * 40
+_SQUASH_OID = "d" * 40
+_REBASE_OID = "e" * 40
+_MERGED_AT = "2026-08-11T10:02:00Z"
+_MISSING = object()
 
 
 @dataclass(frozen=True)
@@ -52,6 +57,52 @@ def _pull_response(*, draft: bool = True, head: str = _HEAD) -> dict[str, object
         "merged_at": None,
         "merged_by": None,
     }
+
+
+def _merged_pull_response(
+    *,
+    merge_commit_sha: object = _MISSING,
+    merged_at: object = _MERGED_AT,
+) -> dict[str, object]:
+    response = {**_pull_response(draft=False), "state": "closed", "merged": True}
+    if merge_commit_sha is _MISSING:
+        response.pop("merge_commit_sha")
+    else:
+        response["merge_commit_sha"] = merge_commit_sha
+    if merged_at is _MISSING:
+        response.pop("merged_at")
+    else:
+        response["merged_at"] = merged_at
+    return response
+
+
+def _merged_graphql_response(**overrides: object) -> dict[str, object]:
+    repository = overrides.get("repository", _REPOSITORY)
+    pull_request = overrides.get("pull_request", _MISSING)
+    if pull_request is _MISSING:
+        pull_request_data: dict[str, object] = {
+            "number": overrides.get("number", 7),
+            "headRefOid": overrides.get("head", _HEAD),
+            "baseRefName": overrides.get("base", "main"),
+            "merged": overrides.get("merged", True),
+            "mergedAt": overrides.get("merged_at", _MERGED_AT),
+            "mergeCommit": (
+                {"oid": overrides.get("oid", _MERGE_OID)}
+                if overrides.get("merge_commit", _MISSING) is _MISSING
+                else overrides["merge_commit"]
+            ),
+        }
+    else:
+        pull_request_data = pull_request
+    repository_data = (
+        None
+        if repository is None
+        else {
+            "nameWithOwner": repository,
+            "pullRequest": pull_request_data,
+        }
+    )
+    return {"data": {"repository": repository_data}}
 
 
 def _check_response(
@@ -185,64 +236,180 @@ def test_pull_request_lookup_distinguishes_missing_and_ambiguous_identity() -> N
     assert exc_info.value.code is PublicationProviderFailureCode.CONFLICT
 
 
-def test_reads_merged_pull_request_evidence_from_one_response() -> None:
-    response = {
-        **_pull_response(draft=False),
-        "state": "closed",
-        "merged": True,
-        "merged_at": "2026-08-11T10:02:00Z",
-        "merged_by": {"login": "octocat"},
-    }
-    provider, _ = _provider(_completed(response))
+def test_reads_open_pull_request_without_merge_oid_through_rest_only() -> None:
+    response = _pull_response()
+    response.pop("merge_commit_sha")
+    provider, runner = _provider(_completed(response))
 
     pull_request = provider.read_pull_request(_REPOSITORY, 7)
 
+    assert pull_request.merged is False
+    assert pull_request.merge_commit_sha is None
+    assert len(runner.calls) == 1
+    assert runner.calls[0][0][-1] == "repos/example/project/pulls/7"
+
+
+def test_reads_merged_pull_request_with_fixed_graphql_evidence() -> None:
+    response = _merged_pull_response()
+    response["merged_by"] = {"login": "octocat"}
+    provider, runner = _provider(
+        _completed(response),
+        _completed(_merged_graphql_response()),
+    )
+
+    pull_request = provider.read_pull_request(_REPOSITORY, 7)
+
+    assert pull_request.merge_commit_sha == _MERGE_OID
     assert pull_request.merged_at is not None
     assert pull_request.merged_at.isoformat() == "2026-08-11T10:02:00+00:00"
     assert pull_request.merged_by_login == "octocat"
+    assert runner.calls[0][0][-1] == "repos/example/project/pulls/7"
+    assert runner.calls[1][0] == ("gh", "api", "graphql", "--method", "POST", "--input", "-")
+    graphql_payload = json.loads(runner.calls[1][1] or b"")
+    assert graphql_payload["operationName"] == "ReadMergedPullRequest"
+    assert graphql_payload["variables"] == {"owner": "example", "name": "project", "number": 7}
+    assert graphql_payload["query"] == (
+        "query ReadMergedPullRequest(\n"
+        "    $owner: String!, $name: String!, $number: Int!\n"
+        ") {\n"
+        "    repository(owner: $owner, name: $name) {\n"
+        "        nameWithOwner\n"
+        "        pullRequest(number: $number) {\n"
+        "            number\n"
+        "            headRefOid\n"
+        "            baseRefName\n"
+        "            merged\n"
+        "            mergedAt\n"
+        "            mergeCommit { oid }\n"
+        "        }\n"
+        "    }\n"
+        "}"
+    )
+
+
+def test_find_pull_request_returns_enriched_merged_public_model() -> None:
+    provider, runner = _provider(
+        _completed([{"number": 7}]),
+        _completed(_merged_pull_response()),
+        _completed(_merged_graphql_response()),
+    )
+
+    pull_request = provider.find_pull_request(
+        FindPublicationPullRequest(
+            repository=_REPOSITORY,
+            head_branch="owlbear/change/example",
+            base_branch="main",
+        )
+    )
+
+    assert pull_request is not None
+    assert pull_request.merged is True
+    assert pull_request.merge_commit_sha == _MERGE_OID
+    assert [call[0][-1] for call in runner.calls[:2]] == [
+        "repos/example/project/pulls?state=all&head=example%3Aowlbear%2Fchange%2Fexample&base=main&per_page=100",
+        "repos/example/project/pulls/7",
+    ]
+    assert json.loads(runner.calls[2][1] or b"")["operationName"] == "ReadMergedPullRequest"
+
+
+@pytest.mark.parametrize(
+    ("graphql_response", "expected_code", "expected_retry_safe"),
+    [
+        (_merged_graphql_response(repository=None), PublicationProviderFailureCode.NOT_FOUND, False),
+        (_merged_graphql_response(pull_request=None), PublicationProviderFailureCode.NOT_FOUND, False),
+        ({"errors": [{"message": "sensitive provider detail"}]}, PublicationProviderFailureCode.INVALID_RESPONSE, True),
+        ({}, PublicationProviderFailureCode.INVALID_RESPONSE, True),
+        (_merged_graphql_response(merge_commit=None), PublicationProviderFailureCode.INVALID_RESPONSE, True),
+        (_merged_graphql_response(oid="not-an-oid"), PublicationProviderFailureCode.INVALID_RESPONSE, True),
+        (_merged_graphql_response(merged_at=None), PublicationProviderFailureCode.INVALID_RESPONSE, True),
+        (
+            _merged_graphql_response(merged_at="2026-08-11T10:02:00"),
+            PublicationProviderFailureCode.INVALID_RESPONSE,
+            True,
+        ),
+        (_merged_graphql_response(repository="other/project"), PublicationProviderFailureCode.INVALID_RESPONSE, True),
+        (_merged_graphql_response(number=8), PublicationProviderFailureCode.INVALID_RESPONSE, True),
+        (_merged_graphql_response(head=_OTHER_HEAD), PublicationProviderFailureCode.INVALID_RESPONSE, True),
+        (_merged_graphql_response(base="develop"), PublicationProviderFailureCode.INVALID_RESPONSE, True),
+        (_merged_graphql_response(merged=False), PublicationProviderFailureCode.INVALID_RESPONSE, True),
+    ],
+)
+def test_merged_read_rejects_invalid_or_contradictory_graphql_evidence(
+    graphql_response: dict[str, object],
+    expected_code: PublicationProviderFailureCode,
+    *,
+    expected_retry_safe: bool,
+) -> None:
+    provider, runner = _provider(
+        _completed(_merged_pull_response()),
+        _completed(graphql_response),
+    )
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.read_pull_request(_REPOSITORY, 7)
+
+    assert exc_info.value.code is expected_code
+    assert exc_info.value.retry_safe is expected_retry_safe
+    assert "sensitive provider detail" not in str(exc_info.value)
+    assert len(runner.calls) == 2
+
+
+def test_merged_read_rejects_conflicting_rest_merge_oid() -> None:
+    provider, _ = _provider(
+        _completed(_merged_pull_response(merge_commit_sha=_OTHER_HEAD)),
+        _completed(_merged_graphql_response()),
+    )
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.read_pull_request(_REPOSITORY, 7)
+
+    assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+    assert exc_info.value.retry_safe is True
+
+
+def test_merged_read_rejects_conflicting_rest_merge_timestamp() -> None:
+    provider, _ = _provider(
+        _completed(_merged_pull_response(merged_at="2026-08-11T10:03:00Z")),
+        _completed(_merged_graphql_response()),
+    )
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.read_pull_request(_REPOSITORY, 7)
+
+    assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+    assert exc_info.value.retry_safe is True
+
+
+def test_merged_read_rejects_malformed_rest_merge_timestamp() -> None:
+    provider, runner = _provider(
+        _completed(_merged_pull_response(merged_at="not-a-timestamp")),
+    )
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        provider.read_pull_request(_REPOSITORY, 7)
+
+    assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+    assert exc_info.value.retry_safe is True
+    assert len(runner.calls) == 1
+
+
+@pytest.mark.parametrize("merge_oid", [_MERGE_OID, _SQUASH_OID, _REBASE_OID])
+def test_merged_read_returns_supplied_method_neutral_merge_oid(merge_oid: str) -> None:
+    provider, _ = _provider(
+        _completed(_merged_pull_response()),
+        _completed(_merged_graphql_response(oid=merge_oid)),
+    )
+
+    pull_request = provider.read_pull_request(_REPOSITORY, 7)
+
+    assert pull_request.merge_commit_sha == merge_oid
+    assert merge_oid != pull_request.head_sha
 
 
 @pytest.mark.parametrize("missing_key", ["merged_at", "merged_by"])
 def test_pull_request_read_rejects_missing_merge_evidence_key(missing_key: str) -> None:
     response = _pull_response()
     del response[missing_key]
-    provider, _ = _provider(_completed(response))
-
-    with pytest.raises(PublicationProviderError) as exc_info:
-        provider.read_pull_request(_REPOSITORY, 7)
-
-    assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
-
-
-def test_pull_request_read_accepts_open_response_without_merge_commit_sha() -> None:
-    response = _pull_response()
-    del response["merge_commit_sha"]
-    provider, _ = _provider(_completed(response))
-
-    pull_request = provider.read_pull_request(_REPOSITORY, 7)
-
-    assert pull_request.merge_commit_sha is None
-
-
-@pytest.mark.parametrize(
-    ("merged_at", "merge_commit_sha"),
-    [
-        (None, _OTHER_HEAD),
-        ("2026-08-11T10:02:00Z", None),
-        ("2026-08-11T10:02:00", _OTHER_HEAD),
-    ],
-)
-def test_pull_request_read_rejects_invalid_merged_evidence(
-    merged_at: str | None,
-    merge_commit_sha: str | None,
-) -> None:
-    response = {
-        **_pull_response(draft=False),
-        "state": "closed",
-        "merged": True,
-        "merged_at": merged_at,
-        "merge_commit_sha": merge_commit_sha,
-    }
     provider, _ = _provider(_completed(response))
 
     with pytest.raises(PublicationProviderError) as exc_info:
@@ -267,6 +434,8 @@ def test_creates_draft_pull_request_with_fixed_json_payload() -> None:
 
     arguments, input_bytes, _ = runner.calls[0]
     assert created.draft is True
+    assert len(runner.calls) == 1
+    assert all("graphql" not in call[0] for call in runner.calls)
     assert arguments[-3:] == ("repos/example/project/pulls", "--input", "-")
     assert json.loads(input_bytes or b"") == {
         "base": "main",
@@ -328,6 +497,7 @@ def test_updates_metadata_only_after_exact_head_read_and_write_fences() -> None:
     )
 
     assert updated.title == "Updated"
+    assert all("graphql" not in call[0] for call in runner.calls)
     assert runner.calls[0][0][-1] == "repos/example/project/pulls/7"
     assert runner.calls[1][0][-3:] == ("repos/example/project/pulls/7", "--input", "-")
     assert json.loads(runner.calls[1][1] or b"") == {"body": "Updated body", "title": "Updated"}
@@ -419,6 +589,7 @@ def test_ready_transition_uses_only_named_graphql_document_and_reads_back() -> N
     arguments, input_bytes, _ = runner.calls[1]
     payload = json.loads(input_bytes or b"")
     assert ready.draft is False
+    assert all(json.loads(call[1] or b"{}").get("operationName") != "ReadMergedPullRequest" for call in runner.calls)
     assert arguments == ("gh", "api", "graphql", "--method", "POST", "--input", "-")
     assert payload["operationName"] == "MarkPullRequestReadyForReview"
     assert "markPullRequestReadyForReview" in payload["query"]
@@ -447,6 +618,7 @@ def test_draft_transition_uses_only_named_graphql_document_and_reads_back() -> N
     arguments, input_bytes, _ = runner.calls[1]
     payload = json.loads(input_bytes or b"")
     assert draft.draft is True
+    assert all(json.loads(call[1] or b"{}").get("operationName") != "ReadMergedPullRequest" for call in runner.calls)
     assert arguments == ("gh", "api", "graphql", "--method", "POST", "--input", "-")
     assert payload["operationName"] == "ConvertPullRequestToDraft"
     assert "convertPullRequestToDraft" in payload["query"]
