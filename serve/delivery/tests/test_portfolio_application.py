@@ -134,6 +134,7 @@ from owlbear_delivery.publication_provider import (
     PublicationRepository,
 )
 from owlbear_delivery.storage_io import locked_roots
+from owlbear_delivery_github import GitHubCliPublicationProvider
 
 _USER_CHECKOUT_STATES = (
     "clean",
@@ -1896,6 +1897,108 @@ def test_observe_acceptance_preserves_user_checkout_states(
     assert receipt.accepted_merge_commit == "f" * 40
     assert runtime.change_stage() == DeliveryChangeStage.COMPLETED
     before.assert_unchanged(repository)
+
+
+def test_github_provider_acceptance_rejects_incomplete_evidence_and_replays_completion(tmp_path: Path) -> None:
+    application, runtime, provider, _state, exact_head, _state_root = _awaiting_acceptance_fixture(tmp_path)
+    provider_calls_before_acceptance = provider.read_pull_request.call_count
+    merge_oid = "e" * 40
+    merged_at = "2026-08-03T23:00:00Z"
+    rest_response = {
+        "number": 7,
+        "node_id": "PR_node_7",
+        "head": {"ref": "owlbear/change/change-a", "sha": exact_head},
+        "base": {"ref": "main", "sha": "b" * 40},
+        "title": "Change A",
+        "body": (
+            "<!-- owlbear-change:change-a -->\n\n"
+            "<!-- owlbear-generated:start -->\n"
+            "Finalized Change A.\n"
+            "<!-- owlbear-generated:end -->\n"
+        ),
+        "draft": False,
+        "state": "closed",
+        "merged": True,
+        "merge_commit_sha": None,
+        "merged_at": merged_at,
+        "merged_by": {"login": "octocat"},
+    }
+    graphql_response = {
+        "data": {
+            "repository": {
+                "nameWithOwner": "example/project",
+                "pullRequest": {
+                    "number": 7,
+                    "headRefOid": exact_head,
+                    "baseRefName": "main",
+                    "merged": True,
+                    "mergedAt": merged_at,
+                    "mergeCommit": {"oid": merge_oid},
+                },
+            },
+        },
+    }
+    incomplete_graphql_response = {
+        "data": {
+            "repository": {
+                "nameWithOwner": "example/project",
+                "pullRequest": {
+                    "number": 7,
+                    "headRefOid": exact_head,
+                    "baseRefName": "main",
+                    "merged": True,
+                    "mergedAt": merged_at,
+                    "mergeCommit": None,
+                },
+            },
+        },
+    }
+
+    def completed(payload: object) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(
+            args=(),
+            returncode=0,
+            stdout=json.dumps(payload).encode(),
+            stderr=b"",
+        )
+
+    runner = Mock(
+        side_effect=(
+            completed(rest_response),
+            completed(incomplete_graphql_response),
+            completed(rest_response),
+            completed(graphql_response),
+        )
+    )
+    github_provider = GitHubCliPublicationProvider(runner=runner)
+    provider.read_pull_request.side_effect = github_provider.read_pull_request
+
+    with pytest.raises(PublicationProviderError) as exc_info:
+        application.observe_acceptance("change-a")
+
+    assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+    assert exc_info.value.retry_safe is True
+    assert runtime.completion_receipt() is None
+    assert runtime.change_stage() == DeliveryChangeStage.AWAITING_MERGE
+    assert provider.read_pull_request.call_count == provider_calls_before_acceptance + 1
+    assert runner.call_count == 2
+
+    receipt = application.observe_acceptance("change-a")
+
+    assert isinstance(receipt, CompletionReceipt)
+    assert receipt.accepted_merge_commit == merge_oid
+    assert receipt.finalized_change_head == exact_head
+    assert receipt.accepted_merge_commit != receipt.finalized_change_head
+    assert runtime.completion_receipt() == receipt
+    assert runtime.change_stage() == DeliveryChangeStage.COMPLETED
+    provider_calls_after_completion = provider.read_pull_request.call_count
+    runner_calls_after_completion = runner.call_count
+
+    replayed = application.observe_acceptance("change-a")
+
+    assert replayed == receipt
+    assert provider.read_pull_request.call_count == provider_calls_after_completion
+    assert runner.call_count == runner_calls_after_completion
 
 
 def test_observe_acceptance_completes_once_and_replays_without_provider_io(  # noqa: PLR0915 - scenario covers full replay lifecycle.
