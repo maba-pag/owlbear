@@ -191,8 +191,11 @@ repos:
         name: Validate Agent Skills
         language: system
         entry: uv run --frozen python .owlbear/scripts/validate_skills.py
+        files: >-
+          (?x)
+          ^(?:share/skills|\.owlbear/skills)/[^/]+/SKILL\.md$
+          |^\.owlbear/scripts/validate_skills\.py$
         pass_filenames: false
-        always_run: true
       - id: validate-agents
         name: Validate Agent Tool Names
         language: system
