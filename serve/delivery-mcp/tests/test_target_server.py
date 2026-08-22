@@ -20,6 +20,7 @@ import owlbear_delivery_mcp.server as live_server
 from owlbear_delivery import (
     AdministrativeDeliveryMove,
     ChangeCoordination,
+    DeliveryAdmissionReceipt,
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryContract,
@@ -31,6 +32,7 @@ from owlbear_delivery import (
     OutcomeAuthorityBinding,
     PortfolioApplication,
 )
+from owlbear_delivery.delivery_contract_discovery import contract_fingerprint
 from owlbear_delivery.delivery_runtime import (
     DeliveryObservation,
     DeliveryObservationReceipt,
@@ -270,6 +272,28 @@ def _write_delivery_state(runtime_root: Path, repository: Path) -> None:
         capture_output=True,
         text=True,
     ).stdout.strip()
+    receipt_payload = {
+        "schema_version": 1,
+        "change_id": contract.change_id,
+        "contract_digest": contract_fingerprint(contract),
+        "source_bindings_digest": hashlib.sha256(
+            json.dumps(
+                [binding.model_dump(mode="json") for binding in contract.source_bindings],
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest(),
+        "integration_target": "main",
+        "checkpoint_commit": target_head,
+        "frontier_ids": tuple(binding.plan_scope_id for binding in frontier.bindings),
+    }
+    receipt_payload["receipt_id"] = hashlib.sha256(
+        json.dumps(receipt_payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    change_root.joinpath("admission.json").write_text(
+        DeliveryAdmissionReceipt.model_validate(receipt_payload).model_dump_json(),
+        encoding="utf-8",
+    )
     coordination_root = runtime_root / "claims/changes"
     coordination_root.mkdir(parents=True)
     coordination_root.joinpath("change-a.json").write_text(
