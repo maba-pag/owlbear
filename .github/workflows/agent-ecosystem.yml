@@ -57,4 +57,9 @@ jobs:
       - run: uv run --frozen python .owlbear/scripts/validate_agents.py
       - run: uv run --frozen python .owlbear/scripts/validate_skills.py
       - run: uv run --frozen python .owlbear/scripts/validate_prompts.py
-      - run: uv run --frozen pytest -q tests/test_agent_ecosystem_validation.py tests/test_write_guard_hooks.py tests/test_knowledge_ops_contract.py tests/test_dependency_verification_workflow.py
+      - run: >-
+          uv run --frozen pytest -q
+          tests/test_agent_ecosystem_validation.py
+          tests/test_write_guard_hooks.py
+          tests/test_knowledge_ops_contract.py
+          tests/test_dependency_verification_workflow.py
