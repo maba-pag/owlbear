@@ -49,21 +49,23 @@ _OBSERVE_CHECKS_QUERY = """query ObservePublicationChecks(
             headRefOid
             commits(last: 1) {
                 nodes {
-                    oid
-                    statusCheckRollup {
-                        state
-                        contexts(first: 100, after: $cursor) {
-                            totalCount
-                            pageInfo { hasNextPage endCursor }
-                            nodes {
-                                __typename
-                                ... on CheckRun {
-                                    id name status conclusion startedAt completedAt detailsUrl
-                                    isRequired(pullRequestNumber: $number)
-                                }
-                                ... on StatusContext {
-                                    id context state createdAt updatedAt targetUrl
-                                    isRequired(pullRequestNumber: $number)
+                    commit {
+                        oid
+                        statusCheckRollup {
+                            state
+                            contexts(first: 100, after: $cursor) {
+                                totalCount
+                                pageInfo { hasNextPage endCursor }
+                                nodes {
+                                    __typename
+                                    ... on CheckRun {
+                                        id name status conclusion startedAt completedAt detailsUrl
+                                        isRequired(pullRequestNumber: $number)
+                                    }
+                                    ... on StatusContext {
+                                        id context state createdAt updatedAt targetUrl
+                                        isRequired(pullRequestNumber: $number)
+                                    }
                                 }
                             }
                         }
@@ -117,7 +119,7 @@ class _PullResponse(_GitHubModel):
     draft: bool
     state: str
     merged: bool
-    merge_commit_sha: str | None
+    merge_commit_sha: str | None = None
     merged_at: str | None
     merged_by: _PullUser | None
 
@@ -152,8 +154,12 @@ class _CheckCommitResponse(_GitHubModel):
     status_check_rollup: _StatusRollupResponse | None = Field(alias="statusCheckRollup")
 
 
+class _CheckPullRequestCommitResponse(_GitHubModel):
+    commit: _CheckCommitResponse | None
+
+
 class _CheckCommitConnection(_GitHubModel):
-    nodes: list[_CheckCommitResponse | None]
+    nodes: list[_CheckPullRequestCommitResponse | None]
 
 
 class _CheckPullRequestResponse(_GitHubModel):
@@ -502,7 +508,11 @@ class GitHubCliPublicationProvider:
             self._invalid_response(operation, "GitHub returned another pull request identity", retry_safe=True)
         if pull_request.head_ref_oid != request.expected_head_sha:
             self._conflict(operation, "pull request head differs from the check observation fence")
-        commits = tuple(commit for commit in pull_request.commits.nodes if commit is not None)
+        commits = tuple(
+            pull_request_commit.commit
+            for pull_request_commit in pull_request.commits.nodes
+            if pull_request_commit is not None and pull_request_commit.commit is not None
+        )
         if len(commits) != 1 or commits[0].oid != request.expected_head_sha:
             self._invalid_response(
                 operation,

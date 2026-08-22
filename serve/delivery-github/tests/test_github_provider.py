@@ -76,7 +76,7 @@ def _check_response(
             "pullRequest": {
                 "number": 7,
                 "headRefOid": options.head,
-                "commits": {"nodes": [{"oid": options.head, "statusCheckRollup": status_check_rollup}]},
+                "commits": {"nodes": [{"commit": {"oid": options.head, "statusCheckRollup": status_check_rollup}}]},
             },
         }
         if options.repository is ...
@@ -212,6 +212,16 @@ def test_pull_request_read_rejects_missing_merge_evidence_key(missing_key: str) 
         provider.read_pull_request(_REPOSITORY, 7)
 
     assert exc_info.value.code is PublicationProviderFailureCode.INVALID_RESPONSE
+
+
+def test_pull_request_read_accepts_open_response_without_merge_commit_sha() -> None:
+    response = _pull_response()
+    del response["merge_commit_sha"]
+    provider, _ = _provider(_completed(response))
+
+    pull_request = provider.read_pull_request(_REPOSITORY, 7)
+
+    assert pull_request.merge_commit_sha is None
 
 
 @pytest.mark.parametrize(
@@ -532,6 +542,7 @@ def test_observes_paginated_check_runs_and_status_contexts_with_fixed_query() ->
     }
     assert payloads[1]["variables"]["cursor"] == "cursor-1"
     query = payloads[0]["query"]
+    assert "commit {" in query
     assert "isRequired(pullRequestNumber: $number)" in query
     assert "mutation" not in query
     assert "workflowDispatch" not in query
