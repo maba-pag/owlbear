@@ -1,5 +1,14 @@
 import pytest
-from owlbear_web_content import clean, extract, extract_content, html_to_markdown, strip_noise
+
+import owlbear_web_content.cleaner as cleaner_module
+from owlbear_web_content import (
+    clean,
+    extract,
+    extract_content,
+    html_to_markdown,
+    normalize,
+    strip_noise,
+)
 
 REPRESENTATIVE_HTML = """
 <html>
@@ -59,12 +68,45 @@ def test_strip_noise_removes_known_page_chrome() -> None:
     assert "Fixture cookie chrome" not in stripped
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (
+            "  Plain\u200b  text\r\n\r\n\r\nwith\u00a0  spaces ",
+            "Plain text\n\nwith spaces",
+        ),
+        (
+            "#  Heading\ufeff\r\n\r\n\r\n-  Markdown\u200c item\u200d",
+            "# Heading\n\n- Markdown item",
+        ),
+    ],
+)
+def test_normalize_direct_text(text: str, expected: str) -> None:
+    assert normalize(text) == expected
+
+
+def test_normalize_is_idempotent() -> None:
+    normalized = normalize("Text\u200b  with\r\n\r\n\r\nspaces")
+
+    assert normalize(normalized) == normalized
+
+
+def test_normalize_does_not_parse_html(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("normalize must not parse HTML")
+
+    monkeypatch.setattr(cleaner_module.lxml_html, "document_fromstring", fail_if_called)
+    monkeypatch.setattr(cleaner_module.lxml_html, "fromstring", fail_if_called)
+
+    assert normalize("Plain\u00a0  text") == "Plain text"
+
+
 def test_extractors_return_article_content() -> None:
     _assert_article_content(extract(REPRESENTATIVE_HTML))
     _assert_article_content(extract_content(REPRESENTATIVE_HTML, url="https://example.com/article"))
 
 
-@pytest.mark.parametrize("converter", [clean, extract, extract_content, html_to_markdown, strip_noise])
+@pytest.mark.parametrize("converter", [clean, extract, extract_content, html_to_markdown, normalize, strip_noise])
 def test_public_callables_return_empty_for_empty_input(converter) -> None:
     assert converter("") == ""
 

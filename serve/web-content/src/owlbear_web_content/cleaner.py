@@ -180,7 +180,7 @@ def html_to_markdown(html_str: str) -> str:
     return _element_to_markdown(root).strip()  # type: ignore[arg-type]
 
 
-def _normalize_content(text: str) -> str:
+def normalize(text: str) -> str:
     """Normalize whitespace and remove zero-width characters from Markdown."""
     text = text.replace("\u200b", "").replace("\u200c", "").replace("\u200d", "").replace("\ufeff", "")
     text = text.replace("\r", "").replace("\u00a0", " ")
@@ -200,4 +200,4 @@ def clean(html_str: str) -> str:
     """Strip noise, convert HTML to Markdown, and normalize the result."""
     if not html_str or not html_str.strip():
         return ""
-    return _normalize_content(html_to_markdown(strip_noise(html_str)))
+    return normalize(html_to_markdown(strip_noise(html_str)))

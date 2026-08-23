@@ -10,11 +10,12 @@ Package map: [serve/README.md](../README.md) - [Project README](../../README.md)
 This package is a library and has no standalone launch command. Import its public API:
 
 ```python
-from owlbear_web_content import clean, extract, extract_content
+from owlbear_web_content import clean, extract, extract_content, normalize
 
 markdown = extract(html_string)
 markdown_with_url = extract_content(html_string, url="https://example.com/article")
-normalized = clean(html_string)
+normalized_text = normalize(plain_or_markdown_text)
+cleaned_html = clean(html_string)
 ```
 
 ## Configuration
@@ -35,4 +36,5 @@ does not import Browser, Knowledge, Playwright, or any other OwlBear package.
 | `extract_content(html, url)` | Extract content with an optional source URL |
 | `strip_noise(html_str)` | Remove navigation, scripts, cookies, and known page chrome |
 | `html_to_markdown(html_str)` | Convert HTML while preserving structural elements |
-| `clean(html_str)` | Strip noise, convert to Markdown, and normalize whitespace |
+| `normalize(text)` | Normalize plain text or Markdown without parsing HTML |
+| `clean(html_str)` | Strip noise, convert HTML to Markdown, and normalize the result |
