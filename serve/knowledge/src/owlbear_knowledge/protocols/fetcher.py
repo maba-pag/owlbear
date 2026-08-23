@@ -28,7 +28,9 @@ class FetchedDocument(BoundaryModel):
     metadata: Metadata = Field(default_factory=dict)
 
 
-class FetchError(BoundaryModel):  # noqa: D101
+class FetchError(BoundaryModel):
+    """One item-level fetch failure captured during source retrieval."""
+
     uri: str
     error: str = ""
     failure: KnowledgeFailure | None = None

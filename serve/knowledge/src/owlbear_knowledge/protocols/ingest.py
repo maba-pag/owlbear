@@ -69,7 +69,9 @@ class IngestDocument(BoundaryModel):
 # ---------------------------------------------------------------------------
 
 
-class IngestResult(BoundaryModel):  # noqa: D101
+class IngestResult(BoundaryModel):
+    """Aggregate result of an ingest operation."""
+
     source_id: str
     documents_processed: int = 0
     documents_created: int = 0
@@ -134,7 +136,9 @@ class RefreshResult(BoundaryModel):
     errors: tuple[RefreshError, ...] = Field(default_factory=tuple)
 
 
-class RefreshError(BoundaryModel):  # noqa: D101
+class RefreshError(BoundaryModel):
+    """Error encountered during source refresh."""
+
     source_id: str
     error: str = ""
     timestamp: datetime
