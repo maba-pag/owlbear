@@ -46,6 +46,7 @@ src = [
   "serve/memory-mcp/src",
   "serve/browser-mcp/src",
   "serve/browser/src",
+  "serve/web-content/src",
   "serve/cockpit/src",
   "serve/tools/src",
 ]

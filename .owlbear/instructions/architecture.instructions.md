@@ -32,6 +32,8 @@ serve/knowledge/                (core library: graph, vector, ingest, query)
 serve/browser-mcp/              (MCP server: authenticated content acquisition)
     import from
 serve/browser/                   (core library: browser acquisition)
+
+serve/web-content/               (core library: shared HTML extraction and Markdown normalization)
 ```
 
 Each MCP server is a standalone MCPServer application. Core libraries, the Delivery provider
@@ -54,6 +56,7 @@ constant in that file maps each package namespace to its permitted owlbear-names
 - Repository tools may import Delivery, but product packages must not import repository tools.
 - Relative imports remain within the owning package; the boundary test reports only external
   `owlbear_*` namespaces.
+- Browser and Knowledge may import the shared web-content core; web-content imports neither.
 
 ## Domain Scope Map
 
@@ -71,6 +74,7 @@ Each task targets exactly one domain. Multi-domain work must be split into separ
 | memory-mcp | `serve/memory-mcp/` |
 | browser | `serve/browser/` |
 | browser-mcp | `serve/browser-mcp/` |
+| web-content | `serve/web-content/` (shared HTML extraction and Markdown normalization) |
 | tools | `serve/tools/` (repository utilities, migration, quality, and indexing commands) |
 | agent-config | `share/agents/`, `share/skills/`, `share/instructions/`, `.github/copilot-instructions.md` |
 | test-infra | shared conftest, fixtures, factories (not individual test files) |

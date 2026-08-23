@@ -16,6 +16,10 @@ name: Sync dev to main
         description: "serve/browser/ + serve/browser-mcp/"
         type: boolean
         default: false
+      sync_web_content:
+        description: "serve/web-content/ (shared content core)"
+        type: boolean
+        default: false
       sync_delivery:
         description: "serve/delivery/ + serve/delivery-mcp/ + serve/delivery-github/"
         type: boolean
@@ -65,6 +69,7 @@ jobs:
     env:
       SYNC_SHARE: ${{ inputs.sync_share }}
       SYNC_BROWSER: ${{ inputs.sync_browser }}
+      SYNC_WEB_CONTENT: ${{ inputs.sync_web_content }}
       SYNC_DELIVERY: ${{ inputs.sync_delivery }}
       SYNC_KNOWLEDGE: ${{ inputs.sync_knowledge }}
       SYNC_COCKPIT: ${{ inputs.sync_cockpit }}
@@ -95,6 +100,7 @@ jobs:
 
           share_paths=$(manifest_paths share)
           browser_paths=$(manifest_paths browser)
+          web_content_paths=$(manifest_paths web-content)
           delivery_paths=$(manifest_paths delivery)
           knowledge_paths=$(manifest_paths knowledge)
           cockpit_paths=$(manifest_paths cockpit)
@@ -105,7 +111,7 @@ jobs:
           serve_scope_count=$(printf '%s\n' "$serve_scope_names" | wc -w | tr -d ' ')
           for serve_scope in $serve_scope_names; do
             case "$serve_scope" in
-              browser|delivery|knowledge|cockpit|tools|memory) ;;
+              browser|delivery|knowledge|cockpit|tools|memory|web-content) ;;
               *)
                 echo "::error::Unsupported serve scope in sync manifest: $serve_scope"
                 exit 1
@@ -124,7 +130,7 @@ jobs:
           serve_scopes=""
           selected_serve_count=0
           for serve_scope in $serve_scope_names; do
-            scope_suffix=$(printf '%s' "$serve_scope" | tr '[:lower:]' '[:upper:]')
+            scope_suffix=$(printf '%s' "$serve_scope" | tr '[:lower:]-' '[:upper:]_')
             scope_env="SYNC_${scope_suffix}"
             if [[ -z "${!scope_env+x}" ]]; then
               echo "::error::Missing workflow input for serve scope: $serve_scope"
@@ -164,6 +170,7 @@ jobs:
             echo "ALL_SERVE=$all_serve"
             echo "SHARE_PATHS=$share_paths"
             echo "BROWSER_PATHS=$browser_paths"
+            echo "WEB_CONTENT_PATHS=$web_content_paths"
             echo "DELIVERY_PATHS=$delivery_paths"
             echo "KNOWLEDGE_PATHS=$knowledge_paths"
             echo "COCKPIT_PATHS=$cockpit_paths"
@@ -192,7 +199,7 @@ jobs:
           paths=""
           if [[ "$SYNC_SHARE" == "true" ]]; then paths="$paths $SHARE_PATHS"; fi
           for serve_scope in $SERVE_SCOPE_NAMES; do
-            scope_suffix=$(printf '%s' "$serve_scope" | tr '[:lower:]' '[:upper:]')
+            scope_suffix=$(printf '%s' "$serve_scope" | tr '[:lower:]-' '[:upper:]_')
             scope_env="SYNC_${scope_suffix}"
             if [[ "${!scope_env}" == "true" ]]; then
               path_var="${scope_suffix}_PATHS"
@@ -235,7 +242,7 @@ jobs:
             paths="$paths $SHARE_PATHS"
           fi
           for serve_scope in $SERVE_SCOPE_NAMES; do
-            scope_suffix=$(printf '%s' "$serve_scope" | tr '[:lower:]' '[:upper:]')
+            scope_suffix=$(printf '%s' "$serve_scope" | tr '[:lower:]-' '[:upper:]_')
             scope_env="SYNC_${scope_suffix}"
             if [[ "${!scope_env}" == "true" ]]; then
               path_var="${scope_suffix}_PATHS"
@@ -313,7 +320,7 @@ jobs:
               git checkout dev -- $SERVE_PATHS
             else
               for serve_scope in $SERVE_SCOPE_NAMES; do
-                scope_suffix=$(printf '%s' "$serve_scope" | tr '[:lower:]' '[:upper:]')
+                scope_suffix=$(printf '%s' "$serve_scope" | tr '[:lower:]-' '[:upper:]_')
                 scope_env="SYNC_${scope_suffix}"
                 if [[ "${!scope_env}" != "true" ]]; then continue; fi
                 path_var="${scope_suffix}_PATHS"
@@ -422,9 +429,10 @@ jobs:
               scope_synced=true
             else
               for serve_scope in $SERVE_SCOPE_NAMES; do
-                scope_env="SYNC_${serve_scope^^}"
+                scope_suffix=$(printf '%s' "$serve_scope" | tr '[:lower:]-' '[:upper:]_')
+                scope_env="SYNC_${scope_suffix}"
                 if [[ "${!scope_env}" != "true" ]]; then continue; fi
-                path_var="${serve_scope^^}_PATHS"
+                path_var="${scope_suffix}_PATHS"
                 if path_in_projection "$file" "${!path_var}"; then
                   scope_synced=true
                   break

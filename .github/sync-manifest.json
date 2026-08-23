@@ -7,6 +7,7 @@
     "cockpit": ["serve/cockpit"],
     "tools": ["serve/tools"],
     "memory": ["serve/memory", "serve/memory-mcp"],
+    "web-content": ["serve/web-content"],
     "setup": ["setup", "seed"],
     "infra": [
       ".editorconfig",
@@ -29,7 +30,7 @@
   },
   "scope_groups": {
     "serve": {
-      "scopes": ["browser", "delivery", "knowledge", "cockpit", "tools", "memory"],
+      "scopes": ["browser", "delivery", "knowledge", "cockpit", "tools", "memory", "web-content"],
       "paths": ["serve/README.md"]
     }
   },

@@ -49,6 +49,7 @@ def test_all_consumer_paths_exclude_dev_only_surfaces() -> None:
     assert ".github/sync-manifest.json" in consumer_paths
     assert ".github/workflows" in consumer_paths
     assert {"pyproject.toml", "uv.lock"}.issubset(consumer_paths)
+    assert "serve/web-content" in consumer_paths
     assert {
         ".github/README-automation.md",
         ".github/copilot-instructions.md",
@@ -80,7 +81,12 @@ def test_sync_workflow_consumes_manifest_projections() -> None:
     assert "sync_manifest.py scopes serve" in workflow
     assert "sync_manifest.py excluded" in workflow
     assert 'serve_paths="serve/README.md ' not in workflow
-    assert "scope_suffix=$(printf '%s' \"$serve_scope\" | tr '[:lower:]' '[:upper:]')" in workflow
+    scope_suffix_command = "scope_suffix=$(printf '%s' \"$serve_scope\" | tr '[:lower:]-' '[:upper:]_')"
+    assert workflow.count(scope_suffix_command) == 5
+    assert "SYNC_WEB_CONTENT: ${{ inputs.sync_web_content }}" in workflow
+    assert "WEB_CONTENT_PATHS=$web_content_paths" in workflow
+    assert 'scope_env="SYNC_${serve_scope^^}"' not in workflow
+    assert 'path_var="${serve_scope^^}_PATHS"' not in workflow
     assert "git rm -rf --quiet $scope_paths" in workflow
     assert "git checkout dev -- $ALL_CONSUMER_PATHS" in workflow
     assert "git checkout dev -- $INFRA_PATHS" in workflow
@@ -137,6 +143,7 @@ def test_tracked_projection_roots_have_one_boundary_owner() -> None:
         "cockpit",
         "tools",
         "memory",
+        "web-content",
     ]
 
 
@@ -150,7 +157,8 @@ def test_serve_group_projection_contains_shared_docs_and_all_packages() -> None:
         "cockpit",
         "tools",
         "memory",
+        "web-content",
     ]
     serve_paths = module.paths_for_group("serve")
     assert serve_paths[0] == "serve/README.md"
-    assert {"serve/browser", "serve/delivery-github", "serve/memory-mcp"}.issubset(serve_paths)
+    assert {"serve/browser", "serve/delivery-github", "serve/memory-mcp", "serve/web-content"}.issubset(serve_paths)

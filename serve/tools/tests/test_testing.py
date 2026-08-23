@@ -28,6 +28,29 @@ def test_python_source_routes_to_owning_package_tests() -> None:
     assert commands == [(["uv", "run", "pytest", "serve/tools/tests"], _ROOT)]
 
 
+def test_shared_web_content_source_routes_to_owning_package_tests() -> None:
+    commands = _commands_for_paths(
+        ["serve/web-content/src/owlbear_web_content/extractor.py"],
+        all_tests=False,
+        python_only=False,
+        web_only=False,
+        coverage=False,
+    )
+
+    assert commands == [(["uv", "run", "pytest", "serve/web-content/tests"], _ROOT)]
+
+
+def test_shared_web_content_path_executes_owning_package_suite() -> None:
+    with (
+        patch.object(sys, "argv", ["test", "serve/web-content/src/owlbear_web_content/extractor.py"]),
+        patch("owlbear_tools.testing.subprocess.call", return_value=0) as call,
+        pytest.raises(SystemExit, match="0"),
+    ):
+        run_test()
+
+    call.assert_called_once_with(["uv", "run", "pytest", "serve/web-content/tests"], cwd=_ROOT)
+
+
 def test_frontend_source_routes_to_vitest() -> None:
     commands = _commands_for_paths(
         ["serve/cockpit/web/src/App.tsx"],

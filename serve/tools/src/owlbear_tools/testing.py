@@ -28,6 +28,7 @@ _PYTHON_ROUTES = (
     ("serve/memory/", (), ("test_memory_*.py", "test_recall_memory.py", "test_assess_memories.py")),
     ("serve/browser-mcp/", ("serve/browser-mcp/tests",), ()),
     ("serve/browser/", ("serve/browser/tests",), ()),
+    ("serve/web-content/", ("serve/web-content/tests",), ()),
     ("serve/tools/", ("serve/tools/tests",), ()),
 )
 

@@ -79,6 +79,7 @@ Maps source paths to the test scope that covers them. Used by quality-runner `mo
 | `serve/knowledge-mcp/` | `serve/knowledge-mcp/tests/` | pytest |
 | `serve/memory-mcp/` | `serve/memory-mcp/tests/` | pytest |
 | `serve/browser-mcp/` | `serve/browser-mcp/tests/` | pytest |
+| `serve/web-content/` | `serve/web-content/tests/` | pytest |
 | `serve/tools/` | `serve/tools/tests/` | pytest |
 | `share/` `.owlbear/` `setup/` | skip (docs/config only) | — |
 | (no prefix match) | `tests/ serve/ -m "not api"` | pytest |
