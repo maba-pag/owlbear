@@ -29,7 +29,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 | `list_knowledge_sources` | List registered knowledge sources, optionally filtered by scope |
 | `knowledge_ingest` | Ingest text content into the knowledge base using a per-scope shared inline source (`mcp-inline-{scope}`); `source_url` stored as document URI; response includes `documents_processed`, `chunks_created`, and `chunks_enqueued` |
 | `knowledge_stats` | Summary statistics: document, entity, edge, source, and chunk counts plus enrichment queue state and completion ratio |
-| `refresh_knowledge_source` | Re-ingest a registered source by source ID; response includes `source_id` (echoed), `sources_refreshed` (int), and `errors` (list of `{source_id, error, timestamp}` entries); raises `ToolError` when source is not found; returns error envelope when source is not active |
+| `refresh_knowledge_source` | Re-ingest a registered source by source ID; response includes retained `source_id`, `sources_refreshed`, and `errors` fields plus additive `documents_created`, `documents_replaced`, `documents_unchanged`, `chunks_created`, and `chunks_replaced` counts; raises `ToolError` when source is not found; returns an error envelope when source is not active |
 | `delete_knowledge_source` | Delete a source and all its associated data (vectors, documents, chunks, entities, enrichment) via coordinator-orchestrated purge; returns a purge-result summary with status (`complete`/`partial`), completed steps, failed step, error, and per-domain sub-results (source, content, enrichment, graph) |
 | `claim_enrichment_batch` | Atomically claim a batch of chunks ready for enrichment |
 | `store_enrichment` | Persist extracted entities and local-reference edges for a claimed chunk, then mark it enriched |
@@ -41,6 +41,12 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 Knowledge storage is fixed to `.owlbear/knowledge/local.db` and
 `.owlbear/knowledge/vectors` under the current workspace. The server must be launched from an
 initialized OwlBear workspace and exposes its complete tool set.
+
+The server's private composition root assembles the SQLite stores, content and query facades,
+ingest coordinator, and composite source fetcher. Production lifespan wiring supplies zero-argument
+HTTP response-fetcher and BGE-M3 embedding factories plus a filesystem Qdrant factory. Deterministic assembled
+tests replace only those lower runtime factories, keeping source registration, SSRF validation,
+SQLite persistence, and MCP tool calls on the same path as production.
 
 ## Dependencies
 

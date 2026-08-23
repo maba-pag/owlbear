@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import sqlite3
 from contextlib import asynccontextmanager
@@ -18,6 +17,9 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 
+from owlbear_knowledge.chunker import TextChunker
+from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider, EmbeddingProvider
+from owlbear_knowledge.fetcher import HttpResponseFetcher, HttpxContentFetcher
 from owlbear_knowledge.ingest_coordinator import IngestCoordinator
 from owlbear_knowledge.protocols.common import (
     EntityType as ProtocolEntityType,
@@ -72,7 +74,7 @@ from ._types import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
+    from collections.abc import AsyncGenerator, Callable
 
 logger = logging.getLogger(__name__)
 _WORKSPACE_MARKER = Path(".owlbear")
@@ -320,7 +322,62 @@ class AppContext:
     enrichment_store: EnrichmentStore | None = None
     source_store_v2: SqliteSourceStore | None = None
     ingest_coordinator: IngestCoordinator | None = None
-    vector_store: QdrantVectorStore | None = None
+    vector_store: object | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class KnowledgeRuntimeFactories:
+    """Factories for runtime dependencies below the Knowledge composition root."""
+
+    http_response_fetcher_factory: Callable[[], HttpResponseFetcher]
+    embedding_provider_factory: Callable[[], EmbeddingProvider]
+    vector_store_factory: Callable[[str], object]
+
+
+def build_app_context(
+    *,
+    workspace_root: Path,
+    conn: sqlite3.Connection,
+    factories: KnowledgeRuntimeFactories,
+) -> AppContext:
+    """Assemble the Knowledge service graph for production or deterministic tests."""
+    vector_store = factories.vector_store_factory(str(workspace_root / _DEFAULT_QDRANT_PATH))
+    source_store_v2 = SqliteSourceStore(conn)
+    graph_store_v2 = SqliteGraphStore(conn)
+    content_store = ContentStore(
+        db=conn,
+        vector_store=vector_store,
+        embedding_provider=factories.embedding_provider_factory(),
+        chunker=TextChunker(),
+    )
+    query_facade = QueryFacade(content=content_store, graph=graph_store_v2)
+    enrichment_store = EnrichmentStore(db=conn, graph=graph_store_v2)
+    source_fetcher = CompositeSourceFetcher(
+        workspace_root=workspace_root,
+        content_fetcher_factory=select_content_fetcher,
+        http_response_fetcher_factory=factories.http_response_fetcher_factory,
+    )
+    ingest_coordinator = IngestCoordinator(
+        sources=source_store_v2,
+        content=content_store,
+        enrichment=enrichment_store,
+        graph=graph_store_v2,
+        fetcher=source_fetcher,
+    )
+    source_store_v2.ensure_tables()
+    graph_store_v2.ensure_tables()
+    content_store.ensure_tables()
+    enrichment_store.ensure_tables()
+    return AppContext(
+        conn=conn,
+        query_facade=query_facade,
+        graph_store_v2=graph_store_v2,
+        vector_store=vector_store,
+        content_store=content_store,
+        enrichment_store=enrichment_store,
+        source_store_v2=source_store_v2,
+        ingest_coordinator=ingest_coordinator,
+    )
 
 
 class RegisteredSourceResult(TypedDict):
@@ -342,47 +399,16 @@ async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
         raise RuntimeError(message)
     db_path = workspace_root / _DEFAULT_KB_PATH
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    qdrant_path = workspace_root / _DEFAULT_QDRANT_PATH
     conn = sqlite3.connect(db_path)
     try:
-        from owlbear_knowledge.chunker import TextChunker  # noqa: PLC0415
-        from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider  # noqa: PLC0415
-
-        vector_store = QdrantVectorStore(location=str(qdrant_path))
-        source_store_v2 = SqliteSourceStore(conn)
-        graph_store_v2 = SqliteGraphStore(conn)
-        content_store = ContentStore(
-            db=conn,
-            vector_store=vector_store,
-            embedding_provider=BgeM3EmbeddingProvider(),
-            chunker=TextChunker(),
-        )
-        query_facade = QueryFacade(content=content_store, graph=graph_store_v2)
-        enrichment_store = EnrichmentStore(db=conn, graph=graph_store_v2)
-        source_fetcher = CompositeSourceFetcher(
+        ctx = build_app_context(
             workspace_root=workspace_root,
-            content_fetcher_factory=select_content_fetcher,
-        )
-        ingest_coordinator = IngestCoordinator(
-            sources=source_store_v2,
-            content=content_store,
-            enrichment=enrichment_store,
-            graph=graph_store_v2,
-            fetcher=source_fetcher,
-        )
-        source_store_v2.ensure_tables()
-        graph_store_v2.ensure_tables()
-        content_store.ensure_tables()
-        enrichment_store.ensure_tables()
-        ctx = AppContext(
             conn=conn,
-            query_facade=query_facade,
-            graph_store_v2=graph_store_v2,
-            vector_store=vector_store,
-            content_store=content_store,
-            enrichment_store=enrichment_store,
-            source_store_v2=source_store_v2,
-            ingest_coordinator=ingest_coordinator,
+            factories=KnowledgeRuntimeFactories(
+                http_response_fetcher_factory=HttpxContentFetcher,
+                embedding_provider_factory=BgeM3EmbeddingProvider,
+                vector_store_factory=lambda location: QdrantVectorStore(location=location),
+            ),
         )
         yield ctx
     finally:
@@ -655,7 +681,7 @@ async def register_knowledge_source(  # noqa: PLR0913
         raise ToolError(str(exc)) from exc
 
     try:
-        source = await asyncio.to_thread(store.register_source, registration)
+        source = store.register_source(registration)
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
     return {
@@ -815,6 +841,11 @@ async def refresh_knowledge_source(ctx: Context, source_id: str) -> dict[str, An
         return {
             "source_id": source_id,
             "sources_refreshed": 0,
+            "documents_created": 0,
+            "documents_replaced": 0,
+            "documents_unchanged": 0,
+            "chunks_created": 0,
+            "chunks_replaced": 0,
             "errors": [
                 {
                     "source_id": source_id,
@@ -830,9 +861,19 @@ async def refresh_knowledge_source(ctx: Context, source_id: str) -> dict[str, An
         raise ToolError(msg)
 
     result = await coordinator.refresh(RefreshRequest(source_ids=(source_id,)))
+    documents_created = sum(item.documents_created for item in result.ingest_results)
+    documents_replaced = sum(item.documents_replaced for item in result.ingest_results)
+    documents_unchanged = sum(item.documents_unchanged for item in result.ingest_results)
+    chunks_created = sum(item.chunks_created for item in result.ingest_results)
+    chunks_replaced = sum(item.chunks_replaced for item in result.ingest_results)
     return {
         "source_id": source_id,
         "sources_refreshed": result.sources_refreshed,
+        "documents_created": documents_created,
+        "documents_replaced": documents_replaced,
+        "documents_unchanged": documents_unchanged,
+        "chunks_created": chunks_created,
+        "chunks_replaced": chunks_replaced,
         "errors": [error.model_dump(mode="json") for error in result.errors],
     }
 

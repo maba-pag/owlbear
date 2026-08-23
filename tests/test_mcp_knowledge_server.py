@@ -62,7 +62,16 @@ class TestRefreshKnowledgeSource:
 
         result = await refresh_knowledge_source(context, source_id="source-1")
 
-        assert result == {"source_id": "source-1", "sources_refreshed": 5, "errors": []}
+        assert result == {
+            "source_id": "source-1",
+            "sources_refreshed": 5,
+            "documents_created": 0,
+            "documents_replaced": 0,
+            "documents_unchanged": 0,
+            "chunks_created": 0,
+            "chunks_replaced": 0,
+            "errors": [],
+        }
         context.request_context.lifespan_context.ingest_coordinator.refresh.assert_awaited_once_with(
             RefreshRequest(source_ids=("source-1",))
         )
