@@ -1240,6 +1240,48 @@ def test_restart_rejects_reset_across_unpromoted_external_head(tmp_path: Path) -
     assert coordinator.show(coordination.change_id).writer == writer
 
 
+def test_restart_accepts_promoted_adoption_after_reviewed_descendant_and_replays(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("restart-promoted-adoption")
+    _remote, adopted = _publish_external_change_head(tmp_path, repository, coordination.branch, initial)
+    manager.adopt_external_head(
+        AdoptExternalHead(
+            change_id=coordination.change_id,
+            expected_head=initial,
+            adopted_head=adopted,
+            operation_id="adopt-before-promoted-restart",
+        )
+    )
+    promoted = manager.promote_external_head(
+        PromoteExternalHead(
+            change_id=coordination.change_id,
+            expected_head=adopted,
+            operation_id="promote-before-restart",
+        )
+    )
+    reviewed = _commit_new_file(coordination.worktree_path, "reviewed.txt", "reviewed\n", "reviewed descendant")
+    manager.record_reviewed(coordination.change_id, reviewed)
+    writer = ChangeWriter(**_identity(coordination.change_id).model_dump(), job_id=1, kind="build")
+    coordinator.acquire(coordination.change_id, writer)
+    rejected = _commit_file(coordination.worktree_path, "rejected\n", "rejected attempt")
+    attempt_ref = f"refs/owlbear/attempts/{coordination.change_id}/{writer.attempt_id}"
+
+    restarted = manager.restart(coordination.change_id, writer.attempt_id, rejected)
+
+    assert promoted is not None
+    assert _git(repository, "rev-parse", attempt_ref) == rejected
+    assert _git(repository, "rev-parse", coordination.branch) == reviewed
+    assert _git(restarted.worktree_path, "rev-parse", "HEAD") == reviewed
+    assert restarted.last_reviewed_commit == reviewed
+    assert restarted.writer is None
+    assert CapacityLedger.model_validate_json((tmp_path / "state/capacity.json").read_bytes()).change_ids == ()
+
+    replayed = manager.restart(coordination.change_id, writer.attempt_id, rejected)
+
+    assert replayed == restarted
+
+
 def test_record_reviewed_rejects_backward_boundary(tmp_path: Path) -> None:
     repository, initial = _repository(tmp_path)
     coordinator, manager = _manager(tmp_path, repository)

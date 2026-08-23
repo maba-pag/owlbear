@@ -2813,6 +2813,8 @@ class ChangeWorkspaceManager:
         receipt = coordination.external_head_adoption_receipt
         if receipt is None or receipt.adopted_head == coordination.last_reviewed_commit:
             return
+        if self._external_head_promotion_covers_adoption(coordination, receipt):
+            return
         if branch_head == coordination.last_reviewed_commit or self._is_ancestor(
             receipt.adopted_head,
             branch_head,
@@ -2821,6 +2823,25 @@ class ChangeWorkspaceManager:
             _coordination_conflict(
                 "cannot restart across an unpromoted external Change head; promote the adopted head first"
             )
+
+    def _external_head_promotion_covers_adoption(
+        self,
+        coordination: ChangeCoordination,
+        adoption: ChangeExternalHeadAdoptionReceipt,
+    ) -> bool:
+        promotion = coordination.external_head_promotion_receipt
+        return (
+            promotion is not None
+            and promotion.change_id == coordination.change_id
+            and promotion.branch == coordination.branch
+            and promotion.adoption_receipt_id == adoption.receipt_id
+            and promotion.promoted_head == adoption.adopted_head
+            and self._is_ancestor(
+                promotion.promoted_head,
+                coordination.last_reviewed_commit,
+                cwd=self._repository,
+            )
+        )
 
     def _validate_released_restart(
         self,
