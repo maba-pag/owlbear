@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_knowledge import intake
 from owlbear_knowledge._paths import sandbox_path
+from owlbear_knowledge.fetcher import HttpxContentFetcher
 from owlbear_knowledge.protocols.fetcher import FetchedDocument, FetchError, FetchResult, SourceFetcher
 from owlbear_knowledge.protocols.sources import (
     AuthenticatedWebConfig,
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_knowledge.cancellation import CancelSignal
-    from owlbear_knowledge.fetcher import ContentFetcher
+    from owlbear_knowledge.fetcher import ContentFetcher, HttpResponseFetcher
     from owlbear_knowledge.protocols.sources import FetchTransport
 
 
@@ -32,9 +33,11 @@ class CompositeSourceFetcher(SourceFetcher):
         *,
         workspace_root: Path,
         content_fetcher_factory: Callable[[FetchTransport], ContentFetcher],
+        http_response_fetcher_factory: Callable[[], HttpResponseFetcher] = HttpxContentFetcher,
     ) -> None:
         self._workspace_root = workspace_root
         self._content_fetcher_factory = content_fetcher_factory
+        self._http_response_fetcher_factory = http_response_fetcher_factory
 
     async def fetch_source(
         self,
@@ -69,12 +72,13 @@ class CompositeSourceFetcher(SourceFetcher):
     ) -> FetchResult:
         documents: list[FetchedDocument] = []
         errors: list[FetchError] = []
+        response_fetcher = self._http_response_fetcher_factory()
 
         for url in config.urls:
             if self._cancelled(cancel):
                 break
             try:
-                intake_result = await intake.read_url(url)
+                intake_result = await intake.read_url(url, fetcher=response_fetcher)
             except Exception as exc:  # noqa: BLE001 - captured into FetchResult.errors.
                 errors.append(FetchError(uri=url, error=str(exc)))
                 continue

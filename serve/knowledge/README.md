@@ -22,7 +22,7 @@ import sqlite3
 from owlbear_knowledge import protocols, stores
 from owlbear_knowledge.chunker import TextChunker
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
-from owlbear_knowledge.fetcher import ContentFetcher, HttpxContentFetcher
+from owlbear_knowledge.fetcher import ContentFetcher, HttpResponse, HttpResponseFetcher, HttpxContentFetcher
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.stores.content import ContentStore
 
@@ -42,6 +42,14 @@ content_store: protocols.ContentStore = ContentStore(
 fetcher: ContentFetcher = HttpxContentFetcher()
 ```
 
+`HttpxContentFetcher.fetch_response(url)` returns an `HttpResponse` containing decoded response
+content and its declared media type. It keeps SSRF validation ahead of transport I/O. The
+HTTP-specific `HttpResponseFetcher` protocol is used by URL-list intake, while the generic
+`ContentFetcher.fetch(url) -> str` contract remains unchanged for authenticated-web fetchers.
+`intake.read_url(url)` classifies HTML/XHTML through shared extraction and normalizes plain text or
+Markdown media without HTML parsing; its `IntakeResult` includes the normalized content and
+`media_type`.
+
 ### Module groups
 
 | Group | Key exports |
@@ -49,7 +57,7 @@ fetcher: ContentFetcher = HttpxContentFetcher()
 | Package surface | `protocols`, `stores` |
 | Protocols | `ContentStore`, `GraphStore`, `SourceStore`, `QueryFacade`, `IngestCoordinator` |
 | Store implementations | `stores.ContentStore`, `stores.SqliteGraphStore`, `stores.SqliteSourceStore` |
-| Fetching | `ContentFetcher`, `HttpxContentFetcher` |
+| Fetching | `ContentFetcher`, `HttpResponse`, `HttpResponseFetcher`, `HttpxContentFetcher`, `fetch_response` |
 | Embeddings | `BgeM3EmbeddingProvider`, `EmbeddingProvider`, `HybridEmbedding` |
 | Vector search | `QdrantVectorStore` |
 
