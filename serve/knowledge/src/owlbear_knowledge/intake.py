@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ConfigDict
 
 from owlbear_knowledge._paths import sandbox_path
-from owlbear_knowledge.fetcher import HttpxContentFetcher
+from owlbear_knowledge.fetcher import HttpxContentFetcher, failure_for_fetch_exception
+from owlbear_knowledge.protocols.failures import KnowledgeFailure, KnowledgeFailureStage, KnowledgeOperationError
 from owlbear_web_content import extract_content, normalize
 
 if TYPE_CHECKING:
@@ -70,22 +71,48 @@ async def read_url(url: str, *, fetcher: HttpResponseFetcher | None = None) -> I
         IntakeResult with normalized response content, media type, and URL metadata.
 
     Raises:
-        httpx.HTTPStatusError: On non-2xx HTTP responses.
-        ValueError: If the media type is unsupported or normalized content is empty.
+        KnowledgeOperationError: If acquisition or extraction fails.
     """
     response_fetcher = fetcher if fetcher is not None else HttpxContentFetcher()
-    response = await response_fetcher.fetch_response(url)
+    try:
+        response = await response_fetcher.fetch_response(url)
+    except KnowledgeOperationError:
+        raise
+    except Exception as exc:
+        raise KnowledgeOperationError(failure_for_fetch_exception(exc)) from exc
     media_type = response.media_type.split(";", 1)[0].strip().lower()
-    if media_type in _HTML_MEDIA_TYPES:
-        content = normalize(extract_content(response.content, url=url))
-    elif media_type in _TEXT_MEDIA_TYPES:
-        content = normalize(response.content)
-    else:
-        msg = f"unsupported media type: {media_type or 'missing'}"
-        raise ValueError(msg)
+    if media_type not in _HTML_MEDIA_TYPES and media_type not in _TEXT_MEDIA_TYPES:
+        failure = KnowledgeFailure(
+            stage=KnowledgeFailureStage.EXTRACTION,
+            code="unsupported_media_type",
+            retryable=False,
+            message="Response media type is unsupported",
+        )
+        raise KnowledgeOperationError(failure)
+
+    try:
+        if media_type in _HTML_MEDIA_TYPES:
+            content = normalize(extract_content(response.content, url=url))
+        elif media_type in _TEXT_MEDIA_TYPES:
+            content = normalize(response.content)
+    except KnowledgeOperationError:
+        raise
+    except Exception as exc:
+        failure = KnowledgeFailure(
+            stage=KnowledgeFailureStage.EXTRACTION,
+            code="extraction_failed",
+            retryable=False,
+            message="Response extraction failed",
+        )
+        raise KnowledgeOperationError(failure) from exc
     if not content:
-        msg = "response content is empty after normalization"
-        raise ValueError(msg)
+        failure = KnowledgeFailure(
+            stage=KnowledgeFailureStage.EXTRACTION,
+            code="content_boundary_missing",
+            retryable=False,
+            message="Response contains no meaningful content",
+        )
+        raise KnowledgeOperationError(failure)
 
     return IntakeResult(
         content=content,

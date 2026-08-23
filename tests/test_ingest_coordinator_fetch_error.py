@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from owlbear_knowledge.ingest_coordinator import IngestCoordinator
+from owlbear_knowledge.protocols.failures import KnowledgeFailure, KnowledgeFailureStage
 from owlbear_knowledge.protocols.fetcher import FetchedDocument, FetchError, FetchResult
 from owlbear_knowledge.protocols.ingest import (
     IngestResult,
@@ -259,18 +260,25 @@ class TestFetchErrorPropagation:
         """AC1: RefreshError.error must incorporate both FetchError.uri and FetchError.error."""
         fetch_uri = "https://example.com/fail"
         fetch_err = "connection refused"
+        failure = KnowledgeFailure(
+            stage=KnowledgeFailureStage.ACQUISITION,
+            code="transport_failure",
+            retryable=True,
+            message=fetch_err,
+        )
         mock_fetcher.fetch_source = AsyncMock(
             return_value=FetchResult(
                 documents=(),
-                errors=(FetchError(uri=fetch_uri, error=fetch_err),),
+                errors=(FetchError(uri=fetch_uri, error=fetch_err, failure=failure),),
             )
         )
 
         result = await coordinator.refresh(RefreshRequest())
 
         assert len(result.errors) == 1
-        assert fetch_uri in result.errors[0].error
-        assert fetch_err in result.errors[0].error
+        assert result.errors[0].failure == failure
+        assert result.errors[0].error == failure.message
+        assert fetch_uri not in result.errors[0].error
 
     @pytest.mark.asyncio
     async def test_ac1_refresh_error_timestamp_is_datetime(
@@ -306,8 +314,26 @@ class TestFetchErrorPropagation:
             return_value=FetchResult(
                 documents=(),
                 errors=(
-                    FetchError(uri="https://example.com/a", error="timeout"),
-                    FetchError(uri="https://example.com/b", error="403 Forbidden"),
+                    FetchError(
+                        uri="https://example.com/a",
+                        error="timeout",
+                        failure=KnowledgeFailure(
+                            stage=KnowledgeFailureStage.ACQUISITION,
+                            code="timeout",
+                            retryable=True,
+                            message="HTTP request timed out",
+                        ),
+                    ),
+                    FetchError(
+                        uri="https://example.com/b",
+                        error="403 Forbidden",
+                        failure=KnowledgeFailure(
+                            stage=KnowledgeFailureStage.ACQUISITION,
+                            code="http_status",
+                            retryable=False,
+                            message="HTTP request returned status 403",
+                        ),
+                    ),
                 ),
             )
         )
@@ -315,9 +341,10 @@ class TestFetchErrorPropagation:
         result = await coordinator.refresh(RefreshRequest())
 
         assert len(result.errors) == 2
-        uris_in_errors = {e.error for e in result.errors}
-        assert any("https://example.com/a" in e for e in uris_in_errors)
-        assert any("https://example.com/b" in e for e in uris_in_errors)
+        assert {error.failure.code for error in result.errors if error.failure is not None} == {
+            "timeout",
+            "http_status",
+        }
 
     # ------------------------------------------------------------------
     # AC2 strengthened — update_source called and sources_refreshed increments
