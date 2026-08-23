@@ -134,6 +134,9 @@ aggregates are listed by `uv run help quality`.
 | `slow` | Long-running |
 | `integration` | Requires the `kanban-md` binary |
 | `e2e` | Excluded by default through `addopts`; include explicitly with `-m e2e` |
+| `model` | Requires installed embedding/vector prerequisites and a real model runtime; excluded by default |
+
+Explicit routine `-m` expressions must include `not model` because they replace the default `addopts` marker selection.
 
 - **Runner.** Use `uv run`; bare system Python does not resolve OwlBear workspace dependencies.
 - **Direct runner debugging.** Raw `uv run pytest` and package-owned npm scripts remain valid when

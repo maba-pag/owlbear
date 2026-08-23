@@ -82,7 +82,7 @@ Maps source paths to the test scope that covers them. Used by quality-runner `mo
 | `serve/web-content/` | `serve/web-content/tests/` | pytest |
 | `serve/tools/` | `serve/tools/tests/` | pytest |
 | `share/` `.owlbear/` `setup/` | skip (docs/config only) | — |
-| (no prefix match) | `tests/ serve/ -m "not api"` | pytest |
+| (no prefix match) | `tests/ serve/ -m "not api and not model"` | pytest |
 
 When a task changes files in multiple domains, run ALL matched test scopes. The last row is the fallback — use it when changed files don't match any specific prefix, or when `changed_paths` is not provided.
 
