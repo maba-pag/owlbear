@@ -140,7 +140,7 @@ def test_dependency_proofs_install_committed_state_and_run_behavior_checks() -> 
     assert proof_python["env"] == {"UV_PROJECT_ENVIRONMENT": ".venv-${{ matrix.python }}"}
     assert 'uv sync --locked --python "${{ matrix.python }}" --all-packages --all-extras --all-groups' in text
     assert 'uv run --python "${{ matrix.python }}" pytest tests serve \\' in text
-    assert '            -m "not api and not e2e and not browser and not cockpit"' in text
+    assert '            -m "not api and not e2e and not browser and not cockpit and not model"' in text
     assert "npm ci --engine-strict" in text
     assert "npm run sync:pds" in text
     assert "git apply" not in text

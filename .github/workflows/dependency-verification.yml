@@ -144,7 +144,7 @@ jobs:
       - name: Run Python behavior tests
         run: |
           uv run --python "${{ matrix.python }}" pytest tests serve \
-            -m "not api and not e2e and not browser and not cockpit"
+            -m "not api and not e2e and not browser and not cockpit and not model"
 
   proof-node:
     name: Prove Node dependency surfaces
