@@ -20,7 +20,11 @@ Search the knowledge base for relevant context.
 | `limit` | int | 5 | Max results to return |
 | `scopes` | list[str] \| null | null | Scope filter (e.g. `["global", "project:myproj"]`) |
 
-Returns: `list[dict]` — ranked results with `title`, `score`, `snippet`, `retrieval_path`, `graph_context`, `entities`, `related_sources`, and `source`; `graph_context` is an empty string unless graph expansion contributes context. Returns `[]` if no results, or an error string if service unavailable.
+Returns on success: `list[dict]` — ranked results with `title`, `score`, `snippet`, `retrieval_path`, `graph_context`, `entities`, `related_sources`, and `source`; `graph_context` is an empty string unless graph expansion contributes context. An empty `[]` is a successful no-match result.
+
+Returns on operational failure: a serialized `KnowledgeFailure` with `stage`, `code`, `retryable`, and redacted `message`. The return union is `list[dict] | KnowledgeFailure`.
+
+Raises `ToolError` when the Knowledge service is unavailable or the search request is invalid. These are preconditions, not `KnowledgeFailure` results.
 
 ### knowledge_ingest
 
@@ -57,7 +61,27 @@ Trigger re-ingestion of a registered knowledge source by source ID.
 | --- | --- | --- | --- |
 | `source_id` | str | required | Registered source ID to refresh |
 
-Returns: refresh result dict on success — `{"source_id": str, "refreshed": int, "partial": int, "skipped": int, "failed": int, "errors": list[str], "warnings": list[str]}` — or an `error: ...` string when refresh infrastructure is unavailable, the source is disabled, or the source is not refreshable. Raises `ToolError` when the source store is unavailable or the source ID is unknown.
+Returns on a count result: `{"source_id": str, "sources_refreshed": int, "documents_created": int, "documents_replaced": int, "documents_unchanged": int, "chunks_created": int, "chunks_replaced": int, "errors": list[RefreshError]}`. Each `errors` entry retains `source_id`, `stage`, `code`, `retryable`, redacted `message`, and `timestamp`. The return union is this count result or a serialized `KnowledgeFailure` when refresh orchestration fails.
+
+Partial URL-list success preserves successful document and chunk counts beside typed per-source `errors`; a total failure has zero successful counts and must not be reported as refreshed work. An error-free no-op is also success: unchanged content increments `documents_unchanged`, leaves creation and replacement counts at zero, and returns `errors: []`.
+
+Raises `ToolError` when the source store or ingest coordinator is unavailable, the source ID is unknown, or the source is inactive. These are preconditions, not `KnowledgeFailure` results.
+
+## Typed failure and extraction rules
+
+Operational failures use a closed vocabulary. The runtime emits a valid `stage` and `code` pair; inspect those fields directly instead of parsing `message` or any legacy error text.
+
+| `stage` | Admitted `code` values |
+| --- | --- |
+| `acquisition` | `url_rejected`, `dns_failure`, `transport_failure`, `http_status`, `timeout`, `response_too_large` |
+| `extraction` | `unsupported_media_type`, `content_boundary_missing`, `extraction_failed` |
+| `indexing` | `embedding_failed`, `vector_write_failed` |
+| `persistence` | `persistence_failed` |
+| `query` | `query_embedding_failed`, `vector_query_failed` |
+
+Every serialized failure has `stage`, `code`, `retryable`, and `message`. `retryable` is the runtime's authoritative boolean; callers must not infer it from the message or code. `message` is a redacted operational summary, not a machine-readable contract and not a place to expose exception text, credentials, or other secret material.
+
+Static URL extraction is fail-closed. `unsupported_media_type`, `content_boundary_missing`, and `extraction_failed` all identify an extraction-stage failure with `retryable: false`; the affected URL produces no document for persistence. For a URL list, successful URLs remain represented by their counts while the typed failure remains in `errors`.
 
 ### register_knowledge_source
 
