@@ -22,6 +22,23 @@ repository = provider.read_repository("example/project")
 
 The CLI adapter runs only code-owned `gh api` argument vectors for repository and pull-request reads, draft PR creation, generated metadata updates, and draft/ready transitions.
 
+### Pull-request read contract
+
+The adapter sends GitHub REST API version `2026-03-10`. That version removes `merge_commit_sha` from pull-request responses, so the field is optional in the REST payload. An open pull request with the field omitted is a normal open `PublicationPullRequest` with no merge OID, and the provider does not issue a merged-evidence GraphQL read.
+
+For a merged public read, `read_pull_request` first treats REST as publication metadata and then issues the fixed named GraphQL query `ReadMergedPullRequest`. The query enriches the result from `mergeCommit.oid` and `mergedAt`; `find_pull_request` results that reach `read_pull_request` receive the same enrichment. The GraphQL fields are canonical merged evidence, while REST remains the publication metadata source.
+
+Before returning a merged `PublicationPullRequest`, the provider requires all of these cross-source checks:
+
+- The repository identity matches case-insensitively and the pull-request number matches.
+- REST `head.sha` equals GraphQL `headRefOid`, and REST `base.ref` equals GraphQL `baseRefName`.
+- GraphQL reports `merged: true`, provides a lowercase 40-character `mergeCommit.oid`, and provides a timezone-aware `mergedAt` timestamp.
+- When REST still supplies `merge_commit_sha` or `merged_at`, each value agrees with the corresponding GraphQL evidence.
+
+Create and update response parsing, including their pre- and post-write read fences, is REST-only and never issues `ReadMergedPullRequest`. Draft-state transitions use REST read fences too, but their existing named `ConvertPullRequestToDraft` or `MarkPullRequestReadyForReview` GraphQL mutation remains separate from the merged-evidence read.
+
+Missing GraphQL repository or pull request data produces a typed, non-retryable `NOT_FOUND`. Null, malformed, or contradictory merged evidence produces a typed, retry-safe `INVALID_RESPONSE`. Read-side transport and nonzero-command failures retain their typed mappings, including `UNAVAILABLE`, `TIMEOUT`, `RATE_LIMITED`, `AUTHENTICATION_REQUIRED`, `NOT_FOUND`, and `CONFLICT` as applicable. Errors redact raw GitHub payloads, and a failed merged read returns no partial `PublicationPullRequest`.
+
 ```python
 from owlbear_delivery import PublicationRepository
 from owlbear_delivery_github import InMemoryPublicationProvider
