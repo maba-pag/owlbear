@@ -26,6 +26,7 @@ members = [
     "owlbear-memory",
     "owlbear-memory-mcp",
     "owlbear-tools",
+    "owlbear-web-content",
 ]
 
 [manifest.dependency-groups]
@@ -2178,6 +2179,21 @@ requires-dist = [
     { name = "owlbear-delivery", editable = "serve/delivery" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "tree-sitter-language-pack", specifier = ">=1.12.5,<2" },
+]
+
+[[package]]
+name = "owlbear-web-content"
+version = "0.1.0"
+source = { editable = "serve/web-content" }
+dependencies = [
+    { name = "lxml" },
+    { name = "trafilatura" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "lxml", specifier = ">=6.1.1" },
+    { name = "trafilatura", specifier = ">=2.0.0" },
 ]
 
 [[package]]
