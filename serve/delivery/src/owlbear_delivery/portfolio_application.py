@@ -75,6 +75,7 @@ from owlbear_delivery.delivery_runtime import (
     DeliveryCheckpointTriggerKind,
     DeliveryFinalizationInvalidationReceipt,
     DeliveryFinalizationReceipt,
+    DeliveryFrontier,
     DeliveryIntegrationAttention,
     DeliveryIntegrationAttentionCode,
     DeliveryIntegrationAttentionDisposition,
@@ -138,6 +139,7 @@ from owlbear_delivery.publication_provider import (
     failed_required_publication_checks,
 )
 from owlbear_delivery.storage_io import locked_roots
+from owlbear_delivery.target_admission import DeliveryAdmissionReceipt
 from owlbear_delivery.target_contract import (
     DeliveryCommitment,
     DeliveryCompilationResult,
@@ -165,6 +167,7 @@ if TYPE_CHECKING:
         CompletedChangeRecord,
         CompletedHistoryCatalog,
     )
+    from owlbear_delivery.delivery_state import DeliveryStatePublisher
     from owlbear_delivery.design_package import (
         DesignCheckpointResult,
         DesignPackageResult,
@@ -253,7 +256,9 @@ def _checkpoint_summary(
 ) -> str:
     lines = [f"Reviewed Delivery checkpoint `{head}`.", "", "Included boundaries:"]
     for trigger in pending.triggers:
-        if trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK:
+        if trigger.kind == DeliveryCheckpointTriggerKind.ADMITTED_DESIGN:
+            lines.append("- Admitted Design package")
+        elif trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK:
             lines.append("- First promoted Task result")
         elif trigger.kind == DeliveryCheckpointTriggerKind.VERIFIED_OUTCOME:
             lines.append(f"- Verified Outcome `{trigger.outcome_id}`")
@@ -793,6 +798,7 @@ class PortfolioApplicationDependencies:
     coordinator: PortfolioCoordinator
     workspace_manager: ChangeWorkspaceManager
     completed_history_catalog: CompletedHistoryCatalog | None = None
+    delivery_state_publisher: DeliveryStatePublisher | None = None
     change_branch_publisher: ChangeBranchPublisher | None = None
     draft_pull_request_publisher: DraftPullRequestPublisher | None = None
 
@@ -864,6 +870,7 @@ class PortfolioApplication:
         self._coordinator = dependencies.coordinator
         self._workspace_manager = dependencies.workspace_manager
         self._completed_history_catalog = dependencies.completed_history_catalog
+        self._delivery_state_publisher = dependencies.delivery_state_publisher
         self._change_branch_publisher = dependencies.change_branch_publisher
         self._draft_pull_request_publisher = dependencies.draft_pull_request_publisher
         self._execution_capacity = config.execution_capacity
@@ -1906,6 +1913,7 @@ class PortfolioApplication:
         with locked_roots((self._checkpoint_lock_root(change_id),)):
             existing = runtime.completion_receipt()
             if existing is not None:
+                self._publish_delivery_state(change_id, runtime, f"acceptance-{existing.completion_id}")
                 return existing
             if runtime.change_disposition() is not None:
                 message = "Delivery Change requires attention resolution before acceptance observation"
@@ -1968,7 +1976,9 @@ class PortfolioApplication:
                     completed_at=_timestamp(self._clock()),
                 )
             )
-            return runtime.complete_change(receipt)
+            completed = runtime.complete_change(receipt)
+            self._publish_delivery_state(change_id, runtime, f"acceptance-{receipt.completion_id}")
+            return completed
 
     def _latch_acceptance_observation(
         self,
@@ -2092,6 +2102,12 @@ class PortfolioApplication:
                     ("publication-baseline-unavailable", f"exact-head:{head}"),
                 )
             raise
+        initial, pending, head, first_checkpoint = self._prepare_checkpoint_head(
+            change_id,
+            runtime,
+            initial,
+            pending,
+        )
         summary = _checkpoint_summary(pending, head, automation_paths)
         pull_request_title = _checkpoint_pull_request_title(runtime)
         branch_request = PublishChangeBranch(
@@ -2120,9 +2136,6 @@ class PortfolioApplication:
                 reconciled=False,
             )
 
-        first_checkpoint = any(
-            trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK for trigger in pending.triggers
-        )
         draft_receipt = None
         if first_checkpoint:
             draft_receipt = self._draft_pull_request_publisher.publish(
@@ -2162,6 +2175,11 @@ class PortfolioApplication:
                     }
                 )
             )
+        self._publish_delivery_state(
+            change_id,
+            runtime,
+            _checkpoint_operation_id("state", change_id, head),
+        )
         state = runtime.acknowledge_checkpoint_publication(pending, head)
         return DeliveryCheckpointReconciliationResult(
             change_id=change_id,
@@ -2172,6 +2190,49 @@ class PortfolioApplication:
             state=state,
             reconciled=state.pending_checkpoint is None,
         )
+
+    def _prepare_checkpoint_head(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        initial: DeliveryCheckpointPublicationState,
+        pending: DeliveryPendingCheckpoint,
+    ) -> tuple[DeliveryCheckpointPublicationState, DeliveryPendingCheckpoint, str, bool]:
+        """Prepare the exact first checkpoint head and its pull-request boundary."""
+        first_checkpoint = any(
+            trigger.kind
+            in {
+                DeliveryCheckpointTriggerKind.ADMITTED_DESIGN,
+                DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
+            }
+            for trigger in pending.triggers
+        )
+        first_task_checkpoint = any(
+            trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK for trigger in pending.triggers
+        )
+        if first_task_checkpoint and initial.published_head is None:
+            package = self._package_store.read_verified(change_id)
+            self._validate_package_authority(runtime, package)
+            snapshot = self._workspace_manager.snapshot_design_package(
+                change_id,
+                package.package_id,
+                {
+                    "authority.json": package.authority_bytes,
+                    "design.md": package.design_bytes,
+                    "intent.md": package.intent_bytes,
+                    "manifest.json": package.manifest.canonical_bytes(),
+                },
+                _checkpoint_operation_id("package", change_id, pending.head, package.package_id),
+            )
+            if snapshot.snapshot_head != pending.head:
+                runtime.record_design_package_snapshot(initial, snapshot)
+                initial = runtime.checkpoint_publication_state()
+                pending = initial.pending_checkpoint
+                if pending is None or pending.head is None:
+                    self._fail("Design package snapshot removed the pending checkpoint")
+        if pending.head is None:
+            self._fail("checkpoint preparation removed the pending head")
+        return initial, pending, pending.head, first_checkpoint
 
     def read_design_session(self, change_id: str) -> VerifiedDesignPackage:
         """Return one verified authored Design package and its current identity."""
@@ -2185,6 +2246,9 @@ class PortfolioApplication:
         design_bytes: bytes,
     ) -> VerifiedDesignPackage:
         """Replace authored Design bytes for one exact package identity."""
+        self._reconcile_runtimes()
+        if change_id in self._runtimes:
+            self._fail("admitted Delivery Changes cannot revise their Design package")
         return self._package_store.revise(change_id, expected_package_id, intent_bytes, design_bytes)
 
     def publish_design_checkpoint(self, change_id: str) -> DesignCheckpointResult:
@@ -2216,8 +2280,27 @@ class PortfolioApplication:
                 workspace_manager=self._workspace_manager,
                 migration_reviewed_head=coordination.last_reviewed_commit,
             )
+            runtime = self._runtimes[request.change_id]
+            package = self._package_store.read_verified(request.change_id)
+            self._validate_package_authority(runtime, package)
+            snapshot = self._workspace_manager.snapshot_design_package(
+                request.change_id,
+                package.package_id,
+                {
+                    "authority.json": package.authority_bytes,
+                    "design.md": package.design_bytes,
+                    "intent.md": package.intent_bytes,
+                    "manifest.json": package.manifest.canonical_bytes(),
+                },
+                _checkpoint_operation_id("package", request.change_id, package.package_id),
+            )
+            runtime.queue_admitted_design_checkpoint(snapshot.snapshot_head)
+            if self._change_branch_publisher is not None and self._draft_pull_request_publisher is not None:
+                self._reconcile_change_checkpoint(request.change_id, runtime)
             self._reconcile_runtimes()
-            return result
+            return result.model_copy(
+                update={"frontier": DeliveryFrontier.model_validate_json(runtime.frontier_bytes())}
+            )
 
     def publish_delivery_plan(
         self,
@@ -3128,6 +3211,11 @@ class PortfolioApplication:
                 continue
             if runtime.active_claims() or runtime.change_stage() != DeliveryChangeStage.BUILDING:
                 continue
+            pending = runtime.checkpoint_publication_state().pending_checkpoint
+            if pending is not None and any(
+                trigger.kind == DeliveryCheckpointTriggerKind.ADMITTED_DESIGN for trigger in pending.triggers
+            ):
+                continue
             claimable = set(runtime.claimable_outcome_ids())
             ranked = []
             for outcome_index, outcome in enumerate(runtime.contract.outcomes):
@@ -3431,6 +3519,28 @@ class PortfolioApplication:
             "design.md": package.manifest.design_sha256,
         }:
             self._fail("active package sources do not match admitted Delivery bindings")
+
+    def _publish_delivery_state(
+        self,
+        change_id: str,
+        runtime: DeliveryRuntime,
+        operation_id: str,
+    ) -> None:
+        if self._delivery_state_publisher is None:
+            return
+        package = self._package_store.read_verified(change_id)
+        self._validate_package_authority(runtime, package)
+        admission_path = self._target_root / "changes" / change_id / "admission.json"
+        admission = DeliveryAdmissionReceipt.model_validate_json(admission_path.read_bytes())
+        self._delivery_state_publisher.publish(
+            change_id=change_id,
+            package_id=package.package_id,
+            coordination=self._workspace_manager.show(change_id),
+            runtime=runtime,
+            admission=admission,
+            operation_id=operation_id,
+            captured_at=_timestamp(self._clock()),
+        )
 
     def _dependency_depth(self, runtime: DeliveryRuntime, outcome_id: str) -> int:
         dependencies = {outcome.outcome_id: outcome.dependency_ids for outcome in runtime.contract.outcomes}

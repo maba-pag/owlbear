@@ -23,7 +23,7 @@ from owlbear_delivery.runtime_transaction import (
 from owlbear_delivery.storage_io import locked_roots
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
 _MANIFEST_NAME = "manifest.json"
 _PACKAGE_NAMES = ("authority.json", "design.md", "intent.md", _MANIFEST_NAME)
@@ -214,6 +214,54 @@ class DesignPackageStore:
                 manifest, content = self._verify_package(change_id)
                 packages.append(self._verified_package(change_id, manifest, content))
             return tuple(packages)
+
+    def restore(self, change_id: str, package_files: Mapping[str, bytes]) -> VerifiedDesignPackage:
+        """Restore one exact verified package from portable Delivery state."""
+        _validate_change_id(change_id)
+        if set(package_files) != set(_PACKAGE_NAMES):
+            message = f"Design package files are incomplete: {change_id}"
+            raise DesignPackageConflictError(message)
+        content = dict(package_files)
+        try:
+            manifest = DesignPackageManifest.model_validate_json(content[_MANIFEST_NAME])
+        except (ValidationError, ValueError) as exc:
+            message = f"Design package manifest is invalid: {change_id}"
+            raise DesignPackageConflictError(message) from exc
+        expected = DesignPackageManifest.from_content(
+            change_id,
+            content["intent.md"],
+            content["design.md"],
+            content["authority.json"],
+        )
+        if manifest != expected or content[_MANIFEST_NAME] != manifest.canonical_bytes():
+            message = f"Design package bytes do not match its manifest: {change_id}"
+            raise DesignPackageConflictError(message)
+        RuntimeTransaction.recover_all(self._active_root)
+        with locked_roots((self._active_root,)):
+            existing = self._existing_content(change_id)
+            if existing is not None:
+                if existing != content:
+                    message = f"Design package differs: {change_id}"
+                    raise DesignPackageConflictError(message)
+                return self._verified_package(change_id, manifest, existing)
+        relative_root = Path(change_id)
+        transaction = RuntimeTransaction(
+            self._active_root,
+            f"design-package-restore-{change_id}-{_digest(manifest.canonical_bytes())}",
+            tuple(
+                TransactionParticipant(self._active_root, relative_root / name, content[name])
+                for name in _PACKAGE_NAMES
+            ),
+        )
+        try:
+            transaction.commit(failure=self._failure)
+        except Exception as exc:
+            transaction.abort()
+            if isinstance(exc, TransactionConflictError):
+                message = f"Design package differs: {change_id}"
+                raise DesignPackageConflictError(message) from exc
+            raise
+        return self._verified_package(change_id, manifest, content)
 
     def revise(
         self,

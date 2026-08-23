@@ -1,0 +1,362 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import subprocess
+from datetime import UTC, datetime
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
+from owlbear_delivery import (
+    DeliveryActiveClaim,
+    DeliveryAdmissionReceipt,
+    DeliveryCommitment,
+    DeliveryCommitmentClass,
+    DeliveryContract,
+    DeliveryFrontier,
+    DeliveryOutcome,
+    DeliveryPlanScope,
+    DeliveryRuntime,
+    DeliveryStage,
+    DeliveryStateConflictError,
+    DeliveryStatePublicationError,
+    DeliveryStatePublisher,
+    DeliveryStateResponseUnknownError,
+    DeliveryStateSnapshot,
+    DeliveryWorkerRole,
+    DesignPackageStore,
+    OutcomeAuthorityBinding,
+    PortfolioCoordinator,
+)
+from owlbear_delivery.change_workspace import ChangeWorkspaceManager
+from owlbear_delivery.delivery_application_loader import (
+    DeliveryApplicationLoadError,
+    DeliveryStartupConfig,
+    load_delivery_application,
+)
+from owlbear_delivery.git_executable import resolve_git_executable
+from owlbear_delivery.target_contract import DeliverySourceBinding
+
+_GIT = resolve_git_executable()
+
+
+def _git(repository: Path, *arguments: str, check: bool = True) -> str:
+    result = subprocess.run(  # noqa: S603
+        (_GIT, "-C", str(repository), *arguments),
+        check=check,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip()
+
+
+def _repository(tmp_path: Path) -> tuple[Path, Path, str]:
+    remote = tmp_path / "remote.git"
+    _git(tmp_path, "init", "--bare", "-b", "main", str(remote))
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    _git(repository, "init", "-b", "main")
+    _git(repository, "config", "user.name", "Delivery State Test")
+    _git(repository, "config", "user.email", "delivery-state@example.invalid")
+    (repository / "product.txt").write_text("baseline\n", encoding="utf-8")
+    _git(repository, "add", "product.txt")
+    _git(repository, "commit", "-m", "baseline")
+    initial = _git(repository, "rev-parse", "HEAD")
+    _git(repository, "remote", "add", "origin", str(remote))
+    _git(repository, "push", "origin", "HEAD:refs/heads/main")
+    _git(repository, "fetch", "origin", "refs/heads/main:refs/remotes/origin/main")
+    return repository, remote, initial
+
+
+def _contract(change_id: str) -> tuple[DeliveryContract, bytes, bytes]:
+    intent = f"# Intent {change_id}\n".encode()
+    design = f"# Design {change_id}\n".encode()
+    contract = DeliveryContract(
+        change_id=change_id,
+        title=f"Delivery {change_id}",
+        commitments=(
+            DeliveryCommitment(
+                commitment_id="COM-001",
+                commitment_class=DeliveryCommitmentClass.AGREED_PATH,
+                provenance="test",
+                statement="Preserve state.",
+            ),
+        ),
+        outcomes=(
+            DeliveryOutcome(
+                outcome_id="OUT-001",
+                title="State",
+                promise="Persist state.",
+                acceptance=("State persists.",),
+                commitment_ids=("COM-001",),
+                dependency_ids=(),
+            ),
+        ),
+        plan_scopes=(DeliveryPlanScope(scope_id="SCOPE-001", outcome_id="OUT-001"),),
+        source_bindings=(
+            DeliverySourceBinding(source_name="intent.md", sha256=hashlib.sha256(intent).hexdigest()),
+            DeliverySourceBinding(source_name="design.md", sha256=hashlib.sha256(design).hexdigest()),
+        ),
+    )
+    return contract, intent, design
+
+
+def _runtime(
+    tmp_path: Path,
+    repository: Path,
+    change_id: str,
+    contract: DeliveryContract,
+) -> tuple[DeliveryRuntime, ChangeWorkspaceManager, Path]:
+    state_root = tmp_path / "state"
+    coordinator = PortfolioCoordinator(state_root, capacity=1)
+    manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
+    coordination = manager.ensure(change_id)
+    frontier_path = state_root / "changes" / change_id / "frontier.json"
+    frontier_path.parent.mkdir(parents=True, exist_ok=True)
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(
+                outcome_id="OUT-001",
+                plan_scope_id="SCOPE-001",
+            ),
+        ),
+    )
+    frontier_path.write_bytes(
+        (json.dumps(frontier.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
+    )
+    return DeliveryRuntime(state_root, contract, workspace_manager=manager), manager, coordination.worktree_path
+
+
+def _publish(  # noqa: PLR0913, PLR0917 - helper binds the exact publisher inputs.
+    publisher: DeliveryStatePublisher,
+    runtime: DeliveryRuntime,
+    manager: ChangeWorkspaceManager,
+    change_id: str,
+    package_id: str,
+    operation_id: str,
+    *,
+    expected_remote_head: str | None = None,
+):
+    admission = _admission(runtime, manager, change_id)
+    return publisher.publish(
+        change_id=change_id,
+        package_id=package_id,
+        coordination=manager.show(change_id),
+        runtime=runtime,
+        admission=admission,
+        operation_id=operation_id,
+        captured_at=datetime(2026, 8, 23, tzinfo=UTC),
+        expected_remote_head=expected_remote_head,
+    )
+
+
+def _admission(runtime: DeliveryRuntime, manager: ChangeWorkspaceManager, change_id: str) -> DeliveryAdmissionReceipt:
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    contract_bytes = (
+        json.dumps(runtime.contract.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode()
+    source_bindings = [item.model_dump(mode="json") for item in runtime.contract.source_bindings]
+    admission_values = {
+        "schema_version": 1,
+        "change_id": change_id,
+        "contract_digest": hashlib.sha256(contract_bytes).hexdigest(),
+        "source_bindings_digest": hashlib.sha256(
+            json.dumps(source_bindings, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
+        "integration_target": manager.show(change_id).integration_target,
+        "checkpoint_commit": manager.show(change_id).last_reviewed_commit,
+        "frontier_ids": tuple(binding.plan_scope_id for binding in frontier.bindings),
+    }
+    return DeliveryAdmissionReceipt(
+        receipt_id=hashlib.sha256(
+            json.dumps(admission_values, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
+        **admission_values,
+    )
+
+
+def test_state_publisher_round_trips_and_replays_without_primary_checkout_changes(tmp_path: Path) -> None:
+    repository, remote, initial = _repository(tmp_path)
+    contract, _intent, _design = _contract("state-change")
+    runtime, manager, _worktree = _runtime(tmp_path, repository, "state-change", contract)
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+    before = (_git(repository, "rev-parse", "HEAD"), _git(repository, "status", "--porcelain"))
+
+    receipt = _publish(publisher, runtime, manager, "state-change", "a" * 64, "state-one")
+    replayed = _publish(publisher, runtime, manager, "state-change", "a" * 64, "state-one")
+    snapshots = publisher.read_snapshots()
+
+    assert replayed == receipt
+    assert len(snapshots) == 1
+    assert snapshots[0].snapshot_id == receipt.snapshot_id
+    assert snapshots[0].change_id == "state-change"
+    assert snapshots[0].contract == contract
+    assert snapshots[0].frontier == DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    assert _git(repository, "rev-parse", "HEAD") == before[0] == initial
+    assert _git(repository, "status", "--porcelain") == before[1]
+
+
+def test_state_publisher_rejects_active_claims_and_stale_remote_head(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    contract, _intent, _design = _contract("state-reject")
+    runtime, manager, _worktree = _runtime(tmp_path, repository, "state-reject", contract)
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+    frontier_path = runtime._frontier_path  # noqa: SLF001
+    frontier = DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
+    active = DeliveryActiveClaim(
+        attempt_id="attempt",
+        claim_id="claim",
+        owner_id="owner",
+        process_id="process",
+        started_at="2026-08-23T00:00:00Z",
+        worker_role=DeliveryWorkerRole.PLANNER,
+    )
+    frontier_path.write_bytes(
+        (
+            json.dumps(
+                frontier.model_copy(
+                    update={
+                        "bindings": (
+                            frontier.bindings[0].model_copy(
+                                update={"active_claim": active, "stage": DeliveryStage.PLANNING}
+                            ),
+                        )
+                    }
+                ).model_dump(mode="json"),
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+        ).encode()
+    )
+
+    with pytest.raises(DeliveryStatePublicationError, match="active Outcome claim"):
+        _publish(publisher, runtime, manager, "state-reject", "b" * 64, "state-reject-one")
+
+    frontier_path.write_bytes(
+        (json.dumps(frontier.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
+    )
+    first = _publish(publisher, runtime, manager, "state-reject", "b" * 64, "state-reject-one")
+
+    with pytest.raises(DeliveryStateConflictError, match="branch changed"):
+        _publish(
+            publisher,
+            runtime,
+            manager,
+            "state-reject",
+            "c" * 64,
+            "state-reject-two",
+            expected_remote_head="0" * 40,
+        )
+
+    assert first.published_head != "0" * 40
+    assert isinstance(publisher.read_snapshot("state-reject"), DeliveryStateSnapshot)
+
+
+def test_state_publisher_exposes_response_unknown_and_replays_after_remote_push(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    contract, _intent, _design = _contract("state-response-unknown")
+    runtime, manager, _worktree = _runtime(tmp_path, repository, "state-response-unknown", contract)
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+
+    with (
+        patch.object(
+            publisher,
+            "_remote_head",
+            side_effect=[None, DeliveryStatePublicationError("remote observation failed", retry_safe=True)],
+        ),
+        pytest.raises(DeliveryStateResponseUnknownError, match="could not be verified"),
+    ):
+        _publish(publisher, runtime, manager, "state-response-unknown", "d" * 64, "state-unknown")
+
+    replayed = _publish(publisher, runtime, manager, "state-response-unknown", "d" * 64, "state-unknown")
+
+    assert replayed.snapshot_id == publisher.read_snapshot("state-response-unknown").snapshot_id
+
+
+def test_remote_state_bootstrap_reconstructs_fresh_clone(tmp_path: Path) -> None:
+    repository, remote, _initial = _repository(tmp_path)
+    change_id = "bootstrap-change"
+    contract, intent, design = _contract(change_id)
+    state_root = tmp_path / "state"
+    package_root = repository / ".owlbear/delivery/packages"
+    package_store = DesignPackageStore(package_root, repository)
+    package = package_store.create(change_id, intent, design)
+    contract_bytes = (
+        json.dumps(contract.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode()
+    package_store.publish_contract(change_id, package.package_id, contract_bytes, lambda *_content: None)
+    package = package_store.read_verified(change_id)
+    coordinator = PortfolioCoordinator(state_root, capacity=1)
+    manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
+    coordination = manager.ensure(change_id)
+    frontier_path = state_root / "changes" / change_id / "frontier.json"
+    frontier_path.parent.mkdir(parents=True, exist_ok=True)
+    frontier = DeliveryFrontier(bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),))
+    frontier_path.write_bytes(
+        (json.dumps(frontier.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
+    )
+    runtime = DeliveryRuntime(state_root, contract, workspace_manager=manager)
+    snapshot = manager.snapshot_design_package(
+        change_id,
+        package.package_id,
+        {
+            "authority.json": package.authority_bytes,
+            "design.md": package.design_bytes,
+            "intent.md": package.intent_bytes,
+            "manifest.json": package.manifest.canonical_bytes(),
+        },
+        "bootstrap-package",
+    )
+    _git(repository, "push", "origin", f"{snapshot.snapshot_head}:refs/heads/{coordination.branch}")
+    publisher = DeliveryStatePublisher(repository, remote=str(remote), state_branch="owlbear/delivery-state")
+    state_receipt = publisher.publish(
+        change_id=change_id,
+        package_id=package.package_id,
+        coordination=manager.show(change_id),
+        runtime=runtime,
+        admission=_admission(runtime, manager, change_id),
+        operation_id="bootstrap-state",
+        captured_at=datetime(2026, 8, 23, tzinfo=UTC),
+    )
+
+    fresh = tmp_path / "fresh"
+    _git(tmp_path, "clone", str(remote), str(fresh))
+    _git(fresh, "config", "url." + str(remote) + ".insteadOf", "https://github.com/example/project.git")
+    _git(fresh, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    config = DeliveryStartupConfig(
+        schema_version=2,
+        remote="origin",
+        target_branch="main",
+        github_repository="example/project",
+        delivery_state_branch="owlbear/delivery-state",
+    )
+    application = load_delivery_application(config, workspace_root=fresh)
+
+    restored = application.read_design_session(change_id)
+    assert restored.package_id == package.package_id
+    runtime_root = fresh / ".owlbear/delivery/runtime"
+    assert (runtime_root / "changes" / change_id / "contract.json").is_file()
+    assert (runtime_root / "changes" / change_id / "frontier.json").is_file()
+    assert (runtime_root / "changes" / change_id / "admission.json").is_file()
+    assert _git(fresh, "rev-parse", f"refs/heads/owlbear/change/{change_id}") == snapshot.snapshot_head
+    assert state_receipt.published_head != "0" * 40
+    assert _git(fresh / ".owlbear/delivery/worktrees" / change_id, "status", "--porcelain") == ""
+    assert application.list_work_items()
+
+    frontier_path = runtime_root / "changes" / change_id / "frontier.json"
+    frontier = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
+    frontier_path.write_bytes(
+        (
+            json.dumps(
+                frontier.model_copy(update={"published_head": "1" * 40}).model_dump(mode="json"),
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+        ).encode()
+    )
+    with pytest.raises(DeliveryApplicationLoadError, match="local Delivery runtime differs"):
+        load_delivery_application(config, workspace_root=fresh)

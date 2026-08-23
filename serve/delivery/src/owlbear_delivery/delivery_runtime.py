@@ -13,10 +13,12 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 from owlbear_delivery.acceptance import (
     CompletionDisplayMetadata,
     CompletionReceipt,
+    CompletionReceiptBundle,
     CompletionReceiptConflictError,
     CompletionReceiptStore,
 )
 from owlbear_delivery.change_workspace import (
+    ChangeDesignPackageSnapshotReceipt,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
     ChangeTargetSyncReceipt,
@@ -91,6 +93,7 @@ class DeliveryWorkerRole(StrEnum):
 class DeliveryCheckpointTriggerKind(StrEnum):
     """Delivery-owned reasons that require Change checkpoint publication."""
 
+    ADMITTED_DESIGN = "admitted-design"
     FIRST_PROMOTED_TASK = "first-promoted-task"
     VERIFIED_OUTCOME = "verified-outcome"
     FINALIZATION = "finalization"
@@ -1340,6 +1343,8 @@ _RETURN_TARGETS = {
 _NORMAL_CHANGE_MUTATIONS = frozenset(
     {
         "record_checkpoint_branch_publication",
+        "record_design_package_snapshot",
+        "queue_admitted_design_checkpoint",
         "acknowledge_checkpoint_publication",
         "record_publication_identity",
         "record_publication_successor",
@@ -1791,6 +1796,55 @@ class DeliveryRuntime:
         self._replace(previous, updated)
         return self.checkpoint_publication_state()
 
+    def record_design_package_snapshot(
+        self,
+        expected: DeliveryCheckpointPublicationState,
+        receipt: ChangeDesignPackageSnapshotReceipt,
+    ) -> DeliveryCheckpointPublicationState:
+        """Re-anchor the first checkpoint to its admitted package snapshot commit."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "record_design_package_snapshot")
+        current = frontier.pending_checkpoint
+        if (
+            expected.change_id != self._contract.change_id
+            or expected.pending_checkpoint is None
+            or current != expected.pending_checkpoint
+            or frontier.published_head != expected.published_head
+            or receipt.change_id != self._contract.change_id
+            or receipt.previous_head != expected.pending_checkpoint.head
+        ):
+            _conflict("Design package snapshot no longer matches the checkpoint queue")
+        if current.head == receipt.snapshot_head:
+            return self.checkpoint_publication_state()
+        updated = frontier.model_copy(
+            update={"pending_checkpoint": current.model_copy(update={"head": receipt.snapshot_head})}
+        )
+        self._replace(previous, updated)
+        return self.checkpoint_publication_state()
+
+    def queue_admitted_design_checkpoint(self, reviewed_head: str) -> DeliveryCheckpointPublicationState:
+        """Queue the first remote checkpoint for an admitted Design package."""
+        frontier, previous = self._read()
+        _require_change_mutable(frontier, "queue_admitted_design_checkpoint")
+        pending = frontier.pending_checkpoint
+        trigger = DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.ADMITTED_DESIGN)
+        if pending is not None:
+            if pending.head != reviewed_head:
+                _conflict("admitted Design checkpoint no longer matches the reviewed boundary")
+            if trigger in pending.triggers:
+                return self.checkpoint_publication_state()
+            updated = frontier.model_copy(
+                update={"pending_checkpoint": pending.model_copy(update={"triggers": (*pending.triggers, trigger)})}
+            )
+        elif frontier.published_head is not None:
+            return self.checkpoint_publication_state()
+        else:
+            updated = frontier.model_copy(
+                update={"pending_checkpoint": DeliveryPendingCheckpoint(head=reviewed_head, triggers=(trigger,))}
+            )
+        self._replace(previous, updated)
+        return self.checkpoint_publication_state()
+
     def acknowledge_checkpoint_publication(
         self,
         expected: DeliveryPendingCheckpoint,
@@ -1809,7 +1863,12 @@ class DeliveryRuntime:
                 trigger
                 for trigger in current.triggers
                 if not (
-                    trigger in expected.triggers and trigger.kind == DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK
+                    trigger in expected.triggers
+                    and trigger.kind
+                    in {
+                        DeliveryCheckpointTriggerKind.ADMITTED_DESIGN,
+                        DeliveryCheckpointTriggerKind.FIRST_PROMOTED_TASK,
+                    }
                 )
             )
         pending = current.model_copy(update={"triggers": retained}) if retained else None
@@ -2119,6 +2178,10 @@ class DeliveryRuntime:
             (completion_participant, display_participant, frontier_participant),
         ).commit()
         return receipt
+
+    def completion_bundle(self) -> CompletionReceiptBundle | None:
+        """Return the immutable completion evidence for this Change, if present."""
+        return CompletionReceiptStore(self._target_root).read_bundle(self._contract.change_id)
 
     def finalize_change(
         self,

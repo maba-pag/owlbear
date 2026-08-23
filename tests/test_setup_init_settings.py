@@ -333,6 +333,39 @@ def test_init_migrates_exact_schema_one_delivery_policy(
         "remote": "upstream",
         "target_branch": "release",
         "github_repository": "example/project",
+        "delivery_state_branch": "owlbear/delivery-state",
+    }
+
+
+def test_init_adds_state_branch_to_existing_schema_two_delivery_policy(
+    tmp_path: Path,
+    init_module: types.ModuleType,
+    run_init_without_test_surface: Callable[..., None],
+) -> None:
+    target_dir = tmp_path / "project"
+    config_path = target_dir / ".owlbear/delivery/config.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "remote": "upstream",
+                "target_branch": "release",
+                "github_repository": "example/project",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    run_init_without_test_surface(init_module.init, target_dir, _REPO_ROOT, interactive=False)
+
+    assert json.loads(config_path.read_text(encoding="utf-8")) == {
+        "schema_version": 2,
+        "remote": "upstream",
+        "target_branch": "release",
+        "github_repository": "example/project",
+        "delivery_state_branch": "owlbear/delivery-state",
     }
 
 

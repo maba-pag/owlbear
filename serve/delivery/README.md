@@ -72,7 +72,7 @@ same typed configuration directly.
 
 | File | Optional? | Fields and defaults | Ownership |
 | --- | --- | --- | --- |
-| `.owlbear/delivery/config.json` | Required for canonical MCP/Cockpit startup | `schema_version` must be `2`; `remote`, `target_branch`, and `github_repository` are required and have no loader defaults. `setup/init.py` defaults `remote` to `origin`, uses `main` as the non-interactive target-branch fallback, suggests the current branch interactively, and infers `github_repository` from the configured remote. | Tracked project policy |
+| `.owlbear/delivery/config.json` | Required for canonical MCP/Cockpit startup | `schema_version` must be `2`; `remote`, `target_branch`, and `github_repository` are required and have no loader defaults. `delivery_state_branch` defaults to `owlbear/delivery-state` and is written by setup. `setup/init.py` defaults `remote` to `origin`, uses `main` as the non-interactive target-branch fallback, suggests the current branch interactively, and infers `github_repository` from the configured remote. | Tracked project policy |
 | `.owlbear/delivery/runtime/host.json` | Optional and ignored | When absent, `writer_capacity` and `execution_capacity` both default to `1`. When present, `schema_version` must be `1`; both capacities must be positive integers. Unknown keys and non-integer values are rejected at startup. | Host-local configuration |
 | `.owlbear/delivery/runtime/capacity.json` | Generated; do not edit | `schema_version` is `1`; `capacity` is the effective `writer_capacity`; `change_ids` lists active writer holders and defaults to an empty list. | Derived writer ledger |
 
@@ -87,6 +87,24 @@ the optional host file can allow two writers and three total claims:
 
 `setup/init.py` creates the tracked project policy but does not create `host.json`; the absence of
 that file therefore preserves the defaults above.
+
+### Portability And Recovery
+
+Authored `intent.md` and `design.md` remain local drafts until admission. When a Change is admitted,
+Delivery commits the verified `authority.json`, `design.md`, `intent.md`, and `manifest.json` to the
+managed `owlbear/change/<change-id>` branch before opening its first draft pull request. Later Design
+revisions are rejected for that Change; a semantic change starts a new or superseding Change.
+
+Sparse semantic checkpoints are published to the configured `delivery_state_branch` at admission,
+meaningful task or Outcome progress, finalization, and acceptance. They retain resumable authority
+and terminal evidence, but never live claims, locks, capacity ledgers, process identifiers, or local
+paths. A fresh clone can therefore recover the last published checkpoint and requeue incomplete work.
+The local `refs/owlbear/packages/*` refs remain useful package history, but are not a remote backup.
+
+If the remote package branch, state snapshot, contract, or local state disagree, startup reports
+bounded Delivery attention and does not choose a side silently. Do not copy hidden `.git` refs or
+ignored runtime files between machines; restore from the normal remote branches and the configured
+state branch.
 
 ## Dependencies
 

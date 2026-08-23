@@ -109,6 +109,7 @@ from owlbear_delivery import (
     PublicationCheckKind,
     PublicationCheckSnapshot,
     PublicationLease,
+    PublishChangeBranch,
     PublishDeliveryPlan,
     PublishDeliveryResult,
     PullRequestReadyReceipt,
@@ -196,6 +197,11 @@ def _branch_receipt(head: str, expected: str | None = None) -> ChangeBranchPubli
         expected_remote_head=expected,
         published_head=head,
     )
+
+
+def _requested_branch_receipt(request: PublishChangeBranch) -> ChangeBranchPublicationReceipt:
+    assert request.expected_published_head is not None
+    return _branch_receipt(request.expected_published_head, request.expected_remote_head)
 
 
 def _draft_receipt(
@@ -2717,10 +2723,12 @@ def test_reconcile_first_checkpoint_publishes_branch_creates_pr_and_drains(tmp_p
     )
     _set_checkpoint(runtimes["change-a"], state_root, pending)
     branch_publisher = Mock()
-    branch_publisher.publish.return_value = _branch_receipt(head)
+    branch_publisher.publish.side_effect = _requested_branch_receipt
     pull_request_publisher = Mock()
-    pull_request_publisher.publish.return_value = _draft_receipt(head)
-    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(request.published_head)
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head
+    )
     application._change_branch_publisher = branch_publisher
     application._draft_pull_request_publisher = pull_request_publisher
 
@@ -2728,7 +2736,9 @@ def test_reconcile_first_checkpoint_publishes_branch_creates_pr_and_drains(tmp_p
     replayed = application.reconcile_change_checkpoint("change-a")
 
     assert result.reconciled
-    assert result.state.published_head == head
+    snapshot = coordinator.show("change-a").design_package_snapshot
+    assert snapshot is not None
+    assert result.state.published_head == snapshot.snapshot_head
     assert result.state.pending_checkpoint is None
     assert replayed.reconciled
     assert replayed.attempted_head is None
@@ -2736,12 +2746,12 @@ def test_reconcile_first_checkpoint_publishes_branch_creates_pr_and_drains(tmp_p
     assert pull_request_publisher.publish.call_count == 1
     assert pull_request_publisher.update_generated_summary.call_count == 1
     request = pull_request_publisher.publish.call_args.args[0]
-    assert request.published_head == head
+    assert request.published_head == snapshot.snapshot_head
     assert "Verified Outcome `OUT-001`" in request.generated_summary
     history = runtimes["change-a"].publication_history()
     assert history is not None
     assert history.current.number == 7
-    assert history.current.head_sha == head
+    assert history.current.head_sha == snapshot.snapshot_head
 
 
 def test_reconcile_checkpoint_reports_bounded_escaped_automation_paths(tmp_path: Path) -> None:
@@ -2756,10 +2766,12 @@ def test_reconcile_checkpoint_reports_bounded_escaped_automation_paths(tmp_path:
     )
     _set_checkpoint(runtimes["change-a"], state_root, pending)
     branch_publisher = Mock()
-    branch_publisher.publish.return_value = _branch_receipt(head)
+    branch_publisher.publish.side_effect = _requested_branch_receipt
     pull_request_publisher = Mock()
-    pull_request_publisher.publish.return_value = _draft_receipt(head)
-    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(request.published_head)
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head
+    )
     application._change_branch_publisher = branch_publisher
     application._draft_pull_request_publisher = pull_request_publisher
     long_path = ".github/workflows/" + ("x" * 300) + ".yml"
@@ -2925,10 +2937,12 @@ def test_later_checkpoint_reports_cumulative_automation_paths(
     )
     _set_checkpoint(runtimes["change-a"], state_root, first_pending)
     branch_publisher = Mock()
-    branch_publisher.publish.return_value = _branch_receipt(first_head)
+    branch_publisher.publish.side_effect = _requested_branch_receipt
     pull_request_publisher = Mock()
-    pull_request_publisher.publish.return_value = _draft_receipt(first_head)
-    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(first_head)
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(request.published_head)
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head
+    )
     application._change_branch_publisher = branch_publisher
     application._draft_pull_request_publisher = pull_request_publisher
 
@@ -2950,8 +2964,11 @@ def test_later_checkpoint_reports_cumulative_automation_paths(
             ),
         ),
     )
-    _set_checkpoint(runtimes["change-a"], state_root, second_pending, published_head=first_head)
-    branch_publisher.publish.return_value = _branch_receipt(second_head, first_head)
+    first_snapshot = coordinator.show("change-a").design_package_snapshot
+    assert first_snapshot is not None
+    _set_checkpoint(runtimes["change-a"], state_root, second_pending, published_head=first_snapshot.snapshot_head)
+    branch_publisher.publish.side_effect = None
+    branch_publisher.publish.return_value = _branch_receipt(second_head, first_snapshot.snapshot_head)
     pull_request_publisher.update_generated_summary.return_value = _summary_receipt(second_head)
 
     result = application.reconcile_change_checkpoint("change-a")
@@ -3210,10 +3227,13 @@ def test_reconcile_checkpoint_rejects_summary_for_a_different_pull_request(tmp_p
     )
     _set_checkpoint(runtimes["change-a"], state_root, pending)
     branch_publisher = Mock()
-    branch_publisher.publish.return_value = _branch_receipt(head)
+    branch_publisher.publish.side_effect = _requested_branch_receipt
     pull_request_publisher = Mock()
-    pull_request_publisher.publish.return_value = _draft_receipt(head)
-    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head, number=8)
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(request.published_head)
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head,
+        number=8,
+    )
     application._change_branch_publisher = branch_publisher
     application._draft_pull_request_publisher = pull_request_publisher
 
@@ -3223,7 +3243,7 @@ def test_reconcile_checkpoint_rejects_summary_for_a_different_pull_request(tmp_p
     history = runtimes["change-a"].publication_history()
     assert history is not None
     assert history.current.number == 7
-    assert runtimes["change-a"].checkpoint_publication_state().pending_checkpoint == pending
+    assert runtimes["change-a"].checkpoint_publication_state().pending_checkpoint is not None
 
 
 def test_reconcile_derives_bounded_provider_text_from_authored_titles(tmp_path: Path) -> None:
@@ -3263,10 +3283,12 @@ def test_reconcile_derives_bounded_provider_text_from_authored_titles(tmp_path: 
         _canonical(_admission_receipt(runtime.contract, current_frontier, head))
     )
     branch_publisher = Mock()
-    branch_publisher.publish.return_value = _branch_receipt(head)
+    branch_publisher.publish.side_effect = _requested_branch_receipt
     pull_request_publisher = Mock()
-    pull_request_publisher.publish.return_value = _draft_receipt(head)
-    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(request.published_head)
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head
+    )
     application._change_branch_publisher = branch_publisher
     application._draft_pull_request_publisher = pull_request_publisher
 
@@ -3334,11 +3356,13 @@ def test_reconcile_checkpoint_retains_newer_head_after_first_pr_creation(tmp_pat
         DeliveryPendingCheckpoint(head=head, triggers=triggers),
     )
     branch_publisher = Mock()
-    branch_publisher.publish.return_value = _branch_receipt(head)
+    branch_publisher.publish.side_effect = _requested_branch_receipt
     pull_request_publisher = Mock()
-    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head
+    )
 
-    def create_pull_request(_request):
+    def create_pull_request(request):
         current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
         frontier_path.write_bytes(
             _canonical(
@@ -3347,7 +3371,7 @@ def test_reconcile_checkpoint_retains_newer_head_after_first_pr_creation(tmp_pat
                 )
             )
         )
-        return _draft_receipt(head)
+        return _draft_receipt(request.published_head)
 
     pull_request_publisher.publish.side_effect = create_pull_request
     application._change_branch_publisher = branch_publisher
@@ -3356,7 +3380,9 @@ def test_reconcile_checkpoint_retains_newer_head_after_first_pr_creation(tmp_pat
     result = application.reconcile_change_checkpoint("change-a")
 
     assert not result.reconciled
-    assert result.state.published_head == head
+    snapshot = coordinator.show("change-a").design_package_snapshot
+    assert snapshot is not None
+    assert result.state.published_head == snapshot.snapshot_head
     assert result.state.pending_checkpoint is not None
     assert result.state.pending_checkpoint.head == newer_head
     assert tuple(trigger.kind for trigger in result.state.pending_checkpoint.triggers) == (
@@ -3384,7 +3410,7 @@ def test_reconcile_checkpoint_records_remote_head_after_local_invalidation(tmp_p
     frontier_path = _set_checkpoint(runtimes["change-a"], state_root, pending)
     branch_publisher = Mock()
 
-    def publish_branch(_request):
+    def publish_branch(request):
         current = DeliveryFrontier.model_validate_json(frontier_path.read_bytes())
         frontier_path.write_bytes(
             _canonical(
@@ -3398,7 +3424,7 @@ def test_reconcile_checkpoint_records_remote_head_after_local_invalidation(tmp_p
                 )
             )
         )
-        return _branch_receipt(head)
+        return _branch_receipt(request.expected_published_head)
 
     branch_publisher.publish.side_effect = publish_branch
     pull_request_publisher = Mock()
@@ -3408,7 +3434,9 @@ def test_reconcile_checkpoint_records_remote_head_after_local_invalidation(tmp_p
     result = application.reconcile_change_checkpoint("change-a")
 
     assert not result.reconciled
-    assert result.state.published_head == head
+    snapshot = coordinator.show("change-a").design_package_snapshot
+    assert snapshot is not None
+    assert result.state.published_head == snapshot.snapshot_head
     assert result.state.pending_checkpoint == DeliveryPendingCheckpoint(head=None, triggers=(first_trigger,))
     assert pull_request_publisher.publish.call_count == 0
 
@@ -3484,12 +3512,12 @@ def test_reconcile_serializes_administrative_invalidation_through_provider_work(
     move_started = Event()
     branch_publisher = Mock()
 
-    def publish_branch(_request):
+    def publish_branch(request):
         branch_started.set()
         if not allow_branch.wait(timeout=5):
             message = "test branch publication remained blocked"
             raise TimeoutError(message)
-        return _branch_receipt(head)
+        return _branch_receipt(request.expected_published_head)
 
     def move_change():
         move_started.set()
@@ -3497,8 +3525,10 @@ def test_reconcile_serializes_administrative_invalidation_through_provider_work(
 
     branch_publisher.publish.side_effect = publish_branch
     pull_request_publisher = Mock()
-    pull_request_publisher.publish.return_value = _draft_receipt(head)
-    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(request.published_head)
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head
+    )
     application._change_branch_publisher = branch_publisher
     application._draft_pull_request_publisher = pull_request_publisher
 
@@ -3535,10 +3565,12 @@ def test_reconcile_checkpoint_replays_pr_after_lost_local_acknowledgment(tmp_pat
     )
     _set_checkpoint(runtimes["change-a"], state_root, pending)
     branch_publisher = Mock()
-    branch_publisher.publish.return_value = _branch_receipt(head)
+    branch_publisher.publish.side_effect = _requested_branch_receipt
     pull_request_publisher = Mock()
-    pull_request_publisher.publish.return_value = _draft_receipt(head)
-    pull_request_publisher.update_generated_summary.return_value = _summary_receipt(head)
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(request.published_head)
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head
+    )
     application._change_branch_publisher = branch_publisher
     application._draft_pull_request_publisher = pull_request_publisher
     runtime = runtimes["change-a"]
@@ -3553,7 +3585,9 @@ def test_reconcile_checkpoint_replays_pr_after_lost_local_acknowledgment(tmp_pat
     ):
         application.reconcile_change_checkpoint("change-a")
 
-    assert runtime.checkpoint_publication_state().published_head == head
+    snapshot = coordinator.show("change-a").design_package_snapshot
+    assert snapshot is not None
+    assert runtime.checkpoint_publication_state().published_head == snapshot.snapshot_head
     replayed = application.reconcile_change_checkpoint("change-a")
 
     assert replayed.reconciled
@@ -3580,10 +3614,7 @@ def test_reconcile_first_pr_recovers_at_newer_head_after_provider_failure(tmp_pa
     )
     _set_checkpoint(runtimes["change-a"], state_root, pending)
     branch_publisher = Mock()
-    branch_publisher.publish.side_effect = (
-        _branch_receipt(first_head),
-        _branch_receipt(second_head, first_head),
-    )
+    branch_publisher.publish.side_effect = _requested_branch_receipt
     provider = Mock()
     provider.read_repository.return_value = PublicationRepository(
         repository="example/project",
@@ -3639,11 +3670,13 @@ def test_reconcile_first_pr_recovers_at_newer_head_after_provider_failure(tmp_pa
         application.reconcile_change_checkpoint("change-a")
 
     assert exc_info.value.code is PublicationProviderFailureCode.UNAVAILABLE
+    snapshot = coordinator.show("change-a").design_package_snapshot
+    assert snapshot is not None
     _set_checkpoint(
         runtimes["change-a"],
         state_root,
         pending.model_copy(update={"head": second_head}),
-        published_head=first_head,
+        published_head=snapshot.snapshot_head,
     )
 
     with patch.object(application._workspace_manager, "repository_automation_paths", return_value=()):
@@ -4350,6 +4383,24 @@ def test_design_session_read_and_revision_delegate_to_package_store(tmp_path: Pa
     assert revised.authority_bytes == b""
 
 
+def test_admitted_design_revision_is_rejected_without_package_mutation(tmp_path: Path) -> None:
+    application, _runtimes, _coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+    )
+    current = application.read_design_session("change-a")
+
+    with pytest.raises(PortfolioApplicationError, match="admitted Delivery Changes"):
+        application.revise_design_session(
+            "change-a",
+            current.package_id,
+            b"changed intent\n",
+            b"changed design\n",
+        )
+
+    assert application.read_design_session("change-a") == current
+
+
 def test_design_compilation_and_admission_delegate_without_extra_mutation(tmp_path: Path) -> None:
     application, _runtimes, _coordinator, state_root = _portfolio(tmp_path, {})
     intent = b"""# Composed Delivery
@@ -4405,10 +4456,21 @@ dependencies: []
     assert _git(tmp_path / "repository", "rev-parse", "main") == product_head
     listed = application.list_work_items()
     assert tuple((item.change_id, item.work_item_id) for item in listed) == (("composed-delivery", "OUT-001"),)
-    launch = application.acquire_frontier_work().launch_packages[0]
-    assert launch.change_id == "composed-delivery"
-    assert launch.outcome_id == "OUT-001"
-    assert launch.claim.worker_role == DeliveryWorkerRole.PLANNER
+    coordination = _coordinator.show("composed-delivery")
+    package_paths = {
+        ".owlbear/delivery/packages/composed-delivery/authority.json",
+        ".owlbear/delivery/packages/composed-delivery/design.md",
+        ".owlbear/delivery/packages/composed-delivery/intent.md",
+        ".owlbear/delivery/packages/composed-delivery/manifest.json",
+    }
+    assert set(_git(tmp_path / "repository", "ls-tree", "-r", "--name-only", coordination.branch).splitlines()) >= (
+        package_paths
+    )
+    pending = application.show_change_checkpoint_publication("composed-delivery").pending_checkpoint
+    assert pending is not None
+    assert pending.head == coordination.last_reviewed_commit
+    assert pending.triggers == (DeliveryCheckpointTrigger(kind=DeliveryCheckpointTriggerKind.ADMITTED_DESIGN),)
+    assert application.acquire_frontier_work().launch_packages == ()
 
     delivery_root = state_root / "changes/composed-delivery"
     admitted_bytes = _file_bytes(delivery_root)
@@ -4431,6 +4493,80 @@ dependencies: []
             )
         )
     assert _file_bytes(delivery_root) == admitted_bytes
+
+
+def test_admission_snapshots_design_before_initial_pull_request(tmp_path: Path) -> None:
+    application, _runtimes, coordinator, _state_root = _portfolio(tmp_path, {})
+    intent = b"""# Initial package
+
+```yaml target-contract
+kind: commitment
+id: COM-001
+class: agreed-path
+provenance: admission test
+statement: Preserve the admitted package.
+```
+
+```yaml target-contract
+kind: outcome
+id: OUT-001
+title: Publish initial package
+promise: Publish the stable package before workers run.
+acceptance: [The initial package is published.]
+commitments: [COM-001]
+dependencies: []
+```
+"""
+    application.create_design_session("change-a", intent, b"# Architecture\n")
+    branch_publisher = Mock()
+    branch_publisher.publish.side_effect = _requested_branch_receipt
+    pull_request_publisher = Mock()
+    pull_request_publisher.publish.side_effect = lambda request: _draft_receipt(
+        request.published_head,
+        operation_id=request.operation_id,
+    )
+    pull_request_publisher.update_generated_summary.side_effect = lambda request: _summary_receipt(
+        request.published_head,
+    )
+    state_publisher = Mock()
+    application._change_branch_publisher = branch_publisher
+    application._draft_pull_request_publisher = pull_request_publisher
+    application._delivery_state_publisher = state_publisher
+
+    admitted = application.admit_delivery_change(DeliveryAdmissionRequest(change_id="change-a", active_claim_ids=()))
+    replayed = application.admit_delivery_change(DeliveryAdmissionRequest(change_id="change-a", active_claim_ids=()))
+
+    coordination = coordinator.show("change-a")
+    snapshot = coordination.design_package_snapshot
+    assert snapshot is not None
+    assert coordination.last_reviewed_commit == snapshot.snapshot_head
+    assert admitted.frontier.published_head == snapshot.snapshot_head
+    assert admitted.frontier.pending_checkpoint is None
+    assert replayed.replayed
+    assert replayed.frontier == admitted.frontier
+    assert branch_publisher.publish.call_count == 1
+    assert pull_request_publisher.publish.call_count == 1
+    assert pull_request_publisher.update_generated_summary.call_count == 1
+    assert state_publisher.publish.call_count == 1
+    branch_request = branch_publisher.publish.call_args.args[0]
+    assert branch_request.expected_published_head == snapshot.snapshot_head
+    pull_request = pull_request_publisher.publish.call_args.args[0]
+    assert pull_request.published_head == snapshot.snapshot_head
+    assert "Admitted Design package" in pull_request.generated_summary
+    package_paths = {
+        ".owlbear/delivery/packages/change-a/authority.json",
+        ".owlbear/delivery/packages/change-a/design.md",
+        ".owlbear/delivery/packages/change-a/intent.md",
+        ".owlbear/delivery/packages/change-a/manifest.json",
+    }
+    tree_paths = _git(
+        application._workspace_manager.repository,
+        "ls-tree",
+        "-r",
+        "--name-only",
+        coordination.branch,
+    ).splitlines()
+    assert set(tree_paths) >= package_paths
 
 
 def test_delivery_publication_and_transition_delegate_to_exact_runtimes(tmp_path: Path) -> None:

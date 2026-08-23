@@ -180,7 +180,10 @@ After verification, prove the installation with one small outcome:
 2. Continue with `/design`, review the proposed work, and approve admission. When it succeeds,
    note the returned lowercase, hyphenated Change ID, for example `improve-search`.
 
-   **Expected result:** one approved Change is admitted and its ID is available for later commands.
+  **Expected result:** one approved Change is admitted, its verified package is backed up on the
+  managed Change branch, its initial checkpoint is queued or published, and its ID is available
+  for later commands. The remote recovery guarantee begins at this boundary; earlier drafts remain
+  local.
 3. Run `/orchestrate` after admission. It acquires currently eligible work across the portfolio;
   Planning and Build then proceed in order.
 
@@ -217,6 +220,8 @@ detailed correction, publication, acceptance, or recovery procedure.
 | Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
 | `owlbear-delivery` reports `ERR_DELIVERY_STARTUP_UNCONFIGURED` | `.owlbear/delivery/config.json` is absent from the project root | Re-run `init.py`; setup recreates the file only when it is missing |
+| Delivery reports that remote Delivery-state snapshots are unavailable | The configured `delivery_state_branch` cannot be read from the configured remote | Verify remote access and the tracked branch name, then retry from the project root; do not copy hidden refs or ignored runtime files |
+| Delivery reports that local state differs from a remote snapshot | Local runtime, package, or Change coordination no longer matches the last published checkpoint | Preserve the local checkout and remote branches, inspect the typed Change attention in Cockpit, and resolve the exact divergence before acquisition |
 | `uv run cockpit` says the command is missing | Command was run from the consumer project without `--project` | Use `uv run --project ../owlbear cockpit` from the project root |
 | Delivery or Cockpit reports that `.owlbear/target` or `.owlbear/worktrees` requires migration | A retired live-state root is still nonempty | Preserve the root unchanged. From the project root, preview with `uv run --project /path/to/owlbear migrate-delivery-state .`, then apply with the same command plus `--apply`. Re-running `--apply` recovers an interrupted attempt before retrying. |
 | Cockpit shows the wrong workspace or cannot find `.owlbear/delivery/config.json` | Cockpit was launched from the wrong working directory | Run from the project root or add `--directory /path/to/project` |

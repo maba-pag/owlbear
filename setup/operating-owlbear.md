@@ -13,6 +13,7 @@ the [sharing guide](sharing-guide.md).
 | Replace seeded editor and lint configuration | [Refreshing Consumer Configs](#refreshing-consumer-configs) |
 | Remove OwlBear from a project | [Uninstalling](#uninstalling) |
 | Run, correct, publish, and accept a Change | [Delivery Workflow](#delivery-workflow) |
+| Recover Delivery after a new clone or hardware loss | [Portability and recovery](#portability-and-recovery) |
 | Launch the human control surface | [Cockpit details](#cockpit-details) |
 | Add project-local agents, instructions, or servers | [Project-Specific Customization](#project-specific-customization) |
 
@@ -26,7 +27,7 @@ Running `init.py` writes the following files into your project directory:
 | --- | --- | --- |
 | `.vscode/settings.json` | Points VS Code at OwlBear agents, skills, and instructions, and carries the seeded Copilot workspace settings | Merged (OwlBear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 5 MCP servers (4 OwlBear stdio, including Browser access seeded for wildcard testing, + markitdown) | Merged (OwlBear servers as defaults; your existing servers are preserved) |
-| `.owlbear/delivery/config.json` | Declares the Git remote, pull-request target branch, and exact GitHub `owner/name` identity; host-local writer and execution capacity may be configured separately in ignored `.owlbear/delivery/runtime/host.json` | Tracked in Git; exact schema-1 policy is migrated once and schema-2 project edits are preserved on rerun |
+| `.owlbear/delivery/config.json` | Declares the Git remote, pull-request target branch, exact GitHub `owner/name` identity, and remote Delivery-state branch; host-local writer and execution capacity may be configured separately in ignored `.owlbear/delivery/runtime/host.json` | Tracked in Git; exact schema-1 policy is migrated once and schema-2 project edits are preserved on rerun |
 | `.owlbear/install-manifest.json` | Records seed paths created or merged by setup, their installed digests, claimed settings/MCP values, and setup-created directories for conservative uninstall | Rewritten atomically on each successful setup; removed when uninstall completes unchanged |
 | `.owlbear/hooks/allow-stances-only.py` | Restricts ideation agents to approved stance outputs | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/hooks/deny-src-writes.py` | Constrains test-only roles to `tests/`, `__tests__/`, and scratch surfaces | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
@@ -260,6 +261,26 @@ Correction: retry | return | block -> typed successor context
 Publication: finalize-change -> checkpoint -> draft PR -> finalized head -> ready PR
 Acceptance: user merges PR -> observe merged evidence -> completed lookup
 ```
+
+## Portability and recovery
+
+Admission is the first remote recovery guarantee. Before admission, authored Design drafts are
+local working material and are not committed for every revision. At admission, Delivery places the
+verified four-file package on the managed Change branch, then opens the first draft pull request.
+The normal remote branch is the package backup; local `refs/owlbear/packages/*` refs are not.
+
+Delivery also publishes sparse semantic snapshots to `owlbear/delivery-state`. These snapshots
+retain the admitted contract, frontier progress, publication and finalization identities, and
+completion evidence. They exclude active claims, writer custody, locks, capacity ledgers, process
+identifiers, absolute paths, and transient model output. A new clone recreates ignored runtime state,
+the package cache, and open Change worktrees from those remote identities; incomplete claims are
+requeued rather than treated as live.
+
+For a new machine, clone the project normally, run setup so `.owlbear/delivery/config.json` names
+the configured `delivery_state_branch`, and launch Delivery or Cockpit from the project root. Do
+not copy `.git`, hidden OwlBear refs, ignored runtime files, or an old managed worktree. If startup
+reports a package, Change-branch, target, or state-snapshot divergence, preserve both sides and
+resolve the typed attention before acquiring work.
 
 ---
 

@@ -48,7 +48,8 @@ directory, so no Delivery environment variable is required.
  "schema_version": 2,
  "remote": "origin",
  "target_branch": "main",
- "github_repository": "your-org/your-project"
+ "github_repository": "your-org/your-project",
+ "delivery_state_branch": "owlbear/delivery-state"
 }
 ```
 
@@ -64,12 +65,19 @@ Startup validates the configured remote, the exact
 remote URL. It does not require or inspect a local target branch.
 
 The tracked `.owlbear/delivery/config.json` is required for canonical startup and contains schema
-version `2` plus `remote`, `target_branch`, and `github_repository`; setup defaults the remote to
-`origin`, uses `main` for non-interactive target selection, and infers the GitHub repository from the
+version `2` plus `remote`, `target_branch`, `github_repository`, and `delivery_state_branch`; setup
+defaults the remote to `origin`, uses `main` for non-interactive target selection, writes
+`owlbear/delivery-state` as the state-branch default, and infers the GitHub repository from the
 remote. The ignored `.owlbear/delivery/runtime/host.json` is optional: its schema version is `1`, and
 both `writer_capacity` and `execution_capacity` default to `1` when the file or either field is
 absent. The generated `.owlbear/delivery/runtime/capacity.json` is runtime state, not a configuration
 file, and must not be edited manually. The Delivery server reads no environment variables.
+
+At admission, Delivery commits the verified four-file Design package to the managed Change branch
+before opening its first draft pull request. Sparse checkpoints on `delivery_state_branch` retain
+frontier, publication, finalization, and completion authority without active claims, locks, process
+identifiers, or local paths. A fresh clone restores the last published checkpoint and requeues
+incomplete work; local `refs/owlbear/packages/*` refs are not a remote backup.
 
 `sync_change_with_target` is an allowed Change-worktree operation. It fetches the configured
 remote-tracking target and merges the exact target head into the managed Change worktree, preserving

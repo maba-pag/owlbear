@@ -53,6 +53,10 @@ without behavior change).
   affected proof, and requires fresh review of the cumulative task result.
 - Never push. The user pushes manually.
 
+An admitted Delivery package snapshot is a Delivery-owned commit on the exact managed Change
+branch. Local `refs/owlbear/packages/*` checkpoints are not remote backup and must not replace that
+branch publication.
+
 ### VS Code Auto-Staging Trap
 
 VS Code may re-serialize and stage `.agent.md` files when it detects new tool capabilities. Run

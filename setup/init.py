@@ -108,6 +108,7 @@ _RETIRED_OWLBEAR_GITIGNORE_LINES = frozenset(
 _HOOKS_REL_PREFIX = ".owlbear/hooks/"
 _DELIVERY_CONFIG_PATH = Path(".owlbear/delivery/config.json")
 _DELIVERY_CONFIG_SCHEMA_VERSION = 2
+_DELIVERY_STATE_BRANCH = "owlbear/delivery-state"
 _INSTALL_MANIFEST_PATH = Path(".owlbear/install-manifest.json")
 _INSTALL_MANIFEST_SCHEMA_VERSION = 1
 _DEFAULT_PROFILE_ASSOCIATION = "__default__profile__"
@@ -1040,33 +1041,41 @@ def _write_delivery_config(
             msg = f"Delivery configuration cannot be migrated: {path}"
             raise RuntimeError(msg) from exc
         if isinstance(existing, dict) and existing.get("schema_version") == _DELIVERY_CONFIG_SCHEMA_VERSION:
-            return
-        if (
-            not isinstance(existing, dict)
-            or set(existing) != {"schema_version", "integration_target"}
-            or existing.get("schema_version") != 1
-            or not isinstance(existing.get("integration_target"), str)
-            or not existing["integration_target"]
-        ):
-            msg = f"Delivery configuration schema cannot be migrated: {path}"
-            raise RuntimeError(msg)
-        target_branch = existing["integration_target"]
+            if "delivery_state_branch" in existing:
+                return
+            content = {**existing, "delivery_state_branch": _DELIVERY_STATE_BRANCH}
+        else:
+            if (
+                not isinstance(existing, dict)
+                or set(existing) != {"schema_version", "integration_target"}
+                or existing.get("schema_version") != 1
+                or not isinstance(existing.get("integration_target"), str)
+                or not existing["integration_target"]
+            ):
+                msg = f"Delivery configuration schema cannot be migrated: {path}"
+                raise RuntimeError(msg)
+            target_branch = existing["integration_target"]
+            content = None
+    else:
+        content = None
     path.parent.mkdir(parents=True, exist_ok=True)
-    content = {
-        "schema_version": _DELIVERY_CONFIG_SCHEMA_VERSION,
-        "remote": remote,
-        "target_branch": _select_target_branch(
-            target_dir,
-            target_branch,
-            interactive=interactive,
-        ),
-        "github_repository": _select_github_repository(
-            target_dir,
-            remote,
-            github_repository,
-            interactive=interactive,
-        ),
-    }
+    if content is None:
+        content = {
+            "schema_version": _DELIVERY_CONFIG_SCHEMA_VERSION,
+            "remote": remote,
+            "target_branch": _select_target_branch(
+                target_dir,
+                target_branch,
+                interactive=interactive,
+            ),
+            "github_repository": _select_github_repository(
+                target_dir,
+                remote,
+                github_repository,
+                interactive=interactive,
+            ),
+            "delivery_state_branch": _DELIVERY_STATE_BRANCH,
+        }
     with tempfile.NamedTemporaryFile(
         mode="w",
         encoding="utf-8",

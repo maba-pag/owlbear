@@ -15,6 +15,7 @@ from owlbear_delivery.change_workspace import (
     CapacityLedger,
     CapacityLedgerConflictError,
     ChangeCoordination,
+    ChangeDesignPackageSnapshotReceipt,
     ChangeExternalHeadAdoptionReceipt,
     ChangeExternalHeadPromotionReceipt,
     ChangeWorkspaceManager,
@@ -310,6 +311,110 @@ def _workspace_bytes(repository: Path, state_root: Path) -> tuple[str, str, tupl
         _git(repository, "worktree", "list", "--porcelain"),
         state_files,
     )
+
+
+def test_snapshot_design_package_commits_managed_change_worktree_only(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("snapshot-change")
+    package_files = {
+        "authority.json": b'{"authority":true}\n',
+        "design.md": b"# Design\n",
+        "intent.md": b"# Intent\n",
+        "manifest.json": b'{"manifest":true}\n',
+    }
+    before_status = _git(repository, "status", "--porcelain")
+
+    receipt = manager.snapshot_design_package(
+        coordination.change_id,
+        "a" * 64,
+        package_files,
+        "snapshot-operation",
+    )
+    replayed = manager.snapshot_design_package(
+        coordination.change_id,
+        "a" * 64,
+        package_files,
+        "snapshot-operation",
+    )
+
+    assert isinstance(receipt, ChangeDesignPackageSnapshotReceipt)
+    assert replayed == receipt
+    assert receipt.previous_head == initial
+    assert receipt.snapshot_head != initial
+    assert coordinator.show(coordination.change_id).last_reviewed_commit == receipt.snapshot_head
+    assert manager.source_head(coordination.change_id) == receipt.snapshot_head
+    assert _git(repository, "rev-parse", "HEAD") == initial
+    assert _git(repository, "status", "--porcelain") == before_status
+    relative_paths = tuple(f".owlbear/delivery/packages/{coordination.change_id}/{name}" for name in package_files)
+    assert (
+        tuple(
+            _git(
+                coordination.worktree_path,
+                "diff-tree",
+                "--no-commit-id",
+                "--name-only",
+                "-r",
+                receipt.snapshot_head,
+            ).splitlines()
+        )
+        == relative_paths
+    )
+    for name, relative_path in zip(package_files, relative_paths, strict=True):
+        assert _git(
+            coordination.worktree_path, "show", f"{receipt.snapshot_head}:{relative_path}"
+        ).encode() == package_files[name].rstrip(b"\n")
+
+
+def test_snapshot_design_package_replays_after_commit_before_receipt(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("snapshot-replay")
+    package_files = {
+        "authority.json": b'{"authority":true}\n',
+        "design.md": b"# Design\n",
+        "intent.md": b"# Intent\n",
+        "manifest.json": b'{"manifest":true}\n',
+    }
+    original_update = coordinator.update
+    update_count = 0
+    failure_message = "simulated receipt failure"
+
+    def fail_receipt_update(updated: ChangeCoordination, *, lock=None) -> ChangeCoordination:
+        nonlocal update_count
+        update_count += 1
+        if update_count == 2:
+            raise RuntimeError(failure_message)
+        return original_update(updated, lock=lock)
+
+    with (
+        patch.object(coordinator, "update", side_effect=fail_receipt_update),
+        pytest.raises(RuntimeError, match=failure_message),
+    ):
+        manager.snapshot_design_package(
+            coordination.change_id,
+            "a" * 64,
+            package_files,
+            "snapshot-replay-operation",
+        )
+
+    interrupted = coordinator.show(coordination.change_id)
+    assert interrupted.design_package_snapshot_intent is not None
+    assert interrupted.design_package_snapshot is None
+    assert _git(coordination.worktree_path, "rev-parse", "HEAD") != initial
+    assert _git(coordination.worktree_path, "status", "--porcelain") == ""
+
+    receipt = manager.snapshot_design_package(
+        coordination.change_id,
+        "a" * 64,
+        package_files,
+        "snapshot-replay-operation",
+    )
+
+    assert receipt.snapshot_head == _git(coordination.worktree_path, "rev-parse", "HEAD")
+    assert coordinator.show(coordination.change_id).design_package_snapshot == receipt
+    assert coordinator.show(coordination.change_id).design_package_snapshot_intent is None
+    assert receipt.previous_head == initial
 
 
 def test_list_retained_worktrees_is_sorted_and_batches_git_reads(tmp_path: Path) -> None:

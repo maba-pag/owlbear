@@ -238,6 +238,12 @@ report its persisted receipt ID, contract digest, frontier IDs, checkpoint commi
 result. An identical retry must return `replayed: true` with the same contract, frontier, and receipt.
 Active target work blocks a semantic revision.
 
+Admission is also the first remote recovery boundary for the package. Delivery snapshots the
+verified `authority.json`, `design.md`, `intent.md`, and `manifest.json` into the managed Change
+branch before its initial publication checkpoint. Do not promise remote recovery for unadmitted
+draft revisions, and do not revise the admitted package in place; a semantic change requires a new
+or superseding Design Change.
+
 If the package changes after checkpoint, validation, or approval, discard pending approval and repeat
 challenge, baseline, checkpoint, validation, and approval against the new identity. Admission failure
 leaves the active package available for `/design` resume and publishes no partial target authority.

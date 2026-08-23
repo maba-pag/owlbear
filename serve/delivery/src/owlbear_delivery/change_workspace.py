@@ -28,7 +28,7 @@ from owlbear_delivery.runtime_transaction import (
 from owlbear_delivery.storage_io import locked_roots
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Iterator, Mapping
     from contextlib import AbstractContextManager
 
 _OCC_RETRY_LIMIT = 8
@@ -38,6 +38,9 @@ _CHANGE_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _COMMIT_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 _MERGE_COMMIT_MIN_PARENTS = 2
 _PORCELAIN_WORKTREE_STATUS_INDEX = 1
+_DESIGN_PACKAGE_NAMES = ("authority.json", "design.md", "intent.md", "manifest.json")
+_DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_COMMIT_PARENT_COUNT = 2
 
 
 @dataclass(frozen=True)
@@ -446,6 +449,95 @@ class ChangeExternalHeadPromotionReceipt(_WorkspaceModel):
         return self
 
 
+class ChangeDesignPackageSnapshotIntent(_WorkspaceModel):
+    """Durable intent for one admitted Design package snapshot."""
+
+    schema_version: Literal[1] = 1
+    intent_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: ChangeId
+    package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    branch: str = Field(min_length=1)
+    worktree_path: Path
+    expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def create(  # noqa: PLR0913 - snapshot identity requires each workspace input.
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        package_id: str,
+        branch: str,
+        worktree_path: Path,
+        expected_head: str,
+    ) -> Self:
+        """Create deterministic intent for one managed package snapshot."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "package_id": package_id,
+            "branch": branch,
+            "worktree_path": worktree_path,
+            "expected_head": expected_head,
+        }
+        candidate = cls.model_construct(intent_id="0" * 64, **values)
+        return cls(intent_id=_design_package_snapshot_intent_digest(candidate), **values)
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> Self:
+        if self.intent_id != _design_package_snapshot_intent_digest(self):
+            message = "Design package snapshot intent identity is invalid"
+            raise ValueError(message)
+        return self
+
+
+class ChangeDesignPackageSnapshotReceipt(_WorkspaceModel):
+    """Exact reviewed Change-branch commit containing one admitted Design package."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    operation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    change_id: ChangeId
+    package_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    branch: str = Field(min_length=1)
+    worktree_path: Path
+    previous_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    snapshot_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+    @classmethod
+    def create(  # noqa: PLR0913 - snapshot identity requires each workspace input.
+        cls,
+        *,
+        operation_id: str,
+        change_id: str,
+        package_id: str,
+        branch: str,
+        worktree_path: Path,
+        previous_head: str,
+        snapshot_head: str,
+    ) -> Self:
+        """Create deterministic receipt for one managed package snapshot commit."""
+        values = {
+            "operation_id": operation_id,
+            "change_id": change_id,
+            "package_id": package_id,
+            "branch": branch,
+            "worktree_path": worktree_path,
+            "previous_head": previous_head,
+            "snapshot_head": snapshot_head,
+        }
+        candidate = cls.model_construct(receipt_id="0" * 64, **values)
+        return cls(receipt_id=_design_package_snapshot_digest(candidate), **values)
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> Self:
+        if self.receipt_id != _design_package_snapshot_digest(self):
+            message = "Design package snapshot receipt identity is invalid"
+            raise ValueError(message)
+        return self
+
+
 class PublicationLease(_WorkspaceModel):
     """Expiring custody for one exact Change publication attempt."""
 
@@ -490,6 +582,8 @@ class ChangeCoordination(_WorkspaceModel):
     publication_base_head: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
     publication_baseline_recovery: PublicationBaselineRecoveryReceipt | None = None
     last_reviewed_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    design_package_snapshot_intent: ChangeDesignPackageSnapshotIntent | None = None
+    design_package_snapshot: ChangeDesignPackageSnapshotReceipt | None = None
     writer: ChangeWriter | None = None
     publication_lease: PublicationLease | None = None
     target_sync_receipt: ChangeTargetSyncReceipt | None = None
@@ -568,7 +662,19 @@ class ChangeCoordination(_WorkspaceModel):
         if self.target_sync_abort_receipt is not None and self.target_sync_conflict is not None:
             message = "target synchronization abort receipt and conflict cannot coexist"
             raise ValueError(message)
+        self._validate_design_package_snapshot()
         return self
+
+    def _validate_design_package_snapshot(self) -> None:
+        if (
+            self.design_package_snapshot_intent is not None
+            and self.design_package_snapshot_intent.change_id != self.change_id
+        ):
+            message = "Design package snapshot intent does not match its Change"
+            raise ValueError(message)
+        if self.design_package_snapshot is not None and self.design_package_snapshot.change_id != self.change_id:
+            message = "Design package snapshot receipt does not match its Change"
+            raise ValueError(message)
 
     def _validate_publication_baseline_recovery(self) -> None:
         receipt = self.publication_baseline_recovery
@@ -1266,6 +1372,223 @@ class ChangeWorkspaceManager:
         self._require_ancestor(commit, branch_head)
         updated = coordination.model_copy(update={"last_reviewed_commit": commit})
         return self._coordinator.update(updated)
+
+    def snapshot_design_package(
+        self,
+        change_id: str,
+        package_id: str,
+        package_files: Mapping[str, bytes],
+        operation_id: str,
+    ) -> ChangeDesignPackageSnapshotReceipt:
+        """Commit one verified admitted Design package on its managed Change branch."""
+        if set(package_files) != set(_DESIGN_PACKAGE_NAMES):
+            _workspace_failure("Design package snapshot must contain the canonical package files")
+        if not _DIGEST_PATTERN.fullmatch(package_id):
+            _workspace_failure("Design package snapshot identity is invalid")
+        with self._coordinator.publication_lock(change_id) as lock:
+            coordination = self._coordinator.show(change_id)
+            existing = coordination.design_package_snapshot
+            if existing is not None:
+                self._validate_design_package_snapshot_replay(existing, package_id, operation_id)
+                return existing
+            intent = coordination.design_package_snapshot_intent
+            branch_head = self._resolve(coordination.branch)
+            if intent is None:
+                if branch_head != coordination.last_reviewed_commit:
+                    _workspace_failure("Design package snapshot requires the reviewed Change branch head")
+                intent = ChangeDesignPackageSnapshotIntent.create(
+                    operation_id=operation_id,
+                    change_id=change_id,
+                    package_id=package_id,
+                    branch=coordination.branch,
+                    worktree_path=coordination.worktree_path,
+                    expected_head=branch_head,
+                )
+                coordination = self._coordinator.update(
+                    coordination.model_copy(update={"design_package_snapshot_intent": intent}),
+                    lock=lock,
+                )
+            elif intent.operation_id != operation_id or intent.package_id != package_id:
+                _coordination_conflict("Design package snapshot intent differs from the request")
+            snapshot_head = self._commit_design_package_snapshot(coordination, intent, package_files, branch_head)
+            receipt = ChangeDesignPackageSnapshotReceipt.create(
+                operation_id=operation_id,
+                change_id=change_id,
+                package_id=package_id,
+                branch=coordination.branch,
+                worktree_path=coordination.worktree_path,
+                previous_head=intent.expected_head,
+                snapshot_head=snapshot_head,
+            )
+            current = self._coordinator.show(change_id)
+            updated = current.model_copy(
+                update={
+                    "design_package_snapshot_intent": None,
+                    "design_package_snapshot": receipt,
+                    "last_reviewed_commit": snapshot_head,
+                }
+            )
+            self._coordinator.update(updated, lock=lock)
+            return receipt
+
+    def _validate_design_package_snapshot_replay(
+        self,
+        receipt: ChangeDesignPackageSnapshotReceipt,
+        package_id: str,
+        operation_id: str,
+    ) -> None:
+        if receipt.package_id != package_id or receipt.operation_id != operation_id:
+            _coordination_conflict("Design package snapshot differs from the request")
+        self._require_worktree(
+            receipt.change_id,
+            receipt.worktree_path,
+            receipt.branch,
+            receipt.snapshot_head,
+        )
+        self._require_clean_worktree(receipt.worktree_path)
+
+    def _commit_design_package_snapshot(
+        self,
+        coordination: ChangeCoordination,
+        intent: ChangeDesignPackageSnapshotIntent,
+        package_files: Mapping[str, bytes],
+        branch_head: str | None,
+    ) -> str:
+        worktree = coordination.worktree_path
+        relative_paths = tuple(
+            f".owlbear/delivery/packages/{coordination.change_id}/{name}" for name in _DESIGN_PACKAGE_NAMES
+        )
+        existing = {
+            name: self._read_optional_worktree_file(worktree / relative_path)
+            for name, relative_path in zip(_DESIGN_PACKAGE_NAMES, relative_paths, strict=True)
+        }
+        if branch_head == intent.expected_head and self._package_files_match_commit(
+            intent.expected_head,
+            relative_paths,
+            existing,
+            package_files,
+        ):
+            return intent.expected_head
+        if branch_head != intent.expected_head:
+            return self._replay_design_package_snapshot(coordination, intent, package_files, branch_head)
+        self._require_worktree(coordination.change_id, worktree, coordination.branch, intent.expected_head)
+        self._require_clean_worktree(worktree)
+        committed = False
+        try:
+            self._write_design_package_files(worktree, relative_paths, package_files)
+            self._git("add", "-f", "--", *relative_paths, cwd=worktree)
+            message = f"chore: snapshot admitted Design package ({coordination.change_id}, {intent.operation_id})"
+            result = self._run_git(
+                "commit",
+                "--only",
+                "-m",
+                message,
+                "--",
+                *relative_paths,
+                cwd=worktree,
+                check=False,
+            )
+            if result.returncode != 0:
+                _workspace_failure("Design package snapshot could not be committed")
+            committed = True
+        except Exception:
+            if not committed:
+                self._restore_worktree_files(worktree, relative_paths, existing)
+            raise
+        else:
+            snapshot_head = self._resolve("HEAD", cwd=worktree)
+            if snapshot_head is None:
+                _workspace_failure("Design package snapshot commit has no resolvable head")
+            self._require_clean_worktree(worktree)
+            changed = self._git(
+                "diff-tree",
+                "--no-commit-id",
+                "--name-only",
+                "-r",
+                snapshot_head,
+                cwd=worktree,
+            ).splitlines()
+            if set(changed) != set(relative_paths):
+                _workspace_failure("Design package snapshot committed an unexpected path")
+            return snapshot_head
+
+    def _replay_design_package_snapshot(
+        self,
+        coordination: ChangeCoordination,
+        intent: ChangeDesignPackageSnapshotIntent,
+        package_files: Mapping[str, bytes],
+        branch_head: str,
+    ) -> str:
+        """Recover a package snapshot after its commit succeeded before receipt storage."""
+        if not self._is_direct_child(intent.expected_head, branch_head):
+            _workspace_failure("Design package snapshot branch changed before its commit")
+        self._require_clean_worktree(coordination.worktree_path)
+        relative_paths = tuple(
+            f".owlbear/delivery/packages/{coordination.change_id}/{name}" for name in _DESIGN_PACKAGE_NAMES
+        )
+        existing = {
+            name: self._read_optional_worktree_file(coordination.worktree_path / relative_path)
+            for name, relative_path in zip(_DESIGN_PACKAGE_NAMES, relative_paths, strict=True)
+        }
+        if not self._package_files_match_commit(branch_head, relative_paths, existing, package_files):
+            _workspace_failure("Design package snapshot commit does not match its package")
+        message = f"chore: snapshot admitted Design package ({coordination.change_id}, {intent.operation_id})"
+        if self._git("log", "-1", "--format=%s", branch_head, cwd=coordination.worktree_path) != message:
+            _workspace_failure("Design package snapshot branch commit is not replayable")
+        return branch_head
+
+    def _package_files_match_commit(
+        self,
+        commit: str,
+        relative_paths: tuple[str, ...],
+        existing: Mapping[str, bytes | None],
+        package_files: Mapping[str, bytes],
+    ) -> bool:
+        tracked = self._git("ls-tree", "-r", "--name-only", commit, "--", *relative_paths).splitlines()
+        return set(tracked) == set(relative_paths) and all(
+            self._git_blob_bytes(commit, relative_path) == package_files[name] and existing[name] == package_files[name]
+            for name, relative_path in zip(_DESIGN_PACKAGE_NAMES, relative_paths, strict=True)
+        )
+
+    def _git_blob_bytes(self, commit: str, relative_path: str) -> bytes:
+        result = self._run_git("show", f"{commit}:{relative_path}", check=False)
+        return result.stdout if result.returncode == 0 else b""
+
+    def _is_direct_child(self, parent: str, commit: str) -> bool:
+        parents = self._git("rev-list", "--parents", "-n", "1", commit).split()
+        return len(parents) == _COMMIT_PARENT_COUNT and parents[1] == parent
+
+    @staticmethod
+    def _read_optional_worktree_file(path: Path) -> bytes | None:
+        if path.is_symlink() or (path.exists() and not path.is_file()):
+            _workspace_failure("Design package snapshot path is unsafe")
+        return path.read_bytes() if path.exists() else None
+
+    @staticmethod
+    def _write_design_package_files(
+        worktree: Path,
+        relative_paths: tuple[str, ...],
+        package_files: Mapping[str, bytes],
+    ) -> None:
+        for name, relative_path in zip(_DESIGN_PACKAGE_NAMES, relative_paths, strict=True):
+            path = worktree / relative_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(package_files[name])
+
+    def _restore_worktree_files(
+        self,
+        worktree: Path,
+        relative_paths: tuple[str, ...],
+        existing: Mapping[str, bytes | None],
+    ) -> None:
+        self._git("reset", "HEAD", "--", *relative_paths, cwd=worktree, check=False)
+        for name, relative_path in zip(_DESIGN_PACKAGE_NAMES, relative_paths, strict=True):
+            path = worktree / relative_path
+            previous = existing[name]
+            if previous is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.write_bytes(previous)
 
     @classmethod
     def restore_worktree(cls, repository: Path, worktree: Path, branch: str) -> None:
@@ -2972,6 +3295,18 @@ def _external_head_adoption_digest(receipt: ChangeExternalHeadAdoptionReceipt) -
 
 
 def _external_head_promotion_digest(receipt: ChangeExternalHeadPromotionReceipt) -> str:
+    payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _design_package_snapshot_intent_digest(intent: ChangeDesignPackageSnapshotIntent) -> str:
+    payload = intent.model_dump(mode="json", exclude={"intent_id"})
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _design_package_snapshot_digest(receipt: ChangeDesignPackageSnapshotReceipt) -> str:
     payload = receipt.model_dump(mode="json", exclude={"receipt_id"})
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()

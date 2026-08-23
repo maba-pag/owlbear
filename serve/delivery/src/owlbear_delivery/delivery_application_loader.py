@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Never
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from owlbear_delivery.acceptance import CompletionReceiptStore
 from owlbear_delivery.change_publication import ChangeBranchPublisher
 from owlbear_delivery.change_workspace import (
     CapacityConfigurationConflictError,
     CapacityLedgerConflictError,
+    ChangeCoordination,
     ChangeWorkspaceManager,
     CoordinationConflictError,
     PortfolioCoordinator,
@@ -28,10 +31,12 @@ from owlbear_delivery.delivery_contract_discovery import (
     require_startup_contracts,
 )
 from owlbear_delivery.delivery_runtime import (
+    DeliveryFrontier,
     DeliveryRuntime,
     DeliveryRuntimeMigrationError,
     DeliveryWorkerRole,
 )
+from owlbear_delivery.delivery_state import DeliveryStatePublicationError, DeliveryStatePublisher, DeliveryStateSnapshot
 from owlbear_delivery.design_package import DesignPackageStore
 from owlbear_delivery.draft_pull_request import DraftPullRequestPublisher
 from owlbear_delivery.git_executable import resolve_git_executable
@@ -41,6 +46,7 @@ from owlbear_delivery.portfolio_application import (
     PortfolioApplicationConfig,
     PortfolioApplicationDependencies,
 )
+from owlbear_delivery.runtime_transaction import RuntimeTransaction, TransactionParticipant
 from owlbear_delivery.target_admission import DeliveryAuthorityRegistry
 
 if TYPE_CHECKING:
@@ -59,6 +65,7 @@ class DeliveryStartupConfig(_LoaderModel):
     remote: str = Field(min_length=1)
     target_branch: str = Field(min_length=1)
     github_repository: str = Field(min_length=3, pattern=r"^[^\s/]+/[^\s/]+$")
+    delivery_state_branch: str = "owlbear/delivery-state"
 
 
 class DeliveryHostConfig(_LoaderModel):
@@ -86,6 +93,9 @@ class DeliveryApplicationLoadError(RuntimeError):
         self.field = field
         self.detail = detail
         super().__init__(detail)
+
+
+_REMOTE_REF_MISSING = 2
 
 
 def _load_error(field: str, detail: str) -> DeliveryApplicationLoadError:
@@ -150,6 +160,7 @@ def _validate_git_config(config: DeliveryStartupConfig, paths: _DeliveryPaths) -
     checks = (
         (("rev-parse", "--git-dir"), "repository_root"),
         (("check-ref-format", f"refs/heads/{config.target_branch}"), "target_branch"),
+        (("check-ref-format", f"refs/heads/{config.delivery_state_branch}"), "delivery_state_branch"),
         (("remote", "get-url", config.remote), "remote"),
         (
             ("rev-parse", "--verify", f"refs/remotes/{config.remote}/{config.target_branch}^{{commit}}"),
@@ -167,11 +178,12 @@ def _validate_git_config(config: DeliveryStartupConfig, paths: _DeliveryPaths) -
                 "repository_root": "configured Git repository is invalid",
                 "remote": "configured Git remote is invalid",
                 "target_branch": "configured target branch or remote-tracking target is invalid",
+                "delivery_state_branch": "configured Delivery-state branch name is invalid",
             }[field]
             error = _load_error(field, detail)
             raise error
     remote_url = subprocess.run(  # noqa: S603 - fixed executable and argument vector.
-        (git_executable, "-C", str(paths.repository_root), "remote", "get-url", config.remote),
+        (git_executable, "-C", str(paths.repository_root), "config", "--get", f"remote.{config.remote}.url"),
         check=False,
         capture_output=True,
         text=True,
@@ -284,6 +296,296 @@ def _role_policies() -> tuple[DeliveryRolePolicy, ...]:
     )
 
 
+def _bootstrap_remote_state(
+    config: DeliveryStartupConfig,
+    host_config: DeliveryHostConfig,
+    paths: _DeliveryPaths,
+) -> None:
+    """Restore missing local Delivery state from remote semantic snapshots."""
+    package_store = DesignPackageStore(paths.package_root, paths.repository_root)
+    try:
+        state_publisher = DeliveryStatePublisher(
+            paths.repository_root,
+            remote=config.remote,
+            state_branch=config.delivery_state_branch,
+        )
+        snapshots = state_publisher.read_snapshots()
+    except DeliveryStatePublicationError as exc:
+        if _local_runtime_change_ids(paths.runtime_root):
+            return
+        error = _load_error("runtime_root", "remote Delivery-state snapshots are unavailable")
+        raise error from exc
+    if not snapshots:
+        return
+    coordinator = PortfolioCoordinator(paths.runtime_root, capacity=host_config.writer_capacity)
+    workspace_manager = ChangeWorkspaceManager(
+        paths.repository_root,
+        paths.worktree_root,
+        coordinator,
+        config.target_branch,
+        config.remote,
+    )
+    local_change_ids = _local_runtime_change_ids(paths.runtime_root)
+    for snapshot in snapshots:
+        try:
+            if snapshot.change_id in local_change_ids:
+                _validate_local_snapshot(snapshot, config, paths, package_store, coordinator)
+            else:
+                _restore_remote_snapshot(snapshot, config, paths, package_store, coordinator, workspace_manager)
+        except DeliveryApplicationLoadError:
+            raise
+        except (OSError, RuntimeError, ValueError) as exc:
+            _bootstrap_failure("remote Delivery state could not be reconciled", exc)
+
+
+def _restore_remote_snapshot(  # noqa: PLR0913, PLR0917 - restoration binds each independent state owner.
+    snapshot: DeliveryStateSnapshot,
+    config: DeliveryStartupConfig,
+    paths: _DeliveryPaths,
+    package_store: DesignPackageStore,
+    coordinator: PortfolioCoordinator,
+    workspace_manager: ChangeWorkspaceManager,
+) -> None:
+    """Restore one exact remote snapshot into host-local Delivery state."""
+    revision, has_remote_change_branch = _fetch_snapshot_change_head(snapshot, config, paths.repository_root)
+    package_files = {
+        name: _read_git_blob(
+            paths.repository_root,
+            revision,
+            f".owlbear/delivery/packages/{snapshot.change_id}/{name}",
+        )
+        for name in ("authority.json", "design.md", "intent.md", "manifest.json")
+    }
+    package_store.restore(snapshot.change_id, package_files)
+    if has_remote_change_branch:
+        _restore_local_change_branch(snapshot, paths.repository_root)
+    worktree_path = paths.worktree_root / snapshot.change_id
+    if not snapshot.frontier.change_completion and not worktree_path.exists():
+        ChangeWorkspaceManager.restore_worktree(
+            paths.repository_root,
+            worktree_path,
+            snapshot.branch,
+        )
+    try:
+        coordinator.show(snapshot.change_id)
+    except CoordinationConflictError:
+        coordinator.register(
+            ChangeCoordination(
+                change_id=snapshot.change_id,
+                branch=snapshot.branch,
+                worktree_path=worktree_path,
+                integration_target=snapshot.integration_target,
+                target_head=snapshot.target_head,
+                publication_base_head=snapshot.publication_base_head,
+                last_reviewed_commit=snapshot.last_reviewed_commit,
+            )
+        )
+    _restore_runtime_snapshot(snapshot, paths.runtime_root)
+    workspace_manager.show(snapshot.change_id)
+
+
+def _validate_local_snapshot(
+    snapshot: DeliveryStateSnapshot,
+    config: DeliveryStartupConfig,
+    paths: _DeliveryPaths,
+    package_store: DesignPackageStore,
+    coordinator: PortfolioCoordinator,
+) -> None:
+    """Reject local Delivery state that does not exactly match its remote checkpoint."""
+    _fetch_snapshot_change_head(snapshot, config, paths.repository_root)
+    try:
+        package = package_store.read_verified(snapshot.change_id)
+    except (OSError, RuntimeError, ValueError) as exc:
+        _bootstrap_failure("local Delivery package cannot be reconciled with its remote snapshot", exc)
+    if package.package_id != snapshot.package_id:
+        _bootstrap_failure("local Delivery package differs from its remote snapshot")
+    try:
+        coordination = coordinator.show(snapshot.change_id)
+    except (OSError, RuntimeError, ValueError) as exc:
+        _bootstrap_failure("local Delivery coordination cannot be reconciled with its remote snapshot", exc)
+    if (
+        coordination.branch != snapshot.branch
+        or coordination.integration_target != snapshot.integration_target
+        or coordination.target_head != snapshot.target_head
+        or coordination.publication_base_head != snapshot.publication_base_head
+        or coordination.last_reviewed_commit != snapshot.last_reviewed_commit
+    ):
+        _bootstrap_failure("local Delivery coordination differs from its remote snapshot")
+    relative_root = paths.runtime_root / "changes" / snapshot.change_id
+    expected = {
+        "contract.json": _canonical_model(snapshot.contract),
+        "frontier.json": _canonical_model(snapshot.frontier),
+        "admission.json": _canonical_model(snapshot.admission),
+    }
+    for name, content in expected.items():
+        path = relative_root / name
+        if path.is_symlink() or not path.is_file() or path.read_bytes() != content:
+            _bootstrap_failure("local Delivery runtime differs from its remote snapshot")
+    frontier = DeliveryFrontier.model_validate_json((relative_root / "frontier.json").read_bytes())
+    if frontier != snapshot.frontier:
+        _bootstrap_failure("local Delivery frontier differs from its remote snapshot")
+    try:
+        completion = CompletionReceiptStore(paths.runtime_root).read_bundle(snapshot.change_id)
+    except RuntimeError as exc:
+        _bootstrap_failure("local completion evidence cannot be reconciled with its remote snapshot", exc)
+    if completion != snapshot.completion:
+        _bootstrap_failure("local completion evidence differs from its remote snapshot")
+
+
+def _fetch_snapshot_change_head(
+    snapshot: DeliveryStateSnapshot,
+    config: DeliveryStartupConfig,
+    repository: Path,
+) -> tuple[str, bool]:
+    """Fetch the remote Change branch or use the configured target for completion."""
+    remote_branch = _remote_branch_head(repository, config.remote, snapshot.branch)
+    if remote_branch is not None:
+        if remote_branch != snapshot.change_head:
+            _bootstrap_failure("remote Change branch differs from Delivery-state snapshot")
+        result = _run_loader_git(
+            repository,
+            "fetch",
+            "--no-tags",
+            "--no-write-fetch-head",
+            "--refmap=",
+            config.remote,
+            f"refs/heads/{snapshot.branch}",
+            check=False,
+        )
+        if result.returncode != 0:
+            _bootstrap_failure("remote Change branch could not be fetched")
+        return snapshot.change_head, True
+    if snapshot.frontier.change_completion is None:
+        _bootstrap_failure("remote Change branch is missing for an active Delivery snapshot")
+    target_ref = f"refs/remotes/{config.remote}/{config.target_branch}"
+    target_head = _loader_git_output(repository, "rev-parse", "--verify", f"{target_ref}^{{commit}}")
+    if target_head is None:
+        _bootstrap_failure("configured target head is unavailable for a completed snapshot")
+    latch = snapshot.frontier.merged_pull_request_latch
+    if latch is None:
+        _bootstrap_failure("completed Delivery snapshot has no accepted merge identity")
+    if (
+        _run_loader_git(
+            repository,
+            "merge-base",
+            "--is-ancestor",
+            latch.accepted_merge_commit,
+            target_ref,
+            check=False,
+        ).returncode
+        != 0
+    ):
+        _bootstrap_failure("accepted merge commit is not present on the configured target")
+    return latch.accepted_merge_commit, False
+
+
+def _restore_local_change_branch(
+    snapshot: DeliveryStateSnapshot,
+    repository: Path,
+) -> None:
+    """Create or validate the local Change branch at the remote snapshot head."""
+    branch_ref = f"refs/heads/{snapshot.branch}"
+    local_head = _loader_git_output(repository, "rev-parse", "--verify", f"{branch_ref}^{{commit}}")
+    if local_head is None:
+        result = _run_loader_git(repository, "branch", snapshot.branch, snapshot.change_head, check=False)
+        if result.returncode != 0:
+            _bootstrap_failure("local Change branch could not be recreated")
+    elif local_head != snapshot.change_head:
+        _bootstrap_failure("local Change branch differs from Delivery-state snapshot")
+
+
+def _restore_runtime_snapshot(snapshot: DeliveryStateSnapshot, runtime_root: Path) -> None:
+    """Atomically recreate one Change's startup and terminal evidence files."""
+    relative_root = Path("changes") / snapshot.change_id
+    participants = (
+        TransactionParticipant(runtime_root, relative_root / "contract.json", _canonical_model(snapshot.contract)),
+        TransactionParticipant(runtime_root, relative_root / "frontier.json", _canonical_model(snapshot.frontier)),
+        TransactionParticipant(runtime_root, relative_root / "admission.json", _canonical_model(snapshot.admission)),
+    )
+    completion_store = CompletionReceiptStore(runtime_root)
+    existing_completion = completion_store.read_bundle(snapshot.change_id)
+    if existing_completion != snapshot.completion:
+        if existing_completion is not None:
+            _bootstrap_failure("local completion evidence differs from its remote snapshot")
+        if snapshot.completion is not None:
+            participants += (
+                completion_store.participant(snapshot.completion.receipt),
+                completion_store.display_participant(snapshot.completion.display),
+            )
+    transaction = RuntimeTransaction(
+        runtime_root,
+        f"delivery-state-bootstrap-{snapshot.change_id}-{snapshot.snapshot_id}",
+        participants,
+    )
+    try:
+        transaction.commit()
+    except (OSError, RuntimeError, ValueError) as exc:
+        transaction.abort()
+        _bootstrap_failure("local Delivery state could not be restored", exc)
+
+
+def _local_runtime_change_ids(runtime_root: Path) -> set[str]:
+    changes_root = runtime_root / "changes"
+    if not changes_root.is_dir():
+        return set()
+    return {path.name for path in changes_root.iterdir() if path.is_dir() and not path.is_symlink()}
+
+
+def _remote_branch_head(repository: Path, remote: str, branch: str) -> str | None:
+    result = _run_loader_git(
+        repository,
+        "ls-remote",
+        "--exit-code",
+        "--heads",
+        remote,
+        f"refs/heads/{branch}",
+        check=False,
+    )
+    if result.returncode == _REMOTE_REF_MISSING:
+        return None
+    if result.returncode != 0:
+        _bootstrap_failure("remote Change branch could not be observed")
+    lines = result.stdout.decode(errors="replace").strip().splitlines()
+    if len(lines) != 1:
+        _bootstrap_failure("remote Change branch response is invalid")
+    return lines[0].split("\t", 1)[0]
+
+
+def _read_git_blob(repository: Path, revision: str, path: str) -> bytes:
+    result = _run_loader_git(repository, "show", f"{revision}:{path}", check=False)
+    if result.returncode != 0:
+        _bootstrap_failure("remote Delivery package file is missing")
+    return result.stdout
+
+
+def _loader_git_output(repository: Path, *arguments: str) -> str | None:
+    result = _run_loader_git(repository, *arguments, check=False)
+    return result.stdout.decode().strip() if result.returncode == 0 else None
+
+
+def _run_loader_git(
+    repository: Path,
+    *arguments: str,
+    check: bool = True,
+) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(  # noqa: S603 - fixed Git executable and argument-vector invocation.
+        (resolve_git_executable(), "-C", str(repository), *arguments),
+        check=check,
+        capture_output=True,
+    )
+
+
+def _canonical_model(model: BaseModel) -> bytes:
+    return (json.dumps(model.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def _bootstrap_failure(detail: str, cause: Exception | None = None) -> Never:
+    error = _load_error("runtime_root", detail)
+    if cause is None:
+        raise error
+    raise error from cause
+
+
 def _compose_application(
     config: DeliveryStartupConfig,
     host_config: DeliveryHostConfig,
@@ -313,6 +615,11 @@ def _compose_application(
         config.target_branch,
         config.remote,
     )
+    delivery_state_publisher = DeliveryStatePublisher(
+        paths.repository_root,
+        remote=config.remote,
+        state_branch=config.delivery_state_branch,
+    )
     runtimes = _composed_runtimes(paths.runtime_root, contracts, workspace_manager)
     dependencies = PortfolioApplicationDependencies(
         target_root=paths.runtime_root,
@@ -330,6 +637,7 @@ def _compose_application(
             f"refs/remotes/{config.remote}/{config.target_branch}",
             paths.runtime_root,
         ),
+        delivery_state_publisher=delivery_state_publisher,
         change_branch_publisher=ChangeBranchPublisher(
             paths.repository_root,
             coordinator,
@@ -386,5 +694,7 @@ def load_delivery_application(
     paths = _derive_paths(workspace_root)
     _validate_git_config(config, paths)
     host_config = _load_host_config(paths)
+    if "delivery_state_branch" in config.model_fields_set:
+        _bootstrap_remote_state(config, host_config, paths)
     contracts = _load_contracts(paths.runtime_root)
     return _compose_application(config, host_config, paths, contracts, publication_provider)
