@@ -43,11 +43,11 @@ or placeholder pages, and preserve enough context for downstream enrichment work
 
 ### Channel A
 
-Report the completed operation inline. For registration, report `id`, `name`, `state`, `kind`, and `scope`; for ingestion or refresh, report the source result, fetch status, chunk count, and validation outcome; for intentional deletion, report `status`, `completed_steps`, `failed_step`, `error`, `source`, `content`, `enrichment`, and `graph`.
+Report the completed operation inline. For registration, report `id`, `name`, `state`, `kind`, and `scope`; for ingestion, report the source result, fetch status, chunk count, and validation outcome. For `knowledge_search`, report either the successful values or `stage`, `code`, `retryable`, and redacted `message`. For refresh, report `source_id`, successful document and chunk counts, and typed per-source failures. Preserve partial successes and error-free no-op success; do not collapse a typed failure into a successful acquisition, extraction, persistence, indexing, or query report. For intentional deletion, report `status`, `completed_steps`, `failed_step`, `error`, `source`, `content`, `enrichment`, and `graph`.
 
 ### Channel B
 
-Report the completed operation inline. For registration, report `id`, `name`, `state`, `kind`, and `scope`; for ingestion, report the source result, fetch status, chunk count, and validation outcome. For `knowledge_search`, report either the successful values or `stage`, `code`, `retryable`, and redacted `message`. For refresh, report `source_id`, successful document and chunk counts, and each typed per-source error. Preserve partial successes and error-free no-op success; do not collapse a typed failure into a successful acquisition, extraction, persistence, indexing, or query report.
+Not applicable — no Delivery integration; output is persisted via `knowledge_ingest`.
 
 </output_format>
 

@@ -93,12 +93,17 @@ def test_handbook_enumerates_typed_failure_literals_and_fail_closed_extraction()
 
 def test_knowledge_ingestor_reports_structured_failures_without_claiming_success() -> None:
     agent = _AGENT_PATH.read_text(encoding="utf-8")
+    output_format = agent.split("<output_format>", 1)[1].split("</output_format>", 1)[0]
+    channel_a = output_format.split("### Channel A", 1)[1].split("### Channel B", 1)[0]
+    channel_b = output_format.split("### Channel B", 1)[1]
 
-    assert all(f"`{field}`" in agent for field in _FAILURE_FIELDS)
-    assert "per-source failures" in agent
+    assert all(f"`{field}`" in channel_a for field in _FAILURE_FIELDS)
+    assert "per-source failures" in channel_a
     assert "Never parse operational text" in agent
-    assert all(stage in agent for stage in ("acquisition", "extraction", "persistence", "indexing", "query"))
+    assert all(stage in channel_a for stage in ("acquisition", "extraction", "persistence", "indexing", "query"))
     assert "error string" not in agent.lower()
+    assert "knowledge_search" not in channel_b
+    assert "Not applicable" in channel_b
 
 
 @pytest.mark.asyncio
