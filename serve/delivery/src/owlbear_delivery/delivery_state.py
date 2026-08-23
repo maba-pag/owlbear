@@ -180,12 +180,6 @@ def _validate_snapshot_authority(snapshot: DeliveryStateSnapshot) -> None:
 
 def _validate_snapshot_lifecycle(snapshot: DeliveryStateSnapshot) -> None:
     """Reject live or transient lifecycle state from portable snapshots."""
-    if (
-        snapshot.frontier.change_completion is not None
-        and snapshot.frontier.change_completion.change_id != snapshot.change_id
-    ):
-        message = "Delivery-state completion does not match its Change"
-        raise ValueError(message)
     if any(
         binding.output is not None
         or binding.candidate is not None

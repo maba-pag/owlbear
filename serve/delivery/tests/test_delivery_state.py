@@ -12,12 +12,20 @@ import pytest
 from owlbear_delivery import (
     DeliveryActiveClaim,
     DeliveryAdmissionReceipt,
+    DeliveryChangeCompletion,
     DeliveryCommitment,
     DeliveryCommitmentClass,
     DeliveryContract,
+    DeliveryFinalization,
+    DeliveryFinalizationReceipt,
     DeliveryFrontier,
+    DeliveryMergedPullRequestLatch,
+    DeliveryObservation,
+    DeliveryObservationReceipt,
     DeliveryOutcome,
     DeliveryPlanScope,
+    DeliveryReview,
+    DeliveryReviewReceipt,
     DeliveryRuntime,
     DeliveryStage,
     DeliveryStateConflictError,
@@ -30,12 +38,19 @@ from owlbear_delivery import (
     OutcomeAuthorityBinding,
     PortfolioCoordinator,
 )
+from owlbear_delivery.acceptance import (
+    CompletionDisplayMetadata,
+    CompletionEvidence,
+    CompletionPullRequestIdentity,
+    CompletionReceipt,
+)
 from owlbear_delivery.change_workspace import ChangeWorkspaceManager
 from owlbear_delivery.delivery_application_loader import (
     DeliveryApplicationLoadError,
     DeliveryStartupConfig,
     load_delivery_application,
 )
+from owlbear_delivery.draft_pull_request import PullRequestReadyReceipt
 from owlbear_delivery.git_executable import resolve_git_executable
 from owlbear_delivery.target_contract import DeliverySourceBinding
 
@@ -196,6 +211,170 @@ def test_state_publisher_round_trips_and_replays_without_primary_checkout_change
     assert snapshots[0].frontier == DeliveryFrontier.model_validate_json(runtime.frontier_bytes())
     assert _git(repository, "rev-parse", "HEAD") == before[0] == initial
     assert _git(repository, "status", "--porcelain") == before[1]
+
+
+def test_state_snapshot_accepts_terminal_completion_projection(tmp_path: Path) -> None:
+    repository, _remote, initial = _repository(tmp_path)
+    change_id = "state-complete"
+    contract, _intent, _design = _contract(change_id)
+    state_root = tmp_path / "state"
+    coordinator = PortfolioCoordinator(state_root, capacity=1)
+    manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
+    coordination = manager.ensure(change_id)
+    frontier_path = state_root / "changes" / change_id / "frontier.json"
+    frontier_path.parent.mkdir(parents=True, exist_ok=True)
+    frontier_path.write_bytes(
+        (
+            json.dumps(
+                DeliveryFrontier(
+                    bindings=(OutcomeAuthorityBinding(outcome_id="OUT-001", plan_scope_id="SCOPE-001"),),
+                ).model_dump(mode="json"),
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+        ).encode()
+    )
+    runtime = DeliveryRuntime(state_root, contract, workspace_manager=manager)
+    observed_at = datetime(2026, 8, 23, 12, tzinfo=UTC)
+    observation = DeliveryObservationReceipt.create(
+        DeliveryObservation(
+            change_id=change_id,
+            task_or_finalization_id="finalize-state-complete",
+            exact_commit=initial,
+            observation_kind="snapshot-test",
+            command_or_procedure="terminal snapshot construction",
+            exit_status_or_artifact_locator="exit:0",
+            observer_or_runner_identity="pytest",
+            observed_at=observed_at,
+        )
+    )
+    review = DeliveryReviewReceipt.create(
+        DeliveryReview(
+            exact_commit=initial,
+            author_id="snapshot-author",
+            reviewer_id="snapshot-reviewer",
+            evidence=("The terminal snapshot authority is internally consistent.",),
+            reviewed_at=observed_at,
+        )
+    )
+    finalization = DeliveryFinalizationReceipt.create(
+        DeliveryFinalization(
+            operation_id="finalize-state-complete",
+            change_id=change_id,
+            exact_head=initial,
+            authority_digest=runtime.authority_digest,
+            result_digests=("a" * 64,),
+            observations=(observation,),
+            review=review,
+            finalized_at=observed_at,
+        )
+    )
+    ready_values = {
+        "schema_version": 1,
+        "operation_id": "ready-state-complete",
+        "change_id": change_id,
+        "finalization_id": finalization.finalization_id,
+        "repository": "example/project",
+        "number": 1,
+        "node_id": "PR_node_complete",
+        "head_sha": initial,
+        "draft": False,
+        "observed_at": observed_at,
+        "provider_evidence_digest": "b" * 64,
+    }
+    ready_candidate = PullRequestReadyReceipt.model_construct(receipt_id="0" * 64, **ready_values)
+    ready = PullRequestReadyReceipt(
+        receipt_id=hashlib.sha256(
+            json.dumps(
+                ready_candidate.model_dump(mode="json", exclude={"receipt_id"}),
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest(),
+        **ready_values,
+    )
+    merged_at = datetime(2026, 8, 23, 12, 1, tzinfo=UTC)
+    latch = DeliveryMergedPullRequestLatch(
+        change_id=change_id,
+        finalization_id=finalization.finalization_id,
+        ready_receipt_id=ready.receipt_id,
+        acceptance_observation_id="c" * 64,
+        provider_evidence_digest="d" * 64,
+        repository="example/project",
+        number=1,
+        node_id="PR_node_complete",
+        base_branch="main",
+        head_sha=initial,
+        accepted_merge_commit="e" * 40,
+        merged_at=merged_at,
+    )
+    completion = CompletionReceipt.create(
+        CompletionEvidence(
+            change_id=change_id,
+            finalization_receipt_id=finalization.finalization_id,
+            finalized_change_head=initial,
+            repository_identity="example/project",
+            pull_request_identity=CompletionPullRequestIdentity(number=1, node_id="PR_node_complete"),
+            accepted_target_ref="main",
+            accepted_merge_commit=latch.accepted_merge_commit,
+            merged_at=merged_at,
+            acceptance_observation_id=latch.acceptance_observation_id,
+            review_receipt_ids=(review.review_id,),
+            completed_at=datetime(2026, 8, 23, 12, 2, tzinfo=UTC),
+        )
+    )
+    display = CompletionDisplayMetadata.create(
+        change_id=change_id,
+        completion_id=completion.completion_id,
+        title=contract.title,
+        outcome_titles=tuple(outcome.title for outcome in contract.outcomes),
+        outcome_promises=tuple(outcome.promise for outcome in contract.outcomes),
+    )
+    completion_root = state_root / "completions" / change_id
+    completion_root.mkdir(parents=True)
+    (completion_root / f"{completion.completion_id}.json").write_text(
+        completion.model_dump_json(),
+        encoding="utf-8",
+    )
+    (completion_root / "display.json").write_text(display.model_dump_json(), encoding="utf-8")
+    frontier = DeliveryFrontier(
+        bindings=(
+            OutcomeAuthorityBinding(
+                outcome_id="OUT-001",
+                plan_scope_id="SCOPE-001",
+                stage=DeliveryStage.COMPLETED,
+            ),
+        ),
+        published_head=initial,
+        finalization=finalization,
+        ready=ready,
+        merged_pull_request_latch=latch,
+        change_completion=DeliveryChangeCompletion(
+            completion_id=completion.completion_id,
+            completed_at=completion.completed_at,
+        ),
+    )
+    frontier_path.write_bytes(
+        (json.dumps(frontier.model_dump(mode="json"), sort_keys=True, separators=(",", ":")) + "\n").encode()
+    )
+    snapshot = DeliveryStateSnapshot.create(
+        operation_id="snapshot-state-complete",
+        change_id=change_id,
+        package_id="f" * 64,
+        coordination=coordination,
+        runtime=runtime,
+        admission=_admission(runtime, manager, change_id),
+        sequence=1,
+        parent_snapshot_id=None,
+        base_head=None,
+        captured_at=observed_at,
+    )
+
+    assert snapshot.frontier.change_completion is not None
+    assert snapshot.completion is not None
+    assert snapshot.completion.receipt.change_id == change_id
+    assert snapshot.completion.receipt.completion_id == snapshot.frontier.change_completion.completion_id
 
 
 def test_state_publisher_rejects_active_claims_and_stale_remote_head(tmp_path: Path) -> None:
