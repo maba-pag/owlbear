@@ -18,6 +18,7 @@ from owlbear_knowledge.fetcher import HttpxContentFetcher
 from owlbear_knowledge_mcp import server
 
 FIXTURE_URL = "https://fixture.example/article"
+SECOND_FIXTURE_URL = "https://fixture.example/secondary"
 _EMBEDDING_DIMENSION = 32
 
 
@@ -26,12 +27,18 @@ async def _public_fixture_resolver(_hostname: str, port: int) -> list[tuple[int,
 
 
 class _ResponseTransport:
-    def __init__(self, responses: Iterable[tuple[str, str]]) -> None:
+    def __init__(
+        self,
+        responses: Iterable[tuple[str, str] | Exception],
+    ) -> None:
         self.responses = list(responses)
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
-        assert str(request.url) == FIXTURE_URL
-        content, media_type = self.responses.pop(0)
+        assert str(request.url).startswith("https://fixture.example/")
+        response = self.responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        content, media_type = response
         return httpx.Response(
             200,
             headers={"content-type": media_type},
@@ -107,15 +114,92 @@ class _DeterministicVectorStore:
         return dot_product / (left_norm * right_norm)
 
 
+class _ToggleEmbeddingProvider(_DeterministicEmbeddingProvider):
+    def __init__(self) -> None:
+        self.failure_message: str | None = None
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        if self.failure_message is not None:
+            raise RuntimeError(self.failure_message)
+        return super().embed(texts)
+
+
+class _VectorWriteError(RuntimeError):
+    def __init__(self) -> None:
+        super().__init__("vector writer secret")
+
+
+class _VectorQueryError(RuntimeError):
+    def __init__(self) -> None:
+        super().__init__("vector query secret")
+
+
+class _PersistenceError(sqlite3.OperationalError):
+    def __init__(self) -> None:
+        super().__init__("database path secret")
+
+
+class _FailingVectorStore(_DeterministicVectorStore):
+    def __init__(self, *, fail_on_store: bool = False, fail_on_search: bool = False) -> None:
+        super().__init__()
+        self.fail_on_store = fail_on_store
+        self.fail_on_search = fail_on_search
+
+    def store_embedding(
+        self,
+        entity_or_doc_id: str,
+        embedding: object,
+        embedding_type: str,
+        *,
+        scope: str,
+    ) -> None:
+        if self.fail_on_store:
+            raise _VectorWriteError
+        super().store_embedding(entity_or_doc_id, embedding, embedding_type, scope=scope)
+
+    def search_similar(
+        self,
+        query_embedding: object,
+        *,
+        top_k: int,
+        embedding_type: str,
+        scopes: list[str] | None,
+    ) -> list[tuple[str, float]]:
+        if self.fail_on_search:
+            raise _VectorQueryError
+        return super().search_similar(
+            query_embedding,
+            top_k=top_k,
+            embedding_type=embedding_type,
+            scopes=scopes,
+        )
+
+
+class _FailingPersistenceConnection(sqlite3.Connection):
+    fail_content_reads = False
+
+    def execute(self, sql: str, parameters: object = ()) -> sqlite3.Cursor:
+        if self.fail_content_reads and "FROM content_documents" in sql:
+            raise _PersistenceError
+        return super().execute(sql, parameters)
+
+
 def _assembled_context(
     tmp_path: Path,
-    responses: Iterable[tuple[str, str]],
+    responses: Iterable[tuple[str, str] | Exception],
+    *,
+    embedding_provider: object | None = None,
+    vector_store: _DeterministicVectorStore | None = None,
+    connection_factory: type[sqlite3.Connection] = sqlite3.Connection,
 ) -> tuple[SimpleNamespace, server.AppContext, _DeterministicVectorStore]:
     (tmp_path / ".owlbear").mkdir()
     database_path = tmp_path / ".owlbear/knowledge/local.db"
     database_path.parent.mkdir()
-    connection = sqlite3.connect(database_path)
-    vector_store = _DeterministicVectorStore()
+    connection = sqlite3.connect(database_path, factory=connection_factory)
+    resolved_vector_store = vector_store if vector_store is not None else _DeterministicVectorStore()
+    resolved_embedding_provider = (
+        embedding_provider if embedding_provider is not None else _DeterministicEmbeddingProvider()
+    )
     http_fetcher = HttpxContentFetcher(
         transport=httpx.MockTransport(_ResponseTransport(responses)),
         resolver=_public_fixture_resolver,
@@ -125,23 +209,42 @@ def _assembled_context(
         conn=connection,
         factories=server.KnowledgeRuntimeFactories(
             http_response_fetcher_factory=lambda: http_fetcher,
-            embedding_provider_factory=_DeterministicEmbeddingProvider,
-            vector_store_factory=lambda _location: vector_store,
+            embedding_provider_factory=lambda: resolved_embedding_provider,
+            vector_store_factory=lambda _location: resolved_vector_store,
         ),
     )
     tool_context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=app_context))
-    return tool_context, app_context, vector_store
+    return tool_context, app_context, resolved_vector_store
 
 
-async def _register_fixture_source(tool_context: SimpleNamespace) -> str:
+async def _register_fixture_source(tool_context: SimpleNamespace, urls: Iterable[str] | None = None) -> str:
+    source_urls = list(urls) if urls is not None else [FIXTURE_URL]
     registered = await server.register_knowledge_source(
         tool_context,
         name="Static fixture article",
         kind="url_list",
         fetch_method="http",
-        config={"kind": "url_list", "urls": [FIXTURE_URL]},
+        config={"kind": "url_list", "urls": source_urls},
     )
     return registered["id"]
+
+
+def _assert_refresh_failure(response: dict[str, object], *, stage: str, code: str, message: str) -> None:
+    assert response["sources_refreshed"] == 0
+    assert response["documents_created"] == 0
+    assert response["documents_replaced"] == 0
+    assert response["documents_unchanged"] == 0
+    assert response["chunks_created"] == 0
+    assert response["chunks_replaced"] == 0
+    errors = response["errors"]
+    assert isinstance(errors, list)
+    assert len(errors) == 1
+    failure = errors[0]
+    assert failure["stage"] == stage
+    assert failure["code"] == code
+    assert failure["retryable"] is True or failure["retryable"] is False
+    assert failure["message"] == message
+    assert isinstance(failure["timestamp"], str)
 
 
 @pytest.mark.asyncio
@@ -217,6 +320,8 @@ async def test_assembled_refresh_reports_unchanged_and_replaced_content(tmp_path
         assert unchanged["documents_replaced"] == 0
         assert unchanged["chunks_created"] == 0
         assert unchanged["chunks_replaced"] == 0
+        assert unchanged["sources_refreshed"] == 1
+        assert unchanged["errors"] == []
         assert unchanged_stats.documents == first_stats.documents == 1
         assert unchanged_stats.chunks == first_stats.chunks == 1
         assert replaced["documents_replaced"] == 1
@@ -236,6 +341,213 @@ async def test_assembled_refresh_reports_unchanged_and_replaced_content(tmp_path
             if index > replacement_store_index and event[0] == "search"
         )
         assert delete_index < replacement_store_index < search_index
+    finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
+async def test_assembled_refresh_returns_typed_acquisition_failure(tmp_path: Path) -> None:
+    tool_context, app_context, _vector_store = _assembled_context(tmp_path, [httpx.ConnectError("transport secret")])
+    try:
+        source_id = await _register_fixture_source(tool_context)
+
+        response = await server.refresh_knowledge_source(tool_context, source_id)
+
+        _assert_refresh_failure(
+            response,
+            stage="acquisition",
+            code="transport_failure",
+            message="HTTP transport failed",
+        )
+        assert response["errors"][0]["source_id"] == source_id
+        assert "transport secret" not in str(response)
+    finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
+async def test_assembled_refresh_returns_typed_extraction_failure(tmp_path: Path) -> None:
+    tool_context, app_context, _vector_store = _assembled_context(
+        tmp_path,
+        [("<html><body><article>fixture</article></body></html>", "text/html")],
+    )
+    try:
+        source_id = await _register_fixture_source(tool_context)
+
+        with patch(
+            "owlbear_knowledge.intake.extract_content",
+            side_effect=RuntimeError("extractor secret"),
+        ):
+            response = await server.refresh_knowledge_source(tool_context, source_id)
+
+        _assert_refresh_failure(
+            response,
+            stage="extraction",
+            code="extraction_failed",
+            message="Response extraction failed",
+        )
+        assert app_context.content_store is not None
+        assert app_context.content_store.stats().documents == 0
+        assert "extractor secret" not in str(response)
+    finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
+async def test_assembled_refresh_returns_typed_persistence_failure(tmp_path: Path) -> None:
+    tool_context, app_context, _vector_store = _assembled_context(
+        tmp_path,
+        [("persistence fixture", "text/plain")],
+        connection_factory=_FailingPersistenceConnection,
+    )
+    try:
+        source_id = await _register_fixture_source(tool_context)
+        assert isinstance(app_context.conn, _FailingPersistenceConnection)
+        app_context.conn.fail_content_reads = True
+
+        response = await server.refresh_knowledge_source(tool_context, source_id)
+
+        _assert_refresh_failure(
+            response,
+            stage="persistence",
+            code="persistence_failed",
+            message="Content persistence failed",
+        )
+        app_context.conn.fail_content_reads = False
+        assert app_context.content_store is not None
+        assert app_context.content_store.stats().documents == 0
+        assert "database path secret" not in str(response)
+    finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
+async def test_assembled_refresh_returns_typed_embedding_failure(tmp_path: Path) -> None:
+    embedding_provider = _ToggleEmbeddingProvider()
+    embedding_provider.failure_message = "embedding secret"
+    tool_context, app_context, _vector_store = _assembled_context(
+        tmp_path,
+        [("embedding fixture", "text/plain")],
+        embedding_provider=embedding_provider,
+    )
+    try:
+        source_id = await _register_fixture_source(tool_context)
+
+        response = await server.refresh_knowledge_source(tool_context, source_id)
+
+        _assert_refresh_failure(
+            response,
+            stage="indexing",
+            code="embedding_failed",
+            message="Document embedding failed",
+        )
+        assert "embedding secret" not in str(response)
+    finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
+async def test_assembled_refresh_returns_typed_vector_write_failure(tmp_path: Path) -> None:
+    vector_store = _FailingVectorStore(fail_on_store=True)
+    tool_context, app_context, _vector_store = _assembled_context(
+        tmp_path,
+        [("vector fixture", "text/plain")],
+        vector_store=vector_store,
+    )
+    try:
+        source_id = await _register_fixture_source(tool_context)
+
+        response = await server.refresh_knowledge_source(tool_context, source_id)
+
+        _assert_refresh_failure(
+            response,
+            stage="indexing",
+            code="vector_write_failed",
+            message="Vector write failed",
+        )
+        assert "vector writer secret" not in str(response)
+    finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
+async def test_assembled_refresh_preserves_partial_url_list_success(tmp_path: Path) -> None:
+    tool_context, app_context, _vector_store = _assembled_context(
+        tmp_path,
+        [
+            ("Successful partial fixture", "text/plain"),
+            httpx.ConnectError("partial transport secret"),
+        ],
+    )
+    try:
+        source_id = await _register_fixture_source(tool_context, urls=(FIXTURE_URL, SECOND_FIXTURE_URL))
+
+        response = await server.refresh_knowledge_source(tool_context, source_id)
+
+        assert response["sources_refreshed"] == 1
+        assert response["documents_created"] == 1
+        assert response["documents_replaced"] == 0
+        assert response["documents_unchanged"] == 0
+        assert response["chunks_created"] == 1
+        assert response["chunks_replaced"] == 0
+        assert len(response["errors"]) == 1
+        assert response["errors"][0]["source_id"] == source_id
+        assert response["errors"][0]["code"] == "transport_failure"
+        assert "partial transport secret" not in str(response)
+    finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
+async def test_assembled_search_returns_typed_query_embedding_failure(tmp_path: Path) -> None:
+    embedding_provider = _ToggleEmbeddingProvider()
+    tool_context, app_context, _vector_store = _assembled_context(
+        tmp_path,
+        [("query failure fixture", "text/plain")],
+        embedding_provider=embedding_provider,
+    )
+    try:
+        source_id = await _register_fixture_source(tool_context)
+        refresh = await server.refresh_knowledge_source(tool_context, source_id)
+        assert refresh["errors"] == []
+        embedding_provider.failure_message = "query embedding secret"
+
+        response = await server.knowledge_search(tool_context, "query failure fixture")
+
+        assert response == {
+            "stage": "query",
+            "code": "query_embedding_failed",
+            "retryable": True,
+            "message": "Query embedding failed",
+        }
+        assert "query embedding secret" not in str(response)
+    finally:
+        app_context.conn.close()
+
+
+@pytest.mark.asyncio
+async def test_assembled_search_returns_typed_vector_query_failure(tmp_path: Path) -> None:
+    vector_store = _FailingVectorStore()
+    tool_context, app_context, _vector_store = _assembled_context(
+        tmp_path,
+        [("vector query fixture", "text/plain")],
+        vector_store=vector_store,
+    )
+    try:
+        source_id = await _register_fixture_source(tool_context)
+        refresh = await server.refresh_knowledge_source(tool_context, source_id)
+        assert refresh["errors"] == []
+        vector_store.fail_on_search = True
+
+        response = await server.knowledge_search(tool_context, "vector query fixture")
+
+        assert response == {
+            "stage": "query",
+            "code": "vector_query_failed",
+            "retryable": True,
+            "message": "Vector search failed",
+        }
+        assert "vector query secret" not in str(response)
     finally:
         app_context.conn.close()
 

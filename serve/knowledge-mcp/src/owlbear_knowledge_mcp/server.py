@@ -32,7 +32,8 @@ from owlbear_knowledge.protocols.enrichment import (
     ExtractedEntity,
     ExtractedRelation,
 )
-from owlbear_knowledge.protocols.ingest import IngestDocument, IngestRequest, RefreshRequest
+from owlbear_knowledge.protocols.failures import KnowledgeFailure, KnowledgeOperationError
+from owlbear_knowledge.protocols.ingest import IngestDocument, IngestRequest, RefreshError, RefreshRequest
 from owlbear_knowledge.protocols.query import EntityLookupRequest, QueryRequest, QueryResult
 from owlbear_knowledge.protocols.sources import (
     FetchTransport,
@@ -390,6 +391,58 @@ class RegisteredSourceResult(TypedDict):
     scope: str
 
 
+class KnowledgeFailureResult(TypedDict):
+    """Redacted failure fields returned by Knowledge MCP tools."""
+
+    stage: str
+    code: str
+    retryable: bool
+    message: str
+
+
+class RefreshErrorResult(KnowledgeFailureResult):
+    """A redacted refresh failure with source context."""
+
+    source_id: str
+    timestamp: str
+
+
+class RefreshToolResult(TypedDict):
+    """Refresh counts and structured per-source failures."""
+
+    source_id: str
+    sources_refreshed: int
+    documents_created: int
+    documents_replaced: int
+    documents_unchanged: int
+    chunks_created: int
+    chunks_replaced: int
+    errors: list[RefreshErrorResult]
+
+
+def _serialize_knowledge_failure(failure: KnowledgeFailure) -> KnowledgeFailureResult:
+    """Project a core failure without reclassifying or exposing exception text."""
+    return {
+        "stage": failure.stage.value,
+        "code": failure.code,
+        "retryable": failure.retryable,
+        "message": failure.message,
+    }
+
+
+def _serialize_refresh_error(error: RefreshError) -> RefreshErrorResult:
+    """Add refresh context to a typed core failure."""
+    failure = error.failure
+    if failure is None:
+        msg = "refresh result contained an untyped failure"
+        raise ToolError(msg)
+    return {
+        **_serialize_knowledge_failure(failure),
+        "source_id": error.source_id,
+        "timestamp": error.timestamp.isoformat(),
+    }
+
+
 @asynccontextmanager
 async def app_lifespan(_server: MCPServer) -> AsyncGenerator[AppContext]:
     """Initialise knowledge-base services; close the DB connection on exit."""
@@ -429,6 +482,9 @@ retry_enrichment = mcp.tool(
 __all__ = [
     "_MAX_ENRICHMENT_BATCH_SIZE",
     "AppContext",
+    "KnowledgeFailureResult",
+    "RefreshErrorResult",
+    "RefreshToolResult",
     "app_lifespan",
     "claim_enrichment_batch",
     "delete_knowledge_source",
@@ -518,8 +574,8 @@ async def knowledge_search(
     query: str,
     limit: int = 5,
     scopes: list[str] | None = None,
-) -> list[SearchResult]:
-    """Search the knowledge base for relevant context."""
+) -> list[SearchResult] | KnowledgeFailureResult:
+    """Search the knowledge base or return a typed operational failure."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     query_facade = app_ctx.query_facade
 
@@ -535,6 +591,8 @@ async def knowledge_search(
             scopes=tuple(normalized_scopes or ()),
         )
         result = await query_facade.search(request)
+    except KnowledgeOperationError as exc:
+        return _serialize_knowledge_failure(exc.failure)
     except ValueError as exc:
         msg = "invalid search request"
         raise ToolError(msg) from exc
@@ -820,7 +878,10 @@ async def knowledge_stats(ctx: Context) -> StatsResult:
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False))
-async def refresh_knowledge_source(ctx: Context, source_id: str) -> dict[str, Any]:
+async def refresh_knowledge_source(
+    ctx: Context,
+    source_id: str,
+) -> RefreshToolResult | KnowledgeFailureResult:
     """Trigger re-ingestion of a registered knowledge source by its ID.
 
     Returns source_id, sources_refreshed, and serialized refresh errors.
@@ -834,33 +895,22 @@ async def refresh_knowledge_source(ctx: Context, source_id: str) -> dict[str, An
         raise ToolError(msg)
     source = store.get_source(source_id)
     if source is None:
-        msg = f"Source '{source_id}' not found"
+        msg = "source not found"
         raise ToolError(msg)
 
     if source.state != SourceState.ACTIVE:
-        return {
-            "source_id": source_id,
-            "sources_refreshed": 0,
-            "documents_created": 0,
-            "documents_replaced": 0,
-            "documents_unchanged": 0,
-            "chunks_created": 0,
-            "chunks_replaced": 0,
-            "errors": [
-                {
-                    "source_id": source_id,
-                    "error": f"Source '{source_id}' is not active",
-                    "timestamp": datetime.now(tz=UTC).isoformat(),
-                }
-            ],
-        }
+        msg = "source is not active"
+        raise ToolError(msg)
 
     coordinator = app_ctx.ingest_coordinator
     if coordinator is None:
         msg = "ingest coordinator not available"
         raise ToolError(msg)
 
-    result = await coordinator.refresh(RefreshRequest(source_ids=(source_id,)))
+    try:
+        result = await coordinator.refresh(RefreshRequest(source_ids=(source_id,)))
+    except KnowledgeOperationError as exc:
+        return _serialize_knowledge_failure(exc.failure)
     documents_created = sum(item.documents_created for item in result.ingest_results)
     documents_replaced = sum(item.documents_replaced for item in result.ingest_results)
     documents_unchanged = sum(item.documents_unchanged for item in result.ingest_results)
@@ -874,7 +924,7 @@ async def refresh_knowledge_source(ctx: Context, source_id: str) -> dict[str, An
         "documents_unchanged": documents_unchanged,
         "chunks_created": chunks_created,
         "chunks_replaced": chunks_replaced,
-        "errors": [error.model_dump(mode="json") for error in result.errors],
+        "errors": [_serialize_refresh_error(error) for error in result.errors],
     }
 
 
