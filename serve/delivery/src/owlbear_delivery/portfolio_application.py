@@ -444,11 +444,39 @@ class DeliveryIntegrationAttentionStatus(_ApplicationModel):
     retry_condition: str = Field(min_length=1)
 
 
+class DeliveryClaimRecoveryStatus(StrEnum):
+    """Observable disposition of one exact-claim recovery request."""
+
+    RECOVERED = "recovered"
+    ATTENTION = "attention"
+
+
+class DeliveryClaimRecoveryResult(_ApplicationModel):
+    """Recovered claim state or retained typed repair attention."""
+
+    status: DeliveryClaimRecoveryStatus
+    change_id: str = Field(min_length=1)
+    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
+    attempt_id: str = Field(min_length=1)
+    claim_id: str = Field(min_length=1)
+    preserved_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
+    preserved_ref: str | None = None
+    attention: DeliveryRecoveryAttention | None = None
+
+    @model_validator(mode="after")
+    def _validate_disposition(self) -> DeliveryClaimRecoveryResult:
+        if (self.status == DeliveryClaimRecoveryStatus.ATTENTION) != (self.attention is not None):
+            message = "only retained recovery requires repair attention"
+            raise ValueError(message)
+        return self
+
+
 class DeliveryAcquisitionResult(_ApplicationModel):
     """Launchable task claims plus typed attention from one refresh."""
 
     launch_packages: tuple[DeliveryLaunchPackage, ...]
     integration_attention: tuple[DeliveryIntegrationAttentionStatus, ...] = ()
+    recoveries: tuple[DeliveryClaimRecoveryResult, ...] = ()
     failures: tuple[DeliveryAcquisitionFailure, ...] = ()
 
 
@@ -585,33 +613,6 @@ class DeliveryOperatorContext(_ApplicationModel):
     return_context: DeliveryReturnContext | None = None
     recovery_attention: DeliveryOperatorRecoveryAttention | None = None
     integration_attention: DeliveryOperatorIntegrationAttention | None = None
-
-
-class DeliveryClaimRecoveryStatus(StrEnum):
-    """Observable disposition of one exact-claim recovery request."""
-
-    RECOVERED = "recovered"
-    ATTENTION = "attention"
-
-
-class DeliveryClaimRecoveryResult(_ApplicationModel):
-    """Recovered claim state or retained typed repair attention."""
-
-    status: DeliveryClaimRecoveryStatus
-    change_id: str = Field(min_length=1)
-    outcome_id: str = Field(pattern=r"^OUT-[0-9]{3}$")
-    attempt_id: str = Field(min_length=1)
-    claim_id: str = Field(min_length=1)
-    preserved_commit: str | None = Field(default=None, pattern=r"^[0-9a-f]{40}$")
-    preserved_ref: str | None = None
-    attention: DeliveryRecoveryAttention | None = None
-
-    @model_validator(mode="after")
-    def _validate_disposition(self) -> DeliveryClaimRecoveryResult:
-        if (self.status == DeliveryClaimRecoveryStatus.ATTENTION) != (self.attention is not None):
-            message = "only retained recovery requires repair attention"
-            raise ValueError(message)
-        return self
 
 
 class DeliveryIntegrationRepairRecoveryResult(_ApplicationModel):
@@ -776,7 +777,7 @@ class PortfolioApplicationConfig(_ApplicationModel):
 
     package_root: Path
     execution_capacity: int = Field(gt=0)
-    claim_timeout_seconds: int = Field(default=30 * 60, gt=0)
+    claim_timeout_seconds: int = Field(default=60 * 60, gt=0)
     role_policies: tuple[DeliveryRolePolicy, ...] = Field(min_length=2, max_length=2)
 
     @model_validator(mode="after")
@@ -3031,8 +3032,11 @@ class PortfolioApplication:
             self._fail("completed-history catalog dependency is not configured")
         return self._completed_history_catalog
 
-    def _recover_expired_claims(self) -> tuple[DeliveryAcquisitionFailure, ...]:
+    def _recover_expired_claims(
+        self,
+    ) -> tuple[tuple[DeliveryClaimRecoveryResult, ...], tuple[DeliveryAcquisitionFailure, ...]]:
         cutoff = _timestamp(self._clock()) - self._claim_timeout
+        recoveries: list[DeliveryClaimRecoveryResult] = []
         failures: list[DeliveryAcquisitionFailure] = []
         for change_id, runtime in sorted(self._runtimes.items()):
             for outcome_id, claim in runtime.active_claims():
@@ -3045,7 +3049,7 @@ class PortfolioApplication:
                         claim.attempt_id,
                         claim.claim_id,
                     )
-                except (OSError, RuntimeError, ValueError) as exc:
+                except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
                     failures.append(
                         DeliveryAcquisitionFailure(
                             change_id=change_id,
@@ -3058,6 +3062,7 @@ class PortfolioApplication:
                         )
                     )
                 else:
+                    recoveries.append(recovered)
                     if recovered.status == DeliveryClaimRecoveryStatus.ATTENTION:
                         attention = recovered.attention
                         if attention is None:
@@ -3073,13 +3078,14 @@ class PortfolioApplication:
                                 retry_condition=attention.retry_condition,
                             )
                         )
-        return tuple(failures)
+        return tuple(recoveries), tuple(failures)
 
     def acquire_frontier_work(self) -> DeliveryAcquisitionResult:
         """Start at most one ready claim per available execution slot."""
         self._reconcile_runtimes()
         with self._coordinator.acquisition_lock():
-            failures = list(self._recover_expired_claims())
+            recoveries, recovery_failures = self._recover_expired_claims()
+            failures = list(recovery_failures)
             occupied = sum(len(runtime.active_claims()) for runtime in self._runtimes.values())
             available = max(self._execution_capacity - occupied, 0)
             launches: list[DeliveryLaunchPackage] = []
@@ -3106,6 +3112,7 @@ class PortfolioApplication:
             return DeliveryAcquisitionResult(
                 launch_packages=tuple(launches),
                 integration_attention=self.list_integration_attention(),
+                recoveries=recoveries,
                 failures=tuple(failures),
             )
 

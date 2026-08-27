@@ -73,26 +73,35 @@ same typed configuration directly.
 | File | Optional? | Fields and defaults | Ownership |
 | --- | --- | --- | --- |
 | `.owlbear/delivery/config.json` | Required for canonical MCP/Cockpit startup | `schema_version` must be `2`; `remote`, `target_branch`, and `github_repository` are required and have no loader defaults. `delivery_state_branch` defaults to `owlbear/delivery-state` and is written by setup. `setup/init.py` defaults `remote` to `origin`, uses `main` as the non-interactive target-branch fallback, suggests the current branch interactively, and infers `github_repository` from the configured remote. | Tracked project policy |
-| `.owlbear/delivery/runtime/host.json` | Seeded and trackable | Setup creates the complete default file and preserves existing values on rerun. When absent, `writer_capacity` and `execution_capacity` default to `1`, and `claim_timeout_seconds` defaults to `1800`. When present, `schema_version` must be `1`; all three values must be positive integers. Unknown keys and non-integer values are rejected at startup. | Host-local configuration |
+| `.owlbear/delivery/runtime/host.json` | Seeded and trackable | Shared baseline defaults: `writer_capacity` and `execution_capacity` default to `1`, and `claim_timeout_seconds` defaults to `3600` (60 minutes). Setup preserves existing values on rerun. `schema_version` must be `1`; all three values must be positive integers. | Tracked baseline configuration |
+| `.owlbear/delivery/runtime/host.local.json` | Optional and ignored | Any subset of the three host settings may override the tracked baseline for one machine. The file may omit `schema_version`; supplied values must be positive integers, and unknown keys are rejected at startup. | Host-local override configuration |
 | `.owlbear/delivery/runtime/capacity.json` | Generated; do not edit | `schema_version` is `1`; `capacity` is the effective `writer_capacity`; `change_ids` lists active writer holders and defaults to an empty list. | Derived writer ledger |
 
 The two host capacities control different limits. `execution_capacity` is the maximum number of
 active Planner or Builder claims across the portfolio. `writer_capacity` is the maximum number of
 concurrent Builder worktrees; a Builder needs both an execution slot and a writer slot. For example,
-the optional host file can allow two writers and three total claims:
+the tracked baseline can allow two writers and three total claims:
 
 ```json
-{"schema_version": 1, "writer_capacity": 2, "execution_capacity": 3, "claim_timeout_seconds": 1800}
+{"schema_version": 1, "writer_capacity": 2, "execution_capacity": 3, "claim_timeout_seconds": 3600}
+```
+
+Put machine-specific changes in the ignored local overlay instead of editing the tracked baseline:
+
+```json
+{"writer_capacity": 1, "claim_timeout_seconds": 1800}
 ```
 
 An active Planner or Builder claim is eligible for recovery after the configured
-`claim_timeout_seconds` (1800 seconds by default), measured from its persisted `started_at` value.
-Recovery runs lazily at the next `acquire_frontier_work()` call. Clean matching Builder custody is
-restarted and released through the normal recovery path; dirty or mismatched worktrees remain
-retained with recovery attention and continue to consume capacity.
+`claim_timeout_seconds` (3600 seconds by default), measured from its persisted `started_at` value.
+The loader merges `host.local.json` over `host.json` when the overlay exists. Recovery runs lazily at
+the next `acquire_frontier_work()` call. Clean matching Builder custody is restarted and released
+through the normal recovery path; dirty or mismatched worktrees remain retained with recovery
+attention and continue to consume capacity.
 
-`setup/init.py` creates the tracked project policy and seeds `host.json` with the defaults above. The
-loader still accepts an absent file for older or manually managed workspaces.
+`setup/init.py` creates the tracked project policy and seeds `host.json` with the defaults above. It
+does not create `host.local.json`; create that ignored file only when this host needs overrides. The
+loader still accepts an absent baseline or local file for older or manually managed workspaces.
 
 ### Portability And Recovery
 

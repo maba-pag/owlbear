@@ -74,7 +74,16 @@ class DeliveryHostConfig(_LoaderModel):
     schema_version: Literal[1]
     writer_capacity: int = Field(default=1, gt=0)
     execution_capacity: int = Field(default=1, gt=0)
-    claim_timeout_seconds: int = Field(default=30 * 60, gt=0)
+    claim_timeout_seconds: int = Field(default=60 * 60, gt=0)
+
+
+class _DeliveryHostConfigOverrides(_LoaderModel):
+    """Optional host-local overrides layered over tracked Delivery defaults."""
+
+    schema_version: Literal[1] = 1
+    writer_capacity: int | None = Field(default=None, gt=0)
+    execution_capacity: int | None = Field(default=None, gt=0)
+    claim_timeout_seconds: int | None = Field(default=None, gt=0)
 
 
 @dataclass(frozen=True)
@@ -258,18 +267,17 @@ def _load_contracts(runtime_root: Path) -> dict[str, DeliveryContract]:
         raise error from exc
 
 
-def _load_host_config(paths: _DeliveryPaths) -> DeliveryHostConfig:
-    path = paths.runtime_root / "host.json"
+def _load_host_config_model[T: BaseModel](path: Path, model: type[T], default: T) -> T:
     try:
         if not path.exists():
             if path.is_symlink():
                 error = _load_error("host_config", "host-local Delivery runtime configuration is unsafe")
                 raise error
-            return DeliveryHostConfig(schema_version=1)
+            return default
         if path.is_symlink() or not path.is_file():
             error = _load_error("host_config", "host-local Delivery runtime configuration must be a regular file")
             raise error
-        return DeliveryHostConfig.model_validate_json(path.read_bytes())
+        return model.model_validate_json(path.read_bytes())
     except DeliveryApplicationLoadError:
         raise
     except ValidationError as exc:
@@ -280,6 +288,24 @@ def _load_host_config(paths: _DeliveryPaths) -> DeliveryHostConfig:
     except (OSError, ValueError) as exc:
         error = _load_error("host_config", f"host-local Delivery runtime configuration cannot be read: {path}")
         raise error from exc
+
+
+def _load_host_config(paths: _DeliveryPaths) -> DeliveryHostConfig:
+    baseline = _load_host_config_model(
+        paths.runtime_root / "host.json",
+        DeliveryHostConfig,
+        DeliveryHostConfig(schema_version=1),
+    )
+    overrides = _load_host_config_model(
+        paths.runtime_root / "host.local.json",
+        _DeliveryHostConfigOverrides,
+        _DeliveryHostConfigOverrides(),
+    )
+    values = baseline.model_dump()
+    local_values = overrides.model_dump(exclude_none=True)
+    local_values.pop("schema_version", None)
+    values.update(local_values)
+    return DeliveryHostConfig.model_validate(values)
 
 
 def _role_policies() -> tuple[DeliveryRolePolicy, ...]:

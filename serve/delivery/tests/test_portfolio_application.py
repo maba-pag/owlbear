@@ -117,6 +117,7 @@ from owlbear_delivery import (
     ReadChangePublicationCheckObservations,
     ReadChangePublicationHistory,
     RetryDelivery,
+    WorkspaceRecoverySnapshot,
     classify_publication_check,
     load_delivery_application,
 )
@@ -3835,12 +3836,12 @@ def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path
     assert (runtime_root / "capacity.json").is_file()
     assert CapacityLedger.model_validate_json((runtime_root / "capacity.json").read_bytes()).capacity == 1
     assert application._execution_capacity == 1
-    assert application._claim_timeout == timedelta(minutes=30)
+    assert application._claim_timeout == timedelta(hours=1)
     assert not (repository / ".owlbear/target").exists()
     assert not (repository / ".owlbear/worktrees").exists()
 
 
-def test_delivery_loader_uses_host_capacity_and_claim_timeout(tmp_path: Path) -> None:
+def test_delivery_loader_uses_host_capacity_and_local_claim_timeout(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     host_config_path = repository / ".owlbear/delivery/runtime/host.json"
     host_config_path.parent.mkdir(parents=True)
@@ -3849,16 +3850,20 @@ def test_delivery_loader_uses_host_capacity_and_claim_timeout(tmp_path: Path) ->
             schema_version=1,
             writer_capacity=2,
             execution_capacity=3,
-            claim_timeout_seconds=5,
+            claim_timeout_seconds=3600,
         ).model_dump_json(),
+        encoding="utf-8",
+    )
+    (repository / ".owlbear/delivery/runtime/host.local.json").write_text(
+        '{"writer_capacity": 4, "execution_capacity": 5, "claim_timeout_seconds": 5}\n',
         encoding="utf-8",
     )
 
     application = load_delivery_application(_startup_config(), workspace_root=repository)
 
     ledger = CapacityLedger.model_validate_json((repository / ".owlbear/delivery/runtime/capacity.json").read_bytes())
-    assert ledger.capacity == 2
-    assert application._execution_capacity == 3
+    assert ledger.capacity == 4
+    assert application._execution_capacity == 5
     assert application._claim_timeout == timedelta(seconds=5)
 
 
@@ -3888,6 +3893,33 @@ def test_delivery_loader_rejects_invalid_host_capacity_before_ledger_mutation(
 
     assert exc_info.value.field == field
     assert "host.json" in exc_info.value.detail
+    assert not (repository / ".owlbear/delivery/runtime/capacity.json").exists()
+
+
+@pytest.mark.parametrize(
+    ("content", "field"),
+    [
+        ('{"claim_timeout_seconds": 0}\n', "claim_timeout_seconds"),
+        ('{"claim_timeout_seconds": "5"}\n', "claim_timeout_seconds"),
+        ('{"schema_version": null}\n', "schema_version"),
+        ('{"unknown": 3}\n', "unknown"),
+    ],
+)
+def test_delivery_loader_rejects_invalid_host_local_config_before_ledger_mutation(
+    tmp_path: Path,
+    content: str,
+    field: str,
+) -> None:
+    repository = _repository(tmp_path)
+    host_local_config_path = repository / ".owlbear/delivery/runtime/host.local.json"
+    host_local_config_path.parent.mkdir(parents=True)
+    host_local_config_path.write_text(content, encoding="utf-8")
+
+    with pytest.raises(DeliveryApplicationLoadError) as exc_info:
+        load_delivery_application(_startup_config(), workspace_root=repository)
+
+    assert exc_info.value.field == field
+    assert "host.local.json" in exc_info.value.detail
     assert not (repository / ".owlbear/delivery/runtime/capacity.json").exists()
 
 
@@ -5257,17 +5289,20 @@ def test_acquisition_recovers_expired_planning_claim_at_inclusive_boundary(tmp_p
     )
     first = application.acquire_frontier_work().launch_packages[0]
 
-    now[0] = "2026-08-04T00:29:59Z"
+    now[0] = "2026-08-04T00:59:59Z"
     live = application.acquire_frontier_work()
 
     assert live.launch_packages == ()
     assert live.failures == ()
     assert runtimes["change-a"].active_claims() == (("OUT-001", first.claim),)
 
-    now[0] = "2026-08-04T00:30:00Z"
+    now[0] = "2026-08-04T01:00:00Z"
     recovered = application.acquire_frontier_work()
 
     assert recovered.failures == ()
+    assert len(recovered.recoveries) == 1
+    assert recovered.recoveries[0].status == DeliveryClaimRecoveryStatus.RECOVERED
+    assert recovered.recoveries[0].claim_id == first.claim.claim_id
     replacement = recovered.launch_packages[0]
     assert replacement.claim.claim_id != first.claim.claim_id
     assert runtimes["change-a"].active_claims() == (("OUT-001", replacement.claim),)
@@ -5284,11 +5319,19 @@ def test_acquisition_recovers_expired_clean_builder_claim_and_relaunches(tmp_pat
         clock=lambda: now[0],
     )
     first = application.acquire_frontier_work().launch_packages[0]
+    (first.worktree_path / "product.txt").write_text("attempt\n", encoding="utf-8")
+    _git(first.worktree_path, "add", "product.txt")
+    _git(first.worktree_path, "commit", "-m", "attempt commit")
+    attempt_commit = _git(first.worktree_path, "rev-parse", "HEAD")
 
-    now[0] = "2026-08-04T00:30:00Z"
+    now[0] = "2026-08-04T01:00:00Z"
     recovered = application.acquire_frontier_work()
 
     assert recovered.failures == ()
+    assert len(recovered.recoveries) == 1
+    assert recovered.recoveries[0].preserved_commit == attempt_commit
+    assert recovered.recoveries[0].preserved_ref == (f"refs/owlbear/attempts/change-a/{first.claim.attempt_id}")
+    assert _git(first.worktree_path, "rev-parse", recovered.recoveries[0].preserved_ref) == attempt_commit
     replacement = recovered.launch_packages[0]
     assert replacement.claim.claim_id != first.claim.claim_id
     assert replacement.writer is not None
@@ -5309,7 +5352,7 @@ def test_acquisition_retains_expired_dirty_builder_claim_and_custody(tmp_path: P
     product = first.worktree_path / "product.txt"
     product.write_text("uncommitted attempt\n", encoding="utf-8")
 
-    now[0] = "2026-08-04T00:30:00Z"
+    now[0] = "2026-08-04T01:00:00Z"
     recovered = application.acquire_frontier_work()
 
     assert recovered.launch_packages == ()
@@ -5321,6 +5364,43 @@ def test_acquisition_retains_expired_dirty_builder_claim_and_custody(tmp_path: P
     assert runtimes["change-a"].show_binding("OUT-001").recovery_attention is not None
     assert coordinator.show("change-a").writer == first.writer
     assert product.read_text(encoding="utf-8") == "uncommitted attempt\n"
+
+
+def test_expired_claim_recovery_failure_does_not_block_independent_change(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {
+            "change-a": DeliveryStage.IMPLEMENTATION,
+            "change-b": DeliveryStage.PLANNING,
+        },
+        writer_capacity=2,
+        execution_capacity=2,
+        clock=lambda: now[0],
+    )
+    initial = application.acquire_frontier_work()
+    initial_by_change = {package.change_id: package for package in initial.launch_packages}
+
+    now[0] = "2026-08-04T01:00:00Z"
+    original_snapshot = application._workspace_manager.recovery_snapshot
+
+    def fail_change_a(change_id: str, attempt_id: str) -> WorkspaceRecoverySnapshot:
+        if change_id == "change-a":
+            raise subprocess.CalledProcessError(1, ("git", "status"))
+        return original_snapshot(change_id, attempt_id)
+
+    with patch.object(application._workspace_manager, "recovery_snapshot", side_effect=fail_change_a):
+        recovered = application.acquire_frontier_work()
+
+    assert tuple(package.change_id for package in recovered.launch_packages) == ("change-b",)
+    assert len(recovered.failures) == 1
+    assert recovered.failures[0].change_id == "change-a"
+    assert recovered.failures[0].claim_id == initial_by_change["change-a"].claim.claim_id
+    assert len(recovered.recoveries) == 1
+    assert recovered.recoveries[0].change_id == "change-b"
+    assert runtimes["change-a"].active_claims()
+    assert runtimes["change-b"].active_claims()[0][1].claim_id != initial_by_change["change-b"].claim.claim_id
+    assert coordinator.show("change-a").writer == initial_by_change["change-a"].writer
 
 
 def test_writer_capacity_skips_blocked_build_but_launches_read_only_work(tmp_path: Path) -> None:

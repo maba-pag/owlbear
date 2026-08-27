@@ -23,8 +23,8 @@ Before edits, enter only `launch.worktree_path` and require:
 - its current branch equals `launch.branch`;
 - `HEAD` equals `launch.source_head` and descends from `launch.last_reviewed_commit`;
 - writer custody still matches the active claim;
-- the task-owned paths are clean and no unrelated staged state is adopted; the final candidate must
-  leave the entire managed worktree clean;
+- the worktree state has been triaged under the rules below; the final candidate must leave the entire
+  managed worktree clean;
 - any predecessor results, resolved requests, return context, and recovery attention come only from
   this fresh Build context.
 
@@ -41,6 +41,32 @@ claim_id: <launch claim ID>
 failed_operation: show_build_context
 reason: <recorded prerequisite failure>
 ```
+
+### Triage An Unclean Worktree
+
+Inspect the assigned worktree before editing with `git status --short`, `git diff`,
+`git diff --cached`, and `git ls-files --others --exclude-standard`. Compare every changed path and
+hunk with `DeliveryBuildContext.task.maintained_surfaces`, constraints, exclusions, and the exact
+launch identity.
+
+- **Reuse:** When every change is compatible with this exact task, keep it, validate it, and include
+  it in the eventual explicit scoped commit. Do not infer ownership from file timestamps or from the
+  fact that another session ended.
+- **Reset:** When changes are clearly disposable artifacts from this exact task and every tracked or
+  untracked path is within the task boundary, the Builder may discard them. Preview untracked removal
+  with `git clean -nd -- <explicit paths>`, restore tracked paths with `git restore --source=HEAD
+  --staged --worktree -- <explicit paths>`, then remove only the reviewed untracked paths with
+  `git clean -f -- <explicit paths>`. Never use broad `git clean -fd`, reset another branch, or remove
+  paths outside the task boundary.
+- **Escalate:** If any path is foreign or ambiguous, staged state exists outside the task boundary,
+  branch/HEAD/custody is not exact, recovery attention is present, or the current HEAD contains an
+  unreviewed commit whose provenance is unclear, do not reset or adopt it. Return the claim-bound
+  `dispatch_failure` above for exact recovery.
+
+This authority covers working-tree artifacts. A committed predecessor head is immutable evidence: the
+Builder may inspect and reuse a compatible exact-task commit, but does not silently erase committed
+history. A Git commit also does not release the Delivery claim or writer custody; the normal published
+result and transition still close the work.
 
 ## Step 1 - Fix The Task Boundary
 

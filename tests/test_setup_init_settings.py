@@ -211,7 +211,7 @@ def test_init_creates_delivery_policy_without_runtime_selection_artifacts(
         "schema_version": 1,
         "writer_capacity": 1,
         "execution_capacity": 1,
-        "claim_timeout_seconds": 1800,
+        "claim_timeout_seconds": 3600,
     }
     installed_text = "\n".join(
         path.read_text(encoding="utf-8")
@@ -242,10 +242,8 @@ def test_init_rerun_preserves_user_settings_and_target_records(
     delivery_config = json.loads(delivery_config_path.read_text(encoding="utf-8"))
     delivery_config["target_branch"] = "release"
     delivery_config_path.write_text(json.dumps(delivery_config), encoding="utf-8")
-    host_config_path = target_dir / ".owlbear/delivery/runtime/host.json"
-    host_config = json.loads(host_config_path.read_text(encoding="utf-8"))
-    host_config["claim_timeout_seconds"] = 5
-    host_config_path.write_text(json.dumps(host_config), encoding="utf-8")
+    host_local_config_path = target_dir / ".owlbear/delivery/runtime/host.local.json"
+    host_local_config_path.write_text('{"claim_timeout_seconds": 5}\n', encoding="utf-8")
     gitignore_path = target_dir / ".gitignore"
     gitignore_path.write_text(
         gitignore_path.read_text(encoding="utf-8")
@@ -286,7 +284,7 @@ def test_init_rerun_preserves_user_settings_and_target_records(
     assert merged_settings["example.userSetting"] == "preserved"
     assert merged_settings["chat.tools.terminal.autoApprove"]["example-command"] is False
     assert json.loads(delivery_config_path.read_text(encoding="utf-8"))["target_branch"] == "release"
-    assert json.loads(host_config_path.read_text(encoding="utf-8"))["claim_timeout_seconds"] == 5
+    assert json.loads(host_local_config_path.read_text(encoding="utf-8"))["claim_timeout_seconds"] == 5
     assert all((target_dir / path).read_bytes() == content for path, content in records.items())
     gitignore = gitignore_path.read_text(encoding="utf-8")
     for retired in (

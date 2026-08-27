@@ -68,12 +68,15 @@ The tracked `.owlbear/delivery/config.json` is required for canonical startup an
 version `2` plus `remote`, `target_branch`, `github_repository`, and `delivery_state_branch`; setup
 defaults the remote to `origin`, uses `main` for non-interactive target selection, writes
 `owlbear/delivery-state` as the state-branch default, and infers the GitHub repository from the
-remote. Setup also seeds the trackable `.owlbear/delivery/runtime/host.json` with schema version `1`,
-`writer_capacity: 1`, `execution_capacity: 1`, and `claim_timeout_seconds: 1800`, preserving an
-existing file on rerun. The loader still supplies those defaults when the file or a field is absent,
-and all three host-local values must be positive integers. The generated
-`.owlbear/delivery/runtime/capacity.json` is runtime state, not a configuration file, and must not be
-edited manually. The Delivery server reads no environment variables.
+remote. Setup also seeds the trackable `.owlbear/delivery/runtime/host.json` baseline with schema
+version `1`, `writer_capacity: 1`, `execution_capacity: 1`, and `claim_timeout_seconds: 3600` (60
+minutes), preserving an existing file on rerun. The optional ignored
+`.owlbear/delivery/runtime/host.local.json` may contain any subset of those settings for one host;
+local values override the baseline and are not synchronized through Git. The loader supplies the
+same defaults when either file or a field is absent, and all supplied numeric values must be positive
+integers. The generated `.owlbear/delivery/runtime/capacity.json` is runtime state, not a
+configuration file, and must not be edited manually. The Delivery server reads no environment
+variables.
 
 At admission, Delivery commits the verified four-file Design package to the managed Change branch
 before opening its first draft pull request. Sparse checkpoints on `delivery_state_branch` retain
