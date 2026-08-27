@@ -73,7 +73,7 @@ same typed configuration directly.
 | File | Optional? | Fields and defaults | Ownership |
 | --- | --- | --- | --- |
 | `.owlbear/delivery/config.json` | Required for canonical MCP/Cockpit startup | `schema_version` must be `2`; `remote`, `target_branch`, and `github_repository` are required and have no loader defaults. `delivery_state_branch` defaults to `owlbear/delivery-state` and is written by setup. `setup/init.py` defaults `remote` to `origin`, uses `main` as the non-interactive target-branch fallback, suggests the current branch interactively, and infers `github_repository` from the configured remote. | Tracked project policy |
-| `.owlbear/delivery/runtime/host.json` | Optional and ignored | When absent, `writer_capacity` and `execution_capacity` both default to `1`. When present, `schema_version` must be `1`; both capacities must be positive integers. Unknown keys and non-integer values are rejected at startup. | Host-local configuration |
+| `.owlbear/delivery/runtime/host.json` | Seeded and trackable | Setup creates the complete default file and preserves existing values on rerun. When absent, `writer_capacity` and `execution_capacity` default to `1`, and `claim_timeout_seconds` defaults to `1800`. When present, `schema_version` must be `1`; all three values must be positive integers. Unknown keys and non-integer values are rejected at startup. | Host-local configuration |
 | `.owlbear/delivery/runtime/capacity.json` | Generated; do not edit | `schema_version` is `1`; `capacity` is the effective `writer_capacity`; `change_ids` lists active writer holders and defaults to an empty list. | Derived writer ledger |
 
 The two host capacities control different limits. `execution_capacity` is the maximum number of
@@ -82,11 +82,17 @@ concurrent Builder worktrees; a Builder needs both an execution slot and a write
 the optional host file can allow two writers and three total claims:
 
 ```json
-{"schema_version": 1, "writer_capacity": 2, "execution_capacity": 3}
+{"schema_version": 1, "writer_capacity": 2, "execution_capacity": 3, "claim_timeout_seconds": 1800}
 ```
 
-`setup/init.py` creates the tracked project policy but does not create `host.json`; the absence of
-that file therefore preserves the defaults above.
+An active Planner or Builder claim is eligible for recovery after the configured
+`claim_timeout_seconds` (1800 seconds by default), measured from its persisted `started_at` value.
+Recovery runs lazily at the next `acquire_frontier_work()` call. Clean matching Builder custody is
+restarted and released through the normal recovery path; dirty or mismatched worktrees remain
+retained with recovery attention and continue to consume capacity.
+
+`setup/init.py` creates the tracked project policy and seeds `host.json` with the defaults above. The
+loader still accepts an absent file for older or manually managed workspaces.
 
 ### Portability And Recovery
 

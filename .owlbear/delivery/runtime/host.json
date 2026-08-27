@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "writer_capacity": 1,
+  "execution_capacity": 1,
+  "claim_timeout_seconds": 1800
+}

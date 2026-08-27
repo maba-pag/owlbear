@@ -9,7 +9,7 @@ import subprocess
 import uuid
 from contextlib import suppress
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Never
@@ -772,10 +772,11 @@ class DeliveryChangePublicationSupersessionReceipt(_ApplicationModel):
 
 
 class PortfolioApplicationConfig(_ApplicationModel):
-    """Configured capacity, source root, and complete stage-role policy."""
+    """Configured capacity, claim timeout, source root, and stage-role policy."""
 
     package_root: Path
     execution_capacity: int = Field(gt=0)
+    claim_timeout_seconds: int = Field(default=30 * 60, gt=0)
     role_policies: tuple[DeliveryRolePolicy, ...] = Field(min_length=2, max_length=2)
 
     @model_validator(mode="after")
@@ -874,6 +875,7 @@ class PortfolioApplication:
         self._change_branch_publisher = dependencies.change_branch_publisher
         self._draft_pull_request_publisher = dependencies.draft_pull_request_publisher
         self._execution_capacity = config.execution_capacity
+        self._claim_timeout = timedelta(seconds=config.claim_timeout_seconds)
         self._policies = {policy.worker_role: policy for policy in config.role_policies}
         self._identity_factory = hooks.identity_factory if hooks else lambda: str(uuid.uuid4())
         self._clock = (
@@ -2828,7 +2830,7 @@ class PortfolioApplication:
             else:
                 try:
                     reconciled_runtime = self._compose_runtime(observation)
-                except (OSError, RuntimeError, ValueError) as exc:
+                except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
                     error = str(exc) or "replacement runtime is unavailable"
         return reconciled_runtime, error
 
@@ -3029,14 +3031,58 @@ class PortfolioApplication:
             self._fail("completed-history catalog dependency is not configured")
         return self._completed_history_catalog
 
+    def _recover_expired_claims(self) -> tuple[DeliveryAcquisitionFailure, ...]:
+        cutoff = _timestamp(self._clock()) - self._claim_timeout
+        failures: list[DeliveryAcquisitionFailure] = []
+        for change_id, runtime in sorted(self._runtimes.items()):
+            for outcome_id, claim in runtime.active_claims():
+                if _timestamp(claim.started_at) > cutoff:
+                    continue
+                try:
+                    recovered = self._recover_claim(
+                        change_id,
+                        outcome_id,
+                        claim.attempt_id,
+                        claim.claim_id,
+                    )
+                except (OSError, RuntimeError, ValueError) as exc:
+                    failures.append(
+                        DeliveryAcquisitionFailure(
+                            change_id=change_id,
+                            outcome_id=outcome_id,
+                            attempt_id=claim.attempt_id,
+                            claim_id=claim.claim_id,
+                            code=getattr(exc, "code", PortfolioApplicationError.code),
+                            detail=str(exc) or "expired claim recovery failed",
+                            retry_condition="Retry exact claim recovery after reconciling workspace custody.",
+                        )
+                    )
+                else:
+                    if recovered.status == DeliveryClaimRecoveryStatus.ATTENTION:
+                        attention = recovered.attention
+                        if attention is None:
+                            self._fail("expired claim recovery returned incomplete attention")
+                        failures.append(
+                            DeliveryAcquisitionFailure(
+                                change_id=change_id,
+                                outcome_id=outcome_id,
+                                attempt_id=claim.attempt_id,
+                                claim_id=claim.claim_id,
+                                code=PortfolioApplicationError.code,
+                                detail=attention.reason,
+                                retry_condition=attention.retry_condition,
+                            )
+                        )
+        return tuple(failures)
+
     def acquire_frontier_work(self) -> DeliveryAcquisitionResult:
         """Start at most one ready claim per available execution slot."""
         self._reconcile_runtimes()
         with self._coordinator.acquisition_lock():
+            failures = list(self._recover_expired_claims())
             occupied = sum(len(runtime.active_claims()) for runtime in self._runtimes.values())
             available = max(self._execution_capacity - occupied, 0)
             launches: list[DeliveryLaunchPackage] = []
-            failures: list[DeliveryAcquisitionFailure] = []
             for candidate in self._candidates():
                 if available == 0:
                     break

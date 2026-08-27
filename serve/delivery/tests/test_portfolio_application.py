@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import subprocess
+import uuid
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -599,6 +600,8 @@ def _reopen_portfolio(
     tmp_path: Path,
     state_root: Path,
     runtimes: dict[str, DeliveryRuntime],
+    *,
+    clock: Callable[[], str] | None = None,
 ) -> tuple[PortfolioApplication, PortfolioCoordinator, ChangeWorkspaceManager]:
     repository = tmp_path / "repository"
     package_root = tmp_path / "packages"
@@ -606,6 +609,9 @@ def _reopen_portfolio(
     manager = ChangeWorkspaceManager(repository, tmp_path / "worktrees", coordinator, "main")
     store = DesignPackageStore(package_root, repository)
     authority_registry = DeliveryAuthorityRegistry(state_root, store, integration_target="main")
+    hooks = (
+        None if clock is None else PortfolioApplicationHooks(identity_factory=lambda: str(uuid.uuid4()), clock=clock)
+    )
     reopened_runtimes = {
         change_id: DeliveryRuntime(state_root, runtime.contract, workspace_manager=manager)
         for change_id, runtime in runtimes.items()
@@ -625,6 +631,7 @@ def _reopen_portfolio(
             execution_capacity=3,
             role_policies=_policies(),
         ),
+        hooks,
     )
     return application, coordinator, manager
 
@@ -3828,16 +3835,22 @@ def test_delivery_loader_composes_validated_owners_from_authorized_root(tmp_path
     assert (runtime_root / "capacity.json").is_file()
     assert CapacityLedger.model_validate_json((runtime_root / "capacity.json").read_bytes()).capacity == 1
     assert application._execution_capacity == 1
+    assert application._claim_timeout == timedelta(minutes=30)
     assert not (repository / ".owlbear/target").exists()
     assert not (repository / ".owlbear/worktrees").exists()
 
 
-def test_delivery_loader_uses_host_capacity_for_writer_and_execution_limits(tmp_path: Path) -> None:
+def test_delivery_loader_uses_host_capacity_and_claim_timeout(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     host_config_path = repository / ".owlbear/delivery/runtime/host.json"
     host_config_path.parent.mkdir(parents=True)
     host_config_path.write_text(
-        DeliveryHostConfig(schema_version=1, writer_capacity=2, execution_capacity=3).model_dump_json(),
+        DeliveryHostConfig(
+            schema_version=1,
+            writer_capacity=2,
+            execution_capacity=3,
+            claim_timeout_seconds=5,
+        ).model_dump_json(),
         encoding="utf-8",
     )
 
@@ -3846,6 +3859,7 @@ def test_delivery_loader_uses_host_capacity_for_writer_and_execution_limits(tmp_
     ledger = CapacityLedger.model_validate_json((repository / ".owlbear/delivery/runtime/capacity.json").read_bytes())
     assert ledger.capacity == 2
     assert application._execution_capacity == 3
+    assert application._claim_timeout == timedelta(seconds=5)
 
 
 @pytest.mark.parametrize(
@@ -3854,6 +3868,8 @@ def test_delivery_loader_uses_host_capacity_for_writer_and_execution_limits(tmp_
         ("not-json\n", "host_config"),
         ('{"schema_version": 1, "writer_capacity": 0}\n', "writer_capacity"),
         ('{"schema_version": 1, "execution_capacity": "3"}\n', "execution_capacity"),
+        ('{"schema_version": 1, "claim_timeout_seconds": 0}\n', "claim_timeout_seconds"),
+        ('{"schema_version": 1, "claim_timeout_seconds": "5"}\n', "claim_timeout_seconds"),
         ('{"schema_version": 1, "unknown": 3}\n', "unknown"),
     ],
 )
@@ -5232,6 +5248,81 @@ def test_writer_failure_leaves_started_exact_claim_without_false_launch(tmp_path
     assert ledger.change_ids == ()
 
 
+def test_acquisition_recovers_expired_planning_claim_at_inclusive_boundary(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.PLANNING},
+        clock=lambda: now[0],
+    )
+    first = application.acquire_frontier_work().launch_packages[0]
+
+    now[0] = "2026-08-04T00:29:59Z"
+    live = application.acquire_frontier_work()
+
+    assert live.launch_packages == ()
+    assert live.failures == ()
+    assert runtimes["change-a"].active_claims() == (("OUT-001", first.claim),)
+
+    now[0] = "2026-08-04T00:30:00Z"
+    recovered = application.acquire_frontier_work()
+
+    assert recovered.failures == ()
+    replacement = recovered.launch_packages[0]
+    assert replacement.claim.claim_id != first.claim.claim_id
+    assert runtimes["change-a"].active_claims() == (("OUT-001", replacement.claim),)
+    assert coordinator.show("change-a").writer is None
+    ledger = CapacityLedger.model_validate_json((state_root / "capacity.json").read_bytes())
+    assert ledger.change_ids == ()
+
+
+def test_acquisition_recovers_expired_clean_builder_claim_and_relaunches(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+        clock=lambda: now[0],
+    )
+    first = application.acquire_frontier_work().launch_packages[0]
+
+    now[0] = "2026-08-04T00:30:00Z"
+    recovered = application.acquire_frontier_work()
+
+    assert recovered.failures == ()
+    replacement = recovered.launch_packages[0]
+    assert replacement.claim.claim_id != first.claim.claim_id
+    assert replacement.writer is not None
+    assert replacement.writer.claim_id == replacement.claim.claim_id
+    assert runtimes["change-a"].active_claims() == (("OUT-001", replacement.claim),)
+    assert coordinator.show("change-a").writer == replacement.writer
+    assert _git(first.worktree_path, "rev-parse", "HEAD") == first.last_reviewed_commit
+
+
+def test_acquisition_retains_expired_dirty_builder_claim_and_custody(tmp_path: Path) -> None:
+    now = ["2026-08-04T00:00:00Z"]
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+        clock=lambda: now[0],
+    )
+    first = application.acquire_frontier_work().launch_packages[0]
+    product = first.worktree_path / "product.txt"
+    product.write_text("uncommitted attempt\n", encoding="utf-8")
+
+    now[0] = "2026-08-04T00:30:00Z"
+    recovered = application.acquire_frontier_work()
+
+    assert recovered.launch_packages == ()
+    assert len(recovered.failures) == 1
+    failure = recovered.failures[0]
+    assert failure.attempt_id == first.claim.attempt_id
+    assert failure.claim_id == first.claim.claim_id
+    assert runtimes["change-a"].active_claims() == (("OUT-001", first.claim),)
+    assert runtimes["change-a"].show_binding("OUT-001").recovery_attention is not None
+    assert coordinator.show("change-a").writer == first.writer
+    assert product.read_text(encoding="utf-8") == "uncommitted attempt\n"
+
+
 def test_writer_capacity_skips_blocked_build_but_launches_read_only_work(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,
@@ -5282,7 +5373,12 @@ def test_acquisition_leaves_active_planning_claim_occupied_across_instances(tmp_
     before_coordination = coordinator.show("change-a")
     before_capacity = (state_root / "capacity.json").read_bytes()
 
-    reopened, _reopened_coordinator, _reopened_manager = _reopen_portfolio(tmp_path, state_root, runtimes)
+    reopened, _reopened_coordinator, _reopened_manager = _reopen_portfolio(
+        tmp_path,
+        state_root,
+        runtimes,
+        clock=lambda: "2026-08-04T00:00:00Z",
+    )
     resumed = reopened.acquire_frontier_work()
 
     assert resumed.launch_packages == ()

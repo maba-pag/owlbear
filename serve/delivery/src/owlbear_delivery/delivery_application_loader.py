@@ -69,11 +69,12 @@ class DeliveryStartupConfig(_LoaderModel):
 
 
 class DeliveryHostConfig(_LoaderModel):
-    """Host-local limits for concurrent Delivery work."""
+    """Host-local limits and timeout for Delivery work."""
 
     schema_version: Literal[1]
     writer_capacity: int = Field(default=1, gt=0)
     execution_capacity: int = Field(default=1, gt=0)
+    claim_timeout_seconds: int = Field(default=30 * 60, gt=0)
 
 
 @dataclass(frozen=True)
@@ -262,11 +263,11 @@ def _load_host_config(paths: _DeliveryPaths) -> DeliveryHostConfig:
     try:
         if not path.exists():
             if path.is_symlink():
-                error = _load_error("host_config", "host-local Delivery capacity configuration is unsafe")
+                error = _load_error("host_config", "host-local Delivery runtime configuration is unsafe")
                 raise error
             return DeliveryHostConfig(schema_version=1)
         if path.is_symlink() or not path.is_file():
-            error = _load_error("host_config", "host-local Delivery capacity configuration must be a regular file")
+            error = _load_error("host_config", "host-local Delivery runtime configuration must be a regular file")
             raise error
         return DeliveryHostConfig.model_validate_json(path.read_bytes())
     except DeliveryApplicationLoadError:
@@ -274,10 +275,10 @@ def _load_host_config(paths: _DeliveryPaths) -> DeliveryHostConfig:
     except ValidationError as exc:
         location = exc.errors(include_url=False, include_context=False)[0].get("loc")
         field = location[0] if isinstance(location, tuple | list) and location else "host_config"
-        error = _load_error(str(field), f"host-local Delivery capacity configuration is invalid: {path}")
+        error = _load_error(str(field), f"host-local Delivery runtime configuration is invalid: {path}")
         raise error from exc
     except (OSError, ValueError) as exc:
-        error = _load_error("host_config", f"host-local Delivery capacity configuration cannot be read: {path}")
+        error = _load_error("host_config", f"host-local Delivery runtime configuration cannot be read: {path}")
         raise error from exc
 
 
@@ -599,7 +600,7 @@ def _compose_application(
     except CapacityConfigurationConflictError as exc:
         error = _load_error(
             "writer_capacity",
-            f"host-local Delivery capacity configuration in host.json cannot be lower than active writers: {exc}",
+            f"host-local Delivery runtime configuration in host.json cannot be lower than active writers: {exc}",
         )
         raise error from exc
     except CapacityLedgerConflictError as exc:
@@ -659,6 +660,7 @@ def _compose_application(
     application_config = PortfolioApplicationConfig(
         package_root=paths.package_root,
         execution_capacity=host_config.execution_capacity,
+        claim_timeout_seconds=host_config.claim_timeout_seconds,
         role_policies=_role_policies(),
     )
     return PortfolioApplication(runtimes, dependencies, application_config)

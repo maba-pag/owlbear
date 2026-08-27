@@ -59,6 +59,7 @@ _SKIP_IF_EXISTS_REL = frozenset(
         ".github/copilot-instructions.md",
         ".editorconfig",
         ".gitattributes",
+        ".owlbear/delivery/runtime/host.json",
         ".markdownlint-cli2.jsonc",
         ".markdownlint.json",
         ".markdownlintignore",
@@ -1661,7 +1662,7 @@ def init(  # noqa: C901, PLR0913
         if rel_posix == ".owlbear/.gitignore":
             before = dest.read_text(encoding="utf-8") if dest.exists() else ""
             created = not dest.exists()
-            _write_gitignore(src, dest, retired_lines=frozenset())
+            _write_gitignore(src, dest, retired_lines=frozenset({"delivery/runtime/"}))
             _record_seed_install(
                 manifest,
                 rel_posix,
