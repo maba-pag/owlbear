@@ -5634,6 +5634,38 @@ def test_dirty_build_recovery_retains_bytes_claim_custody_and_attention(tmp_path
     assert ledger.change_ids == ("change-a",)
 
 
+def test_cleaned_build_recovery_clears_attention_and_relaunches(tmp_path: Path) -> None:
+    application, runtimes, coordinator, _state_root = _portfolio(
+        tmp_path,
+        {"change-a": DeliveryStage.IMPLEMENTATION},
+    )
+    package = application.acquire_frontier_work().launch_packages[0]
+    dirty_file = package.worktree_path / "uncommitted.txt"
+    dirty_file.write_text("preserve me\n", encoding="utf-8")
+    retained = application.recover_claim(
+        package.change_id,
+        package.outcome_id,
+        package.claim.attempt_id,
+        package.claim.claim_id,
+    )
+    assert retained.status == DeliveryClaimRecoveryStatus.ATTENTION
+
+    dirty_file.unlink()
+    recovered = application.recover_claim(
+        package.change_id,
+        package.outcome_id,
+        package.claim.attempt_id,
+        package.claim.claim_id,
+    )
+
+    assert recovered.status == DeliveryClaimRecoveryStatus.RECOVERED
+    assert runtimes["change-a"].active_claims() == ()
+    assert coordinator.show("change-a").writer is None
+    relaunched = application.acquire_frontier_work().launch_packages[0]
+    assert relaunched.claim.claim_id != package.claim.claim_id
+    assert relaunched.writer is not None
+
+
 def test_mismatched_build_custody_retains_current_writer_and_attention(tmp_path: Path) -> None:
     application, runtimes, coordinator, state_root = _portfolio(
         tmp_path,

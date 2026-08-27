@@ -2928,10 +2928,6 @@ class ChangeWorkspaceManager:
             _coordination_conflict("restart attempt does not own the change writer")
         if branch_head not in {rejected_head, coordination.last_reviewed_commit}:
             _workspace_failure("change branch is outside the recoverable restart states")
-        if preserved is None:
-            if branch_head != rejected_head:
-                _workspace_failure("rejected head is not the current change branch")
-            self._git("update-ref", attempt_ref, rejected_head, "0" * 40)
         if branch_head != rejected_head:
             return
         if coordination.worktree_path.exists():
@@ -2943,6 +2939,9 @@ class ChangeWorkspaceManager:
             )
             if self._git("-C", str(coordination.worktree_path), "status", "--porcelain"):
                 _workspace_failure("restart requires a clean committed change worktree")
+        if preserved is None:
+            self._git("update-ref", attempt_ref, rejected_head, "0" * 40)
+        if coordination.worktree_path.exists():
             self._git("reset", "--hard", coordination.last_reviewed_commit, cwd=coordination.worktree_path)
             return
         self._git(

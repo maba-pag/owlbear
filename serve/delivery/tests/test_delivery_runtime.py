@@ -2040,6 +2040,27 @@ def test_implementation_nonadvance_persists_only_consumed_successor_state(
         assert _git(coordination.worktree_path, "rev-parse", "HEAD") == attempt_commit
 
 
+def test_dirty_implementation_retry_rejects_without_mutating_claim_or_worktree(tmp_path: Path) -> None:
+    runtime, coordinator, coordination, _initial, attempt_commit, _first_result, _tasks = _active_second_task(tmp_path)
+    dirty_file = coordination.worktree_path / "dirty-retry.txt"
+    dirty_file.write_text("preserve this work\n", encoding="utf-8")
+    before = dirty_file.read_bytes()
+
+    with pytest.raises(RuntimeError, match="clean change worktree"):
+        runtime.transition(
+            RetryDelivery(
+                outcome_id="OUT-001",
+                claim_id="claim-002",
+                abandoned_commit=attempt_commit,
+                attempt_id="attempt-002",
+            )
+        )
+
+    assert dirty_file.read_bytes() == before
+    assert runtime.show_binding("OUT-001").active_claim_id == "claim-002"
+    assert coordinator.show("delivery-runtime").writer is not None
+
+
 @pytest.mark.parametrize(
     ("stage", "transition", "expected_stage"),
     [

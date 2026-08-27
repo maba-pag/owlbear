@@ -52,16 +52,26 @@ launch identity.
 - **Reuse:** When every change is compatible with this exact task, keep it, validate it, and include
   it in the eventual explicit scoped commit. Do not infer ownership from file timestamps or from the
   fact that another session ended.
+- **Preserve for handoff:** When changes are useful but incomplete for this invocation, preserve them
+  with a task-scoped WIP commit using explicit owned paths, then return `retry` with that exact clean
+  commit as `abandoned_commit`. The WIP commit is recoverable predecessor evidence; it is not a
+  successful task result and does not release the claim by itself.
 - **Reset:** When changes are clearly disposable artifacts from this exact task and every tracked or
-  untracked path is within the task boundary, the Builder may discard them. Preview untracked removal
-  with `git clean -nd -- <explicit paths>`, restore tracked paths with `git restore --source=HEAD
-  --staged --worktree -- <explicit paths>`, then remove only the reviewed untracked paths with
-  `git clean -f -- <explicit paths>`. Never use broad `git clean -fd`, reset another branch, or remove
-  paths outside the task boundary.
+  untracked path is within the task boundary, the Builder may discard them. Prefer a reversible
+  `git stash push -u -m <claim-id> -- <explicit paths>` before removal. For disposable untracked
+  artifacts, preview removal with `git clean -nd -- <explicit paths>`, then remove only the reviewed
+  paths with `git clean -f -- <explicit paths>`. Never use broad `git clean -fd`, reset another branch,
+  or remove paths outside the task boundary.
 - **Escalate:** If any path is foreign or ambiguous, staged state exists outside the task boundary,
   branch/HEAD/custody is not exact, recovery attention is present, or the current HEAD contains an
   unreviewed commit whose provenance is unclear, do not reset or adopt it. Return the claim-bound
   `dispatch_failure` above for exact recovery.
+
+Before returning `retry`, `return`, or `block`, the Builder must leave the managed worktree clean and
+make any required commit identity equal the current exact HEAD. A dirty worktree cannot produce one of
+those transitions: resolve it through reuse, a WIP handoff, or an explicit scoped reset first. Use
+`dispatch_failure` only when that triage cannot be completed safely, not as a substitute for ordinary
+task failure handling.
 
 This authority covers working-tree artifacts. A committed predecessor head is immutable evidence: the
 Builder may inspect and reuse a compatible exact-task commit, but does not silently erase committed
@@ -180,6 +190,11 @@ abandoned_commit: <exact clean current head>
 ```
 
 Use `retry` for an implementation failure that cannot be repaired in this invocation.
+
+`retry` abandons the current attempt and resets the managed worktree to the reviewed boundary through
+Delivery. It is valid only after the Builder has supplied a clean exact `abandoned_commit`; it does not
+preserve uncommitted work. Preserve useful incomplete work with the WIP handoff in Step 0 before
+returning `retry`.
 
 ```yaml
 action: return

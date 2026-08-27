@@ -164,8 +164,17 @@ Use only an existing operation whose contract owns the selected result:
   retry synchronization, abort the merge, reset the worktree, or use raw Git as a substitute;
 - target, publication, or finalization prerequisite: hand off to the owning Delivery workflow and
   report the exact missing authority rather than inventing a local Integration route;
+- dirty Builder claim recovery: when current Delivery evidence retains an active claim with
+  `recovery_attention` for uncommitted or otherwise ambiguous worktree state, treat the condition as
+  a user-owned preservation decision. Distinguish preserving the changes for a successor, adopting
+  compatible work into the current task, and intentional discard. The exact `recover_claim` operation
+  can complete only after the managed worktree is clean and the same attempt and claim identities are
+  re-read; run it again after that user-owned cleanup or WIP handoff. Do not call
+  `recover_change_worktree` while the writer is active, and do not use a dirty `retry` transition as a
+  cleanup request.
 - claim recovery: use the exact claim-bound recovery operation only when current context supplies
-  its attempt and claim identities.
+  its attempt and claim identities. A recovery result of `attention` is not recovery; report the
+  retained claim, custody, and exact next cleanup decision.
 - retained Integration repair attention: preserve the existing
   `show_integration_attention(change_id)` and `recover_integration_repair_claim(change_id,
   attempt_id, claim_id)` route. Do not use Change disposition resolution for an Integration repair

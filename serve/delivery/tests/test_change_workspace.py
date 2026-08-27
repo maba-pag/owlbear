@@ -711,6 +711,30 @@ def test_cleanup_refuses_dirty_worktree_without_discarding_content(tmp_path: Pat
     assert coordinator.show(coordination.change_id).worktree_cleanup is None
 
 
+def test_restart_refuses_dirty_worktree_before_creating_attempt_ref(tmp_path: Path) -> None:
+    repository, initial = _repository(tmp_path)
+    coordinator, manager = _manager(tmp_path, repository)
+    coordination = manager.ensure("dirty-restart")
+    writer = ChangeWriter(
+        **_identity(coordination.change_id).model_dump(),
+        job_id=1,
+        kind="build",
+    )
+    coordinator.acquire(coordination.change_id, writer)
+    dirty_file = coordination.worktree_path / "uncommitted.txt"
+    dirty_file.write_text("preserve me\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="clean committed change worktree"):
+        manager.restart(coordination.change_id, writer.attempt_id, initial)
+
+    assert dirty_file.read_text(encoding="utf-8") == "preserve me\n"
+    assert not _git_ref_exists(
+        repository,
+        f"refs/owlbear/attempts/{coordination.change_id}/{writer.attempt_id}",
+    )
+    assert coordinator.show(coordination.change_id).writer == writer
+
+
 def test_cleanup_replays_persisted_intent_after_receipt_write_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
